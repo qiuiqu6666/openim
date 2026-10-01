@@ -124,8 +124,10 @@ class ConversationPage extends StatelessWidget {
   Widget _buildItemView(ConversationInfo info) => Slidable(
     key: ValueKey(info.conversationID),
     endActionPane: ActionPane(
-      motion: const ScrollMotion(),
+      motion: const BehindMotion(),
       extentRatio: 0.5,
+      openThreshold: 0.12,
+      closeThreshold: 0.38,
       children: [
         _swipeAction(
           onPressed: (_) => logic.setNotDisturb(info, !logic.isNotDisturb(info)),
