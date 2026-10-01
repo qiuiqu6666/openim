@@ -163,6 +163,7 @@ class ConversationPage extends StatelessWidget {
                         AvatarView(
                           width: 48.w,
                           height: 48.h,
+                          isCircle: true,
                           text: logic.getShowName(info),
                           url: info.faceURL,
                           isGroup: logic.isGroupChat(info),
