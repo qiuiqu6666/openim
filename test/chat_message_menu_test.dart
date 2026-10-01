@@ -4,6 +4,33 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openim_common/openim_common.dart';
 
 void main() {
+  testWidgets('custom sticker shows without a chat bubble', (tester) async {
+    await tester.pumpWidget(ScreenUtilInit(
+      designSize: const Size(375, 812),
+      builder: (_, __) => const MaterialApp(
+        home: Scaffold(
+          body: ChatItemContainer(
+            id: 'sticker',
+            timeStr: '05:51',
+            isBubbleBg: false,
+            bareMedia: true,
+            isISend: true,
+            hasRead: true,
+            isSending: false,
+            isSendFailed: false,
+            child: SizedBox(key: Key('sticker-image'), width: 100, height: 100),
+          ),
+        ),
+      ),
+    ));
+    expect(find.byType(ChatBubble), findsNothing);
+    expect(
+        tester.getRect(find.text('05:51')).top,
+        greaterThan(
+            tester.getRect(find.byKey(const Key('sticker-image'))).bottom));
+    expect(find.byType(ChatReadReceiptIcon), findsOneWidget);
+  });
+
   testWidgets('photo and video metadata overlays the bottom right',
       (tester) async {
     tester.view.physicalSize = const Size(375, 812);
@@ -76,10 +103,8 @@ void main() {
         findsOneWidget);
     expect(find.text(StrRes.hasRead), findsNothing);
     expect(
-      (tester.getCenter(find.text('hi')).dy -
-              tester.getCenter(find.text('17:59')).dy)
-          .abs(),
-      lessThan(12),
+      tester.getRect(find.text('17:59')).top,
+      lessThan(tester.getRect(find.text('hi')).bottom),
     );
   });
 
@@ -114,7 +139,19 @@ void main() {
     );
 
     expect(find.text('17:59'), findsOneWidget);
-    expect(find.byIcon(Icons.check), findsOneWidget);
+    expect(find.byType(ChatReadReceiptIcon), findsOneWidget);
+    final textRect = tester.getRect(find.byType(ChatText));
+    final timeRect = tester.getRect(find.text('17:59'));
+    final statusRect = tester.getRect(find.byType(ChatReadReceiptIcon));
+    expect(timeRect.bottom, greaterThanOrEqualTo(textRect.bottom - 4));
+    expect(textRect.right, greaterThan(timeRect.left));
+    expect(statusRect.right, lessThanOrEqualTo(textRect.right + 1));
+    expect(tester.takeException(), isNull);
+    expect(
+        tester
+            .widget<ChatReadReceiptIcon>(find.byType(ChatReadReceiptIcon))
+            .isRead,
+        isFalse);
   });
 
   testWidgets('media time is above content and status is below',

@@ -6,6 +6,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:sprintf/sprintf.dart';
 
 import 'select_contacts_logic.dart';
+import 'friend_list/friend_list_view.dart';
 
 class SelectContactsPage extends StatelessWidget {
   final logic = Get.find<SelectContactsLogic>();
@@ -14,6 +15,9 @@ class SelectContactsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (logic.action == SelAction.crateGroup) {
+      return SelectContactsFromFriendsPage(title: StrRes.createGroup);
+    }
     return Scaffold(
       appBar: TitleBar.back(),
       backgroundColor: Styles.c_F8F9FA,

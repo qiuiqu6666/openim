@@ -27,101 +27,82 @@ class ContactCardView extends StatelessWidget {
   final String time;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 247.w,
-        child: Stack(children: [
-          Positioned(
-            left: isSelf ? null : 0,
-            right: isSelf ? 0 : null,
-            top: 22.w,
-            child: Transform.flip(
-              flipX: !isSelf,
-              child: CustomPaint(size: Size(14.w, 24.w), painter: _CardTail()),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.only(
-                left: isSelf ? 0 : 9.w, right: isSelf ? 9.w : 0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14.r),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  color: ContactCardTokens.body,
-                  constraints: BoxConstraints(minHeight: 82.w),
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 14.w, vertical: 14.w),
-                  child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        IgnorePointer(
-                            child: AvatarView(
-                                width: 40.w,
-                                height: 40.w,
-                                isCircle: true,
-                                url: faceURL,
-                                text: name)),
-                        SizedBox(width: 12.w),
-                        Expanded(
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                              Text(name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      color: ContactCardTokens.title,
-                                      fontSize: 15.sp,
-                                      fontWeight: FontWeight.w500,
-                                      height: 1.25)),
-                              if (userID.isNotEmpty && userID != name) ...[
-                                SizedBox(height: 6.w),
-                                Text(userID,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                        color: ContactCardTokens.subtitle,
-                                        fontSize: 12.sp)),
-                              ],
-                            ])),
-                      ]),
-                ),
-                Container(
-                  color: ContactCardTokens.footer,
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.w),
-                  child: Row(children: [
-                    Expanded(
-                        child: Text('personalContactCard'.tr,
-                            style: TextStyle(
-                                color: ContactCardTokens.footerText,
-                                fontSize: 11.sp))),
-                    Text(time,
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return SizedBox(
+      width: 216.w,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8.r),
+        child: ColoredBox(
+          color: dark
+              ? Color.alphaBlend(Colors.black26, ContactCardTokens.body)
+              : ContactCardTokens.body,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.w),
+              child: Row(children: [
+                IgnorePointer(
+                    child: AvatarView(
+                  width: 36.w,
+                  height: 36.w,
+                  isCircle: true,
+                  url: faceURL,
+                  text: name,
+                )),
+                SizedBox(width: 10.w),
+                Expanded(
+                    child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            color: ContactCardTokens.footerText,
-                            fontSize: 11.sp)),
-                  ]),
-                ),
+                            color: ContactCardTokens.title,
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w500,
+                            height: 1.25)),
+                    if (userID.isNotEmpty && userID != name) ...[
+                      SizedBox(height: 4.w),
+                      Text(userID,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: ContactCardTokens.subtitle,
+                              fontSize: 11.sp)),
+                    ],
+                  ],
+                )),
               ]),
             ),
-          ),
-        ]),
-      );
-}
-
-class _CardTail extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(0, 0)
-      ..quadraticBezierTo(size.width * .88, size.height * .14, size.width * .92,
-          size.height * .46)
-      ..quadraticBezierTo(size.width * .96, size.height * .78, 0, size.height)
-      ..close();
-    canvas.drawPath(path, Paint()..color = ContactCardTokens.body);
+            Container(
+              color: dark
+                  ? Color.alphaBlend(Colors.black26, ContactCardTokens.footer)
+                  : ContactCardTokens.footer,
+              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.w),
+              child: Row(children: [
+                Icon(Icons.person_outline_rounded,
+                    size: 12.w, color: ContactCardTokens.footerText),
+                SizedBox(width: 4.w),
+                Expanded(
+                    child: Text('personalContactCard'.tr,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: ContactCardTokens.footerText,
+                            fontSize: 10.sp))),
+                SizedBox(width: 8.w),
+                Text(time,
+                    style: TextStyle(
+                        color: ContactCardTokens.footerText, fontSize: 10.sp)),
+              ]),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class ContactCardSendDialog extends StatelessWidget {

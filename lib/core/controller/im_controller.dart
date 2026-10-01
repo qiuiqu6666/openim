@@ -71,6 +71,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
           },
           onUserStatusChanged: userStausChanged))
       ..messageManager.setAdvancedMsgListener(OnAdvancedMsgListener(
+        onMsgDeleted: (message) => deletedMessages.addSafely(message),
         onRecvC2CReadReceipt: recvC2CMessageReadReceipt,
         onRecvNewMessage: recvNewMessage,
         onNewRecvMessageRevoked: recvMessageRevoked,
@@ -179,7 +180,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       _queryAtAllTag();
     } catch (e, s) {
       _pendingSdkLogin = null;
-      Logger.print('e: $e  s:$s');
+      Logger.print('OpenIM login failed');
       await _handleLoginRepeatError(e);
 
       return Future.error(e, s);

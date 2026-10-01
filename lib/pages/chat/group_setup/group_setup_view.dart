@@ -1,52 +1,90 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:sprintf/sprintf.dart';
 
 import 'group_setup_logic.dart';
+import 'group_announcement_page.dart';
+import '../group_announcement_banner.dart';
 
 class GroupSetupPage extends StatelessWidget {
-  final logic = Get.find<GroupSetupLogic>();
+  final GroupSetupLogic logic;
 
-  GroupSetupPage({super.key});
+  GroupSetupPage({super.key, GroupSetupLogic? logic})
+      : logic = logic ?? Get.find<GroupSetupLogic>();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: TitleBar.back(title: StrRes.groupChatSetup),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        centerTitle: true,
+        backgroundColor: Styles.c_F8F9FA,
+        surfaceTintColor: Styles.c_F8F9FA,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: Get.back,
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          icon: Icon(CupertinoIcons.back, size: 24.w, color: Styles.c_0089FF),
+        ),
+        title: Text(StrRes.groupChat, style: Styles.ts_0C1C33_17sp_semibold),
+      ),
       backgroundColor: Styles.c_F8F9FA,
       body: Obx(() => SingleChildScrollView(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (logic.isJoinedGroup.value) _buildBaseInfoView(),
-                if (logic.isJoinedGroup.value) _buildMemberView(),
-                if (logic.isOwner)
-                  _buildItemView(
-                    text: StrRes.groupManage,
-                    showRightArrow: true,
-                    isBottomRadius: true,
-                    onTap: logic.groupManage,
-                  ),
-                10.verticalSpace,
+                if (logic.isJoinedGroup.value) _groupHeaderCard(),
+                if (logic.isJoinedGroup.value) _membersCard(),
+                if (logic.isJoinedGroup.value) _detailsCard(),
+                if (logic.isJoinedGroup.value)
+                  _section([
+                    _settingRow('findChatContent'.tr,
+                        onTap: logic.searchHistory)
+                  ]),
+                if (logic.isJoinedGroup.value)
+                  _section([
+                    _settingRow('groupMuteLabel'.tr,
+                        trailing: CupertinoSwitch(
+                          value: logic.isNotDisturb,
+                          activeColor: Styles.c_0089FF,
+                          onChanged:
+                              logic.updating.value ? null : logic.setMuted,
+                        )),
+                    _settingRow('groupPinLabel'.tr,
+                        trailing: CupertinoSwitch(
+                          value: logic.isPinned,
+                          activeColor: Styles.c_0089FF,
+                          onChanged:
+                              logic.updating.value ? null : logic.setPinned,
+                        )),
+                  ]),
+                if (logic.isJoinedGroup.value)
+                  _section([
+                    _settingRow('groupReport'.tr,
+                        onTap: () =>
+                            IMViews.showToast('groupReportUnavailable'.tr))
+                  ]),
+                if (logic.isOwner || logic.isAdmin)
+                  _section([
+                    _settingRow(StrRes.groupManage, onTap: logic.groupManage)
+                  ]),
                 if (!logic.isOwner)
-                  _buildItemView(
-                    text: logic.isJoinedGroup.value
-                        ? StrRes.exitGroup
-                        : StrRes.delete,
-                    textStyle: Styles.ts_FF381F_17sp,
-                    showRightArrow: true,
-                    onTap: logic.quitGroup,
-                  ),
+                  _section([
+                    _settingRow(
+                        logic.isJoinedGroup.value
+                            ? StrRes.exitGroup
+                            : StrRes.delete,
+                        color: Styles.c_FF381F,
+                        onTap: logic.quitGroup)
+                  ]),
                 if (logic.isOwner)
-                  _buildItemView(
-                    text: StrRes.dismissGroup,
-                    textStyle: Styles.ts_FF381F_17sp,
-                    isBottomRadius: true,
-                    showRightArrow: true,
-                    onTap: logic.quitGroup,
-                  ),
+                  _section([
+                    _settingRow(StrRes.dismissGroup,
+                        color: Styles.c_FF381F, onTap: logic.quitGroup)
+                  ]),
                 40.verticalSpace,
               ],
             ),
@@ -54,251 +92,284 @@ class GroupSetupPage extends StatelessWidget {
     );
   }
 
-  Widget _buildBaseInfoView() => Container(
-        height: 80.h,
-        padding: EdgeInsets.symmetric(horizontal: 16.w),
-        margin: EdgeInsets.symmetric(horizontal: 10.w, vertical: 10.h),
+  String get _displayGroupID {
+    final id = logic.groupInfo.value.groupID;
+    return id.startsWith('@') ? id : '@$id';
+  }
+
+  Widget _section(List<Widget> rows) => Container(
+        margin: EdgeInsets.fromLTRB(8.w, 0, 8.w, 10.h),
+        padding: EdgeInsets.symmetric(horizontal: 14.w),
         decoration: BoxDecoration(
           color: Styles.c_FFFFFF,
-          borderRadius: BorderRadius.circular(6.r),
+          borderRadius: BorderRadius.circular(12.r),
         ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 50.h,
-              height: 50.h,
-              child: Stack(
-                children: [
-                  AvatarView(
-                    width: 48.w,
-                    height: 48.h,
-                    url: logic.groupInfo.value.faceURL,
-                    file: logic.avatar.value,
-                    text: logic.groupInfo.value.groupName,
-                    textStyle: Styles.ts_FFFFFF_14sp,
-                    isGroup: true,
-                    enabledPreview: true,
-                  ),
-                  if (logic.isOwnerOrAdmin)
-                    Align(
-                        alignment: Alignment.bottomRight,
-                        child: GestureDetector(
-                          onTap: logic.modifyGroupAvatar,
-                          child: ImageRes.editAvatar.toImage
-                            ..width = 14.w
-                            ..height = 14.h,
-                        ))
-                ],
-              ),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: Styles.c_E8EAEF),
+            rows[i],
+          ],
+        ]),
+      );
+
+  Widget _settingRow(String label,
+          {String? value,
+          Widget? trailing,
+          VoidCallback? onTap,
+          bool showArrow = true,
+          Color? color}) =>
+      InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: double.infinity,
+          height: 56.h,
+          child: Row(children: [
+            Expanded(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: color ?? Styles.c_0C1C33, fontSize: 16.sp)),
             ),
-            10.horizontalSpace,
+            if (value != null)
+              Flexible(
+                fit: FlexFit.tight,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          TextStyle(color: Styles.c_8E9AB0, fontSize: 14.sp)),
+                ),
+              ),
+            if (trailing != null) trailing,
+            if (onTap != null && showArrow) ...[
+              6.horizontalSpace,
+              Icon(Icons.chevron_right_rounded,
+                  size: 22.w, color: Styles.c_8E9AB0),
+            ],
+          ]),
+        ),
+      );
+
+  Widget _groupHeaderCard() => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: logic.isOwnerOrAdmin
+            ? () => logic.modifyGroupName(logic.groupInfo.value.faceURL)
+            : null,
+        child: Container(
+          margin: EdgeInsets.fromLTRB(8.w, 0, 8.w, 10.h),
+          padding: EdgeInsets.all(14.w),
+          decoration: BoxDecoration(
+            color: Styles.c_FFFFFF,
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Row(children: [
+            AvatarView(
+              width: 48.w,
+              height: 48.w,
+              url: logic.groupInfo.value.faceURL,
+              file: logic.avatar.value,
+              text: logic.groupInfo.value.groupName,
+              isGroup: true,
+              isCircle: true,
+              enabledPreview: !logic.isOwnerOrAdmin,
+              onTap: logic.isOwnerOrAdmin
+                  ? () => logic.modifyGroupName(logic.groupInfo.value.faceURL)
+                  : null,
+            ),
+            12.horizontalSpace,
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.translucent,
+                  InkWell(
                     onTap: logic.isOwnerOrAdmin
-                        ? () => logic.modifyGroupName(
-                            logic.conversationInfo.value.faceURL)
+                        ? () =>
+                            logic.modifyGroupName(logic.groupInfo.value.faceURL)
                         : null,
-                    child: Row(
-                      children: [
-                        ConstrainedBox(
-                            constraints: BoxConstraints(maxWidth: 200.w),
-                            child:
-                                (logic.groupInfo.value.groupName ?? '').toText
-                                  ..style = Styles.ts_0C1C33_17sp),
-                        '(${logic.groupInfo.value.memberCount ?? 0})'.toText
-                          ..style = Styles.ts_0C1C33_17sp,
-                        6.horizontalSpace,
-                        if (logic.isOwnerOrAdmin)
-                          ImageRes.editName.toImage
-                            ..width = 12.w
-                            ..height = 12.h,
-                      ],
-                    ),
+                    child: Text(logic.groupInfo.value.groupName ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Styles.ts_0C1C33_17sp_semibold),
                   ),
-                  4.verticalSpace,
-                  logic.groupInfo.value.groupID.toText
-                    ..style = Styles.ts_8E9AB0_14sp
-                    ..onTap = logic.copyGroupID,
+                  5.verticalSpace,
+                  InkWell(
+                    onTap: logic.copyGroupID,
+                    child: Row(children: [
+                      Flexible(
+                        child: Text(_displayGroupID,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Styles.ts_8E9AB0_14sp),
+                      ),
+                      4.horizontalSpace,
+                      Icon(Icons.copy_outlined,
+                          size: 14.w, color: Styles.c_8E9AB0),
+                    ]),
+                  ),
                 ],
               ),
             ),
-          ],
+            if (logic.isOwnerOrAdmin) ...[
+              8.horizontalSpace,
+              Icon(Icons.chevron_right_rounded,
+                  size: 22.w, color: Styles.c_8E9AB0),
+            ],
+          ]),
         ),
       );
 
-  Widget _buildMemberView() => Container(
+  Widget _membersCard() => Container(
+        margin: EdgeInsets.fromLTRB(8.w, 0, 8.w, 10.h),
+        padding: EdgeInsets.fromLTRB(14.w, 6.h, 14.w, 14.h),
         decoration: BoxDecoration(
           color: Styles.c_FFFFFF,
-          borderRadius: BorderRadius.circular(6.r),
+          borderRadius: BorderRadius.circular(12.r),
         ),
-        margin: EdgeInsets.symmetric(horizontal: 10.w),
-        child: Column(
-          children: [
-            GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: logic.length(),
-              shrinkWrap: true,
-              padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8.h),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                crossAxisSpacing: 3.w,
-                mainAxisSpacing: 2.h,
-                childAspectRatio: 68.w / 78.h,
-              ),
-              itemBuilder: (BuildContext context, int index) {
-                return logic.itemBuilder(
-                  index: index,
-                  builder: (info) => Column(
-                    children: [
-                      SizedBox(
-                        width: 58.w,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            AvatarView(
-                              width: 48.w,
-                              height: 48.h,
-                              url: info.faceURL,
-                              text: info.nickname,
-                              textStyle: Styles.ts_FFFFFF_14sp,
-                              onTap: () => logic.viewMemberInfo(info),
-                            ),
-                            if (logic.groupInfo.value.ownerUserID ==
-                                info.userID)
-                              Positioned(
-                                bottom: 0.h,
-                                child: Container(
-                                  width: 52.h,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: Styles.c_E8EAEF,
-                                    borderRadius: BorderRadius.circular(6.r),
-                                  ),
-                                  child: StrRes.groupOwner.toText
-                                    ..style = Styles.ts_8E9AB0_10sp
-                                    ..maxLines = 1
-                                    ..overflow = TextOverflow.ellipsis,
-                                ),
-                              )
-                          ],
-                        ),
-                      ),
-                      2.verticalSpace,
-                      (info.nickname ?? '').toText
-                        ..style = Styles.ts_8E9AB0_10sp
-                        ..maxLines = 1
-                        ..overflow = TextOverflow.ellipsis,
-                    ],
-                  ),
-                  addButton: () => GestureDetector(
-                    onTap: logic.addMember,
-                    child: Column(
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _settingRow(StrRes.groupMember,
+              value: 'groupMemberTotal'.trParams({
+                'count':
+                    '${logic.groupInfo.value.memberCount ?? logic.memberList.length}'
+              }),
+              onTap: logic.viewGroupMembers),
+          4.verticalSpace,
+          SizedBox(
+            height: 78.h,
+            child: LayoutBuilder(builder: (context, constraints) {
+              final memberWidth = constraints.maxWidth / 7;
+              return Row(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
                       children: [
-                        ImageRes.addMember.toImage
-                          ..width = 48.w
-                          ..height = 48.h,
-                        StrRes.addMember.toText..style = Styles.ts_8E9AB0_10sp,
+                        for (final member in logic.memberList.take(6))
+                          _memberPreview(member, memberWidth),
                       ],
                     ),
                   ),
-                  delButton: () => GestureDetector(
-                    onTap: logic.removeMember,
-                    child: Column(
-                      children: [
-                        ImageRes.delMember.toImage
-                          ..width = 48.w
-                          ..height = 48.h,
-                        StrRes.delMember.toText..style = Styles.ts_8E9AB0_10sp,
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                  if (logic.isJoinedGroup.value || logic.isOwnerOrAdmin)
+                    _memberAddButton(memberWidth),
+                  if (logic.isOwnerOrAdmin) _memberRemoveButton(memberWidth),
+                ],
+              );
+            }),
+          ),
+        ]),
+      );
+
+  Widget _memberPreview(GroupMembersInfo member, double memberWidth) {
+    final isOwner = member.userID == logic.groupInfo.value.ownerUserID;
+    final isAdmin = member.roleLevel == GroupRoleLevel.admin;
+    return SizedBox(
+      width: memberWidth,
+      child: InkWell(
+        onTap: () => logic.viewMemberInfo(member),
+        child: Column(children: [
+          AvatarView(
+              width: memberWidth * 0.72,
+              height: memberWidth * 0.72,
+              url: member.faceURL,
+              text: member.nickname,
+              isCircle: true),
+          2.verticalSpace,
+          if (isOwner || isAdmin)
             Container(
-              color: Styles.c_E8EAEF,
-              height: 1,
-              margin: EdgeInsets.symmetric(horizontal: 10.w),
-            ),
-            GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: logic.viewGroupMembers,
-              child: Container(
-                padding: EdgeInsets.only(left: 12.w, right: 16.w),
-                height: 46.h,
-                child: Row(
-                  children: [
-                    sprintf(StrRes.viewAllGroupMembers,
-                        [logic.groupInfo.value.memberCount]).toText
-                      ..style = Styles.ts_0C1C33_17sp,
-                    const Spacer(),
-                    ImageRes.rightArrow.toImage
-                      ..width = 24.w
-                      ..height = 24.h,
-                  ],
-                ),
+              padding: EdgeInsets.symmetric(horizontal: 4.w),
+              decoration: BoxDecoration(
+                color: isOwner ? Styles.c_0089FF : const Color(0xFFFF9800),
+                borderRadius: BorderRadius.circular(8.r),
               ),
+              child: Text(isOwner ? StrRes.groupOwner : 'groupAdmin'.tr,
+                  style: TextStyle(color: Colors.white, fontSize: 9.sp)),
             ),
-          ],
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: memberWidth * 0.05),
+              child: Text(member.nickname ?? '',
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: Styles.ts_8E9AB0_10sp),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _memberAddButton(double memberWidth) => SizedBox(
+        width: memberWidth,
+        child: InkWell(
+          onTap: logic.addMember,
+          child: Column(children: [
+            CircleAvatar(
+                radius: memberWidth * 0.36,
+                backgroundColor: Styles.c_E8EAEF,
+                child: Icon(Icons.add, color: Styles.c_8E9AB0)),
+            6.verticalSpace,
+            Text('addChatMember'.tr,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Styles.ts_8E9AB0_10sp),
+          ]),
         ),
       );
 
-  Widget _buildItemView({
-    required String text,
-    TextStyle? textStyle,
-    String? value,
-    bool switchOn = false,
-    bool isTopRadius = false,
-    bool isBottomRadius = false,
-    bool showRightArrow = false,
-    bool showSwitchButton = false,
-    ValueChanged<bool>? onChanged,
-    Function()? onTap,
-  }) =>
-      GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.translucent,
-        child: Container(
-          height: 46.h,
-          margin: EdgeInsets.symmetric(horizontal: 10.w),
-          padding: EdgeInsets.symmetric(horizontal: 16.w),
-          decoration: BoxDecoration(
-            color: Styles.c_FFFFFF,
-            borderRadius: BorderRadius.only(
-              topRight: Radius.circular(isTopRadius ? 6.r : 0),
-              topLeft: Radius.circular(isTopRadius ? 6.r : 0),
-              bottomLeft: Radius.circular(isBottomRadius ? 6.r : 0),
-              bottomRight: Radius.circular(isBottomRadius ? 6.r : 0),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                  child: text.toText
-                    ..style = textStyle ?? Styles.ts_0C1C33_17sp
-                    ..maxLines = 1),
-              if (null != value)
-                value.toText
-                  ..style = Styles.ts_8E9AB0_14sp
-                  ..maxLines = 1
-                  ..overflow = TextOverflow.ellipsis,
-              if (showSwitchButton)
-                CupertinoSwitch(
-                  value: switchOn,
-                  activeColor: Styles.c_0089FF,
-                  onChanged: onChanged,
-                ),
-              if (showRightArrow)
-                ImageRes.rightArrow.toImage
-                  ..width = 24.w
-                  ..height = 24.h,
-            ],
-          ),
+  Widget _memberRemoveButton(double memberWidth) => SizedBox(
+        width: memberWidth,
+        child: InkWell(
+          onTap: logic.removeMember,
+          child: Column(children: [
+            CircleAvatar(
+                radius: memberWidth * 0.36,
+                backgroundColor: Styles.c_E8EAEF,
+                child: Icon(Icons.remove, color: Styles.c_8E9AB0)),
+            6.verticalSpace,
+            Text(StrRes.delMember,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Styles.ts_8E9AB0_10sp),
+          ]),
         ),
       );
+
+  Widget _detailsCard() => _section([
+        _settingRow('groupIdShort'.tr,
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: 155.w),
+                  child: Text(_displayGroupID,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          TextStyle(color: Styles.c_0089FF, fontSize: 14.sp))),
+              8.horizontalSpace,
+              Icon(Icons.qr_code_2, size: 24.w, color: Styles.c_0C1C33),
+            ]),
+            onTap: logic.viewGroupQrcode,
+            showArrow: false),
+        _settingRow('groupAnnouncement'.tr,
+            value: logic.groupInfo.value.notification?.isNotEmpty == true
+                ? logic.groupInfo.value.notification
+                : 'groupNoAnnouncement'.tr,
+            showArrow: logic.isOwnerOrAdmin ||
+                (logic.groupInfo.value.notification?.trim().isNotEmpty ??
+                    false),
+            onTap: logic.isOwnerOrAdmin
+                ? () => Get.to(() => const GroupAnnouncementPage())
+                : (logic.groupInfo.value.notification?.trim().isNotEmpty ??
+                        false)
+                    ? () => showGroupAnnouncementSheet(
+                        Get.context!, logic.groupInfo.value.notification!)
+                    : null),
+        _settingRow('groupMyNickname'.tr,
+            value: logic.myGroupNickname ?? 'groupNicknameUnset'.tr,
+            onTap: logic.editMyGroupNickname),
+      ]);
 }

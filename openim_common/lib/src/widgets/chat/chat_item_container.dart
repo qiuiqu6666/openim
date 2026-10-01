@@ -1,3 +1,4 @@
+import 'chat_inline_metadata.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:openim_common/openim_common.dart';
@@ -14,11 +15,14 @@ class ChatItemContainer extends StatelessWidget {
     this.timeStr,
     required this.isBubbleBg,
     this.mediaOverlay = false,
+    this.bareMedia = false,
     this.standaloneCard = false,
     this.metadataBelow = false,
+    this.compactBubble = false,
     required this.isISend,
     required this.hasRead,
     this.showReadStatus = true,
+    this.showStatus = true,
     required this.isSending,
     required this.isSendFailed,
     this.ignorePointer = false,
@@ -29,6 +33,7 @@ class ChatItemContainer extends StatelessWidget {
     this.onTapLeftAvatar,
     this.onTapRightAvatar,
     this.onLongPressRightAvatar,
+    this.onLongPressLeftAvatar,
     this.onFailedToResend,
     this.messageMenus = const [],
     this.menuController,
@@ -42,11 +47,14 @@ class ChatItemContainer extends StatelessWidget {
   final String? timeStr;
   final bool isBubbleBg;
   final bool mediaOverlay;
+  final bool bareMedia;
   final bool standaloneCard;
   final bool metadataBelow;
+  final bool compactBubble;
   final bool isISend;
   final bool hasRead;
   final bool showReadStatus;
+  final bool showStatus;
   final bool isSending;
   final bool isSendFailed;
   final bool ignorePointer;
@@ -57,6 +65,7 @@ class ChatItemContainer extends StatelessWidget {
   final Function()? onTapLeftAvatar;
   final Function()? onTapRightAvatar;
   final Function()? onLongPressRightAvatar;
+  final VoidCallback? onLongPressLeftAvatar;
   final Function()? onFailedToResend;
   final List<PopMenuInfo> messageMenus;
   final CustomPopupMenuController? menuController;
@@ -87,9 +96,9 @@ class ChatItemContainer extends StatelessWidget {
     final time = timeStr == null
         ? null
         : Text(timeStr!,
-            style: Styles.ts_8E9AB0_12sp
-                .copyWith(color: mediaOverlay ? Colors.white : null));
-    final Widget? status = !isISend
+            style: Styles.ts_8E9AB0_12sp.copyWith(
+                fontSize: 10.sp, color: mediaOverlay ? Colors.white : null));
+    final Widget? status = !isISend || !showStatus
         ? null
         : isSendFailed
             ? ChatSendFailedView(
@@ -103,6 +112,7 @@ class ChatItemContainer extends StatelessWidget {
                 ? ChatDelayedStatusView(isSending: true)
                 : ChatReadReceiptIcon(
                     isRead: showReadStatus && hasRead,
+                    size: compactBubble ? 16.w : null,
                     color: mediaOverlay
                         ? Colors.white
                         : showReadStatus && hasRead
@@ -144,51 +154,73 @@ class ChatItemContainer extends StatelessWidget {
               ],
             ),
           )
-        : standaloneCard
+        : bareMedia
             ? Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: isISend
-                    ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    isISend ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
                   child,
-                  if (status != null) ...[4.verticalSpace, status],
+                  if (time != null || status != null) ...[
+                    4.verticalSpace,
+                    metadata,
+                  ],
                 ],
               )
-        : ChatBubble(
-            bubbleType: type,
-            // Position the bubble in the message row; do not expand its background.
-            alignment: null,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: 247.w),
-              child: metadataBelow
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [child, 4.verticalSpace, metadata],
-                    )
-                  : isBubbleBg
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Flexible(child: child),
-                        6.horizontalSpace,
-                        metadata,
-                      ],
-                    )
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: isISend
-                          ? CrossAxisAlignment.end
-                          : CrossAxisAlignment.start,
-                      children: [
-                        if (time != null) ...[time, 4.verticalSpace],
-                        child,
-                        if (status != null) ...[4.verticalSpace, status],
-                      ],
+            : standaloneCard
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: isISend
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                    children: [
+                      if (time != null) ...[time, 4.verticalSpace],
+                      child,
+                      if (status != null) ...[4.verticalSpace, status],
+                    ],
+                  )
+                : ChatBubble(
+                    compact: compactBubble,
+                    bubbleType: type,
+                    // Position the bubble in the message row; do not expand its background.
+                    alignment: null,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                          maxWidth: compactBubble ? 200.w : 247.w),
+                      child: metadataBelow
+                          ? Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                child,
+                                compactBubble
+                                    ? 0.verticalSpace
+                                    : 4.verticalSpace,
+                                metadata
+                              ],
+                            )
+                          : isBubbleBg
+                              ? ChatInlineMetadata(
+                                  content: child, metadata: metadata)
+                              : Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: isISend
+                                      ? CrossAxisAlignment.end
+                                      : CrossAxisAlignment.start,
+                                  children: [
+                                    if (time != null) ...[
+                                      time,
+                                      4.verticalSpace
+                                    ],
+                                    child,
+                                    if (status != null) ...[
+                                      4.verticalSpace,
+                                      status
+                                    ],
+                                  ],
+                                ),
                     ),
-            ),
-          );
+                  );
     if (messageMenus.isEmpty) return content;
     return PopButton(
       menus: messageMenus,
@@ -209,6 +241,7 @@ class ChatItemContainer extends StatelessWidget {
             url: leftFaceUrl,
             text: leftNickname,
             onTap: onTapLeftAvatar,
+            onLongPress: onLongPressLeftAvatar,
           ),
           10.horizontalSpace,
           Flexible(
@@ -259,16 +292,18 @@ class ChatReadReceiptIcon extends StatelessWidget {
     this.isRead = true,
     this.color,
     this.semanticLabel,
+    this.size,
   });
   final bool isRead;
   final Color? color;
   final String? semanticLabel;
+  final double? size;
 
   @override
   Widget build(BuildContext context) => Semantics(
         label: semanticLabel ?? (isRead ? StrRes.hasRead : StrRes.unread),
         child: CustomPaint(
-          size: Size(20.w, 14.w),
+          size: Size(size ?? 16.w, (size ?? 16.w) * .7),
           painter: _ReadReceiptPainter(
             color ?? (isRead ? Styles.c_0089FF : Styles.c_8E9AB0),
             isRead,

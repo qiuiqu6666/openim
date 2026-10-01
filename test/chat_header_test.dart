@@ -43,22 +43,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('group chat header keeps its title without a user avatar',
+  testWidgets('group chat header shares avatar layout and opens group settings',
       (tester) async {
     tester.view.physicalSize = const Size(375, 812);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    var settings = 0;
     await tester.pumpWidget(ScreenUtilInit(
       designSize: const Size(375, 812),
       builder: (_, __) => GetMaterialApp(
         home: Scaffold(
-          appBar: TitleBar.chat(title: '群聊', member: '(10)'),
+          appBar: TitleBar.chat(
+              title: '群聊', member: '(10)', onClickMoreBtn: () => settings++),
         ),
       ),
     ));
     await tester.pumpAndSettle();
-    expect(find.byType(AvatarView), findsNothing);
+    expect(find.byType(AvatarView), findsOneWidget);
+    expect(tester.widget<AvatarView>(find.byType(AvatarView)).isGroup, isTrue);
+    expect(find.text('(10)'), findsOneWidget);
+    expect(find.byIcon(Icons.more_horiz), findsNothing);
+    await tester.tap(find.text('群聊'));
+    expect(settings, 1);
     expect(find.text('群聊'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

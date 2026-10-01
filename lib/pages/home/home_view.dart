@@ -22,7 +22,7 @@ class HomePage extends StatelessWidget {
           item: ItemConfig(
             icon: _setupIcon(
                 _navIcon('nav_chat_active_99chat.png',
-                    Theme.of(context).colorScheme.primary),
+                    Styles.c_0089FF),
                 () => _unreadCount(groupChats: false)),
             inactiveIcon: _setupIcon(
                 _navIcon('nav_chat_99chat.png',
@@ -38,7 +38,7 @@ class HomePage extends StatelessWidget {
           item: ItemConfig(
             icon: _setupIcon(
                 _navIcon('nav_group_conv_99chat.png',
-                    Theme.of(context).colorScheme.primary),
+                    Styles.c_0089FF),
                 () => _unreadCount(groupChats: true)),
             inactiveIcon: _setupIcon(
                 _navIcon('nav_group_conv_99chat.png',
@@ -53,7 +53,7 @@ class HomePage extends StatelessWidget {
           item: ItemConfig(
             icon: _setupIcon(
                 _navIcon('nav_contact_active_99chat.png',
-                    Theme.of(context).colorScheme.primary),
+                    Styles.c_0089FF),
                 () => logic.unhandledCount.value),
             inactiveIcon: _setupIcon(
                 _navIcon('nav_contact_99chat.png',
@@ -67,7 +67,7 @@ class HomePage extends StatelessWidget {
           screen: ThemeAwarePage(builder: (_) => MinePage()),
           item: ItemConfig(
             icon: _navIcon('nav_profile_active_99chat.png',
-                Theme.of(context).colorScheme.primary),
+                Styles.c_0089FF),
             inactiveIcon: _navIcon('nav_profile_99chat.png',
                 Theme.of(context).colorScheme.onSurfaceVariant),
             title: StrRes.mine,

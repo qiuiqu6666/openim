@@ -5,17 +5,23 @@ import 'package:openim_common/openim_common.dart';
 
 import '../select_contacts_logic.dart';
 import 'friend_list_logic.dart';
+import 'group_contact_picker.dart';
 
 class SelectContactsFromFriendsPage extends StatelessWidget {
   final logic = Get.find<SelectContactsFromFriendsLogic>();
   final selectContactsLogic = Get.find<SelectContactsLogic>();
 
-  SelectContactsFromFriendsPage({super.key});
+  SelectContactsFromFriendsPage({super.key, this.title});
+
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
+    if (selectContactsLogic.action == SelAction.crateGroup) {
+      return GroupContactPicker(friends: logic, selection: selectContactsLogic);
+    }
     return Scaffold(
-      appBar: TitleBar.back(title: StrRes.myFriend),
+      appBar: TitleBar.back(title: title ?? StrRes.myFriend),
       backgroundColor: Styles.c_F8F9FA,
       body: Column(
         children: [
@@ -81,7 +87,15 @@ class SelectContactsFromFriendsPage extends StatelessWidget {
                     text: info.showName,
                   ),
                   10.horizontalSpace,
-                  info.showName.toText..style = Styles.ts_0C1C33_17sp,
+                  Expanded(
+                    child: Text(
+                      info.showName,
+                      style: Styles.ts_0C1C33_17sp,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
             ),

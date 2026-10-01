@@ -133,12 +133,15 @@ class GlassAppBar extends AppBar {
     super.automaticallyImplyLeading,
     double? toolbarHeight,
     super.titleSpacing,
+    Color? backgroundColor,
   }) : super(
           toolbarHeight: toolbarHeight ?? NavigationGlassTokens.toolbarHeight,
-          backgroundColor: Colors.transparent,
+          backgroundColor: backgroundColor ?? Colors.transparent,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
-          flexibleSpace: const LiquidGlassSurface(child: SizedBox.expand()),
+          flexibleSpace: backgroundColor == null
+              ? const LiquidGlassSurface(child: SizedBox.expand())
+              : null,
         );
 }

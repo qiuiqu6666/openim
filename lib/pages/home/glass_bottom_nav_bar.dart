@@ -13,7 +13,13 @@ class GlassBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
         animation: NavigationGlassController.instance,
-        builder: (context, _) => _buildBar(context),
+        builder: (context, _) => ColoredBox(
+          color: NavigationGlassTokens.backgroundColor(context),
+          child: Padding(
+            padding: const EdgeInsets.only(top: NavigationGlassTokens.gap),
+            child: _buildBar(context),
+          ),
+        ),
       );
 
   Widget _buildBar(BuildContext context) {
@@ -38,17 +44,16 @@ class GlassBottomNavBar extends StatelessWidget {
           selectedIndex: config.selectedIndex,
           onTabSelected: config.onItemSelected,
           horizontalPadding: NavigationGlassTokens.inset,
-          verticalPadding: NavigationGlassTokens.gap,
+          verticalPadding: 0,
           barHeight: NavigationGlassTokens.height(context),
           barBorderRadius: NavigationGlassTokens.radius,
           tabPadding: NavigationGlassTokens.tabPadding,
           iconSize: NavigationGlassTokens.iconSize,
           iconLabelSpacing: NavigationGlassTokens.iconLabelGap,
-          textStyle: NavigationGlassTokens.labelStyle(context),
           // The package applies 0.5 opacity to its resting indicator.
           indicatorColor: theme.colorScheme.primary
               .withValues(alpha: NavigationGlassTokens.selectionOpacity * 2),
-          selectedIconColor: theme.colorScheme.primary,
+          selectedIconColor: Styles.c_0089FF,
           unselectedIconColor: theme.colorScheme.onSurfaceVariant,
           // Standard-quality rendering generates a rim from refraction and
           // specular light even without a Flutter border. Keep the base plain;
@@ -78,7 +83,6 @@ class GlassBottomNavBar extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: NavigationGlassTokens.inset,
-          vertical: NavigationGlassTokens.gap,
         ),
         child: LiquidGlassSurface(
           surface: NavigationGlassSurface.bottom,
@@ -157,7 +161,7 @@ class GlassBottomNavBar extends StatelessWidget {
                                             size:
                                                 NavigationGlassTokens.iconSize,
                                             color: config.selectedIndex == index
-                                                ? theme.colorScheme.primary
+                                                ? Styles.c_0089FF
                                                 : theme.colorScheme
                                                     .onSurfaceVariant,
                                           ),
@@ -177,7 +181,11 @@ class GlassBottomNavBar extends StatelessWidget {
                                           textAlign: TextAlign.center,
                                           style:
                                               NavigationGlassTokens.labelStyle(
-                                                  context),
+                                                  context).copyWith(
+                                                color: config.selectedIndex == index
+                                                    ? Styles.c_0089FF
+                                                    : theme.colorScheme.onSurfaceVariant,
+                                              ),
                                         ),
                                       ],
                                     ),

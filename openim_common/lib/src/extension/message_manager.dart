@@ -22,7 +22,8 @@ extension MessageManagerExt on MessageManager {
         description: '',
       );
 
-  Future<Message> createFailedHintMessage({required int type}) => createCustomMessage(
+  Future<Message> createFailedHintMessage({required int type}) =>
+      createCustomMessage(
         data: json.encode({
           "customType": type,
           "data": {},
@@ -33,6 +34,21 @@ extension MessageManagerExt on MessageManager {
 }
 
 extension MessageExt on Message {
+  DateTime? get burnDeadline {
+    final attached = attachedInfoElem;
+    if (attached?.isPrivateChat != true) return null;
+    final attachedRead = attached?.hasReadTime;
+    final read =
+        attachedRead != null && attachedRead > 0 ? attachedRead : hasReadTime;
+    final duration = attached?.burnDuration;
+    if (read == null || read <= 0 || duration == null || duration <= 0)
+      return null;
+    return DateTime.fromMillisecondsSinceEpoch(
+            read < 100000000000 ? read * 1000 : read)
+        .add(Duration(seconds: duration));
+  }
+
+  bool get hasExpired => burnDeadline?.isAfter(DateTime.now()) == false;
 
   bool get isDeletedByFriendType {
     if (isCustomType) {

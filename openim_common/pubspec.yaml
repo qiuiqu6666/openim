@@ -54,6 +54,7 @@ dependencies:
   font_awesome_flutter: ^10.9.1
   dart_date: ^1.1.1
   video_compress: ^3.1.2
+  just_waveform: ^0.0.7
   just_audio: ^0.10.5
   webview_flutter: ^4.10.0
   webview_flutter_wkwebview: ^3.17.0
@@ -71,6 +72,8 @@ dependencies:
   emoji_picker_flutter: ^4.3.0
   should_rebuild: ^1.0.1
   record: ^6.0.0
+  voice_note_kit:
+    path: ../local_plugin/voice_note_kit
   mime: ^2.0.0
   flutter_keyboard_visibility: ^6.0.0
   rotated_corner_decoration: ^2.1.0

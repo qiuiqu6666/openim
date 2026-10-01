@@ -16,6 +16,7 @@ import 'package:openim_common/openim_common.dart';
 import 'custom_mk_controls.dart';
 import 'photo_browser_hero.dart';
 import 'native_media_video.dart';
+import 'video_media_cache.dart';
 import 'media_preview_glass.dart';
 
 class MediaSource {
@@ -615,6 +616,7 @@ class _MobileVideoPlayerViewState extends State<VideoPlayerView> {
         file: widget.file,
         path: widget.path,
         url: widget.url,
+        coverUrl: widget.coverUrl,
         autoPlay: widget.autoPlay,
         muted: widget.muted,
       );
@@ -649,13 +651,17 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
       if (local != null && await local.exists()) source = local.path;
       final url = widget.url;
       if (source == null && url != null && url.isNotEmpty) {
-        final cached = await _cacheManager.getFileFromCache(url);
-        source = cached?.file.path ?? url;
+        final cached = await VideoMediaCache.cachedFile(url);
+        source = cached?.path ?? url;
       }
       if (_disposed || source == null) return;
       await player.setVolume(widget.muted ? 0 : 100);
       if (_disposed) return;
       await player.open(Media(source), play: widget.autoPlay);
+      if (source == url && url != null && url.isNotEmpty) {
+        unawaited(Future<void>.delayed(
+            const Duration(seconds: 2), () => VideoMediaCache.remember(url)));
+      }
     } catch (_) {
       if (mounted && !_disposed) IMViews.showToast(StrRes.videoPlaybackFailed);
     }

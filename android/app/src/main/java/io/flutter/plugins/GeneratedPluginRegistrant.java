@@ -141,6 +141,11 @@ public final class GeneratedPluginRegistrant {
       Log.e(TAG, "Error registering plugin just_audio, com.ryanheise.just_audio.JustAudioPlugin", e);
     }
     try {
+      flutterEngine.getPlugins().add(new com.ryanheise.just_waveform.JustWaveformPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin just_waveform, com.ryanheise.just_waveform.JustWaveformPlugin", e);
+    }
+    try {
       flutterEngine.getPlugins().add(new io.livekit.plugin.LiveKitPlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin livekit_client, io.livekit.plugin.LiveKitPlugin", e);

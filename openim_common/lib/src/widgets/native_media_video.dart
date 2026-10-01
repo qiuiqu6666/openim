@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
 
+import 'video_media_cache.dart';
+
 /// Mobile playback uses platform players rather than the mpv FFI lifecycle.
 class NativeMediaVideo extends StatefulWidget {
   const NativeMediaVideo(
@@ -11,10 +13,11 @@ class NativeMediaVideo extends StatefulWidget {
       this.file,
       this.url,
       this.path,
+      this.coverUrl,
       required this.autoPlay,
       required this.muted});
   final File? file;
-  final String? url, path;
+  final String? url, path, coverUrl;
   final bool autoPlay, muted;
   @override
   State<NativeMediaVideo> createState() => _NativeMediaVideoState();
@@ -41,8 +44,12 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
       if (!local && (url == null || url.isEmpty)) {
         throw StateError('Missing video');
       }
-      final controller = local
-          ? VideoPlayerController.file(file)
+      final cached =
+          !local && url != null ? await VideoMediaCache.cachedFile(url) : null;
+      if (_closed) return;
+      final sourceFile = local ? file : cached;
+      final controller = sourceFile != null
+          ? VideoPlayerController.file(sourceFile)
           : VideoPlayerController.networkUrl(Uri.parse(url!));
       _controller = controller;
       await controller.initialize();
@@ -51,6 +58,10 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
       if (_closed) return;
       if (widget.autoPlay) await controller.play();
       if (mounted && !_closed) setState(() {});
+      if (!local && cached == null && url != null) {
+        unawaited(Future<void>.delayed(
+            const Duration(seconds: 2), () => VideoMediaCache.remember(url)));
+      }
     } catch (_) {
       if (mounted && !_closed) setState(() => _failed = true);
     }
@@ -78,7 +89,14 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
     }
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
+      final cover = widget.coverUrl;
+      return Stack(fit: StackFit.expand, children: [
+        if (cover != null && cover.isNotEmpty)
+          Image.network(cover,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+        const Center(child: CircularProgressIndicator()),
+      ]);
     }
     return ValueListenableBuilder<VideoPlayerValue>(
       valueListenable: controller,
@@ -156,7 +174,7 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
                             ),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 4,
-                                  vertical: 20,
+                              vertical: 20,
                             ),
                           ),
                         ),

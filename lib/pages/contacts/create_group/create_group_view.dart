@@ -73,7 +73,7 @@ class CreateGroupPage extends StatelessWidget {
                     style: Styles.ts_0C1C33_17sp,
                     autofocus: true,
                     controller: logic.nameCtrl,
-                    inputFormatters: [LengthLimitingTextInputFormatter(16)],
+                    inputFormatters: [LengthLimitingTextInputFormatter(30)],
                     decoration: InputDecoration(
                       hintStyle: Styles.ts_8E9AB0_17sp,
                       hintText: StrRes.plsEnterGroupNameHint,
@@ -99,7 +99,8 @@ class CreateGroupPage extends StatelessWidget {
                 children: [
                   StrRes.groupMember.toText..style = Styles.ts_8E9AB0_17sp,
                   const Spacer(),
-                  sprintf(StrRes.nPerson, [logic.allList.length]).toText..style = Styles.ts_8E9AB0_17sp,
+                  sprintf(StrRes.nPerson, [logic.allList.length]).toText
+                    ..style = Styles.ts_8E9AB0_17sp,
                 ],
               ),
             ),

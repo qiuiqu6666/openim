@@ -23,6 +23,14 @@ class AccountSetupPage extends StatelessWidget {
               children: [
                 10.verticalSpace,
                 _buildItemView(
+                    label: 'sdkGlobalMute'.tr,
+                    switchOn:
+                        logic.imLogic.userInfo.value.globalRecvMsgOpt == 2,
+                    showSwitchButton: true,
+                    onChanged: logic.globalMuteBusy.value
+                        ? null
+                        : logic.setGlobalMute),
+                _buildItemView(
                   label: 'showLastSeen'.tr,
                   switchOn: logic.presenceVisibility.showLastSeen.value,
                   showSwitchButton: true,

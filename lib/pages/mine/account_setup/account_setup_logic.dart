@@ -118,13 +118,32 @@ class AccountSetupLogic extends GetxController with WidgetsBindingObserver {
       Logger.print('updateFriendAddPermission failed: $error');
       if (!isClosed) {
         final unsupported = error is StateError &&
-            error.message == 'Friend add permission was not saved by the server';
+            error.message ==
+                'Friend add permission was not saved by the server';
         IMViews.showToast(
           unsupported ? 'friendAddSettingsUnsupported'.tr : StrRes.saveFailed,
         );
       }
     } finally {
       if (!isClosed) friendSettingsBusy.value = false;
+    }
+  }
+
+  final globalMuteBusy = false.obs;
+  Future<void> setGlobalMute(bool value) async {
+    if (globalMuteBusy.value) return;
+    globalMuteBusy.value = true;
+    try {
+      await OpenIM.iMManager.userManager
+          .setGlobalRecvMessageOpt(status: value ? 2 : 0);
+      final user = await OpenIM.iMManager.userManager.getSelfUserInfo();
+      if (!isClosed)
+        imLogic.userInfo
+            .update((info) => info?.globalRecvMsgOpt = user.globalRecvMsgOpt);
+    } catch (error) {
+      IMViews.showToast(error.toString());
+    } finally {
+      if (!isClosed) globalMuteBusy.value = false;
     }
   }
 

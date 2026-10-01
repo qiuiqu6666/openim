@@ -53,7 +53,7 @@ class Config {
       );
 
   static const friendScheme = "io.openim.app/addFriend/";
-  static const groupScheme = "io.openim.app/joinGroup/";
+  static const groupScheme = "https://99chat.vip?group=";
 
   static const _host = "8.217.191.236";
 

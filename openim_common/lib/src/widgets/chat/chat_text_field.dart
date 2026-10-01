@@ -1,8 +1,6 @@
 import 'package:extended_text_field/extended_text_field.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:openim_common/openim_common.dart';
 
 class ChatTextField extends StatelessWidget {
   final FocusNode? focusNode;
@@ -15,7 +13,7 @@ class ChatTextField extends StatelessWidget {
   final TextAlign textAlign;
 
   const ChatTextField({
-    Key? key,
+    super.key,
     this.focusNode,
     this.controller,
     this.hintText,
@@ -23,7 +21,7 @@ class ChatTextField extends StatelessWidget {
     this.atStyle,
     this.enabled = true,
     this.textAlign = TextAlign.start,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -41,9 +39,12 @@ class ChatTextField extends StatelessWidget {
         border: InputBorder.none,
         isDense: true,
         hintText: hintText,
-        hintStyle: Styles.ts_8E9AB0_17sp,
+        hintStyle: TextStyle(
+          fontSize: 16.sp,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
         contentPadding: EdgeInsets.symmetric(
-          horizontal: 4.w,
+          horizontal: 10.w,
           vertical: 8.h,
         ),
       ),

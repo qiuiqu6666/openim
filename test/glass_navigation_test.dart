@@ -116,6 +116,19 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('bottom surface meets safe area without extra gap', (tester) async {
+    for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+      await pumpNavigation(tester, platform: platform);
+      final bar = tester.getRect(find.byType(GlassBottomNavBar));
+      final surface = platform == TargetPlatform.android
+          ? find.descendant(of: find.byType(GlassBottomNavBar), matching: find.byType(LiquidGlassSurface))
+          : find.byType(glass.GlassBottomBar);
+      expect(bar.bottom, 812);
+      expect(tester.getRect(surface).bottom, 812 - 34);
+      expect(bar.height, NavigationGlassTokens.barHeight + NavigationGlassTokens.gap + 34);
+    }
+  });
+
   for (final brightness in Brightness.values) {
     testWidgets('${brightness.name} mode changes preserve large-text geometry',
         (tester) async {

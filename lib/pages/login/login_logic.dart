@@ -179,7 +179,7 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
       };
       await DataSp.putLoginCertificate(data);
       await DataSp.putLoginAccount(account);
-      Logger.print('login : ${data.userID}, token: ${data.imToken}');
+      Logger.print('Login credentials received');
       await imLogic.login(data.userID, data.imToken);
       Logger.print('im login success');
       PushController.login(
@@ -191,8 +191,8 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
       );
       Logger.print('push login success');
       return true;
-    } catch (e, s) {
-      Logger.print('login e: $e $s');
+    } catch (e) {
+      Logger.print('Login failed');
     }
     return false;
   }

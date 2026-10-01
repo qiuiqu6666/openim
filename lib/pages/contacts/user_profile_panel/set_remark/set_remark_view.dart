@@ -42,7 +42,12 @@ class SetFriendRemarkPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Styles.c_F4F5F7,
-        appBar: GlassAppBar(
+        appBar: AppBar(
+          toolbarHeight: NavigationGlassTokens.toolbarHeight,
+          backgroundColor: Styles.c_F4F5F7,
+          surfaceTintColor: Styles.c_F4F5F7,
+          elevation: 0,
+          scrolledUnderElevation: 0,
           automaticallyImplyLeading: false,
           leading: IconButton(
             onPressed: Get.back,
@@ -70,6 +75,7 @@ class SetFriendRemarkPage extends StatelessWidget {
                   url: avatarURL,
                   text: avatarName,
                   isGroup: isGroupAvatar,
+                  isCircle: true,
                   width: 96.w,
                   height: 96.w,
                   textStyle: TextStyle(

@@ -25,6 +25,8 @@ enum KickoffType {
 mixin IMCallback {
   final initLogic = Get.find<AppController>();
 
+  final revokedMessages = PublishSubject<RevokedInfo>();
+  final deletedMessages = PublishSubject<Message>();
   Function(RevokedInfo info)? onRecvMessageRevoked;
 
   Function(List<ReadReceiptInfo> list)? onRecvC2CReadReceipt;
@@ -118,6 +120,7 @@ mixin IMCallback {
   }
 
   void recvMessageRevoked(RevokedInfo info) {
+    revokedMessages.addSafely(info);
     onRecvMessageRevoked?.call(info);
   }
 
@@ -237,6 +240,9 @@ mixin IMCallback {
   }
 
   void close() {
+    revokedMessages.close();
+    deletedMessages.close();
+    inputStateChangedSubject.close();
     initializedSubject.close();
     friendApplicationChangedSubject.close();
     friendAddSubject.close();

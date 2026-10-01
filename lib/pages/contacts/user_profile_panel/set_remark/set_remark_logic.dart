@@ -6,7 +6,7 @@ import 'package:openim_common/openim_common.dart';
 import '../user_profile _panel_logic.dart';
 
 class SetFriendRemarkLogic extends GetxController {
-  static const maxRemarkLength = 16;
+  static const maxRemarkLength = 30;
 
   final userProfilesLogic =
       Get.find<UserProfilePanelLogic>(tag: GetTags.userProfile);

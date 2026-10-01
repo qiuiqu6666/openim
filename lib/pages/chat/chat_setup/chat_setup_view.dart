@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'chat_setup_logic.dart';
+import 'message_retention_page.dart';
 
 class ChatSetupPage extends StatelessWidget {
   final logic = Get.find<ChatSetupLogic>();
@@ -28,6 +29,7 @@ class ChatSetupPage extends StatelessWidget {
         child: Obx(() => Column(
               children: [
                 _buildBaseInfoView(),
+                _buildItemView(text: 'sdkRetention'.tr, showRightArrow: true, onTap: () => Get.to(() => MessageRetentionPage(conversation: logic.conversationInfo.value))),
                 _buildItemView(
                     text: 'findChatContent'.tr,
                     showRightArrow: true,

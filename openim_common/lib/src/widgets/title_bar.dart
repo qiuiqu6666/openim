@@ -130,102 +130,72 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
   })  : backgroundColor = null,
         height = chatToolbarHeight,
         showUnderline = false,
-        center = isSingleChat
-            ? Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: onClickMoreBtn,
-                  child: Row(
+        center = Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: onClickMoreBtn,
+            child: Row(
+              children: [
+                Stack(clipBehavior: Clip.none, children: [
+                  AvatarView(
+                    width: 32.w,
+                    height: 32.w,
+                    url: avatarUrl,
+                    text: title,
+                    isCircle: true,
+                    isGroup: !isSingleChat,
+                  ),
+                  if (isSingleChat && isOnline)
+                    Positioned(
+                        right: -1.w,
+                        bottom: -1.h,
+                        child: Container(
+                            width: 9.w,
+                            height: 9.w,
+                            decoration: BoxDecoration(
+                                color: Styles.c_18E875,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: Styles.c_FFFFFF, width: 1.5.w))))
+                ]),
+                8.horizontalSpace,
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Stack(clipBehavior: Clip.none, children: [
-                        AvatarView(
-                          width: 32.w,
-                          height: 32.w,
-                          url: avatarUrl,
-                          text: title,
-                          isCircle: true,
-                        ),
-                        if (isOnline)
-                          Positioned(
-                              right: -1.w,
-                              bottom: -1.h,
-                              child: Container(
-                                  width: 9.w,
-                                  height: 9.w,
-                                  decoration: BoxDecoration(
-                                      color: Styles.c_18E875,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                          color: Styles.c_FFFFFF,
-                                          width: 1.5.w))))
-                      ]),
-                      8.horizontalSpace,
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(title?.trim() ?? '',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Styles.ts_0C1C33_17sp_semibold),
-                            if (presenceText != null)
-                              Text(presenceText,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      color: isOnline
-                                          ? Styles.c_0089FF
-                                          : Styles.c_8E9AB0,
-                                      fontSize: 11.sp))
-                          ],
-                        ),
-                      ),
+                      Text(title?.trim() ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Styles.ts_0C1C33_17sp),
+                      if (isSingleChat ? presenceText != null : member != null)
+                        Text(isSingleChat ? presenceText! : member!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: isOnline
+                                    ? Styles.c_0089FF
+                                    : Styles.c_8E9AB0,
+                                fontSize: 11.sp))
                     ],
                   ),
                 ),
-              )
-            : Flexible(
-                child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (null != title)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Flexible(
-                            flex: 5,
-                            child: Container(
-                              child: title.trim().toText
-                                ..style = Styles.ts_0C1C33_17sp_semibold
-                                ..maxLines = 1
-                                ..overflow = TextOverflow.ellipsis
-                                ..textAlign = TextAlign.center,
-                            )),
-                        if (null != member)
-                          Flexible(
-                              flex: 2,
-                              child: Container(
-                                  child: member.toText
-                                    ..style = Styles.ts_0C1C33_17sp_semibold
-                                    ..maxLines = 1))
-                      ],
-                    ),
-                ],
-              )),
+              ],
+            ),
+          ),
+        ),
         left = SizedBox(
-            width: isSingleChat ? 32.w : (showCallBtn ? 48.w : 24.w),
+            width: 32.w,
             child: isMultiModel
                 ? (StrRes.cancel.toText
                   ..style = Styles.ts_0C1C33_17sp
                   ..onTap = onCloseMultiModel)
                 : Transform.translate(
-                    offset: Offset(isSingleChat ? -8.w : 0, 0),
+                    offset: Offset(-8.w, 0),
                     child: ImageRes.backBlack.toImage
                       ..width = 24.w
                       ..height = 24.h
-                      ..color = isSingleChat ? Styles.c_0089FF : null
+                      ..color = Styles.c_0089FF
                       ..onTap = (() => Get.back()))),
         right = isSingleChat
             ? Row(mainAxisSize: MainAxisSize.min, children: [
@@ -246,24 +216,18 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
                         BoxConstraints.tightFor(width: 40.w, height: 40.h),
                     padding: EdgeInsets.zero)
               ])
-            : SizedBox(
-                width: 16.w + (showCallBtn ? 56.w : 28.w),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showCallBtn)
-                      ImageRes.callBack.toImage
-                        ..width = 28.w
-                        ..height = 28.h
-                        ..opacity = isMuted ? 0.4 : 1
-                        ..onTap = isMuted ? null : onClickCallBtn,
-                    16.horizontalSpace,
-                    ImageRes.moreBlack.toImage
-                      ..width = 28.w
-                      ..height = 28.h
-                      ..onTap = onClickMoreBtn,
-                  ],
-                ));
+            : Row(mainAxisSize: MainAxisSize.min, children: [
+                if (showCallBtn && onClickCallBtn != null)
+                  IconButton(
+                    icon: Icon(CupertinoIcons.phone_fill,
+                        color: Styles.c_0089FF, size: 23.w),
+                    tooltip: StrRes.callVoice,
+                    onPressed: isMuted ? null : onClickCallBtn,
+                    constraints:
+                        BoxConstraints.tightFor(width: 40.w, height: 40.h),
+                    padding: EdgeInsets.zero,
+                  ),
+              ]);
 
   TitleBar.back({
     super.key,

@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
+import 'sticker_video_message.dart';
+
 class ChatPictureGallery {
   const ChatPictureGallery({required this.sources, required this.initialIndex});
 
@@ -17,6 +19,7 @@ class ChatPictureGallery {
     var initialIndex = -1;
 
     void add(Message message) {
+      if (isStickerVideoMessage(message)) return;
       final video = message.contentType == MessageType.video;
       if (!video && message.contentType != MessageType.picture) return;
       final picture = message.pictureElem;

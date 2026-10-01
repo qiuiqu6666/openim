@@ -7,9 +7,13 @@ class ChatNoticeView extends StatelessWidget {
     Key? key,
     required this.isISend,
     required this.content,
+    this.time,
+    this.patterns = const [],
   }) : super(key: key);
   final bool isISend;
   final String content;
+  final String? time;
+  final List<MatchPattern> patterns;
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +37,14 @@ class ChatNoticeView extends StatelessWidget {
             ],
           ),
           6.verticalSpace,
-          content.toText..style = Styles.ts_0C1C33_17sp,
+          ChatText(text: content, patterns: patterns),
+          if (time != null) ...[
+            6.verticalSpace,
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Text(time!, style: Styles.ts_8E9AB0_12sp),
+            ),
+          ],
         ],
       ),
     );

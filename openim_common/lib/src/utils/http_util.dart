@@ -1,13 +1,12 @@
+import 'dart:typed_data';
 import 'dart:io';
 import 'dart:ui';
 
 import 'package:dio/dio.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart' hide FormData, MultipartFile;
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:talker_dio_logger/talker_dio_logger.dart';
 
 var dio = Dio();
 
@@ -16,17 +15,6 @@ class HttpUtil {
 
   static void init() {
     dio
-      ..interceptors.add(
-        TalkerDioLogger(
-          settings: const TalkerDioLoggerSettings(
-            printRequestHeaders: kDebugMode,
-            printRequestData: kDebugMode,
-            printResponseMessage: kDebugMode,
-            printResponseData: kDebugMode,
-            printResponseHeaders: kDebugMode,
-          ),
-        ),
-      )
       ..interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
         return handler.next(options); //continue
       }, onResponse: (response, handler) {

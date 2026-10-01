@@ -722,14 +722,55 @@ class IMUtils {
     bool isConversation = false,
     bool replaceIdToNickname = false,
   }) {
+    if (message.hasExpired) return 'sdkExpired'.tr;
     String? content;
     try {
       switch (message.contentType) {
         case MessageType.text:
           content = message.textElem!.content!;
           break;
+        case MessageType.atText:
+          content = message.atTextElem?.text ?? '';
+          final members = [...?message.atTextElem?.atUsersInfo]
+            ..sort((a, b) => (b.atUserID?.length ?? 0)
+                .compareTo(a.atUserID?.length ?? 0));
+          for (final member in members) {
+            final id = member.atUserID;
+            final name = member.groupNickname;
+            if (id != null && id.isNotEmpty && name != null) {
+              content = content!.replaceAll('@$id', '@${getAtNickname(id, name)}');
+            }
+          }
+          content = content!.replaceAll('@atAllTag', '@${StrRes.everyone}');
+          break;
+        case MessageType.advancedText:
+          content = message.advancedTextElem?.text ?? '';
+          break;
+        case MessageType.quote:
+          content = message.quoteElem?.text ?? '';
+          break;
+        case MessageType.merger:
+          content = '[${StrRes.chatRecord}] ${message.mergeElem?.title ?? ''}';
+          break;
+        case MessageType.location:
+          content = '[${StrRes.toolboxLocation}] ${message.locationElem?.description ?? ''}';
+          break;
+        case MessageType.customFace:
+          content = '[${StrRes.emoji}]';
+          break;
         case MessageType.picture:
           content = '[${StrRes.picture}]';
+          break;
+        case MessageType.video:
+          content = '[${StrRes.video}]';
+          break;
+        case MessageType.voice:
+          final duration = message.soundElem?.duration;
+          content = '[${StrRes.voice}]${duration != null && duration > 0 ? ' ${duration}″' : ''}';
+          break;
+        case MessageType.file:
+          final name = message.fileElem?.fileName;
+          content = '[${StrRes.file}]${name != null && name.isNotEmpty ? ' $name' : ''}';
           break;
         case MessageType.card:
           content = '[${StrRes.carte}]${message.cardElem?.nickname ?? ''}';
@@ -740,6 +781,17 @@ class IMUtils {
           var customType = map['customType'];
 
           switch (customType) {
+            case CustomMessageType.emoji:
+              content = '[${StrRes.emoji}]';
+              break;
+            case CustomMessageType.call:
+              final call = parseCustomMessage(message);
+              final type = map['data'] is Map ? map['data']['type'] : null;
+              final label = type == 'audio'
+                  ? StrRes.callVoice
+                  : type == 'video' ? StrRes.callVideo : StrRes.audioAndVideoCall;
+              content = '[$label]${call?['content'] != null ? ' ${call['content']}' : ''}';
+              break;
             case CustomMessageType.blockedByFriend:
               content = StrRes.blockedByFriendHint;
               break;

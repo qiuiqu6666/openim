@@ -126,6 +126,12 @@
 @import just_audio;
 #endif
 
+#if __has_include(<just_waveform/JustWaveformPlugin.h>)
+#import <just_waveform/JustWaveformPlugin.h>
+#else
+@import just_waveform;
+#endif
+
 #if __has_include(<livekit_client/LiveKitPlugin.h>)
 #import <livekit_client/LiveKitPlugin.h>
 #else
@@ -293,6 +299,7 @@
   [ImageGallerySaverPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"ImageGallerySaverPlusPlugin"]];
   [FLTImagePickerPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTImagePickerPlugin"]];
   [JustAudioPlugin registerWithRegistrar:[registry registrarForPlugin:@"JustAudioPlugin"]];
+  [JustWaveformPlugin registerWithRegistrar:[registry registrarForPlugin:@"JustWaveformPlugin"]];
   [LiveKitPlugin registerWithRegistrar:[registry registrarForPlugin:@"LiveKitPlugin"]];
   [LocalAuthPlugin registerWithRegistrar:[registry registrarForPlugin:@"LocalAuthPlugin"]];
   [MapLauncherPlugin registerWithRegistrar:[registry registrarForPlugin:@"MapLauncherPlugin"]];

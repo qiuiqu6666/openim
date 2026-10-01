@@ -15,6 +15,7 @@ enum EditAttr {
 }
 
 class EditMyInfoLogic extends GetxController {
+  static const nicknameMaxLength = 16;
   final imLogic = Get.find<IMController>();
   late TextEditingController inputCtrl;
   late EditAttr editAttr;
@@ -35,7 +36,9 @@ class EditMyInfoLogic extends GetxController {
   @override
   void onInit() {
     editAttr = Get.arguments['editAttr'];
-    maxLength = Get.arguments['maxLength'] ?? 16;
+    maxLength = editAttr == EditAttr.nickname
+        ? nicknameMaxLength
+        : Get.arguments['maxLength'] ?? nicknameMaxLength;
     _initAttr();
     inputCtrl = TextEditingController(text: defaultValue);
     super.onInit();

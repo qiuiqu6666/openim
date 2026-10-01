@@ -1,12 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart' hide Config;
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
-import 'package:focus_detector_v2/focus_detector_v2.dart';
 import 'package:get/get.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:just_waveform/just_waveform.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -22,22 +24,50 @@ class _ChatFileMessageViewState extends State<ChatFileMessageView> {
   bool _failed = false;
   bool _downloaded = false;
   double? _progress;
+  File? _cachedFile;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLocalFile();
+  }
+
+  Future<void> _checkLocalFile() async {
+    final path = widget.message.fileElem?.filePath;
+    if (path == null || path.isEmpty) return;
+    final file = File(path);
+    if (await file.exists() && mounted) {
+      setState(() {
+        _cachedFile = file;
+        _downloaded = true;
+      });
+    }
+  }
 
   Future<void> _open() async {
     if (_busy) return;
-    setState(() { _busy = true; _failed = false; _progress = null; });
+    setState(() {
+      _busy = true;
+      _failed = false;
+      _progress = null;
+    });
     try {
       final element = widget.message.fileElem!;
       File? file;
-      final path = element.filePath;
+      bool fromCache = false;
+      final path = _cachedFile?.path ?? element.filePath;
       if (path != null && path.isNotEmpty && await File(path).exists()) {
         file = File(path);
       } else {
+        fromCache = true;
         final url = element.sourceUrl;
         if (url == null || url.isEmpty) throw StateError('Missing file URL');
-        await for (final event in DefaultCacheManager().getFileStream(url, withProgress: true)) {
+        await for (final event
+            in DefaultCacheManager().getFileStream(url, withProgress: true)) {
           if (!mounted) return;
-          if (event is DownloadProgress) setState(() => _progress = event.progress);
+          if (event is DownloadProgress) {
+            setState(() => _progress = event.progress);
+          }
           if (event is FileInfo) file = event.file;
         }
       }
@@ -45,16 +75,19 @@ class _ChatFileMessageViewState extends State<ChatFileMessageView> {
       if (file == null) throw StateError('Missing downloaded file');
       final name = element.fileName ?? '';
       // Cache URLs may have no extension; retain the platform file association.
-      final extension = RegExp(r'\.([a-zA-Z0-9]{1,12})$').firstMatch(name)?.group(0);
-      if (extension != null && !file.path.endsWith(extension)) {
+      final extension =
+          RegExp(r'\.([a-zA-Z0-9]{1,12})$').firstMatch(name)?.group(0);
+      if (fromCache && extension != null && !file.path.endsWith(extension)) {
         file = await file.copy('${file.path}$extension');
       }
       if (!mounted) return;
-      setState(() => _downloaded = true);
+      setState(() {
+        _cachedFile = file;
+        _downloaded = true;
+      });
       final result = await OpenFilex.open(file.path,
           type: extension == null ? null : IMUtils.getMediaType(name));
       if (result.type != ResultType.done) throw StateError(result.message);
-      if (mounted) setState(() => _downloaded = true);
     } catch (_) {
       if (mounted) setState(() => _failed = true);
     } finally {
@@ -66,136 +99,278 @@ class _ChatFileMessageViewState extends State<ChatFileMessageView> {
   Widget build(BuildContext context) {
     final file = widget.message.fileElem!;
     final bytes = file.fileSize ?? 0;
-    final size = bytes < 1024 ? '$bytes B' : bytes < 1048576
-        ? '${(bytes / 1024).toStringAsFixed(1)} KB'
-        : '${(bytes / 1048576).toStringAsFixed(1)} MB';
+    final size = bytes < 1024
+        ? '$bytes B'
+        : bytes < 1048576
+            ? '${(bytes / 1024).toStringAsFixed(1)} KB'
+            : '${(bytes / 1048576).toStringAsFixed(1)} MB';
     return GestureDetector(
       onTap: _open,
       behavior: HitTestBehavior.opaque,
-      child: SizedBox(width: 220, child: Row(children: [
-        Icon(Icons.insert_drive_file_outlined, size: 32, color: Styles.c_0089FF),
-        const SizedBox(width: 8),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(file.fileName ?? 'attachmentFile'.tr, maxLines: 2,
-              overflow: TextOverflow.ellipsis, style: Styles.ts_0C1C33_17sp),
-          Text(size, style: Styles.ts_8E9AB0_12sp),
-          Text(_busy ? (_progress == null ? 'attachmentLoading'.tr
-              : '${(_progress! * 100).round()}%') : _failed ? 'attachmentRetry'.tr
-              : _downloaded ? 'attachmentOpen'.tr : 'attachmentDownload'.tr,
-              style: Styles.ts_8E9AB0_12sp),
-        ])),
-      ])),
+      child: SizedBox(
+          width: 200.w,
+          child: Row(children: [
+            ChatAttachmentIcon(
+                size: 32.w,
+                child: Icon(Icons.insert_drive_file_outlined,
+                    size: 20.w, color: Styles.c_0089FF)),
+            8.horizontalSpace,
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(file.fileName ?? 'attachmentFile'.tr,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Styles.ts_0C1C33_17sp.copyWith(
+                          fontSize: 14.sp, fontWeight: FontWeight.w500)),
+                  3.verticalSpace,
+                  Wrap(spacing: 8.w, runSpacing: 2.h, children: [
+                    Text(size, style: Styles.ts_8E9AB0_12sp.copyWith(fontSize: 11.sp)),
+                    Text(
+                        _busy
+                            ? (_progress == null
+                                ? 'attachmentLoading'.tr
+                                : '${(_progress! * 100).round()}%')
+                            : _failed
+                                ? 'attachmentRetry'.tr
+                                : _downloaded
+                                    ? 'attachmentOpen'.tr
+                                    : 'attachmentDownload'.tr,
+                        style: Styles.ts_8E9AB0_12sp.copyWith(
+                            fontSize: 11.sp,
+                            color:
+                                _failed ? Styles.c_FF381F : Styles.c_0089FF)),
+                  ]),
+                ])),
+          ])),
     );
   }
 }
 
 class ChatVoiceMessageView extends StatefulWidget {
-  const ChatVoiceMessageView({super.key, required this.message, required this.isOutgoing});
+  const ChatVoiceMessageView(
+      {super.key,
+      required this.message,
+      required this.isOutgoing,
+      this.onPlayed,
+      this.playback});
   final Message message;
   final bool isOutgoing;
+  final Future<void> Function()? onPlayed;
+  final VoicePlaybackController? playback;
   @override
   State<ChatVoiceMessageView> createState() => _ChatVoiceMessageViewState();
 }
 
-class _ChatVoiceMessageViewState extends State<ChatVoiceMessageView>
-    with WidgetsBindingObserver {
-  static _ChatVoiceMessageViewState? _active;
-  static int _generation = 0;
-  AudioPlayer? _player;
-  bool _loading = false;
-  bool _playing = false;
-  bool _failed = false;
+class _ChatVoiceMessageViewState extends State<ChatVoiceMessageView> {
+  late VoicePlaybackController _playback;
   bool _heard = false;
-  bool _loaded = false;
-  Future<void>? _loadingSource;
+  bool get _current =>
+      _playback.current?.clientMsgID == widget.message.clientMsgID;
+  bool get _loading => _current && _playback.loading;
+  bool get _playing => _current && _playback.playing;
+  bool get _failed => _current && _playback.failed;
 
-  @override
-  void initState() { super.initState(); WidgetsBinding.instance.addObserver(this); }
-
-  void _stop() {
-    if (_active == this) { _active = null; _generation++; }
-    unawaited(_player?.pause());
-    if (mounted) setState(() { _playing = false; _loading = false; });
+  void _changed() {
+    if (!mounted) return;
+    setState(() {
+      if (_playing) _heard = true;
+    });
   }
 
-  Future<void> _toggle() async {
-    if (_playing || _loading) { _stop(); return; }
-    _active?._stop();
-    _active = this;
-    final generation = ++_generation;
-    setState(() { _loading = true; _failed = false; });
+  List<double> _waveform = const [];
+  static final Map<String, Future<List<double>>> _waveJobs = {};
+
+  Future<void> _prepareWaveform() async {
+    final sound = widget.message.soundElem;
+    final key = widget.message.clientMsgID;
+    if (sound == null || key == null) return;
     try {
-      final player = _player ??= AudioPlayer();
-      if (!_loaded) await (_loadingSource ??= _loadSource(player));
-      if (player.processingState == ProcessingState.completed) {
-        await player.seek(Duration.zero);
-      }
-      if (!mounted || generation != _generation) return;
-      setState(() { _loading = false; _playing = true; _heard = true; });
-      await player.play();
-      if (mounted && generation == _generation) _stop();
+      final job = _waveJobs.putIfAbsent(key, () async {
+        final directory = Directory('${Config.cachePath}/voice_waveforms');
+        await directory.create(recursive: true);
+        final name = base64Url.encode(utf8.encode(key));
+        final cache = File('${directory.path}/$name.json');
+        if (await cache.exists()) {
+          try {
+            final values = (jsonDecode(await cache.readAsString()) as List)
+                .map((v) => (v as num).toDouble())
+                .toList();
+            if (values.length == 16) return values;
+          } catch (_) {}
+        }
+        final local = sound.soundPath;
+        final File audio;
+        if (local != null && local.isNotEmpty && await File(local).exists()) {
+          audio = File(local);
+        } else {
+          final url = sound.sourceUrl;
+          if (url == null || url.isEmpty) return <double>[];
+          audio = await DefaultCacheManager().getSingleFile(url);
+        }
+        final output = File('${directory.path}/$name.wave');
+        try {
+          final result = await JustWaveform.extract(
+                  audioInFile: audio, waveOutFile: output)
+              .last;
+          final samples = result.waveform?.data;
+          if (samples == null || samples.isEmpty) return <double>[];
+          final peaks = List.generate(16, (i) {
+            final start = i * samples.length ~/ 16;
+            final end = math.max(start + 1, (i + 1) * samples.length ~/ 16);
+            var peak = 0.0;
+            for (var j = start; j < end && j < samples.length; j++) {
+              peak = math.max(peak, samples[j].abs().toDouble());
+            }
+            return peak;
+          });
+          final maxPeak = peaks.reduce(math.max);
+          final normalized =
+              peaks.map((v) => maxPeak == 0 ? 0.0 : v / maxPeak).toList();
+          await cache.writeAsString(jsonEncode(normalized));
+          return normalized;
+        } finally {
+          if (await output.exists()) await output.delete();
+        }
+      });
+      final values = await job;
+      if (mounted) setState(() => _waveform = values);
     } catch (_) {
-      if (mounted && generation == _generation) {
-        _stop();
-        setState(() => _failed = true);
-      }
-    }
-  }
-
-  Future<void> _loadSource(AudioPlayer player) async {
-    try {
-      final sound = widget.message.soundElem!;
-      final path = sound.soundPath;
-      if (path != null && path.isNotEmpty && await File(path).exists()) {
-        await player.setFilePath(path);
-      } else {
-        final url = sound.sourceUrl;
-        if (url == null || url.isEmpty) throw StateError('Missing audio URL');
-        await player.setUrl(url);
-      }
-      _loaded = true;
+      // Keep a neutral placeholder if extraction is unavailable; never invent peaks.
     } finally {
-      _loadingSource = null;
+      _waveJobs.remove(key);
     }
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _stop();
+  void initState() {
+    super.initState();
+    _playback = widget.playback ??
+        VoicePlaybackController(
+          messages: () => [widget.message],
+          onPlayed: (_) async {
+            await widget.onPlayed?.call();
+          },
+        );
+    _playback.addListener(_changed);
+    try {
+      _heard = jsonDecode(widget.message.localEx ?? '{}')['voiceHeard'] == true;
+    } catch (_) {}
+    unawaited(_prepareWaveform());
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    if (_active == this) { _active = null; _generation++; }
-    unawaited(_player?.dispose());
+    _playback.removeListener(_changed);
+    if (widget.playback == null) _playback.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final duration = widget.message.soundElem?.duration ?? 0;
-    return FocusDetector(
-      onFocusLost: _stop,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _toggle,
-        child: Semantics(button: true,
-          label: _playing ? 'attachmentPause'.tr : 'attachmentPlay'.tr,
-          child: SizedBox(width: (96 + duration * 2).clamp(96, 210).toDouble(),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(_loading ? Icons.hourglass_top : _playing ? Icons.pause
-                  : Icons.play_arrow, color: Styles.c_0C1C33),
-              const SizedBox(width: 8),
-              Flexible(child: Text(_failed ? 'attachmentRetry'.tr : '$duration″',
-                  style: Styles.ts_0C1C33_17sp)),
-              if (!widget.isOutgoing && !_heard && widget.message.isRead != true) ...[
+    // Match the reference width; the parent still constrains narrow screens.
+    final bubbleContentWidth = 128.w;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _playback.toggle(widget.message),
+      child: Semantics(
+        button: true,
+        label: _playing ? 'attachmentPause'.tr : 'attachmentPlay'.tr,
+        child: SizedBox(
+            width: bubbleContentWidth,
+            child: Row(children: [
+              Container(
+                width: 24.w,
+                height: 24.w,
+                decoration: BoxDecoration(
+                    color: Styles.c_0089FF, shape: BoxShape.circle),
+                alignment: Alignment.center,
+                child: _loading
+                    ? SizedBox(
+                        width: 18.w,
+                        height: 18.w,
+                        child: const CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : Icon(
+                        _failed
+                            ? Icons.refresh_rounded
+                            : _playing
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 18.w),
+              ),
+              6.horizontalSpace,
+              Expanded(
+                  child: StreamBuilder<Duration>(
+                stream: _current ? _playback.positionStream : null,
+                builder: (_, snapshot) => CustomPaint(
+                  size: Size(double.infinity, 18.w),
+                  painter: _VoiceWavePainter(
+                    levels: _waveform,
+                    color: Styles.c_8E9AB0,
+                    playedColor: Styles.c_0089FF,
+                    progress: _playing && duration > 0
+                        ? ((snapshot.data?.inMilliseconds ?? 0) /
+                                (duration * 1000))
+                            .clamp(0.0, 1.0)
+                        : 0,
+                  ),
+                ),
+              )),
+              6.horizontalSpace,
+              Text('$duration″',
+                  style: Styles.ts_0C1C33_17sp.copyWith(fontSize: 12.sp, fontWeight: FontWeight.w500)),
+              if (!widget.isOutgoing && !_heard) ...[
                 const SizedBox(width: 6),
                 Icon(Icons.circle, size: 6, color: Styles.c_0089FF),
               ],
             ])),
-        ),
       ),
     );
   }
+}
+
+class _VoiceWavePainter extends CustomPainter {
+  const _VoiceWavePainter(
+      {required this.levels,
+      required this.color,
+      required this.playedColor,
+      required this.progress});
+  final List<double> levels;
+  final Color color;
+  final Color playedColor;
+  final double progress;
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (levels.isEmpty) {
+      canvas.drawLine(
+          Offset(0, size.height / 2),
+          Offset(size.width, size.height / 2),
+          Paint()
+            ..color = color.withValues(alpha: .35)
+            ..strokeWidth = 1);
+      return;
+    }
+    final step = size.width / levels.length;
+    final paint = Paint()
+      ..strokeWidth = math.min(2.0.w, step * .4)
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < levels.length; i++) {
+      paint.color = (i + .5) / levels.length <= progress ? playedColor : color;
+      final height = math.max(0.0, size.height * levels[i] - paint.strokeWidth);
+      final x = step * (i + .5);
+      canvas.drawLine(Offset(x, (size.height - height) / 2),
+          Offset(x, (size.height + height) / 2), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _VoiceWavePainter old) =>
+      old.levels != levels ||
+      old.color != color ||
+      old.playedColor != playedColor ||
+      old.progress != progress;
 }

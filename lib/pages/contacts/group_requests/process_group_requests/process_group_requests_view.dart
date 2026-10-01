@@ -85,7 +85,15 @@ class ProcessGroupRequestsPage extends StatelessWidget {
               ],
             ),
             12.verticalSpace,
-            Row(
+            Obx(() => logic.handleResult.value != 0
+                ? Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12.h),
+                    child: Text(
+                      logic.handleResult.value == 1 ? StrRes.approved : StrRes.rejected,
+                      style: Styles.ts_8E9AB0_14sp,
+                    ),
+                  )
+                : Row(
               children: [
                 Flexible(child: _buildRejectButton()),
                 12.horizontalSpace,
@@ -97,7 +105,7 @@ class ProcessGroupRequestsPage extends StatelessWidget {
                   ),
                 ),
               ],
-            )
+            ))
           ],
         ),
       ),

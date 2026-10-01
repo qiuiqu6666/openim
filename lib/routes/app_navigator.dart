@@ -184,14 +184,19 @@ class AppNavigator {
         'faceUrl': faceUrl,
       });
 
-  static Future<T?>? startGroupMemberList<T>({
+  static Future<T?> startGroupMemberList<T>({
     required GroupInfo groupInfo,
     GroupMemberOpType opType = GroupMemberOpType.view,
-  }) =>
-      Get.toNamed(AppRoutes.groupMemberList, preventDuplicates: false, arguments: {
+  }) async {
+    // Named GetX routes are registered as dynamic. Convert the result after
+    // navigation completes instead of requiring a typed Route at push time.
+    final result = await Get.toNamed<dynamic>(AppRoutes.groupMemberList,
+        preventDuplicates: false, arguments: {
         'groupInfo': groupInfo,
         'opType': opType,
       });
+    return result as T?;
+  }
 
   static startSearchGroupMember({
     required GroupInfo groupInfo,

@@ -92,3 +92,7 @@ export 'src/controller/push_controller.dart';
 
 export 'src/widgets/liquid_glass_surface.dart';
 export 'src/widgets/navigation_glass_controller.dart';
+
+export 'src/widgets/group_qr_scanner.dart';
+
+export 'src/widgets/chat/voice_playback_controller.dart';

@@ -1,11 +1,6 @@
-import 'dart:math';
-
-import 'package:common_utils/common_utils.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:sprintf/sprintf.dart';
 
 import 'group_profile_panel_logic.dart';
 
@@ -14,135 +9,132 @@ class GroupProfilePanelPage extends StatelessWidget {
 
   GroupProfilePanelPage({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: TitleBar.back(),
-      backgroundColor: Styles.c_F8F9FA,
-      body: Obx(() => Column(
-            children: [
-              _buildBaseInfo(),
-              if (logic.members.isNotEmpty) _buildGroupMemberList(),
-              Container(
-                height: 56.h,
-                color: Styles.c_FFFFFF,
-                padding: EdgeInsets.symmetric(horizontal: 16.w),
-                child: Row(
-                  children: [
-                    StrRes.groupID.toText..style = Styles.ts_0C1C33_17sp,
-                    12.horizontalSpace,
-                    logic.groupInfo.value.groupID.toText
-                      ..style = Styles.ts_8E9AB0_17sp,
-                  ],
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                color: Styles.c_FFFFFF,
-                child: Button(
-                  text: logic.isJoined.value
-                      ? StrRes.enterGroup
-                      : StrRes.applyJoin,
-                  onTap: logic.enterGroup,
-                ),
-              ),
-            ],
-          )),
-    );
-  }
+  static const _muted = Color(0xFF8993A7);
+  static const _card = Color(0xFFF7F8FA);
 
-  Widget _buildBaseInfo() => Container(
-        height: 80.h,
-        color: Styles.c_FFFFFF,
-        padding: EdgeInsets.symmetric(horizontal: 16.w),
-        margin: EdgeInsets.only(bottom: 10.h),
-        child: Row(
-          children: [
-            AvatarView(
-              width: 48.w,
-              height: 48.h,
-              url: logic.groupInfo.value.faceURL,
-              text: logic.groupInfo.value.groupName,
-              isGroup: true,
-              enabledPreview: true,
-            ),
-            12.horizontalSpace,
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  (logic.groupInfo.value.groupName ?? '').toText
-                    ..style = Styles.ts_0C1C33_17sp_medium,
-                  4.verticalSpace,
-                  Row(
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Colors.white,
+        appBar: GlassAppBar(
+          backgroundColor: Colors.white,
+          leading: IconButton(
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+            onPressed: () => Get.back(),
+            icon: Icon(Icons.arrow_back_ios_new,
+                color: Styles.c_0089FF, size: 22),
+          ),
+        ),
+        body: Obx(() {
+          final group = logic.groupInfo.value;
+          return SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 36, 16, 24),
                     children: [
-                      ImageRes.createGroupTime.toImage
-                        ..width = 12.w
-                        ..height = 12.h,
-                      6.horizontalSpace,
-                      DateUtil.formatDateMs(
-                        (logic.groupInfo.value.createTime ?? 0),
-                        format: IMUtils.getTimeFormat1(),
-                      ).toText
-                        ..style = Styles.ts_8E9AB0_14sp,
+                      Center(
+                        child: AvatarView(
+                          width: 90,
+                          height: 90,
+                          url: group.faceURL,
+                          text: group.groupName,
+                          isGroup: true,
+                          isCircle: true,
+                          enabledPreview: true,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        group.groupName ?? '',
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 23,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF11151D),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '共${group.memberCount ?? logic.members.length}人',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 16, color: _muted),
+                      ),
+                      const SizedBox(height: 32),
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(18, 14, 12, 14),
+                        decoration: BoxDecoration(
+                          color: _card,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('群UID',
+                                      style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    group.groupID,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontSize: 15, color: _muted),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: StrRes.copySuccessfully,
+                              onPressed: () =>
+                                  IMUtils.copy(text: group.groupID),
+                              icon: const Icon(Icons.copy_outlined,
+                                  color: _muted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Text('groupAnnouncement'.tr,
+                          style: const TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: _card,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          group.notification?.isNotEmpty == true
+                              ? group.notification!
+                              : 'groupNoAnnouncement'.tr,
+                          style: const TextStyle(fontSize: 15, color: _muted),
+                        ),
+                      ),
                     ],
                   ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-
-  Widget _buildGroupMemberList() => Container(
-        color: Styles.c_FFFFFF,
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-        margin: EdgeInsets.only(bottom: 10.h),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            RichText(
-              text: TextSpan(
-                text: StrRes.groupMember,
-                style: Styles.ts_0C1C33_17sp,
-                children: [
-                  WidgetSpan(child: 12.horizontalSpace),
-                  TextSpan(
-                    text: sprintf(
-                        StrRes.nPerson, [logic.groupInfo.value.memberCount]),
-                    style: Styles.ts_8E9AB0_17sp,
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                  child: Button(
+                    text: logic.isJoined.value
+                        ? StrRes.enterGroup
+                        : StrRes.applyJoin,
+                    onTap: logic.enterGroup,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            10.verticalSpace,
-            GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                crossAxisSpacing: 6.w,
-                childAspectRatio: 1,
-              ),
-              itemCount: min(logic.members.length, 7),
-              shrinkWrap: true,
-              itemBuilder: (_, index) {
-                final member = logic.members.elementAt(index);
-                if (index == 6 && logic.members.length != 7) {
-                  return ImageRes.moreMembers.toImage
-                    ..width = 44.w
-                    ..height = 44.h;
-                }
-                return AvatarView(
-                  width: 44.w,
-                  height: 44.h,
-                  text: member.nickname,
-                  url: member.faceURL,
-                );
-              },
-            ),
-          ],
-        ),
+          );
+        }),
       );
 }

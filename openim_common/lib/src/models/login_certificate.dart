@@ -1,4 +1,3 @@
-import 'dart:convert';
 
 class LoginCertificate {
   String userID;
@@ -20,6 +19,6 @@ class LoginCertificate {
 
   @override
   String toString() {
-    return jsonEncode(this);
+    return 'LoginCertificate(redacted)';
   }
 }

@@ -6,7 +6,6 @@ import 'package:openim_common/openim_common.dart';
 
 import 'user_profile _panel_logic.dart';
 import '../contacts_logic.dart';
-import '../presence_label.dart';
 import '../star_burst_button.dart';
 import '../../../theme/profile_tokens.dart';
 
@@ -23,15 +22,19 @@ class UserProfilePanelPage extends StatelessWidget {
         final user = logic.userInfo.value;
         final canChat = !logic.isMyself &&
             (logic.isFriendship || logic.allowSendMsgNotFriend);
+        final groupManager = logic.isGroupMemberPage &&
+            (logic.iAmOwner.value || logic.iHaveAdminOrOwnerPermission.value);
         final canAdd = !logic.isMyself &&
             !logic.isFriendship &&
-            logic.isAllowAddFriend &&
-            (!logic.isGroupMemberPage ||
-                logic.forceCanAdd == true ||
-                !logic.notAllowAddGroupMemberFriend.value);
+            (groupManager ||
+                (logic.isAllowAddFriend &&
+                    (!logic.isGroupMemberPage ||
+                        logic.forceCanAdd == true ||
+                        !logic.notAllowAddGroupMemberFriend.value)));
         return Scaffold(
           backgroundColor: _background,
           appBar: GlassAppBar(
+            backgroundColor: _background,
             centerTitle: true,
             leading: IconButton(
               tooltip: MaterialLocalizations.of(context).backButtonTooltip,
@@ -73,10 +76,10 @@ class UserProfilePanelPage extends StatelessWidget {
                             : user.gender == 2
                                 ? StrRes.woman
                                 : 'profileGenderPrivate'.tr),
-                    if (!logic.isGroupMemberPage ||
+                    if (logic.isFriendship || logic.isMyself || !logic.isGroupMemberPage ||
                         !logic.notAllowAddGroupMemberFriend.value)
-                      _row('profileChatID'.tr,
-                          value: user.userID,
+                      _row(logic.showMemberIMID ? 'IM ID' : 'profileChatID'.tr,
+                          value: logic.displayedUserID.isEmpty ? '—' : logic.displayedUserID,
                           valueColor: Styles.c_0089FF,
                           onTap: logic.copyID),
                     if (logic.isGroupMemberPage &&
@@ -207,7 +210,7 @@ class UserProfilePanelPage extends StatelessWidget {
   Widget _header({bool stranger = false}) {
     final user = logic.userInfo.value;
     final showID =
-        !logic.isGroupMemberPage || !logic.notAllowAddGroupMemberFriend.value;
+        logic.isFriendship || logic.isMyself || !logic.isGroupMemberPage || !logic.notAllowAddGroupMemberFriend.value;
     return Padding(
       padding: stranger
           ? EdgeInsets.zero
@@ -218,7 +221,7 @@ class UserProfilePanelPage extends StatelessWidget {
             text: user.nickname,
             width: stranger ? ProfileTokens.avatar : 78,
             height: stranger ? ProfileTokens.avatar : 78,
-            isCircle: stranger,
+            isCircle: true,
             enabledPreview: true),
         const SizedBox(width: 14),
         Expanded(
@@ -243,12 +246,12 @@ class UserProfilePanelPage extends StatelessWidget {
                         user.gender == 1 ? Styles.c_0089FF : Colors.pinkAccent),
               ],
             ]),
-            if (showID) ...[
+            if (showID && logic.displayedUserID.isNotEmpty) ...[
               const SizedBox(height: 6),
               if (stranger)
                 InkWell(
                   onTap: logic.copyID,
-                  child: Text('${'profileChatID'.tr}: ${user.userID ?? ''}',
+                  child: Text(logic.displayedUserID,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Styles.ts_8E9AB0_14sp
@@ -266,7 +269,7 @@ class UserProfilePanelPage extends StatelessWidget {
                           horizontal: 12, vertical: 8),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
                         Flexible(
-                            child: Text('ID: ${user.userID ?? ''}',
+                            child: Text(logic.displayedUserID,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(fontSize: 14, color: _muted))),
@@ -277,14 +280,6 @@ class UserProfilePanelPage extends StatelessWidget {
                   ),
                 ),
             ],
-            if (!logic.isMyself && Get.isRegistered<ContactsLogic>())
-              Obx(() {
-                final presence =
-                    Get.find<ContactsLogic>().presence.users[user.userID];
-                return presence == null
-                    ? const SizedBox.shrink()
-                    : PresenceLabel(presence: presence);
-              }),
           ],
         )),
         if (logic.isFriendship &&
@@ -371,7 +366,7 @@ class UserProfilePanelPage extends StatelessWidget {
               Expanded(
                   child: Text(value,
                       textAlign: TextAlign.right,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           fontSize: 15, color: valueColor ?? _muted))),

@@ -8,6 +8,7 @@ import 'package:sprintf/sprintf.dart';
 
 import 'conversation_logic.dart';
 import 'conversation_organizer.dart';
+import 'folder_name_dialog.dart';
 
 class ConversationPage extends StatefulWidget {
   const ConversationPage(
@@ -51,30 +52,10 @@ class _ConversationPageState extends State<ConversationPage>
   }
 
   Future<void> _editFolder(BuildContext context, [ChatFolder? folder]) async {
-    final controller = TextEditingController(text: folder?.name ?? '');
     final name = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(folder == null ? '新建分组' : '重命名分组'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 50,
-          decoration: const InputDecoration(hintText: '分组名称'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('取消')),
-          TextButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
+      builder: (_) => FolderNameDialog(initialName: folder?.name),
     );
-    controller.dispose();
     if (name == null || name.isEmpty) return;
     if (folder == null) {
       await logic.createFolder(name);
@@ -358,7 +339,8 @@ class _ConversationPageState extends State<ConversationPage>
                   onTap: _closeOpenItems,
                   child: SlidableAutoCloseBehavior(
                     child: ListView.builder(
-                      padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
+                      padding: EdgeInsets.only(
+                          bottom: MediaQuery.paddingOf(context).bottom),
                       physics: const AlwaysScrollableScrollPhysics(),
                       itemBuilder: (_, index) {
                         if (!widget.archivedOnly &&
@@ -453,8 +435,8 @@ class _ConversationPageState extends State<ConversationPage>
       color: Styles.isDark ? Styles.c_F8F9FA : Styles.c_FFFFFF,
       child: InkWell(
         onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) =>
-              ConversationPage(groupChats: widget.groupChats, archivedOnly: true),
+          builder: (_) => ConversationPage(
+              groupChats: widget.groupChats, archivedOnly: true),
         )),
         child: SizedBox(
           height: 72.w,
@@ -684,7 +666,14 @@ class _ConversationPageState extends State<ConversationPage>
                                             ),
                                           TextSpan(
                                             text: logic.getPrefixTag(info),
-                                            style: Styles.ts_0089FF_14sp,
+                                            style:
+                                                Styles.ts_0089FF_14sp.copyWith(
+                                              color:
+                                                  info.draftText?.isNotEmpty ==
+                                                          true
+                                                      ? Styles.c_FF381F
+                                                      : Styles.c_0089FF,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -707,7 +696,8 @@ class _ConversationPageState extends State<ConversationPage>
                                           info.latestMsg?.status ==
                                               MessageStatus.succeeded) ...[
                                         ChatReadReceiptIcon(
-                                          isRead: info.latestMsg?.isRead == true,
+                                          isRead:
+                                              info.latestMsg?.isRead == true,
                                           color: info.latestMsg?.isRead == true
                                               ? Styles.c_0089FF
                                               : Styles.c_8E9AB0,

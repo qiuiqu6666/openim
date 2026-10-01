@@ -40,6 +40,7 @@ class UserProfilePanelLogic extends GetxController {
   final notAllowLookGroupMemberProfiles = true.obs;
   final notAllowAddGroupMemberFriend = false.obs;
   final iHaveAdminOrOwnerPermission = false.obs;
+  int _profileRequest = 0;
   late StreamSubscription _friendAddedSub;
   late StreamSubscription _friendDeletedSub;
   late StreamSubscription _friendInfoChangedSub;
@@ -73,11 +74,17 @@ class UserProfilePanelLogic extends GetxController {
         userInfo.update((val) {
           val?.isFriendship = true;
         });
+        _loadProfileGender(user.userID!);
       }
     });
 
     _friendDeletedSub = imLogic.friendDelSubject.listen((user) {
       if (user.userID == userInfo.value.userID) {
+        _profileRequest++;
+        userInfo.update((value) {
+          value?.account = null;
+          value?.isFriendship = false;
+        });
         UserCacheManager().removeUserInfo(user.userID!);
         _getUsersInfo();
       }
@@ -95,6 +102,14 @@ class UserProfilePanelLogic extends GetxController {
     });
 
     _memberInfoChangedSub = imLogic.memberInfoChangedSubject.listen((value) {
+      if (!isGroupMemberPage || value.groupID != groupID) return;
+      if (value.userID == OpenIM.iMManager.userID) {
+        iHaveAdminOrOwnerPermission.value =
+            value.roleLevel == GroupRoleLevel.owner ||
+                value.roleLevel == GroupRoleLevel.admin;
+        iAmOwner.value = value.roleLevel == GroupRoleLevel.owner;
+        _syncGroupPrivacy();
+      }
       if (value.userID == userInfo.value.userID) {
         if (null != value.muteEndTime) {
           _calMuteTime(value.muteEndTime!);
@@ -208,6 +223,7 @@ class UserProfilePanelLogic extends GetxController {
   }
 
   Future<void> _loadProfileGender(String userID) async {
+    final request = ++_profileRequest;
     List<UserFullInfo>? profiles;
     try {
       profiles = await Apis.getUserFullInfo(userIDList: [userID]);
@@ -215,10 +231,11 @@ class UserProfilePanelLogic extends GetxController {
       // Keep SDK information usable when the optional full profile is unavailable.
       return;
     }
-    if (isClosed || userInfo.value.userID != userID) return;
+    if (isClosed || request != _profileRequest || userInfo.value.userID != userID) return;
     final profile = profiles?.firstWhereOrNull((info) => info.userID == userID);
     if (profile == null) return;
     userInfo.update((value) {
+      value?.account = profile.account;
       value?.gender = profile.gender;
       value?.allowAddFriend = profile.allowAddFriend;
     });
@@ -232,6 +249,15 @@ class UserProfilePanelLogic extends GetxController {
     userInfo.refresh();
   }
 
+  void _syncGroupPrivacy() {
+    final exempt = iHaveAdminOrOwnerPermission.value ||
+        groupInfo?.ownerUserID == OpenIM.iMManager.userID;
+    notAllowLookGroupMemberProfiles.value =
+        !exempt && groupInfo?.lookMemberInfo == 1;
+    notAllowAddGroupMemberFriend.value =
+        !exempt && groupInfo?.applyMemberFriend == 1;
+  }
+
   _queryGroupInfo() async {
     if (isGroupMemberPage) {
       var list = await OpenIM.iMManager.groupManager.getGroupsInfo(
@@ -240,9 +266,7 @@ class UserProfilePanelLogic extends GetxController {
       if (isClosed) return;
       groupInfo = list.firstOrNull;
 
-      notAllowLookGroupMemberProfiles.value = groupInfo?.lookMemberInfo == 1;
-
-      notAllowAddGroupMemberFriend.value = groupInfo?.applyMemberFriend == 1;
+      _syncGroupPrivacy();
     }
   }
 
@@ -280,6 +304,13 @@ class UserProfilePanelLogic extends GetxController {
             me?.roleLevel == GroupRoleLevel.owner ||
                 me?.roleLevel == GroupRoleLevel.admin;
       }
+
+      if (isMyself) {
+        iHaveAdminOrOwnerPermission.value =
+            other?.roleLevel == GroupRoleLevel.owner ||
+                other?.roleLevel == GroupRoleLevel.admin;
+      }
+      _syncGroupPrivacy();
 
       if (null != other &&
           null != other.muteEndTime &&
@@ -408,8 +439,12 @@ class UserProfilePanelLogic extends GetxController {
     }
   }
 
+  bool get showMemberIMID => false;
+
+  String get displayedUserID => userInfo.value.account ?? '';
+
   void copyID() {
-    IMUtils.copy(text: userInfo.value.userID!);
+    if (displayedUserID.isNotEmpty) IMUtils.copy(text: displayedUserID);
   }
 
   void addFriend() => AppNavigator.startSendVerificationApplication(

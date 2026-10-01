@@ -16,6 +16,15 @@ class ProfileFixture extends GetxController implements UserProfilePanelLogic {
   final bool allowAdd;
   final bool group;
   @override
+  bool get showMemberIMID => false;
+  @override
+  String get displayedUserID => userInfo.value.account ?? '';
+
+  @override
+  final iAmOwner = false.obs;
+  @override
+  final iHaveAdminOrOwnerPermission = false.obs;
+  @override
   final notAllowAddGroupMemberFriend = false.obs;
   @override
   bool? get forceCanAdd => false;
@@ -36,6 +45,7 @@ class ProfileFixture extends GetxController implements UserProfilePanelLogic {
   @override
   final userInfo = UserFullInfo(
           userID: '123456789012345678901234567890',
+          account: 'public_account',
           nickname: 'A very long original nickname',
           remark: 'A very long friend remark that wraps')
       .obs;
@@ -74,6 +84,24 @@ class ProfileFixture extends GetxController implements UserProfilePanelLogic {
 }
 
 void main() {
+  testWidgets('group owner can open friend request when member disallows adding', (tester) async {
+    addTearDown(Get.reset);
+    final fixture = ProfileFixture(friend: false, allowAdd: false, group: true);
+    fixture.iAmOwner.value = true;
+    fixture.notAllowAddGroupMemberFriend.value = true;
+    GetTags.createUserProfileTag();
+    addTearDown(GetTags.destroyUserProfileTag);
+    Get.put<UserProfilePanelLogic>(fixture, tag: GetTags.userProfile);
+    await tester.pumpWidget(ScreenUtilInit(designSize: const Size(375, 812),
+      builder: (_, __) => GetMaterialApp(home: UserProfilePanelPage())));
+    await tester.pumpAndSettle();
+    expect(find.textContaining(fixture.userInfo.value.userID!), findsNothing);
+    await tester.tap(find.text('profileAdd'.tr));
+    expect(fixture.action, 'add');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('friend profile fits narrow screens and connects primary actions',
       (tester) async {
     tester.view.physicalSize = const Size(320, 812);

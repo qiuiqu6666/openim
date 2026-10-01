@@ -26,7 +26,33 @@ class _FakeRemarkLogic implements SetFriendRemarkLogic {
 }
 
 void main() {
-  testWidgets('remark page shows count and enforces the 16 character limit',
+  testWidgets('shared name editor lets the group avatar be tapped',
+      (tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = TextEditingController(text: '测试群聊');
+    addTearDown(controller.dispose);
+    var avatarTaps = 0;
+    await tester.pumpWidget(ScreenUtilInit(
+      designSize: const Size(375, 812),
+      builder: (_, __) => GetMaterialApp(
+        home: SetFriendRemarkPage.editor(
+          controller: controller,
+          onSave: () {},
+          maxLength: 30,
+          isGroupAvatar: true,
+          onAvatarTap: () => avatarTaps++,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(AvatarView));
+    expect(avatarTaps, 1);
+  });
+
+  testWidgets('remark page shows count and enforces the 30 character limit',
       (tester) async {
     tester.view.physicalSize = const Size(375, 812);
     tester.view.devicePixelRatio = 1;
@@ -48,11 +74,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('确定'), findsOneWidget);
-    expect(find.text('3/16'), findsOneWidget);
-    await tester.enterText(find.byType(TextField), '一二三四五六七八九十甲乙丙丁戊己庚');
+    expect(find.text('3/30'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), List.filled(31, '字').join());
     await tester.pumpAndSettle();
-    expect(logic.inputCtrl.text, '一二三四五六七八九十甲乙丙丁戊己');
-    expect(find.text('16/16'), findsOneWidget);
+    expect(logic.inputCtrl.text, List.filled(30, '字').join());
+    expect(find.text('30/30'), findsOneWidget);
     await tester.tap(find.text('确定'));
     expect(logic.saves, 1);
     expect(tester.takeException(), isNull);

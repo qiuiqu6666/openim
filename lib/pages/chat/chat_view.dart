@@ -7,7 +7,14 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'chat_logic.dart';
+import 'personal_sticker_panel.dart';
+import 'sticker_video_bubble.dart';
+import 'sticker_video_message.dart';
+import 'package:openim_common/src/widgets/hold_to_record_button.dart';
+import 'announcement_mention_link.dart';
+import 'group_announcement_banner.dart';
 import 'chat_picture_gallery.dart';
+import 'mention_id.dart';
 import '../contacts/contacts_logic.dart';
 
 class ChatPage extends StatelessWidget {
@@ -30,29 +37,37 @@ class ChatPage extends StatelessWidget {
         showRightNickname: false,
         onFailedToResend: () => logic.failedResend(message),
         onClickItemView: () => logic.parseClickEvent(message),
+        onVoicePlayed: () => logic.markVoicePlayed(message),
+        voicePlayback: logic.voicePlayback,
         messageMenus: [
-          if (message.isTextType || message.contentType == MessageType.quote)
+          if (message.attachedInfoElem?.isPrivateChat != true &&
+              [
+                MessageType.text,
+                MessageType.atText,
+                MessageType.advancedText,
+                MessageType.quote
+              ].contains(message.contentType))
             PopMenuInfo(
               text: StrRes.copy,
               onTap: () => IMUtils.copy(
                 text: logic.copyTextMap[message.clientMsgID] ??
-                    message.textElem?.content ??
-                    message.quoteElem?.text ??
-                    '',
+                    IMUtils.parseMsg(message),
               ),
             ),
-          if (message.isTextType || message.contentType == MessageType.quote)
+          if (logic.canForward(message))
             PopMenuInfo(
               text: StrRes.menuReply,
               onTap: () => logic.replyToMessage(message),
             ),
-          if (message.isTextType ||
-              message.isPictureType ||
-              message.contentType == MessageType.quote)
+          if (logic.canForward(message))
             PopMenuInfo(
               text: StrRes.menuForward,
               onTap: () => logic.forwardMessage(message),
             ),
+          if (logic.canForward(message))
+            PopMenuInfo(
+                text: 'sdkMergeForward'.tr,
+                onTap: () => logic.mergeForward(message)),
           if (logic.canRevoke(message))
             PopMenuInfo(
               text: StrRes.menuRevoke,
@@ -67,6 +82,9 @@ class ChatPage extends StatelessWidget {
           logic.markMessageAsRead(message, visible);
         },
         onLongPressRightAvatar: () {},
+        onLongPressLeftAvatar: logic.isGroupChat
+            ? () => logic.mentionMessageSender(message)
+            : null,
         onTapLeftAvatar: () {
           logic.onTapLeftAvatar(message);
         },
@@ -75,6 +93,12 @@ class ChatPage extends StatelessWidget {
         },
         customTypeBuilder: _buildCustomTypeItemView,
         patterns: <MatchPattern>[
+          ..._mentionPatterns(message),
+          MatchPattern(
+            type: PatternType.custom,
+            pattern: mentionIDPattern,
+            onTap: (value, _) => logic.searchMentionID(value),
+          ),
           MatchPattern(
             type: PatternType.email,
             onTap: logic.clickLinkText,
@@ -98,6 +122,42 @@ class ChatPage extends StatelessWidget {
         onTapUserProfile: handleUserProfileTap,
       );
 
+  List<MatchPattern> _mentionPatterns(Message message) {
+    if (message.contentType ==
+        MessageType.groupInfoSetAnnouncementNotification) {
+      return [
+        MatchPattern(
+          type: PatternType.custom,
+          pattern: r'@[\w\u4e00-\u9fff-]+',
+          onTap: (value, _) {
+            final context = Get.context;
+            if (context != null) AnnouncementMentionLink.open(context, value);
+          },
+        )
+      ];
+    }
+    if (message.contentType != MessageType.atText) return [];
+    final members = [...?message.atTextElem?.atUsersInfo]..sort((a, b) =>
+        (b.groupNickname?.length ?? 0).compareTo(a.groupNickname?.length ?? 0));
+    return [
+      for (final member in members)
+        if (member.atUserID?.isNotEmpty == true &&
+            member.atUserID != OpenIM.iMManager.conversationManager.atAllTag &&
+            member.groupNickname?.isNotEmpty == true)
+          MatchPattern(
+            type: PatternType.custom,
+            pattern: '${RegExp.escape('@${member.groupNickname}')}'
+                r'(?=\s|$)',
+            onTap: (_, __) => handleUserProfileTap((
+              userID: member.atUserID!,
+              name: member.groupNickname!,
+              faceURL: null,
+              groupID: message.groupID,
+            )),
+          ),
+    ];
+  }
+
   void handleUserProfileTap(
       ({
         String userID,
@@ -118,14 +178,18 @@ class ChatPage extends StatelessWidget {
       return null;
     }
 
+    if (isStickerVideoMessage(message)) {
+      return _buildMediaContent(message);
+    }
+
     return GestureDetector(
       onTap: () async {
         try {
           final gallery =
               ChatPictureGallery.fromMessages(logic.messageList, message);
-          if (gallery != null && gallery.sources.isEmpty) return;
+          if (gallery.sources.isEmpty) return;
           Message messageAt(int index) {
-            final id = gallery!.sources[index].tag;
+            final id = gallery.sources[index].tag;
             for (final item in logic.messageList) {
               if (item.clientMsgID == id) return item;
             }
@@ -133,26 +197,21 @@ class ChatPage extends StatelessWidget {
           }
 
           IMUtils.previewMediaFile(
-                  context: context,
-                  message: message,
-                  sources: gallery?.sources,
-                  initialIndex: gallery?.initialIndex ?? 0,
-                  onAutoPlay: (index) {
-                    return !logic.playOnce;
-                  },
-                  muted: logic.rtcIsBusy,
-                  onPageChanged: (index) {
-                    logic.playOnce = true;
-                  },
-                  onForward: gallery == null
-                      ? null
-                      : (index) => logic.forwardMessage(messageAt(index)),
-                  onDelete: gallery == null
-                      ? null
-                      : (index) {
-                          logic.deleteMessage(messageAt(index));
-                        })
-              .then((value) {
+              context: context,
+              message: message,
+              sources: gallery.sources,
+              initialIndex: gallery.initialIndex,
+              onAutoPlay: (index) {
+                return !logic.playOnce;
+              },
+              muted: logic.rtcIsBusy,
+              onPageChanged: (index) {
+                logic.playOnce = true;
+              },
+              onForward: (index) => logic.forwardMessage(messageAt(index)),
+              onDelete: (index) {
+                logic.deleteMessage(messageAt(index));
+              }).then((value) {
             logic.playOnce = false;
           });
         } catch (e) {
@@ -172,6 +231,9 @@ class ChatPage extends StatelessWidget {
     final isOutgoing = message.sendID == OpenIM.iMManager.userID;
 
     if (message.isVideoType) {
+      if (isStickerVideoMessage(message)) {
+        return StickerVideoBubble(message: message);
+      }
       final video = message.videoElem;
       final path = video?.snapshotPath;
       final url = video?.snapshotUrl;
@@ -259,7 +321,8 @@ class ChatPage extends StatelessWidget {
             appBar: TitleBar.chat(
               title: logic.nickname.value,
               avatarUrl: logic.faceUrl.value,
-              presenceText: presence?.label,
+              presenceText:
+                  logic.peerTyping.value ? StrRes.typing : presence?.label,
               isOnline: presence?.displayOnline ?? false,
               isSingleChat: logic.isSingleChat,
               member: logic.memberStr,
@@ -269,60 +332,81 @@ class ChatPage extends StatelessWidget {
               onClickVideoBtn: logic.isGroupChat ? null : logic.callVideo,
             ),
             body: SafeArea(
-              child: WaterMarkBgView(
-                text: '',
-                path: logic.background.value,
-                backgroundColor: Styles.c_FFFFFF,
-                floatView: _groupCallHintView,
-                bottomView: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (logic.quotedMessage.value != null)
-                      ListTile(
-                        dense: true,
-                        title: Text(
-                          '${logic.quotedMessage.value?.senderNickname ?? ''}: ${logic.quotedMessage.value?.textElem?.content ?? StrRes.message}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+              child: Column(children: [
+                if (logic.isGroupChat &&
+                    logic.announcement.value.trim().isNotEmpty)
+                  GroupAnnouncementBanner(
+                    text: logic.announcement.value,
+                    version: logic.announcementVersion.value,
+                    groupID: logic.groupID!,
+                    userID: OpenIM.iMManager.userID,
+                  ),
+                Expanded(
+                    child: WaterMarkBgView(
+                  text: '',
+                  path: logic.background.value,
+                  backgroundColor: Styles.c_FFFFFF,
+                  floatView: _groupCallHintView,
+                  bottomView: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (logic.quotedMessage.value != null)
+                        ListTile(
+                          dense: true,
+                          title: Text(
+                            '${logic.quotedMessage.value?.senderNickname ?? ''}: ${logic.quotedMessage.value?.textElem?.content ?? StrRes.message}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: logic.clearReply,
+                          ),
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: logic.clearReply,
+                      ChatInputBox(
+                        stickerPanel: PersonalStickerPanel(
+                          store: logic.personalStickers,
+                          onAdd: logic.addPersonalSticker,
+                          onSend: logic.sendPersonalSticker,
+                        ),
+                        forceCloseToolboxSub: logic.forceCloseToolbox,
+                        controller: logic.inputCtrl,
+                        focusNode: logic.focusNode,
+                        isNotInGroup: logic.isInvalidGroup,
+                        enabled: !logic.sendingMuted,
+                        hintText: logic.sendingMuted ? StrRes.youMuted : null,
+                        directionalText: logic.directionalText(),
+                        onCloseDirectional: logic.onClearDirectional,
+                        onSend: (v) => logic.sendTextMsg(),
+                        onTapVoice: logic.onTapRecord,
+                        toolbox: ChatToolBox(
+                          onTapAlbum: logic.onTapAlbum,
+                          onTapFile: logic.onTapFile,
+                          onTapCamera: logic.onTapCamera,
+                          onTapCard: logic.onTapCard,
+                          onTapLocation: logic.onTapLocation,
+                          onTapCall: logic.isGroupChat ? null : logic.call,
+                        ),
+                        voiceRecordBar: HoldToRecordButton(
+                          enabled: !logic.sendingMuted && !logic.isInvalidGroup,
+                          onRecorded: logic.sendRecordedVoice,
                         ),
                       ),
-                    ChatInputBox(
-                      forceCloseToolboxSub: logic.forceCloseToolbox,
-                      controller: logic.inputCtrl,
-                      focusNode: logic.focusNode,
-                      isNotInGroup: logic.isInvalidGroup,
-                      directionalText: logic.directionalText(),
-                      onCloseDirectional: logic.onClearDirectional,
-                      onSend: (v) => logic.sendTextMsg(),
-                      toolbox: ChatToolBox(
-                        onTapAlbum: logic.onTapAlbum,
-                        onTapAudio: logic.onTapAudio,
-                        onTapFile: logic.onTapFile,
-                        onTapCamera: logic.onTapCamera,
-                        onTapRecord: logic.onTapRecord,
-                        onTapCard: logic.onTapCard,
-                        onTapCall: logic.isGroupChat ? null : logic.call,
-                      ),
-                      voiceRecordBar: const SizedBox(),
-                    ),
-                  ],
-                ),
-                child: ChatListView(
-                  onTouch: () => logic.closeToolbox(),
-                  itemCount: logic.messageList.length,
-                  controller: logic.scrollController,
-                  onScrollToBottomLoad: logic.onScrollToBottomLoad,
-                  onScrollToTop: logic.onScrollToTop,
-                  itemBuilder: (_, index) {
-                    final message = logic.indexOfMessage(index);
-                    return Obx(() => _buildItemView(message));
-                  },
-                ),
-              ),
+                    ],
+                  ),
+                  child: ChatListView(
+                    onTouch: () => logic.closeToolbox(),
+                    itemCount: logic.messageList.length,
+                    controller: logic.scrollController,
+                    onScrollToBottomLoad: logic.onScrollToBottomLoad,
+                    onScrollToTop: logic.onScrollToTop,
+                    itemBuilder: (_, index) {
+                      final message = logic.indexOfMessage(index);
+                      return Obx(() => _buildItemView(message));
+                    },
+                  ),
+                )),
+              ]),
             ));
       }),
     );

@@ -10,6 +10,9 @@ import 'package:rxdart/rxdart.dart';
 
 import 'chat_notice_view.dart';
 import 'chat_attachment_view.dart';
+import 'chat_structured_message.dart';
+import 'chat_formatted_text.dart';
+import 'chat_expiring_content.dart';
 
 double maxWidth = 247.w;
 double pictureWidth = 120.w;
@@ -86,12 +89,16 @@ class ChatItemView extends StatefulWidget {
     this.highlightColor,
     this.allAtMap = const {},
     this.patterns = const [],
+    this.structuredDepth = 0,
     this.onTapLeftAvatar,
+    this.onLongPressLeftAvatar,
     this.onTapRightAvatar,
     this.onLongPressRightAvatar,
     this.onVisibleTrulyText,
     this.onFailedToResend,
     this.onClickItemView,
+    this.onVoicePlayed,
+    this.voicePlayback,
     this.messageMenus = const [],
     required this.onTapUserProfile,
   }) : super(key: key);
@@ -110,6 +117,8 @@ class ChatItemView extends StatefulWidget {
   final String? rightFaceUrl;
   final Message message;
 
+  final Future<void> Function()? onVoicePlayed;
+  final VoicePlaybackController? voicePlayback;
   final double textScaleFactor;
   final bool ignorePointer;
   final bool showLeftNickname;
@@ -118,7 +127,9 @@ class ChatItemView extends StatefulWidget {
   final Color? highlightColor;
   final Map<String, String> allAtMap;
   final List<MatchPattern> patterns;
+  final int structuredDepth;
   final Function()? onTapLeftAvatar;
+  final VoidCallback? onLongPressLeftAvatar;
   final Function()? onTapRightAvatar;
   final Function()? onLongPressRightAvatar;
   final Function(String? text)? onVisibleTrulyText;
@@ -179,10 +190,17 @@ class _ChatItemViewState extends State<ChatItemView> {
     } else if (_message.isEmojiType) {
     } else if (_message.isTagType) {
     }*/
-    if (_message.isTextType) {
+    if (_message.contentType == MessageType.advancedText) {
+      isBubbleBg = true;
+      child = ChatFormattedText(
+          text: _message.advancedTextElem?.text ?? '',
+          entities: _message.advancedTextElem?.messageEntityList ?? []);
+    } else if (_message.isTextType ||
+        _message.contentType == MessageType.atText ||
+        _message.contentType == MessageType.advancedText) {
       isBubbleBg = true;
       child = ChatText(
-        text: _message.textElem!.content!,
+        text: IMUtils.parseMsg(_message),
         patterns: widget.patterns,
         textScaleFactor: widget.textScaleFactor,
         onVisibleTrulyText: widget.onVisibleTrulyText,
@@ -192,20 +210,36 @@ class _ChatItemViewState extends State<ChatItemView> {
       child = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(_message.quoteElem?.text ?? ''),
+          ChatText(
+            text: _message.quoteElem?.text ?? '',
+            patterns: widget.patterns,
+            textScaleFactor: widget.textScaleFactor,
+          ),
           const SizedBox(height: 4),
           Text(
-            '${_message.quoteElem?.quoteMessage?.senderNickname ?? ''}: ${_message.quoteElem?.quoteMessage?.textElem?.content ?? ''}',
+            '${_message.quoteElem?.quoteMessage?.senderNickname ?? ''}: ${_message.quoteElem?.quoteMessage == null ? '' : IMUtils.parseMsg(_message.quoteElem!.quoteMessage!)}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.grey, fontSize: 12),
+            style: Styles.ts_8E9AB0_12sp,
           ),
         ],
       );
+    } else if ([
+          MessageType.merger,
+          MessageType.location,
+          MessageType.customFace
+        ].contains(_message.contentType) ||
+        _message.isEmojiType) {
+      child = ChatStructuredMessage(
+          message: _message, depth: widget.structuredDepth);
     } else if (_message.isVideoType) {
       child = widget.mediaItemBuilder?.call(context, _message);
     } else if (_message.isVoiceType && _message.soundElem != null) {
-      child = ChatVoiceMessageView(message: _message, isOutgoing: _isISend);
+      child = ChatVoiceMessageView(
+          message: _message,
+          isOutgoing: _isISend,
+          onPlayed: widget.onVoicePlayed,
+          playback: widget.voicePlayback);
     } else if (_message.isFileType && _message.fileElem != null) {
       child = ChatFileMessageView(message: _message);
     } else if (_message.isCustomType) {
@@ -220,11 +254,12 @@ class _ChatItemViewState extends State<ChatItemView> {
       child = ContactCardView(
         userID: card.userID ?? '',
         name: card.nickname?.trim().isNotEmpty == true
-            ? card.nickname!.trim() : card.userID ?? '',
+            ? card.nickname!.trim()
+            : card.userID ?? '',
         faceURL: card.faceURL,
         isSelf: _isISend,
-        time: DateFormat('HH:mm').format(
-          DateTime.fromMillisecondsSinceEpoch(_message.sendTime!)),
+        time: DateFormat('HH:mm')
+            .format(DateTime.fromMillisecondsSinceEpoch(_message.sendTime!)),
       );
     } else if (_message.isPictureType) {
       child = widget.mediaItemBuilder?.call(context, _message) ??
@@ -240,7 +275,15 @@ class _ChatItemViewState extends State<ChatItemView> {
         final noticeContent = ntf.group?.notification;
         senderNickname = ntf.opUser?.nickname;
         senderFaceURL = ntf.opUser?.faceURL;
-        child = ChatNoticeView(isISend: _isISend, content: noticeContent!);
+        child = ChatNoticeView(
+          patterns: widget.patterns,
+          isISend: _isISend,
+          content: noticeContent ?? '',
+          time: _message.sendTime == null
+              ? null
+              : DateFormat('HH:mm').format(
+                  DateTime.fromMillisecondsSinceEpoch(_message.sendTime!)),
+        );
       } else {
         return ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
@@ -252,6 +295,9 @@ class _ChatItemViewState extends State<ChatItemView> {
       }
     }
 
+    if (child != null && _message.attachedInfoElem?.isPrivateChat == true) {
+      child = ChatExpiringContent(message: _message, child: child);
+    }
     senderNickname ??= widget.leftNickname ?? _message.senderNickname;
     senderFaceURL ??= widget.leftFaceUrl ?? _message.senderFaceUrl;
     return child = ChatItemContainer(
@@ -264,28 +310,51 @@ class _ChatItemViewState extends State<ChatItemView> {
       showLeftNickname: widget.showLeftNickname,
       showRightNickname: widget.showRightNickname,
       timelineStr: widget.timelineStr,
-      timeStr: _message.isCardType ? null : DateFormat('HH:mm').format(
-        DateTime.fromMillisecondsSinceEpoch(_message.sendTime!),
-      ),
+      timeStr: _message.isCardType ||
+              _message.contentType ==
+                  MessageType.groupInfoSetAnnouncementNotification
+          ? null
+          : DateFormat('HH:mm').format(
+              DateTime.fromMillisecondsSinceEpoch(_message.sendTime!),
+            ),
       hasRead: _message.isRead!,
       showReadStatus: _message.isSingleChat,
+      showStatus: _message.contentType !=
+          MessageType.groupInfoSetAnnouncementNotification,
       isSending: _message.status == MessageStatus.sending,
       isSendFailed: _message.status == MessageStatus.failed,
       isBubbleBg: isBubbleBg,
-      metadataBelow: _message.isVoiceType || _message.isFileType || _message.isCustomType,
+      bareMedia: _message.contentType == MessageType.customFace ||
+          _message.isEmojiType,
+      compactBubble: _message.isVoiceType || _message.isFileType ||
+          (_message.isCustomType &&
+              IMUtils.parseCustomMessage(_message)?['viewType'] ==
+                  CustomMessageType.call),
+      metadataBelow: _message.isVoiceType ||
+          _message.isFileType ||
+          _message.isCustomType ||
+          [MessageType.merger, MessageType.location, MessageType.customFace]
+              .contains(_message.contentType),
       mediaOverlay: _message.isPictureType || _message.isVideoType,
-      standaloneCard: _message.isCardType && _message.cardElem != null,
+      standaloneCard: (_message.isCardType && _message.cardElem != null) ||
+          _message.contentType ==
+              MessageType.groupInfoSetAnnouncementNotification,
       ignorePointer: widget.ignorePointer,
       sendStatusStream: widget.sendStatusSubject,
       onFailedToResend: widget.onFailedToResend,
       onLongPressRightAvatar: widget.onLongPressRightAvatar,
       onTapLeftAvatar: widget.onTapLeftAvatar,
+      onLongPressLeftAvatar: widget.onLongPressLeftAvatar,
       onTapRightAvatar: widget.onTapRightAvatar,
       messageMenus: widget.messageMenus,
       menuController: _menuController,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onTap: widget.onClickItemView,
+        onTap: () {
+          final deadline = ChatExpiringContent.deadline(_message);
+          if (deadline == null || deadline.isAfter(DateTime.now()))
+            widget.onClickItemView?.call();
+        },
         child: child ?? ChatText(text: StrRes.unsupportedMessage),
       ),
     );

@@ -53,7 +53,8 @@ class GroupProfilePanelLogic extends GetxController {
         }
       }
     } else if (value is GroupMembersInfo) {
-      if (value.groupID == groupInfo.value.groupID && value.userID == OpenIM.iMManager.userID) {
+      if (value.groupID == groupInfo.value.groupID &&
+          value.userID == OpenIM.iMManager.userID) {
         if (!isJoined.value) {
           isJoined.value = true;
           _getGroupInfo();
@@ -75,6 +76,7 @@ class GroupProfilePanelLogic extends GetxController {
         val?.memberCount = info.memberCount;
         val?.groupType = info.groupType;
         val?.createTime = info.createTime;
+        val?.notification = info.notification;
       });
     }
   }

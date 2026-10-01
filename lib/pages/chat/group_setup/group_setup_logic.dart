@@ -1,3 +1,4 @@
+import 'group_member_order.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -15,6 +16,7 @@ import '../../../routes/app_navigator.dart';
 import '../../contacts/select_contacts/select_contacts_logic.dart';
 import '../../conversation/conversation_logic.dart';
 import '../chat_logic.dart';
+import '../chat_setup/chat_history_search_page.dart';
 import 'edit_name/edit_name_logic.dart';
 import 'group_member_list/group_member_list_logic.dart';
 
@@ -44,19 +46,20 @@ class GroupSetupLogic extends GetxController {
     if (Get.arguments['conversationInfo'] != null) {
       conversationInfo = Rx(Get.arguments['conversationInfo']);
     } else {
-      final temp = await OpenIM.iMManager.conversationManager.getOneConversation(
-          sourceID: chatLogic.conversationInfo.isGroupChat
-              ? chatLogic.conversationInfo.groupID!
-              : chatLogic.conversationInfo.userID!,
-          sessionType: chatLogic.conversationInfo.conversationType!);
+      final temp = await OpenIM.iMManager.conversationManager
+          .getOneConversation(
+              sourceID: chatLogic.conversationInfo.isGroupChat
+                  ? chatLogic.conversationInfo.groupID!
+                  : chatLogic.conversationInfo.userID!,
+              sessionType: chatLogic.conversationInfo.conversationType!);
       conversationInfo = Rx(temp);
     }
     groupInfo = Rx(_defaultGroupInfo);
     myGroupMembersInfo = Rx(_defaultMemberInfo);
 
     _ccSub = imLogic.conversationChangedSubject.listen((newList) {
-      final newValue =
-          newList.firstWhereOrNull((element) => element.conversationID == conversationInfo.value.conversationID);
+      final newValue = newList.firstWhereOrNull((element) =>
+          element.conversationID == conversationInfo.value.conversationID);
       if (newValue != null) {
         conversationInfo.update((val) {
           val?.isPinned = newValue.isPinned;
@@ -88,27 +91,22 @@ class GroupSetupLogic extends GetxController {
     });
 
     _mISub = imLogic.memberInfoChangedSubject.listen((e) {
-      if (e.groupID == groupInfo.value.groupID && e.userID == myGroupMembersInfo.value.userID) {
+      if (e.groupID == groupInfo.value.groupID &&
+          e.userID == myGroupMembersInfo.value.userID) {
         myGroupMembersInfo.update((val) {
           val?.nickname = e.nickname;
           val?.roleLevel = e.roleLevel;
         });
       }
-      if (e.groupID == groupInfo.value.groupID && e.userID == groupInfo.value.ownerUserID) {
-        var index = memberList.indexWhere((element) => element.userID == groupInfo.value.ownerUserID);
-        if (index == -1) {
-          memberList.insert(0, e);
-        } else if (index != 0) {
-          memberList.insert(0, memberList.removeAt(index));
-        }
+      if (e.groupID != groupInfo.value.groupID) return;
+      final index = memberList.indexWhere((m) => m.userID == e.userID);
+      if (index >= 0) {
+        memberList[index] = e;
+      } else if (e.roleLevel == GroupRoleLevel.owner ||
+          e.roleLevel == GroupRoleLevel.admin) {
+        memberList.add(e);
       }
-      memberList.sort((a, b) {
-        if (b.roleLevel != a.roleLevel) {
-          return b.roleLevel!.compareTo(a.roleLevel!);
-        } else {
-          return b.joinTime!.compareTo(a.joinTime!);
-        }
-      });
+      memberList.sort(compareGroupMembers);
     });
     _mASub = imLogic.memberAddedSubject.listen((e) async {
       if (e.groupID == groupInfo.value.groupID) {
@@ -117,6 +115,7 @@ class GroupSetupLogic extends GetxController {
           _queryAllInfo();
         } else {
           memberList.add(e);
+          memberList.sort(compareGroupMembers);
         }
       }
     });
@@ -164,11 +163,55 @@ class GroupSetupLogic extends GetxController {
 
   bool get isOwnerOrAdmin => isOwner || isAdmin;
 
-  bool get isAdmin => myGroupMembersInfo.value.roleLevel == GroupRoleLevel.admin;
+  bool get isAdmin =>
+      myGroupMembersInfo.value.roleLevel == GroupRoleLevel.admin;
 
-  bool get isNotDisturb => conversationInfo.value.recvMsgOpt != 0;
+  bool get isNotDisturb => conversationInfo.value.recvMsgOpt == 2;
 
-  bool get isOwner => groupInfo.value.ownerUserID == OpenIM.iMManager.userID;
+  bool get isPinned => conversationInfo.value.isPinned == true;
+  String? get myGroupNickname {
+    final nickname = myGroupMembersInfo.value.nickname?.trim();
+    if (nickname == null ||
+        nickname.isEmpty ||
+        nickname == OpenIM.iMManager.userInfo.nickname) {
+      return null;
+    }
+    return nickname;
+  }
+
+  final updating = false.obs;
+
+  Future<void> setPinned(bool value) async {
+    if (updating.value) return;
+    updating.value = true;
+    try {
+      await conversationLogic.setPinned(conversationInfo.value, value);
+      conversationInfo.refresh();
+    } finally {
+      updating.value = false;
+    }
+  }
+
+  Future<void> setMuted(bool value) async {
+    if (updating.value) return;
+    updating.value = true;
+    try {
+      await conversationLogic.setNotDisturb(conversationInfo.value, value);
+      conversationInfo.refresh();
+    } finally {
+      updating.value = false;
+    }
+  }
+
+  void searchHistory() =>
+      Get.to(() => ChatHistorySearchPage(conversationID: conversationID));
+
+  void editMyGroupNickname() =>
+      AppNavigator.startEditGroupName(type: EditNameType.myGroupMemberNickname);
+
+  bool get isOwner =>
+      groupInfo.value.ownerUserID == OpenIM.iMManager.userID ||
+      myGroupMembersInfo.value.roleLevel == GroupRoleLevel.owner;
 
   String get conversationID => conversationInfo.value.conversationID;
 
@@ -188,11 +231,14 @@ class GroupSetupLogic extends GetxController {
   }
 
   getGroupMembers() async {
-    var list = await OpenIM.iMManager.groupManager.getGroupMemberList(
+    final page = await OpenIM.iMManager.groupManager.getGroupMemberList(
       groupID: groupInfo.value.groupID,
-      count: 10,
+      filter: 0,
+      count: 20,
     );
-    memberList.assignAll(list);
+    if (isClosed) return;
+    final members = page.toList()..sort(compareGroupMembers);
+    memberList.assignAll(members);
   }
 
   getGroupInfo() async {
@@ -241,7 +287,8 @@ class GroupSetupLogic extends GetxController {
   void modifyGroupAvatar() async {
     final List<AssetEntity>? assets = await AssetPicker.pickAssets(
       Get.context!,
-      pickerConfig: const AssetPickerConfig(maxAssets: 1, requestType: RequestType.image),
+      pickerConfig:
+          const AssetPickerConfig(maxAssets: 1, requestType: RequestType.image),
     );
     if (assets != null) {
       final file = await assets.first.file;
@@ -290,7 +337,8 @@ class GroupSetupLogic extends GetxController {
       );
 
   void _removeConversation() async {
-    await OpenIM.iMManager.conversationManager.deleteConversationAndDeleteAllMsg(
+    await OpenIM.iMManager.conversationManager
+        .deleteConversationAndDeleteAllMsg(
       conversationID: conversationInfo.value.conversationID,
     );
   }
@@ -333,7 +381,9 @@ class GroupSetupLogic extends GetxController {
 
   int length() {
     int buttons = isOwnerOrAdmin ? 2 : 1;
-    return (memberList.length + buttons) > 10 ? 10 : (memberList.length + buttons);
+    return (memberList.length + buttons) > 10
+        ? 10
+        : (memberList.length + buttons);
   }
 
   Widget itemBuilder({
@@ -405,7 +455,8 @@ class GroupSetupLogic extends GetxController {
     }
   }
 
-  void viewMemberInfo(GroupMembersInfo membersInfo) => AppNavigator.startUserProfilePane(
+  void viewMemberInfo(GroupMembersInfo membersInfo) =>
+      AppNavigator.startUserProfilePane(
         userID: membersInfo.userID!,
         nickname: membersInfo.nickname,
         faceURL: membersInfo.faceURL,

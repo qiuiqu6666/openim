@@ -1,6 +1,7 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/chat_picture_gallery.dart';
+import 'package:openim/pages/chat/sticker_video_message.dart';
 
 Message picture(String id, String url) => Message()
   ..clientMsgID = id
@@ -15,9 +16,12 @@ void main() {
     final video = Message()
       ..clientMsgID = 'video'
       ..contentType = MessageType.video
-      ..videoElem = VideoElem(videoUrl: 'https://example.com/video.mp4', snapshotUrl: 'https://example.com/cover.jpg');
+      ..videoElem = VideoElem(
+          videoUrl: 'https://example.com/video.mp4',
+          snapshotUrl: 'https://example.com/cover.jpg');
     final gallery = ChatPictureGallery.fromMessages([
-      picture('before', 'https://example.com/before.jpg'), video,
+      picture('before', 'https://example.com/before.jpg'),
+      video,
       picture('after', 'https://example.com/after.jpg'),
     ], video);
     expect(gallery.initialIndex, 1);
@@ -54,5 +58,23 @@ void main() {
     );
     expect(gallery.initialIndex, 1);
     expect(gallery.sources.length, 2);
+  });
+
+  test('sticker videos are excluded from the gallery', () {
+    final sticker = Message()
+      ..clientMsgID = 'sticker'
+      ..contentType = MessageType.video
+      ..videoElem = VideoElem(
+          videoUrl: 'https://example.com/sticker.mp4',
+          snapshotUrl: 'https://example.com/sticker.jpg');
+    markStickerVideoMessage(sticker);
+    final first = picture('first', 'https://example.com/first.png');
+    final last = picture('last', 'https://example.com/last.png');
+    final gallery =
+        ChatPictureGallery.fromMessages([first, sticker, last], last);
+    expect(gallery.sources.map((source) => source.tag), ['first', 'last']);
+    expect(gallery.initialIndex, 1);
+    expect(ChatPictureGallery.fromMessages([first, sticker], sticker).sources,
+        isEmpty);
   });
 }

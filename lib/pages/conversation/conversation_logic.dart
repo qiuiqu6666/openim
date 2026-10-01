@@ -195,6 +195,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   }
 
   String? getPrefixTag(ConversationInfo info) {
+    if (info.draftText?.isNotEmpty == true) return '[${StrRes.draftText}]';
     if (info.groupAtType == GroupAtType.groupNotification) {
       return '[${StrRes.groupAc}]';
     }
@@ -205,8 +206,11 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   String getContent(ConversationInfo info) {
     try {
       if (null != info.draftText && '' != info.draftText) {
-        var map = json.decode(info.draftText!);
-        String text = map['text'];
+        var text = info.draftText!;
+        try {
+          final map = json.decode(text);
+          if (map is Map && map['text'] is String) text = map['text'];
+        } catch (_) {}
         if (text.isNotEmpty) {
           return text;
         }
