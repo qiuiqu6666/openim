@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
 import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim_common/openim_common.dart';
@@ -14,36 +15,28 @@ class ConversationPage extends StatelessWidget {
 
   ConversationPage({super.key});
 
-  void _showConversationActions(BuildContext context, ConversationInfo info) {
-    showModalBottomSheet<void>(
+  Future<void> _confirmDeleteConversation(
+      BuildContext context, ConversationInfo info) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.push_pin_outlined),
-              title: Text(info.isPinned == true ? StrRes.cancelTop : StrRes.topChat),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                logic.setPinned(info, info.isPinned != true);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.notifications_off_outlined),
-              title: Text(StrRes.notDisturbMode),
-              trailing: logic.isNotDisturb(info)
-                  ? const Icon(Icons.check, color: Colors.blue)
-                  : null,
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                logic.setNotDisturb(info, !logic.isNotDisturb(info));
-              },
-            ),
-          ],
-        ),
+      builder: (dialogContext) => AlertDialog(
+        title: Text(StrRes.delete),
+        content: Text('${StrRes.delete} "${logic.getShowName(info)}"?\n${StrRes.confirmClearChatHistory}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(StrRes.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(StrRes.delete),
+          ),
+        ],
       ),
     );
+    if (confirmed == true) {
+      logic.deleteConversation(info);
+    }
   }
 
   @override
@@ -90,8 +83,7 @@ class ConversationPage extends StatelessWidget {
             children: [
               Expanded(
                   child: ListView.builder(
-                    itemBuilder: (context, index) => _buildItemView(
-                      context,
+                    itemBuilder: (_, index) => _buildItemView(
                       logic.list.elementAt(index),
                     ),
                     itemCount: logic.list.length,
@@ -103,10 +95,38 @@ class ConversationPage extends StatelessWidget {
         ));
   }
 
-  Widget _buildItemView(BuildContext context, ConversationInfo info) => Ink(
+  Widget _buildItemView(ConversationInfo info) => Slidable(
+    key: ValueKey(info.conversationID),
+    endActionPane: ActionPane(
+      motion: const ScrollMotion(),
+      extentRatio: 0.78,
+      children: [
+        SlidableAction(
+          onPressed: (_) => logic.setNotDisturb(info, !logic.isNotDisturb(info)),
+          backgroundColor: const Color(0xFF8E9AB0),
+          foregroundColor: Colors.white,
+          icon: logic.isNotDisturb(info) ? Icons.notifications_active_outlined : Icons.notifications_off_outlined,
+          label: StrRes.notDisturbMode,
+        ),
+        SlidableAction(
+          onPressed: (_) => logic.setPinned(info, info.isPinned != true),
+          backgroundColor: Styles.c_0089FF,
+          foregroundColor: Colors.white,
+          icon: info.isPinned == true ? Icons.push_pin_outlined : Icons.push_pin,
+          label: info.isPinned == true ? StrRes.cancelTop : StrRes.topChat,
+        ),
+        SlidableAction(
+          onPressed: (context) => _confirmDeleteConversation(context, info),
+          backgroundColor: const Color(0xFFE45454),
+          foregroundColor: Colors.white,
+          icon: Icons.delete_outline,
+          label: StrRes.delete,
+        ),
+      ],
+    ),
+    child: Ink(
         child: InkWell(
           onTap: () => logic.toChat(conversationInfo: info),
-          onLongPress: () => _showConversationActions(context, info),
           child: Stack(
             children: [
               Container(
@@ -188,5 +208,6 @@ class ConversationPage extends StatelessWidget {
             ],
           ),
         ),
-      );
+      ),
+  );
 }

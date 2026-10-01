@@ -205,6 +205,18 @@ class ConversationLogic extends GetxController {
     }
   }
 
+  Future<void> deleteConversation(ConversationInfo info) async {
+    try {
+      await OpenIM.iMManager.conversationManager.deleteConversationAndDeleteAllMsg(
+        conversationID: info.conversationID,
+      );
+      list.removeWhere((item) => item.conversationID == info.conversationID);
+      tempDraftText.remove(info.conversationID);
+    } catch (error) {
+      IMViews.showToast(error.toString());
+    }
+  }
+
   bool isUserGroup(int index) => list.elementAt(index).isGroupChat;
 
   String? get imSdkStatus {
