@@ -39,6 +39,32 @@ class ConversationPage extends StatelessWidget {
     }
   }
 
+  Widget _swipeAction({
+    required Color color,
+    required IconData icon,
+    required String label,
+    required void Function(BuildContext) onPressed,
+  }) =>
+      CustomSlidableAction(
+        onPressed: onPressed,
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.zero,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 20),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              style: const TextStyle(fontSize: 11),
+            ),
+          ],
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Obx(() => Scaffold(
@@ -99,26 +125,23 @@ class ConversationPage extends StatelessWidget {
     key: ValueKey(info.conversationID),
     endActionPane: ActionPane(
       motion: const ScrollMotion(),
-      extentRatio: 0.78,
+      extentRatio: 0.5,
       children: [
-        SlidableAction(
+        _swipeAction(
           onPressed: (_) => logic.setNotDisturb(info, !logic.isNotDisturb(info)),
-          backgroundColor: const Color(0xFF8E9AB0),
-          foregroundColor: Colors.white,
+          color: const Color(0xFF8E9AB0),
           icon: logic.isNotDisturb(info) ? Icons.notifications_active_outlined : Icons.notifications_off_outlined,
           label: StrRes.notDisturbMode,
         ),
-        SlidableAction(
+        _swipeAction(
           onPressed: (_) => logic.setPinned(info, info.isPinned != true),
-          backgroundColor: Styles.c_0089FF,
-          foregroundColor: Colors.white,
+          color: Styles.c_0089FF,
           icon: info.isPinned == true ? Icons.push_pin_outlined : Icons.push_pin,
           label: info.isPinned == true ? StrRes.cancelTop : StrRes.topChat,
         ),
-        SlidableAction(
+        _swipeAction(
           onPressed: (context) => _confirmDeleteConversation(context, info),
-          backgroundColor: const Color(0xFFE45454),
-          foregroundColor: Colors.white,
+          color: const Color(0xFFE45454),
           icon: Icons.delete_outline,
           label: StrRes.delete,
         ),
