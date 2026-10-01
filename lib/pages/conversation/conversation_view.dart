@@ -45,7 +45,11 @@ class ConversationPage extends StatelessWidget {
     required void Function(BuildContext) onPressed,
   }) =>
       CustomSlidableAction(
-        onPressed: onPressed,
+        autoClose: false,
+        onPressed: (context) async {
+          await Slidable.of(context)?.close();
+          if (context.mounted) onPressed(context);
+        },
         backgroundColor: color,
         foregroundColor: Colors.white,
         padding: EdgeInsets.zero,
