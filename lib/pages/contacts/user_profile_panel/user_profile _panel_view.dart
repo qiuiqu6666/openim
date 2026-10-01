@@ -6,6 +6,7 @@ import 'package:openim_common/openim_common.dart';
 
 import 'user_profile _panel_logic.dart';
 import '../contacts_logic.dart';
+import '../presence_label.dart';
 import '../star_burst_button.dart';
 import '../../../theme/profile_tokens.dart';
 
@@ -276,13 +277,13 @@ class UserProfilePanelPage extends StatelessWidget {
                   ),
                 ),
             ],
-            if (stranger && Get.isRegistered<ContactsLogic>())
+            if (!logic.isMyself && Get.isRegistered<ContactsLogic>())
               Obx(() {
                 final presence =
                     Get.find<ContactsLogic>().presence.users[user.userID];
                 return presence == null
                     ? const SizedBox.shrink()
-                    : Text(presence.label, style: Styles.ts_8E9AB0_14sp);
+                    : PresenceLabel(presence: presence);
               }),
           ],
         )),

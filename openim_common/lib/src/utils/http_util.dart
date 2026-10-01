@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:get/get.dart' hide FormData, MultipartFile;
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:talker_dio_logger/talker_dio_logger.dart';
@@ -30,7 +31,7 @@ class HttpUtil {
         return handler.next(options); //continue
       }, onResponse: (response, handler) {
         return handler.next(response); // continue
-      }, onError: (DioError e, handler) {
+      }, onError: (DioException e, handler) {
         return handler.next(e); //continue
       }));
 
@@ -40,6 +41,16 @@ class HttpUtil {
   }
 
   static String get operationID => DateTime.now().millisecondsSinceEpoch.toString();
+
+  static String businessErrorMessage(ApiResp response) {
+    if (response.errCode == 20018) return 'nicknameAlreadyUsed'.tr;
+    if (response.errCode == 20019) return 'nicknameUpdateTooFrequent'.tr;
+    if (response.errCode == 1001 &&
+        response.errDlt == 'nickname can not be empty') {
+      return 'nicknameCannotBeEmpty'.tr;
+    }
+    return response.errDlt.isNotEmpty ? response.errDlt : response.errMsg;
+  }
 
   static Future post(
     String path, {
@@ -71,7 +82,7 @@ class HttpUtil {
         return resp.data;
       } else {
         if (showErrorToast) {
-          IMViews.showToast(resp.errDlt);
+          IMViews.showToast(businessErrorMessage(resp));
         }
 
         return Future.error((resp.errCode, resp.errMsg));

@@ -8,6 +8,7 @@ import 'package:openim_common/openim_common.dart';
 
 import 'chat_logic.dart';
 import 'chat_picture_gallery.dart';
+import '../contacts/contacts_logic.dart';
 
 class ChatPage extends StatelessWidget {
   final logic = Get.find<ChatLogic>(tag: GetTags.chat);
@@ -250,14 +251,22 @@ class ChatPage extends StatelessWidget {
     return WillPopScope(
       onWillPop: logic.willPop(),
       child: Obx(() {
+        final presence = logic.isSingleChat && Get.isRegistered<ContactsLogic>()
+            ? Get.find<ContactsLogic>().presence.users[logic.userID]
+            : null;
         return Scaffold(
             backgroundColor: Styles.c_F0F2F6,
             appBar: TitleBar.chat(
               title: logic.nickname.value,
+              avatarUrl: logic.faceUrl.value,
+              presenceText: presence?.label,
+              isOnline: presence?.displayOnline ?? false,
+              isSingleChat: logic.isSingleChat,
               member: logic.memberStr,
               onCloseMultiModel: logic.exit,
               onClickMoreBtn: logic.chatSetup,
-              onClickCallBtn: logic.isGroupChat ? null : logic.call,
+              onClickCallBtn: logic.isGroupChat ? null : logic.callAudio,
+              onClickVideoBtn: logic.isGroupChat ? null : logic.callVideo,
             ),
             body: SafeArea(
               child: WaterMarkBgView(

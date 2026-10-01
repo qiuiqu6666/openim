@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
@@ -15,6 +16,7 @@ import 'package:openim_common/openim_common.dart';
 import 'custom_mk_controls.dart';
 import 'photo_browser_hero.dart';
 import 'native_media_video.dart';
+import 'media_preview_glass.dart';
 
 class MediaSource {
   final String? url;
@@ -70,6 +72,7 @@ class _MediaBrowserState extends State<MediaBrowser>
   int currentIndex = 0;
   bool _showControls = true;
   bool _showGrid = false;
+  SystemUiOverlayStyle? _previousSystemUiStyle;
 
   List<double> doubleTapScales = <double>[1.0, 2.0];
   late AnimationController _doubleClickAnimationController;
@@ -78,6 +81,9 @@ class _MediaBrowserState extends State<MediaBrowser>
 
   @override
   void initState() {
+    // Capture before this route's AnnotatedRegion paints. The image viewer
+    // does not change SystemUiMode, so preserve the caller's mode as-is.
+    _previousSystemUiStyle = SystemChrome.latestStyle;
     currentIndex = widget.initialIndex;
     _doubleClickAnimationController = AnimationController(
         duration: const Duration(milliseconds: 150), vsync: this);
@@ -88,6 +94,14 @@ class _MediaBrowserState extends State<MediaBrowser>
   void dispose() {
     Logger.print('[MediaBrowser] dispose', fileName: 'media_browser.dart');
     _doubleClickAnimationController.dispose();
+
+    final previousStyle = _previousSystemUiStyle;
+    if (previousStyle != null) {
+      SystemChrome.setSystemUIOverlayStyle(previousStyle);
+    }
+    // Reapply the platform's existing visibility configuration (also covers
+    // temporarily hidden bars) without hardcoding edge-to-edge or a theme.
+    unawaited(SystemChrome.restoreSystemUIOverlays());
 
     super.dispose();
   }
@@ -118,281 +132,316 @@ class _MediaBrowserState extends State<MediaBrowser>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final source = widget.sources[currentIndex];
-    final isImage = !source.isVideo;
-    final background = isImage
-        ? Theme.of(context).colorScheme.surfaceContainerLow
-        : Colors.black;
-    return Material(
-      color: background,
-      shadowColor: Colors.transparent,
-      child: Stack(children: [
-        ExtendedImageSlidePage(
-          key: slidePagekey,
-          slideAxis:
-              widget.sources.length > 1 ? SlideAxis.vertical : SlideAxis.both,
-          slideType: SlideType.wholePage,
-          resetPageDuration: const Duration(milliseconds: 300),
-          slidePageBackgroundHandler: (offset, pageSize) {
-            double rate = 1 - (offset.dy.abs() / (size.height / 2));
-            rate = rate > 0 ? rate : 0;
-            return background.withValues(alpha: rate);
-          },
-          child: GestureDetector(
-            onTap: () => setState(() => _showControls = !_showControls),
-            onLongPress: () => widget.onLongPress?.call(currentIndex),
-            child: ExtendedImageGesturePageView.builder(
-              controller: ExtendedPageController(
-                initialPage: currentIndex,
-                pageSpacing: 8,
-                shouldIgnorePointerWhenScrolling: true,
-              ),
-              itemCount: widget.sources.length,
-              onPageChanged: (int page) {
-                setState(() => currentIndex = page);
-                widget.onPageChanged?.call(page);
-                _preloadImage(page - 1);
-                _preloadImage(page + 1);
-              },
-              itemBuilder: (BuildContext context, int index) {
-                final s = widget.sources[index];
-
-                if (s.isVideo && index != currentIndex) {
-                  return const SizedBox.expand();
-                }
-                return s.isVideo
-                    ? ExtendedImageSlidePageHandler(
-                        child: VideoPlayerView(
-                          key: ValueKey(s.tag ?? s.url),
-                          url: s.url,
-                          coverUrl: s.thumbnail,
-                          file: s.file,
-                          heroTag: s.tag,
-                          autoPlay: widget.onAutoPlay?.call(index) ?? false,
-                          muted: widget.muted,
-                          onDownload: (url, file) =>
-                              widget.onSave?.call(currentIndex),
-                        ),
-                        heroBuilderForSlidingPage: (Widget result) {
-                          return Hero(
-                            tag: s.tag ?? s.thumbnail,
-                            child: result,
-                            flightShuttleBuilder: (BuildContext flightContext,
-                                Animation<double> animation,
-                                HeroFlightDirection flightDirection,
-                                BuildContext fromHeroContext,
-                                BuildContext toHeroContext) {
-                              final Hero hero =
-                                  (flightDirection == HeroFlightDirection.pop
-                                      ? fromHeroContext.widget
-                                      : toHeroContext.widget) as Hero;
-
-                              return hero.child;
-                            },
-                          );
-                        },
-                      )
-                    : HeroWidget(
-                        tag: s.tag ?? s.thumbnail,
-                        slideType: SlideType.onlyImage,
-                        slidePagekey: slidePagekey,
-                        child: s.file != null && s.file!.existsSync()
-                            ? ExtendedImage.file(
-                                s.file!,
-                                enableSlideOutPage: true,
-                                fit: BoxFit.contain,
-                                mode: ExtendedImageMode.gesture,
-                              )
-                            : ExtendedImage.network(
-                                s.url ?? s.thumbnail,
-                                enableSlideOutPage: true,
-                                fit: BoxFit.contain,
-                                mode: ExtendedImageMode.gesture,
-                                initGestureConfigHandler:
-                                    (ExtendedImageState state) {
-                                  return GestureConfig(
-                                    minScale: 0.9,
-                                    animationMinScale: 0.7,
-                                    maxScale: 3.0,
-                                    animationMaxScale: 3.5,
-                                    speed: 1.0,
-                                    inPageView: true,
-                                    initialAlignment: InitialAlignment.center,
-                                  );
-                                },
-                                onDoubleTap: (state) {
-                                  final Offset? pointerDownPosition =
-                                      state.pointerDownPosition;
-                                  final double? begin =
-                                      state.gestureDetails!.totalScale;
-                                  double end;
-
-                                  _doubleClickAnimation?.removeListener(
-                                      _doubleClickAnimationListener);
-
-                                  _doubleClickAnimationController.stop();
-
-                                  _doubleClickAnimationController.reset();
-
-                                  if (begin == doubleTapScales[0]) {
-                                    end = doubleTapScales[1];
-                                  } else {
-                                    end = doubleTapScales[0];
-                                  }
-
-                                  _doubleClickAnimationListener = () {
-                                    state.handleDoubleTap(
-                                        scale: _doubleClickAnimation!.value,
-                                        doubleTapPosition: pointerDownPosition);
-                                  };
-                                  _doubleClickAnimation =
-                                      _doubleClickAnimationController.drive(
-                                          Tween<double>(
-                                              begin: begin, end: end));
-
-                                  _doubleClickAnimation!.addListener(
-                                      _doubleClickAnimationListener);
-
-                                  _doubleClickAnimationController.forward();
-                                },
-                                loadStateChanged: (state) {
-                                  if (state.extendedImageLoadState ==
-                                      LoadState.loading) {
-                                    return Stack(
-                                      alignment: AlignmentDirectional.center,
-                                      children: [
-                                        ExtendedImage.network(
-                                          s.thumbnail,
-                                          enableLoadState: false,
-                                        ),
-                                        const CupertinoActivityIndicator(
-                                          radius: 15,
-                                        ),
-                                      ],
-                                    );
-                                  } else if (state.extendedImageLoadState ==
-                                      LoadState.failed) {
-                                    state.imageProvider.evict();
-
-                                    return ImageRes.pictureError.toImage;
-                                  }
-                                  return null;
-                                },
-                              ),
-                      );
-              },
-            ),
-          ),
-        ),
-        if (_showControls)
-          Positioned(
-            top: MediaQuery.paddingOf(context).top + 12,
-            left: 16,
-            right: 16,
-            child: Row(
-              children: [
-                _roundAction(
-                  context,
-                  icon: Icons.arrow_back_ios_new,
-                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                  onPressed: () => Navigator.of(context).pop(),
+    const background = Colors.black;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.black,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.black,
+        systemNavigationBarDividerColor: Colors.black,
+        systemNavigationBarIconBrightness: Brightness.light,
+        systemStatusBarContrastEnforced: false,
+        systemNavigationBarContrastEnforced: false,
+      ),
+      child: Material(
+        color: background,
+        shadowColor: Colors.transparent,
+        child: Stack(children: [
+          ExtendedImageSlidePage(
+            key: slidePagekey,
+            slideAxis:
+                widget.sources.length > 1 ? SlideAxis.vertical : SlideAxis.both,
+            slideType: SlideType.wholePage,
+            resetPageDuration: const Duration(milliseconds: 300),
+            slidePageBackgroundHandler: (offset, pageSize) {
+              double rate = 1 - (offset.dy.abs() / (size.height / 2));
+              rate = rate > 0 ? rate : 0;
+              return background.withValues(alpha: rate);
+            },
+            child: GestureDetector(
+              onTap: () => setState(() => _showControls = !_showControls),
+              onLongPress: () => widget.onLongPress?.call(currentIndex),
+              child: ExtendedImageGesturePageView.builder(
+                controller: ExtendedPageController(
+                  initialPage: currentIndex,
+                  pageSpacing: 8,
+                  shouldIgnorePointerWhenScrolling: true,
                 ),
-                const Spacer(),
-              ],
+                itemCount: widget.sources.length,
+                onPageChanged: (int page) {
+                  setState(() => currentIndex = page);
+                  widget.onPageChanged?.call(page);
+                  _preloadImage(page - 1);
+                  _preloadImage(page + 1);
+                },
+                itemBuilder: (BuildContext context, int index) {
+                  final s = widget.sources[index];
+
+                  if (s.isVideo && index != currentIndex) {
+                    return const SizedBox.expand();
+                  }
+                  return s.isVideo
+                      ? ExtendedImageSlidePageHandler(
+                          child: VideoPlayerView(
+                            key: ValueKey(s.tag ?? s.url),
+                            url: s.url,
+                            coverUrl: s.thumbnail,
+                            file: s.file,
+                            heroTag: s.tag,
+                            autoPlay: widget.onAutoPlay?.call(index) ?? false,
+                            muted: widget.muted,
+                            onDownload: (url, file) =>
+                                widget.onSave?.call(currentIndex),
+                          ),
+                          heroBuilderForSlidingPage: (Widget result) {
+                            return Hero(
+                              tag: s.tag ?? s.thumbnail,
+                              child: result,
+                              flightShuttleBuilder: (BuildContext flightContext,
+                                  Animation<double> animation,
+                                  HeroFlightDirection flightDirection,
+                                  BuildContext fromHeroContext,
+                                  BuildContext toHeroContext) {
+                                final Hero hero =
+                                    (flightDirection == HeroFlightDirection.pop
+                                        ? fromHeroContext.widget
+                                        : toHeroContext.widget) as Hero;
+
+                                return hero.child;
+                              },
+                            );
+                          },
+                        )
+                      : HeroWidget(
+                          tag: s.tag ?? s.thumbnail,
+                          slideType: SlideType.onlyImage,
+                          slidePagekey: slidePagekey,
+                          child: s.file != null && s.file!.existsSync()
+                              ? ExtendedImage.file(
+                                  s.file!,
+                                  enableSlideOutPage: true,
+                                  fit: BoxFit.contain,
+                                  mode: ExtendedImageMode.gesture,
+                                )
+                              : ExtendedImage.network(
+                                  s.url ?? s.thumbnail,
+                                  enableSlideOutPage: true,
+                                  fit: BoxFit.contain,
+                                  mode: ExtendedImageMode.gesture,
+                                  initGestureConfigHandler:
+                                      (ExtendedImageState state) {
+                                    return GestureConfig(
+                                      minScale: 0.9,
+                                      animationMinScale: 0.7,
+                                      maxScale: 3.0,
+                                      animationMaxScale: 3.5,
+                                      speed: 1.0,
+                                      inPageView: true,
+                                      initialAlignment: InitialAlignment.center,
+                                    );
+                                  },
+                                  onDoubleTap: (state) {
+                                    final Offset? pointerDownPosition =
+                                        state.pointerDownPosition;
+                                    final double? begin =
+                                        state.gestureDetails!.totalScale;
+                                    double end;
+
+                                    _doubleClickAnimation?.removeListener(
+                                        _doubleClickAnimationListener);
+
+                                    _doubleClickAnimationController.stop();
+
+                                    _doubleClickAnimationController.reset();
+
+                                    if (begin == doubleTapScales[0]) {
+                                      end = doubleTapScales[1];
+                                    } else {
+                                      end = doubleTapScales[0];
+                                    }
+
+                                    _doubleClickAnimationListener = () {
+                                      state.handleDoubleTap(
+                                          scale: _doubleClickAnimation!.value,
+                                          doubleTapPosition:
+                                              pointerDownPosition);
+                                    };
+                                    _doubleClickAnimation =
+                                        _doubleClickAnimationController.drive(
+                                            Tween<double>(
+                                                begin: begin, end: end));
+
+                                    _doubleClickAnimation!.addListener(
+                                        _doubleClickAnimationListener);
+
+                                    _doubleClickAnimationController.forward();
+                                  },
+                                  loadStateChanged: (state) {
+                                    if (state.extendedImageLoadState ==
+                                        LoadState.loading) {
+                                      return Stack(
+                                        alignment: AlignmentDirectional.center,
+                                        children: [
+                                          ExtendedImage.network(
+                                            s.thumbnail,
+                                            enableLoadState: false,
+                                          ),
+                                          const CupertinoActivityIndicator(
+                                            radius: 15,
+                                          ),
+                                        ],
+                                      );
+                                    } else if (state.extendedImageLoadState ==
+                                        LoadState.failed) {
+                                      state.imageProvider.evict();
+
+                                      return ImageRes.pictureError.toImage;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                        );
+                },
+              ),
             ),
           ),
-        if (_showControls)
-          Positioned(
-            top: MediaQuery.paddingOf(context).top + 12,
-            left: 76,
-            right: 76,
-            child: Center(
-                child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-              decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.48),
-                  borderRadius: BorderRadius.circular(28)),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                if (source.senderName?.isNotEmpty == true)
-                  Text(source.senderName!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white)),
-                Text(
-                    [
-                      if (source.sentAt != null) _previewTime(source.sentAt),
-                      '${currentIndex + 1}/${widget.sources.length}',
-                    ].join('  '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: Colors.white70)),
-              ]),
-            )),
-          ),
-        if (_showControls && source.isVideo)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: IgnorePointer(
-              child: Container(
-                height: MediaQuery.paddingOf(context).bottom + 96,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.72)
-                    ],
+          if (_showControls)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Material(
+                color: Colors.transparent,
+                child: SafeArea(
+                  bottom: false,
+                  minimum: const EdgeInsets.symmetric(horizontal: 12),
+                  child: SizedBox(
+                    height: 72,
+                    child: Row(children: [
+                      Transform.translate(
+                        offset:
+                            Offset(0, (TitleBar.chatToolbarHeight - 72) / 2),
+                        child: _roundAction(context,
+                            icon: Icons.arrow_back_ios_new,
+                            tooltip: MaterialLocalizations.of(context)
+                                .backButtonTooltip,
+                            onPressed: () => Navigator.of(context).pop()),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Transform.translate(
+                          offset:
+                              Offset(0, (TitleBar.chatToolbarHeight - 72) / 2),
+                          child: Center(
+                            child: MediaPreviewGlass(
+                              borderRadius: BorderRadius.circular(28),
+                              child: Container(
+                                key: const ValueKey('media-preview-info'),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 4),
+                                child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (source.senderName?.isNotEmpty == true)
+                                        Text(source.senderName!,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                                color: Colors.white)),
+                                      Text(
+                                          [
+                                            if (source.sentAt != null)
+                                              _previewTime(source.sentAt),
+                                            '${currentIndex + 1}/${widget.sources.length}',
+                                          ].join('  '),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                  color: Colors.white70)),
+                                    ]),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                          width: (MediaQuery.sizeOf(context).width * 0.105)
+                                  .clamp(42.0, 52.0) +
+                              12),
+                    ]),
                   ),
                 ),
               ),
             ),
-          ),
-        if (_showControls)
-          SafeArea(
-            child: Align(
-              alignment: Alignment.bottomRight,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.onForward != null) ...[
-                    _roundAction(context,
-                        icon: Icons.ios_share,
-                        tooltip: '转发',
-                        onPressed: () => widget.onForward!(currentIndex)),
-                    const SizedBox(width: 8),
-                    ],
-                    if (widget.onSave != null) ...[
-                    _roundAction(context,
-                        icon: Icons.download,
-                        tooltip: StrRes.saveToAlbum,
-                        onPressed: () => widget.onSave!(currentIndex)),
-                    const SizedBox(width: 8),
-                    ],
-                    _roundAction(context,
-                        icon: Icons.grid_view_rounded,
-                        tooltip: '图片和视频',
-                        onPressed: () => setState(() => _showGrid = true)),
-                    if (widget.onDelete != null) ...[
-                    const SizedBox(width: 8),
-                    _roundAction(context,
-                        icon: Icons.more_horiz,
-                        tooltip: 'mediaMore'.tr,
-                        onPressed: () => _showMoreMenu(context)),
-                    ],
-                  ],
+          if (_showControls && source.isVideo)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: IgnorePointer(
+                child: Container(
+                  height: MediaQuery.paddingOf(context).bottom + 96,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.72)
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        if (_showGrid) Positioned.fill(child: _buildGrid(context)),
-      ]),
+          if (_showControls)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Material(
+                color: Colors.transparent,
+                child: SafeArea(
+                  top: false,
+                  minimum: const EdgeInsets.symmetric(horizontal: 12),
+                  child: SizedBox(
+                    height: 72,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      spacing: NavigationGlassTokens.gap,
+                      children: [
+                        if (widget.onForward != null)
+                          _roundAction(context,
+                              icon: Icons.ios_share,
+                              tooltip: '转发',
+                              onPressed: () => widget.onForward!(currentIndex)),
+                        if (widget.onSave != null)
+                          _roundAction(context,
+                              icon: Icons.download,
+                              tooltip: StrRes.saveToAlbum,
+                              onPressed: () => widget.onSave!(currentIndex)),
+                        _roundAction(context,
+                            icon: Icons.grid_view_rounded,
+                            tooltip: '图片和视频',
+                            onPressed: () => setState(() => _showGrid = true)),
+                        if (widget.onDelete != null)
+                          _roundAction(context,
+                              icon: Icons.more_horiz,
+                              tooltip: 'mediaMore'.tr,
+                              onPressed: () => _showMoreMenu(context)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (_showGrid) Positioned.fill(child: _buildGrid(context)),
+        ]),
+      ),
     );
   }
 
@@ -416,15 +465,19 @@ class _MediaBrowserState extends State<MediaBrowser>
         (MediaQuery.sizeOf(context).width * 0.105).clamp(42.0, 52.0);
     return SizedBox.square(
       dimension: diameter,
-      child: IconButton.filled(
-        tooltip: tooltip,
-        onPressed: onPressed,
-        icon: Icon(icon, size: diameter * 0.48),
-        style: IconButton.styleFrom(
-          foregroundColor: Colors.white,
-          disabledForegroundColor: Colors.white70,
-          backgroundColor: Colors.black.withValues(alpha: 0.48),
-          disabledBackgroundColor: Colors.black.withValues(alpha: 0.22),
+      child: MediaPreviewGlass(
+        borderRadius: BorderRadius.circular(diameter / 2),
+        interactive: onPressed != null,
+        child: IconButton.filled(
+          tooltip: tooltip,
+          onPressed: onPressed,
+          icon: Icon(icon, size: diameter * 0.48),
+          style: IconButton.styleFrom(
+            foregroundColor: Colors.white,
+            disabledForegroundColor: Colors.white70,
+            backgroundColor: Colors.transparent,
+            disabledBackgroundColor: Colors.transparent,
+          ),
         ),
       ),
     );

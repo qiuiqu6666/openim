@@ -18,6 +18,7 @@ class SetPasswordLogic extends GetxController {
   late int usedFor;
   late String verificationCode;
   String? invitationCode;
+  bool _registering = false;
 
   @override
   void onClose() {
@@ -41,16 +42,12 @@ class SetPasswordLogic extends GetxController {
     super.onInit();
   }
 
-  _onChanged() {
+  void _onChanged() {
     enabled.value =
-        nicknameCtrl.text.trim().isNotEmpty && pwdCtrl.text.trim().isNotEmpty && pwdAgainCtrl.text.trim().isNotEmpty;
+        pwdCtrl.text.trim().isNotEmpty && pwdAgainCtrl.text.trim().isNotEmpty;
   }
 
   bool _checkingInput() {
-    if (nicknameCtrl.text.trim().isEmpty) {
-      IMViews.showToast(StrRes.plsEnterYourNickname);
-      return false;
-    }
     if (!IMUtils.isValidPassword(pwdCtrl.text)) {
       IMViews.showToast(StrRes.wrongPasswordFormat);
       return false;
@@ -68,31 +65,50 @@ class SetPasswordLogic extends GetxController {
   }
 
   void register() async {
-    final operateType = Get.find<LoginLogic>().operateType;
-    await LoadingView.singleton.wrap(asyncFunction: () async {
-      final data = await Apis.register(
-        nickname: nicknameCtrl.text.trim(),
-        areaCode: areaCode,
-        phoneNumber: operateType == LoginType.phone ? phoneNumber : null,
-        email: email,
-        account: operateType == LoginType.account ? phoneNumber : null,
-        password: pwdCtrl.text,
-        verificationCode: verificationCode,
-        invitationCode: invitationCode,
-      );
-      if (null == IMUtils.emptyStrToNull(data.imToken) || null == IMUtils.emptyStrToNull(data.chatToken)) {
+    if (_registering) return;
+    _registering = true;
+    try {
+      final operateType = Get.find<LoginLogic>().operateType;
+      final loggedIn =
+          await LoadingView.singleton.wrap<bool>(asyncFunction: () async {
+        final data = await Apis.register(
+          nickname: nicknameCtrl.text,
+          areaCode: areaCode,
+          phoneNumber: operateType == LoginType.phone ? phoneNumber : null,
+          email: email,
+          account: operateType == LoginType.account ? phoneNumber : null,
+          password: pwdCtrl.text,
+          verificationCode: verificationCode,
+          invitationCode: invitationCode,
+        );
+        if (null == IMUtils.emptyStrToNull(data.imToken) ||
+            null == IMUtils.emptyStrToNull(data.chatToken)) {
+          return false;
+        }
+        final account = {
+          "areaCode": areaCode,
+          "phoneNumber": phoneNumber,
+          'email': email
+        };
+        await DataSp.putLoginCertificate(data);
+        await DataSp.putLoginAccount(account);
+        DataSp.putLoginType(email != null ? 1 : 0);
+        await imLogic.login(data.userID, data.imToken);
+        Logger.print('---------im login success-------');
+        PushController.login(data.userID);
+        Logger.print('---------jpush login success----');
+        return true;
+      });
+      if (isClosed) return;
+      if (loggedIn) {
+        AppNavigator.startMain();
+      } else {
         AppNavigator.startLogin();
-        return;
       }
-      final account = {"areaCode": areaCode, "phoneNumber": phoneNumber, 'email': email};
-      await DataSp.putLoginCertificate(data);
-      await DataSp.putLoginAccount(account);
-      DataSp.putLoginType(email != null ? 1 : 0);
-      await imLogic.login(data.userID, data.imToken);
-      Logger.print('---------im login success-------');
-      PushController.login(data.userID);
-      Logger.print('---------jpush login success----');
-    });
-    AppNavigator.startMain();
+    } catch (_) {
+      // The API already displays the server error; keep the form for retry.
+    } finally {
+      _registering = false;
+    }
   }
 }

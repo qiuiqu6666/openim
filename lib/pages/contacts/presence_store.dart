@@ -123,10 +123,16 @@ class PresenceStore {
   void markOffline(String id) {
     if (_closed || users[id] == null || users[id]!.hidden) return;
     _versions[id] = (_versions[id] ?? 0) + 1;
+    final previous = users[id]!;
     _set(
         id,
-        UserPresence(false, null,
-            showLastSeen: users[id]!.showLastSeen, isSelf: id == _owner));
+        UserPresence(
+            false,
+            previous.online
+                ? DateTime.now().millisecondsSinceEpoch
+                : previous.lastSeenAt,
+            showLastSeen: previous.showLastSeen,
+            isSelf: id == _owner));
   }
 
   void remove(String id) {
@@ -166,10 +172,12 @@ class PresenceStore {
           final showLastSeen = item['showLastSeen'] != false;
           final hidden = id != owner && !showLastSeen;
           final online = !hidden && item['online'] == true;
+          final previous = users[id];
+          final lastSeenAt = (item['lastSeenAt'] as num?)?.toInt();
           _set(
               id,
               UserPresence(
-                  online, online ? null : (item['lastSeenAt'] as num?)?.toInt(),
+                  online, online ? null : lastSeenAt ?? previous?.lastSeenAt,
                   showLastSeen: showLastSeen, isSelf: id == owner));
         }
       } catch (_) {

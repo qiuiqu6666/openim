@@ -15,6 +15,7 @@ class ChatSetupPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: GlassAppBar(
+        toolbarHeight: TitleBar.chatToolbarHeight,
         title: Text('chatSettingsTitle'.tr, style: Styles.ts_0C1C33_17sp),
         centerTitle: true,
         leading: IconButton(

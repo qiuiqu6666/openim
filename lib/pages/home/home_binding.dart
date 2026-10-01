@@ -10,7 +10,7 @@ class HomeBinding extends Bindings {
   void dependencies() {
     Get.lazyPut(() => HomeLogic());
     Get.lazyPut(() => ConversationLogic());
-    Get.lazyPut(() => ContactsLogic());
+    Get.lazyPut(() => ContactsLogic(), fenix: true);
     Get.lazyPut(() => MineLogic());
   }
 }

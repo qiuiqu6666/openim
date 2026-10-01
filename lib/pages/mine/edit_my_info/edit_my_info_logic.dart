@@ -22,6 +22,7 @@ class EditMyInfoLogic extends GetxController {
   String? title;
   String? defaultValue;
   TextInputType? keyboardType;
+  bool _saving = false;
 
   void openPhotoSheet() => MyAvatarEditor.open(imLogic);
 
@@ -40,7 +41,7 @@ class EditMyInfoLogic extends GetxController {
     super.onInit();
   }
 
-  _initAttr() {
+  void _initAttr() {
     switch (editAttr) {
       case EditAttr.nickname:
         title = StrRes.name;
@@ -65,42 +66,55 @@ class EditMyInfoLogic extends GetxController {
   }
 
   void save() async {
-    final value = inputCtrl.text.trim();
-    if (editAttr == EditAttr.nickname) {
-      await LoadingView.singleton.wrap(
-        asyncFunction: () => Apis.updateUserInfo(
-          userID: OpenIM.iMManager.userID,
-          nickname: value,
-        ),
-      );
-      imLogic.userInfo.update((val) {
-        val?.nickname = value;
-      });
-    } else if (editAttr == EditAttr.mobile) {
-      await LoadingView.singleton.wrap(
-        asyncFunction: () => Apis.updateUserInfo(
-          userID: OpenIM.iMManager.userID,
-          phoneNumber: value,
-        ),
-      );
-      imLogic.userInfo.update((val) {
-        val?.phoneNumber = value;
-      });
-    } else if (editAttr == EditAttr.email) {
-      if (defaultValue?.isNotEmpty == true && value.isEmpty) {
-        IMViews.showToast(StrRes.plsEnterEmail);
-        return;
-      }
-      await LoadingView.singleton.wrap(
-        asyncFunction: () => Apis.updateUserInfo(
-          userID: OpenIM.iMManager.userID,
-          email: value,
-        ),
-      );
-      imLogic.userInfo.update((val) {
-        val?.email = value;
-      });
+    if (_saving) return;
+    final value =
+        editAttr == EditAttr.nickname ? inputCtrl.text : inputCtrl.text.trim();
+    if (editAttr == EditAttr.nickname && value.isEmpty) {
+      IMViews.showToast('nicknameCannotBeEmpty'.tr);
+      return;
     }
-    Get.back();
+    _saving = true;
+    try {
+      if (editAttr == EditAttr.nickname) {
+        await LoadingView.singleton.wrap(
+          asyncFunction: () => Apis.updateUserInfo(
+            userID: OpenIM.iMManager.userID,
+            nickname: value,
+          ),
+        );
+        imLogic.userInfo.update((val) {
+          val?.nickname = value;
+        });
+      } else if (editAttr == EditAttr.mobile) {
+        await LoadingView.singleton.wrap(
+          asyncFunction: () => Apis.updateUserInfo(
+            userID: OpenIM.iMManager.userID,
+            phoneNumber: value,
+          ),
+        );
+        imLogic.userInfo.update((val) {
+          val?.phoneNumber = value;
+        });
+      } else if (editAttr == EditAttr.email) {
+        if (defaultValue?.isNotEmpty == true && value.isEmpty) {
+          IMViews.showToast(StrRes.plsEnterEmail);
+          return;
+        }
+        await LoadingView.singleton.wrap(
+          asyncFunction: () => Apis.updateUserInfo(
+            userID: OpenIM.iMManager.userID,
+            email: value,
+          ),
+        );
+        imLogic.userInfo.update((val) {
+          val?.email = value;
+        });
+      }
+      if (!isClosed) Get.back();
+    } catch (_) {
+      // Keep the input and current profile unchanged after a rejected update.
+    } finally {
+      _saving = false;
+    }
   }
 }

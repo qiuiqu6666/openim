@@ -27,6 +27,7 @@ class SetFriendRemarkPage extends StatelessWidget {
     this.avatarName,
     this.keyboardType,
     this.onAvatarTap,
+    this.isGroupAvatar = false,
   });
 
   final TextEditingController controller;
@@ -36,6 +37,7 @@ class SetFriendRemarkPage extends StatelessWidget {
   final String? avatarName;
   final TextInputType? keyboardType;
   final VoidCallback? onAvatarTap;
+  final bool isGroupAvatar;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -67,6 +69,7 @@ class SetFriendRemarkPage extends StatelessWidget {
                   onTap: onAvatarTap,
                   url: avatarURL,
                   text: avatarName,
+                  isGroup: isGroupAvatar,
                   width: 96.w,
                   height: 96.w,
                   textStyle: TextStyle(

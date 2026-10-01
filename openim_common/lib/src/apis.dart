@@ -187,7 +187,7 @@ class Apis {
       put('phoneNumber', phoneNumber);
       put('areaCode', areaCode);
       put('email', email);
-      put('nickname', nickname);
+      if (nickname != null) param['nickname'] = {'value': nickname};
       put('faceURL', faceURL);
       put('gender', gender);
       put('gender', gender);
@@ -197,7 +197,7 @@ class Apis {
       put('allowBeep', allowBeep);
       put('allowVibration', allowVibration);
 
-      return HttpUtil.post(
+      return await HttpUtil.post(
         Urls.updateUserInfo,
         data: {
           ...param,
@@ -206,7 +206,8 @@ class Apis {
         options: chatTokenOptions,
       );
     } catch (e, s) {
-      _catchErrorHelper(e, s);
+      if (e is (int, String?)) _catchErrorHelper(e, s);
+      rethrow;
     }
   }
 

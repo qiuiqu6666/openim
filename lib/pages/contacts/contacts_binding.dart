@@ -5,6 +5,6 @@ import 'contacts_logic.dart';
 class ContactsBinding extends Bindings {
   @override
   void dependencies() {
-    Get.lazyPut(() => ContactsLogic());
+    Get.lazyPut(() => ContactsLogic(), fenix: true);
   }
 }

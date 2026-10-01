@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -24,7 +25,8 @@ void main() {
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     await SpUtil().init();
-    await glass.LiquidGlassWidgets.initialize();
+    await NavigationGlassController.instance
+        .setMode(NavigationGlassMode.liquid);
     const fontDirectory = String.fromEnvironment('GLASS_PREVIEW_FONTS');
     if (fontDirectory.isNotEmpty) {
       for (final entry in {
@@ -115,6 +117,21 @@ void main() {
   }
 
   for (final brightness in Brightness.values) {
+    testWidgets('${brightness.name} mode changes preserve large-text geometry',
+        (tester) async {
+      await pumpNavigation(tester, brightness: brightness, scale: 2);
+      final bar = tester.getRect(find.byType(GlassBottomNavBar));
+      final label = tester.getRect(find.text('Contacts').hitTestable().first);
+      final style =
+          tester.widget<Text>(find.text('Contacts').hitTestable().first).style;
+      await NavigationGlassController.instance
+          .setMode(NavigationGlassMode.translucent);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.byType(GlassBottomNavBar)), bar);
+      expect(tester.getRect(find.text('Contacts')), label);
+      expect(tester.widget<Text>(find.text('Contacts')).style, style);
+      expect(tester.takeException(), isNull);
+    });
     testWidgets('${brightness.name} glass respects safe areas and selection',
         (tester) async {
       var selected = -1;
@@ -145,6 +162,73 @@ void main() {
       }
     });
   }
+
+  test('renderer failure preserves preference and can be retried', () async {
+    var attempts = 0;
+    final controller = NavigationGlassController(initialize: () async {
+      if (++attempts == 1) throw StateError('shader unavailable');
+    });
+    addTearDown(controller.dispose);
+    await controller.setMode(NavigationGlassMode.translucent);
+    expect(await controller.setMode(NavigationGlassMode.liquid), isFalse);
+    expect(controller.mode, NavigationGlassMode.translucent);
+    expect(SpUtil().getString(NavigationGlassController.storageKey),
+        'translucent');
+    expect(await controller.setMode(NavigationGlassMode.liquid), isTrue);
+    expect(controller.mode, NavigationGlassMode.liquid);
+    expect(attempts, 2);
+  });
+
+  test('pending renderer does not override a newer mode choice', () async {
+    final loading = Completer<void>();
+    var attempts = 0;
+    final controller = NavigationGlassController(initialize: () {
+      attempts++;
+      return loading.future;
+    });
+    addTearDown(controller.dispose);
+    await controller.setMode(NavigationGlassMode.translucent);
+    final first = controller.setMode(NavigationGlassMode.liquid);
+    final second = controller.setMode(NavigationGlassMode.liquid);
+    expect(controller.mode, NavigationGlassMode.translucent);
+    await controller.setMode(NavigationGlassMode.translucent);
+    loading.complete();
+    await Future.wait([first, second]);
+    expect(attempts, 1);
+    expect(controller.mode, NavigationGlassMode.translucent);
+    expect(SpUtil().getString(NavigationGlassController.storageKey),
+        'translucent');
+  });
+
+  testWidgets('asymmetric top corners retain their full clip in both modes',
+      (tester) async {
+    const corners = BorderRadius.only(
+        bottomLeft: Radius.circular(12), bottomRight: Radius.circular(20));
+    for (final mode in [
+      NavigationGlassMode.liquid,
+      NavigationGlassMode.translucent
+    ]) {
+      await NavigationGlassController.instance.setMode(mode);
+      await tester.pumpWidget(const MaterialApp(
+          home: Scaffold(
+        body: LiquidGlassSurface(
+            borderRadius: corners, child: SizedBox(width: 200, height: 80)),
+      )));
+      await tester.pumpAndSettle();
+      expect(
+          tester
+              .widgetList<ClipRRect>(find.byType(ClipRRect))
+              .any((clip) => clip.borderRadius == corners),
+          isTrue);
+      if (mode == NavigationGlassMode.liquid) {
+        final container = tester
+            .widget<glass.GlassContainer>(find.byType(glass.GlassContainer));
+        expect(
+            (container.shape as glass.LiquidRoundedRectangle).borderRadius, 0);
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
 
   testWidgets('landscape, large text and reduced motion do not overflow',
       (tester) async {

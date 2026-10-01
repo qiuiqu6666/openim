@@ -112,4 +112,42 @@ void main() {
     expect(restored.users['u3']!.lastSeenAt, 1790849179579);
     restored.dispose();
   });
+
+  test('offline updates keep the last known time for profiles and contacts',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    await SpUtil().init();
+    await DataSp.putLoginCertificate(
+        LoginCertificate.fromJson({'userID': 'me', 'chatToken': 'chat'}));
+    final client = Dio();
+    client.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) {
+      handler.resolve(Response(requestOptions: request, data: {
+        'errCode': 0,
+        'data': {
+          'users': [
+            {
+              'userID': 'friend',
+              'online': false,
+              'showLastSeen': true,
+              'lastSeenAt': null,
+            }
+          ]
+        }
+      }));
+    }));
+    final store = PresenceStore(client: client);
+    final known = DateTime.now()
+        .subtract(const Duration(minutes: 5))
+        .millisecondsSinceEpoch;
+    store.users['friend'] = UserPresence(false, known);
+    await store.refresh(['friend']);
+    expect(store.users['friend']!.lastSeenAt, known);
+    store.markOffline('friend');
+    expect(store.users['friend']!.lastSeenAt, known);
+
+    store.users['friend'] = UserPresence(true, null);
+    store.markOffline('friend');
+    expect(store.users['friend']!.label, '刚刚在线');
+    store.dispose();
+  });
 }

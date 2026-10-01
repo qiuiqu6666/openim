@@ -156,7 +156,7 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
                             ),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 4,
-                              vertical: 16,
+                                  vertical: 20,
                             ),
                           ),
                         ),

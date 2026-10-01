@@ -14,16 +14,17 @@ class ChatCallItemView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           (type == 'audio' ? ImageRes.voiceCallMsg : ImageRes.videoCallMsg).toImage
             ..width = 18.w
             ..height = 18.h
             ..color = (/*isISend ? Styles.c_FFFFFF : */ Styles.c_0C1C33),
           8.horizontalSpace,
-          Text(
+          Flexible(child: Text(
             content,
             style: /*isISend ? Styles.ts_FFFFFF_17sp : */ Styles.ts_0C1C33_17sp,
-          ),
+          )),
         ],
       );
 }

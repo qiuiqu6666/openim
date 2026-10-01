@@ -39,17 +39,26 @@ class GlassBottomNavBar extends StatelessWidget {
           onTabSelected: config.onItemSelected,
           horizontalPadding: NavigationGlassTokens.inset,
           verticalPadding: NavigationGlassTokens.gap,
-          barHeight: NavigationGlassTokens.barHeight +
-              (MediaQuery.textScalerOf(context)
-                          .scale(NavigationGlassTokens.labelSize) -
-                      NavigationGlassTokens.labelSize)
-                  .clamp(0, 48),
+          barHeight: NavigationGlassTokens.height(context),
           barBorderRadius: NavigationGlassTokens.radius,
-          textStyle: theme.textTheme.labelSmall?.copyWith(
-              fontSize: NavigationGlassTokens.labelSize, height: 1.2),
+          tabPadding: NavigationGlassTokens.tabPadding,
+          iconSize: NavigationGlassTokens.iconSize,
+          iconLabelSpacing: NavigationGlassTokens.iconLabelGap,
+          textStyle: NavigationGlassTokens.labelStyle(context),
+          // The package applies 0.5 opacity to its resting indicator.
+          indicatorColor: theme.colorScheme.primary
+              .withValues(alpha: NavigationGlassTokens.selectionOpacity * 2),
           selectedIconColor: theme.colorScheme.primary,
           unselectedIconColor: theme.colorScheme.onSurfaceVariant,
-          glassSettings: NavigationGlassTokens.settings(context),
+          // Standard-quality rendering generates a rim from refraction and
+          // specular light even without a Flutter border. Keep the base plain;
+          // the moving indicator retains its separate glass settings below.
+          glassSettings: NavigationGlassTokens.settings(context).copyWith(
+            refractiveIndex: 0,
+            lightIntensity: 0,
+          ),
+          indicatorSettings:
+              NavigationGlassTokens.settings(context, tint: Colors.transparent),
           quality: NavigationGlassTokens.quality,
           glowDuration:
               reduceMotion ? Duration.zero : NavigationGlassTokens.duration,
@@ -63,6 +72,7 @@ class GlassBottomNavBar extends StatelessWidget {
 
   Widget _buildTranslucentBar(BuildContext context) {
     final theme = Theme.of(context);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return SafeArea(
       top: false,
       child: Padding(
@@ -71,58 +81,114 @@ class GlassBottomNavBar extends StatelessWidget {
           vertical: NavigationGlassTokens.gap,
         ),
         child: LiquidGlassSurface(
+          surface: NavigationGlassSurface.bottom,
           borderRadius: BorderRadius.circular(NavigationGlassTokens.radius),
           child: SizedBox(
-            height: NavigationGlassTokens.barHeight,
-            child: Material(
-              type: MaterialType.transparency,
-              child: Row(children: [
-                for (var index = 0; index < config.items.length; index++)
-                  Expanded(
-                      child: Semantics(
-                    button: true,
-                    selected: config.selectedIndex == index,
-                    label: config.items[index].title,
-                    child: InkWell(
-                      borderRadius:
-                          BorderRadius.circular(NavigationGlassTokens.radius),
-                      onTap: () => config.onItemSelected(index),
-                      child: Container(
-                        margin:
-                            const EdgeInsets.all(NavigationGlassTokens.gap / 2),
-                        decoration: BoxDecoration(
-                          color: config.selectedIndex == index
-                              ? theme.colorScheme.primary.withValues(alpha: .13)
-                              : null,
-                          borderRadius: BorderRadius.circular(
-                              NavigationGlassTokens.radius),
+            height: NavigationGlassTokens.height(context),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.all(NavigationGlassTokens.gap / 2),
+                    child: AnimatedAlign(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : NavigationGlassTokens.duration,
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment(
+                        config.items.length == 1
+                            ? 0
+                            : -1 +
+                                2 *
+                                    config.selectedIndex /
+                                    (config.items.length - 1),
+                        0,
+                      ),
+                      child: FractionallySizedBox(
+                        widthFactor: 1 / config.items.length,
+                        heightFactor: 1,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color:
+                                NavigationGlassTokens.selectionColor(context),
+                            border: Border.all(
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: NavigationGlassTokens
+                                    .selectionBorderOpacity,
+                              ),
+                            ),
+                            borderRadius: BorderRadius.circular(
+                                NavigationGlassTokens.radius * 2),
+                          ),
                         ),
-                        child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                  height: AppIconTokens.large,
-                                  child: config.selectedIndex == index
-                                      ? config.items[index].icon
-                                      : config.items[index].inactiveIcon),
-                              Flexible(
-                                  child: ExcludeSemantics(
-                                      child: Text(
-                                config.items[index].title ?? '',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontSize: NavigationGlassTokens.labelSize,
-                                  color: config.selectedIndex == index
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ))),
-                            ]),
                       ),
                     ),
-                  )),
-              ]),
+                  ),
+                ),
+                Material(
+                  type: MaterialType.transparency,
+                  child: Padding(
+                    padding: NavigationGlassTokens.tabPadding,
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var index = 0;
+                              index < config.items.length;
+                              index++)
+                            Expanded(
+                              child: Semantics(
+                                button: true,
+                                selected: config.selectedIndex == index,
+                                label: config.items[index].title,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(
+                                      NavigationGlassTokens.radius),
+                                  onTap: () => config.onItemSelected(index),
+                                  child: ExcludeSemantics(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      spacing:
+                                          NavigationGlassTokens.iconLabelGap,
+                                      children: [
+                                        IconTheme(
+                                          data: IconThemeData(
+                                            size:
+                                                NavigationGlassTokens.iconSize,
+                                            color: config.selectedIndex == index
+                                                ? theme.colorScheme.primary
+                                                : theme.colorScheme
+                                                    .onSurfaceVariant,
+                                          ),
+                                          child: SizedBox(
+                                            height:
+                                                NavigationGlassTokens.iconSize,
+                                            child: config.selectedIndex == index
+                                                ? config.items[index].icon
+                                                : config
+                                                    .items[index].inactiveIcon,
+                                          ),
+                                        ),
+                                        Text(
+                                          config.items[index].title ?? '',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.center,
+                                          style:
+                                              NavigationGlassTokens.labelStyle(
+                                                  context),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ]),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

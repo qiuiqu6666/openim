@@ -9,6 +9,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:rxdart/rxdart.dart';
 
 import 'chat_notice_view.dart';
+import 'chat_attachment_view.dart';
 
 double maxWidth = 247.w;
 double pictureWidth = 120.w;
@@ -203,6 +204,17 @@ class _ChatItemViewState extends State<ChatItemView> {
       );
     } else if (_message.isVideoType) {
       child = widget.mediaItemBuilder?.call(context, _message);
+    } else if (_message.isVoiceType && _message.soundElem != null) {
+      child = ChatVoiceMessageView(message: _message, isOutgoing: _isISend);
+    } else if (_message.isFileType && _message.fileElem != null) {
+      child = ChatFileMessageView(message: _message);
+    } else if (_message.isCustomType) {
+      final custom = widget.customTypeBuilder?.call(context, _message);
+      if (custom != null) {
+        if (!custom.needChatItemContainer) return custom.customView;
+        child = custom.customView;
+        isBubbleBg = custom.needBubbleBackground;
+      }
     } else if (_message.isCardType && _message.cardElem != null) {
       final card = _message.cardElem!;
       child = ContactCardView(
@@ -260,6 +272,7 @@ class _ChatItemViewState extends State<ChatItemView> {
       isSending: _message.status == MessageStatus.sending,
       isSendFailed: _message.status == MessageStatus.failed,
       isBubbleBg: isBubbleBg,
+      metadataBelow: _message.isVoiceType || _message.isFileType || _message.isCustomType,
       mediaOverlay: _message.isPictureType || _message.isVideoType,
       standaloneCard: _message.isCardType && _message.cardElem != null,
       ignorePointer: widget.ignorePointer,

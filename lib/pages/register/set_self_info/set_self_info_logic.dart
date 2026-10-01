@@ -33,8 +33,8 @@ class SetSelfInfoLogic extends GetxController {
     super.onInit();
   }
 
-  _onChanged() {
-    nickname.value = nicknameCtrl.text.trim();
+  void _onChanged() {
+    nickname.value = nicknameCtrl.text;
   }
 
   void openPhotoSheet() {

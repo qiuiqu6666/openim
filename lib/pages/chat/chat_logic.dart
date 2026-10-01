@@ -26,6 +26,7 @@ import '../../core/controller/im_controller.dart';
 import '../../core/im_callback.dart';
 import '../../routes/app_navigator.dart';
 import '../contacts/select_contacts/select_contacts_logic.dart';
+import '../contacts/contacts_logic.dart';
 import '../conversation/conversation_logic.dart';
 import 'group_setup/group_member_list/group_member_list_logic.dart';
 
@@ -165,6 +166,9 @@ class ChatLogic extends SuperController {
   void onInit() {
     var arguments = Get.arguments;
     conversationInfo = arguments['conversationInfo'];
+    if (isSingleChat && Get.isRegistered<ContactsLogic>()) {
+      Get.find<ContactsLogic>().setProfilePresence(this, userID);
+    }
     searchMessage = arguments['searchMessage'];
     nickname.value = conversationInfo.showName ?? '';
     faceUrl.value = conversationInfo.faceURL ?? '';
@@ -973,6 +977,9 @@ class ChatLogic extends SuperController {
 
   @override
   void onClose() {
+    if (Get.isRegistered<ContactsLogic>()) {
+      Get.find<ContactsLogic>().setProfilePresence(this, null);
+    }
     sendTypingMsg();
     _clearUnreadCount();
     inputCtrl.dispose();
@@ -1176,6 +1183,23 @@ class ChatLogic extends SuperController {
       );
     });
   }
+
+  void callDirectly(CallType type) {
+    if (rtcIsBusy) {
+      IMViews.showToast(StrRes.callingBusy);
+      return;
+    }
+    if (!isSingleChat) return;
+    imLogic.call(
+      callObj: CallObj.single,
+      callType: type,
+      inviteeUserIDList: [userID!],
+    );
+  }
+
+  void callAudio() => callDirectly(CallType.audio);
+
+  void callVideo() => callDirectly(CallType.video);
 
   void onScrollToTop() {
     if (scrollingCacheMessageList.isNotEmpty) {

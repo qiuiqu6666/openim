@@ -10,7 +10,10 @@ import 'presence_label.dart';
 
 class ContactsPage extends StatelessWidget {
   ContactsPage({super.key, ContactsLogic? logic})
-      : logic = logic ?? Get.find<ContactsLogic>();
+      : logic = logic ??
+            (Get.isRegistered<ContactsLogic>()
+                ? Get.find<ContactsLogic>()
+                : Get.put(ContactsLogic()));
 
   final ContactsLogic logic;
 

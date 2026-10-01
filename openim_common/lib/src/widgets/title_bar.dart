@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 class TitleBar extends StatelessWidget implements PreferredSizeWidget {
+  static double get chatToolbarHeight => NavigationGlassTokens.toolbarHeight;
   const TitleBar({
     Key? key,
     this.height,
@@ -34,7 +35,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
         child: Padding(
           padding: EdgeInsets.only(top: mq.padding.top),
           child: Container(
-            height: height,
+            height: height ?? NavigationGlassTokens.toolbarHeight,
             padding: EdgeInsets.symmetric(horizontal: 16.w),
             decoration: showUnderline
                 ? BoxDecoration(
@@ -57,7 +58,8 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Size get preferredSize => Size.fromHeight(height ?? 44.h);
+  Size get preferredSize =>
+      Size.fromHeight(height ?? NavigationGlassTokens.toolbarHeight);
 
   TitleBar.conversation(
       {super.key,
@@ -69,7 +71,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
       CustomPopupMenuController? popCtrl,
       this.left})
       : backgroundColor = null,
-        height = 62.h,
+        height = NavigationGlassTokens.toolbarHeight,
         showUnderline = false,
         center = null,
         right = Row(
@@ -113,73 +115,155 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
   TitleBar.chat({
     super.key,
     String? title,
+    String? avatarUrl,
+    String? presenceText,
+    bool isOnline = false,
     String? member,
+    bool isSingleChat = false,
     bool isMultiModel = false,
     bool showCallBtn = true,
     bool isMuted = false,
     Function()? onClickCallBtn,
+    Function()? onClickVideoBtn,
     Function()? onClickMoreBtn,
     Function()? onCloseMultiModel,
   })  : backgroundColor = null,
-        height = 48.h,
-        showUnderline = true,
-        center = Flexible(
-            child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (null != title)
-              Row(
+        height = chatToolbarHeight,
+        showUnderline = false,
+        center = isSingleChat
+            ? Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: onClickMoreBtn,
+                  child: Row(
+                    children: [
+                      Stack(clipBehavior: Clip.none, children: [
+                        AvatarView(
+                          width: 32.w,
+                          height: 32.w,
+                          url: avatarUrl,
+                          text: title,
+                          isCircle: true,
+                        ),
+                        if (isOnline)
+                          Positioned(
+                              right: -1.w,
+                              bottom: -1.h,
+                              child: Container(
+                                  width: 9.w,
+                                  height: 9.w,
+                                  decoration: BoxDecoration(
+                                      color: Styles.c_18E875,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                          color: Styles.c_FFFFFF,
+                                          width: 1.5.w))))
+                      ]),
+                      8.horizontalSpace,
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title?.trim() ?? '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Styles.ts_0C1C33_17sp_semibold),
+                            if (presenceText != null)
+                              Text(presenceText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      color: isOnline
+                                          ? Styles.c_0089FF
+                                          : Styles.c_8E9AB0,
+                                      fontSize: 11.sp))
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : Flexible(
+                child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Flexible(
-                      flex: 5,
-                      child: Container(
-                        child: title.trim().toText
-                          ..style = Styles.ts_0C1C33_17sp_semibold
-                          ..maxLines = 1
-                          ..overflow = TextOverflow.ellipsis
-                          ..textAlign = TextAlign.center,
-                      )),
-                  if (null != member)
-                    Flexible(
-                        flex: 2,
-                        child: Container(
-                            child: member.toText
-                              ..style = Styles.ts_0C1C33_17sp_semibold
-                              ..maxLines = 1))
+                  if (null != title)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(
+                            flex: 5,
+                            child: Container(
+                              child: title.trim().toText
+                                ..style = Styles.ts_0C1C33_17sp_semibold
+                                ..maxLines = 1
+                                ..overflow = TextOverflow.ellipsis
+                                ..textAlign = TextAlign.center,
+                            )),
+                        if (null != member)
+                          Flexible(
+                              flex: 2,
+                              child: Container(
+                                  child: member.toText
+                                    ..style = Styles.ts_0C1C33_17sp_semibold
+                                    ..maxLines = 1))
+                      ],
+                    ),
                 ],
-              ),
-          ],
-        )),
+              )),
         left = SizedBox(
-            width: showCallBtn ? 48.w : 24.w,
+            width: isSingleChat ? 32.w : (showCallBtn ? 48.w : 24.w),
             child: isMultiModel
                 ? (StrRes.cancel.toText
                   ..style = Styles.ts_0C1C33_17sp
                   ..onTap = onCloseMultiModel)
-                : (ImageRes.backBlack.toImage
-                  ..width = 24.w
-                  ..height = 24.h
-                  ..onTap = (() => Get.back()))),
-        right = SizedBox(
-            width: 16.w + (showCallBtn ? 56.w : 28.w),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showCallBtn)
-                  ImageRes.callBack.toImage
-                    ..width = 28.w
-                    ..height = 28.h
-                    ..opacity = isMuted ? 0.4 : 1
-                    ..onTap = isMuted ? null : onClickCallBtn,
-                16.horizontalSpace,
-                ImageRes.moreBlack.toImage
-                  ..width = 28.w
-                  ..height = 28.h
-                  ..onTap = onClickMoreBtn,
-              ],
-            ));
+                : Transform.translate(
+                    offset: Offset(isSingleChat ? -8.w : 0, 0),
+                    child: ImageRes.backBlack.toImage
+                      ..width = 24.w
+                      ..height = 24.h
+                      ..color = isSingleChat ? Styles.c_0089FF : null
+                      ..onTap = (() => Get.back()))),
+        right = isSingleChat
+            ? Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                    icon: Icon(CupertinoIcons.phone_fill,
+                        color: Styles.c_0089FF, size: 23.w),
+                    tooltip: StrRes.callVoice,
+                    onPressed: isMuted ? null : onClickCallBtn,
+                    constraints:
+                        BoxConstraints.tightFor(width: 40.w, height: 40.h),
+                    padding: EdgeInsets.zero),
+                IconButton(
+                    icon: Icon(CupertinoIcons.videocam_fill,
+                        color: Styles.c_0089FF, size: 25.w),
+                    tooltip: StrRes.callVideo,
+                    onPressed: isMuted ? null : onClickVideoBtn,
+                    constraints:
+                        BoxConstraints.tightFor(width: 40.w, height: 40.h),
+                    padding: EdgeInsets.zero)
+              ])
+            : SizedBox(
+                width: 16.w + (showCallBtn ? 56.w : 28.w),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showCallBtn)
+                      ImageRes.callBack.toImage
+                        ..width = 28.w
+                        ..height = 28.h
+                        ..opacity = isMuted ? 0.4 : 1
+                        ..onTap = isMuted ? null : onClickCallBtn,
+                    16.horizontalSpace,
+                    ImageRes.moreBlack.toImage
+                      ..width = 28.w
+                      ..height = 28.h
+                      ..onTap = onClickMoreBtn,
+                  ],
+                ));
 
   TitleBar.back({
     super.key,
@@ -193,7 +277,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
     this.right,
     this.showUnderline = false,
     Function()? onTap,
-  })  : height = 44.h,
+  })  : height = NavigationGlassTokens.toolbarHeight,
         backgroundColor = backgroundColor,
         center = Expanded(
             child: (title ?? '').toText
@@ -220,7 +304,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     this.showUnderline = false,
     Function()? onClickAddContacts,
-  })  : height = 44.h,
+  })  : height = NavigationGlassTokens.toolbarHeight,
         backgroundColor = null,
         center = Spacer(),
         left = StrRes.contacts.toText..style = Styles.ts_0C1C33_20sp_semibold,
@@ -237,7 +321,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
   TitleBar.workbench({
     super.key,
     this.showUnderline = false,
-  })  : height = 44.h,
+  })  : height = NavigationGlassTokens.toolbarHeight,
         backgroundColor = null,
         center = null,
         left = StrRes.workbench.toText..style = Styles.ts_0C1C33_20sp_semibold,
@@ -252,7 +336,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
     Function(String)? onSubmitted,
     Function()? onCleared,
     ValueChanged<String>? onChanged,
-  })  : height = 44.h,
+  })  : height = NavigationGlassTokens.toolbarHeight,
         backgroundColor = null,
         center = Expanded(
           child: Container(
@@ -267,7 +351,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
             onChanged: onChanged,
           )),
         ),
-        showUnderline = true,
+        showUnderline = false,
         right = null,
         left = ImageRes.backBlack.toImage
           ..width = 24.w

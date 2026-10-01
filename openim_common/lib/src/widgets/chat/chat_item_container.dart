@@ -15,6 +15,7 @@ class ChatItemContainer extends StatelessWidget {
     required this.isBubbleBg,
     this.mediaOverlay = false,
     this.standaloneCard = false,
+    this.metadataBelow = false,
     required this.isISend,
     required this.hasRead,
     this.showReadStatus = true,
@@ -42,6 +43,7 @@ class ChatItemContainer extends StatelessWidget {
   final bool isBubbleBg;
   final bool mediaOverlay;
   final bool standaloneCard;
+  final bool metadataBelow;
   final bool isISend;
   final bool hasRead;
   final bool showReadStatus;
@@ -158,7 +160,13 @@ class ChatItemContainer extends StatelessWidget {
             alignment: null,
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: 247.w),
-              child: isBubbleBg
+              child: metadataBelow
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [child, 4.verticalSpace, metadata],
+                    )
+                  : isBubbleBg
                   ? Row(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.end,

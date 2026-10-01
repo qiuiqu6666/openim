@@ -192,9 +192,16 @@ class MinePage extends StatelessWidget {
                   ? Icon(Icons.check,
                       color: Theme.of(sheetContext).colorScheme.primary)
                   : null,
-              onTap: () {
-                NavigationGlassController.instance.setMode(mode);
+              onTap: () async {
                 Navigator.pop(sheetContext);
+                final success =
+                    await NavigationGlassController.instance.setMode(mode);
+                if (!success && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(_themeText(context, '暂时无法启用此效果，请重新选择重试',
+                        'Could not enable this effect. Select it again to retry.')),
+                  ));
+                }
               },
             ),
         ]),
