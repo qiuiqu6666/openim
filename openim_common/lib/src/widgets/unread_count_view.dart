@@ -4,13 +4,15 @@ import 'package:openim_common/openim_common.dart';
 
 class UnreadCountView extends StatelessWidget {
   const UnreadCountView({
-    Key? key,
+    super.key,
     this.count = 0,
     this.size = 13,
+    this.fontSize = 8,
     this.margin,
-  }) : super(key: key);
+  });
   final int count;
   final double size;
+  final double fontSize;
   final EdgeInsetsGeometry? margin;
 
   @override
@@ -31,7 +33,7 @@ class UnreadCountView extends StatelessWidget {
   Text get _text => Text(
         '${count > 99 ? '99+' : count}',
         style: TextStyle(
-          fontSize: 8.sp,
+          fontSize: fontSize.sp,
           color: const Color(0xFFFFFFFF),
         ),
         textAlign: TextAlign.center,

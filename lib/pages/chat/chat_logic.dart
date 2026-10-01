@@ -1,3 +1,6 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:openim_common/src/widgets/voice_capture_dialog.dart';
+import 'package:just_audio/just_audio.dart' as audio;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
@@ -86,6 +89,7 @@ class ChatLogic extends SuperController {
   bool _isFirstLoad = true;
 
   final copyTextMap = <String?, String?>{};
+  final quotedMessage = Rxn<Message>();
 
   String? groupOwnerID;
 
@@ -355,11 +359,67 @@ class ChatLogic extends SuperController {
   void sendTextMsg() async {
     var content = IMUtils.safeTrim(inputCtrl.text);
     if (content.isEmpty) return;
-    Message message = await OpenIM.iMManager.messageManager.createTextMessage(
-      text: content,
-    );
+    final quote = quotedMessage.value;
+    try {
+      final message = quote == null
+          ? await OpenIM.iMManager.messageManager
+              .createTextMessage(text: content)
+          : await OpenIM.iMManager.messageManager
+              .createQuoteMessage(text: content, quoteMsg: quote);
+      quotedMessage.value = null;
+      _sendMessage(message);
+    } catch (error) {
+      IMViews.showToast(error.toString());
+    }
+  }
 
-    _sendMessage(message);
+  void replyToMessage(Message message) {
+    quotedMessage.value = message;
+    focusNode.requestFocus();
+  }
+
+  void clearReply() => quotedMessage.value = null;
+
+  bool canRevoke(Message message) {
+    final sentAt = message.sendTime;
+    return message.sendID == OpenIM.iMManager.userID &&
+        message.status == MessageStatus.succeeded &&
+        sentAt != null &&
+        DateTime.now().millisecondsSinceEpoch - sentAt <
+            const Duration(minutes: 2).inMilliseconds;
+  }
+
+  Future<void> revokeMessage(Message message) async {
+    final clientMsgID = message.clientMsgID;
+    if (clientMsgID == null || !canRevoke(message)) return;
+    try {
+      await OpenIM.iMManager.messageManager.revokeMessage(
+        conversationID: conversationInfo.conversationID,
+        clientMsgID: clientMsgID,
+      );
+      messageList.removeWhere((item) => item.clientMsgID == clientMsgID);
+    } catch (error) {
+      IMViews.showToast(error.toString());
+    }
+  }
+
+  Future<void> forwardMessage(Message message) async {
+    final result = await AppNavigator.startSelectContacts(
+      action: SelAction.forward,
+      ex: IMUtils.parseMsg(message, isConversation: true),
+    );
+    if (result == null) return;
+    try {
+      for (final contact in result['checkedList']) {
+        final userId = IMUtils.convertCheckedToUserID(contact);
+        final groupId = IMUtils.convertCheckedToGroupID(contact);
+        final forwarded = await OpenIM.iMManager.messageManager
+            .createForwardMessage(message: message);
+        await _sendMessage(forwarded, userId: userId, groupId: groupId);
+      }
+    } catch (error) {
+      IMViews.showToast(error.toString());
+    }
   }
 
   Future sendPicture({required String path, bool sendNow = true}) async {
@@ -407,17 +467,42 @@ class ChatLogic extends SuperController {
     }
   }
 
-  void sendCarte({
+  Future<void> onTapCard() async {
+    closeToolbox();
+    final selected = await AppNavigator.startSelectContacts(
+      action: SelAction.carte,
+      cardRecipientName: nickname.value,
+      cardRecipientFaceURL: faceUrl.value,
+      cardRecipientIsGroup: isGroupChat,
+    );
+    if (isClosed ||
+        selected is! UserInfo ||
+        selected.userID?.isNotEmpty != true) {
+      return;
+    }
+    try {
+      await sendCarte(
+        userID: selected.userID!,
+        nickname: selected.nickname,
+        faceURL: selected.faceURL,
+      );
+    } catch (error) {
+      Logger.print('Send contact card failed: $error');
+      IMViews.showToast(StrRes.sendFailed);
+    }
+  }
+
+  Future<void> sendCarte({
     required String userID,
     String? nickname,
     String? faceURL,
   }) async {
     var message = await OpenIM.iMManager.messageManager.createCardMessage(
       userID: userID,
-      nickname: nickname!,
+      nickname: nickname?.trim().isNotEmpty == true ? nickname! : userID,
       faceURL: faceURL,
     );
-    _sendMessage(message);
+    await _sendMessage(message);
   }
 
   void sendCustomMsg({
@@ -539,7 +624,8 @@ class ChatLogic extends SuperController {
   }
 
   void _reset(Message message) {
-    if (message.contentType == MessageType.text) {
+    if (message.contentType == MessageType.text ||
+        message.contentType == MessageType.quote) {
       inputCtrl.clear();
     }
   }
@@ -595,6 +681,7 @@ class ChatLogic extends SuperController {
   void onTapAlbum() async {
     final List<AssetEntity>? assets = await AssetPicker.pickAssets(Get.context!,
         pickerConfig: AssetPickerConfig(
+            requestType: RequestType.common,
             sortPathsByModifiedDate: true,
             filterOptions: PMFilter.defaultValue(containsPathModified: true),
             selectPredicate: (_, entity, isSelected) async {
@@ -617,7 +704,11 @@ class ChatLogic extends SuperController {
             }));
     if (null != assets) {
       for (var asset in assets) {
-        await _handleAssets(asset, sendNow: false);
+        try {
+          await _handleAssets(asset, sendNow: false);
+        } catch (_) {
+          IMViews.showToast(StrRes.sendFailed);
+        }
       }
 
       for (var msg in tempMessages) {
@@ -625,6 +716,86 @@ class ChatLogic extends SuperController {
       }
 
       tempMessages.clear();
+    }
+  }
+
+  bool _pickingAttachment = false;
+  Future<File> _retainAttachment(String path) async {
+    final name = path.split(Platform.pathSeparator).last;
+    final directory = Directory('${Config.cachePath}/outgoing_media');
+    await directory.create(recursive: true);
+    return File(path).copy(
+        '${directory.path}/${DateTime.now().microsecondsSinceEpoch}_$name');
+  }
+
+  Future<void> onTapFile() => _pickAttachment(false);
+  Future<void> onTapCamera() async {
+    if (_pickingAttachment) return;
+    _pickingAttachment = true;
+    try {
+      final asset = await CameraPicker.pickFromCamera(Get.context!,
+          pickerConfig: const CameraPickerConfig(
+              enableRecording: true,
+              enableAudio: true,
+              maximumRecordingDuration: Duration(seconds: 60)));
+      if (asset != null && !isClosed) await _handleAssets(asset);
+    } catch (_) {
+      IMViews.showToast(StrRes.sendFailed);
+    } finally {
+      _pickingAttachment = false;
+    }
+  }
+
+  Future<void> onTapRecord() async {
+    final result = await Get.dialog<Map<String, dynamic>>(
+        const VoiceCaptureDialog(),
+        barrierDismissible: false);
+    if (result == null || isClosed) return;
+    try {
+      final message = await OpenIM.iMManager.messageManager
+          .createSoundMessageFromFullPath(
+              soundPath: result['path'], duration: result['duration']);
+      await _sendMessage(message);
+    } catch (_) {
+      IMViews.showToast(StrRes.sendFailed);
+    }
+  }
+
+  Future<void> onTapAudio() => _pickAttachment(true);
+  Future<void> _pickAttachment(bool isAudio) async {
+    if (_pickingAttachment) return;
+    _pickingAttachment = true;
+    try {
+      final result = await FilePicker.platform
+          .pickFiles(type: isAudio ? FileType.audio : FileType.any);
+      if (result == null || isClosed) return;
+      final selected = result.files.single;
+      if (selected.path == null) throw StateError('File unavailable');
+      final file = await _retainAttachment(selected.path!);
+      Message message;
+      if (isAudio) {
+        final player = audio.AudioPlayer();
+        try {
+          final duration = await player.setFilePath(file.path);
+          if (duration == null || duration.inMilliseconds <= 0)
+            throw StateError('Invalid audio');
+          message = await OpenIM.iMManager.messageManager
+              .createSoundMessageFromFullPath(
+                  soundPath: file.path,
+                  duration: (duration.inMilliseconds / 1000).ceil());
+        } finally {
+          await player.dispose();
+        }
+      } else {
+        message = await OpenIM.iMManager.messageManager
+            .createFileMessageFromFullPath(
+                filePath: file.path, fileName: selected.name);
+      }
+      if (!isClosed) await _sendMessage(message);
+    } catch (_) {
+      IMViews.showToast(StrRes.sendFailed);
+    } finally {
+      _pickingAttachment = false;
     }
   }
 
@@ -639,7 +810,11 @@ class ChatLogic extends SuperController {
       Logger.print(
           '--------assets type-----${asset.type} create time: ${asset.createDateTime}');
       final originalFile = await asset.file;
-      final originalPath = originalFile!.path;
+      if (originalFile == null) {
+        IMViews.showToast(StrRes.sendFailed);
+        return;
+      }
+      final originalPath = originalFile.path;
       var path = originalPath.toLowerCase().endsWith('.gif')
           ? originalPath
           : originalFile.path;
@@ -648,11 +823,31 @@ class ChatLogic extends SuperController {
         case AssetType.image:
           await sendPicture(path: path, sendNow: sendNow);
           break;
+        case AssetType.video:
+          final saved = await _retainAttachment(path);
+          final thumbnail =
+              await asset.thumbnailDataWithSize(const ThumbnailSize(640, 640));
+          if (thumbnail == null)
+            throw StateError('Video thumbnail unavailable');
+          final snapshot = File('${saved.path}.jpg');
+          await snapshot.writeAsBytes(thumbnail);
+          final message = await OpenIM.iMManager.messageManager
+              .createVideoMessageFromFullPath(
+                  videoPath: saved.path,
+                  videoType: await asset.mimeTypeAsync ?? 'video/mp4',
+                  duration: asset.videoDuration.inSeconds < 1
+                      ? 1
+                      : asset.videoDuration.inSeconds,
+                  snapshotPath: snapshot.path);
+          if (sendNow) {
+            await _sendMessage(message);
+          } else {
+            messageList.add(message);
+            tempMessages.add(message);
+          }
+          break;
         default:
           break;
-      }
-      if (Platform.isIOS) {
-        originalFile.deleteSync();
       }
     }
   }

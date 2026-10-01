@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -8,6 +10,8 @@ import '../../../core/controller/app_controller.dart';
 import '../../../core/controller/im_controller.dart';
 import '../../../routes/app_navigator.dart';
 import '../chat_logic.dart';
+import '../../conversation/conversation_logic.dart';
+import 'chat_history_search_page.dart';
 
 class ChatSetupLogic extends GetxController {
   final chatLogic = Get.find<ChatLogic>(tag: GetTags.chat);
@@ -20,6 +24,64 @@ class ChatSetupLogic extends GetxController {
   String get conversationID => conversationInfo.value.conversationID;
 
   bool get isPinned => conversationInfo.value.isPinned == true;
+  final updating = false.obs;
+  bool get isMuted => conversationInfo.value.recvMsgOpt == 2;
+
+  Future<void> setPinned(bool value) async {
+    if (updating.value) return;
+    updating.value = true;
+    try {
+      await Get.find<ConversationLogic>()
+          .setPinned(conversationInfo.value, value);
+      conversationInfo.refresh();
+    } finally {
+      updating.value = false;
+    }
+  }
+
+  Future<void> setMuted(bool value) async {
+    if (updating.value) return;
+    updating.value = true;
+    try {
+      await Get.find<ConversationLogic>()
+          .setNotDisturb(conversationInfo.value, value);
+      conversationInfo.refresh();
+    } finally {
+      updating.value = false;
+    }
+  }
+
+  void searchHistory() =>
+      Get.to(() => ChatHistorySearchPage(conversationID: conversationID));
+
+  Future<void> setBackground() async {
+    try {
+      final image = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (image == null || isClosed) return;
+      final path =
+          '${Config.cachePath}/chat_background_${DateTime.now().microsecondsSinceEpoch}.jpg';
+      await File(image.path).copy(path);
+      await DataSp.putChatBackground(chatLogic.otherId, path);
+      chatLogic.background.value = path;
+    } catch (_) {
+      IMViews.showToast(StrRes.saveFailed);
+    }
+  }
+
+  Future<void> clearHistory() async {
+    final confirmed = await Get.dialog<bool>(CustomDialog(
+        title: 'clearThisChatConfirm'.tr, rightText: StrRes.delete));
+    if (confirmed != true) return;
+    try {
+      await LoadingView.singleton.wrap(
+          asyncFunction: () => OpenIM.iMManager.conversationManager
+              .clearConversationAndDeleteAllMsg(
+                  conversationID: conversationID));
+      chatLogic.clearAllMessage();
+    } catch (_) {
+      IMViews.showToast(StrRes.saveFailed);
+    }
+  }
 
   @override
   void onClose() {
@@ -31,11 +93,14 @@ class ChatSetupLogic extends GetxController {
   @override
   void onInit() {
     conversationInfo = Rx(Get.arguments['conversationInfo']);
-    final sourceID = conversationInfo.value.conversationType == ConversationType.single
-        ? conversationInfo.value.userID
-        : conversationInfo.value.groupID;
+    final sourceID =
+        conversationInfo.value.conversationType == ConversationType.single
+            ? conversationInfo.value.userID
+            : conversationInfo.value.groupID;
     OpenIM.iMManager.conversationManager
-        .getOneConversation(sourceID: sourceID!, sessionType: conversationInfo.value.conversationType!)
+        .getOneConversation(
+            sourceID: sourceID!,
+            sessionType: conversationInfo.value.conversationType!)
         .then((value) {
       conversationInfo.value = value;
     });

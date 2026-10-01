@@ -2,8 +2,8 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:dio/dio.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:talker_dio_logger/talker_dio_logger.dart';
@@ -137,29 +137,25 @@ class HttpUtil {
     Function(int count, int total)? onProgress,
     VoidCallback? onCompletion,
   }) async {
-    final name = url.substring(url.lastIndexOf('/') + 1);
-    final cachePath = await IMUtils.createTempFile(dir: 'picture', name: name);
-    var intervalDo = IntervalDo();
-
-    return download(
-      url,
-      cachePath: cachePath,
-      cancelToken: cancelToken,
-      onProgress: (int count, int total) async {
-        onProgress?.call(count, total);
-        if (total == -1) {
-          onCompletion?.call();
-          intervalDo.drop(
-              fun: () async {
-                saveFileToGallerySaver(File(cachePath), showTaost: EasyLoading.isShow);
-              },
-              milliseconds: 1500);
-        }
-        if (count == total) {
-          saveFileToGallerySaver(File(cachePath), showTaost: EasyLoading.isShow);
-        }
-      },
-    );
+    try {
+      final segments = Uri.parse(url).pathSegments;
+      final name = segments.isNotEmpty && segments.last.isNotEmpty
+          ? segments.last
+          : 'image_${DateTime.now().millisecondsSinceEpoch}.png';
+      final cachePath = await IMUtils.createTempFile(dir: 'picture', name: name);
+      await download(
+        url,
+        cachePath: cachePath,
+        cancelToken: cancelToken,
+        onProgress: onProgress,
+      );
+      await saveFileToGallerySaver(File(cachePath), name: name);
+    } catch (error) {
+      Logger.print('saveUrlPicture failed: $error');
+      IMViews.showToast(StrRes.saveFailed);
+    } finally {
+      onCompletion?.call();
+    }
   }
 
   static Future saveImage(Image image) async {
@@ -215,19 +211,29 @@ class HttpUtil {
   }
 
   static Future saveFileToGallerySaver(File file, {String? name, bool showTaost = true}) async {
-    Permissions.storage(() async {
-      var tips = StrRes.saveSuccessfully;
-      Logger.print('saveFileToGallerySaver: ${file.path}');
-      final imageBytes = await file.readAsBytes();
-
-      final result = await ImageGallerySaverPlus.saveImage(imageBytes, name: name);
-      if (result != null && showTaost) {
-        if (Platform.isAndroid) {
-          final filePath = result['filePath'].split('//').last;
-          tips = '${StrRes.saveSuccessfully}:$filePath';
+    Future<void> save() async {
+      try {
+        Logger.print('saveFileToGallerySaver: ${file.path}');
+        final imageBytes = await file.readAsBytes();
+        final result = await ImageGallerySaverPlus.saveImage(imageBytes, name: name);
+        if (showTaost) {
+          if (result is Map && result['isSuccess'] == true) {
+            IMViews.showToast(StrRes.saveSuccessfully);
+          } else {
+            IMViews.showToast(StrRes.saveFailed);
+          }
         }
-        IMViews.showToast(tips);
+      } catch (error) {
+        Logger.print('saveFileToGallerySaver failed: $error');
+        if (showTaost) IMViews.showToast(StrRes.saveFailed);
       }
-    });
+    }
+
+    if (Platform.isAndroid &&
+        (await DeviceInfoPlugin().androidInfo).version.sdkInt < 29) {
+      Permissions.storage(save);
+    } else {
+      await save();
+    }
   }
 }

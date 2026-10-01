@@ -5,14 +5,19 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 class Apis {
-  static Options get imTokenOptions => Options(headers: {'token': DataSp.imToken});
+  static Options get imTokenOptions =>
+      Options(headers: {'token': DataSp.imToken});
 
-  static Options get chatTokenOptions => Options(headers: {'token': DataSp.chatToken});
+  static Options get chatTokenOptions =>
+      Options(headers: {'token': DataSp.chatToken});
 
   static StreamController kickoffController = StreamController<int>.broadcast();
 
   static void _kickoff(int? errCode) {
-    if (errCode == 1501 || errCode == 1503 || errCode == 1504 || errCode == 1505) {
+    if (errCode == 1501 ||
+        errCode == 1503 ||
+        errCode == 1504 ||
+        errCode == 1505) {
       kickoffController.sink.add(errCode);
     }
   }
@@ -205,6 +210,65 @@ class Apis {
     }
   }
 
+  /// Update one friend discovery permission without changing the other settings.
+  static Future<void> updateFriendAddPermission({
+    required String userID,
+    required String field,
+    required int value,
+  }) async {
+    const fields = {
+      'allowAddByUserID',
+      'allowAddByPhone',
+      'allowAddByEmail',
+      'allowAddByQRCode',
+      'allowAddByGroup',
+      'allowAddByCard',
+    };
+    if ((field == 'allowAddFriend' && value != 0 && value != 1) ||
+        (field != 'allowAddFriend' &&
+            (!fields.contains(field) || (value != 1 && value != 2)))) {
+      throw ArgumentError('Invalid friend add permission');
+    }
+    Future<void> save(dynamic fieldValue) async {
+      await HttpUtil.post(
+        Urls.updateUserInfo,
+        data: {
+          'userID': userID,
+          field: fieldValue,
+          'platform': IMUtils.getPlatform(),
+        },
+        options: chatTokenOptions,
+        showErrorToast: false,
+      );
+    }
+
+    if (field == 'allowAddFriend') {
+      await save(value);
+      return;
+    }
+
+    try {
+      await save({'value': value});
+    } catch (error) {
+      // Older deployments parse these fields as integers. Only retry that
+      // specific format error; other failures must reach the caller.
+      if (error is! (int, String) ||
+          error.$1 != 1001 ||
+          !error.$2.contains('strconv.ParseInt')) {
+        rethrow;
+      }
+      await save(value);
+      final refreshed = await getUserFullInfo(userIDList: [userID]);
+      if (refreshed == null || refreshed.isEmpty) {
+        throw StateError('Could not verify friend add permission');
+      }
+      final current = refreshed.first.toJson()[field];
+      if (current != value) {
+        throw StateError('Friend add permission was not saved by the server');
+      }
+    }
+  }
+
   static Future<List<FriendInfo>> searchFriendInfo(
     String keyword, {
     int pageNumber = 1,
@@ -222,7 +286,9 @@ class Apis {
         showErrorToast: showErrorToast,
       );
       if (data['users'] is List) {
-        return (data['users'] as List).map((e) => FriendInfo.fromJson(e)).toList();
+        return (data['users'] as List)
+            .map((e) => FriendInfo.fromJson(e))
+            .toList();
       }
       return [];
     } catch (e, s) {
@@ -248,7 +314,9 @@ class Apis {
         options: chatTokenOptions,
       );
       if (data['users'] is List) {
-        return (data['users'] as List).map((e) => UserFullInfo.fromJson(e)).toList();
+        return (data['users'] as List)
+            .map((e) => UserFullInfo.fromJson(e))
+            .toList();
       }
       return null;
     } catch (e, s) {
@@ -260,6 +328,7 @@ class Apis {
 
   static Future<List<UserFullInfo>?> searchUserFullInfo({
     required String content,
+    int? way,
     int pageNumber = 1,
     int showNumber = 10,
   }) async {
@@ -269,11 +338,14 @@ class Apis {
         data: {
           'pagination': {'pageNumber': pageNumber, 'showNumber': showNumber},
           'keyword': content,
+          if (way != null) 'way': way,
         },
         options: chatTokenOptions,
       );
       if (data['users'] is List) {
-        return (data['users'] as List).map((e) => UserFullInfo.fromJson(e)).toList();
+        return (data['users'] as List)
+            .map((e) => UserFullInfo.fromJson(e))
+            .toList();
       }
       return null;
     } catch (e, s) {
@@ -316,7 +388,8 @@ class Apis {
     });
   }
 
-  static Future<SignalingCertificate> getTokenForRTC(String roomID, String userID) async {
+  static Future<SignalingCertificate> getTokenForRTC(
+      String roomID, String userID) async {
     return HttpUtil.post(
       Urls.getTokenForRTC,
       data: {
@@ -375,7 +448,10 @@ class Apis {
   }
 
   static Future<Map<String, dynamic>> getClientConfig() async {
-    return {'discoverPageURL': Config.discoverPageURL, 'allowSendMsgNotFriend': Config.allowSendMsgNotFriend};
+    return {
+      'discoverPageURL': Config.discoverPageURL,
+      'allowSendMsgNotFriend': Config.allowSendMsgNotFriend
+    };
   }
 
   static void _catchErrorHelper(Object e, StackTrace s) {

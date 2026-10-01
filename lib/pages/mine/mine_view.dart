@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'mine_logic.dart';
+import '../../theme/app_theme_controller.dart';
 
 class MinePage extends StatelessWidget {
   final logic = Get.find<MineLogic>();
@@ -40,6 +41,7 @@ class MinePage extends StatelessWidget {
               label: StrRes.accountSetup,
               onTap: logic.accountSetup,
             ),
+            _buildThemeItem(context),
             _buildItemView(
               icon: ImageRes.aboutUs,
               label: StrRes.aboutUs,
@@ -80,7 +82,8 @@ class MinePage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  (logic.imLogic.userInfo.value.nickname ?? '').toText..style = Styles.ts_0C1C33_17sp_medium,
+                  (logic.imLogic.userInfo.value.nickname ?? '').toText
+                    ..style = Styles.ts_0C1C33_17sp_medium,
                   4.verticalSpace,
                   GestureDetector(
                     behavior: HitTestBehavior.translucent,
@@ -88,7 +91,8 @@ class MinePage extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        (logic.imLogic.userInfo.value.userID ?? '').toText..style = Styles.ts_8E9AB0_14sp,
+                        (logic.imLogic.userInfo.value.userID ?? '').toText
+                          ..style = Styles.ts_8E9AB0_14sp,
                         ImageRes.mineCopy.toImage
                           ..width = 16.w
                           ..height = 16.h,
@@ -101,6 +105,69 @@ class MinePage extends StatelessWidget {
           ],
         ),
       );
+
+  String _themeText(BuildContext context, String zh, String en) =>
+      Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
+
+  Widget _buildThemeItem(BuildContext context) => Container(
+        margin: EdgeInsets.symmetric(horizontal: 16.w),
+        color: Styles.c_FFFFFF,
+        child: InkWell(
+          onTap: () => _showThemePicker(context),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.w),
+            child: SizedBox(
+              height: 56.h,
+              child: Row(
+                children: [
+                  Icon(Icons.brightness_6_outlined,
+                      size: 24.w, color: Styles.c_0C1C33),
+                  11.horizontalSpace,
+                  Text(_themeText(context, '外观', 'Appearance'),
+                      style: Styles.ts_0C1C33_17sp),
+                  const Spacer(),
+                  Text(_modeLabel(context, AppThemeController.instance.mode),
+                      style: Styles.ts_8E9AB0_14sp),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+  String _modeLabel(BuildContext context, ThemeMode mode) => switch (mode) {
+        ThemeMode.system => _themeText(context, '跟随系统', 'System'),
+        ThemeMode.light => _themeText(context, '浅色', 'Light'),
+        ThemeMode.dark => _themeText(context, '深色', 'Dark'),
+      };
+
+  void _showThemePicker(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final mode in ThemeMode.values)
+              ListTile(
+                title: Text(_modeLabel(sheetContext, mode)),
+                trailing: mode == AppThemeController.instance.mode
+                    ? Icon(Icons.check,
+                        color: Theme.of(sheetContext).colorScheme.primary)
+                    : null,
+                selected: mode == AppThemeController.instance.mode,
+                onTap: () {
+                  AppThemeController.instance.setMode(mode);
+                  Navigator.pop(sheetContext);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildItemView({
     required String icon,

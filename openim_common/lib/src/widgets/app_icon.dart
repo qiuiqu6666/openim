@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../res/styles.dart';
 
 /// The icon language shared by conversation actions and primary navigation.
 enum AppIconKind {
@@ -24,12 +25,13 @@ class AppIconTokens {
   static const double status = 12;
   static const double androidTouchTarget = 48;
 
-  static const Color primary = Color(0xFF0C1C33);
-  static const Color secondary = Color(0xFF8E9AB0);
-  static const Color selected = Color(0xFF0089FF);
+  static Color get primary => Styles.c_0C1C33;
+  static Color get secondary => Styles.c_8E9AB0;
+  static Color get selected => Styles.c_0089FF;
   static const Color danger = Color(0xFFE45454);
   static const Color onColor = Colors.white;
-  static const Color disabled = Color(0xFFB8C0CE);
+  static Color get disabled =>
+      Styles.isDark ? const Color(0xFF718094) : const Color(0xFFB8C0CE);
 }
 
 /// Line icons on a common 24-unit canvas. State changes never switch to fill.
@@ -38,18 +40,19 @@ class AppIcon extends StatelessWidget {
     super.key,
     required this.kind,
     this.size = AppIconTokens.large,
-    this.color = AppIconTokens.primary,
+    this.color,
   });
 
   final AppIconKind kind;
   final double size;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
         dimension: size,
         child: CustomPaint(
-          painter: _AppIconPainter(kind: kind, color: color, size: size),
+          painter: _AppIconPainter(
+              kind: kind, color: color ?? AppIconTokens.primary, size: size),
         ),
       );
 }

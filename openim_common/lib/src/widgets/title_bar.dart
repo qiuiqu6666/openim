@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
@@ -25,7 +26,9 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
+      value: Theme.of(context).brightness == Brightness.dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
       child: Container(
         color: backgroundColor ?? Styles.c_FFFFFF,
         padding: EdgeInsets.only(top: mq.padding.top),
@@ -75,17 +78,21 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
               menus: [
                 PopMenuInfo(
                   text: StrRes.addFriend,
-                  iconWidget: const AppIcon(kind: AppIconKind.addFriend, size: AppIconTokens.medium),
+                  iconWidget: AppIcon(
+                      kind: AppIconKind.addFriend, size: AppIconTokens.medium),
                   onTap: onAddFriend,
                 ),
                 PopMenuInfo(
                   text: StrRes.addGroup,
-                  iconWidget: const AppIcon(kind: AppIconKind.addGroup, size: AppIconTokens.medium),
+                  iconWidget: AppIcon(
+                      kind: AppIconKind.addGroup, size: AppIconTokens.medium),
                   onTap: onAddGroup,
                 ),
                 PopMenuInfo(
                   text: StrRes.createGroup,
-                  iconWidget: const AppIcon(kind: AppIconKind.createGroup, size: AppIconTokens.medium),
+                  iconWidget: AppIcon(
+                      kind: AppIconKind.createGroup,
+                      size: AppIconTokens.medium),
                   onTap: onCreateGroup,
                 ),
               ],
@@ -200,7 +207,9 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
                 ..width = 24.w
                 ..height = 24.h
                 ..color = backIconColor,
-              if (null != leftTitle) leftTitle.toText..style = (leftTitleStyle ?? Styles.ts_0C1C33_17sp_semibold),
+              if (null != leftTitle)
+                leftTitle.toText
+                  ..style = (leftTitleStyle ?? Styles.ts_0C1C33_17sp_semibold),
             ],
           ),
         );

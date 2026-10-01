@@ -1,254 +1,284 @@
-import 'dart:ui';
-
 import 'package:common_utils/common_utils.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'user_profile _panel_logic.dart';
+import '../contacts_logic.dart';
+import '../star_burst_button.dart';
 
 class UserProfilePanelPage extends StatelessWidget {
   final logic = Get.find<UserProfilePanelLogic>(tag: GetTags.userProfile);
 
   UserProfilePanelPage({super.key});
 
+  static const _background = Color(0xFFF5F6F8);
+  static const _muted = Color(0xFF89909C);
+
   @override
-  Widget build(BuildContext context) {
-    return Obx(
-      () => Scaffold(
-        appBar: TitleBar.back(
-          right: logic.isFriendship
-              ? (ImageRes.moreBlack.toImage
-                ..width = 24.w
-                ..height = 24.h
-                ..onTap = logic.friendSetup)
-              : null,
-        ),
-        backgroundColor: Styles.c_F8F9FA,
-        body: SizedBox(
-          height: 1.sh,
-          child: Stack(
-            children: [
-              SingleChildScrollView(
-                child: Column(
-                  children: [
-                    _buildBaseInfoView(),
-                    if (logic.isGroupMemberPage) _buildEnterGroupMethodView(),
-                    if (logic.isFriendship ||
-                        logic.isMyself ||
-                        logic.isGroupMemberPage && !logic.notAllowLookGroupMemberProfiles.value)
-                      _buildItemView(
-                        label: StrRes.personalInfo,
-                        showRightArrow: true,
-                        onTap: logic.viewPersonalInfo,
-                      ),
-                    SizedBox(height: 108.h),
-                  ],
+  Widget build(BuildContext context) => Obx(() {
+        final user = logic.userInfo.value;
+        final canChat = !logic.isMyself &&
+            (logic.isFriendship || logic.allowSendMsgNotFriend);
+        final canAdd = !logic.isMyself &&
+            !logic.isFriendship &&
+            logic.isAllowAddFriend &&
+            (!logic.isGroupMemberPage ||
+                logic.forceCanAdd == true ||
+                !logic.notAllowAddGroupMemberFriend.value);
+        return Scaffold(
+          backgroundColor: _background,
+          appBar: AppBar(
+            backgroundColor: _background,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            centerTitle: true,
+            leading: IconButton(
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              onPressed: () => Get.back(),
+              icon: Icon(Icons.arrow_back_ios_new,
+                  color: Styles.c_0089FF, size: 22),
+            ),
+            title: Text('profileDetails'.tr,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            actions: [
+              if (logic.isFriendship)
+                IconButton(
+                  tooltip: 'profileMore'.tr,
+                  onPressed: logic.friendSetup,
+                  icon: const Icon(Icons.more_horiz, size: 28),
                 ),
-              ),
-              if ((logic.isFriendship || logic.allowSendMsgNotFriend) && !logic.isMyself) _buildButtonGroup(),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBaseInfoView() => Container(
-        color: Styles.c_FFFFFF,
-        height: 80.h,
-        margin: EdgeInsets.only(bottom: 10.h),
-        padding: EdgeInsets.symmetric(horizontal: 16.w),
-        child: Row(
-          children: [
-            AvatarView(
-              url: logic.userInfo.value.faceURL,
-              text: logic.userInfo.value.nickname,
-              width: 48.w,
-              height: 48.h,
-              textStyle: Styles.ts_FFFFFF_14sp,
-              enabledPreview: true,
-            ),
-            12.horizontalSpace,
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  logic.getShowName().toText
-                    ..style = Styles.ts_0C1C33_17sp_medium
-                    ..maxLines = 1
-                    ..overflow = TextOverflow.ellipsis,
-                  if (!logic.isGroupMemberPage || logic.isGroupMemberPage && !logic.notAllowAddGroupMemberFriend.value)
-                    Padding(
-                      padding: EdgeInsets.only(top: 4.h),
-                      child: (logic.userInfo.value.userID ?? '').toText
-                        ..style = Styles.ts_8E9AB0_14sp
-                        ..onTap = logic.copyID,
-                    ),
-                ],
-              ),
-            ),
-            if (!logic.isMyself &&
-                logic.isAllowAddFriend &&
-                !logic.isFriendship &&
-                (!logic.isGroupMemberPage ||
-                    logic.forceCanAdd == true ||
-                    logic.isGroupMemberPage && !logic.notAllowAddGroupMemberFriend.value))
-              Material(
-                child: Ink(
-                  decoration: BoxDecoration(
-                    color: Styles.c_0089FF,
-                    borderRadius: BorderRadius.circular(6.r),
+          body: SafeArea(
+            top: false,
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                _header(),
+                if (canChat)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 14),
+                    child: Row(children: [
+                      _action('profileVoiceCall'.tr, Icons.call_outlined,
+                          () => logic.callDirectly(video: false)),
+                      const SizedBox(width: 8),
+                      _action('profileVideoCall'.tr, Icons.videocam_outlined,
+                          () => logic.callDirectly(video: true)),
+                      const SizedBox(width: 8),
+                      _action(StrRes.sendMessage, Icons.chat_bubble_outline,
+                          logic.toChat,
+                          primary: true),
+                    ]),
                   ),
-                  child: InkWell(
-                    onTap: logic.addFriend,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 9.w,
-                        vertical: 4.h,
-                      ),
-                      child: Row(
-                        children: [
-                          ImageRes.addContacts.toImage
-                            ..width = 21.w
-                            ..height = 21.h
-                            ..color = Styles.c_FFFFFF,
-                          2.horizontalSpace,
-                          StrRes.add.toText..style = Styles.ts_FFFFFF_14sp,
-                        ],
-                      ),
+                if (canAdd)
+                  _card([_row(StrRes.addFriend, onTap: logic.addFriend)]),
+                if (logic.isFriendship)
+                  _card([
+                    _row('profileRemarkName'.tr,
+                        value: user.remark, onTap: logic.editRemark),
+                  ]),
+                if (logic.isFriendship ||
+                    logic.isMyself ||
+                    logic.isGroupMemberPage &&
+                        !logic.notAllowLookGroupMemberProfiles.value)
+                  _card([
+                    _row(StrRes.personalInfo, onTap: logic.viewPersonalInfo),
+                  ]),
+                if (logic.isGroupMemberPage &&
+                    (logic.joinGroupTime.value > 0 ||
+                        logic.joinGroupMethod.value.isNotEmpty))
+                  _card([
+                    if (logic.joinGroupTime.value > 0)
+                      _row(StrRes.joinGroupDate,
+                          value: DateUtil.formatDateMs(
+                              logic.joinGroupTime.value,
+                              format: DateFormats.zh_y_mo_d)),
+                    if (logic.joinGroupMethod.value.isNotEmpty)
+                      _row(StrRes.joinGroupMethod,
+                          value: logic.joinGroupMethod.value),
+                  ]),
+                if (logic.isFriendship)
+                  _card([
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 6),
+                      child: Row(children: [
+                        Expanded(
+                            child: Text('profileAddBlacklist'.tr,
+                                style: const TextStyle(fontSize: 16))),
+                        CupertinoSwitch(
+                          value: user.isBlacklist,
+                          activeTrackColor: Styles.c_0089FF,
+                          onChanged: logic.updatingBlacklist.value
+                              ? null
+                              : logic.setBlacklist,
+                        ),
+                      ]),
                     ),
+                  ]),
+              ],
+            ),
+          ),
+        );
+      });
+
+  Widget _header() {
+    final user = logic.userInfo.value;
+    final showID =
+        !logic.isGroupMemberPage || !logic.notAllowAddGroupMemberFriend.value;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 22, 16, 22),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        AvatarView(
+            url: user.faceURL,
+            text: user.nickname,
+            width: 78,
+            height: 78,
+            enabledPreview: true),
+        const SizedBox(width: 14),
+        Expanded(
+            child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Flexible(
+                  child: Text(
+                      (user.nickname ?? '').trim().isNotEmpty
+                          ? user.nickname!
+                          : user.userID ?? '',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.w600))),
+              if (user.gender == 1 || user.gender == 2) ...[
+                const SizedBox(width: 6),
+                Icon(user.gender == 1 ? Icons.male : Icons.female,
+                    size: 20,
+                    color:
+                        user.gender == 1 ? Styles.c_0089FF : Colors.pinkAccent),
+              ],
+            ]),
+            if (showID) ...[
+              const SizedBox(height: 6),
+              Material(
+                color: const Color(0xFFEBEDF1),
+                borderRadius: BorderRadius.circular(18),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: logic.copyID,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Flexible(
+                          child: Text('ID: ${user.userID ?? ''}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 14, color: _muted))),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.copy_outlined, size: 15, color: _muted),
+                    ]),
                   ),
                 ),
               ),
+            ],
           ],
-        ),
-      );
-
-  Widget _buildEnterGroupMethodView() {
-    if (logic.joinGroupTime.value == 0 && logic.joinGroupMethod.value.isEmpty) {
-      return Container();
-    }
-    return Container(
-      color: Styles.c_FFFFFF,
-      margin: EdgeInsets.only(bottom: 10.h),
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-      child: Table(
-        defaultVerticalAlignment: TableCellVerticalAlignment.top,
-        columnWidths: {0: FixedColumnWidth(100.w)},
-        children: [
-          if (logic.joinGroupTime.value > 0)
-            _buildTabRowView(
-              label: StrRes.joinGroupDate,
-              value: DateUtil.formatDateMs(
-                logic.joinGroupTime.value,
-                format: DateFormats.zh_y_mo_d,
-              ),
-            ),
-          if (logic.joinGroupMethod.value.isNotEmpty)
-            _buildTabRowView(
-              label: StrRes.joinGroupMethod,
-              value: logic.joinGroupMethod.value,
-            ),
-        ],
-      ),
+        )),
+        if (logic.isFriendship &&
+            !logic.isMyself &&
+            Get.isRegistered<ContactsLogic>())
+          Builder(
+              builder: (context) => Obx(() {
+                    final stars = Get.find<ContactsLogic>().stars;
+                    final id = user.userID!;
+                    final selected = stars.isStarred(id);
+                    return StarBurstButton(
+                      tooltip: (selected ? 'unstarFriend' : 'starFriend').tr,
+                      starred: selected,
+                      onPressed: stars.pending.contains(id)
+                          ? null
+                          : () => stars.toggle(id),
+                      color: selected
+                          ? Styles.c_FFB300
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                    );
+                  })),
+      ]),
     );
   }
 
-  TableRow _buildTabRowView({
-    required String label,
-    String? value,
-  }) =>
-      TableRow(
-        children: [
-          TableCell(
-            child: Container(
-              constraints: BoxConstraints(minHeight: 40.h),
-              alignment: Alignment.centerLeft,
-              child: label.toText..style = Styles.ts_8E9AB0_17sp,
-            ),
-          ),
-          TableCell(
-            child: Container(
-              constraints: BoxConstraints(minHeight: 40.h),
-              alignment: Alignment.centerLeft,
-              child: (value ?? '').toText..style = Styles.ts_0C1C33_17sp,
-            ),
-          ),
-        ],
-      );
-
-  Widget _buildItemView({
-    required String label,
-    String? value,
-    bool addMargin = false,
-    bool showSwitchButton = false,
-    bool showRightArrow = false,
-    bool switchOn = false,
-    ValueChanged<bool>? onChanged,
-    Function()? onTap,
-  }) =>
-      Container(
-        margin: EdgeInsets.only(bottom: addMargin ? 10.h : 0),
-        child: Ink(
-          color: Styles.c_FFFFFF,
-          height: 56.h,
+  Widget _action(String label, IconData icon, VoidCallback onTap,
+          {bool primary = false}) =>
+      Expanded(
+        child: Material(
+          color: primary ? Styles.c_0089FF : Colors.white,
+          borderRadius: BorderRadius.circular(14),
           child: InkWell(
             onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.w),
-              child: Row(
-                children: [
-                  label.toText..style = Styles.ts_0C1C33_17sp,
-                  const Spacer(),
-                  if (showSwitchButton)
-                    CupertinoSwitch(
-                      value: switchOn,
-                      activeColor: Styles.c_0089FF,
-                      onChanged: onChanged,
-                    ),
-                  if (null != value) value.toText..style = Styles.ts_0C1C33_17sp,
-                  if (showRightArrow)
-                    ImageRes.rightArrow.toImage
-                      ..width = 24.w
-                      ..height = 24.h,
-                ],
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 16),
+              child: Column(children: [
+                Icon(icon,
+                    size: 25,
+                    color: primary ? Colors.white : const Color(0xFF202329)),
+                const SizedBox(height: 10),
+                Text(label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 14,
+                        height: 1.3,
+                        color:
+                            primary ? Colors.white : const Color(0xFF202329))),
+              ]),
             ),
           ),
         ),
       );
 
-  Widget _buildButtonGroup() => Positioned(
-        bottom: 0.h,
-        width: 1.sw,
-        child: ClipRRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-            child: Container(
-              color: Styles.c_F8F9FA.withOpacity(.3),
-              padding: EdgeInsets.symmetric(horizontal: 9.w),
-              height: 108.h,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ImageTextButton.call(
-                      onTap: logic.toCall,
-                    ),
-                  ),
-                  11.horizontalSpace,
-                  Expanded(
-                    child: ImageTextButton.message(
-                      onTap: logic.toChat,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+  Widget _card(List<Widget> children) => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: Column(children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0)
+                const Divider(
+                    height: 0.5,
+                    thickness: 0.5,
+                    indent: 16,
+                    color: Color(0xFFE9ECF1)),
+              children[i],
+            ],
+          ]),
+        ),
+      );
+
+  Widget _row(String title, {String? value, VoidCallback? onTap}) => InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          child: Row(children: [
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 16))),
+            if (value != null && value.isNotEmpty)
+              Expanded(
+                  child: Text(value,
+                      textAlign: TextAlign.right,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 15, color: _muted))),
+            if (onTap != null) ...[
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right,
+                  size: 20, color: Color(0xFFB6BBC4)),
+            ],
+          ]),
         ),
       );
 }

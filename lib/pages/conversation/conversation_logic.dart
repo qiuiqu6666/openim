@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -12,12 +14,19 @@ import '../../core/im_callback.dart';
 import '../../routes/app_navigator.dart';
 import '../contacts/add_by_search/add_by_search_logic.dart';
 import '../home/home_logic.dart';
+import 'conversation_organizer.dart';
 
-class ConversationLogic extends GetxController {
+class ConversationLogic extends GetxController with WidgetsBindingObserver {
   static const int _receiveMessages = 0;
   static const int _receiveWithoutNotification = 2;
   final popCtrl = CustomPopupMenuController();
   final list = <ConversationInfo>[].obs;
+  final folders = <ChatFolder>[].obs;
+  final states = <String, ChatConversationState>{}.obs;
+  final organizerLoading = false.obs;
+  int _organizerSyncAt = 0;
+  bool _refreshPending = false;
+  StreamSubscription<String>? _businessSubscription;
   final imLogic = Get.find<IMController>();
   final homeLogic = Get.find<HomeLogic>();
   final appLogic = Get.find<AppController>();
@@ -33,6 +42,10 @@ class ConversationLogic extends GetxController {
   @override
   void onInit() {
     getFirstPage();
+    WidgetsBinding.instance.addObserver(this);
+    _businessSubscription = imLogic.customBusinessMessageSubject
+        .listen(_handleBusinessNotification);
+    refreshOrganizer();
     imLogic.conversationAddedSubject.listen(onChanged);
     imLogic.conversationChangedSubject.listen(onChanged);
     imLogic.imSdkStatusSubject.listen((value) async {
@@ -41,6 +54,10 @@ class ConversationLogic extends GetxController {
       final progress = value.progress;
       imStatus.value = status;
 
+      if (status == IMSdkStatus.connectionSucceeded) {
+        refreshOrganizer();
+      }
+
       if (status == IMSdkStatus.syncStart) {
         reInstall = appReInstall;
         if (reInstall) {
@@ -48,13 +65,16 @@ class ConversationLogic extends GetxController {
         }
       }
 
-      Logger.print('IM SDK Status: $status, reinstall: $reInstall, progress: $progress');
+      Logger.print(
+          'IM SDK Status: $status, reinstall: $reInstall, progress: $progress');
 
       if (status == IMSdkStatus.syncProgress && reInstall) {
         final p = (progress!).toDouble() / 100.0;
 
-        EasyLoading.showProgress(p, status: '${StrRes.synchronizing}(${(p * 100.0).truncate()}%)');
-      } else if (status == IMSdkStatus.syncEnded || status == IMSdkStatus.syncFailed) {
+        EasyLoading.showProgress(p,
+            status: '${StrRes.synchronizing}(${(p * 100.0).truncate()}%)');
+      } else if (status == IMSdkStatus.syncEnded ||
+          status == IMSdkStatus.syncFailed) {
         EasyLoading.dismiss();
         if (reInstall) {
           onRefresh();
@@ -67,9 +87,66 @@ class ConversationLogic extends GetxController {
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _businessSubscription?.cancel();
     list.clear();
+    folders.clear();
+    states.clear();
     reInstall = false;
     super.onClose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) refreshOrganizer();
+  }
+
+  void _handleBusinessNotification(String raw) {
+    try {
+      final message = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      final key = message['key'];
+      final rawData = message['data'];
+      final data = rawData is String
+          ? Map<String, dynamic>.from(jsonDecode(rawData) as Map)
+          : Map<String, dynamic>.from(rawData as Map);
+      if (key == 'conversationStateChanged') {
+        final state = ChatConversationState.fromJson(data);
+        _applyState(state);
+      } else if (key == 'chatFolderChanged') {
+        if (data['op'] == 'delete') {
+          final id = data['id'] as String;
+          folders.removeWhere((folder) => folder.id == id);
+          // The server also clears folderID from associated conversations.
+          refreshOrganizer();
+        } else if (data['op'] == 'upsert') {
+          final folder = ChatFolder.fromJson(
+              Map<String, dynamic>.from(data['folder'] as Map));
+          _upsertFolder(folder);
+        }
+      }
+    } catch (error) {
+      Logger.print('Invalid chat organizer notification: $error');
+    }
+  }
+
+  void _applyState(ChatConversationState state) {
+    final old = states[state.conversationID];
+    if (old == null || state.version > old.version) {
+      states[state.conversationID] = state;
+    }
+  }
+
+  void _upsertFolder(ChatFolder folder) {
+    final index = folders.indexWhere((item) => item.id == folder.id);
+    if (index < 0) {
+      folders.add(folder);
+    } else if (folder.updatedAt > folders[index].updatedAt) {
+      folders[index] = folder;
+    }
+    folders.sort((a, b) {
+      final order = a.sortOrder.compareTo(b.sortOrder);
+      return order != 0 ? order : a.createdAt.compareTo(b.createdAt);
+    });
   }
 
   void onChanged(List<ConversationInfo> newList) {
@@ -77,7 +154,8 @@ class ConversationLogic extends GetxController {
       onChangeConversations.addAll(newList);
     }
     for (var newValue in newList) {
-      Logger.print('======== conversation changed: ${newValue.toJson()} ========');
+      Logger.print(
+          '======== conversation changed: ${newValue.toJson()} ========');
       list.removeWhere((e) => e.conversationID == newValue.conversationID);
     }
 
@@ -138,7 +216,8 @@ class ConversationLogic extends GetxController {
 
       final text = IMUtils.parseNtf(info.latestMsg!, isConversation: true);
       if (text != null) return text;
-      if (info.isSingleChat || info.latestMsg!.sendID == OpenIM.iMManager.userID)
+      if (info.isSingleChat ||
+          info.latestMsg!.sendID == OpenIM.iMManager.userID)
         return IMUtils.parseMsg(info.latestMsg!, isConversation: true);
 
       return "${info.latestMsg!.senderNickname}: ${IMUtils.parseMsg(info.latestMsg!, isConversation: true)} ";
@@ -202,9 +281,12 @@ class ConversationLogic extends GetxController {
     try {
       await OpenIM.iMManager.conversationManager.setConversation(
         info.conversationID,
-        ConversationReq(recvMsgOpt: enabled ? _receiveWithoutNotification : _receiveMessages),
+        ConversationReq(
+            recvMsgOpt:
+                enabled ? _receiveWithoutNotification : _receiveMessages),
       );
-      info.recvMsgOpt = enabled ? _receiveWithoutNotification : _receiveMessages;
+      info.recvMsgOpt =
+          enabled ? _receiveWithoutNotification : _receiveMessages;
       for (final conversation in list) {
         if (conversation.conversationID == info.conversationID) {
           conversation.recvMsgOpt = info.recvMsgOpt;
@@ -219,7 +301,8 @@ class ConversationLogic extends GetxController {
 
   Future<void> deleteConversation(ConversationInfo info) async {
     try {
-      await OpenIM.iMManager.conversationManager.deleteConversationAndDeleteAllMsg(
+      await OpenIM.iMManager.conversationManager
+          .deleteConversationAndDeleteAllMsg(
         conversationID: info.conversationID,
       );
       list.removeWhere((item) => item.conversationID == info.conversationID);
@@ -250,9 +333,11 @@ class ConversationLogic extends GetxController {
   }
 
   bool get isFailedSdkStatus =>
-      imStatus.value == IMSdkStatus.connectionFailed || imStatus.value == IMSdkStatus.syncFailed;
+      imStatus.value == IMSdkStatus.connectionFailed ||
+      imStatus.value == IMSdkStatus.syncFailed;
 
-  void _sortConversationList() => OpenIM.iMManager.conversationManager.simpleSort(list);
+  void _sortConversationList() =>
+      OpenIM.iMManager.conversationManager.simpleSort(list);
 
   void onRefresh() async {
     late List<ConversationInfo> list;
@@ -271,7 +356,8 @@ class ConversationLogic extends GetxController {
   }
 
   static Future<List<ConversationInfo>> getConversationFirstPage() async {
-    final result = await OpenIM.iMManager.conversationManager.getConversationListSplit(offset: 0, count: 400);
+    final result = await OpenIM.iMManager.conversationManager
+        .getConversationListSplit(offset: 0, count: 400);
 
     return result;
   }
@@ -285,26 +371,122 @@ class ConversationLogic extends GetxController {
 
   void clearConversations() {
     list.clear();
+    folders.clear();
+    states.clear();
+    _organizerSyncAt = 0;
+  }
+
+  bool isArchived(ConversationInfo info) =>
+      states[info.conversationID]?.archived ?? false;
+
+  String? folderID(ConversationInfo info) =>
+      states[info.conversationID]?.folderID;
+
+  Future<void> refreshOrganizer() async {
+    if (DataSp.chatToken == null) return;
+    if (organizerLoading.value) {
+      _refreshPending = true;
+      return;
+    }
+    organizerLoading.value = true;
+    try {
+      final fetchedFolders = await ChatOrganizerApi.getFolders();
+      final fetchedStates =
+          await ChatOrganizerApi.getStates(updatedAfter: _organizerSyncAt);
+      if (isClosed) return;
+      folders.assignAll(fetchedFolders);
+      for (final entry in fetchedStates.states.entries) {
+        _applyState(entry.value);
+      }
+      if (fetchedStates.syncAt > _organizerSyncAt) {
+        _organizerSyncAt = fetchedStates.syncAt;
+      }
+    } catch (error) {
+      IMViews.showToast(error.toString());
+    } finally {
+      organizerLoading.value = false;
+      if (_refreshPending && !isClosed) {
+        _refreshPending = false;
+        unawaited(refreshOrganizer());
+      }
+    }
+  }
+
+  Future<bool> updateOrganizer(ConversationInfo info,
+      {required String? folderID, required bool archived}) async {
+    final old = states[info.conversationID];
+    try {
+      final state = await ChatOrganizerApi.putState(
+        conversationID: info.conversationID,
+        folderID: folderID,
+        archived: archived,
+        version: old?.version ?? 0,
+      );
+      _applyState(state);
+      return true;
+    } on ChatOrganizerConflict catch (error) {
+      _applyState(error.current);
+      IMViews.showToast('此会话已在另一台设备更新，请重试');
+    } catch (error) {
+      IMViews.showToast(error.toString());
+    }
+    return false;
+  }
+
+  Future<bool> createFolder(String name) async {
+    try {
+      _upsertFolder(await ChatOrganizerApi.createFolder(name));
+      return true;
+    } catch (error) {
+      IMViews.showToast(error.toString());
+      return false;
+    }
+  }
+
+  Future<bool> renameFolder(ChatFolder folder, String name) async {
+    try {
+      final updated = await ChatOrganizerApi.renameFolder(folder.id, name);
+      _upsertFolder(updated);
+      return true;
+    } catch (error) {
+      IMViews.showToast(error.toString());
+      return false;
+    }
+  }
+
+  Future<bool> deleteFolder(ChatFolder folder) async {
+    try {
+      await ChatOrganizerApi.deleteFolder(folder.id);
+      folders.removeWhere((item) => item.id == folder.id);
+      await refreshOrganizer();
+      return true;
+    } catch (error) {
+      IMViews.showToast(error.toString());
+      return false;
+    }
   }
 
   _request() async {
     final temp = <ConversationInfo>[];
 
     while (true) {
-      var result = await OpenIM.iMManager.conversationManager.getConversationListSplit(
+      var result =
+          await OpenIM.iMManager.conversationManager.getConversationListSplit(
         offset: temp.length,
         count: pageSize,
       );
       if (onChangeConversations.isNotEmpty) {
         final bSet = Set.from(onChangeConversations);
 
-        Logger.print('replace conversation: [${onChangeConversations.length}], $bSet');
+        Logger.print(
+            'replace conversation: [${onChangeConversations.length}], $bSet');
 
         for (int i = 0; i < result.length; i++) {
           final info = result[i];
 
           if (bSet.contains(info)) {
-            result[i] = onChangeConversations[onChangeConversations.indexOf(info)];
+            result[i] =
+                onChangeConversations[onChangeConversations.indexOf(info)];
           }
         }
       }
@@ -328,7 +510,8 @@ class ConversationLogic extends GetxController {
     required int sessionType,
   }) =>
       LoadingView.singleton.wrap(
-          asyncFunction: () => OpenIM.iMManager.conversationManager.getOneConversation(
+          asyncFunction: () =>
+              OpenIM.iMManager.conversationManager.getOneConversation(
                 sourceID: sourceID,
                 sessionType: sessionType,
               ));
@@ -374,11 +557,14 @@ class ConversationLogic extends GetxController {
     }
   }
 
-  addFriend() => AppNavigator.startAddContactsBySearch(searchType: SearchType.user);
+  addFriend() =>
+      AppNavigator.startAddContactsBySearch(searchType: SearchType.user);
 
-  createGroup() => AppNavigator.startCreateGroup(defaultCheckedList: [OpenIM.iMManager.userInfo]);
+  createGroup() => AppNavigator.startCreateGroup(
+      defaultCheckedList: [OpenIM.iMManager.userInfo]);
 
-  addGroup() => AppNavigator.startAddContactsBySearch(searchType: SearchType.group);
+  addGroup() =>
+      AppNavigator.startAddContactsBySearch(searchType: SearchType.group);
 
   void globalSearch() => AppNavigator.startGlobalSearch();
 }

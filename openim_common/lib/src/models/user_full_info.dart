@@ -18,6 +18,12 @@ class UserFullInfo {
   int? order;
   int? status;
   int? allowAddFriend;
+  int? allowAddByUserID;
+  int? allowAddByPhone;
+  int? allowAddByEmail;
+  int? allowAddByQRCode;
+  int? allowAddByGroup;
+  int? allowAddByCard;
   int? allowBeep;
   int? allowVibration;
   int? forbidden;
@@ -30,7 +36,9 @@ class UserFullInfo {
 
   bool get isMale => gender == 1;
 
-  String get showName => remark?.isNotEmpty == true ? remark! : (nickname?.isNotEmpty == true ? nickname! : userID!);
+  String get showName => remark?.isNotEmpty == true
+      ? remark!
+      : (nickname?.isNotEmpty == true ? nickname! : userID!);
 
   UserFullInfo({
     this.userID,
@@ -52,6 +60,12 @@ class UserFullInfo {
     this.order,
     this.status,
     this.allowAddFriend,
+    this.allowAddByUserID,
+    this.allowAddByPhone,
+    this.allowAddByEmail,
+    this.allowAddByQRCode,
+    this.allowAddByGroup,
+    this.allowAddByCard,
     this.allowBeep,
     this.allowVibration,
     this.forbidden,
@@ -83,6 +97,12 @@ class UserFullInfo {
     order = json['order'];
     status = json['status'];
     allowAddFriend = json['allowAddFriend'];
+    allowAddByUserID = json['allowAddByUserID'] ?? 1;
+    allowAddByPhone = json['allowAddByPhone'] ?? 1;
+    allowAddByEmail = json['allowAddByEmail'] ?? 1;
+    allowAddByQRCode = json['allowAddByQRCode'] ?? 1;
+    allowAddByGroup = json['allowAddByGroup'] ?? 1;
+    allowAddByCard = json['allowAddByCard'] ?? 1;
     allowBeep = json['allowBeep'];
     allowVibration = json['allowVibration'];
     forbidden = json['forbidden'];
@@ -93,7 +113,9 @@ class UserFullInfo {
     isBlacklist = json['isBlacklist'] ?? false;
     departmentList = json['departmentList'] == null
         ? null
-        : (json['departmentList'] as List).map((e) => DepartmentInfo.fromJson(e)).toList();
+        : (json['departmentList'] as List)
+            .map((e) => DepartmentInfo.fromJson(e))
+            .toList();
   }
 
   Map<String, dynamic> toJson() {
@@ -116,6 +138,12 @@ class UserFullInfo {
     data['order'] = order;
     data['status'] = status;
     data['allowAddFriend'] = allowAddFriend;
+    data['allowAddByUserID'] = allowAddByUserID;
+    data['allowAddByPhone'] = allowAddByPhone;
+    data['allowAddByEmail'] = allowAddByEmail;
+    data['allowAddByQRCode'] = allowAddByQRCode;
+    data['allowAddByGroup'] = allowAddByGroup;
+    data['allowAddByCard'] = allowAddByCard;
     data['allowBeep'] = allowBeep;
     data['allowVibration'] = allowVibration;
     data['forbidden'] = forbidden;

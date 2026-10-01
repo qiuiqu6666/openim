@@ -28,6 +28,9 @@ class SelectContactsLogic extends GetxController implements OrganizationMultiSel
   String? groupID;
   final conversationList = <ConversationInfo>[].obs;
   String? ex;
+  String? cardRecipientName;
+  String? cardRecipientFaceURL;
+  bool cardRecipientIsGroup = false;
   final inputCtrl = TextEditingController();
 
   @override
@@ -39,6 +42,9 @@ class SelectContactsLogic extends GetxController implements OrganizationMultiSel
     checkedList.addAll(Get.arguments['checkedList'] ?? {});
     openSelectedSheet = Get.arguments['openSelectedSheet'];
     ex = Get.arguments['ex'];
+    cardRecipientName = Get.arguments['cardRecipientName'];
+    cardRecipientFaceURL = Get.arguments['cardRecipientFaceURL'];
+    cardRecipientIsGroup = Get.arguments['cardRecipientIsGroup'] == true;
     super.onInit();
   }
 
@@ -203,9 +209,15 @@ class SelectContactsLogic extends GetxController implements OrganizationMultiSel
 
   confirmSelectedItem(dynamic info) async {
     if (action == SelAction.carte) {
-      final sure = await Get.dialog(CustomDialog(
-        title: StrRes.sendCarteConfirmHint,
-      ));
+      final sure = await Get.dialog<bool>(ContactCardSendDialog(
+        name: parseName(info)?.trim().isNotEmpty == true
+            ? parseName(info)!.trim() : parseID(info) ?? '',
+        faceURL: parseFaceURL(info),
+        recipientName: cardRecipientName?.trim().isNotEmpty == true
+            ? cardRecipientName!.trim() : 'thisChat'.tr,
+        recipientFaceURL: cardRecipientFaceURL,
+        recipientIsGroup: cardRecipientIsGroup,
+      ), barrierDismissible: false);
       if (sure == true) {
         Get.back(result: UserInfo.fromJson(info.toJson()));
       }

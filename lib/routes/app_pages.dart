@@ -1,5 +1,7 @@
 import 'package:get/get.dart';
 
+import '../widgets/theme_aware_page.dart';
+
 import '../pages/chat/chat_binding.dart';
 import '../pages/chat/chat_setup/chat_setup_binding.dart';
 import '../pages/chat/chat_setup/chat_setup_view.dart';
@@ -95,7 +97,7 @@ class AppPages {
   }) =>
       GetPage(
         name: name,
-        page: page,
+        page: () => ThemeAwarePage(builder: (_) => page()),
         binding: binding,
         preventDuplicates: preventDuplicates,
         transition: Transition.cupertino,

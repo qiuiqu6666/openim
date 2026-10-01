@@ -228,6 +228,9 @@ class AppNavigator {
 
   static startSelectContacts({
     required SelAction action,
+    String? cardRecipientName,
+    String? cardRecipientFaceURL,
+    bool cardRecipientIsGroup = false,
     List<String>? defaultCheckedIDList,
     List<dynamic>? checkedList,
     List<String>? excludeIDList,
@@ -237,6 +240,9 @@ class AppNavigator {
   }) =>
       Get.toNamed(AppRoutes.selectContacts, arguments: {
         'action': action,
+        'cardRecipientName': cardRecipientName,
+        'cardRecipientFaceURL': cardRecipientFaceURL,
+        'cardRecipientIsGroup': cardRecipientIsGroup,
         'defaultCheckedIDList': defaultCheckedIDList,
         'checkedList': IMUtils.convertCheckedListToMap(checkedList),
         'excludeIDList': excludeIDList,

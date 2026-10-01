@@ -61,6 +61,7 @@ export 'src/widgets/chat/new_message_indicator.dart';
 export 'src/widgets/chat/water_mark_view.dart';
 export 'src/widgets/custom_pop_up_menu.dart';
 export 'src/widgets/dialog.dart';
+export 'src/widgets/contact_card.dart';
 export 'src/widgets/expanded_text.dart';
 export 'src/widgets/gesture_x_detector.dart';
 export 'src/widgets/gesture_zoom_box.dart';

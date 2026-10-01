@@ -47,7 +47,8 @@ mixin IMCallback {
 
   final unreadMsgCountEventSubject = PublishSubject<int>();
 
-  final friendApplicationChangedSubject = BehaviorSubject<FriendApplicationInfo>();
+  final friendApplicationChangedSubject =
+      BehaviorSubject<FriendApplicationInfo>();
 
   final friendAddSubject = BehaviorSubject<FriendInfo>();
 
@@ -61,7 +62,8 @@ mixin IMCallback {
 
   final groupInfoUpdatedSubject = BehaviorSubject<GroupInfo>();
 
-  final groupApplicationChangedSubject = BehaviorSubject<GroupApplicationInfo>();
+  final groupApplicationChangedSubject =
+      BehaviorSubject<GroupApplicationInfo>();
 
   final initializedSubject = PublishSubject<bool>();
 
@@ -77,15 +79,22 @@ mixin IMCallback {
 
   final onKickedOfflineSubject = PublishSubject<KickoffType>();
 
-  final imSdkStatusSubject = ReplaySubject<({IMSdkStatus status, bool reInstall, int? progress})>();
+  final imSdkStatusSubject =
+      ReplaySubject<({IMSdkStatus status, bool reInstall, int? progress})>();
 
-  final imSdkStatusPublishSubject = PublishSubject<({IMSdkStatus status, bool reInstall, int? progress})>();
+  final imSdkStatusPublishSubject =
+      PublishSubject<({IMSdkStatus status, bool reInstall, int? progress})>();
 
   final inputStateChangedSubject = PublishSubject<InputStatusChangedData>();
 
-  void imSdkStatus(IMSdkStatus status, {bool reInstall = false, int? progress}) {
-    imSdkStatusSubject.add((status: status, reInstall: reInstall, progress: progress));
-    imSdkStatusPublishSubject.add((status: status, reInstall: reInstall, progress: progress));
+  final customBusinessMessageSubject = PublishSubject<String>();
+
+  void imSdkStatus(IMSdkStatus status,
+      {bool reInstall = false, int? progress}) {
+    imSdkStatusSubject
+        .add((status: status, reInstall: reInstall, progress: progress));
+    imSdkStatusPublishSubject
+        .add((status: status, reInstall: reInstall, progress: progress));
   }
 
   void kickedOffline() {
@@ -126,7 +135,9 @@ mixin IMCallback {
     onRecvOfflineMessage?.call(msg);
   }
 
-  void recvCustomBusinessMessage(String s) {}
+  void recvCustomBusinessMessage(String s) {
+    customBusinessMessageSubject.addSafely(s);
+  }
 
   void progressCallback(String msgId, int progress) {
     onMsgSendProgress?.call(msgId, progress);

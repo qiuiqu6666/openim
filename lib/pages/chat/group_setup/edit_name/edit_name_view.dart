@@ -15,7 +15,7 @@ class EditGroupNamePage extends StatelessWidget {
   Widget build(BuildContext context) {
     if (logic.type == EditNameType.groupNickname) {
       return Scaffold(
-        backgroundColor: Colors.white,
+          backgroundColor: Styles.c_FFFFFF,
           appBar: TitleBar.back(),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.center,

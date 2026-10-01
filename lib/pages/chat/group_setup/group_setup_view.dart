@@ -32,7 +32,9 @@ class GroupSetupPage extends StatelessWidget {
                 10.verticalSpace,
                 if (!logic.isOwner)
                   _buildItemView(
-                    text: logic.isJoinedGroup.value ? StrRes.exitGroup : StrRes.delete,
+                    text: logic.isJoinedGroup.value
+                        ? StrRes.exitGroup
+                        : StrRes.delete,
                     textStyle: Styles.ts_FF381F_17sp,
                     showRightArrow: true,
                     onTap: logic.quitGroup,
@@ -75,14 +77,17 @@ class GroupSetupPage extends StatelessWidget {
                     text: logic.groupInfo.value.groupName,
                     textStyle: Styles.ts_FFFFFF_14sp,
                     isGroup: true,
-                    onTap: logic.isOwnerOrAdmin ? logic.modifyGroupAvatar : null,
+                    enabledPreview: true,
                   ),
                   if (logic.isOwnerOrAdmin)
                     Align(
                         alignment: Alignment.bottomRight,
-                        child: ImageRes.editAvatar.toImage
-                          ..width = 14.w
-                          ..height = 14.h)
+                        child: GestureDetector(
+                          onTap: logic.modifyGroupAvatar,
+                          child: ImageRes.editAvatar.toImage
+                            ..width = 14.w
+                            ..height = 14.h,
+                        ))
                 ],
               ),
             ),
@@ -94,14 +99,19 @@ class GroupSetupPage extends StatelessWidget {
                 children: [
                   GestureDetector(
                     behavior: HitTestBehavior.translucent,
-                    onTap:
-                        logic.isOwnerOrAdmin ? () => logic.modifyGroupName(logic.conversationInfo.value.faceURL) : null,
+                    onTap: logic.isOwnerOrAdmin
+                        ? () => logic.modifyGroupName(
+                            logic.conversationInfo.value.faceURL)
+                        : null,
                     child: Row(
                       children: [
                         ConstrainedBox(
                             constraints: BoxConstraints(maxWidth: 200.w),
-                            child: (logic.groupInfo.value.groupName ?? '').toText..style = Styles.ts_0C1C33_17sp),
-                        '(${logic.groupInfo.value.memberCount ?? 0})'.toText..style = Styles.ts_0C1C33_17sp,
+                            child:
+                                (logic.groupInfo.value.groupName ?? '').toText
+                                  ..style = Styles.ts_0C1C33_17sp),
+                        '(${logic.groupInfo.value.memberCount ?? 0})'.toText
+                          ..style = Styles.ts_0C1C33_17sp,
                         6.horizontalSpace,
                         if (logic.isOwnerOrAdmin)
                           ImageRes.editName.toImage
@@ -158,7 +168,8 @@ class GroupSetupPage extends StatelessWidget {
                               textStyle: Styles.ts_FFFFFF_14sp,
                               onTap: () => logic.viewMemberInfo(info),
                             ),
-                            if (logic.groupInfo.value.ownerUserID == info.userID)
+                            if (logic.groupInfo.value.ownerUserID ==
+                                info.userID)
                               Positioned(
                                 bottom: 0.h,
                                 child: Container(
@@ -222,7 +233,8 @@ class GroupSetupPage extends StatelessWidget {
                 height: 46.h,
                 child: Row(
                   children: [
-                    sprintf(StrRes.viewAllGroupMembers, [logic.groupInfo.value.memberCount]).toText
+                    sprintf(StrRes.viewAllGroupMembers,
+                        [logic.groupInfo.value.memberCount]).toText
                       ..style = Styles.ts_0C1C33_17sp,
                     const Spacer(),
                     ImageRes.rightArrow.toImage

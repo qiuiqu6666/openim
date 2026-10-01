@@ -65,6 +65,7 @@ class GroupProfilePanelPage extends StatelessWidget {
               url: logic.groupInfo.value.faceURL,
               text: logic.groupInfo.value.groupName,
               isGroup: true,
+              enabledPreview: true,
             ),
             12.horizontalSpace,
             Expanded(

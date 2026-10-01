@@ -54,7 +54,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     );
 
     OpenIM.iMManager
-      ..setUploadLogsListener(OnUploadLogsListener(onUploadProgress: uploadLogsProgress))
+      ..setUploadLogsListener(
+          OnUploadLogsListener(onUploadProgress: uploadLogsProgress))
       ..userManager.setUserListener(OnUserListener(
           onSelfInfoUpdated: (u) {
             selfInfoUpdated(u);
@@ -84,7 +85,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
                 customType == CustomMessageType.callingReject ||
                 customType == CustomMessageType.callingCancel ||
                 customType == CustomMessageType.callingHungup) {
-              final signaling = SignalingInfo(invitation: InvitationInfo.fromJson(map['data']));
+              final signaling = SignalingInfo(
+                  invitation: InvitationInfo.fromJson(map['data']));
               signaling.userID = signaling.invitation?.inviterUserID;
 
               switch (customType) {
@@ -164,15 +166,19 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
 
   Future login(String userID, String token) async {
     try {
-      var user = await OpenIM.iMManager.login(
+      final pending = OpenIM.iMManager.login(
         userID: userID,
         token: token,
         defaultValue: () async => UserInfo(userID: userID),
       );
+      _pendingSdkLogin = pending;
+      final user = await pending;
+      _pendingSdkLogin = null;
       userInfo = UserFullInfo.fromJson(user.toJson()).obs;
       _queryMyFullInfo();
       _queryAtAllTag();
     } catch (e, s) {
+      _pendingSdkLogin = null;
       Logger.print('e: $e  s:$s');
       await _handleLoginRepeatError(e);
 
@@ -180,8 +186,29 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     }
   }
 
-  Future logout() {
-    return OpenIM.iMManager.logout();
+  Future<UserInfo>? _pendingSdkLogin;
+  Future<void>? _pendingLogout;
+
+  Future<void> logout() {
+    return _pendingLogout ??=
+        _logoutSafely().whenComplete(() => _pendingLogout = null);
+  }
+
+  Future<void> _logoutSafely() async {
+    final pending = _pendingSdkLogin;
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (_) {/* A failed login may already be logged out. */}
+    }
+    try {
+      final status = await OpenIM.iMManager.getLoginStatus();
+      if (status == LoginStatus.logout) return;
+      await OpenIM.iMManager.logout();
+    } on PlatformException catch (error) {
+      // The SDK can finish disconnecting between the status check and logout.
+      if (error.code != '10009') rethrow;
+    }
   }
 
   void _queryAtAllTag() async {

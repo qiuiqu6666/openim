@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:intl/intl.dart';
 import 'package:focus_detector_v2/focus_detector_v2.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:rxdart/rxdart.dart';
@@ -185,6 +186,34 @@ class _ChatItemViewState extends State<ChatItemView> {
         textScaleFactor: widget.textScaleFactor,
         onVisibleTrulyText: widget.onVisibleTrulyText,
       );
+    } else if (_message.contentType == MessageType.quote) {
+      isBubbleBg = true;
+      child = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_message.quoteElem?.text ?? ''),
+          const SizedBox(height: 4),
+          Text(
+            '${_message.quoteElem?.quoteMessage?.senderNickname ?? ''}: ${_message.quoteElem?.quoteMessage?.textElem?.content ?? ''}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+        ],
+      );
+    } else if (_message.isVideoType) {
+      child = widget.mediaItemBuilder?.call(context, _message);
+    } else if (_message.isCardType && _message.cardElem != null) {
+      final card = _message.cardElem!;
+      child = ContactCardView(
+        userID: card.userID ?? '',
+        name: card.nickname?.trim().isNotEmpty == true
+            ? card.nickname!.trim() : card.userID ?? '',
+        faceURL: card.faceURL,
+        isSelf: _isISend,
+        time: DateFormat('HH:mm').format(
+          DateTime.fromMillisecondsSinceEpoch(_message.sendTime!)),
+      );
     } else if (_message.isPictureType) {
       child = widget.mediaItemBuilder?.call(context, _message) ??
           ChatPictureView(
@@ -223,13 +252,16 @@ class _ChatItemViewState extends State<ChatItemView> {
       showLeftNickname: widget.showLeftNickname,
       showRightNickname: widget.showRightNickname,
       timelineStr: widget.timelineStr,
-      timeStr: IMUtils.getChatTimeline(_message.sendTime!, 'HH:mm:ss'),
+      timeStr: _message.isCardType ? null : DateFormat('HH:mm').format(
+        DateTime.fromMillisecondsSinceEpoch(_message.sendTime!),
+      ),
       hasRead: _message.isRead!,
-      isSending: _message.isVideoType
-          ? false
-          : _message.status == MessageStatus.sending,
+      showReadStatus: _message.isSingleChat,
+      isSending: _message.status == MessageStatus.sending,
       isSendFailed: _message.status == MessageStatus.failed,
-      isBubbleBg: child == null ? true : isBubbleBg,
+      isBubbleBg: isBubbleBg,
+      mediaOverlay: _message.isPictureType || _message.isVideoType,
+      standaloneCard: _message.isCardType && _message.cardElem != null,
       ignorePointer: widget.ignorePointer,
       sendStatusStream: widget.sendStatusSubject,
       onFailedToResend: widget.onFailedToResend,

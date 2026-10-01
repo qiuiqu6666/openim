@@ -6,9 +6,14 @@ import 'package:openim_common/openim_common.dart';
 import '../user_profile _panel_logic.dart';
 
 class SetFriendRemarkLogic extends GetxController {
+  static const maxRemarkLength = 16;
+
   final userProfilesLogic =
       Get.find<UserProfilePanelLogic>(tag: GetTags.userProfile);
   late TextEditingController inputCtrl;
+
+  String? get avatarURL => userProfilesLogic.userInfo.value.faceURL;
+  String? get avatarName => userProfilesLogic.userInfo.value.nickname;
 
   void save() async {
     try {

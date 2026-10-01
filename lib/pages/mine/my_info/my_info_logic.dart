@@ -26,14 +26,28 @@ class MyInfoLogic extends GetxController {
         attr: EditAttr.mobile,
       );
 
-  void editEmail() => AppNavigator.startEditMyInfo(attr: EditAttr.email, maxLength: 30);
+  void editEmail() =>
+      AppNavigator.startEditMyInfo(attr: EditAttr.email, maxLength: 30);
 
   void openPhotoSheet() {
+    final avatarUrl = imLogic.userInfo.value.faceURL;
     IMViews.openPhotoSheet(
+        items: IMUtils.isUrlValid(avatarUrl)
+            ? [
+                SheetItem(
+                  label: StrRes.viewAvatar,
+                  onTap: () => IMUtils.previewUrlPicture(
+                    [MediaSource(thumbnail: avatarUrl!, url: avatarUrl)],
+                    showSaveButton: true,
+                  ),
+                ),
+              ]
+            : const [],
         onData: (path, url) async {
           if (url != null) {
             LoadingView.singleton.wrap(
-              asyncFunction: () => Apis.updateUserInfo(userID: OpenIM.iMManager.userID, faceURL: url)
+              asyncFunction: () => Apis.updateUserInfo(
+                      userID: OpenIM.iMManager.userID, faceURL: url)
                   .then((value) => imLogic.userInfo.update((val) {
                         val?.faceURL = url;
                       })),
@@ -50,7 +64,8 @@ class MyInfoLogic extends GetxController {
       Get.context!,
       locale: isZh ? LocaleType.zh : LocaleType.en,
       maxTime: DateTime.now(),
-      currentTime: DateTime.fromMillisecondsSinceEpoch(imLogic.userInfo.value.birth ?? 0),
+      currentTime: DateTime.fromMillisecondsSinceEpoch(
+          imLogic.userInfo.value.birth ?? 0),
       theme: DatePickerTheme(
         cancelStyle: Styles.ts_0C1C33_17sp,
         doneStyle: Styles.ts_0089FF_17sp,
@@ -81,10 +96,11 @@ class MyInfoLogic extends GetxController {
 
   void _updateGender(int gender) {
     LoadingView.singleton.wrap(
-      asyncFunction: () => Apis.updateUserInfo(userID: OpenIM.iMManager.userID, gender: gender)
-          .then((value) => imLogic.userInfo.update((val) {
-                val?.gender = gender;
-              })),
+      asyncFunction: () =>
+          Apis.updateUserInfo(userID: OpenIM.iMManager.userID, gender: gender)
+              .then((value) => imLogic.userInfo.update((val) {
+                    val?.gender = gender;
+                  })),
     );
   }
 

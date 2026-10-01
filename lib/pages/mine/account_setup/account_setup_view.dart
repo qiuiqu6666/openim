@@ -23,6 +23,80 @@ class AccountSetupPage extends StatelessWidget {
               children: [
                 10.verticalSpace,
                 _buildItemView(
+                  label: 'showLastSeen'.tr,
+                  switchOn: logic.presenceVisibility.showLastSeen.value,
+                  showSwitchButton: true,
+                  isTopRadius: true,
+                  isBottomRadius: true,
+                  onChanged: logic.presenceVisibility.ready.value &&
+                          !logic.presenceVisibility.busy.value
+                      ? logic.presenceVisibility.setVisible
+                      : null,
+                ),
+                Padding(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 26.w, vertical: 8.h),
+                  child:
+                      Text('showLastSeenHint'.tr, style: Styles.ts_8E9AB0_12sp),
+                ),
+                if (logic.presenceVisibility.busy.value)
+                  const LinearProgressIndicator(),
+                if (logic.presenceVisibility.failed.value)
+                  TextButton(
+                      onPressed: logic.presenceVisibility.refresh,
+                      child: Text('presenceVisibilityRetry'.tr)),
+                Padding(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 26.w, vertical: 12.h),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('friendAddSettings'.tr,
+                        style: Theme.of(context).textTheme.titleSmall),
+                  ),
+                ),
+                if (logic.friendSettingsFailed.value)
+                  TextButton(
+                    onPressed: logic.refreshFriendSettings,
+                    child: Text('friendAddSettingsRetry'.tr),
+                  ),
+                if (logic.friendSettingsReady.value) ...[
+                  _buildItemView(
+                    label: 'allowAddFriend'.tr,
+                    switchOn: logic.allowAddFriend.value == 1,
+                    showSwitchButton: true,
+                    isTopRadius: true,
+                    onChanged: logic.friendSettingsBusy.value
+                        ? null
+                        : (value) =>
+                            logic.setFriendPermission('allowAddFriend', value),
+                  ),
+                  for (final entry in const [
+                    ('allowAddByUserID', 'allowAddByUserID'),
+                    ('allowAddByPhone', 'allowAddByPhone'),
+                    ('allowAddByEmail', 'allowAddByEmail'),
+                    ('allowAddByQRCode', 'allowAddByQRCode'),
+                    ('allowAddByGroup', 'allowAddByGroup'),
+                    ('allowAddByCard', 'allowAddByCard'),
+                  ])
+                    _buildItemView(
+                      label: entry.$2.tr,
+                      switchOn: logic.friendPermissions[entry.$1] != 2,
+                      showSwitchButton: true,
+                      isBottomRadius: entry.$1 == 'allowAddByCard',
+                      onChanged: logic.friendSettingsBusy.value ||
+                              logic.allowAddFriend.value != 1
+                          ? null
+                          : (value) =>
+                              logic.setFriendPermission(entry.$1, value),
+                    ),
+                  Padding(
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 26.w, vertical: 8.h),
+                    child: Text('friendAddSettingsHint'.tr,
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ),
+                ],
+                _buildItemView(
                   label: StrRes.blacklist,
                   onTap: logic.blacklist,
                   showRightArrow: true,
@@ -71,12 +145,13 @@ class AccountSetupPage extends StatelessWidget {
               padding: EdgeInsets.symmetric(horizontal: 16.w),
               child: Row(
                 children: [
-                  label.toText..style = textStyle ?? Styles.ts_0C1C33_17sp,
-                  const Spacer(),
+                  Expanded(
+                      child: Text(label,
+                          style: textStyle ?? Styles.ts_0C1C33_17sp)),
                   if (showSwitchButton)
                     CupertinoSwitch(
                       value: switchOn,
-                      activeColor: Styles.c_0089FF,
+                      activeTrackColor: Styles.c_0089FF,
                       onChanged: onChanged,
                     ),
                   if (showRightArrow)

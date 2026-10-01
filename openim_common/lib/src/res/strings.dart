@@ -17,6 +17,12 @@ class TranslationService extends Translations {
 }
 
 class StrRes {
+  static String get voiceCapture => 'voiceCapture'.tr;
+  static String get voiceStart => 'voiceStart'.tr;
+  static String get voiceStop => 'voiceStop'.tr;
+  static String get voicePreview => 'voicePreview'.tr;
+  static String get voiceCaptureFailed => 'voiceCaptureFailed'.tr;
+  static String get videoPlaybackFailed => 'videoPlaybackFailed'.tr;
   StrRes._();
 
   static String get welcome => 'welcome'.tr;
@@ -100,6 +106,10 @@ class StrRes {
   static String get through => 'through'.tr;
 
   static String get home => 'home'.tr;
+
+  static String get singleChat => 'singleChat'.tr;
+
+  static String get groupChat => 'groupChat'.tr;
 
   static String get contacts => 'contacts'.tr;
 
@@ -515,6 +525,8 @@ class StrRes {
   static String get save => 'save'.tr;
 
   static String get saveSuccessfully => 'saveSuccessfully'.tr;
+  static String get saveToAlbum => 'saveToAlbum'.tr;
+  static String get viewAvatar => 'viewAvatar'.tr;
 
   static String get saveFailed => 'saveFailed'.tr;
 

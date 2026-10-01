@@ -14,6 +14,7 @@ import 'package:openim_live/openim_live.dart';
 import '../../../core/controller/app_controller.dart';
 import '../../../core/controller/im_controller.dart';
 import '../../conversation/conversation_logic.dart';
+import '../contacts_logic.dart';
 
 class UserProfilePanelLogic extends GetxController {
   final appLogic = Get.find<AppController>();
@@ -44,6 +45,9 @@ class UserProfilePanelLogic extends GetxController {
 
   @override
   void onClose() {
+    if (Get.isRegistered<ContactsLogic>()) {
+      Get.find<ContactsLogic>().setProfilePresence(this, null);
+    }
     _friendAddedSub.cancel();
     _friendInfoChangedSub.cancel();
     _memberInfoChangedSub.cancel();
@@ -101,6 +105,10 @@ class UserProfilePanelLogic extends GetxController {
 
   @override
   void onReady() {
+    if (Get.isRegistered<ContactsLogic>()) {
+      Get.find<ContactsLogic>()
+          .setProfilePresence(this, userInfo.value.userID!);
+    }
     _getUsersInfo();
     _queryGroupInfo();
     _queryGroupMemberInfo();
@@ -149,7 +157,7 @@ class UserProfilePanelLogic extends GetxController {
       });
 
       UserCacheManager().addOrUpdateUserInfo(userID, userInfo.value);
-
+      await _loadProfileGender(userID);
       return;
     }
 
@@ -161,7 +169,9 @@ class UserProfilePanelLogic extends GetxController {
     final blackList = await OpenIM.iMManager.friendshipManager.getBlacklist();
 
     final isFriendship = friendInfo != null;
-    final isBlack = blackList.firstWhereOrNull((e) => e.userID == friendInfo?.userID) != null;
+    final isBlack =
+        blackList.firstWhereOrNull((e) => e.userID == friendInfo?.userID) !=
+            null;
 
     if (friendInfo == null) {
       final user = (await OpenIM.iMManager.userManager.getUsersInfoWithCache(
@@ -186,6 +196,16 @@ class UserProfilePanelLogic extends GetxController {
         val?.isFriendship = isFriendship;
       });
     }
+    UserCacheManager().addOrUpdateUserInfo(userID, userInfo.value);
+    if (isFriendship) await _loadProfileGender(userID);
+  }
+
+  Future<void> _loadProfileGender(String userID) async {
+    final profiles = await Apis.getUserFullInfo(userIDList: [userID]);
+    if (isClosed || userInfo.value.userID != userID) return;
+    final profile = profiles?.firstWhereOrNull((info) => info.userID == userID);
+    if (profile == null) return;
+    userInfo.update((value) => value?.gender = profile.gender);
     UserCacheManager().addOrUpdateUserInfo(userID, userInfo.value);
   }
 
@@ -213,9 +233,13 @@ class UserProfilePanelLogic extends GetxController {
     if (isGroupMemberPage) {
       final list = await OpenIM.iMManager.groupManager.getGroupMembersInfo(
         groupID: groupID!,
-        userIDList: [userInfo.value.userID!, if (!isMyself) OpenIM.iMManager.userID],
+        userIDList: [
+          userInfo.value.userID!,
+          if (!isMyself) OpenIM.iMManager.userID
+        ],
       );
-      final other = list.firstWhereOrNull((e) => e.userID == userInfo.value.userID);
+      final other =
+          list.firstWhereOrNull((e) => e.userID == userInfo.value.userID);
       groupMembersInfo = other;
       groupUserNickname.value = other?.nickname ?? '';
       joinGroupTime.value = other?.joinTime ?? 0;
@@ -225,18 +249,23 @@ class UserProfilePanelLogic extends GetxController {
       hasAdminPermission.value = other?.roleLevel == GroupRoleLevel.admin;
 
       if (!isMyself) {
-        var me = list.firstWhereOrNull((e) => e.userID == OpenIM.iMManager.userID);
+        var me =
+            list.firstWhereOrNull((e) => e.userID == OpenIM.iMManager.userID);
 
         iAmOwner.value = me?.roleLevel == GroupRoleLevel.owner;
 
         iHasMutePermissions.value = me?.roleLevel == GroupRoleLevel.owner ||
-            (me?.roleLevel == GroupRoleLevel.admin && other?.roleLevel == GroupRoleLevel.member);
+            (me?.roleLevel == GroupRoleLevel.admin &&
+                other?.roleLevel == GroupRoleLevel.member);
 
         iHaveAdminOrOwnerPermission.value =
-            me?.roleLevel == GroupRoleLevel.owner || me?.roleLevel == GroupRoleLevel.admin;
+            me?.roleLevel == GroupRoleLevel.owner ||
+                me?.roleLevel == GroupRoleLevel.admin;
       }
 
-      if (null != other && null != other.muteEndTime && other.muteEndTime! > 0) {
+      if (null != other &&
+          null != other.muteEndTime &&
+          other.muteEndTime! > 0) {
         _calMuteTime(other.muteEndTime!);
       }
     }
@@ -307,6 +336,54 @@ class UserProfilePanelLogic extends GetxController {
         inviteeUserIDList: [userInfo.value.userID!],
       );
     });
+  }
+
+  void callDirectly({required bool video}) {
+    imLogic.call(
+      callObj: CallObj.single,
+      callType: video ? CallType.video : CallType.audio,
+      inviteeUserIDList: [userInfo.value.userID!],
+    );
+  }
+
+  Future<void> editRemark() async {
+    final result = await AppNavigator.startSetFriendRemark();
+    if (result is String) {
+      userInfo.update((value) => value?.remark = result);
+      UserCacheManager()
+          .addOrUpdateUserInfo(userInfo.value.userID!, userInfo.value);
+    }
+  }
+
+  final updatingBlacklist = false.obs;
+
+  Future<void> setBlacklist(bool enabled) async {
+    if (updatingBlacklist.value) return;
+    updatingBlacklist.value = true;
+    try {
+      if (enabled) {
+        final confirmed = await Get.dialog<bool>(
+          CustomDialog(title: StrRes.areYouSureAddBlacklist),
+        );
+        if (confirmed != true) return;
+      }
+      await LoadingView.singleton.wrap(asyncFunction: () async {
+        if (enabled) {
+          await OpenIM.iMManager.friendshipManager
+              .addBlacklist(userID: userInfo.value.userID!);
+        } else {
+          await OpenIM.iMManager.friendshipManager
+              .removeBlacklist(userID: userInfo.value.userID!);
+        }
+      });
+      userInfo.update((value) => value?.isBlacklist = enabled);
+      UserCacheManager()
+          .addOrUpdateUserInfo(userInfo.value.userID!, userInfo.value);
+    } catch (_) {
+      IMViews.showToast(StrRes.saveFailed);
+    } finally {
+      updatingBlacklist.value = false;
+    }
   }
 
   void copyID() {

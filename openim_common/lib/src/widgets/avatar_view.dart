@@ -36,6 +36,7 @@ class AvatarView extends StatelessWidget {
   final String? url;
   final File? file;
   final CustomAvatarBuilder? builder;
+
   /// User avatars are circular by default; group avatars keep their square shape.
   final bool? isCircle;
   final BorderRadius? borderRadius;
@@ -70,10 +71,14 @@ class AvatarView extends StatelessWidget {
       behavior: HitTestBehavior.translucent,
       onTap: onTap ??
           ((enabledPreview && isUrlValid)
-              ? () => IMUtils.previewUrlPicture([MediaSource(thumbnail: url!, url: url)])
+              ? () => IMUtils.previewUrlPicture(
+                    [MediaSource(thumbnail: url!, url: url)],
+                    showSaveButton: true,
+                  )
               : null),
       onLongPress: onLongPress,
-      child: builder?.call() ?? (nineGridUrl.isNotEmpty ? _nineGridAvatar() : _normalAvatar()),
+      child: builder?.call() ??
+          (nineGridUrl.isNotEmpty ? _nineGridAvatar() : _normalAvatar()),
     );
     return Hero(
       tag: tag,
@@ -99,7 +104,9 @@ class AvatarView extends StatelessWidget {
         child: null == _showName
             ? (showDefaultAvatar
                 ? FaIcon(
-                    isGroup ? FontAwesomeIcons.userGroup : FontAwesomeIcons.solidUser,
+                    isGroup
+                        ? FontAwesomeIcons.userGroup
+                        : FontAwesomeIcons.solidUser,
                     color: Colors.white,
                     size: _avatarSize / 2,
                   )
