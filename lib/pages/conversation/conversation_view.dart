@@ -41,7 +41,6 @@ class ConversationPage extends StatelessWidget {
 
   Widget _swipeAction({
     required Color color,
-    required IconData icon,
     required String label,
     required void Function(BuildContext) onPressed,
   }) =>
@@ -50,18 +49,19 @@ class ConversationPage extends StatelessWidget {
         backgroundColor: color,
         foregroundColor: Colors.white,
         padding: EdgeInsets.zero,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              maxLines: 1,
-              softWrap: false,
-              style: const TextStyle(fontSize: 11),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
             ),
-          ],
+          ),
         ),
       );
 
@@ -131,22 +131,19 @@ class ConversationPage extends StatelessWidget {
       children: [
         _swipeAction(
           onPressed: (_) => logic.setNotDisturb(info, !logic.isNotDisturb(info)),
-          color: const Color(0xFF8E9AB0),
-          icon: logic.isNotDisturb(info) ? Icons.notifications_active_outlined : Icons.notifications_off_outlined,
+          color: AppIconTokens.secondary,
           label: logic.isNotDisturb(info)
               ? StrRes.disableConversationMute
               : StrRes.enableConversationMute,
         ),
         _swipeAction(
           onPressed: (_) => logic.setPinned(info, info.isPinned != true),
-          color: Styles.c_0089FF,
-          icon: info.isPinned == true ? Icons.push_pin_outlined : Icons.push_pin,
+          color: AppIconTokens.selected,
           label: info.isPinned == true ? StrRes.cancelTop : StrRes.topChat,
         ),
         _swipeAction(
           onPressed: (context) => _confirmDeleteConversation(context, info),
-          color: const Color(0xFFE45454),
-          icon: Icons.delete_outline,
+          color: AppIconTokens.danger,
           label: StrRes.delete,
         ),
       ],
@@ -189,11 +186,11 @@ class ConversationPage extends StatelessWidget {
                               ),
                               if (info.isPinned == true) ...[
                                 5.horizontalSpace,
-                                Icon(Icons.push_pin, size: 15.w, color: Styles.c_8E9AB0),
+                                const AppIcon(kind: AppIconKind.pin, size: AppIconTokens.small, color: AppIconTokens.secondary),
                               ],
                               if (logic.isNotDisturb(info)) ...[
                                 5.horizontalSpace,
-                                Icon(Icons.notifications_off_outlined, size: 15.w, color: Styles.c_8E9AB0),
+                                const AppIcon(kind: AppIconKind.mute, size: AppIconTokens.small, color: AppIconTokens.secondary),
                               ],
                               const Spacer(),
                               logic.getTime(info).toText..style = Styles.ts_8E9AB0_12sp,

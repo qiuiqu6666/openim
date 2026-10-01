@@ -24,9 +24,11 @@ class SyncStatusView extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           isFailed
-              ? (ImageRes.syncFailed.toImage
-                ..width = 12.w
-                ..height = 12.h)
+              ? const AppIcon(
+                  kind: AppIconKind.alert,
+                  size: AppIconTokens.status,
+                  color: AppIconTokens.danger,
+                )
               : SizedBox(
                   width: 12.w,
                   height: 12.h,

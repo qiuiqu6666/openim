@@ -31,6 +31,7 @@ export 'src/utils/sp_util.dart';
 export 'src/utils/utils.dart';
 export 'src/utils/voice_record.dart';
 export 'src/widgets/avatar_view.dart';
+export 'src/widgets/app_icon.dart';
 export 'src/widgets/azlist_view.dart';
 export 'src/widgets/bottom_bar.dart';
 export 'src/widgets/bottom_sheet_view.dart';

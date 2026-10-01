@@ -16,8 +16,8 @@ class HomePage extends StatelessWidget {
         PersistentTabConfig(
           screen: ConversationPage(),
           item: ItemConfig(
-            icon: _setupIcon(ImageRes.homeTab1Sel.toImage, logic.unreadMsgCount.value),
-            inactiveIcon: _setupIcon(ImageRes.homeTab1Nor.toImage, logic.unreadMsgCount.value),
+            icon: _setupIcon(const AppIcon(kind: AppIconKind.singleChat, color: AppIconTokens.selected), logic.unreadMsgCount.value),
+            inactiveIcon: _setupIcon(const AppIcon(kind: AppIconKind.singleChat, color: AppIconTokens.secondary), logic.unreadMsgCount.value),
             title: StrRes.home,
             textStyle: Styles.ts_0089FF_10sp_semibold,
           ),
@@ -25,8 +25,8 @@ class HomePage extends StatelessWidget {
         PersistentTabConfig(
           screen: ContactsPage(),
           item: ItemConfig(
-            icon: _setupIcon(ImageRes.homeTab2Sel.toImage, logic.unhandledCount.value),
-            inactiveIcon: _setupIcon(ImageRes.homeTab2Nor.toImage, logic.unhandledCount.value),
+            icon: _setupIcon(const AppIcon(kind: AppIconKind.contacts, color: AppIconTokens.selected), logic.unhandledCount.value),
+            inactiveIcon: _setupIcon(const AppIcon(kind: AppIconKind.contacts, color: AppIconTokens.secondary), logic.unhandledCount.value),
             title: StrRes.contacts,
             textStyle: Styles.ts_0089FF_10sp_semibold,
           ),
@@ -34,8 +34,8 @@ class HomePage extends StatelessWidget {
         PersistentTabConfig(
           screen: MinePage(),
           item: ItemConfig(
-            icon: ImageRes.homeTab4Sel.toImage,
-            inactiveIcon: ImageRes.homeTab4Nor.toImage,
+            icon: const AppIcon(kind: AppIconKind.profile, color: AppIconTokens.selected),
+            inactiveIcon: const AppIcon(kind: AppIconKind.profile, color: AppIconTokens.secondary),
             title: StrRes.mine,
             textStyle: Styles.ts_0089FF_10sp_semibold,
           ),

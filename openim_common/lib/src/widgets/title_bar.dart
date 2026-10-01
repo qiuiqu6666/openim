@@ -75,23 +75,28 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
               menus: [
                 PopMenuInfo(
                   text: StrRes.addFriend,
-                  icon: ImageRes.popMenuAddFriend,
+                  iconWidget: const AppIcon(kind: AppIconKind.addFriend, size: AppIconTokens.medium),
                   onTap: onAddFriend,
                 ),
                 PopMenuInfo(
                   text: StrRes.addGroup,
-                  icon: ImageRes.popMenuAddGroup,
+                  iconWidget: const AppIcon(kind: AppIconKind.addGroup, size: AppIconTokens.medium),
                   onTap: onAddGroup,
                 ),
                 PopMenuInfo(
                   text: StrRes.createGroup,
-                  icon: ImageRes.popMenuCreateGroup,
+                  iconWidget: const AppIcon(kind: AppIconKind.createGroup, size: AppIconTokens.medium),
                   onTap: onCreateGroup,
                 ),
               ],
-              child: ImageRes.addBlack.toImage
-                ..width = 28.w
-                ..height = 28.h /*..onTap = onClickAddBtn*/,
+              child: Semantics(
+                label: StrRes.add,
+                button: true,
+                child: const SizedBox.square(
+                  dimension: AppIconTokens.androidTouchTarget,
+                  child: Center(child: AppIcon(kind: AppIconKind.add)),
+                ),
+              ),
             ),
           ],
         );
