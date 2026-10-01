@@ -1,0 +1,11 @@
+.dart_tool/
+.flutter-plugins-dependencies
+build/
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/gradle/wrapper/gradle-wrapper.jar
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+ios/Flutter/flutter_export_environment.sh
+local_plugin/uri_to_file/example/

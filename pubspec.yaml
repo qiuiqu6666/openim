@@ -107,13 +107,17 @@ dependencies:
   openim_live:
     path: openim_live
 
+dependency_overrides:
+  uri_to_file:
+    path: local_plugin/uri_to_file
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.13.1
   flutter_native_splash: ^2.2.19
   hive_generator: ^2.0.1
-  build_runner: ^2.4.15
+  build_runner: 2.4.13
   flutter_lints: ^6.0.0
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
