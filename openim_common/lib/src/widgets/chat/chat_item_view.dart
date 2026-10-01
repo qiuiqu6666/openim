@@ -90,6 +90,7 @@ class ChatItemView extends StatefulWidget {
     this.onVisibleTrulyText,
     this.onFailedToResend,
     this.onClickItemView,
+    this.messageMenus = const [],
     required this.onTapUserProfile,
   }) : super(key: key);
   final ItemViewBuilder? mediaItemBuilder;
@@ -120,7 +121,10 @@ class ChatItemView extends StatefulWidget {
   final Function()? onLongPressRightAvatar;
   final Function(String? text)? onVisibleTrulyText;
   final Function()? onClickItemView;
-  final ValueChanged<({String userID, String name, String? faceURL, String? groupID})> onTapUserProfile;
+  final List<PopMenuInfo> messageMenus;
+  final ValueChanged<
+          ({String userID, String name, String? faceURL, String? groupID})>
+      onTapUserProfile;
 
   final Function()? onFailedToResend;
   @override
@@ -128,6 +132,14 @@ class ChatItemView extends StatefulWidget {
 }
 
 class _ChatItemViewState extends State<ChatItemView> {
+  final _menuController = CustomPopupMenuController();
+
+  @override
+  void dispose() {
+    _menuController.dispose();
+    super.dispose();
+  }
+
   Message get _message => widget.message;
 
   bool get _isISend => _message.sendID == OpenIM.iMManager.userID;
@@ -150,7 +162,8 @@ class _ChatItemViewState extends State<ChatItemView> {
     );
   }
 
-  Widget get _child => widget.itemViewBuilder?.call(context, _message) ?? _buildChildView();
+  Widget get _child =>
+      widget.itemViewBuilder?.call(context, _message) ?? _buildChildView();
 
   Widget _buildChildView() {
     Widget? child;
@@ -179,7 +192,8 @@ class _ChatItemViewState extends State<ChatItemView> {
             message: _message,
           );
     } else if (_message.isNotificationType) {
-      if (_message.contentType == MessageType.groupInfoSetAnnouncementNotification) {
+      if (_message.contentType ==
+          MessageType.groupInfoSetAnnouncementNotification) {
         final map = json.decode(_message.notificationElem!.detail!);
         final ntf = GroupNotification.fromJson(map);
         final noticeContent = ntf.group?.notification;
@@ -211,7 +225,9 @@ class _ChatItemViewState extends State<ChatItemView> {
       timelineStr: widget.timelineStr,
       timeStr: IMUtils.getChatTimeline(_message.sendTime!, 'HH:mm:ss'),
       hasRead: _message.isRead!,
-      isSending: _message.isVideoType ? false : _message.status == MessageStatus.sending,
+      isSending: _message.isVideoType
+          ? false
+          : _message.status == MessageStatus.sending,
       isSendFailed: _message.status == MessageStatus.failed,
       isBubbleBg: child == null ? true : isBubbleBg,
       ignorePointer: widget.ignorePointer,
@@ -220,6 +236,8 @@ class _ChatItemViewState extends State<ChatItemView> {
       onLongPressRightAvatar: widget.onLongPressRightAvatar,
       onTapLeftAvatar: widget.onTapLeftAvatar,
       onTapRightAvatar: widget.onTapRightAvatar,
+      messageMenus: widget.messageMenus,
+      menuController: _menuController,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: widget.onClickItemView,

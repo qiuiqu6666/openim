@@ -26,6 +26,8 @@ class ChatItemContainer extends StatelessWidget {
     this.onTapRightAvatar,
     this.onLongPressRightAvatar,
     this.onFailedToResend,
+    this.messageMenus = const [],
+    this.menuController,
   });
   final String id;
   final String? leftFaceUrl;
@@ -48,6 +50,8 @@ class ChatItemContainer extends StatelessWidget {
   final Function()? onTapRightAvatar;
   final Function()? onLongPressRightAvatar;
   final Function()? onFailedToResend;
+  final List<PopMenuInfo> messageMenus;
+  final CustomPopupMenuController? menuController;
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +75,17 @@ class ChatItemContainer extends StatelessWidget {
     );
   }
 
-  Widget _buildChildView(BubbleType type) => isBubbleBg ? ChatBubble(bubbleType: type, child: child) : child;
+  Widget _buildChildView(BubbleType type) {
+    final content =
+        isBubbleBg ? ChatBubble(bubbleType: type, child: child) : child;
+    if (messageMenus.isEmpty) return content;
+    return PopButton(
+      menus: messageMenus,
+      popCtrl: menuController,
+      pressType: PressType.longPress,
+      child: content,
+    );
+  }
 
   Widget _buildLeftView() => Row(
         crossAxisAlignment: CrossAxisAlignment.start,

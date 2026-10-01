@@ -58,7 +58,8 @@ class StrRes {
 
   static String get resendVerificationCode => 'resendVerificationCode'.tr;
 
-  static String get verificationCodeTimingReminder => 'verificationCodeTimingReminder'.tr;
+  static String get verificationCodeTimingReminder =>
+      'verificationCodeTimingReminder'.tr;
 
   static String get defaultVerificationCode => 'defaultVerificationCode'.tr;
 
@@ -200,6 +201,8 @@ class StrRes {
 
   static String get delete => 'delete'.tr;
 
+  static String get copy => 'copy'.tr;
+
   static String get nPieces => 'nPieces'.tr;
 
   static String get online => 'online'.tr;
@@ -276,7 +279,8 @@ class StrRes {
 
   static String get releaseToSend => 'releaseToSend'.tr;
 
-  static String get releaseToSendSwipeUpToCancel => 'releaseToSendSwipeUpToCancel'.tr;
+  static String get releaseToSendSwipeUpToCancel =>
+      'releaseToSendSwipeUpToCancel'.tr;
 
   static String get liftFingerToCancelSend => 'liftFingerToCancelSend'.tr;
 
@@ -704,7 +708,8 @@ class StrRes {
 
   static String get confirm => 'confirm'.tr;
 
-  static String get confirmTransferGroupToUser => 'confirmTransferGroupToUser'.tr;
+  static String get confirmTransferGroupToUser =>
+      'confirmTransferGroupToUser'.tr;
 
   static String get removeGroupMember => 'removeGroupMember'.tr;
 
@@ -960,7 +965,8 @@ class StrRes {
 
   static String get confirmTheChanges => 'confirmTheChanges'.tr;
 
-  static String get invitesYouToVideoConference => 'invitesYouToVideoConference'.tr;
+  static String get invitesYouToVideoConference =>
+      'invitesYouToVideoConference'.tr;
 
   static String get over => 'over'.tr;
 
@@ -1064,7 +1070,8 @@ class StrRes {
 
   static String get sendAnother => 'sendAnother'.tr;
 
-  static String get confirmDelTagNotificationHint => 'confirmDelTagNotificationHint'.tr;
+  static String get confirmDelTagNotificationHint =>
+      'confirmDelTagNotificationHint'.tr;
 
   static String get contentNotBlank => 'contentNotBlank'.tr;
 
@@ -1076,11 +1083,13 @@ class StrRes {
 
   static String get groupRequestHandled => 'groupRequestHandled'.tr;
 
-  static String get burnAfterReadingDescription => 'burnAfterReadingDescription'.tr;
+  static String get burnAfterReadingDescription =>
+      'burnAfterReadingDescription'.tr;
 
   static String get periodicallyDeleteMessage => 'periodicallyDeleteMessage'.tr;
 
-  static String get periodicallyDeleteMessageDescription => 'periodicallyDeleteMessageDescription'.tr;
+  static String get periodicallyDeleteMessageDescription =>
+      'periodicallyDeleteMessageDescription'.tr;
 
   static String get nDay => 'nDay'.tr;
 

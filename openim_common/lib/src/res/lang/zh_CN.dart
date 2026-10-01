@@ -91,6 +91,7 @@ const Map<String, String> zh_CN = {
   'cancelTop': '取消置顶',
   'markHasRead': '标记已读',
   'delete': '删除',
+  'copy': '复制',
   'nPieces': '%s条',
   "online": "在线",
   "offline": "离线",
