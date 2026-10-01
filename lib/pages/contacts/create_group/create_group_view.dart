@@ -59,6 +59,7 @@ class CreateGroupPage extends StatelessWidget {
                     width: 48.w,
                     height: 48.h,
                     url: logic.faceURL.value,
+                    isGroup: true,
                     onTap: logic.selectAvatar,
                   )
                 else

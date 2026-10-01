@@ -54,6 +54,7 @@ class SmallWindowView extends StatelessWidget {
                       AvatarView(
                         text: groupInfo!.groupName,
                         url: groupInfo!.faceURL,
+                        isGroup: true,
                       ),
                     10.verticalSpace,
                     callStateStr.toText

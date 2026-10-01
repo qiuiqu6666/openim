@@ -47,6 +47,7 @@ class GroupQrcodePage extends StatelessWidget {
                         height: 48.h,
                         url: logic.groupSetupLogic.groupInfo.value.faceURL,
                         text: logic.groupSetupLogic.groupInfo.value.groupName,
+                        isGroup: true,
                         textStyle: Styles.ts_FFFFFF_14sp,
                       ),
                       12.horizontalSpace,

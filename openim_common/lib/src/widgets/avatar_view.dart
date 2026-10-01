@@ -21,7 +21,7 @@ class AvatarView extends StatelessWidget {
     this.text,
     this.textStyle,
     this.onLongPress,
-    this.isCircle = false,
+    this.isCircle,
     this.borderRadius,
     this.enabledPreview = false,
     this.lowMemory = false,
@@ -36,7 +36,8 @@ class AvatarView extends StatelessWidget {
   final String? url;
   final File? file;
   final CustomAvatarBuilder? builder;
-  final bool isCircle;
+  /// User avatars are circular by default; group avatars keep their square shape.
+  final bool? isCircle;
   final BorderRadius? borderRadius;
   final bool enabledPreview;
   final String? text;
@@ -76,7 +77,7 @@ class AvatarView extends StatelessWidget {
     );
     return Hero(
       tag: tag,
-      child: isCircle
+      child: (isCircle ?? !isGroup)
           ? ClipOval(child: child)
           : ClipRRect(
               borderRadius: borderRadius ?? BorderRadius.circular(6.r),
