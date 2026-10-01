@@ -187,30 +187,6 @@ class UserProfilePanelLogic extends GetxController {
       });
     }
     UserCacheManager().addOrUpdateUserInfo(userID, userInfo.value);
-
-    final list2 = await Apis.getUserFullInfo(userIDList: [userID]);
-    final fullInfo = list2?.firstOrNull;
-
-    if (null != fullInfo) {
-      userInfo.update((val) {
-        val?.allowAddFriend = fullInfo.allowAddFriend;
-        val?.status = fullInfo.status;
-        val?.level = fullInfo.level;
-        val?.phoneNumber = fullInfo.phoneNumber;
-        val?.areaCode = fullInfo.areaCode;
-        val?.birth = fullInfo.birth;
-        val?.email = fullInfo.email;
-        val?.gender = fullInfo.gender;
-        val?.mobile = fullInfo.mobile;
-        val?.nickname = fullInfo.nickname;
-        val?.faceURL = fullInfo.faceURL;
-        val?.remark = friendInfo?.remark;
-        val?.isBlacklist = isBlack;
-        val?.isFriendship = isFriendship;
-      });
-
-      UserCacheManager().addOrUpdateUserInfo(userID, userInfo.value);
-    }
   }
 
   void _resetAvatar(String url) async {

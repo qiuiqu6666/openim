@@ -40,6 +40,8 @@ class PersonalInfoLogic extends GetxController {
       });
     }
 
+    if (!userProfilesLogic.isMyself) return;
+
     final list = await LoadingView.singleton.wrap(
       asyncFunction: () => Apis.getUserFullInfo(userIDList: [userID]),
     );
@@ -64,7 +66,12 @@ class PersonalInfoLogic extends GetxController {
 
   String? get faceURL => IMUtils.emptyStrToNull(userProfilesLogic.userInfo.value.faceURL) ?? IMUtils.emptyStrToNull(userFullInfo.value.faceURL);
 
-  bool get isMale => (userProfilesLogic.userInfo.value.gender ?? userFullInfo.value.gender) == 1;
+  String get genderLabel {
+    final gender = userProfilesLogic.userInfo.value.gender ?? userFullInfo.value.gender;
+    if (gender == 1) return StrRes.man;
+    if (gender == 2) return StrRes.woman;
+    return '-';
+  }
 
   String? get englishName => IMUtils.emptyStrToNull(userFullInfo.value.englishName) ?? '-';
 

@@ -36,7 +36,7 @@ class PersonalInfoPage extends StatelessWidget {
                 ),
                 _buildItemView(
                   label: StrRes.gender,
-                  value: logic.isMale ? StrRes.man : StrRes.woman,
+                  value: logic.genderLabel,
                 ),
                 _buildItemView(
                   label: StrRes.englishName,
