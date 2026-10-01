@@ -14,8 +14,10 @@ void main() {
           'FlutterError: ${details.exception.toString()}, ${details.stack.toString()}');
     };
 
-    Config.init(() {
+    Config.init(() async {
       AppThemeController.instance.load();
+      NavigationGlassController.instance.load();
+      await NavigationGlassController.instance.initializeRenderer();
       runApp(const ChatApp());
     });
   }, (error, stackTrace) {

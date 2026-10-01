@@ -9,3 +9,9 @@ ios/Flutter/Generated.xcconfig
 ios/Flutter/ephemeral/
 ios/Flutter/flutter_export_environment.sh
 local_plugin/uri_to_file/example/
+
+# Local CocoaPods artifacts and Xcode user state
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.podspec
+**/xcuserdata/

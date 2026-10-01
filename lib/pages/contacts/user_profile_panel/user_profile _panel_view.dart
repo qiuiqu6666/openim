@@ -7,14 +7,15 @@ import 'package:openim_common/openim_common.dart';
 import 'user_profile _panel_logic.dart';
 import '../contacts_logic.dart';
 import '../star_burst_button.dart';
+import '../../../theme/profile_tokens.dart';
 
 class UserProfilePanelPage extends StatelessWidget {
   final logic = Get.find<UserProfilePanelLogic>(tag: GetTags.userProfile);
 
   UserProfilePanelPage({super.key});
 
-  static const _background = Color(0xFFF5F6F8);
-  static const _muted = Color(0xFF89909C);
+  static Color get _background => Styles.c_F8F9FA;
+  static Color get _muted => Styles.c_8E9AB0;
 
   @override
   Widget build(BuildContext context) => Obx(() {
@@ -29,10 +30,7 @@ class UserProfilePanelPage extends StatelessWidget {
                 !logic.notAllowAddGroupMemberFriend.value);
         return Scaffold(
           backgroundColor: _background,
-          appBar: AppBar(
-            backgroundColor: _background,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
+          appBar: GlassAppBar(
             centerTitle: true,
             leading: IconButton(
               tooltip: MaterialLocalizations.of(context).backButtonTooltip,
@@ -52,13 +50,52 @@ class UserProfilePanelPage extends StatelessWidget {
                 ),
             ],
           ),
+          bottomNavigationBar: !logic.isMyself && !logic.isFriendship
+              ? _strangerActions(context, canAdd)
+              : null,
           body: SafeArea(
             top: false,
             child: ListView(
               padding: const EdgeInsets.only(bottom: 24),
               children: [
-                _header(),
-                if (canChat)
+                if (!logic.isMyself && !logic.isFriendship) ...[
+                  _card([
+                    Padding(
+                      padding: ProfileTokens.headerPadding,
+                      child: _header(stranger: true),
+                    )
+                  ]),
+                  _card([
+                    _row(StrRes.gender,
+                        value: user.gender == 1
+                            ? StrRes.man
+                            : user.gender == 2
+                                ? StrRes.woman
+                                : 'profileGenderPrivate'.tr),
+                    if (!logic.isGroupMemberPage ||
+                        !logic.notAllowAddGroupMemberFriend.value)
+                      _row('profileChatID'.tr,
+                          value: user.userID,
+                          valueColor: Styles.c_0089FF,
+                          onTap: logic.copyID),
+                    if (logic.isGroupMemberPage &&
+                        logic.joinGroupTime.value > 0)
+                      _row(StrRes.joinGroupDate,
+                          value: DateUtil.formatDateMs(
+                              logic.joinGroupTime.value < 1000000000000
+                                  ? logic.joinGroupTime.value * 1000
+                                  : logic.joinGroupTime.value,
+                              format: 'yyyy-MM-dd HH:mm')),
+                    if (logic.isGroupMemberPage &&
+                        logic.inviterID.value.isNotEmpty)
+                      _row('profileInviter'.tr,
+                          value: logic.inviterName.value,
+                          valueColor: Styles.c_0089FF,
+                          onTap: logic.viewInviter),
+                  ]),
+                ] else
+                  _header(),
+                if (canChat && logic.isFriendship)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 14),
                     child: Row(children: [
@@ -73,8 +110,6 @@ class UserProfilePanelPage extends StatelessWidget {
                           primary: true),
                     ]),
                   ),
-                if (canAdd)
-                  _card([_row(StrRes.addFriend, onTap: logic.addFriend)]),
                 if (logic.isFriendship)
                   _card([
                     _row('profileRemarkName'.tr,
@@ -83,11 +118,13 @@ class UserProfilePanelPage extends StatelessWidget {
                 if (logic.isFriendship ||
                     logic.isMyself ||
                     logic.isGroupMemberPage &&
+                        logic.isFriendship &&
                         !logic.notAllowLookGroupMemberProfiles.value)
                   _card([
                     _row(StrRes.personalInfo, onTap: logic.viewPersonalInfo),
                   ]),
                 if (logic.isGroupMemberPage &&
+                    logic.isFriendship &&
                     (logic.joinGroupTime.value > 0 ||
                         logic.joinGroupMethod.value.isNotEmpty))
                   _card([
@@ -125,18 +162,62 @@ class UserProfilePanelPage extends StatelessWidget {
         );
       });
 
-  Widget _header() {
+  Widget _strangerActions(BuildContext context, bool canAdd) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: ProfileTokens.actionsPadding,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (canAdd) ...[
+              Button(
+                text: 'profileAdd'.tr,
+                enabled: !logic.userInfo.value.isBlacklist &&
+                    !logic.updatingBlacklist.value,
+                height: ProfileTokens.buttonHeight,
+                radius: ProfileTokens.radius,
+                textStyle: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
+                onTap: logic.addFriend,
+              ),
+              const SizedBox(height: ProfileTokens.gap),
+            ],
+            Button(
+              text: (logic.userInfo.value.isBlacklist
+                      ? 'profileRemoveBlacklist'
+                      : 'profileAddBlacklist')
+                  .tr,
+              enabled: !logic.updatingBlacklist.value,
+              height: ProfileTokens.buttonHeight,
+              radius: ProfileTokens.radius,
+              enabledColor: _background,
+              disabledColor: _background,
+              border: Border.all(color: Styles.c_0089FF),
+              textStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color:
+                      logic.updatingBlacklist.value ? _muted : Styles.c_0089FF),
+              onTap: () =>
+                  logic.setBlacklist(!logic.userInfo.value.isBlacklist),
+            ),
+          ]),
+        ),
+      );
+
+  Widget _header({bool stranger = false}) {
     final user = logic.userInfo.value;
     final showID =
         !logic.isGroupMemberPage || !logic.notAllowAddGroupMemberFriend.value;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 22, 16, 22),
+      padding: stranger
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(20, 22, 16, 22),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         AvatarView(
             url: user.faceURL,
             text: user.nickname,
-            width: 78,
-            height: 78,
+            width: stranger ? ProfileTokens.avatar : 78,
+            height: stranger ? ProfileTokens.avatar : 78,
+            isCircle: stranger,
             enabledPreview: true),
         const SizedBox(width: 14),
         Expanded(
@@ -163,29 +244,46 @@ class UserProfilePanelPage extends StatelessWidget {
             ]),
             if (showID) ...[
               const SizedBox(height: 6),
-              Material(
-                color: const Color(0xFFEBEDF1),
-                borderRadius: BorderRadius.circular(18),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
+              if (stranger)
+                InkWell(
                   onTap: logic.copyID,
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Flexible(
-                          child: Text('ID: ${user.userID ?? ''}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 14, color: _muted))),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.copy_outlined, size: 15, color: _muted),
-                    ]),
+                  child: Text('${'profileChatID'.tr}: ${user.userID ?? ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Styles.ts_8E9AB0_14sp
+                          .copyWith(color: Styles.c_0089FF)),
+                )
+              else
+                Material(
+                  color: Styles.c_F0F2F6,
+                  borderRadius: BorderRadius.circular(18),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: logic.copyID,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Flexible(
+                            child: Text('ID: ${user.userID ?? ''}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 14, color: _muted))),
+                        const SizedBox(width: 8),
+                        Icon(Icons.copy_outlined, size: 15, color: _muted),
+                      ]),
+                    ),
                   ),
                 ),
-              ),
             ],
+            if (stranger && Get.isRegistered<ContactsLogic>())
+              Obx(() {
+                final presence =
+                    Get.find<ContactsLogic>().presence.users[user.userID];
+                return presence == null
+                    ? const SizedBox.shrink()
+                    : Text(presence.label, style: Styles.ts_8E9AB0_14sp);
+              }),
           ],
         )),
         if (logic.isFriendship &&
@@ -243,24 +341,26 @@ class UserProfilePanelPage extends StatelessWidget {
   Widget _card(List<Widget> children) => Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         child: Material(
-          color: Colors.white,
+          color: Styles.c_FFFFFF,
           borderRadius: BorderRadius.circular(14),
           clipBehavior: Clip.antiAlias,
           child: Column(children: [
             for (var i = 0; i < children.length; i++) ...[
               if (i > 0)
-                const Divider(
+                Divider(
                     height: 0.5,
                     thickness: 0.5,
                     indent: 16,
-                    color: Color(0xFFE9ECF1)),
+                    color: Styles.c_E8EAEF),
               children[i],
             ],
           ]),
         ),
       );
 
-  Widget _row(String title, {String? value, VoidCallback? onTap}) => InkWell(
+  Widget _row(String title,
+          {String? value, VoidCallback? onTap, Color? valueColor}) =>
+      InkWell(
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
@@ -272,7 +372,8 @@ class UserProfilePanelPage extends StatelessWidget {
                       textAlign: TextAlign.right,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 15, color: _muted))),
+                      style: TextStyle(
+                          fontSize: 15, color: valueColor ?? _muted))),
             if (onTap != null) ...[
               const SizedBox(width: 6),
               const Icon(Icons.chevron_right,

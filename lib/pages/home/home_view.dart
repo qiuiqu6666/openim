@@ -7,6 +7,7 @@ import '../conversation/conversation_view.dart';
 import '../conversation/conversation_logic.dart';
 import '../mine/mine_view.dart';
 import 'home_logic.dart';
+import 'glass_bottom_nav_bar.dart';
 import '../../widgets/theme_aware_page.dart';
 import 'package:persistent_bottom_nav_bar_v2/persistent_bottom_nav_bar_v2.dart';
 
@@ -15,15 +16,17 @@ class HomePage extends StatelessWidget {
   final conversationLogic = Get.find<ConversationLogic>();
   HomePage({super.key});
 
-  List<PersistentTabConfig> _tabs() => [
+  List<PersistentTabConfig> _tabs(BuildContext context) => [
         PersistentTabConfig(
           screen: ThemeAwarePage(builder: (_) => ConversationPage()),
           item: ItemConfig(
             icon: _setupIcon(
-                _navIcon('nav_chat_active_99chat.png', AppIconTokens.selected),
+                _navIcon('nav_chat_active_99chat.png',
+                    Theme.of(context).colorScheme.primary),
                 () => _unreadCount(groupChats: false)),
             inactiveIcon: _setupIcon(
-                _navIcon('nav_chat_99chat.png', AppIconTokens.secondary),
+                _navIcon('nav_chat_99chat.png',
+                    Theme.of(context).colorScheme.onSurfaceVariant),
                 () => _unreadCount(groupChats: false)),
             title: StrRes.singleChat,
             textStyle: Styles.ts_0089FF_10sp_semibold,
@@ -34,10 +37,12 @@ class HomePage extends StatelessWidget {
               builder: (_) => ConversationPage(groupChats: true)),
           item: ItemConfig(
             icon: _setupIcon(
-                _navIcon('nav_group_conv_99chat.png', AppIconTokens.selected),
+                _navIcon('nav_group_conv_99chat.png',
+                    Theme.of(context).colorScheme.primary),
                 () => _unreadCount(groupChats: true)),
             inactiveIcon: _setupIcon(
-                _navIcon('nav_group_conv_99chat.png', AppIconTokens.secondary),
+                _navIcon('nav_group_conv_99chat.png',
+                    Theme.of(context).colorScheme.onSurfaceVariant),
                 () => _unreadCount(groupChats: true)),
             title: StrRes.groupChat,
             textStyle: Styles.ts_0089FF_10sp_semibold,
@@ -47,11 +52,12 @@ class HomePage extends StatelessWidget {
           screen: ThemeAwarePage(builder: (_) => ContactsPage()),
           item: ItemConfig(
             icon: _setupIcon(
-                _navIcon(
-                    'nav_contact_active_99chat.png', AppIconTokens.selected),
+                _navIcon('nav_contact_active_99chat.png',
+                    Theme.of(context).colorScheme.primary),
                 () => logic.unhandledCount.value),
             inactiveIcon: _setupIcon(
-                _navIcon('nav_contact_99chat.png', AppIconTokens.secondary),
+                _navIcon('nav_contact_99chat.png',
+                    Theme.of(context).colorScheme.onSurfaceVariant),
                 () => logic.unhandledCount.value),
             title: StrRes.contacts,
             textStyle: Styles.ts_0089FF_10sp_semibold,
@@ -60,10 +66,10 @@ class HomePage extends StatelessWidget {
         PersistentTabConfig(
           screen: ThemeAwarePage(builder: (_) => MinePage()),
           item: ItemConfig(
-            icon: _navIcon(
-                'nav_profile_active_99chat.png', AppIconTokens.selected),
-            inactiveIcon:
-                _navIcon('nav_profile_99chat.png', AppIconTokens.secondary),
+            icon: _navIcon('nav_profile_active_99chat.png',
+                Theme.of(context).colorScheme.primary),
+            inactiveIcon: _navIcon('nav_profile_99chat.png',
+                Theme.of(context).colorScheme.onSurfaceVariant),
             title: StrRes.mine,
             textStyle: Styles.ts_0089FF_10sp_semibold,
           ),
@@ -116,20 +122,10 @@ class HomePage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Styles.c_FFFFFF,
       body: PersistentTabView(
-        tabs: _tabs(),
-        navBarBuilder: (navBarConfig) => Style1BottomNavBar(
-          navBarConfig: navBarConfig,
-          navBarDecoration: NavBarDecoration(
-            color: Styles.c_FFFFFF,
-            boxShadow: [
-              BoxShadow(
-                  color: Styles.c_000000_opacity12,
-                  blurRadius: 0.5,
-                  spreadRadius: 0.5),
-            ],
-          ),
-        ),
-        navBarOverlap: const NavBarOverlap.none(),
+        tabs: _tabs(context),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        navBarBuilder: (config) => GlassBottomNavBar(config: config),
+        navBarOverlap: const NavBarOverlap.full(),
         screenTransitionAnimation: const ScreenTransitionAnimation.none(),
       ),
     );

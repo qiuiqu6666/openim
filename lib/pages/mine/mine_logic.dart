@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'my_info/my_avatar_editor.dart';
 
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:get/get.dart';
@@ -15,6 +16,10 @@ class MineLogic extends GetxController {
   late StreamSubscription kickedOfflineSub;
 
   void viewMyInfo() => AppNavigator.startMyInfo();
+
+  void openPhotoSheet() => MyAvatarEditor.open(imLogic);
+
+  void editMyName() => AppNavigator.startEditMyInfo();
 
   void copyID() {
     IMUtils.copy(text: imLogic.userInfo.value.userID!);

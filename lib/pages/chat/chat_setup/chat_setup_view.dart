@@ -14,12 +14,9 @@ class ChatSetupPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: Text('chatSettingsTitle'.tr, style: Styles.ts_0C1C33_17sp),
         centerTitle: true,
-        elevation: 0,
-        backgroundColor: Styles.c_F8F9FA,
-        surfaceTintColor: Colors.transparent,
         leading: IconButton(
             onPressed: () => Get.back(),
             icon:

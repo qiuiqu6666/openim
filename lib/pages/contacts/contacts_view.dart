@@ -17,11 +17,8 @@ class ContactsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Styles.c_F8F9FA,
-        appBar: AppBar(
+        appBar: GlassAppBar(
           toolbarHeight: 56.h,
-          elevation: 0,
-          scrolledUnderElevation: 0.5,
-          backgroundColor: Styles.c_FFFFFF,
           titleSpacing: 16.w,
           title: Text(StrRes.contacts,
               style: TextStyle(
@@ -102,6 +99,7 @@ class ContactsPage extends StatelessWidget {
       if (!tags.contains(tag)) tags.add(tag);
     }
     return AzListView(
+      padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
       data: rows,
       itemCount: rows.length,
       physics: const BouncingScrollPhysics(),
@@ -135,7 +133,8 @@ class ContactsPage extends StatelessWidget {
       indexBarData: logic.friends.isEmpty ? const [] : tags,
       indexBarWidth: 24.w,
       indexBarItemHeight: 16.h,
-      indexBarMargin: EdgeInsets.only(right: 2.w),
+      indexBarMargin: EdgeInsets.only(
+          right: 2.w, bottom: MediaQuery.paddingOf(context).bottom),
       indexBarOptions: IndexBarOptions(
         needRebuild: true,
         textStyle: Styles.ts_8E9AB0_12sp,

@@ -1,4 +1,5 @@
 import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
+import 'my_avatar_editor.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/login/login_logic.dart';
@@ -29,33 +30,7 @@ class MyInfoLogic extends GetxController {
   void editEmail() =>
       AppNavigator.startEditMyInfo(attr: EditAttr.email, maxLength: 30);
 
-  void openPhotoSheet() {
-    final avatarUrl = imLogic.userInfo.value.faceURL;
-    IMViews.openPhotoSheet(
-        items: IMUtils.isUrlValid(avatarUrl)
-            ? [
-                SheetItem(
-                  label: StrRes.viewAvatar,
-                  onTap: () => IMUtils.previewUrlPicture(
-                    [MediaSource(thumbnail: avatarUrl!, url: avatarUrl)],
-                    showSaveButton: true,
-                  ),
-                ),
-              ]
-            : const [],
-        onData: (path, url) async {
-          if (url != null) {
-            LoadingView.singleton.wrap(
-              asyncFunction: () => Apis.updateUserInfo(
-                      userID: OpenIM.iMManager.userID, faceURL: url)
-                  .then((value) => imLogic.userInfo.update((val) {
-                        val?.faceURL = url;
-                      })),
-            );
-          }
-        },
-        quality: 15);
-  }
+  void openPhotoSheet() => MyAvatarEditor.open(imLogic);
 
   void openDatePicker() {
     var appLocale = Get.locale;

@@ -238,7 +238,7 @@ class _ConversationPageState extends State<ConversationPage>
       return Scaffold(
         backgroundColor: Styles.c_F8F9FA,
         appBar: widget.archivedOnly
-            ? AppBar(title: const Text('归档'))
+            ? GlassAppBar(title: const Text('归档'))
             : TitleBar.conversation(
                 statusStr: logic.imSdkStatus,
                 isFailed: logic.isFailedSdkStatus,
@@ -358,6 +358,7 @@ class _ConversationPageState extends State<ConversationPage>
                   onTap: _closeOpenItems,
                   child: SlidableAutoCloseBehavior(
                     child: ListView.builder(
+                      padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
                       physics: const AlwaysScrollableScrollPhysics(),
                       itemBuilder: (_, index) {
                         if (!widget.archivedOnly &&

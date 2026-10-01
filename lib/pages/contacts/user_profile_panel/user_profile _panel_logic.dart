@@ -34,6 +34,8 @@ class UserProfilePanelLogic extends GetxController {
   final groupUserNickname = "".obs;
   final joinGroupTime = 0.obs;
   final joinGroupMethod = ''.obs;
+  final inviterID = ''.obs;
+  final inviterName = ''.obs;
   final hasAdminPermission = false.obs;
   final notAllowLookGroupMemberProfiles = true.obs;
   final notAllowAddGroupMemberFriend = false.obs;
@@ -167,11 +169,15 @@ class UserProfilePanelLogic extends GetxController {
         .firstOrNull;
 
     final blackList = await OpenIM.iMManager.friendshipManager.getBlacklist();
+    if (isClosed) return;
 
     final isFriendship = friendInfo != null;
     final isBlack =
-        blackList.firstWhereOrNull((e) => e.userID == friendInfo?.userID) !=
-            null;
+        blackList.firstWhereOrNull((e) => e.userID == userID) != null;
+    userInfo.update((value) {
+      value?.isFriendship = isFriendship;
+      value?.isBlacklist = isBlack;
+    });
 
     if (friendInfo == null) {
       final user = (await OpenIM.iMManager.userManager.getUsersInfoWithCache(
@@ -179,6 +185,7 @@ class UserProfilePanelLogic extends GetxController {
       ))
           .firstOrNull;
       if (user != null) {
+        if (isClosed) return;
         userInfo.update((val) {
           val?.nickname = user.nickname;
           val?.faceURL = user.faceURL;
@@ -197,15 +204,24 @@ class UserProfilePanelLogic extends GetxController {
       });
     }
     UserCacheManager().addOrUpdateUserInfo(userID, userInfo.value);
-    if (isFriendship) await _loadProfileGender(userID);
+    await _loadProfileGender(userID);
   }
 
   Future<void> _loadProfileGender(String userID) async {
-    final profiles = await Apis.getUserFullInfo(userIDList: [userID]);
+    List<UserFullInfo>? profiles;
+    try {
+      profiles = await Apis.getUserFullInfo(userIDList: [userID]);
+    } catch (_) {
+      // Keep SDK information usable when the optional full profile is unavailable.
+      return;
+    }
     if (isClosed || userInfo.value.userID != userID) return;
     final profile = profiles?.firstWhereOrNull((info) => info.userID == userID);
     if (profile == null) return;
-    userInfo.update((value) => value?.gender = profile.gender);
+    userInfo.update((value) {
+      value?.gender = profile.gender;
+      value?.allowAddFriend = profile.allowAddFriend;
+    });
     UserCacheManager().addOrUpdateUserInfo(userID, userInfo.value);
   }
 
@@ -221,6 +237,7 @@ class UserProfilePanelLogic extends GetxController {
       var list = await OpenIM.iMManager.groupManager.getGroupsInfo(
         groupIDList: [groupID!],
       );
+      if (isClosed) return;
       groupInfo = list.firstOrNull;
 
       notAllowLookGroupMemberProfiles.value = groupInfo?.lookMemberInfo == 1;
@@ -240,6 +257,7 @@ class UserProfilePanelLogic extends GetxController {
       );
       final other =
           list.firstWhereOrNull((e) => e.userID == userInfo.value.userID);
+      if (isClosed) return;
       groupMembersInfo = other;
       groupUserNickname.value = other?.nickname ?? '';
       joinGroupTime.value = other?.joinTime ?? 0;
@@ -279,6 +297,9 @@ class UserProfilePanelLogic extends GetxController {
           userIDList: [other.inviterUserID!],
         );
         var inviterUserInfo = list.firstOrNull;
+        if (isClosed) return;
+        inviterID.value = other.inviterUserID!;
+        inviterName.value = inviterUserInfo?.nickname ?? other.inviterUserID!;
         joinGroupMethod.value = sprintf(
           StrRes.byInviteJoinGroup,
           [inviterUserInfo?.nickname ?? ''],
@@ -376,13 +397,14 @@ class UserProfilePanelLogic extends GetxController {
               .removeBlacklist(userID: userInfo.value.userID!);
         }
       });
+      if (isClosed) return;
       userInfo.update((value) => value?.isBlacklist = enabled);
       UserCacheManager()
           .addOrUpdateUserInfo(userInfo.value.userID!, userInfo.value);
     } catch (_) {
       IMViews.showToast(StrRes.saveFailed);
     } finally {
-      updatingBlacklist.value = false;
+      if (!isClosed) updatingBlacklist.value = false;
     }
   }
 
@@ -393,6 +415,15 @@ class UserProfilePanelLogic extends GetxController {
   void addFriend() => AppNavigator.startSendVerificationApplication(
         userID: userInfo.value.userID!,
       );
+
+  void viewInviter() {
+    if (inviterID.value.isEmpty) return;
+    AppNavigator.startUserProfilePane(
+      userID: inviterID.value,
+      nickname: inviterName.value,
+      groupID: groupID,
+    );
+  }
 
   void viewPersonalInfo() => AppNavigator.startPersonalInfo(
         userID: userInfo.value.userID!,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -8,128 +10,110 @@ import '../../../core/im_callback.dart';
 import '../../conversation/conversation_logic.dart';
 
 class GroupListLogic extends GetxController {
-  final imLoic = Get.find<IMController>();
-  final iCreateRefreshController = RefreshController(initialRefresh: true);
-  final iJoinRefreshController = RefreshController(initialRefresh: true);
+  GroupListLogic({
+    Future<List<GroupInfo>> Function(int offset, int count)? fetchPage,
+    String Function()? currentUserID,
+  })  : _fetchPage = fetchPage ??
+            ((offset, count) => OpenIM.iMManager.groupManager
+                .getJoinedGroupListPage(offset: offset, count: count)),
+        _currentUserID = currentUserID ?? (() => OpenIM.iMManager.userID);
 
+  final Future<List<GroupInfo>> Function(int, int) _fetchPage;
+  final String Function() _currentUserID;
+  final iCreateRefreshController = RefreshController();
+  final iJoinRefreshController = RefreshController();
   final iCreateGlobalKey = GlobalKey();
   final iJoinGlobalKey = GlobalKey();
-
-  final conversationLogic = Get.find<ConversationLogic>();
+  ConversationLogic get conversationLogic => Get.find<ConversationLogic>();
   final index = 0.obs;
   final iCreatedList = <GroupInfo>[].obs;
   final iJoinedList = <GroupInfo>[].obs;
-
   int iCreatedOffset = 0;
   int iJoinedOffset = 0;
-
   int count = 1000;
+  final _versions = <bool, int>{true: 0, false: 0};
+  final _loading = <bool, bool>{true: false, false: false};
+  final _hasMore = <bool, bool>{true: true, false: true};
+  StreamSubscription? _syncSubscription;
+  bool _disposed = false;
 
   @override
   void onInit() {
-    imLoic.imSdkStatusPublishSubject.last.then((con) {
-      if (con.status == IMSdkStatus.syncEnded) {
+    super.onInit();
+    _syncSubscription =
+        Get.find<IMController>().imSdkStatusPublishSubject.listen((event) {
+      if (event.status == IMSdkStatus.syncEnded) {
         iCreatedInitial();
         iJoinedInitial();
       }
     });
-
     iCreatedInitial();
     iJoinedInitial();
-
-    super.onInit();
   }
 
-  void switchTab(i) {
-    index.value = i;
-  }
+  void switchTab(int i) => index.value = i;
 
-  void iCreatedInitial() async {
-    iCreatedOffset = 0;
-    iCreatedList.clear();
-    final length = await initial(iCreate: true, offset: iCreatedOffset);
+  Future<void> iCreatedInitial() => _load(iCreate: true, refresh: true);
+  Future<void> iJoinedInitial() => _load(iCreate: false, refresh: true);
+  Future<void> iCreatedLoadMore() => _load(iCreate: true, refresh: false);
+  Future<void> iJoinedLoadMore() => _load(iCreate: false, refresh: false);
 
-    iCreateRefreshController.refreshCompleted();
-
-    if (length >= count) {
-      iCreatedOffset += length;
-    } else {
-      iCreateRefreshController.loadNoData();
+  Future<void> _load({required bool iCreate, required bool refresh}) async {
+    if (_disposed ||
+        (!refresh && (_loading[iCreate]! || !_hasMore[iCreate]!))) {
+      return;
+    }
+    // A refresh supersedes any older refresh or pagination request.
+    final version = _versions[iCreate]! + 1;
+    _versions[iCreate] = version;
+    _loading[iCreate] = true;
+    final controller =
+        iCreate ? iCreateRefreshController : iJoinRefreshController;
+    final target = iCreate ? iCreatedList : iJoinedList;
+    final offset = refresh ? 0 : (iCreate ? iCreatedOffset : iJoinedOffset);
+    try {
+      final page = await _fetchPage(offset, count);
+      if (_disposed || _versions[iCreate] != version) return;
+      final groups = <String?, GroupInfo>{
+        if (!refresh)
+          for (final group in target) group.groupID: group,
+        for (final group in page)
+          if ((group.ownerUserID == _currentUserID()) == iCreate)
+            group.groupID: group,
+      };
+      target.assignAll(groups.values);
+      // SDK offsets refer to the unfiltered page, not either ownership tab.
+      if (iCreate) {
+        iCreatedOffset = offset + page.length;
+      } else {
+        iJoinedOffset = offset + page.length;
+      }
+      _hasMore[iCreate] = page.length >= count;
+      if (refresh) controller.refreshCompleted(resetFooterState: true);
+      if (_hasMore[iCreate]!) {
+        controller.loadComplete();
+      } else {
+        controller.loadNoData();
+      }
+    } catch (_) {
+      if (_disposed || _versions[iCreate] != version) return;
+      if (refresh) {
+        controller.refreshFailed();
+      } else {
+        controller.loadFailed();
+      }
+    } finally {
+      if (_versions[iCreate] == version) _loading[iCreate] = false;
     }
   }
 
-  void iCreatedLoadMore() async {
-    final length = await loadMore(iCreate: true, offset: iCreatedOffset);
-
-    if (length < count) {
-      iCreateRefreshController.loadNoData();
-    } else {
-      iCreateRefreshController.loadComplete();
-      iCreatedOffset += length;
-    }
-  }
-
-  void iJoinedInitial() async {
-    iJoinedOffset = 0;
-    iJoinedList.clear();
-    final length = await initial(iCreate: false, offset: iJoinedOffset);
-
-    iJoinRefreshController.refreshCompleted();
-
-    if (length >= count) {
-      iJoinedOffset += length;
-    } else {
-      iJoinRefreshController.loadNoData();
-    }
-  }
-
-  void iJoinedLoadMore() async {
-    final length = await loadMore(iCreate: false, offset: iJoinedOffset);
-
-    if (length < count) {
-      iJoinRefreshController.loadNoData();
-    } else {
-      iJoinRefreshController.loadComplete();
-      iJoinedOffset += length;
-    }
-  }
-
-  Future<int> initial({bool iCreate = true, int offset = 0}) async {
-    final list = await OpenIM.iMManager.groupManager.getJoinedGroupListPage(offset: offset, count: count);
-
-    int iCreatedCount = 0;
-    int iJoinedCount = 0;
-
-    if (iCreate) {
-      final result = list.where((e) => e.ownerUserID == OpenIM.iMManager.userID);
-      iCreatedList.addAll(result);
-      iCreatedCount = result.length;
-    } else {
-      final result = list.where((e) => e.ownerUserID != OpenIM.iMManager.userID);
-      iJoinedList.addAll(result);
-      iJoinedCount = result.length;
-    }
-
-    return iCreate ? iCreatedCount : iJoinedCount;
-  }
-
-  Future<int> loadMore({bool iCreate = true, int offset = 0}) async {
-    final list = await OpenIM.iMManager.groupManager.getJoinedGroupListPage(offset: offset, count: count);
-
-    int iCreatedCount = 0;
-    int iJoinedCount = 0;
-
-    if (iCreate) {
-      final result = list.where((e) => e.ownerUserID == OpenIM.iMManager.userID);
-      iCreatedList.addAll(result);
-      iCreatedCount = result.length;
-    } else {
-      final result = list.where((e) => e.ownerUserID != OpenIM.iMManager.userID);
-      iJoinedList.addAll(result);
-      iJoinedCount = result.length;
-    }
-
-    return iCreate ? iCreatedCount : iJoinedCount;
+  @override
+  void onClose() {
+    _disposed = true;
+    _syncSubscription?.cancel();
+    iCreateRefreshController.dispose();
+    iJoinRefreshController.dispose();
+    super.onClose();
   }
 
   void toGroupChat(GroupInfo info) {

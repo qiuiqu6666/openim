@@ -92,9 +92,9 @@ PODS:
   - flutter_openim_sdk (0.0.1):
     - Flutter
     - OpenIMSDKCore (= 3.8.3-hotfix.12)
-  - flutter_webrtc (0.14.0):
+  - flutter_webrtc (1.1.0):
     - Flutter
-    - WebRTC-SDK (= 125.6422.07)
+    - WebRTC-SDK (= 137.7151.03)
   - geolocator_apple (1.2.0):
     - Flutter
     - FlutterMacOS
@@ -150,7 +150,7 @@ PODS:
   - livekit_client (2.5.0):
     - Flutter
     - flutter_webrtc
-    - WebRTC-SDK (= 125.6422.07)
+    - WebRTC-SDK (= 137.7151.03)
   - local_auth_darwin (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -223,7 +223,7 @@ PODS:
     - Flutter
   - wakelock_plus (0.0.1):
     - Flutter
-  - WebRTC-SDK (125.6422.07)
+  - WebRTC-SDK (137.7151.03)
   - webview_flutter_wkwebview (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -414,7 +414,7 @@ SPEC CHECKSUMS:
   flutter_local_notifications: 395056b3175ba4f08480a7c5de30cd36d69827e4
   flutter_native_splash: c32d145d68aeda5502d5f543ee38c192065986cf
   flutter_openim_sdk: bb2a5af4aeda4b44362ca6c223c1515e2fee795d
-  flutter_webrtc: fd0d3bdef8766a0736dbbe2e5b7e85f1f3c52117
+  flutter_webrtc: b0b2e04411747142962164a1cfa43a1af9a0afac
   geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
@@ -423,7 +423,7 @@ SPEC CHECKSUMS:
   image_picker_ios: 7fe1ff8e34c1790d6fff70a32484959f563a928a
   just_audio: 4e391f57b79cad2b0674030a00453ca5ce817eed
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
-  livekit_client: 3710bf3bf24987e184163e4d54f817b03ef9fa4c
+  livekit_client: f810c81bbbc229a84f60b09e66603ac4e93f7599
   local_auth_darwin: d2e8c53ef0c4f43c646462e3415432c4dab3ae19
   Mantle: c5aa8794a29a022dfbbfc9799af95f477a69b62d
   map_launcher: 8051ad5783913cafce93f2414c6858f2904fd8df
@@ -456,9 +456,9 @@ SPEC CHECKSUMS:
   video_player_avfoundation: 2cef49524dd1f16c5300b9cd6efd9611ce03639b
   volume_controller: 3657a1f65bedb98fa41ff7dc5793537919f31b12
   wakelock_plus: e29112ab3ef0b318e58cfa5c32326458be66b556
-  WebRTC-SDK: dff00a3892bc570b6014e046297782084071657e
+  WebRTC-SDK: 69d4e56b0b4b27d788e87bab9b9a1326ed05b1e3
   webview_flutter_wkwebview: 1821ceac936eba6f7984d89a9f3bcb4dea99ebb2
 
-PODFILE CHECKSUM: 3003a7d95e8a59d1b52038824bad0a4b90bc52ca
+PODFILE CHECKSUM: cdc8c791e58d8869d499dc4433d56aa7b9a5f7d4
 
 COCOAPODS: 1.16.2

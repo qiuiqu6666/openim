@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../core/controller/im_controller.dart';
+import '../my_info/my_avatar_editor.dart';
 
 enum EditAttr {
   nickname,
@@ -21,6 +22,14 @@ class EditMyInfoLogic extends GetxController {
   String? title;
   String? defaultValue;
   TextInputType? keyboardType;
+
+  void openPhotoSheet() => MyAvatarEditor.open(imLogic);
+
+  @override
+  void onClose() {
+    inputCtrl.dispose();
+    super.onClose();
+  }
 
   @override
   void onInit() {

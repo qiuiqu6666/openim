@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +10,29 @@ import 'package:openim/pages/contacts/user_profile_panel/user_profile _panel_log
 import 'package:openim/pages/contacts/user_profile_panel/user_profile _panel_view.dart';
 
 class ProfileFixture extends GetxController implements UserProfilePanelLogic {
+  ProfileFixture(
+      {this.friend = true, this.allowAdd = true, this.group = false});
+  final bool friend;
+  final bool allowAdd;
+  final bool group;
+  @override
+  final notAllowAddGroupMemberFriend = false.obs;
+  @override
+  bool? get forceCanAdd => false;
+  @override
+  final joinGroupTime = 0.obs;
+  @override
+  final inviterID = ''.obs;
+  @override
+  final inviterName = ''.obs;
+  @override
+  void viewInviter() => action = 'inviter';
+  @override
+  bool get isAllowAddFriend => allowAdd;
+  @override
+  bool get allowSendMsgNotFriend => true;
+  @override
+  void addFriend() => action = 'add';
   @override
   final userInfo = UserFullInfo(
           userID: '123456789012345678901234567890',
@@ -16,9 +42,9 @@ class ProfileFixture extends GetxController implements UserProfilePanelLogic {
   @override
   bool get isMyself => false;
   @override
-  bool get isFriendship => true;
+  bool get isFriendship => friend || userInfo.value.isFriendship;
   @override
-  bool get isGroupMemberPage => false;
+  bool get isGroupMemberPage => group;
   @override
   final updatingBlacklist = false.obs;
   String? action;
@@ -74,5 +100,106 @@ void main() {
     expect(fixture.action, 'remark');
     await tester.tap(find.byIcon(Icons.copy_outlined));
     expect(fixture.action, 'copy');
+  });
+  for (final dark in [false, true]) {
+    testWidgets(
+        'nonfriend profile has bottom actions in ${dark ? "dark" : "light"}',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 650);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(Get.reset);
+      Styles.isDark = dark;
+      addTearDown(() => Styles.isDark = false);
+      final fixture = ProfileFixture(friend: false);
+      GetTags.createUserProfileTag();
+      addTearDown(GetTags.destroyUserProfileTag);
+      Get.put<UserProfilePanelLogic>(fixture, tag: GetTags.userProfile);
+      await tester.pumpWidget(ScreenUtilInit(
+        designSize: const Size(375, 812),
+        builder: (_, __) => GetMaterialApp(
+            theme: ThemeData(
+                brightness: dark ? Brightness.dark : Brightness.light),
+            home: RepaintBoundary(
+                key: const ValueKey('profile-preview'),
+                child: UserProfilePanelPage())),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byIcon(Icons.call_outlined), findsNothing);
+      expect(find.byIcon(Icons.chat_bubble_outline), findsNothing);
+      expect(find.text('profileRemarkName'), findsNothing);
+      expect(find.text('profileGenderPrivate'), findsOneWidget);
+      expect(find.text('profileAdd'), findsOneWidget);
+      expect(find.text('profileAddBlacklist'), findsOneWidget);
+      final previewDir = Platform.environment['PROFILE_PREVIEW_DIR'];
+      if (previewDir != null) {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+            find.byKey(const ValueKey('profile-preview')));
+        final image =
+            (await tester.runAsync(() => boundary.toImage(pixelRatio: 2)))!;
+        final bytes = await tester
+            .runAsync(() => image.toByteData(format: ui.ImageByteFormat.png));
+        await tester.runAsync(() async {
+          await Directory(previewDir).create(recursive: true);
+          await File('$previewDir/profile-${dark ? "dark" : "light"}.png')
+              .writeAsBytes(bytes!.buffer.asUint8List());
+        });
+        image.dispose();
+      }
+
+      await tester.tap(find.text('profileAdd'));
+      expect(fixture.action, 'add');
+      await tester.tap(find.text('profileAddBlacklist'));
+      await tester.pumpAndSettle();
+      expect(fixture.userInfo.value.isBlacklist, isTrue);
+      expect(find.text('profileRemoveBlacklist'), findsOneWidget);
+      fixture.updatingBlacklist.value = true;
+      await tester.pump();
+      await tester.tap(find.text('profileRemoveBlacklist'));
+      expect(fixture.userInfo.value.isBlacklist, isTrue);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('nonfriend respects add permission', (tester) async {
+    addTearDown(Get.reset);
+    final fixture = ProfileFixture(friend: false, allowAdd: false);
+    GetTags.createUserProfileTag();
+    addTearDown(GetTags.destroyUserProfileTag);
+    Get.put<UserProfilePanelLogic>(fixture, tag: GetTags.userProfile);
+    await tester.pumpWidget(ScreenUtilInit(
+      designSize: const Size(375, 812),
+      builder: (_, __) => GetMaterialApp(home: UserProfilePanelPage()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('profileAdd'), findsNothing);
+    expect(find.text('profileAddBlacklist'), findsOneWidget);
+    fixture.userInfo.update((user) => user?.isFriendship = true);
+    await tester.pumpAndSettle();
+    expect(find.text('profileAdd'), findsNothing);
+    expect(find.byIcon(Icons.chat_bubble_outline), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('group nonfriend displays SDK join time and inviter action',
+      (tester) async {
+    addTearDown(Get.reset);
+    final fixture = ProfileFixture(friend: false, group: true);
+    fixture.joinGroupTime.value = 1700000000;
+    fixture.inviterID.value = 'inviter-id';
+    fixture.inviterName.value = 'Inviter';
+    GetTags.createUserProfileTag();
+    addTearDown(GetTags.destroyUserProfileTag);
+    Get.put<UserProfilePanelLogic>(fixture, tag: GetTags.userProfile);
+    await tester.pumpWidget(ScreenUtilInit(
+      designSize: const Size(375, 812),
+      builder: (_, __) => GetMaterialApp(home: UserProfilePanelPage()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Inviter'), findsOneWidget);
+    await tester.tap(find.text('Inviter'));
+    expect(fixture.action, 'inviter');
+    expect(tester.takeException(), isNull);
   });
 }

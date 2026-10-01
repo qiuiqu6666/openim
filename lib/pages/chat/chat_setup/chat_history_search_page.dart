@@ -63,7 +63,7 @@ class _ChatHistorySearchPageState extends State<ChatHistorySearchPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text('findChatContent'.tr)),
+        appBar: GlassAppBar(title: Text('findChatContent'.tr)),
         body: SafeArea(
             child: Column(children: [
           Padding(

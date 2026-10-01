@@ -147,5 +147,8 @@ void main() {
         image.dispose();
       });
     }
+    await tester.pumpWidget(const SizedBox.shrink());
+    logic.presence.dispose();
+    logic.stars.dispose();
   });
 }

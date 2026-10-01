@@ -89,3 +89,6 @@ export 'src/widgets/views.dart';
 export 'src/widgets/overlay_widget.dart';
 export 'src/widgets/photo_browser.dart';
 export 'src/controller/push_controller.dart';
+
+export 'src/widgets/liquid_glass_surface.dart';
+export 'src/widgets/navigation_glass_controller.dart';

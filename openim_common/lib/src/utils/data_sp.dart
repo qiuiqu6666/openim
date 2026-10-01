@@ -95,7 +95,15 @@ class DataSp {
   }
 
   static int? getLanguage() {
-    return SpUtil().getInt(_language);
+    // Older installations may have stored this preference as a string.
+    // Read the raw value so a stale type cannot prevent the app from building.
+    final value = SpUtil().getDynamic(_language);
+    final index = value is int
+        ? value
+        : value is String
+            ? int.tryParse(value.trim())
+            : null;
+    return index != null && index >= 0 && index <= 2 ? index : 0;
   }
 
   static Future<bool>? putHaveReadUnHandleGroupApplication(List<String> idList) {

@@ -1,6 +1,8 @@
 import 'package:get/get.dart';
 
 import '../widgets/theme_aware_page.dart';
+import '../pages/mine/edit_my_info/edit_my_info_binding.dart';
+import '../pages/mine/edit_my_info/edit_my_info_view.dart';
 
 import '../pages/chat/chat_binding.dart';
 import '../pages/chat/chat_setup/chat_setup_binding.dart';
@@ -176,6 +178,11 @@ class AppPages {
       name: AppRoutes.myInfo,
       page: () => MyInfoPage(),
       binding: MyInfoBinding(),
+    ),
+    _pageBuilder(
+      name: AppRoutes.editMyInfo,
+      page: () => EditMyInfoPage(),
+      binding: EditMyInfoBinding(),
     ),
     _pageBuilder(
       name: AppRoutes.accountSetup,

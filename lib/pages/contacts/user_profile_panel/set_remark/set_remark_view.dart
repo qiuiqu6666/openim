@@ -6,18 +6,41 @@ import 'package:openim_common/openim_common.dart';
 import 'set_remark_logic.dart';
 
 class SetFriendRemarkPage extends StatelessWidget {
-  SetFriendRemarkPage({super.key, SetFriendRemarkLogic? logic})
-      : logic = logic ?? Get.find<SetFriendRemarkLogic>();
+  factory SetFriendRemarkPage({Key? key, SetFriendRemarkLogic? logic}) {
+    final editor = logic ?? Get.find<SetFriendRemarkLogic>();
+    return SetFriendRemarkPage.editor(
+      key: key,
+      controller: editor.inputCtrl,
+      avatarURL: editor.avatarURL,
+      avatarName: editor.avatarName,
+      maxLength: SetFriendRemarkLogic.maxRemarkLength,
+      onSave: editor.save,
+    );
+  }
 
-  final SetFriendRemarkLogic logic;
+  const SetFriendRemarkPage.editor({
+    super.key,
+    required this.controller,
+    required this.onSave,
+    required this.maxLength,
+    this.avatarURL,
+    this.avatarName,
+    this.keyboardType,
+    this.onAvatarTap,
+  });
+
+  final TextEditingController controller;
+  final VoidCallback onSave;
+  final int maxLength;
+  final String? avatarURL;
+  final String? avatarName;
+  final TextInputType? keyboardType;
+  final VoidCallback? onAvatarTap;
 
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Styles.c_F4F5F7,
-        appBar: AppBar(
-          backgroundColor: Styles.c_F4F5F7,
-          elevation: 0,
-          scrolledUnderElevation: 0,
+        appBar: GlassAppBar(
           automaticallyImplyLeading: false,
           leading: IconButton(
             onPressed: Get.back,
@@ -27,7 +50,7 @@ class SetFriendRemarkPage extends StatelessWidget {
           ),
           actions: [
             TextButton(
-              onPressed: logic.save,
+              onPressed: onSave,
               child: Text(StrRes.determine,
                   style: TextStyle(color: Styles.c_0089FF, fontSize: 16.sp)),
             ),
@@ -41,20 +64,24 @@ class SetFriendRemarkPage extends StatelessWidget {
             child: Column(children: [
               Center(
                 child: AvatarView(
-                  url: logic.avatarURL,
-                  text: logic.avatarName,
+                  onTap: onAvatarTap,
+                  url: avatarURL,
+                  text: avatarName,
                   width: 96.w,
                   height: 96.w,
-                  textStyle: TextStyle(color: Colors.white, fontSize: 40.sp),
+                  textStyle: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                      fontSize: 40.sp),
                 ),
               ),
               30.verticalSpace,
               TextField(
-                controller: logic.inputCtrl,
-                maxLength: SetFriendRemarkLogic.maxRemarkLength,
+                controller: controller,
+                maxLength: maxLength,
+                keyboardType: keyboardType,
                 maxLines: 1,
                 textInputAction: TextInputAction.done,
-                onSubmitted: (_) => logic.save(),
+                onSubmitted: (_) => onSave(),
                 style: TextStyle(color: Styles.c_0C1C33, fontSize: 16.sp),
                 decoration: InputDecoration(
                   filled: true,
@@ -64,14 +91,14 @@ class SetFriendRemarkPage extends StatelessWidget {
                   focusedBorder: _border(),
                   counterText: '',
                   suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: logic.inputCtrl,
+                    valueListenable: controller,
                     builder: (_, value, __) => Padding(
                       padding: EdgeInsets.only(left: 8.w, right: 18.w),
                       child: Center(
                         widthFactor: 1,
                         heightFactor: 1,
                         child: Text(
-                          '${value.text.characters.length}/${SetFriendRemarkLogic.maxRemarkLength}',
+                          '${value.text.characters.length}/$maxLength',
                           style: Styles.ts_8E9AB0_13sp,
                         ),
                       ),

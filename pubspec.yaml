@@ -28,6 +28,8 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  # Pinned for the project Flutter 3.32.8 SDK.
+  liquid_glass_widgets: 0.5.0
   flutter:
     sdk: flutter
   flutter_localizations:
@@ -108,6 +110,9 @@ dependencies:
     path: openim_live
 
 dependency_overrides:
+  # livekit_client 2.5.0+hotfix.3 requires WebRTC-SDK 137.7151.03 on iOS.
+  # flutter_webrtc 1.2.x requires 137.7151.04, which CocoaPods cannot combine.
+  flutter_webrtc: 1.1.0
   uri_to_file:
     path: local_plugin/uri_to_file
 

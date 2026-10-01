@@ -16,6 +16,7 @@ class MinePage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Styles.c_F8F9FA,
       body: SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
         child: Column(
           children: [
             Stack(
@@ -42,6 +43,17 @@ class MinePage extends StatelessWidget {
               onTap: logic.accountSetup,
             ),
             _buildThemeItem(context),
+            AnimatedBuilder(
+              animation: NavigationGlassController.instance,
+              builder: (context, _) => _buildAppearanceItem(
+                context,
+                icon: Icons.blur_on_outlined,
+                label: _themeText(context, '导航玻璃效果', 'Navigation glass'),
+                value: _glassModeLabel(
+                    context, NavigationGlassController.instance.mode),
+                onTap: () => _showGlassPicker(context),
+              ),
+            ),
             _buildItemView(
               icon: ImageRes.aboutUs,
               label: StrRes.aboutUs,
@@ -70,6 +82,7 @@ class MinePage extends StatelessWidget {
         child: Row(
           children: [
             AvatarView(
+              onTap: logic.openPhotoSheet,
               url: logic.imLogic.userInfo.value.faceURL,
               text: logic.imLogic.userInfo.value.nickname,
               width: 48.w,
@@ -83,7 +96,8 @@ class MinePage extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   (logic.imLogic.userInfo.value.nickname ?? '').toText
-                    ..style = Styles.ts_0C1C33_17sp_medium,
+                    ..style = Styles.ts_0C1C33_17sp_medium
+                    ..onTap = logic.editMyName,
                   4.verticalSpace,
                   GestureDetector(
                     behavior: HitTestBehavior.translucent,
@@ -109,25 +123,40 @@ class MinePage extends StatelessWidget {
   String _themeText(BuildContext context, String zh, String en) =>
       Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
 
-  Widget _buildThemeItem(BuildContext context) => Container(
+  Widget _buildThemeItem(BuildContext context) => _buildAppearanceItem(
+        context,
+        icon: Icons.brightness_6_outlined,
+        label: _themeText(context, '外观', 'Appearance'),
+        value: _modeLabel(context, AppThemeController.instance.mode),
+        onTap: () => _showThemePicker(context),
+      );
+
+  Widget _buildAppearanceItem(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) =>
+      Container(
         margin: EdgeInsets.symmetric(horizontal: 16.w),
         color: Styles.c_FFFFFF,
         child: InkWell(
-          onTap: () => _showThemePicker(context),
+          onTap: onTap,
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.w),
             child: SizedBox(
               height: 56.h,
               child: Row(
                 children: [
-                  Icon(Icons.brightness_6_outlined,
-                      size: 24.w, color: Styles.c_0C1C33),
+                  Icon(icon, size: 24.w, color: Styles.c_0C1C33),
                   11.horizontalSpace,
-                  Text(_themeText(context, '外观', 'Appearance'),
-                      style: Styles.ts_0C1C33_17sp),
-                  const Spacer(),
-                  Text(_modeLabel(context, AppThemeController.instance.mode),
-                      style: Styles.ts_8E9AB0_14sp),
+                  Expanded(
+                      child: Text(label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Styles.ts_0C1C33_17sp)),
+                  Text(value, style: Styles.ts_8E9AB0_14sp),
                   const Icon(Icons.chevron_right),
                 ],
               ),
@@ -135,6 +164,43 @@ class MinePage extends StatelessWidget {
           ),
         ),
       );
+
+  String _glassModeLabel(BuildContext context, NavigationGlassMode mode) =>
+      switch (mode) {
+        NavigationGlassMode.automatic => _themeText(context, '自动', 'Automatic'),
+        NavigationGlassMode.liquid =>
+          _themeText(context, '液态玻璃', 'Liquid glass'),
+        NavigationGlassMode.translucent =>
+          _themeText(context, '普通半透明', 'Translucent'),
+      };
+
+  void _showGlassPicker(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          for (final mode in NavigationGlassMode.values)
+            ListTile(
+              title: Text(_glassModeLabel(sheetContext, mode)),
+              subtitle: mode == NavigationGlassMode.automatic
+                  ? Text(_themeText(sheetContext, 'Android 优先流畅，使用普通半透明效果',
+                      'Uses translucent navigation on Android for smooth scrolling'))
+                  : null,
+              selected: mode == NavigationGlassController.instance.mode,
+              trailing: mode == NavigationGlassController.instance.mode
+                  ? Icon(Icons.check,
+                      color: Theme.of(sheetContext).colorScheme.primary)
+                  : null,
+              onTap: () {
+                NavigationGlassController.instance.setMode(mode);
+                Navigator.pop(sheetContext);
+              },
+            ),
+        ]),
+      ),
+    );
+  }
 
   String _modeLabel(BuildContext context, ThemeMode mode) => switch (mode) {
         ThemeMode.system => _themeText(context, '跟随系统', 'System'),
