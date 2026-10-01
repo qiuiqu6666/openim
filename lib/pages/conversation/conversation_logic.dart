@@ -14,6 +14,8 @@ import '../contacts/add_by_search/add_by_search_logic.dart';
 import '../home/home_logic.dart';
 
 class ConversationLogic extends GetxController {
+  static const int _receiveMessages = 0;
+  static const int _receiveWithoutNotification = 2;
   final popCtrl = CustomPopupMenuController();
   final list = <ConversationInfo>[].obs;
   final imLogic = Get.find<IMController>();
@@ -171,6 +173,36 @@ class ConversationLogic extends GetxController {
 
   bool existUnreadMsg(ConversationInfo info) {
     return getUnreadCount(info) > 0;
+  }
+
+  bool isNotDisturb(ConversationInfo info) =>
+      info.recvMsgOpt == _receiveWithoutNotification;
+
+  Future<void> setPinned(ConversationInfo info, bool pinned) async {
+    try {
+      await OpenIM.iMManager.conversationManager.setConversation(
+        info.conversationID,
+        ConversationReq(isPinned: pinned),
+      );
+      info.isPinned = pinned;
+      _sortConversationList();
+      list.refresh();
+    } catch (error) {
+      IMViews.showToast(error.toString());
+    }
+  }
+
+  Future<void> setNotDisturb(ConversationInfo info, bool enabled) async {
+    try {
+      await OpenIM.iMManager.conversationManager.setConversation(
+        info.conversationID,
+        ConversationReq(recvMsgOpt: enabled ? _receiveWithoutNotification : _receiveMessages),
+      );
+      info.recvMsgOpt = enabled ? _receiveWithoutNotification : _receiveMessages;
+      list.refresh();
+    } catch (error) {
+      IMViews.showToast(error.toString());
+    }
   }
 
   bool isUserGroup(int index) => list.elementAt(index).isGroupChat;

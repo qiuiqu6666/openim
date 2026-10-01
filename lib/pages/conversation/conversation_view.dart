@@ -14,6 +14,38 @@ class ConversationPage extends StatelessWidget {
 
   ConversationPage({super.key});
 
+  void _showConversationActions(BuildContext context, ConversationInfo info) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.push_pin_outlined),
+              title: Text(info.isPinned == true ? StrRes.cancelTop : StrRes.topChat),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                logic.setPinned(info, info.isPinned != true);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications_off_outlined),
+              title: Text(StrRes.notDisturbMode),
+              trailing: logic.isNotDisturb(info)
+                  ? const Icon(Icons.check, color: Colors.blue)
+                  : null,
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                logic.setNotDisturb(info, !logic.isNotDisturb(info));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Obx(() => Scaffold(
@@ -58,7 +90,8 @@ class ConversationPage extends StatelessWidget {
             children: [
               Expanded(
                   child: ListView.builder(
-                    itemBuilder: (_, index) => _buildItemView(
+                    itemBuilder: (context, index) => _buildItemView(
+                      context,
                       logic.list.elementAt(index),
                     ),
                     itemCount: logic.list.length,
@@ -70,9 +103,10 @@ class ConversationPage extends StatelessWidget {
         ));
   }
 
-  Widget _buildItemView(ConversationInfo info) => Ink(
+  Widget _buildItemView(BuildContext context, ConversationInfo info) => Ink(
         child: InkWell(
           onTap: () => logic.toChat(conversationInfo: info),
+          onLongPress: () => _showConversationActions(context, info),
           child: Stack(
             children: [
               Container(
@@ -106,6 +140,14 @@ class ConversationPage extends StatelessWidget {
                                   ..maxLines = 1
                                   ..overflow = TextOverflow.ellipsis,
                               ),
+                              if (info.isPinned == true) ...[
+                                5.horizontalSpace,
+                                Icon(Icons.push_pin, size: 15.w, color: Styles.c_8E9AB0),
+                              ],
+                              if (logic.isNotDisturb(info)) ...[
+                                5.horizontalSpace,
+                                Icon(Icons.notifications_off_outlined, size: 15.w, color: Styles.c_8E9AB0),
+                              ],
                               const Spacer(),
                               logic.getTime(info).toText..style = Styles.ts_8E9AB0_12sp,
                             ],
