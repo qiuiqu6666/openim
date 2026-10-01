@@ -266,6 +266,8 @@ const Map<String, String> zh_CN = {
   "youMuted": '你已被禁言',
   "groupMuted": '已开启群禁言',
   "notDisturbMode": '勿扰模式',
+  'enableConversationMute': '开启勿扰',
+  'disableConversationMute': '取消勿扰',
   "allowRing": '新消息提示音',
   "allowVibrate": '新消息震动',
   'forbidAddMeToFriend': '禁止加我为好友',

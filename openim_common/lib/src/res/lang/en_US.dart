@@ -273,6 +273,8 @@ const Map<String, String> en_US = {
   "youMuted": 'You have been muted',
   "groupMuted": 'Group Muted',
   "notDisturbMode": 'Do Not Disturb Mode',
+  'enableConversationMute': 'Mute',
+  'disableConversationMute': 'Unmute',
   "allowRing": 'New Message Sound',
   "allowVibrate": 'New Message Vibration',
   'forbidAddMeToFriend': 'Disallow Add Me as a Friend',

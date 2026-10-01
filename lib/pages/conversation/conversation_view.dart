@@ -133,7 +133,9 @@ class ConversationPage extends StatelessWidget {
           onPressed: (_) => logic.setNotDisturb(info, !logic.isNotDisturb(info)),
           color: const Color(0xFF8E9AB0),
           icon: logic.isNotDisturb(info) ? Icons.notifications_active_outlined : Icons.notifications_off_outlined,
-          label: StrRes.notDisturbMode,
+          label: logic.isNotDisturb(info)
+              ? StrRes.disableConversationMute
+              : StrRes.enableConversationMute,
         ),
         _swipeAction(
           onPressed: (_) => logic.setPinned(info, info.isPinned != true),

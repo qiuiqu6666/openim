@@ -552,6 +552,10 @@ class StrRes {
 
   static String get notDisturbMode => 'notDisturbMode'.tr;
 
+  static String get enableConversationMute => 'enableConversationMute'.tr;
+
+  static String get disableConversationMute => 'disableConversationMute'.tr;
+
   static String get allowRing => 'allowRing'.tr;
 
   static String get allowVibrate => 'allowVibrate'.tr;

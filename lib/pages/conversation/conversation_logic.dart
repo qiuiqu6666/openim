@@ -185,6 +185,12 @@ class ConversationLogic extends GetxController {
         ConversationReq(isPinned: pinned),
       );
       info.isPinned = pinned;
+      for (final conversation in list) {
+        if (conversation.conversationID == info.conversationID) {
+          conversation.isPinned = pinned;
+          break;
+        }
+      }
       _sortConversationList();
       list.refresh();
     } catch (error) {
@@ -199,6 +205,12 @@ class ConversationLogic extends GetxController {
         ConversationReq(recvMsgOpt: enabled ? _receiveWithoutNotification : _receiveMessages),
       );
       info.recvMsgOpt = enabled ? _receiveWithoutNotification : _receiveMessages;
+      for (final conversation in list) {
+        if (conversation.conversationID == info.conversationID) {
+          conversation.recvMsgOpt = info.recvMsgOpt;
+          break;
+        }
+      }
       list.refresh();
     } catch (error) {
       IMViews.showToast(error.toString());
