@@ -121,8 +121,11 @@ flutter:
   # To add assets to your package, add an assets section, like this:
   assets:
     - assets/images/
+    - assets/images/chat_backgrounds/
+    - assets/profile_icons/
     - assets/anim/
     - assets/audio/
+    - assets/audio/99chat/
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
   #

@@ -38,7 +38,7 @@ class WaterMarkBgView extends StatelessWidget {
         alignment: Alignment.center,
         fit: StackFit.expand,
         children: [
-          if (path?.isNotEmpty == true) Image.file(File(path!), fit: BoxFit.cover),
+          if (path?.isNotEmpty == true) _buildBackground(path!),
           if (text.isNotEmpty) _buildWaterMarkTextView(context: context),
           Column(
             children: [
@@ -65,6 +65,33 @@ class WaterMarkBgView extends StatelessWidget {
           if (null != floatView) floatView!,
         ],
       ),
+    );
+  }
+
+  Widget _buildBackground(String value) {
+    if (value.startsWith('color:')) {
+      var hex = value.substring('color:'.length).replaceAll('#', '');
+      if (hex.length == 6) hex = 'ff$hex';
+      final parsed = int.tryParse(hex, radix: 16);
+      return ColoredBox(color: Color(parsed ?? 0xFFF3F5F8));
+    }
+    if (value.startsWith('asset:')) {
+      final assetPath = value.substring('asset:'.length);
+      return Image.asset(
+        assetPath,
+        package: 'openim_common',
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      );
+    }
+    final filePath = value.startsWith('file:')
+        ? value.substring('file:'.length)
+        : value;
+    if (filePath.isEmpty) return const SizedBox.shrink();
+    return Image.file(
+      File(filePath),
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
     );
   }
 

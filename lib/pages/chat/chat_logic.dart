@@ -34,6 +34,7 @@ import '../contacts/contacts_logic.dart';
 import '../contacts/group_profile_panel/group_profile_panel_logic.dart';
 import 'mention_id.dart';
 import '../conversation/conversation_logic.dart';
+import '../mine/settings/chat_background_local_service.dart';
 import 'personal_sticker_store.dart';
 import 'sticker_video_message.dart';
 import 'group_setup/group_member_list/group_member_list_logic.dart';
@@ -1584,12 +1585,26 @@ class ChatLogic extends SuperController {
     }
   }
 
-  void _initChatConfig() async {
+  void _initChatConfig() {
     scaleFactor.value = DataSp.getChatFontSizeFactor();
-    var path = DataSp.getChatBackground(otherId) ?? '';
-    if (path.isNotEmpty && (await File(path).exists())) {
-      background.value = path;
+    unawaited(reloadChatBackground());
+  }
+
+  Future<void> reloadChatBackground() async {
+    var direct = ChatBackgroundLocalService.direct(otherId);
+    if (direct != null && !ChatBackgroundLocalService.isUsable(direct)) {
+      await ChatBackgroundLocalService.clear(otherId);
+      direct = null;
     }
+
+    var value = direct ?? ChatBackgroundLocalService.global();
+    if (value != null && !ChatBackgroundLocalService.isUsable(value)) {
+      await ChatBackgroundLocalService.clear(
+        ChatBackgroundLocalService.globalConversationId,
+      );
+      value = null;
+    }
+    if (!isClosed) background.value = value ?? '';
   }
 
   String get otherId => isSingleChat ? userID! : groupID!;

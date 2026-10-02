@@ -1,202 +1,57 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as glass;
 import 'package:openim_common/openim_common.dart';
 import 'package:persistent_bottom_nav_bar_v2/persistent_bottom_nav_bar_v2.dart';
 
-/// Adapts the existing persistent tabs to the package's liquid glass tab bar.
+/// OpenIM tab host rendered with the same bottom-navigation visual contract
+/// used by 99chat. The app keeps OpenIM's existing tab set; only presentation
+/// is aligned here.
 class GlassBottomNavBar extends StatelessWidget {
   const GlassBottomNavBar({super.key, required this.config});
 
   final NavBarConfig config;
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-        animation: NavigationGlassController.instance,
-        builder: (context, _) => ColoredBox(
-          color: NavigationGlassTokens.backgroundColor(context),
-          child: Padding(
-            padding: const EdgeInsets.only(top: NavigationGlassTokens.gap),
-            child: _buildBar(context),
-          ),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final background = AppTokens.surface(dark: dark);
+    final inactive = AppTokens.textSecondary(dark: dark);
 
-  Widget _buildBar(BuildContext context) {
-    final theme = Theme.of(context);
-    if (NavigationGlassController.instance.usesTranslucent(context)) {
-      return _buildTranslucentBar(context);
-    }
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    return CupertinoTheme(
-      data: CupertinoTheme.of(context).copyWith(brightness: theme.brightness),
+    return ColoredBox(
+      color: background,
       child: SafeArea(
         top: false,
-        child: glass.GlassBottomBar(
-          tabs: [
-            for (final item in config.items)
-              glass.GlassBottomBarTab(
-                icon: item.inactiveIcon,
-                activeIcon: item.icon,
-                label: item.title ?? '',
+        child: SizedBox(
+          height: kBottomNavigationBarHeight,
+          child: MediaQuery.removePadding(
+            context: context,
+            removeBottom: true,
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                splashFactory: NoSplash.splashFactory,
+                highlightColor: Colors.transparent,
+                splashColor: Colors.transparent,
+                hoverColor: Colors.transparent,
               ),
-          ],
-          selectedIndex: config.selectedIndex,
-          onTabSelected: config.onItemSelected,
-          horizontalPadding: NavigationGlassTokens.inset,
-          verticalPadding: 0,
-          barHeight: NavigationGlassTokens.height(context),
-          barBorderRadius: NavigationGlassTokens.radius,
-          tabPadding: NavigationGlassTokens.tabPadding,
-          iconSize: NavigationGlassTokens.iconSize,
-          iconLabelSpacing: NavigationGlassTokens.iconLabelGap,
-          // The package applies 0.5 opacity to its resting indicator.
-          indicatorColor: theme.colorScheme.primary
-              .withValues(alpha: NavigationGlassTokens.selectionOpacity * 2),
-          selectedIconColor: Styles.c_0089FF,
-          unselectedIconColor: theme.colorScheme.onSurfaceVariant,
-          // Standard-quality rendering generates a rim from refraction and
-          // specular light even without a Flutter border. Keep the base plain;
-          // the moving indicator retains its separate glass settings below.
-          glassSettings: NavigationGlassTokens.settings(context).copyWith(
-            refractiveIndex: 0,
-            lightIntensity: 0,
-          ),
-          indicatorSettings:
-              NavigationGlassTokens.settings(context, tint: Colors.transparent),
-          quality: NavigationGlassTokens.quality,
-          glowDuration:
-              reduceMotion ? Duration.zero : NavigationGlassTokens.duration,
-          maskingQuality: reduceMotion
-              ? glass.MaskingQuality.off
-              : glass.MaskingQuality.high,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTranslucentBar(BuildContext context) {
-    final theme = Theme.of(context);
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: NavigationGlassTokens.inset,
-        ),
-        child: LiquidGlassSurface(
-          surface: NavigationGlassSurface.bottom,
-          borderRadius: BorderRadius.circular(NavigationGlassTokens.radius),
-          child: SizedBox(
-            height: NavigationGlassTokens.height(context),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.all(NavigationGlassTokens.gap / 2),
-                    child: AnimatedAlign(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : NavigationGlassTokens.duration,
-                      curve: Curves.easeOutCubic,
-                      alignment: Alignment(
-                        config.items.length == 1
-                            ? 0
-                            : -1 +
-                                2 *
-                                    config.selectedIndex /
-                                    (config.items.length - 1),
-                        0,
-                      ),
-                      child: FractionallySizedBox(
-                        widthFactor: 1 / config.items.length,
-                        heightFactor: 1,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color:
-                                NavigationGlassTokens.selectionColor(context),
-                            border: Border.all(
-                              color: theme.colorScheme.primary.withValues(
-                                alpha: NavigationGlassTokens
-                                    .selectionBorderOpacity,
-                              ),
-                            ),
-                            borderRadius: BorderRadius.circular(
-                                NavigationGlassTokens.radius * 2),
-                          ),
-                        ),
-                      ),
+              child: BottomNavigationBar(
+                items: [
+                  for (var index = 0; index < config.items.length; index++)
+                    BottomNavigationBarItem(
+                      icon: config.selectedIndex == index
+                          ? config.items[index].icon
+                          : config.items[index].inactiveIcon,
+                      label: config.items[index].title ?? '',
                     ),
-                  ),
-                ),
-                Material(
-                  type: MaterialType.transparency,
-                  child: Padding(
-                    padding: NavigationGlassTokens.tabPadding,
-                    child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (var index = 0;
-                              index < config.items.length;
-                              index++)
-                            Expanded(
-                              child: Semantics(
-                                button: true,
-                                selected: config.selectedIndex == index,
-                                label: config.items[index].title,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(
-                                      NavigationGlassTokens.radius),
-                                  onTap: () => config.onItemSelected(index),
-                                  child: ExcludeSemantics(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      spacing:
-                                          NavigationGlassTokens.iconLabelGap,
-                                      children: [
-                                        IconTheme(
-                                          data: IconThemeData(
-                                            size:
-                                                NavigationGlassTokens.iconSize,
-                                            color: config.selectedIndex == index
-                                                ? Styles.c_0089FF
-                                                : theme.colorScheme
-                                                    .onSurfaceVariant,
-                                          ),
-                                          child: SizedBox(
-                                            height:
-                                                NavigationGlassTokens.iconSize,
-                                            child: config.selectedIndex == index
-                                                ? config.items[index].icon
-                                                : config
-                                                    .items[index].inactiveIcon,
-                                          ),
-                                        ),
-                                        Text(
-                                          config.items[index].title ?? '',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          textAlign: TextAlign.center,
-                                          style:
-                                              NavigationGlassTokens.labelStyle(
-                                                  context).copyWith(
-                                                color: config.selectedIndex == index
-                                                    ? Styles.c_0089FF
-                                                    : theme.colorScheme.onSurfaceVariant,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ]),
-                  ),
-                ),
-              ],
+                ],
+                currentIndex: config.selectedIndex,
+                type: BottomNavigationBarType.fixed,
+                selectedFontSize: 11,
+                unselectedFontSize: 11,
+                selectedItemColor: AppTokens.accent,
+                unselectedItemColor: inactive,
+                backgroundColor: background,
+                elevation: 0,
+                onTap: config.onItemSelected,
+              ),
             ),
           ),
         ),

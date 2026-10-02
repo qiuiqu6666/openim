@@ -16,17 +16,21 @@ class HomePage extends StatelessWidget {
   final conversationLogic = Get.find<ConversationLogic>();
   HomePage({super.key});
 
-  List<PersistentTabConfig> _tabs(BuildContext context) => [
+  List<PersistentTabConfig> _tabs(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final selectedColor = AppTokens.accent;
+    final inactiveColor = AppTokens.textSecondary(dark: dark);
+    return [
         PersistentTabConfig(
           screen: ThemeAwarePage(builder: (_) => ConversationPage()),
           item: ItemConfig(
             icon: _setupIcon(
                 _navIcon('nav_chat_active_99chat.png',
-                    Styles.c_0089FF),
+                    selectedColor),
                 () => _unreadCount(groupChats: false)),
             inactiveIcon: _setupIcon(
                 _navIcon('nav_chat_99chat.png',
-                    Theme.of(context).colorScheme.onSurfaceVariant),
+                    inactiveColor),
                 () => _unreadCount(groupChats: false)),
             title: StrRes.singleChat,
             textStyle: Styles.ts_0089FF_10sp_semibold,
@@ -38,11 +42,11 @@ class HomePage extends StatelessWidget {
           item: ItemConfig(
             icon: _setupIcon(
                 _navIcon('nav_group_conv_99chat.png',
-                    Styles.c_0089FF),
+                    selectedColor),
                 () => _unreadCount(groupChats: true)),
             inactiveIcon: _setupIcon(
                 _navIcon('nav_group_conv_99chat.png',
-                    Theme.of(context).colorScheme.onSurfaceVariant),
+                    inactiveColor),
                 () => _unreadCount(groupChats: true)),
             title: StrRes.groupChat,
             textStyle: Styles.ts_0089FF_10sp_semibold,
@@ -53,11 +57,11 @@ class HomePage extends StatelessWidget {
           item: ItemConfig(
             icon: _setupIcon(
                 _navIcon('nav_contact_active_99chat.png',
-                    Styles.c_0089FF),
+                    selectedColor),
                 () => logic.unhandledCount.value),
             inactiveIcon: _setupIcon(
                 _navIcon('nav_contact_99chat.png',
-                    Theme.of(context).colorScheme.onSurfaceVariant),
+                    inactiveColor),
                 () => logic.unhandledCount.value),
             title: StrRes.contacts,
             textStyle: Styles.ts_0089FF_10sp_semibold,
@@ -67,14 +71,15 @@ class HomePage extends StatelessWidget {
           screen: ThemeAwarePage(builder: (_) => MinePage()),
           item: ItemConfig(
             icon: _navIcon('nav_profile_active_99chat.png',
-                Styles.c_0089FF),
+                selectedColor),
             inactiveIcon: _navIcon('nav_profile_99chat.png',
-                Theme.of(context).colorScheme.onSurfaceVariant),
+                inactiveColor),
             title: StrRes.mine,
             textStyle: Styles.ts_0089FF_10sp_semibold,
           ),
         ),
       ];
+  }
 
   int _unreadCount({required bool groupChats}) => conversationLogic.list
       .where((info) =>

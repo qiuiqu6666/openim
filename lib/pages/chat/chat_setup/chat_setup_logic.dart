@@ -1,7 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
-
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -11,6 +8,7 @@ import '../../../core/controller/im_controller.dart';
 import '../../../routes/app_navigator.dart';
 import '../chat_logic.dart';
 import '../../conversation/conversation_logic.dart';
+import '../../mine/settings/pages/chat_background_page.dart';
 import 'chat_history_search_page.dart';
 
 class ChatSetupLogic extends GetxController {
@@ -55,17 +53,14 @@ class ChatSetupLogic extends GetxController {
       Get.to(() => ChatHistorySearchPage(conversationID: conversationID));
 
   Future<void> setBackground() async {
-    try {
-      final image = await ImagePicker().pickImage(source: ImageSource.gallery);
-      if (image == null || isClosed) return;
-      final path =
-          '${Config.cachePath}/chat_background_${DateTime.now().microsecondsSinceEpoch}.jpg';
-      await File(image.path).copy(path);
-      await DataSp.putChatBackground(chatLogic.otherId, path);
-      chatLogic.background.value = path;
-    } catch (_) {
-      IMViews.showToast(StrRes.saveFailed);
-    }
+    await Get.to(
+      () => ChatBackgroundPage(
+        conversationId: chatLogic.otherId,
+        conversationName:
+            conversationInfo.value.showName ?? chatLogic.nickname.value,
+      ),
+    );
+    if (!isClosed) await chatLogic.reloadChatBackground();
   }
 
   Future<void> clearHistory() async {
