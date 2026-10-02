@@ -10,6 +10,10 @@ class SendVerificationApplicationLogic extends GetxController {
   final inputCtrl = TextEditingController();
   String? userID;
   String? groupID;
+  String? friendGroupID;
+  FriendAddSource addSource = FriendAddSource.chat;
+  Map<String, String> friendAddFields = const {};
+  bool _sending = false;
   JoinGroupMethod? joinGroupMethod;
 
   bool get isEnterGroup => groupID != null;
@@ -20,6 +24,11 @@ class SendVerificationApplicationLogic extends GetxController {
   void onInit() {
     userID = Get.arguments['userID'];
     groupID = Get.arguments['groupID'];
+    friendGroupID = Get.arguments['friendGroupID'];
+    friendAddFields =
+        Map<String, String>.from(Get.arguments['friendAddFields'] ?? {});
+    addSource = resolveFriendAddSource(Get.arguments['addSource'],
+        groupID: friendGroupID);
     joinGroupMethod = Get.arguments['joinGroupMethod'];
     super.onInit();
   }
@@ -33,23 +42,37 @@ class SendVerificationApplicationLogic extends GetxController {
   }
 
   _applyAddFriend() async {
+    if (_sending) return;
+    _sending = true;
     try {
       await LoadingView.singleton.wrap(
-        asyncFunction: () => OpenIM.iMManager.friendshipManager.addFriend(
+        asyncFunction: () => FriendAddRequest.send(
           userID: userID!,
           reason: inputCtrl.text.trim(),
+          source: addSource,
+          groupID: friendGroupID,
+          fields: friendAddFields,
         ),
       );
+      if (isClosed) return;
       Get.back();
       IMViews.showToast(StrRes.sendSuccessfully);
-    } catch (_) {
-      if (_ is PlatformException) {
-        if (_.code == '${SDKErrorCode.refuseToAddFriends}') {
+    } catch (error) {
+      final message = friendAddErrorMessage(error,
+          chinese: Get.locale?.languageCode == 'zh');
+      if (message != null) {
+        IMViews.showToast(message);
+        return;
+      }
+      if (error is PlatformException) {
+        if (error.code == '${SDKErrorCode.refuseToAddFriends}') {
           IMViews.showToast(StrRes.canNotAddFriends);
           return;
         }
       }
       IMViews.showToast(StrRes.sendFailed);
+    } finally {
+      _sending = false;
     }
   }
 

@@ -16,6 +16,7 @@ class DataSp {
 
   static const _screenPassword = '%s_screenPassword';
   static const _enabledBiometric = '%s_enabledBiometric';
+  static const _enabledBiometricPay = '%s_enabledBiometricPay';
   static const _chatFontSizeFactor = '%s_chatFontSizeFactor';
   static const _chatBackground = '%s_chatBackground_%s';
   static const _loginType = 'loginType';
@@ -141,6 +142,23 @@ class DataSp {
   static bool? isEnabledBiometric() {
     return SpUtil().getBool(getKey(_enabledBiometric), defValue: null);
   }
+
+  static bool isEnabledBiometricPay({String? accountID}) =>
+      SpUtil().getBool(
+          sprintf(_enabledBiometricPay, [accountID ?? OpenIM.iMManager.userID]),
+          defValue: false) ?? false;
+
+  static Future<bool>? setBiometricPay(bool enabled, {String? accountID}) =>
+      SpUtil().putBool(
+          sprintf(_enabledBiometricPay, [accountID ?? OpenIM.iMManager.userID]),
+          enabled);
+
+  static Map? getBiometricSettings(String accountID) =>
+      SpUtil().getObject('${accountID}_biometricSettings');
+
+  static Future<bool>? putBiometricSettings(
+          String accountID, Map<String, dynamic> settings) =>
+      SpUtil().putObject('${accountID}_biometricSettings', settings);
 
   static Future<bool>? closeBiometric() {
     return SpUtil().remove(getKey(_enabledBiometric));

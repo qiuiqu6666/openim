@@ -8,6 +8,17 @@ import 'mine_profile_localization.dart';
 const _assetPackage = 'openim_common';
 
 class MineHotEcoSection extends StatelessWidget {
+  static const imageProviders = <AssetImage>[
+    AssetImage('assets/images/profile_eco_ai_99chat.webp',
+        package: _assetPackage),
+    AssetImage('assets/images/profile_eco_shop_99chat.webp',
+        package: _assetPackage),
+    AssetImage('assets/images/profile_eco_wallet_99chat.webp',
+        package: _assetPackage),
+    AssetImage('assets/images/profile_eco_community_99chat.webp',
+        package: _assetPackage),
+  ];
+
   const MineHotEcoSection({
     super.key,
     required this.primaryTextColor,
@@ -69,7 +80,8 @@ class MineHotEcoSection extends StatelessWidget {
                 height: sectionWidth * 0.11,
                 child: Row(
                   children: [
-                    Text('🔥', style: TextStyle(fontSize: sectionWidth * 0.046)),
+                    Text('🔥',
+                        style: TextStyle(fontSize: sectionWidth * 0.046)),
                     SizedBox(width: sectionWidth * 0.018),
                     Expanded(
                       child: Text(
@@ -231,7 +243,8 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final enabled = TickerMode.of(context) && (ModalRoute.of(context)?.isCurrent ?? true);
+    final enabled =
+        TickerMode.of(context) && (ModalRoute.of(context)?.isCurrent ?? true);
     if (_tickerModeEnabled == enabled) return;
     _tickerModeEnabled = enabled;
     _syncAnimationWork();
@@ -289,6 +302,7 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
                           package: _assetPackage,
                           fit: BoxFit.cover,
                           alignment: Alignment.center,
+                          gaplessPlayback: true,
                         ),
                       ),
                       _MineHotEcoLightSweep(animation: _sweep),
@@ -302,10 +316,12 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
                               width: tileWidth * 0.16,
                               height: tileWidth * 0.16,
                               decoration: BoxDecoration(
-                                color: AppTokens.onAccent.withValues(alpha: 0.35),
+                                color:
+                                    AppTokens.onAccent.withValues(alpha: 0.35),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: AppTokens.onAccent.withValues(alpha: 0.75),
+                                  color: AppTokens.onAccent
+                                      .withValues(alpha: 0.75),
                                   width: tileWidth * 0.0096,
                                 ),
                               ),

@@ -1,3 +1,4 @@
+import 'package:openim/pages/mine/settings/widgets/account_code_request.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/login/login_logic.dart';
@@ -49,7 +50,7 @@ class RegisterLogic extends GetxController {
     if (null != code) areaCode.value = code;
   }
 
-  Future<bool> requestVerificationCode() => Apis.requestVerificationCode(
+  Future<bool> requestVerificationCode() => requestAccountVerificationCode(
         areaCode: areaCode.value,
         phoneNumber: phone,
         email: email,
@@ -68,9 +69,7 @@ class RegisterLogic extends GetxController {
       IMViews.showToast(StrRes.plsEnterRightEmail);
       return;
     }
-    final success = await LoadingView.singleton.wrap(
-      asyncFunction: () => requestVerificationCode(),
-    );
+    final success = await requestVerificationCode();
     if (success) {
       AppNavigator.startVerifyPhone(
         areaCode: areaCode.value,

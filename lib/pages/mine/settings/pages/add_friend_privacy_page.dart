@@ -5,7 +5,7 @@ import '../settings_draft_store.dart';
 import '../settings_service.dart';
 import '../widgets/settings_widgets.dart';
 
-class AddFriendPrivacyPage extends StatelessWidget {
+class AddFriendPrivacyPage extends StatefulWidget {
   const AddFriendPrivacyPage({
     super.key,
     required this.store,
@@ -15,35 +15,72 @@ class AddFriendPrivacyPage extends StatelessWidget {
   final SettingsDraftStore store;
   final SettingsService service;
 
-  Future<void> _updateDiscovery(
-    BuildContext context, {
+  @override
+  State<AddFriendPrivacyPage> createState() => _AddFriendPrivacyPageState();
+}
+
+class _AddFriendPrivacyPageState extends State<AddFriendPrivacyPage> {
+  SettingsDraftStore get store => widget.store;
+  SettingsService get service => widget.service;
+  bool _saving = false;
+
+  Future<void> _updateDiscovery({
     bool? qrCode,
     bool? businessCard,
     bool? group,
     bool? phone,
     bool? uid,
+    bool? account,
+    bool? email,
   }) async {
-    if (!service.isBackendAvailable) {
+    if (_saving) return;
+    if (!service.supportsFriendPermissions || !store.friendPermissionsLoaded) {
       showUnavailableSettingsAction(
         context,
         settingsText(context, zh: '添加我的方式', en: 'Ways to find me'),
       );
       return;
     }
-    await service.updateFriendDiscovery(
-      qrCode: qrCode,
-      businessCard: businessCard,
-      group: group,
-      phone: phone,
-      uid: uid,
-    );
-    store.setFriendDiscovery(
-      qrCode: qrCode,
-      businessCard: businessCard,
-      group: group,
-      phone: phone,
-      uid: uid,
-    );
+    setState(() {
+      _saving = true;
+    });
+    try {
+      await service.updateFriendDiscovery(
+        qrCode: qrCode,
+        businessCard: businessCard,
+        group: group,
+        phone: phone,
+        uid: uid,
+        account: account,
+        email: email,
+      );
+      if (!mounted) return;
+      store.setFriendDiscovery(
+        qrCode: qrCode,
+        businessCard: businessCard,
+        group: group,
+        phone: phone,
+        uid: uid,
+        account: account,
+        email: email,
+      );
+      showSettingsMessage(
+          context, settingsText(context, zh: '已保存', en: 'Saved'));
+    } catch (error) {
+      if (mounted) {
+        showSettingsError(
+            context,
+            error,
+            settingsText(context,
+                zh: '保存失败，请重试', en: 'Could not save. Retry.'));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
   }
 
   @override
@@ -80,7 +117,8 @@ class AddFriendPrivacyPage extends StatelessWidget {
                       en: 'Allow adding me via my QR code',
                     ),
                     value: store.allowQrCode,
-                    onChanged: (v) => _updateDiscovery(context, qrCode: v),
+                    onChanged:
+                        _saving ? null : (v) => _updateDiscovery(qrCode: v),
                   ),
                   _PrivacySwitchCell(
                     title: settingsText(context, zh: '名片', en: 'Contact Card'),
@@ -90,7 +128,9 @@ class AddFriendPrivacyPage extends StatelessWidget {
                       en: 'Allow adding me via shared contact cards',
                     ),
                     value: store.allowBusinessCard,
-                    onChanged: (v) => _updateDiscovery(context, businessCard: v),
+                    onChanged: _saving
+                        ? null
+                        : (v) => _updateDiscovery(businessCard: v),
                   ),
                   _PrivacySwitchCell(
                     title: settingsText(context, zh: '群聊', en: 'Group Chat'),
@@ -100,7 +140,8 @@ class AddFriendPrivacyPage extends StatelessWidget {
                       en: 'Allow group members to add me from group chats',
                     ),
                     value: store.allowGroup,
-                    onChanged: (v) => _updateDiscovery(context, group: v),
+                    onChanged:
+                        _saving ? null : (v) => _updateDiscovery(group: v),
                   ),
                   _PrivacySwitchCell(
                     title: settingsText(context, zh: '手机号', en: 'Phone Number'),
@@ -110,7 +151,26 @@ class AddFriendPrivacyPage extends StatelessWidget {
                       en: 'Allow adding me by phone number search',
                     ),
                     value: store.allowPhone,
-                    onChanged: (v) => _updateDiscovery(context, phone: v),
+                    onChanged:
+                        _saving ? null : (v) => _updateDiscovery(phone: v),
+                  ),
+                  _PrivacySwitchCell(
+                    title:
+                        settingsText(context, zh: '公开账号', en: 'Public Account'),
+                    subtitle: settingsText(context,
+                        zh: '允许通过公开账号添加',
+                        en: 'Allow adding me by public account'),
+                    value: store.allowAccount,
+                    onChanged:
+                        _saving ? null : (v) => _updateDiscovery(account: v),
+                  ),
+                  _PrivacySwitchCell(
+                    title: settingsText(context, zh: '邮箱', en: 'Email'),
+                    subtitle: settingsText(context,
+                        zh: '允许通过邮箱搜索添加', en: 'Allow adding me by email'),
+                    value: store.allowEmail,
+                    onChanged:
+                        _saving ? null : (v) => _updateDiscovery(email: v),
                   ),
                   _PrivacySwitchCell(
                     title: settingsText(context, zh: 'UID', en: 'UID'),
@@ -120,7 +180,7 @@ class AddFriendPrivacyPage extends StatelessWidget {
                       en: 'Allow adding me by UID search',
                     ),
                     value: store.allowUid,
-                    onChanged: (v) => _updateDiscovery(context, uid: v),
+                    onChanged: _saving ? null : (v) => _updateDiscovery(uid: v),
                     showDivider: false,
                   ),
                 ],
@@ -189,7 +249,7 @@ class _PrivacySwitchCell extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          SettingsPlatformSwitch(value: value, onChanged: onChanged),
+          AppSwitch(value: value, onChanged: onChanged),
         ],
       ),
     );

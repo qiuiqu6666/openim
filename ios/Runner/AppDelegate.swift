@@ -7,6 +7,8 @@ import FirebaseCore
     
     var replayKitChannel: FlutterMethodChannel! = nil
     var observeTimer: Timer?
+    var inviteChannel: FlutterMethodChannel?
+    var pendingInvite: String?
     var hasEmittedFirstSample = false;
     
     override func application(
@@ -18,6 +20,14 @@ import FirebaseCore
         }
 
         FirebaseApp.configure()
+        pendingInvite = (launchOptions?[.url] as? URL)?.absoluteString
+        inviteChannel = FlutterMethodChannel(name: "openim_friend_invites", binaryMessenger: controller.binaryMessenger)
+        inviteChannel?.setMethodCallHandler { [weak self] call, result in
+            guard call.method == "takeInvite" else { result(FlutterMethodNotImplemented); return }
+            let value = self?.pendingInvite
+            self?.pendingInvite = nil
+            result(value)
+        }
         
         replayKitChannel = FlutterMethodChannel(name: "io.livekit.example.flutter/replaykit-channel",binaryMessenger: controller.binaryMessenger)
         
@@ -30,6 +40,21 @@ import FirebaseCore
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
     
+    override func application(_ app: UIApplication, open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        guard url.scheme == "openim", url.host == "user" else {
+            return super.application(app, open: url, options: options)
+        }
+        let value = url.absoluteString
+        pendingInvite = value
+        inviteChannel?.invokeMethod("openInvite", arguments: value) { [weak self] result in
+            if result as? Bool == true && self?.pendingInvite == value {
+                self?.pendingInvite = nil
+            }
+        }
+        return true
+    }
+
     func handleReplayKitFromFlutter(result:FlutterResult, call: FlutterMethodCall){
         switch (call.method) {
         case "startReplayKit":

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -18,6 +19,26 @@ class ContactsLogic extends GetxController
     with WidgetsBindingObserver
     implements ViewUserProfileBridge, SelectContactsBridge, ScanBridge {
   final imLogic = Get.find<IMController>();
+  static const _inviteChannel = MethodChannel('openim_friend_invites');
+
+  Future<void> _listenForInvites() async {
+    _inviteChannel.setMethodCallHandler((call) async {
+      if (isClosed || call.method != 'openInvite' || call.arguments is! String)
+        return false;
+      final link = call.arguments as String;
+      if (parseFriendInvite(link) == null) return false;
+      scanOutUserID(link);
+      return true;
+    });
+    try {
+      final pending = await _inviteChannel.invokeMethod<String>('takeInvite');
+      if (!isClosed && pending != null && parseFriendInvite(pending) != null)
+        scanOutUserID(pending);
+    } on MissingPluginException {
+      // Desktop platforms can paste invitations into the search entry.
+    }
+  }
+
   final homeLogic = Get.find<HomeLogic>();
 
   final friendApplicationList = <UserInfo>[];
@@ -106,6 +127,7 @@ class ContactsLogic extends GetxController
   @override
   void onReady() {
     super.onReady();
+    unawaited(_listenForInvites());
     loadFriends();
   }
 
@@ -154,6 +176,7 @@ class ContactsLogic extends GetxController
 
   @override
   void onClose() {
+    _inviteChannel.setMethodCallHandler(null);
     WidgetsBinding.instance.removeObserver(this);
     _starSubscription.cancel();
     stars.dispose();
@@ -272,6 +295,18 @@ class ContactsLogic extends GetxController
       );
 
   @override
-  scanOutUserID(String userID) =>
-      AppNavigator.startUserProfilePane(userID: userID, offAndToNamed: true);
+  scanOutUserID(String userID) {
+    final invite = parseFriendInvite(userID);
+    if (invite == null) {
+      IMViews.showToast('邀请已失效，请获取新的邀请');
+      return;
+    }
+    return AppNavigator.startUserProfilePane(
+        userID: invite['userID']!,
+        offAndToNamed: false,
+        addSource: invite['source'] == 'link'
+            ? FriendAddSource.link
+            : FriendAddSource.qrcode,
+        friendAddFields: {'inviteCode': invite['inviteCode']!});
+  }
 }

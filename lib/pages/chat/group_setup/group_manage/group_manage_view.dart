@@ -145,11 +145,7 @@ class GroupManagePage extends StatelessWidget {
                   ]))));
   Widget _toggle(String title,
           {required bool value, required ValueChanged<bool>? onChanged}) =>
-      _row(title,
-          trailing: CupertinoSwitch(
-              value: value,
-              activeTrackColor: Styles.c_0089FF,
-              onChanged: onChanged));
+      _row(title, trailing: AppSwitch(value: value, onChanged: onChanged));
 
   Future<void> _selectJoinRule(BuildContext context, int current) async {
     final draft = current.clamp(0, 2);

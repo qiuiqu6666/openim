@@ -23,7 +23,11 @@ class AddContactsBySearchPage extends StatelessWidget {
           SearchBox(
             focusNode: logic.focusNode,
             controller: logic.searchCtrl,
-            hintText: logic.isSearchUser ? StrRes.searchByPhoneAndUid : StrRes.searchIDAddGroup,
+            hintText: logic.isSearchUser
+                ? (Get.locale?.languageCode == 'zh'
+                    ? '搜索公开账号、手机号或邮箱'
+                    : 'Search public account, phone or email')
+                : StrRes.searchIDAddGroup,
             enabled: true,
             autofocus: true,
             margin: EdgeInsets.symmetric(horizontal: 17.w, vertical: 10.h),

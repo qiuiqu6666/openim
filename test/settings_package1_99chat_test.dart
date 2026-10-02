@@ -99,7 +99,7 @@ void main() {
       currentPhone: '13800138000',
     )));
 
-    expect(find.text('第 1 步  验证当前手机号'), findsOneWidget);
+    expect(find.text('第 1 步  填写旧号验证码'), findsOneWidget);
     expect(find.text('下一步'), findsOneWidget);
     expect(find.text('138****8000'), findsOneWidget);
   });
@@ -111,12 +111,10 @@ void main() {
     await tester.pumpWidget(_host(FriendPermissionPage(store: store)));
 
     for (final text in const [
-      '加我为好友的方式',
+      '允许别人添加我',
       '添加我的方式',
       '黑名单',
-      '最后上线时间',
-      '显示在线状态',
-      '消息阅读状态',
+      '显示上线时间',
     ]) {
       expect(find.text(text), findsOneWidget);
     }
@@ -146,6 +144,7 @@ void main() {
   testWidgets('signed-in devices renders 99chat empty state without fake data',
       (tester) async {
     await tester.pumpWidget(_host(const LoginDevicesPage()));
+    await tester.pumpAndSettle();
     expect(find.text('暂无登录设备'), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
   });
@@ -154,26 +153,28 @@ void main() {
       (tester) async {
     await tester.pumpWidget(_host(const TradePasswordPage()));
     expect(find.text('设置交易密码'), findsOneWidget);
-    expect(find.byKey(const ValueKey('trade-password-pin-dots')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('trade-password-pin-dots')), findsOneWidget);
     expect(find.byKey(const ValueKey('trade-password-keypad')), findsOneWidget);
   });
 
-  testWidgets('trade password keypad keeps 99chat 750-design effective scale',
+  testWidgets('trade password keypad keeps all keys visible and easy to tap',
       (tester) async {
     await tester.pumpWidget(_host(const TradePasswordPage()));
 
     final keypadSize = tester.getSize(
       find.byKey(const ValueKey('trade-password-keypad')),
     );
-    expect(keypadSize.height, lessThan(240));
+    expect(keypadSize.height, lessThan(300));
     expect(find.byKey(const ValueKey('trade-password-key-1')), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('trade-password-key-1'))).height,
-      lessThan(50),
+      greaterThanOrEqualTo(48),
     );
   });
 
-  test('biometric settings entry follows device support, not enrollment state', () {
+  test('biometric settings entry follows device support, not enrollment state',
+      () {
     expect(
       shouldShowBiometricSettingsEntry(
         platformSupported: true,
@@ -193,15 +194,19 @@ void main() {
       (tester) async {
     await tester.pumpWidget(_host(const SettingsScaffold(
       title: '设置',
-      children: [SettingsGroup(children: [SettingsCell(title: '测试')])],
+      children: [
+        SettingsGroup(children: [SettingsCell(title: '测试')])
+      ],
     )));
 
     final list = tester.widget<ListView>(find.byType(ListView).first);
     expect(list.padding, const EdgeInsets.fromLTRB(12, 12, 12, 24));
 
-    final material = tester.widgetList<Material>(find.byType(Material)).firstWhere(
-          (item) => item.borderRadius == BorderRadius.circular(AppTokens.rLg),
-        );
+    final material =
+        tester.widgetList<Material>(find.byType(Material)).firstWhere(
+              (item) =>
+                  item.borderRadius == BorderRadius.circular(AppTokens.rLg),
+            );
     expect(material.clipBehavior, Clip.antiAlias);
     expect(AppTokens.rLg, 14);
   });
@@ -239,7 +244,8 @@ void main() {
     )));
 
     expect(find.text('修改支付密码'), findsOneWidget);
-    expect(find.text('原密码'), findsOneWidget);
+    expect(find.text('验证码'), findsOneWidget);
+    expect(find.text('获取验证码'), findsOneWidget);
     expect(find.text('新密码'), findsOneWidget);
     expect(find.text('确认密码'), findsOneWidget);
     expect(find.text('忘记支付密码？通过短信验证码重置'), findsOneWidget);
@@ -255,7 +261,8 @@ void main() {
     expect(find.text('最近半年'), findsOneWidget);
   });
 
-  testWidgets('node page keeps the two 99chat catalog entries without fake status',
+  testWidgets(
+      'node page keeps the two 99chat catalog entries without fake status',
       (tester) async {
     final store = SettingsDraftStore();
     addTearDown(store.dispose);
@@ -268,7 +275,8 @@ void main() {
     expect(find.text('未知'), findsNWidgets(2));
   });
 
-  testWidgets('profile page exposes the complete 99chat mobile information chain',
+  testWidgets(
+      'profile page exposes the complete 99chat mobile information chain',
       (tester) async {
     final store = SettingsDraftStore()
       ..setProfileNickname('Alice')
@@ -337,7 +345,6 @@ void main() {
     expect(SettingsResponsive.listRowMinHeight(context), 52);
   });
 
-
   testWidgets('share app sheet matches 99chat action surface', (tester) async {
     await tester.pumpWidget(_host(const Scaffold(
       body: ShareAppSheet(website: 'https://example.com/download'),
@@ -351,17 +358,19 @@ void main() {
     expect(find.text('更多'), findsOneWidget);
   });
 
-
-
-  testWidgets('feedback hero keeps the 99chat blue wave backdrop', (tester) async {
+  testWidgets('feedback hero keeps the 99chat blue wave backdrop',
+      (tester) async {
     await tester.pumpWidget(_host(const FeedbackPage(
       service: StubSettingsService(),
     )));
-    expect(find.byKey(const ValueKey('feedback-hero-backdrop')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('feedback-hero-backdrop')), findsOneWidget);
     expect(find.byKey(const ValueKey('feedback-hero-image')), findsOneWidget);
   });
 
-  test('profile QR share uses branded WeChat/QQ assets and native Android chooser', () {
+  test(
+      'profile QR share uses branded WeChat/QQ assets and native Android chooser',
+      () {
     final dartSource = File(
       'lib/pages/mine/settings/pages/qr_profile_page.dart',
     ).readAsStringSync();
@@ -387,9 +396,10 @@ void main() {
 
   testWidgets('profile QR page exposes 99chat branded card and action surface',
       (tester) async {
-    await tester.pumpWidget(_host(const QrProfilePage(
+    await tester.pumpWidget(_host(QrProfilePage(
       nickname: 'Alice',
       userId: '990001',
+      inviteFactory: (_) async => 'fi_test',
       avatarUrl: '',
     )));
 
@@ -420,7 +430,8 @@ void main() {
     expect(FontSizePage.presets, const <double>[0.9, 1.0, 1.12, 1.24]);
   });
 
-  testWidgets('legal documents ship the 99chat legal body instead of placeholders',
+  testWidgets(
+      'legal documents ship the 99chat legal body instead of placeholders',
       (tester) async {
     await tester.pumpWidget(_host(const LegalDocumentPage(
       kind: LegalDocumentKind.terms,
@@ -448,14 +459,12 @@ void main() {
     expect(find.text('节点02(US)'), findsOneWidget);
   });
 
-
-test('message sound picker previews selected 99chat sound asset', () {
-  final source = File(
-    'lib/pages/mine/settings/pages/message_notification_sound_picker_page.dart',
-  ).readAsStringSync();
-  expect(source, contains("assets/audio/99chat/\$id.wav"));
-  expect(source, contains("package: 'openim_common'"));
-  expect(source, contains('await _player.play()'));
-});
-
+  test('message sound picker previews selected 99chat sound asset', () {
+    final source = File(
+      'lib/pages/mine/settings/pages/message_notification_sound_picker_page.dart',
+    ).readAsStringSync();
+    expect(source, contains("assets/audio/99chat/\$id.wav"));
+    expect(source, contains("package: 'openim_common'"));
+    expect(source, contains('await _player.play()'));
+  });
 }

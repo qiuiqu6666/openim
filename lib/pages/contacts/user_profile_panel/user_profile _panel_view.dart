@@ -5,9 +5,11 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'user_profile _panel_logic.dart';
+import 'friend_setup/friend_setup_logic.dart';
 import '../contacts_logic.dart';
 import '../star_burst_button.dart';
 import '../../../theme/profile_tokens.dart';
+import '../../mine/settings/openim_profile_service.dart';
 
 class UserProfilePanelPage extends StatelessWidget {
   final logic = Get.find<UserProfilePanelLogic>(tag: GetTags.userProfile);
@@ -49,8 +51,8 @@ class UserProfilePanelPage extends StatelessWidget {
               if (logic.isFriendship)
                 IconButton(
                   tooltip: 'profileMore'.tr,
-                  onPressed: logic.friendSetup,
                   icon: const Icon(Icons.more_horiz, size: 28),
+                  onPressed: () => _showMore(context),
                 ),
             ],
           ),
@@ -119,13 +121,24 @@ class UserProfilePanelPage extends StatelessWidget {
                     _row('profileRemarkName'.tr,
                         value: user.remark, onTap: logic.editRemark),
                   ]),
-                if (logic.isFriendship ||
-                    logic.isMyself ||
-                    logic.isGroupMemberPage &&
-                        logic.isFriendship &&
-                        !logic.notAllowLookGroupMemberProfiles.value)
+                if (logic.isMyself)
                   _card([
                     _row(StrRes.personalInfo, onTap: logic.viewPersonalInfo),
+                  ]),
+                if (!logic.isMyself)
+                  _card([
+                    _row('profileCommonGroups'.tr,
+                        value: logic.loadingCommonGroups.value
+                            ? 'profileCommonGroupsLoading'.tr
+                            : logic.commonGroupsFailed.value
+                                ? 'profileCommonGroupsCountFailed'.tr
+                                : '${logic.commonGroupCount.value ?? 0}',
+                        onTap: logic.openCommonGroups),
+                  ]),
+                if (logic.isFriendship && !logic.isMyself)
+                  _card([
+                    _row('currentChatBackground'.tr,
+                        onTap: logic.setChatBackground),
                   ]),
                 if (logic.isGroupMemberPage &&
                     logic.isFriendship &&
@@ -165,6 +178,44 @@ class UserProfilePanelPage extends StatelessWidget {
           ),
         );
       });
+
+  Future<void> _showMore(BuildContext context) async {
+    final zh = (Get.locale ?? Get.deviceLocale)?.languageCode == 'zh';
+    final action = await Get.bottomSheet<String>(
+      BottomSheetView(
+        items: [
+          SheetItem(
+            label: zh ? '分享联系人' : 'Share Contact',
+            result: 'share',
+          ),
+          SheetItem(
+            label: zh ? '删除好友' : 'Delete Friend',
+            textStyle: Styles.ts_0C1C33_17sp.copyWith(
+                color: Theme.of(context).colorScheme.error),
+            result: 'delete',
+          ),
+          SheetItem(
+            label: (logic.userInfo.value.isBlacklist
+                ? 'profileRemoveBlacklist' : 'profileAddBlacklist').tr,
+            result: 'blacklist',
+          ),
+        ],
+      ),
+      backgroundColor: Colors.transparent,
+      useRootNavigator: true,
+    );
+    if (action == null || logic.isClosed) return;
+    if (action == 'blacklist') {
+      await logic.setBlacklist(!logic.userInfo.value.isBlacklist);
+      return;
+    }
+    final actions = FriendSetupLogic()..userID = logic.userInfo.value.userID!;
+    if (action == 'share') {
+      actions.recommendToFriend();
+    } else if (action == 'delete') {
+      actions.deleteFromFriendList();
+    }
+  }
 
   Widget _strangerActions(BuildContext context, bool canAdd) => SafeArea(
         top: false,
@@ -209,6 +260,7 @@ class UserProfilePanelPage extends StatelessWidget {
 
   Widget _header({bool stranger = false}) {
     final user = logic.userInfo.value;
+    final signature = OpenIMProfileService.signatureFromEx(user.ex).trim();
     final showID =
         logic.isFriendship || logic.isMyself || !logic.isGroupMemberPage || !logic.notAllowAddGroupMemberFriend.value;
     return Padding(
@@ -279,6 +331,14 @@ class UserProfilePanelPage extends StatelessWidget {
                     ),
                   ),
                 ),
+            ],
+            ...[
+              const SizedBox(height: AppTokens.s3),
+              Text(signature.isNotEmpty ? signature :
+                  (Get.locale?.languageCode == 'zh' ? '暂未设置个性签名' : 'No bio set yet'),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: Styles.ts_8E9AB0_14sp.copyWith(color: _muted)),
             ],
           ],
         )),

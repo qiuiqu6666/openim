@@ -1,3 +1,4 @@
+import '../../../services/platform_config_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -23,6 +24,7 @@ class ShareAppSheet extends StatefulWidget {
   }) =>
       showModalBottomSheet<void>(
         context: context,
+        useRootNavigator: true,
         isScrollControlled: true,
         isDismissible: true,
         enableDrag: true,
@@ -36,11 +38,35 @@ class ShareAppSheet extends StatefulWidget {
 }
 
 class _ShareAppSheetState extends State<ShareAppSheet> {
-  String get _website => widget.website.trim();
+  String _remoteLink = '';
+  bool _loadingConfig = true;
+  bool _configFailed = false;
+  String get _website =>
+      widget.website.trim().isNotEmpty ? widget.website.trim() : _remoteLink;
+  @override
+  void initState() {
+    super.initState();
+    if (widget.website.trim().isNotEmpty) {
+      _loadingConfig = false;
+    } else {
+      _loadConfig();
+    }
+  }
+
+  Future<void> _loadConfig() async {
+    try {
+      final config = await PlatformConfigService.fetch();
+      if (mounted) setState(() => _remoteLink = config.officialURL);
+    } catch (_) {
+      if (mounted) setState(() => _configFailed = true);
+    } finally {
+      if (mounted) setState(() => _loadingConfig = false);
+    }
+  }
 
   String _shareText(BuildContext context) => settingsText(
         context,
-        zh: '我正在使用 99chat，快来一起聊天吧！下载链接：$_website',
+        zh: '我正在使用 99chat，快来一起聊天吧！官方地址：$_website',
         en: 'I am using 99chat. Join me and start chatting: $_website',
       );
 
@@ -48,7 +74,17 @@ class _ShareAppSheetState extends State<ShareAppSheet> {
 
   bool _ensureConfigured(BuildContext context) {
     if (_website.isNotEmpty) return true;
-    _toast(settingsText(context, zh: '未配置', en: 'Not configured'));
+    _toast(settingsText(context,
+        zh: _loadingConfig
+            ? '正在获取官方地址'
+            : _configFailed
+                ? '官方地址获取失败，请重新打开重试'
+                : '未配置',
+        en: _loadingConfig
+            ? 'Loading official website'
+            : _configFailed
+                ? 'Unable to load link. Please retry.'
+                : 'Not configured'));
     return false;
   }
 
@@ -56,9 +92,11 @@ class _ShareAppSheetState extends State<ShareAppSheet> {
     if (!_ensureConfigured(context)) return;
     try {
       await Clipboard.setData(ClipboardData(text: _shareText(context)));
+      if (!context.mounted) return;
       _toast(settingsText(context, zh: '链接已复制', en: 'Link copied'));
     } catch (_) {
-      _toast(settingsText(context, zh: '复制失败，请重试', en: 'Copy failed. Try again.'));
+      _toast(
+          settingsText(context, zh: '复制失败，请重试', en: 'Copy failed. Try again.'));
     }
   }
 
@@ -69,11 +107,11 @@ class _ShareAppSheetState extends State<ShareAppSheet> {
         Uri.parse(_website),
         mode: LaunchMode.externalApplication,
       );
-      if (!ok && mounted) {
+      if (!ok && context.mounted) {
         _toast(settingsText(context, zh: '无法打开', en: 'Unable to open'));
       }
     } catch (_) {
-      if (mounted) {
+      if (context.mounted) {
         _toast(settingsText(context, zh: '无法打开', en: 'Unable to open'));
       }
     }
@@ -123,7 +161,8 @@ class _ShareAppSheetState extends State<ShareAppSheet> {
       en: 'System sharing is not supported on this device',
     );
     final box = context.findRenderObject() as RenderBox?;
-    final origin = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+    final origin =
+        box == null ? null : box.localToGlobal(Offset.zero) & box.size;
     Navigator.of(context).pop();
     try {
       await Share.share(
@@ -144,7 +183,17 @@ class _ShareAppSheetState extends State<ShareAppSheet> {
     final line = AppTokens.border(dark: dark);
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     final shareUrlLabel = _website.isEmpty
-        ? settingsText(context, zh: '未配置', en: 'Not configured')
+        ? settingsText(context,
+            zh: _loadingConfig
+                ? '获取中'
+                : _configFailed
+                    ? '获取失败'
+                    : '未配置',
+            en: _loadingConfig
+                ? 'Loading'
+                : _configFailed
+                    ? 'Load failed'
+                    : 'Not configured')
         : _website;
 
     return Stack(

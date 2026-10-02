@@ -28,6 +28,8 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
   Future<void>? _initializing;
   bool _closed = false;
   bool _failed = false;
+  double? _seekSeconds;
+  bool _changingSpeed = false;
   @override
   void initState() {
     super.initState();
@@ -80,7 +82,7 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
   }
 
   String _time(Duration time) =>
-      '${time.inMinutes}:${(time.inSeconds % 60).toString().padLeft(2, '0')}';
+      '${time.inMinutes.toString().padLeft(2, '0')}:${(time.inSeconds % 60).toString().padLeft(2, '0')}';
   @override
   Widget build(BuildContext context) {
     if (_failed) {
@@ -116,24 +118,22 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 560),
-                child: Material(
-                  color: Colors.black.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(16),
-                  clipBehavior: Clip.antiAlias,
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(),
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         IconButton(
                           tooltip: value.isPlaying
                               ? 'videoPause'.tr
                               : 'videoPlay'.tr,
-                          constraints: const BoxConstraints(
-                            minWidth: 48,
-                            minHeight: 48,
-                          ),
                           color: Colors.white,
+                          iconSize: 44,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                              width: 48, height: 48),
                           icon: Icon(value.isPlaying
                               ? Icons.pause_rounded
                               : Icons.play_arrow_rounded),
@@ -152,30 +152,131 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
                             }
                           },
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${_time(value.position)} / ${_time(value.duration)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontFeatures: [FontFeature.tabularFigures()],
-                          ),
-                        ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: VideoProgressIndicator(
-                            controller,
-                            allowScrubbing: true,
-                            colors: VideoProgressColors(
-                              playedColor:
-                                  Theme.of(context).colorScheme.primary,
-                              bufferedColor: Colors.white54,
-                              backgroundColor: Colors.white30,
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 20,
-                            ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Transform.translate(
+                                offset: const Offset(0, 14),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${_time(Duration(milliseconds: ((_seekSeconds ?? value.position.inMilliseconds / 1000) * 1000).round()))} / ${_time(value.duration)}',
+                                        style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 13,
+                                            fontFeatures: [
+                                              FontFeature.tabularFigures()
+                                            ]),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.white70,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 2),
+                                        minimumSize: const Size(48, 24),
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      onPressed: _changingSpeed
+                                          ? null
+                                          : () async {
+                                              const speeds = [
+                                                1.0,
+                                                1.5,
+                                                2.0,
+                                                0.5
+                                              ];
+                                              final index = speeds.indexOf(
+                                                  controller
+                                                      .value.playbackSpeed);
+                                              final speed = speeds[
+                                                  (index + 1) % speeds.length];
+                                              setState(
+                                                  () => _changingSpeed = true);
+                                              try {
+                                                await controller
+                                                    .setPlaybackSpeed(speed);
+                                              } catch (_) {
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.maybeOf(
+                                                          context)
+                                                      ?.showSnackBar(
+                                                          const SnackBar(
+                                                              content: Text(
+                                                                  '倍速设置失败，请重试')));
+                                                }
+                                              } finally {
+                                                if (mounted) {
+                                                  setState(() =>
+                                                      _changingSpeed = false);
+                                                }
+                                              }
+                                            },
+                                      child: Text(
+                                          '${value.playbackSpeed.toString().replaceAll('.0', '')}×',
+                                          style: const TextStyle(fontSize: 13)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(
+                                height: 48,
+                                child: SliderTheme(
+                                  data: SliderTheme.of(context).copyWith(
+                                    trackHeight: 3,
+                                    activeTrackColor: Colors.white,
+                                    inactiveTrackColor: Colors.white30,
+                                    thumbColor: Colors.white,
+                                    thumbShape: const RoundSliderThumbShape(
+                                        enabledThumbRadius: 4),
+                                    overlayShape: const RoundSliderOverlayShape(
+                                        overlayRadius: 14),
+                                  ),
+                                  child: Slider(
+                                    min: 0,
+                                    max: value.duration.inMilliseconds > 0
+                                        ? value.duration.inMilliseconds / 1000
+                                        : 1,
+                                    value: (_seekSeconds ??
+                                            value.position.inMilliseconds /
+                                                1000)
+                                        .clamp(
+                                            0,
+                                            value.duration.inMilliseconds > 0
+                                                ? value.duration
+                                                        .inMilliseconds /
+                                                    1000
+                                                : 1)
+                                        .toDouble(),
+                                    onChangeStart: (seconds) =>
+                                        setState(() => _seekSeconds = seconds),
+                                    onChanged: (seconds) =>
+                                        setState(() => _seekSeconds = seconds),
+                                    onChangeEnd: (seconds) async {
+                                      try {
+                                        await controller.seekTo(Duration(
+                                            milliseconds:
+                                                (seconds * 1000).round()));
+                                      } catch (_) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.maybeOf(context)
+                                              ?.showSnackBar(const SnackBar(
+                                                  content: Text('跳转失败，请重试')));
+                                        }
+                                      } finally {
+                                        if (mounted) {
+                                          setState(() => _seekSeconds = null);
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

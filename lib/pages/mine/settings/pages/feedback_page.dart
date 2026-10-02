@@ -1,7 +1,7 @@
+import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:photo_manager/photo_manager.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
 import '../settings_service.dart';
@@ -33,6 +33,32 @@ class _FeedbackPageState extends State<FeedbackPage> {
   bool _picking = false;
   bool _submitted = false;
   bool _includeDiagnostics = false;
+  String? _clientRequestID;
+  int? _submittedFingerprint;
+  String? _feedbackID;
+  bool _logFailed = false;
+  bool _uploadingLogs = false;
+  Future<void> _uploadLogs() async {
+    if (_uploadingLogs || _feedbackID == null || _clientRequestID == null) {
+      return;
+    }
+    setState(() => _uploadingLogs = true);
+    try {
+      await widget.service.uploadFeedbackLogs(_feedbackID!, _clientRequestID!);
+      if (mounted) setState(() => _logFailed = false);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _logFailed = true);
+        showSettingsMessage(
+            context,
+            settingsText(context,
+                zh: '反馈已提交，日志上传失败，可重试',
+                en: 'Feedback submitted. Log upload failed. You can retry.'));
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingLogs = false);
+    }
+  }
 
   @override
   void initState() {
@@ -53,7 +79,10 @@ class _FeedbackPageState extends State<FeedbackPage> {
   }
 
   bool get _canSubmit =>
-      !_submitting && _controller.text.trim().isNotEmpty;
+      !_submitting &&
+      !_picking &&
+      _controller.text.trim().isNotEmpty &&
+      _controller.text.trim().runes.length <= _maxContentLength;
 
   Future<void> _pickImages() async {
     if (_picking || _attachments.length >= _maxScreenshots) return;
@@ -122,7 +151,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
     if (!_canSubmit) return;
     FocusManager.instance.primaryFocus?.unfocus();
 
-    if (!widget.service.isBackendAvailable) {
+    if (!widget.service.supportsFeedback) {
       showUnavailableSettingsAction(
         context,
         settingsText(context, zh: '提交反馈', en: 'Submit feedback'),
@@ -132,25 +161,32 @@ class _FeedbackPageState extends State<FeedbackPage> {
 
     setState(() => _submitting = true);
     try {
-      await widget.service.submitFeedback(
+      final fingerprint = Object.hash(_type, _controller.text.trim(),
+          _includeDiagnostics, Object.hashAll(_attachments));
+      if (_clientRequestID == null || fingerprint != _submittedFingerprint) {
+        _clientRequestID = const Uuid().v4();
+        _submittedFingerprint = fingerprint;
+      }
+      _feedbackID = await widget.service.createFeedback(
+        clientRequestID: _clientRequestID!,
         type: _type,
         content: _controller.text.trim(),
         attachments: List.unmodifiable(_attachments),
-        includeDiagnostics: _includeDiagnostics,
+        includeSDKLogs: _includeDiagnostics,
       );
+      if (!mounted) return;
+      if (_includeDiagnostics) await _uploadLogs();
       if (!mounted) return;
       FocusManager.instance.primaryFocus?.unfocus();
       setState(() => _submitted = true);
-    } catch (_) {
+    } catch (error) {
+      if (error is (int, String) && error.$1 == 20046) _clientRequestID = null;
       if (!mounted) return;
-      showSettingsMessage(
-        context,
-        settingsText(
+      showSettingsError(
           context,
-          zh: '提交失败，请稍后重试',
-          en: 'Submission failed. Please try again later.',
-        ),
-      );
+          error,
+          settingsText(context,
+              zh: '提交失败，请稍后重试', en: 'Submission failed. Please retry.'));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -160,7 +196,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     return AnimatedSwitcher(
-      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 420),
+      duration:
+          reduceMotion ? Duration.zero : const Duration(milliseconds: 420),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) => FadeTransition(
@@ -177,6 +214,9 @@ class _FeedbackPageState extends State<FeedbackPage> {
           ? _FeedbackSuccessView(
               key: const ValueKey('feedback-success'),
               onDone: () => Navigator.of(context).maybePop(),
+              logFailed: _logFailed,
+              uploadingLogs: _uploadingLogs,
+              retryLogs: _uploadLogs,
             )
           : _buildForm(context),
     );
@@ -371,8 +411,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                               zh: '相关截图（选填）',
                               en: 'Screenshots (optional)',
                             ),
-                            trailing:
-                                '${_attachments.length}/$_maxScreenshots',
+                            trailing: '${_attachments.length}/$_maxScreenshots',
                             text: text,
                             muted: muted,
                           ),
@@ -390,7 +429,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       color: Colors.transparent,
                       child: CheckboxListTile(
                         key: const ValueKey('feedback-diagnostics'),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 4),
                         activeColor: _blue,
                         value: _includeDiagnostics,
                         onChanged: _submitting
@@ -401,7 +441,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                         title: Text(
                           settingsText(
                             context,
-                            zh: '附带问题排查记录',
+                            zh: '附带 SDK 运行日志',
                             en: 'Attach diagnostic report',
                           ),
                           style: TextStyle(
@@ -413,8 +453,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
                         subtitle: Text(
                           settingsText(
                             context,
-                            zh: '勾选后随反馈提交精简诊断信息；不包含聊天正文、密码或请求内容。',
-                            en: 'Attach brief diagnostics. Message bodies, passwords, and request contents are excluded.',
+                            zh: '附带 SDK 运行日志，帮助排查问题。日志可能包含设备和运行信息。',
+                            en: 'Attach SDK runtime logs to help investigate. Logs may contain device and runtime information.',
                           ),
                           style: TextStyle(
                             color: muted,
@@ -545,108 +585,108 @@ class _FeedbackPageState extends State<FeedbackPage> {
         padding: const EdgeInsets.fromLTRB(8, 22, 8, 2),
         child: LayoutBuilder(
           builder: (context, constraints) {
-          final stackIllustration =
-              !expandedText && constraints.maxWidth >= 310 &&
-                  Localizations.localeOf(context).languageCode == 'zh';
-          final copy = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: settingsText(
-                        context,
-                        zh: '您的意见',
-                        en: 'Your feedback ',
-                      ),
-                    ),
-                    TextSpan(
-                      text: settingsText(
-                        context,
-                        zh: '很重要',
-                        en: 'matters',
-                      ),
-                      style: const TextStyle(color: _blue),
-                    ),
-                  ],
-                ),
-                style: TextStyle(
-                  color: text,
-                  fontSize: 25,
-                  height: 1.3,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                settingsText(
-                  context,
-                  zh: '每一条反馈，都能帮助我们做得更好',
-                  en: 'Every piece of feedback helps us improve.',
-                ),
-                style: TextStyle(color: muted, fontSize: 13, height: 1.5),
-              ),
-              const SizedBox(height: 20),
-              expandedText
-                  ? Wrap(spacing: 12, runSpacing: 8, children: badges)
-                  : Row(
-                      children: [
-                        for (var i = 0; i < badges.length; i++) ...[
-                          if (i > 0)
-                            Container(
-                              margin:
-                                  const EdgeInsets.symmetric(horizontal: 5),
-                              width: 1,
-                              height: 16,
-                              color: dark
-                                  ? const Color(0xFF3A4B60)
-                                  : const Color(0xFFD0DEED),
-                            ),
-                          Expanded(child: badges[i]),
-                        ],
-                      ],
-                    ),
-            ],
-          );
-
-          final illustration = _FeedbackAssetIllustration(
-            key: const ValueKey('feedback-hero-image'),
-            asset: 'assets/images/feedback_hero.png',
-            size: stackIllustration ? 180 : 150,
-            fallback: _FeedbackHeroIllustration(
-              dark: dark,
-              size: stackIllustration ? 180 : 150,
-            ),
-          );
-          if (!stackIllustration) {
-            return Column(
+            final stackIllustration = !expandedText &&
+                constraints.maxWidth >= 310 &&
+                Localizations.localeOf(context).languageCode == 'zh';
+            final copy = Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Align(alignment: Alignment.centerRight, child: illustration),
-                copy,
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: settingsText(
+                          context,
+                          zh: '您的意见',
+                          en: 'Your feedback ',
+                        ),
+                      ),
+                      TextSpan(
+                        text: settingsText(
+                          context,
+                          zh: '很重要',
+                          en: 'matters',
+                        ),
+                        style: const TextStyle(color: _blue),
+                      ),
+                    ],
+                  ),
+                  style: TextStyle(
+                    color: text,
+                    fontSize: 25,
+                    height: 1.3,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  settingsText(
+                    context,
+                    zh: '每一条反馈，都能帮助我们做得更好',
+                    en: 'Every piece of feedback helps us improve.',
+                  ),
+                  style: TextStyle(color: muted, fontSize: 13, height: 1.5),
+                ),
+                const SizedBox(height: 20),
+                expandedText
+                    ? Wrap(spacing: 12, runSpacing: 8, children: badges)
+                    : Row(
+                        children: [
+                          for (var i = 0; i < badges.length; i++) ...[
+                            if (i > 0)
+                              Container(
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 5),
+                                width: 1,
+                                height: 16,
+                                color: dark
+                                    ? const Color(0xFF3A4B60)
+                                    : const Color(0xFFD0DEED),
+                              ),
+                            Expanded(child: badges[i]),
+                          ],
+                        ],
+                      ),
               ],
             );
-          }
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                right: -18,
-                top: -20,
-                bottom: -18,
-                width: constraints.maxWidth * .42,
-                child: illustration,
+
+            final illustration = _FeedbackAssetIllustration(
+              key: const ValueKey('feedback-hero-image'),
+              asset: 'assets/images/feedback_hero.png',
+              size: stackIllustration ? 180 : 150,
+              fallback: _FeedbackHeroIllustration(
+                dark: dark,
+                size: stackIllustration ? 180 : 150,
               ),
-              ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 140),
-                child: SizedBox(
-                  width: constraints.maxWidth * .69,
-                  child: copy,
+            );
+            if (!stackIllustration) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Align(alignment: Alignment.centerRight, child: illustration),
+                  copy,
+                ],
+              );
+            }
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  right: -18,
+                  top: -20,
+                  bottom: -18,
+                  width: constraints.maxWidth * .42,
+                  child: illustration,
                 ),
-              ),
-            ],
-          );
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 140),
+                  child: SizedBox(
+                    width: constraints.maxWidth * .69,
+                    child: copy,
+                  ),
+                ),
+              ],
+            );
           },
         ),
       ),
@@ -944,7 +984,6 @@ class _FeedbackPageState extends State<FeedbackPage> {
   }
 }
 
-
 class _FeedbackHeroBackdrop extends CustomPainter {
   const _FeedbackHeroBackdrop({required this.dark});
 
@@ -1079,7 +1118,15 @@ class _FeedbackHeroIllustration extends StatelessWidget {
 }
 
 class _FeedbackSuccessView extends StatelessWidget {
-  const _FeedbackSuccessView({super.key, required this.onDone});
+  const _FeedbackSuccessView(
+      {super.key,
+      required this.onDone,
+      this.logFailed = false,
+      this.uploadingLogs = false,
+      required this.retryLogs});
+  final bool logFailed;
+  final bool uploadingLogs;
+  final VoidCallback retryLogs;
 
   final VoidCallback onDone;
 
@@ -1096,7 +1143,8 @@ class _FeedbackSuccessView extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: (constraints.maxHeight - 64).clamp(0.0, double.infinity),
+                  minHeight:
+                      (constraints.maxHeight - 64).clamp(0.0, double.infinity),
                 ),
                 child: Center(
                   child: ConstrainedBox(
@@ -1148,6 +1196,15 @@ class _FeedbackSuccessView extends StatelessWidget {
                             height: 1.6,
                           ),
                         ),
+                        if (logFailed)
+                          TextButton.icon(
+                              onPressed: uploadingLogs ? null : retryLogs,
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: Text(settingsText(context,
+                                  zh: uploadingLogs ? '正在上传日志…' : '日志上传失败，点击重试',
+                                  en: uploadingLogs
+                                      ? 'Uploading logs…'
+                                      : 'Retry log upload'))),
                         const SizedBox(height: 60),
                         ElevatedButton(
                           key: const ValueKey('feedback-success-done'),

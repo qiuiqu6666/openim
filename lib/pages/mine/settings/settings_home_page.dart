@@ -1,3 +1,4 @@
+import 'widgets/platform_update.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -71,16 +72,9 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
 
   Future<void> _checkForUpdate() async {
     if (_checkingUpdate) return;
-    if (!widget.service.isBackendAvailable) {
-      showUnavailableSettingsAction(
-        context,
-        settingsText(context, zh: '检查新版本', en: 'Check for updates'),
-      );
-      return;
-    }
     setState(() => _checkingUpdate = true);
     try {
-      await widget.service.checkForUpdate();
+      await checkPlatformUpdate(context);
     } finally {
       if (mounted) setState(() => _checkingUpdate = false);
     }
@@ -155,10 +149,12 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
         SettingsGroup(
           children: [
             SettingsCell(
-              title: settingsText(context, zh: '朋友权限', en: 'Friend Permissions'),
+              title:
+                  settingsText(context, zh: '朋友权限', en: 'Friend Permissions'),
               onTap: () => openSettingsPage(
                 context,
-                FriendPermissionPage(store: widget.store, service: widget.service),
+                FriendPermissionPage(
+                    store: widget.store, service: widget.service),
               ),
             ),
             SettingsCell(
@@ -166,7 +162,8 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
               showDivider: false,
               onTap: () => openSettingsPage(
                 context,
-                MomentsPermissionPage(store: widget.store, service: widget.service),
+                MomentsPermissionPage(
+                    store: widget.store, service: widget.service),
               ),
             ),
           ],

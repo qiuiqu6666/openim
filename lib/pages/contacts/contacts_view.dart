@@ -138,15 +138,7 @@ class ContactsPage extends StatelessWidget {
       indexBarItemHeight: 16.h,
       indexBarMargin: EdgeInsets.only(
           right: 2.w, bottom: MediaQuery.paddingOf(context).bottom),
-      indexBarOptions: IndexBarOptions(
-        needRebuild: true,
-        textStyle: Styles.ts_8E9AB0_12sp,
-        selectTextStyle: Styles.ts_FFFFFF_12sp,
-        downItemDecoration:
-            BoxDecoration(color: Styles.c_0089FF, shape: BoxShape.circle),
-        indexHintDecoration: BoxDecoration(
-            color: Styles.c_0089FF, borderRadius: BorderRadius.circular(12.r)),
-      ),
+      indexBarOptions: directoryIndexBarOptions(),
     );
   }
 

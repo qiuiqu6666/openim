@@ -10,7 +10,8 @@ import '../user_profile _panel_logic.dart';
 
 class FriendSetupLogic extends GetxController {
   final conversationLogic = Get.find<ConversationLogic>();
-  final userProfilesLogic = Get.find<UserProfilePanelLogic>(tag: GetTags.userProfile);
+  final userProfilesLogic =
+      Get.find<UserProfilePanelLogic>(tag: GetTags.userProfile);
   late String userID;
 
   @override
@@ -28,7 +29,8 @@ class FriendSetupLogic extends GetxController {
   }
 
   void addBlacklist() async {
-    var confirm = await Get.dialog(CustomDialog(title: StrRes.areYouSureAddBlacklist));
+    var confirm =
+        await Get.dialog(CustomDialog(title: StrRes.areYouSureAddBlacklist));
     if (confirm == true) {
       await OpenIM.iMManager.friendshipManager.addBlacklist(
         userID: userProfilesLogic.userInfo.value.userID!,
@@ -69,9 +71,11 @@ class FriendSetupLogic extends GetxController {
         userIDList.sort();
         final conversationID = 'si_${userIDList.join('_')}';
 
-        await OpenIM.iMManager.conversationManager.deleteConversationAndDeleteAllMsg(conversationID: conversationID);
+        await OpenIM.iMManager.conversationManager
+            .deleteConversationAndDeleteAllMsg(conversationID: conversationID);
 
-        conversationLogic.list.removeWhere((e) => e.conversationID == conversationID);
+        conversationLogic.list
+            .removeWhere((e) => e.conversationID == conversationID);
       });
 
       if (userProfilesLogic.offAllWhenDelFriend == true) {
@@ -86,7 +90,8 @@ class FriendSetupLogic extends GetxController {
     final isRegistered = Get.isRegistered<ChatLogic>(tag: GetTags.chat);
     if (isRegistered) {
       final logic = Get.find<ChatLogic>(tag: GetTags.chat);
-      logic.recommendFriendCarte(UserInfo.fromJson(userProfilesLogic.userInfo.value.toJson()));
+      logic.recommendFriendCarte(
+          UserInfo.fromJson(userProfilesLogic.userInfo.value.toJson()));
       return;
     }
     final result = await AppNavigator.startSelectContacts(
@@ -113,6 +118,8 @@ class FriendSetupLogic extends GetxController {
         OpenIM.iMManager.messageManager.sendMessage(
           message: await OpenIM.iMManager.messageManager.createCardMessage(
             userID: userProfilesLogic.userInfo.value.userID!,
+            ex: await createFriendCardExtension(
+                userProfilesLogic.userInfo.value.userID!),
             nickname: userProfilesLogic.userInfo.value.showName,
             faceURL: userProfilesLogic.userInfo.value.faceURL,
           ),

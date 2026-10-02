@@ -37,10 +37,12 @@ class ImageUtil {
     bool clearMemoryCacheWhenDispose = false,
     bool lowMemory = false,
     Widget? errorWidget,
+    Widget? loadingWidget,
     BorderRadius? borderRadius,
   }) =>
       ExtendedImage.network(
         url,
+        gaplessPlayback: true,
         width: width,
         height: height,
         fit: fit,
@@ -55,10 +57,13 @@ class ImageUtil {
           switch (state.extendedImageLoadState) {
             case LoadState.loading:
               {
+                if (loadingWidget != null) return loadingWidget;
                 final ImageChunkEvent? loadingProgress = state.loadingProgress;
-                final double? progress = loadingProgress?.expectedTotalBytes != null
-                    ? loadingProgress!.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                    : null;
+                final double? progress =
+                    loadingProgress?.expectedTotalBytes != null
+                        ? loadingProgress!.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                        : null;
 
                 return SizedBox(
                   width: 15.0,
@@ -118,9 +123,11 @@ class ImageUtil {
             case LoadState.loading:
               {
                 final ImageChunkEvent? loadingProgress = state.loadingProgress;
-                final double? progress = loadingProgress?.expectedTotalBytes != null
-                    ? loadingProgress!.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                    : null;
+                final double? progress =
+                    loadingProgress?.expectedTotalBytes != null
+                        ? loadingProgress!.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                        : null;
 
                 return SizedBox(
                   width: 15.0,

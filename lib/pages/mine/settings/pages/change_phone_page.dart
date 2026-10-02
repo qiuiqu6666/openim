@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../settings_service.dart';
+import 'country_code_page.dart';
+import '../widgets/verification_code_flow.dart';
 import '../widgets/settings_widgets.dart';
 
 class ChangePhonePage extends StatefulWidget {
@@ -24,10 +26,15 @@ class ChangePhonePage extends StatefulWidget {
 }
 
 class _ChangePhonePageState extends State<ChangePhonePage> {
+  late final TextEditingController areaCodeController;
   final oldCodeController = TextEditingController();
   final newPhoneController = TextEditingController();
   final newCodeController = TextEditingController();
 
+  final _oldCodeFlow = VerificationCodeFlow();
+  final _newCodeFlow = VerificationCodeFlow();
+  VerificationCodeFlow get _codeFlow =>
+      !_isBindMode && step == 1 ? _oldCodeFlow : _newCodeFlow;
   int step = 1;
   bool busy = false;
 
@@ -49,6 +56,10 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
   @override
   void initState() {
     super.initState();
+    _oldCodeFlow.addListener(_refresh);
+    _newCodeFlow.addListener(_refresh);
+    areaCodeController =
+        TextEditingController(text: widget.service.securityAreaCode);
     oldCodeController.addListener(_refresh);
     newPhoneController.addListener(_refresh);
     newCodeController.addListener(_refresh);
@@ -60,6 +71,9 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
 
   @override
   void dispose() {
+    _oldCodeFlow.dispose();
+    _newCodeFlow.dispose();
+    areaCodeController.dispose();
     oldCodeController.dispose();
     newPhoneController.dispose();
     newCodeController.dispose();
@@ -68,33 +82,61 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
 
   Future<void> _sendCode(String phone) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    if (!widget.service.isBackendAvailable) {
+    if (!widget.service.isSecurityBackendAvailable) {
       showUnavailableSettingsAction(
         context,
         settingsText(context, zh: '获取验证码', en: 'Get Code'),
       );
       return;
     }
-    await widget.service.requestPhoneCode(phone);
+    if (busy || !_codeFlow.canSend) return;
+    setState(() => busy = true);
+    try {
+      final sent = await _codeFlow.send(context, (param) async {
+        if (!_isBindMode && step == 1) {
+          return widget.service
+              .requestPhoneCode(phone, captchaVerifyParam: param);
+        } else {
+          return widget.service.requestNewPhoneCode(phone,
+              captchaVerifyParam: param,
+              areaCode: areaCodeController.text.trim());
+        }
+      });
+      if (mounted && sent) {
+        showSettingsMessage(
+            context, settingsText(context, zh: '验证码已发送', en: 'Code sent'));
+      }
+    } catch (error) {
+      if (mounted) {
+        showSettingsError(context, error,
+            settingsText(context, zh: '发送失败，请稍后重试', en: 'Could not send code'));
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   Future<void> _verifyOld() async {
     if (!_canVerifyOld) return;
     FocusManager.instance.primaryFocus?.unfocus();
-    if (!widget.service.isBackendAvailable) {
+    if (!widget.service.isSecurityBackendAvailable) {
       showUnavailableSettingsAction(
         context,
-        settingsText(context, zh: '验证当前手机号', en: 'Verify current phone'),
+        settingsText(context, zh: '填写旧号验证码', en: 'Verify current phone'),
       );
       return;
     }
     setState(() => busy = true);
     try {
-      await widget.service.verifyCurrentPhoneCode(
-        phone: widget.currentPhone.trim(),
-        code: oldCodeController.text.trim(),
-      );
       if (mounted) setState(() => step = 2);
+    } catch (error) {
+      if (mounted) {
+        showSettingsError(
+            context,
+            error,
+            settingsText(context,
+                zh: '操作失败，请检查验证码后重试', en: 'Check the codes and try again'));
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -103,7 +145,7 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
   Future<void> _confirm() async {
     if (!_canConfirm) return;
     FocusManager.instance.primaryFocus?.unfocus();
-    if (!widget.service.isBackendAvailable) {
+    if (!widget.service.isSecurityBackendAvailable) {
       showUnavailableSettingsAction(
         context,
         settingsText(context, zh: '修改手机号', en: 'Change Phone Number'),
@@ -112,15 +154,67 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
     }
     setState(() => busy = true);
     try {
-      await widget.service.bindPhone(
-        phone: newPhoneController.text.trim(),
-        code: newCodeController.text,
+      if (_isBindMode) {
+        await widget.service.bindPhone(
+            phone: newPhoneController.text.trim(),
+            code: newCodeController.text,
+            areaCode: areaCodeController.text.trim());
+      } else {
+        await widget.service.changePhone(
+            phone: newPhoneController.text.trim(),
+            oldCode: oldCodeController.text,
+            newCode: newCodeController.text,
+            areaCode: areaCodeController.text.trim());
+      }
+      if (!mounted) return;
+      showSettingsMessage(
+        context,
+        settingsText(context,
+            zh: _isBindMode ? '手机号绑定成功' : '手机号修改成功',
+            en: _isBindMode
+                ? 'Phone number linked successfully'
+                : 'Phone number changed successfully'),
       );
-      if (mounted) Navigator.of(context).pop(true);
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) {
+        showSettingsError(
+            context,
+            error,
+            settingsText(context,
+                zh: '操作失败，请检查验证码后重试', en: 'Check the codes and try again'));
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
   }
+
+  Future<void> _selectCountry() async {
+    if (busy) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    final code = await Navigator.of(context).push<String>(MaterialPageRoute(
+        builder: (_) =>
+            CountryCodePage(selectedCode: areaCodeController.text)));
+    if (mounted && code != null) setState(() => areaCodeController.text = code);
+  }
+
+  Widget _areaCodeInput(BuildContext context) => InkWell(
+        onTap: busy ? null : _selectCountry,
+        borderRadius: BorderRadius.circular(AppTokens.rSm),
+        child: ConstrainedBox(
+          constraints:
+              const BoxConstraints(minHeight: AppTokens.s8 + AppTokens.s4),
+          child: Row(children: [
+            Flexible(
+                child: Text(areaCodeController.text,
+                    style: TextStyle(
+                        color: AppTokens.textPrimary(
+                            dark: settingsIsDark(context)),
+                        fontSize: AppTokens.secondaryFontSize))),
+            const Icon(Icons.expand_more_rounded, size: AppTokens.s5),
+          ]),
+        ),
+      );
 
   Future<void> _bindConfirm() async => _confirm();
 
@@ -153,20 +247,25 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
             children: [
               SettingsInputCell(
                 label: settingsText(context, zh: '手机号', en: 'Phone Number'),
-                hint: settingsText(context, zh: '请输入手机号', en: 'Enter phone number'),
+                hint: settingsText(context,
+                    zh: '请输入手机号', en: 'Enter phone number'),
                 keyboardType: TextInputType.phone,
                 controller: newPhoneController,
+                leadingWidth: AppTokens.listItemHeight,
+                leading: _areaCodeInput(context),
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(20),
                 ],
               ),
               _CodeCell(
-                label: settingsText(context, zh: '验证码', en: 'Verification Code'),
-                hint: settingsText(context, zh: '请输入验证码', en: 'Enter verification code'),
-                buttonText: settingsText(context, zh: '获取验证码', en: 'Get Code'),
+                label:
+                    settingsText(context, zh: '验证码', en: 'Verification Code'),
+                hint: settingsText(context,
+                    zh: '请输入验证码', en: 'Enter verification code'),
+                buttonText: _codeFlow.label(context),
                 controller: newCodeController,
-                onPressed: _validNewPhone
+                onPressed: _validNewPhone && !busy && _codeFlow.canSend
                     ? () => _sendCode(newPhoneController.text.trim())
                     : null,
                 dark: dark,
@@ -186,7 +285,8 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
                   busy
                       ? settingsText(context, zh: '处理中...', en: 'Processing...')
                       : settingsText(context, zh: '完成绑定', en: 'Link Phone'),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -198,13 +298,13 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
               _uiStep == 1
                   ? settingsText(
                       context,
-                      zh: '先验证当前绑定手机号，再进入下一步绑定新手机号。',
-                      en: 'Verify your current phone number first, then proceed to bind a new one.',
+                      zh: '先填写当前手机的验证码，再输入新号码；提交时验证两个号码。',
+                      en: 'Enter the code sent to your current phone, then enter the new number. Both are verified on submit.',
                     )
                   : settingsText(
                       context,
-                      zh: '当前手机号已验证，请绑定新的手机号并完成验证。',
-                      en: 'Your current phone number has been verified. Please bind and verify a new number.',
+                      zh: '请输入新手机号和验证码，提交时验证新旧号码。',
+                      en: 'Enter the new phone and code. Both codes are verified when you submit.',
                     ),
               style: TextStyle(color: helperColor, fontSize: 13, height: 1.45),
             ),
@@ -214,7 +314,7 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
             _StepLabel(
               text: settingsText(
                 context,
-                zh: '第 1 步  验证当前手机号',
+                zh: '第 1 步  填写旧号验证码',
                 en: 'Step 1  Verify Current Phone Number',
               ),
             ),
@@ -222,16 +322,18 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
               margin: EdgeInsets.zero,
               children: [
                 SettingsCell(
-                  title: settingsText(context, zh: '当前手机号', en: 'Current Phone Number'),
+                  title: settingsText(context,
+                      zh: '当前手机号', en: 'Current Phone Number'),
                   value: _currentPhoneDisplay,
                   showArrow: false,
                 ),
                 _CodeCell(
                   label: settingsText(context, zh: '旧号验证码', en: 'Current Code'),
-                  hint: settingsText(context, zh: '请输入验证码', en: 'Enter verification code'),
-                  buttonText: settingsText(context, zh: '获取验证码', en: 'Get Code'),
+                  hint: settingsText(context,
+                      zh: '请输入验证码', en: 'Enter verification code'),
+                  buttonText: _codeFlow.label(context),
                   controller: oldCodeController,
-                  onPressed: busy
+                  onPressed: busy || !_codeFlow.canSend
                       ? null
                       : () => _sendCode(widget.currentPhone.trim()),
                   dark: dark,
@@ -249,7 +351,8 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
                   onPressed: _canVerifyOld ? _verifyOld : null,
                   child: Text(
                     settingsText(context, zh: '下一步', en: 'Next'),
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -266,26 +369,33 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
               margin: EdgeInsets.zero,
               children: [
                 SettingsCell(
-                  title: settingsText(context, zh: '当前手机号', en: 'Current Phone Number'),
+                  title: settingsText(context,
+                      zh: '当前手机号', en: 'Current Phone Number'),
                   value: _currentPhoneDisplay,
                   showArrow: false,
                 ),
                 SettingsInputCell(
-                  label: settingsText(context, zh: '新手机号', en: 'New Phone Number'),
-                  hint: settingsText(context, zh: '请输入新手机号', en: 'Enter new phone number'),
+                  label:
+                      settingsText(context, zh: '新手机号', en: 'New Phone Number'),
+                  hint: settingsText(context,
+                      zh: '请输入新手机号', en: 'Enter new phone number'),
                   keyboardType: TextInputType.phone,
                   controller: newPhoneController,
+                  leadingWidth: AppTokens.listItemHeight,
+                  leading: _areaCodeInput(context),
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(20),
                   ],
                 ),
                 _CodeCell(
-                  label: settingsText(context, zh: '新号验证码', en: 'New Number Code'),
-                  hint: settingsText(context, zh: '请输入验证码', en: 'Enter verification code'),
-                  buttonText: settingsText(context, zh: '获取验证码', en: 'Get Code'),
+                  label:
+                      settingsText(context, zh: '新号验证码', en: 'New Number Code'),
+                  hint: settingsText(context,
+                      zh: '请输入验证码', en: 'Enter verification code'),
+                  buttonText: _codeFlow.label(context),
                   controller: newCodeController,
-                  onPressed: _validNewPhone
+                  onPressed: _validNewPhone && !busy && _codeFlow.canSend
                       ? () => _sendCode(newPhoneController.text.trim())
                       : null,
                   dark: dark,
@@ -307,7 +417,8 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
                   ),
                   child: Text(
                     settingsText(context, zh: '返回上一步', en: 'Back'),
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                 ),
               ),
@@ -322,9 +433,11 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
                   onPressed: _canConfirm ? _confirm : null,
                   child: Text(
                     busy
-                        ? settingsText(context, zh: '处理中...', en: 'Processing...')
+                        ? settingsText(context,
+                            zh: '处理中...', en: 'Processing...')
                         : settingsText(context, zh: '完成', en: 'Done'),
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -481,7 +594,8 @@ class _StepIndicator extends StatelessWidget {
           Expanded(
             child: _StepIndicatorItem(
               index: 1,
-              title: settingsText(context, zh: '验证当前手机号', en: 'Verify Current Phone'),
+              title: settingsText(context,
+                  zh: '填写旧号验证码', en: 'Verify Current Phone'),
               active: currentStep == 1,
               done: currentStep > 1,
             ),
@@ -534,7 +648,8 @@ class _StepIndicatorItem extends StatelessWidget {
             color: highlighted ? AppTokens.accent : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: highlighted ? AppTokens.accent : AppTokens.border(dark: dark),
+              color:
+                  highlighted ? AppTokens.accent : AppTokens.border(dark: dark),
             ),
           ),
           child: Text(

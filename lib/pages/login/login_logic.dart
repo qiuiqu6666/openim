@@ -1,3 +1,4 @@
+import 'package:openim/pages/mine/settings/widgets/account_code_request.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -225,13 +226,12 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
     return sendVerificationCode();
   }
 
-  Future<bool> sendVerificationCode() => LoadingView.singleton.wrap(
-      asyncFunction: () => Apis.requestVerificationCode(
-            areaCode: areaCode.value,
-            phoneNumber: phone,
-            email: email,
-            usedFor: 3,
-          ));
+  Future<bool> sendVerificationCode() => requestAccountVerificationCode(
+        areaCode: areaCode.value,
+        phoneNumber: phone,
+        email: email,
+        usedFor: 3,
+      );
 
   void openCountryCodePicker() async {
     String? code = await IMViews.showCountryCodePicker();

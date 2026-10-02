@@ -15,7 +15,7 @@ import '../../routes/app_navigator.dart';
 import 'settings/settings_draft_store.dart';
 import 'settings/settings_home_page.dart';
 import 'settings/settings_navigation.dart';
-import 'settings/settings_service.dart';
+import 'settings/openim_profile_service.dart';
 import 'settings/pages/notification_settings_page.dart';
 import 'settings/pages/font_size_page.dart';
 import 'settings/pages/profile_info_page.dart';
@@ -28,15 +28,26 @@ import 'secondary/share_app_sheet.dart';
 class MineLogic extends GetxController {
   final imLogic = Get.find<IMController>();
   final settingsStore = SettingsDraftStore();
-  final SettingsService settingsService = const StubSettingsService();
+  late final OpenIMProfileService settingsService =
+      OpenIMProfileService(imLogic);
   final favoritesStore = FavoritesDraftStore();
 
   late StreamSubscription kickedOfflineSub;
 
   void viewMyInfo() => AppNavigator.startMyInfo();
 
-  void openProfileInfo(BuildContext context) {
+  Future<void> openProfileInfo(BuildContext context) async {
+    try {
+      await settingsService.refresh();
+    } catch (_) {
+      IMViews.showToast(_isZh ? '资料刷新失败，显示已缓存资料' : 'Could not refresh profile');
+    }
+    if (!context.mounted || isClosed) return;
     final user = imLogic.userInfo.value;
+    settingsStore.seedProfile(
+        nickname: user.nickname ?? '',
+        signature: OpenIMProfileService.signatureFromEx(user.ex));
+    settingsStore.syncProfileSignature(OpenIMProfileService.signatureFromEx(user.ex));
     openSettingsPage(
       context,
       ProfileInfoPage(
@@ -87,7 +98,8 @@ class MineLogic extends GetxController {
 
   void openNotifications(BuildContext context) => openSettingsPage(
         context,
-        NotificationSettingsPage(store: settingsStore, service: settingsService),
+        NotificationSettingsPage(
+            store: settingsStore, service: settingsService),
       );
 
   void openShareApp(BuildContext context) => ShareAppSheet.show(context);
@@ -107,11 +119,11 @@ class MineLogic extends GetxController {
         phoneNumber: user.phoneNumber ?? '',
         profileGender: user.gender ?? 0,
         profileBirth: user.birth ?? 0,
+        onProfileTap: () => openProfileInfo(context),
         onLogout: logout,
       ),
     );
   }
-
 
   void openPhotoSheet() => MyAvatarEditor.open(imLogic);
 
@@ -163,7 +175,8 @@ class MineLogic extends GetxController {
     if (EasyLoading.isShow) {
       EasyLoading.dismiss();
     }
-    Get.snackbar(StrRes.accountWarn, tips ?? StrRes.accountException);
+    IMViews.showToast(
+        '${StrRes.accountWarn}\n${tips ?? StrRes.accountException}');
     await DataSp.removeLoginCertificate();
     PushController.logout();
     AppNavigator.startLogin();

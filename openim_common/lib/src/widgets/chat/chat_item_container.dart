@@ -71,7 +71,12 @@ class ChatItemContainer extends StatelessWidget {
   final CustomPopupMenuController? menuController;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: FriendDisplayPreferences.changes,
+        builder: (context, _) => _build(context),
+      );
+
+  Widget _build(BuildContext context) {
     return IgnorePointer(
       ignoring: ignorePointer,
       child: Column(
@@ -93,6 +98,8 @@ class ChatItemContainer extends StatelessWidget {
   }
 
   Widget _buildChildView(BubbleType type) {
+    final showReadStatus =
+        this.showReadStatus && FriendDisplayPreferences.showReadReceipts;
     final time = timeStr == null
         ? null
         : Text(timeStr!,

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import '../security_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -77,7 +78,8 @@ class SettingsResponsive {
         maxExtra: 12,
       );
 
-  static EdgeInsets listRowPadding(BuildContext context) => EdgeInsets.symmetric(
+  static EdgeInsets listRowPadding(BuildContext context) =>
+      EdgeInsets.symmetric(
         horizontal: isDesktop(context) ? 20 : 16,
         vertical: (isDesktop(context) ? 10 : 12) +
             _extraForScale(
@@ -116,6 +118,7 @@ class SettingsScaffold extends StatelessWidget {
     this.leading,
     this.actions,
     this.bottom,
+    this.body,
     this.onLeadingPressed,
     this.disableLeading = false,
     this.showLeading = true,
@@ -130,6 +133,9 @@ class SettingsScaffold extends StatelessWidget {
   final List<Widget> children;
   final List<Widget>? actions;
   final Widget? bottom;
+
+  /// Custom content for pages that need a fixed footer and adaptive layout.
+  final Widget? body;
   final VoidCallback? onLeadingPressed;
   final bool disableLeading;
   final bool showLeading;
@@ -212,7 +218,7 @@ class SettingsScaffold extends StatelessWidget {
           top: false,
           child: Column(
             children: [
-              Expanded(child: listView),
+              Expanded(child: body ?? listView),
               if (bottom != null) bottom!,
             ],
           ),
@@ -300,7 +306,8 @@ class SettingsCell extends StatelessWidget {
 
     final row = Container(
       constraints: BoxConstraints(
-        minHeight: subtitle == null ? minHeight : math.max(minHeight, 64.0).toDouble(),
+        minHeight:
+            subtitle == null ? minHeight : math.max(minHeight, 64.0).toDouble(),
       ),
       padding: padding,
       decoration: BoxDecoration(
@@ -309,8 +316,9 @@ class SettingsCell extends StatelessWidget {
             : null,
       ),
       child: Row(
-        crossAxisAlignment:
-            subtitle == null ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+        crossAxisAlignment: subtitle == null
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
         children: [
           if (indent > 0) SizedBox(width: indent),
           if (leading != null) ...[
@@ -416,6 +424,7 @@ class SettingsInputCell extends StatelessWidget {
     this.trailing,
     this.showDivider = true,
     this.enabled = true,
+    this.contentPadding,
   });
 
   final String label;
@@ -430,6 +439,7 @@ class SettingsInputCell extends StatelessWidget {
   final Widget? trailing;
   final bool showDivider;
   final bool enabled;
+  final EdgeInsetsGeometry? contentPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -442,7 +452,7 @@ class SettingsInputCell extends StatelessWidget {
       constraints: BoxConstraints(
         minHeight: SettingsResponsive.listRowMinHeight(context),
       ),
-      padding: SettingsResponsive.listRowPadding(context),
+      padding: contentPadding ?? SettingsResponsive.listRowPadding(context),
       decoration: BoxDecoration(
         border: showDivider
             ? Border(bottom: BorderSide(color: line, width: 0.7))
@@ -459,8 +469,7 @@ class SettingsInputCell extends StatelessWidget {
               style: TextStyle(color: text, fontSize: 16),
             ),
           ),
-          if (leading != null)
-            SizedBox(width: leadingWidth, child: leading),
+          if (leading != null) SizedBox(width: leadingWidth, child: leading),
           Expanded(
             child: TextField(
               controller: controller,
@@ -800,13 +809,19 @@ Future<bool> showSettingsConfirm(
   return result ?? false;
 }
 
+String settingsErrorMessage(BuildContext context, Object error,
+        {required String fallback}) =>
+    securityErrorMessage(error,
+        zh: Localizations.localeOf(context).languageCode == 'zh',
+        fallback: fallback);
+
+void showSettingsError(BuildContext context, Object error, String fallback) {
+  showSettingsMessage(
+      context, settingsErrorMessage(context, error, fallback: fallback));
+}
+
 void showSettingsMessage(BuildContext context, String message) {
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  messenger
-    ?..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(duration: const Duration(seconds: 2), content: Text(message)),
-    );
+  IMViews.showToast(message, duration: const Duration(seconds: 2));
 }
 
 Future<void> showUnavailableSettingsAction(
@@ -829,3 +844,80 @@ Future<void> showReservedSettingsAction(
   String feature,
 ) =>
     showUnavailableSettingsAction(context, feature);
+
+class SettingsDestructiveButton extends StatelessWidget {
+  const SettingsDestructiveButton(
+      {super.key,
+      required this.text,
+      required this.loadingText,
+      required this.onPressed,
+      this.loading = false,
+      this.soft = false});
+  final String text;
+  final String loadingText;
+  final VoidCallback? onPressed;
+  final bool loading;
+  final bool soft;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+      width: double.infinity,
+      height: SettingsResponsive.controlHeight(context),
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+                disabledForegroundColor:
+                    AppTokens.textSecondary(dark: settingsIsDark(context)),
+                textStyle: const TextStyle(
+                    fontSize: AppTokens.listTitleFontSize,
+                    fontWeight: FontWeight.w600),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTokens.rMd)))
+            .copyWith(
+          foregroundColor: WidgetStateProperty.resolveWith((states) =>
+              loading || !states.contains(WidgetState.disabled)
+                  ? Theme.of(context).colorScheme.error
+                  : AppTokens.textSecondary(dark: settingsIsDark(context))),
+          backgroundColor: WidgetStateProperty.resolveWith((states) => loading
+              ? Theme.of(context)
+                  .colorScheme
+                  .error
+                  .withValues(alpha: soft ? 0.1 : 0.04)
+              : states.contains(WidgetState.disabled)
+                  ? AppTokens.surfaceAlt(dark: settingsIsDark(context))
+                  : states.contains(WidgetState.pressed)
+                      ? Theme.of(context)
+                          .colorScheme
+                          .error
+                          .withValues(alpha: 0.12)
+                      : soft
+                          ? Theme.of(context).colorScheme.error.withValues(
+                              alpha: settingsIsDark(context) ? 0.18 : 0.08)
+                          : AppTokens.surface(dark: settingsIsDark(context))),
+          overlayColor: WidgetStatePropertyAll(
+              Theme.of(context).colorScheme.error.withValues(alpha: 0.06)),
+          side: WidgetStateProperty.resolveWith((states) => soft
+              ? BorderSide.none
+              : BorderSide(
+                  color: loading || states.contains(WidgetState.pressed)
+                      ? Theme.of(context)
+                          .colorScheme
+                          .error
+                          .withValues(alpha: 0.3)
+                      : AppTokens.border(dark: settingsIsDark(context)))),
+        ),
+        onPressed: loading ? null : onPressed,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (loading)
+            SizedBox(
+                width: AppTokens.chevronSize,
+                height: AppTokens.chevronSize,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Theme.of(context).colorScheme.error))
+          else
+            const Icon(Icons.delete_outline_rounded,
+                size: AppTokens.chevronSize),
+          const SizedBox(width: AppTokens.s3),
+          Flexible(child: Text(loading ? loadingText : text)),
+        ]),
+      ));
+}

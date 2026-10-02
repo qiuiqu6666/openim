@@ -21,7 +21,7 @@ class EditSignaturePage extends StatefulWidget {
 }
 
 class _EditSignaturePageState extends State<EditSignaturePage> {
-  static const int _maxLength = 30;
+  static const int _maxLength = 100;
   late final TextEditingController _controller;
   bool _saving = false;
 
@@ -46,7 +46,7 @@ class _EditSignaturePageState extends State<EditSignaturePage> {
     if (_saving) return;
     FocusManager.instance.primaryFocus?.unfocus();
     final value = _controller.text.trim();
-    if (!widget.service.isBackendAvailable) {
+    if (!widget.service.isProfileBackendAvailable) {
       showUnavailableSettingsAction(
         context,
         settingsText(context, zh: '个性签名', en: 'Bio'),
@@ -59,6 +59,13 @@ class _EditSignaturePageState extends State<EditSignaturePage> {
       if (!mounted) return;
       widget.store.setProfileSignature(value);
       Navigator.of(context).pop(value);
+    } catch (_) {
+      if (mounted) {
+        showSettingsMessage(
+            context,
+            settingsText(context,
+                zh: '保存失败，请稍后重试', en: 'Failed to save. Please try again.'));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -67,7 +74,7 @@ class _EditSignaturePageState extends State<EditSignaturePage> {
   @override
   Widget build(BuildContext context) {
     final dark = settingsIsDark(context);
-    final fill = dark ? const Color(0xFF23262D) : const Color(0xFFF1F2F4);
+    final fill = AppTokens.surface(dark: dark);
     final text = AppTokens.textPrimary(dark: dark);
     final hint = AppTokens.textSecondary(dark: dark);
     final changed = _controller.text.trim() != widget.store.profileSignature;
@@ -85,6 +92,7 @@ class _EditSignaturePageState extends State<EditSignaturePage> {
             ),
             child: TextField(
               controller: _controller,
+              enabled: !_saving,
               autofocus: true,
               minLines: 5,
               maxLines: 7,
@@ -96,7 +104,8 @@ class _EditSignaturePageState extends State<EditSignaturePage> {
                 hintStyle: TextStyle(color: hint, fontSize: 16),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-                counterText: '${_controller.text.length}/$_maxLength',
+                counterText:
+                    '${_controller.text.characters.length}/$_maxLength',
                 counterStyle: TextStyle(color: hint, fontSize: 12),
               ),
             ),
@@ -111,18 +120,19 @@ class _EditSignaturePageState extends State<EditSignaturePage> {
               onPressed: _saving || !changed ? null : _save,
               style: FilledButton.styleFrom(
                 backgroundColor: AppTokens.accent,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: AppTokens.accent.withOpacity(0.45),
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                disabledBackgroundColor:
+                    AppTokens.accent.withValues(alpha: 0.45),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
               child: _saving
-                  ? const SizedBox.square(
+                  ? SizedBox.square(
                       dimension: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onPrimary,
                       ),
                     )
                   : Text(

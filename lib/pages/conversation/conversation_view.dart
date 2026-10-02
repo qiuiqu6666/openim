@@ -200,7 +200,12 @@ class _ConversationPageState extends State<ConversationPage>
       );
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: FriendDisplayPreferences.changes,
+        builder: (context, _) => _build(context),
+      );
+
+  Widget _build(BuildContext context) {
     return Obx(() {
       final archivedConversations = logic.list
           .where((info) =>
@@ -276,7 +281,7 @@ class _ConversationPageState extends State<ConversationPage>
                   ),
                 ),
               ),
-            if (!widget.archivedOnly)
+            if (!widget.archivedOnly && logic.folders.isNotEmpty)
               SizedBox(
                 height: 48.w,
                 child: Padding(
@@ -696,9 +701,17 @@ class _ConversationPageState extends State<ConversationPage>
                                           info.latestMsg?.status ==
                                               MessageStatus.succeeded) ...[
                                         ChatReadReceiptIcon(
-                                          isRead:
+                                          semanticLabel:
+                                              FriendDisplayPreferences
+                                                      .showReadReceipts
+                                                  ? null
+                                                  : StrRes.sentSuccessfully,
+                                          isRead: FriendDisplayPreferences
+                                                  .showReadReceipts &&
                                               info.latestMsg?.isRead == true,
-                                          color: info.latestMsg?.isRead == true
+                                          color: FriendDisplayPreferences
+                                                      .showReadReceipts &&
+                                                  info.latestMsg?.isRead == true
                                               ? Styles.c_0089FF
                                               : Styles.c_8E9AB0,
                                         ),

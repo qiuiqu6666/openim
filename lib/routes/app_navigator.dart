@@ -21,14 +21,16 @@ class AppNavigator {
     Get.until((route) => Get.currentRoute == AppRoutes.login);
   }
 
-  static void startMain({bool isAutoLogin = false, List<ConversationInfo>? conversations}) {
+  static void startMain(
+      {bool isAutoLogin = false, List<ConversationInfo>? conversations}) {
     Get.offAllNamed(
       AppRoutes.home,
       arguments: {'isAutoLogin': isAutoLogin, 'conversations': conversations},
     );
   }
 
-  static void startSplashToMain({bool isAutoLogin = false, List<ConversationInfo>? conversations}) {
+  static void startSplashToMain(
+      {bool isAutoLogin = false, List<ConversationInfo>? conversations}) {
     Get.offAndToNamed(
       AppRoutes.home,
       arguments: {'isAutoLogin': isAutoLogin, 'conversations': conversations},
@@ -68,13 +70,16 @@ class AppNavigator {
 
   static startAddContactsMethod() => Get.toNamed(AppRoutes.addContactsMethod);
 
-  static startAddContactsBySearch({required SearchType searchType}) => Get.toNamed(
+  static startAddContactsBySearch({required SearchType searchType}) =>
+      Get.toNamed(
         AppRoutes.addContactsBySearch,
         arguments: {"searchType": searchType},
       );
 
   static startUserProfilePane({
     required String userID,
+    FriendAddSource? addSource,
+    Map<String, String> friendAddFields = const {},
     String? groupID,
     String? nickname,
     String? faceURL,
@@ -91,6 +96,8 @@ class AppNavigator {
       'faceURL': faceURL,
       'offAllWhenDelFriend': offAllWhenDelFriend,
       'forceCanAdd': forceCanAdd,
+      'addSource': resolveFriendAddSource(addSource, groupID: groupID),
+      'friendAddFields': friendAddFields,
     };
 
     return offAndToNamed
@@ -116,15 +123,22 @@ class AppNavigator {
         'userID': userID,
       });
 
-  static startSetFriendRemark() => Get.toNamed(AppRoutes.setFriendRemark, arguments: {});
+  static startSetFriendRemark() =>
+      Get.toNamed(AppRoutes.setFriendRemark, arguments: {});
 
   static startSendVerificationApplication({
     String? userID,
+    FriendAddSource? addSource,
+    Map<String, String> friendAddFields = const {},
+    String? friendGroupID,
     String? groupID,
     JoinGroupMethod? joinGroupMethod,
   }) =>
       Get.toNamed(AppRoutes.sendVerificationApplication, arguments: {
         'joinGroupMethod': joinGroupMethod,
+        'addSource': resolveFriendAddSource(addSource, groupID: friendGroupID),
+        'friendGroupID': friendGroupID,
+        'friendAddFields': friendAddFields,
         'userID': userID,
         'groupID': groupID,
       });
@@ -147,7 +161,8 @@ class AppNavigator {
   static startMyInfo() => Get.toNamed(AppRoutes.myInfo);
 
   static startEditMyInfo({EditAttr attr = EditAttr.nickname, int? maxLength}) =>
-      Get.toNamed(AppRoutes.editMyInfo, arguments: {'editAttr': attr, 'maxLength': maxLength});
+      Get.toNamed(AppRoutes.editMyInfo,
+          arguments: {'editAttr': attr, 'maxLength': maxLength});
 
   static startAccountSetup() => Get.toNamed(AppRoutes.accountSetup);
 
@@ -191,10 +206,11 @@ class AppNavigator {
     // Named GetX routes are registered as dynamic. Convert the result after
     // navigation completes instead of requiring a typed Route at push time.
     final result = await Get.toNamed<dynamic>(AppRoutes.groupMemberList,
-        preventDuplicates: false, arguments: {
-        'groupInfo': groupInfo,
-        'opType': opType,
-      });
+        preventDuplicates: false,
+        arguments: {
+          'groupInfo': groupInfo,
+          'opType': opType,
+        });
     return result as T?;
   }
 
@@ -256,11 +272,14 @@ class AppNavigator {
         'ex': ex,
       });
 
-  static startSelectContactsFromFriends() => Get.toNamed(AppRoutes.selectContactsFromFriends);
+  static startSelectContactsFromFriends() =>
+      Get.toNamed(AppRoutes.selectContactsFromFriends);
 
-  static startSelectContactsFromGroup() => Get.toNamed(AppRoutes.selectContactsFromGroup);
+  static startSelectContactsFromGroup() =>
+      Get.toNamed(AppRoutes.selectContactsFromGroup);
 
-  static startSelectContactsFromSearch() => Get.toNamed(AppRoutes.selectContactsFromSearch);
+  static startSelectContactsFromSearch() =>
+      Get.toNamed(AppRoutes.selectContactsFromSearch);
 
   static startCreateGroup({
     List<UserInfo> defaultCheckedList = const [],
@@ -273,7 +292,10 @@ class AppNavigator {
     if (list is List<UserInfo>) {
       return Get.toNamed(
         AppRoutes.createGroup,
-        arguments: {'checkedList': list, 'defaultCheckedList': defaultCheckedList},
+        arguments: {
+          'checkedList': list,
+          'defaultCheckedList': defaultCheckedList
+        },
       );
     }
     return null;
@@ -363,5 +385,6 @@ class AppNavigator {
         'verificationCode': verificationCode,
       });
 
-  static startSelectContactsFromTag() => Get.toNamed(AppRoutes.selectContactsFromTag);
+  static startSelectContactsFromTag() =>
+      Get.toNamed(AppRoutes.selectContactsFromTag);
 }

@@ -23,6 +23,7 @@ class MediaSource {
   final String? url;
   final String thumbnail;
   final File? file;
+  final Uint8List? bytes;
   final bool isVideo;
   final String? tag;
   final String? senderName;
@@ -32,6 +33,7 @@ class MediaSource {
       {required this.thumbnail,
       this.url,
       this.file,
+      this.bytes,
       this.isVideo = false,
       this.tag,
       this.senderName,
@@ -44,6 +46,8 @@ class MediaBrowser extends StatefulWidget {
     required this.sources,
     required this.initialIndex,
     this.muted = false,
+    this.showGallery = true,
+    this.showCounter = true,
     this.onAutoPlay,
     this.onSave,
     this.onLongPress,
@@ -54,6 +58,8 @@ class MediaBrowser extends StatefulWidget {
   final int initialIndex;
   final List<MediaSource> sources;
   final bool muted;
+  final bool showGallery;
+  final bool showCounter;
   final bool Function(int index)? onAutoPlay;
   final ValueChanged<int>? onSave;
   final ValueChanged<int>? onLongPress;
@@ -218,90 +224,102 @@ class _MediaBrowserState extends State<MediaBrowser>
                           tag: s.tag ?? s.thumbnail,
                           slideType: SlideType.onlyImage,
                           slidePagekey: slidePagekey,
-                          child: s.file != null && s.file!.existsSync()
-                              ? ExtendedImage.file(
-                                  s.file!,
+                          child: s.bytes != null
+                              ? ExtendedImage.memory(
+                                  s.bytes!,
                                   enableSlideOutPage: true,
                                   fit: BoxFit.contain,
                                   mode: ExtendedImageMode.gesture,
                                 )
-                              : ExtendedImage.network(
-                                  s.url ?? s.thumbnail,
-                                  enableSlideOutPage: true,
-                                  fit: BoxFit.contain,
-                                  mode: ExtendedImageMode.gesture,
-                                  initGestureConfigHandler:
-                                      (ExtendedImageState state) {
-                                    return GestureConfig(
-                                      minScale: 0.9,
-                                      animationMinScale: 0.7,
-                                      maxScale: 3.0,
-                                      animationMaxScale: 3.5,
-                                      speed: 1.0,
-                                      inPageView: true,
-                                      initialAlignment: InitialAlignment.center,
-                                    );
-                                  },
-                                  onDoubleTap: (state) {
-                                    final Offset? pointerDownPosition =
-                                        state.pointerDownPosition;
-                                    final double? begin =
-                                        state.gestureDetails!.totalScale;
-                                    double end;
+                              : s.file != null && s.file!.existsSync()
+                                  ? ExtendedImage.file(
+                                      s.file!,
+                                      enableSlideOutPage: true,
+                                      fit: BoxFit.contain,
+                                      mode: ExtendedImageMode.gesture,
+                                    )
+                                  : ExtendedImage.network(
+                                      s.url ?? s.thumbnail,
+                                      enableSlideOutPage: true,
+                                      fit: BoxFit.contain,
+                                      mode: ExtendedImageMode.gesture,
+                                      initGestureConfigHandler:
+                                          (ExtendedImageState state) {
+                                        return GestureConfig(
+                                          minScale: 0.9,
+                                          animationMinScale: 0.7,
+                                          maxScale: 3.0,
+                                          animationMaxScale: 3.5,
+                                          speed: 1.0,
+                                          inPageView: true,
+                                          initialAlignment:
+                                              InitialAlignment.center,
+                                        );
+                                      },
+                                      onDoubleTap: (state) {
+                                        final Offset? pointerDownPosition =
+                                            state.pointerDownPosition;
+                                        final double? begin =
+                                            state.gestureDetails!.totalScale;
+                                        double end;
 
-                                    _doubleClickAnimation?.removeListener(
-                                        _doubleClickAnimationListener);
+                                        _doubleClickAnimation?.removeListener(
+                                            _doubleClickAnimationListener);
 
-                                    _doubleClickAnimationController.stop();
+                                        _doubleClickAnimationController.stop();
 
-                                    _doubleClickAnimationController.reset();
+                                        _doubleClickAnimationController.reset();
 
-                                    if (begin == doubleTapScales[0]) {
-                                      end = doubleTapScales[1];
-                                    } else {
-                                      end = doubleTapScales[0];
-                                    }
+                                        if (begin == doubleTapScales[0]) {
+                                          end = doubleTapScales[1];
+                                        } else {
+                                          end = doubleTapScales[0];
+                                        }
 
-                                    _doubleClickAnimationListener = () {
-                                      state.handleDoubleTap(
-                                          scale: _doubleClickAnimation!.value,
-                                          doubleTapPosition:
-                                              pointerDownPosition);
-                                    };
-                                    _doubleClickAnimation =
-                                        _doubleClickAnimationController.drive(
-                                            Tween<double>(
-                                                begin: begin, end: end));
+                                        _doubleClickAnimationListener = () {
+                                          state.handleDoubleTap(
+                                              scale:
+                                                  _doubleClickAnimation!.value,
+                                              doubleTapPosition:
+                                                  pointerDownPosition);
+                                        };
+                                        _doubleClickAnimation =
+                                            _doubleClickAnimationController
+                                                .drive(Tween<double>(
+                                                    begin: begin, end: end));
 
-                                    _doubleClickAnimation!.addListener(
-                                        _doubleClickAnimationListener);
+                                        _doubleClickAnimation!.addListener(
+                                            _doubleClickAnimationListener);
 
-                                    _doubleClickAnimationController.forward();
-                                  },
-                                  loadStateChanged: (state) {
-                                    if (state.extendedImageLoadState ==
-                                        LoadState.loading) {
-                                      return Stack(
-                                        alignment: AlignmentDirectional.center,
-                                        children: [
-                                          ExtendedImage.network(
-                                            s.thumbnail,
-                                            enableLoadState: false,
-                                          ),
-                                          const CupertinoActivityIndicator(
-                                            radius: 15,
-                                          ),
-                                        ],
-                                      );
-                                    } else if (state.extendedImageLoadState ==
-                                        LoadState.failed) {
-                                      state.imageProvider.evict();
+                                        _doubleClickAnimationController
+                                            .forward();
+                                      },
+                                      loadStateChanged: (state) {
+                                        if (state.extendedImageLoadState ==
+                                            LoadState.loading) {
+                                          return Stack(
+                                            alignment:
+                                                AlignmentDirectional.center,
+                                            children: [
+                                              ExtendedImage.network(
+                                                s.thumbnail,
+                                                enableLoadState: false,
+                                              ),
+                                              const CupertinoActivityIndicator(
+                                                radius: 15,
+                                              ),
+                                            ],
+                                          );
+                                        } else if (state
+                                                .extendedImageLoadState ==
+                                            LoadState.failed) {
+                                          state.imageProvider.evict();
 
-                                      return ImageRes.pictureError.toImage;
-                                    }
-                                    return null;
-                                  },
-                                ),
+                                          return ImageRes.pictureError.toImage;
+                                        }
+                                        return null;
+                                      },
+                                    ),
                         );
                 },
               ),
@@ -350,19 +368,22 @@ class _MediaBrowserState extends State<MediaBrowser>
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
                                                 color: Colors.white)),
-                                      Text(
-                                          [
-                                            if (source.sentAt != null)
-                                              _previewTime(source.sentAt),
-                                            '${currentIndex + 1}/${widget.sources.length}',
-                                          ].join('  '),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                  color: Colors.white70)),
+                                      if (widget.showCounter ||
+                                          source.sentAt != null)
+                                        Text(
+                                            [
+                                              if (source.sentAt != null)
+                                                _previewTime(source.sentAt),
+                                              if (widget.showCounter)
+                                                '${currentIndex + 1}/${widget.sources.length}',
+                                            ].join('  '),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                    color: Colors.white70)),
                                     ]),
                               ),
                             ),
@@ -425,10 +446,12 @@ class _MediaBrowserState extends State<MediaBrowser>
                               icon: Icons.download,
                               tooltip: StrRes.saveToAlbum,
                               onPressed: () => widget.onSave!(currentIndex)),
-                        _roundAction(context,
-                            icon: Icons.grid_view_rounded,
-                            tooltip: '图片和视频',
-                            onPressed: () => setState(() => _showGrid = true)),
+                        if (widget.showGallery)
+                          _roundAction(context,
+                              icon: Icons.grid_view_rounded,
+                              tooltip: '图片和视频',
+                              onPressed: () =>
+                                  setState(() => _showGrid = true)),
                         if (widget.onDelete != null)
                           _roundAction(context,
                               icon: Icons.more_horiz,
@@ -529,50 +552,132 @@ class _MediaBrowserState extends State<MediaBrowser>
   }
 
   Widget _buildGrid(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    Widget placeholder({bool failed = false}) => ColoredBox(
+          color: AppTokens.surface(dark: dark),
+          child: Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(failed ? Icons.broken_image_outlined : Icons.image_outlined,
+                  color: AppTokens.textSecondary(dark: dark), size: 28),
+              if (failed) ...[
+                const SizedBox(height: 6),
+                Text(zh ? '缩略图不可用' : 'Preview unavailable',
+                    style: TextStyle(
+                        color: AppTokens.textSecondary(dark: dark),
+                        fontSize: 11)),
+              ],
+            ]),
+          ),
+        );
+    Widget failed(BuildContext _, Object __, StackTrace? ___) =>
+        placeholder(failed: true);
     return Material(
-      color: scheme.surface,
+      color: AppTokens.background(dark: dark),
       child: SafeArea(
         child: Column(children: [
-          ListTile(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => setState(() => _showGrid = false),
-            ),
-            title: Text('图片和视频 (${widget.sources.length})'),
+          SizedBox(
+            height: 56,
+            child: Stack(alignment: Alignment.center, children: [
+              Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    tooltip: zh ? '返回预览' : 'Back to preview',
+                    color: AppTokens.accent,
+                    icon: const Icon(Icons.chevron_left_rounded, size: 32),
+                    onPressed: () => setState(() => _showGrid = false),
+                  )),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 56),
+                child: Text(zh ? '图片和视频' : 'Photos and videos',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: AppTokens.textPrimary(dark: dark),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                    zh
+                        ? '共 ${widget.sources.length} 项'
+                        : '${widget.sources.length} items',
+                    style: TextStyle(
+                        color: AppTokens.textSecondary(dark: dark),
+                        fontSize: 13))),
           ),
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.all(8),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4, crossAxisSpacing: 4, mainAxisSpacing: 4),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 160,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6),
               itemCount: widget.sources.length,
               itemBuilder: (context, index) {
                 final item = widget.sources[index];
                 final file = item.file;
-                final thumb = !item.isVideo && file != null && file.existsSync()
-                    ? Image.file(file, fit: BoxFit.cover)
-                    : Image.network(
-                        item.thumbnail.isNotEmpty
-                            ? item.thumbnail
-                            : item.url ?? '',
-                        fit: BoxFit.cover);
-                return InkWell(
-                  onTap: () {
-                    setState(() {
+                final uri =
+                    item.thumbnail.isNotEmpty ? item.thumbnail : item.url ?? '';
+                final localThumbnail = uri.isNotEmpty && !uri.startsWith('http')
+                    ? File(uri.startsWith('file://')
+                        ? Uri.parse(uri).toFilePath()
+                        : uri)
+                    : null;
+                final thumb = !item.isVideo && item.bytes != null
+                    ? Image.memory(item.bytes!,
+                        fit: BoxFit.cover, errorBuilder: failed)
+                    : !item.isVideo && file != null && file.existsSync()
+                        ? Image.file(file,
+                            fit: BoxFit.cover, errorBuilder: failed)
+                        : localThumbnail != null && localThumbnail.existsSync()
+                            ? Image.file(localThumbnail,
+                                fit: BoxFit.cover, errorBuilder: failed)
+                            : uri.startsWith('http')
+                                ? Image.network(uri,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: failed,
+                                    loadingBuilder: (_, child, progress) =>
+                                        progress == null
+                                            ? child
+                                            : placeholder())
+                                : placeholder(failed: true);
+                return Semantics(
+                  button: true,
+                  selected: currentIndex == index,
+                  label:
+                      '${item.isVideo ? (zh ? '视频' : 'Video') : (zh ? '图片' : 'Photo')} ${index + 1}',
+                  child: InkWell(
+                    onTap: () => setState(() {
                       currentIndex = index;
                       _showGrid = false;
-                    });
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Stack(fit: StackFit.expand, children: [
-                      thumb,
-                      if (item.isVideo)
-                        const Center(
-                            child: Icon(Icons.play_circle_fill,
-                                color: Colors.white, size: 32)),
-                    ]),
+                    }),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: currentIndex == index
+                              ? Border.all(color: AppTokens.accent, width: 2)
+                              : null),
+                      padding: currentIndex == index
+                          ? const EdgeInsets.all(2)
+                          : EdgeInsets.zero,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Stack(fit: StackFit.expand, children: [
+                          thumb,
+                          if (item.isVideo)
+                            const Center(
+                                child: Icon(Icons.play_circle_fill,
+                                    color: Colors.white, size: 32)),
+                        ]),
+                      ),
+                    ),
                   ),
                 );
               },

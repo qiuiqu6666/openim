@@ -60,3 +60,14 @@ class WrapAzListView<T extends ISuspensionBean> extends StatelessWidget {
         child: tag.toText..style = Styles.ts_8E9AB0_14sp,
       );
 }
+
+/// Shared alphabet navigation appearance used by the contacts directory.
+IndexBarOptions directoryIndexBarOptions() => IndexBarOptions(
+      needRebuild: true,
+      textStyle: Styles.ts_8E9AB0_12sp,
+      selectTextStyle: Styles.ts_FFFFFF_12sp,
+      downItemDecoration:
+          BoxDecoration(color: Styles.c_0089FF, shape: BoxShape.circle),
+      indexHintDecoration: BoxDecoration(
+          color: Styles.c_0089FF, borderRadius: BorderRadius.circular(12.r)),
+    );

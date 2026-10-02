@@ -99,3 +99,7 @@ export 'src/widgets/navigation_glass_controller.dart';
 export 'src/widgets/group_qr_scanner.dart';
 
 export 'src/widgets/chat/voice_playback_controller.dart';
+
+export 'src/utils/friend_display_preferences.dart';
+export 'src/widgets/app_switch.dart';
+export 'src/utils/friend_add_source.dart';

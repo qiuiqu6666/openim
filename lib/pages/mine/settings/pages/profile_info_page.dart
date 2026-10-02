@@ -1,12 +1,10 @@
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:photo_manager/photo_manager.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:wechat_camera_picker/wechat_camera_picker.dart';
 
@@ -49,6 +47,7 @@ class ProfileInfoPage extends StatefulWidget {
 
 class _ProfileInfoPageState extends State<ProfileInfoPage> {
   bool _pickingAvatar = false;
+  bool _savingProfile = false;
   late int _gender;
   late int _birth;
 
@@ -67,7 +66,8 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
       title: settingsText(context, zh: '更换头像', en: 'Change Avatar'),
       actions: [
         if (!desktop)
-          SettingsAction(settingsText(context, zh: '拍照', en: 'Take Photo'), 'camera'),
+          SettingsAction(
+              settingsText(context, zh: '拍照', en: 'Take Photo'), 'camera'),
         SettingsAction(
           settingsText(
             context,
@@ -76,7 +76,8 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
           ),
           'photos',
         ),
-        SettingsAction(settingsText(context, zh: '查看头像', en: 'View Avatar'), 'view'),
+        SettingsAction(
+            settingsText(context, zh: '查看头像', en: 'View Avatar'), 'view'),
       ],
     );
     if (source == null || !mounted) return;
@@ -135,7 +136,7 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
       }
 
       if (!mounted || bytes == null || bytes.isEmpty) return;
-      if (!widget.service.isBackendAvailable) {
+      if (!widget.service.isProfileBackendAvailable) {
         showUnavailableSettingsAction(
           context,
           settingsText(context, zh: '更换头像', en: 'Change avatar'),
@@ -173,16 +174,30 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
 
   Future<void> _viewAvatar() async {
     if (!mounted) return;
-    await showDialog<void>(
+    final bytes = widget.store.profileAvatarPreviewBytes;
+    final url = widget.avatarUrl;
+    if (bytes == null && !IMUtils.isUrlValid(url)) {
+      showSettingsMessage(
+        context,
+        settingsText(context, zh: '暂无可查看的头像', en: 'No avatar to preview'),
+      );
+      return;
+    }
+    await IMUtils.previewMediaFile(
       context: context,
-      builder: (dialogContext) => Dialog(
-        insetPadding: const EdgeInsets.all(24),
-        backgroundColor: Colors.black,
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: InteractiveViewer(child: _avatar(size: 360, square: true)),
+      message: Message(),
+      sources: [
+        MediaSource(
+          thumbnail: url,
+          url: url,
+          bytes: bytes,
+          senderName: widget.store.profileNickname.trim().isEmpty
+              ? widget.nickname
+              : widget.store.profileNickname,
         ),
-      ),
+      ],
+      showGallery: false,
+      showCounter: false,
     );
   }
 
@@ -198,21 +213,27 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
   }
 
   Future<void> _chooseGender() async {
+    if (_savingProfile) return;
     final selected = await showSettingsActionSheet<int>(
       context,
       title: settingsText(context, zh: '性别', en: 'Gender'),
       actions: [
-        SettingsAction(settingsText(context, zh: '男', en: 'Male'), 1, enabled: _gender != 1),
-        SettingsAction(settingsText(context, zh: '女', en: 'Female'), 2, enabled: _gender != 2),
+        SettingsAction(settingsText(context, zh: '男', en: 'Male'), 1,
+            enabled: _gender != 1),
+        SettingsAction(settingsText(context, zh: '女', en: 'Female'), 2,
+            enabled: _gender != 2),
       ],
     );
     if (selected == null || selected == _gender || !mounted) return;
-    if (!widget.service.isBackendAvailable) {
-      showUnavailableSettingsAction(context, settingsText(context, zh: '修改性别', en: 'Update gender'));
+    if (!widget.service.isProfileBackendAvailable) {
+      showUnavailableSettingsAction(
+          context, settingsText(context, zh: '修改性别', en: 'Update gender'));
       return;
     }
-    await widget.service.updateGender(selected);
-    if (mounted) setState(() => _gender = selected);
+    await _saveProfile(() async {
+      await widget.service.updateGender(selected);
+      if (mounted) setState(() => _gender = selected);
+    });
   }
 
   DateTime _birthDate() {
@@ -233,6 +254,7 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
   }
 
   Future<void> _chooseBirthday() async {
+    if (_savingProfile) return;
     var selected = _birthDate();
     final picked = await showModalBottomSheet<DateTime>(
       context: context,
@@ -256,11 +278,13 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
                     children: [
                       TextButton(
                         onPressed: () => Navigator.pop(sheetContext),
-                        child: Text(settingsText(sheetContext, zh: '取消', en: 'Cancel')),
+                        child: Text(
+                            settingsText(sheetContext, zh: '取消', en: 'Cancel')),
                       ),
                       Expanded(
                         child: Text(
-                          settingsText(sheetContext, zh: '选择生日', en: 'Choose Birthday'),
+                          settingsText(sheetContext,
+                              zh: '选择生日', en: 'Choose Birthday'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: AppTokens.textPrimary(dark: dark),
@@ -271,7 +295,8 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
                       ),
                       TextButton(
                         onPressed: () => Navigator.pop(sheetContext, selected),
-                        child: Text(settingsText(sheetContext, zh: '完成', en: 'Done')),
+                        child: Text(
+                            settingsText(sheetContext, zh: '完成', en: 'Done')),
                       ),
                     ],
                   ),
@@ -293,13 +318,17 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
       },
     );
     if (picked == null || !mounted) return;
-    if (!widget.service.isBackendAvailable) {
-      showUnavailableSettingsAction(context, settingsText(context, zh: '修改生日', en: 'Update birthday'));
+    if (!widget.service.isProfileBackendAvailable) {
+      showUnavailableSettingsAction(
+          context, settingsText(context, zh: '修改生日', en: 'Update birthday'));
       return;
     }
-    final value = DateTime(picked.year, picked.month, picked.day).millisecondsSinceEpoch;
-    await widget.service.updateBirthday(value);
-    if (mounted) setState(() => _birth = value);
+    final value =
+        DateTime(picked.year, picked.month, picked.day).millisecondsSinceEpoch;
+    await _saveProfile(() async {
+      await widget.service.updateBirthday(value);
+      if (mounted) setState(() => _birth = value);
+    });
   }
 
   Future<void> _copyId() async {
@@ -311,6 +340,23 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
       context,
       settingsText(context, zh: '用户ID已复制', en: 'User ID copied'),
     );
+  }
+
+  Future<void> _saveProfile(Future<void> Function() save) async {
+    if (_savingProfile) return;
+    setState(() => _savingProfile = true);
+    try {
+      await save();
+    } catch (_) {
+      if (mounted) {
+        showSettingsMessage(
+            context,
+            settingsText(context,
+                zh: '保存失败，请稍后重试', en: 'Failed to save. Please try again.'));
+      }
+    } finally {
+      if (mounted) setState(() => _savingProfile = false);
+    }
   }
 
   Future<void> _openPhone() async {
@@ -364,6 +410,8 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
                       context,
                       EditNicknamePage(
                         initialNickname: widget.store.profileNickname,
+                        avatarUrl: widget.avatarUrl,
+                        onChangeAvatar: _changeAvatar,
                         service: widget.service,
                         store: widget.store,
                       ),
@@ -388,7 +436,9 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
                   ),
                   SettingsCell(
                     title: settingsText(context, zh: '99号ID', en: '99 ID'),
-                    value: widget.userId.trim().isEmpty ? '--' : widget.userId.trim(),
+                    value: widget.userId.trim().isEmpty
+                        ? '--'
+                        : widget.userId.trim(),
                     onTap: _copyId,
                   ),
                   SettingsCell(
@@ -410,7 +460,8 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
                   ),
                   SettingsCell(
                     title: settingsText(context, zh: '朋友圈', en: 'Moments'),
-                    value: settingsText(context, zh: '查看我的动态', en: 'View my posts'),
+                    value: settingsText(context,
+                        zh: '查看我的动态', en: 'View my posts'),
                     onTap: _openMoments,
                   ),
                   SettingsCell(

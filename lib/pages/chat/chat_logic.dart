@@ -530,8 +530,12 @@ class ChatLogic extends SuperController {
 
   void mentionMessageSender(Message message) {
     final userID = message.sendID;
-    if (isClosed || !isGroupChat || _choosingMention ||
-        userID == null || userID.isEmpty || userID == OpenIM.iMManager.userID) {
+    if (isClosed ||
+        !isGroupChat ||
+        _choosingMention ||
+        userID == null ||
+        userID.isEmpty ||
+        userID == OpenIM.iMManager.userID) {
       return;
     }
     if (sendingMuted) {
@@ -539,7 +543,8 @@ class ChatLogic extends SuperController {
       return;
     }
     final name = message.senderNickname?.trim().isNotEmpty == true
-        ? message.senderNickname!.trim() : userID;
+        ? message.senderNickname!.trim()
+        : userID;
     final text = inputCtrl.text;
     final selection = inputCtrl.selection;
     final valid = selection.isValid && selection.end <= text.length;
@@ -841,6 +846,7 @@ class ChatLogic extends SuperController {
   }) async {
     var message = await OpenIM.iMManager.messageManager.createCardMessage(
       userID: userID,
+      ex: await createFriendCardExtension(userID),
       nickname: nickname?.trim().isNotEmpty == true ? nickname! : userID,
       faceURL: faceURL,
     );
@@ -1393,7 +1399,9 @@ class ChatLogic extends SuperController {
     IMUtils.parseClickEvent(
       msg,
       onViewUserInfo: (userInfo) {
-        viewUserInfo(userInfo, isCard: msg.isCardType);
+        viewUserInfo(userInfo,
+            isCard: msg.isCardType,
+            inviteCode: friendCardInviteCode(msg.cardElem?.ex));
       },
     );
   }
@@ -1409,7 +1417,8 @@ class ChatLogic extends SuperController {
     viewUserInfo(OpenIM.iMManager.userInfo);
   }
 
-  void viewUserInfo(UserInfo userInfo, {bool isCard = false}) {
+  void viewUserInfo(UserInfo userInfo,
+      {bool isCard = false, String? inviteCode}) {
     if (isGroupChat && !isAdminOrOwner && !isCard) {
       if (groupInfo!.lookMemberInfo != 1) {
         AppNavigator.startUserProfilePane(
@@ -1428,6 +1437,8 @@ class ChatLogic extends SuperController {
         groupID: groupID,
         offAllWhenDelFriend: isSingleChat,
         forceCanAdd: isCard,
+        addSource: isCard ? FriendAddSource.card : null,
+        friendAddFields: isCard ? {'inviteCode': inviteCode ?? ''} : const {},
       );
     }
   }
@@ -1935,6 +1946,7 @@ class ChatLogic extends SuperController {
         _sendMessage(
           await OpenIM.iMManager.messageManager.createCardMessage(
             userID: userInfo.userID!,
+            ex: await createFriendCardExtension(userInfo.userID!),
             nickname: userInfo.nickname!,
             faceURL: userInfo.faceURL,
           ),

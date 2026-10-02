@@ -23,12 +23,14 @@ class QrProfilePage extends StatefulWidget {
     required this.userId,
     required this.avatarUrl,
     this.avatarBytes,
+    this.inviteFactory,
   });
 
   final String nickname;
   final String userId;
   final String avatarUrl;
   final Uint8List? avatarBytes;
+  final Future<String> Function(FriendAddSource)? inviteFactory;
 
   @override
   State<QrProfilePage> createState() => _QrProfilePageState();
@@ -40,6 +42,48 @@ class _QrProfilePageState extends State<QrProfilePage> {
 
   final GlobalKey _captureKey = GlobalKey();
   bool _saving = false;
+  String? _qrInvite;
+  String? _linkInvite;
+  String? _inviteError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInvite();
+  }
+
+  Future<void> _loadInvite() async {
+    try {
+      final code = await (widget.inviteFactory ??
+          Apis.createFriendInvite)(FriendAddSource.qrcode);
+      if (mounted) setState(() => _qrInvite = code);
+    } catch (_) {
+      if (mounted) setState(() => _inviteError = '二维码邀请暂不可用，点击重试');
+    }
+  }
+
+  Future<bool> _ensureLink() async {
+    try {
+      _linkInvite ??= await (widget.inviteFactory ??
+          Apis.createFriendInvite)(FriendAddSource.link);
+      return mounted;
+    } catch (error) {
+      if (mounted)
+        showSettingsMessage(
+            context,
+            friendAddErrorMessage(error,
+                    chinese:
+                        Localizations.localeOf(context).languageCode == 'zh') ??
+                '邀请暂不可用，请稍后重试');
+      return false;
+    }
+  }
+
+  String _inviteUrl(String code, String source) => Uri(
+      scheme: 'openim',
+      host: 'user',
+      path: '/${widget.userId.trim()}',
+      queryParameters: {'inviteCode': code, 'source': source}).toString();
 
   String get _displayName {
     final nickname = widget.nickname.trim();
@@ -48,16 +92,16 @@ class _QrProfilePageState extends State<QrProfilePage> {
     return userId.isEmpty ? '99Chat' : userId;
   }
 
-  String get _displayId => widget.userId.trim().isEmpty ? '--' : widget.userId.trim();
+  String get _displayId =>
+      widget.userId.trim().isEmpty ? '--' : widget.userId.trim();
 
-  String get _qrData => widget.userId.trim().isEmpty
-      ? 'openim://profile'
-      : 'openim://user/${widget.userId.trim()}';
+  String get _qrData =>
+      _qrInvite == null ? '' : _inviteUrl(_qrInvite!, 'qrcode');
 
   String get _shareText => settingsText(
         context,
-        zh: '你好，我是$_displayName\n邀请你在 99Chat 添加我为好友，随时聊聊、分享日常。\n我的好友邀请：$_qrData',
-        en: 'Hi, I’m $_displayName! Add me on 99Chat to stay in touch.\n$_qrData',
+        zh: '你好，我是$_displayName\n邀请你在 99Chat 添加我为好友，随时聊聊、分享日常。\n我的好友邀请：${_linkInvite == null ? '' : _inviteUrl(_linkInvite!, 'link')}',
+        en: 'Hi, I’m $_displayName! Add me on 99Chat to stay in touch.\n${_linkInvite == null ? '' : _inviteUrl(_linkInvite!, 'link')}',
       );
 
   Widget _avatar(double size) {
@@ -110,6 +154,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
   }
 
   Future<void> _saveImage() async {
+    if (_qrInvite == null) return;
     if (_saving) return;
     setState(() => _saving = true);
     try {
@@ -133,13 +178,15 @@ class _QrProfilePageState extends State<QrProfilePage> {
         context,
         result != null
             ? settingsText(context, zh: '图片已保存', en: 'Image saved')
-            : settingsText(context, zh: '保存失败，请稍后重试', en: 'Unable to save image'),
+            : settingsText(context,
+                zh: '保存失败，请稍后重试', en: 'Unable to save image'),
       );
     } catch (_) {
       if (!mounted) return;
       showSettingsMessage(
         context,
-        settingsText(context, zh: '保存失败，请检查相册权限', en: 'Unable to save. Check photo permission.'),
+        settingsText(context,
+            zh: '保存失败，请检查相册权限', en: 'Unable to save. Check photo permission.'),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -147,17 +194,22 @@ class _QrProfilePageState extends State<QrProfilePage> {
   }
 
   Future<void> _openScanner() async {
-    final userId = await Navigator.of(context).push<String>(
+    final invite = await Navigator.of(context).push<Map<String, String>>(
       MaterialPageRoute(builder: (_) => const _QrScannerPage()),
     );
-    if (!mounted || userId == null || userId.trim().isEmpty) return;
+    if (!mounted || invite == null) return;
     AppNavigator.startUserProfilePane(
-      userID: userId.trim(),
+      userID: invite['userID']!,
+      addSource: invite['source'] == 'link'
+          ? FriendAddSource.link
+          : FriendAddSource.qrcode,
+      friendAddFields: {'inviteCode': invite['inviteCode']!},
       forceCanAdd: true,
     );
   }
 
   Future<void> _copyInvitation() async {
+    if (!await _ensureLink()) return;
     await Clipboard.setData(ClipboardData(text: _shareText));
     if (!mounted) return;
     showSettingsMessage(
@@ -167,6 +219,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
   }
 
   Future<void> _shareToApp(String scheme, String label) async {
+    if (!await _ensureLink()) return;
     await Clipboard.setData(ClipboardData(text: _shareText));
     try {
       final uri = Uri.parse(scheme);
@@ -186,6 +239,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
   }
 
   Future<void> _systemShare() async {
+    if (!await _ensureLink()) return;
     try {
       final handled = await _systemShareChannel.invokeMethod<bool>(
         'shareText',
@@ -251,12 +305,14 @@ class _QrProfilePageState extends State<QrProfilePage> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: palette.primary.withValues(alpha: palette.dark ? .35 : .22),
+                  color: palette.primary
+                      .withValues(alpha: palette.dark ? .35 : .22),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: palette.primary.withValues(alpha: palette.dark ? .20 : .12),
+                    color: palette.primary
+                        .withValues(alpha: palette.dark ? .20 : .12),
                     blurRadius: 18,
                     spreadRadius: 1,
                   ),
@@ -265,23 +321,33 @@ class _QrProfilePageState extends State<QrProfilePage> {
             ),
           ),
           Positioned.fill(
-            child: CustomPaint(painter: _QrCornerFramePainter(color: palette.primary)),
+            child: CustomPaint(
+                painter: _QrCornerFramePainter(color: palette.primary)),
           ),
-          QrImageView(
-            data: _qrData,
-            version: QrVersions.auto,
-            size: qrSize,
-            backgroundColor: Colors.white,
-            errorCorrectionLevel: QrErrorCorrectLevel.H,
-            eyeStyle: const QrEyeStyle(
-              eyeShape: QrEyeShape.square,
-              color: Colors.black,
+          if (_qrInvite == null)
+            SizedBox(
+                width: qrSize,
+                height: qrSize,
+                child: Center(
+                    child: TextButton(
+                        onPressed: _loadInvite,
+                        child: Text(_inviteError ?? '正在生成邀请二维码'))))
+          else
+            QrImageView(
+              data: _qrData,
+              version: QrVersions.auto,
+              size: qrSize,
+              backgroundColor: Colors.white,
+              errorCorrectionLevel: QrErrorCorrectLevel.H,
+              eyeStyle: const QrEyeStyle(
+                eyeShape: QrEyeShape.square,
+                color: Colors.black,
+              ),
+              dataModuleStyle: const QrDataModuleStyle(
+                dataModuleShape: QrDataModuleShape.square,
+                color: Colors.black,
+              ),
             ),
-            dataModuleStyle: const QrDataModuleStyle(
-              dataModuleShape: QrDataModuleShape.square,
-              color: Colors.black,
-            ),
-          ),
           Container(
             width: logoSize,
             height: logoSize,
@@ -339,7 +405,8 @@ class _QrProfilePageState extends State<QrProfilePage> {
                   right: 0,
                   bottom: 0,
                   height: 60,
-                  child: CustomPaint(painter: _CardWavePainter(color: palette.primary)),
+                  child: CustomPaint(
+                      painter: _CardWavePainter(color: palette.primary)),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(22, 16, 22, 12),
@@ -389,7 +456,10 @@ class _QrProfilePageState extends State<QrProfilePage> {
                           en: 'Scan the QR code to add me',
                         ),
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: palette.secondary, fontSize: 13, height: 1.35),
+                        style: TextStyle(
+                            color: palette.secondary,
+                            fontSize: 13,
+                            height: 1.35),
                       ),
                       const SizedBox(height: 3),
                       Text(
@@ -399,7 +469,10 @@ class _QrProfilePageState extends State<QrProfilePage> {
                           en: 'Share your QR code and connect with more friends',
                         ),
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: palette.secondary, fontSize: 12, height: 1.5),
+                        style: TextStyle(
+                            color: palette.secondary,
+                            fontSize: 12,
+                            height: 1.5),
                       ),
                       const SizedBox(height: 8),
                       Divider(color: palette.border, height: 12, thickness: .5),
@@ -486,7 +559,8 @@ class _QrProfilePageState extends State<QrProfilePage> {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final columns = MediaQuery.textScalerOf(context).scale(14) > 20 ? 2 : 4;
+          final columns =
+              MediaQuery.textScalerOf(context).scale(14) > 20 ? 2 : 4;
           const spacing = 14.0;
           final itemWidth =
               (constraints.maxWidth - spacing * (columns - 1)) / columns;
@@ -545,7 +619,9 @@ class _QrProfilePageState extends State<QrProfilePage> {
               decoration: BoxDecoration(
                 color: filled ? palette.primary : palette.card,
                 borderRadius: BorderRadius.circular(28),
-                border: filled ? null : Border.all(color: palette.primary, width: 1.4),
+                border: filled
+                    ? null
+                    : Border.all(color: palette.primary, width: 1.4),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -559,7 +635,9 @@ class _QrProfilePageState extends State<QrProfilePage> {
                       ),
                     )
                   else
-                    Icon(icon, size: 20, color: filled ? Colors.white : palette.primary),
+                    Icon(icon,
+                        size: 20,
+                        color: filled ? Colors.white : palette.primary),
                   const SizedBox(width: 8),
                   Text(
                     label,
@@ -621,13 +699,15 @@ class _QrProfilePageState extends State<QrProfilePage> {
             : null,
         title: Text(
           settingsText(context, zh: '我的二维码', en: 'My QR Code'),
-          style: TextStyle(color: palette.text, fontSize: 17, fontWeight: FontWeight.w600),
+          style: TextStyle(
+              color: palette.text, fontSize: 17, fontWeight: FontWeight.w600),
         ),
         actions: [
           IconButton(
             key: const ValueKey('qr-more'),
             onPressed: _showActions,
-            icon: Icon(Icons.more_horiz_rounded, color: palette.primary, size: 26),
+            icon: Icon(Icons.more_horiz_rounded,
+                color: palette.primary, size: 26),
           ),
         ],
       ),
@@ -654,7 +734,8 @@ class _QrProfilePageState extends State<QrProfilePage> {
             bottom: false,
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final contentWidth = (constraints.maxWidth - 40).clamp(280.0, 420.0).toDouble();
+                final contentWidth =
+                    (constraints.maxWidth - 40).clamp(280.0, 420.0).toDouble();
                 return SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(
                     20,
@@ -674,7 +755,9 @@ class _QrProfilePageState extends State<QrProfilePage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  settingsText(context, zh: '扫一扫，添加我为好友', en: 'Scan to add me as a friend'),
+                                  settingsText(context,
+                                      zh: '扫一扫，添加我为好友',
+                                      en: 'Scan to add me as a friend'),
                                   style: TextStyle(
                                     color: palette.text,
                                     fontSize: 23,
@@ -683,8 +766,13 @@ class _QrProfilePageState extends State<QrProfilePage> {
                                 ),
                                 const SizedBox(height: 7),
                                 Text(
-                                  settingsText(context, zh: '一起交流 · 分享精彩 · 连接更多朋友', en: 'Chat · Share · Connect'),
-                                  style: TextStyle(color: palette.secondary, fontSize: 14, height: 1.5),
+                                  settingsText(context,
+                                      zh: '一起交流 · 分享精彩 · 连接更多朋友',
+                                      en: 'Chat · Share · Connect'),
+                                  style: TextStyle(
+                                      color: palette.secondary,
+                                      fontSize: 14,
+                                      height: 1.5),
                                 ),
                               ],
                             ),
@@ -727,15 +815,11 @@ class _QrScannerPageState extends State<_QrScannerPage> {
       if (_handled) return;
       final code = barcode.code?.trim() ?? '';
       if (code.isEmpty) return;
-      final uri = Uri.tryParse(code);
-      String? userId;
-      if (uri != null && uri.scheme == 'openim' && uri.host == 'user' && uri.pathSegments.isNotEmpty) {
-        userId = uri.pathSegments.first;
-      }
-      if (userId == null || userId.trim().isEmpty) return;
+      final invite = parseFriendInvite(code);
+      if (invite == null) return;
       _handled = true;
       _controller?.pauseCamera();
-      Navigator.of(context).pop(userId.trim());
+      if (mounted) Navigator.of(context).pop(invite);
     });
   }
 
@@ -855,17 +939,20 @@ class _QrCornerFramePainter extends CustomPainter {
       ..lineTo(right, top + length)
       ..moveTo(right, bottom - length)
       ..lineTo(right, bottom - radius)
-      ..arcToPoint(Offset(right - radius, bottom), radius: Radius.circular(radius))
+      ..arcToPoint(Offset(right - radius, bottom),
+          radius: Radius.circular(radius))
       ..lineTo(right - length, bottom)
       ..moveTo(left + length, bottom)
       ..lineTo(left + radius, bottom)
-      ..arcToPoint(Offset(left, bottom - radius), radius: Radius.circular(radius))
+      ..arcToPoint(Offset(left, bottom - radius),
+          radius: Radius.circular(radius))
       ..lineTo(left, bottom - length);
     canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(_QrCornerFramePainter oldDelegate) => oldDelegate.color != color;
+  bool shouldRepaint(_QrCornerFramePainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _DotGridPainter extends CustomPainter {
@@ -917,7 +1004,8 @@ class _CardWavePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_CardWavePainter oldDelegate) => oldDelegate.color != color;
+  bool shouldRepaint(_CardWavePainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _QrBackdropPainter extends CustomPainter {
@@ -933,9 +1021,12 @@ class _QrBackdropPainter extends CustomPainter {
     final p2 = Paint()
       ..color = Colors.white.withValues(alpha: dark ? .03 : .45)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 50);
-    canvas.drawCircle(Offset(size.width * .1, size.height * .23), size.width * .26, p1);
-    canvas.drawCircle(Offset(size.width * .95, size.height * .14), size.width * .34, p2);
-    canvas.drawCircle(Offset(size.width * .82, size.height * .70), size.width * .28, p1);
+    canvas.drawCircle(
+        Offset(size.width * .1, size.height * .23), size.width * .26, p1);
+    canvas.drawCircle(
+        Offset(size.width * .95, size.height * .14), size.width * .34, p2);
+    canvas.drawCircle(
+        Offset(size.width * .82, size.height * .70), size.width * .28, p1);
   }
 
   @override

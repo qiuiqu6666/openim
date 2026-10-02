@@ -1,3 +1,4 @@
+import '../../../../services/platform_config_service.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -15,8 +16,7 @@ class AboutUsPage extends StatefulWidget {
     this.embedded = false,
   });
 
-  /// Remote contact values are intentionally injectable. The default migration
-  /// keeps them empty until a real backend contract is wired in.
+  /// Optional overrides; otherwise contacts come from the public platform API.
   final String website;
   final String email;
   final bool embedded;
@@ -27,10 +27,25 @@ class AboutUsPage extends StatefulWidget {
 
 class _AboutUsPageState extends State<AboutUsPage> {
   String _version = '';
+  PlatformConfig? _platform;
+  bool _platformLoading = true;
+  bool _platformFailed = false;
+
+  Future<void> _loadPlatform() async {
+    try {
+      final config = await PlatformConfigService.fetch();
+      if (mounted) setState(() => _platform = config);
+    } catch (_) {
+      if (mounted) setState(() => _platformFailed = true);
+    } finally {
+      if (mounted) setState(() => _platformLoading = false);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadPlatform();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadVersion());
   }
 
@@ -43,8 +58,17 @@ class _AboutUsPageState extends State<AboutUsPage> {
     }
   }
 
-  String _notConfigured(BuildContext context) =>
-      settingsText(context, zh: '未配置', en: 'Not configured');
+  String _notConfigured(BuildContext context) => settingsText(context,
+      zh: _platformLoading
+          ? '获取中'
+          : _platformFailed
+              ? '获取失败'
+              : '未配置',
+      en: _platformLoading
+          ? 'Loading'
+          : _platformFailed
+              ? 'Load failed'
+              : 'Not configured');
 
   Future<void> _openExternal(String value) async {
     final raw = value.trim();
@@ -83,7 +107,8 @@ class _AboutUsPageState extends State<AboutUsPage> {
       scheme: 'mailto',
       path: address,
       queryParameters: {
-        'subject': settingsText(context, zh: '99chat 反馈', en: '99chat Feedback'),
+        'subject':
+            settingsText(context, zh: '99chat 反馈', en: '99chat Feedback'),
       },
     );
     try {
@@ -109,8 +134,12 @@ class _AboutUsPageState extends State<AboutUsPage> {
     final primary = AppTokens.textPrimary(dark: dark);
     final secondary = AppTokens.textSecondary(dark: dark);
     final surface = AppTokens.surface(dark: dark);
-    final website = widget.website.trim();
-    final email = widget.email.trim();
+    final website = widget.website.trim().isNotEmpty
+        ? widget.website.trim()
+        : _platform?.officialURL ?? '';
+    final email = widget.email.trim().isNotEmpty
+        ? widget.email.trim()
+        : _platform?.email ?? '';
 
     return SettingsScaffold(
       embedded: widget.embedded,

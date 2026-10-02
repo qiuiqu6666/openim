@@ -28,6 +28,7 @@ class AvatarView extends StatelessWidget {
     this.nineGridUrl = const [],
     this.isGroup = false,
     this.showDefaultAvatar = true,
+    this.showLoadingAvatar = true,
   }) : super(key: key);
   final double? width;
   final double? height;
@@ -44,6 +45,9 @@ class AvatarView extends StatelessWidget {
   final String? text;
   final TextStyle? textStyle;
   final bool lowMemory;
+
+  /// Whether to show the fallback avatar while a remote image is loading.
+  final bool showLoadingAvatar;
   final List<String> nineGridUrl;
   final bool isGroup;
   final bool showDefaultAvatar;
@@ -123,6 +127,7 @@ class AvatarView extends StatelessWidget {
           fit: BoxFit.cover,
           lowMemory: lowMemory,
           loadProgress: false,
+          loadingWidget: showLoadingAvatar ? _textAvatar() : null,
           errorWidget: _textAvatar(),
         );
 

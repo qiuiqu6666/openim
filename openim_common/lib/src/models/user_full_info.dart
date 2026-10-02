@@ -19,6 +19,7 @@ class UserFullInfo {
   int? status;
   int? allowAddFriend;
   int? allowAddByUserID;
+  int? allowAddByAccount;
   int? allowAddByPhone;
   int? allowAddByEmail;
   int? allowAddByQRCode;
@@ -61,6 +62,7 @@ class UserFullInfo {
     this.status,
     this.allowAddFriend,
     this.allowAddByUserID,
+    this.allowAddByAccount,
     this.allowAddByPhone,
     this.allowAddByEmail,
     this.allowAddByQRCode,
@@ -98,6 +100,7 @@ class UserFullInfo {
     status = json['status'];
     allowAddFriend = json['allowAddFriend'];
     allowAddByUserID = json['allowAddByUserID'] ?? 1;
+    allowAddByAccount = json['allowAddByAccount'] ?? 1;
     allowAddByPhone = json['allowAddByPhone'] ?? 1;
     allowAddByEmail = json['allowAddByEmail'] ?? 1;
     allowAddByQRCode = json['allowAddByQRCode'] ?? 1;
@@ -139,6 +142,7 @@ class UserFullInfo {
     data['status'] = status;
     data['allowAddFriend'] = allowAddFriend;
     data['allowAddByUserID'] = allowAddByUserID;
+    data['allowAddByAccount'] = allowAddByAccount;
     data['allowAddByPhone'] = allowAddByPhone;
     data['allowAddByEmail'] = allowAddByEmail;
     data['allowAddByQRCode'] = allowAddByQRCode;

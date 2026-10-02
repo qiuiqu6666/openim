@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../settings_service.dart';
@@ -21,9 +20,6 @@ class TradePasswordPage extends StatefulWidget {
 enum _SetupStep { create, confirm }
 
 class _TradePasswordPageState extends State<TradePasswordPage> {
-  static const double _upperScale = 0.75;
-  static const double _lowerScale = 0.6;
-
   _SetupStep _step = _SetupStep.create;
   String _input = '';
   String? _firstPin;
@@ -60,7 +56,7 @@ class _TradePasswordPageState extends State<TradePasswordPage> {
   }
 
   Future<void> _onPinComplete() async {
-    if (_input.length != 6 || _submitting) return;
+    if (!mounted || _input.length != 6 || _submitting) return;
     final pin = _input;
     if (_step == _SetupStep.create) {
       setState(() {
@@ -82,7 +78,7 @@ class _TradePasswordPageState extends State<TradePasswordPage> {
       });
       return;
     }
-    if (!widget.service.isBackendAvailable) {
+    if (!widget.service.isSecurityBackendAvailable) {
       setState(() => _input = '');
       showUnavailableSettingsAction(
         context,
@@ -97,17 +93,23 @@ class _TradePasswordPageState extends State<TradePasswordPage> {
     try {
       await widget.service.setTradePassword(pin);
       if (!mounted) return;
+      showSettingsMessage(
+        context,
+        settingsText(context,
+            zh: '支付密码设置成功', en: 'Payment password set successfully'),
+      );
       Navigator.of(context).pop(true);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _submitting = false;
         _input = '';
-        _error = settingsText(
-          context,
-          zh: '设置失败，请稍后重试',
-          en: 'Failed to set the password. Please try again later.',
-        );
+        _error = settingsErrorMessage(context, error,
+            fallback: settingsText(
+              context,
+              zh: '设置失败，请稍后重试',
+              en: 'Failed to set the password. Please try again later.',
+            ));
       });
     }
   }
@@ -128,186 +130,265 @@ class _TradePasswordPageState extends State<TradePasswordPage> {
   @override
   Widget build(BuildContext context) {
     final dark = settingsIsDark(context);
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
     final statusText = _submitting
         ? settingsText(context, zh: '正在提交...', en: 'Submitting...')
-        : (_error.isEmpty ? '' : _error);
-    final subText = AppTokens.textSecondary(dark: dark);
-    final statusColor = _error.isEmpty ? subText : settingsDanger(dark);
-    final u = _upperScale;
-    final k = _lowerScale;
+        : _error;
+    final secondary = AppTokens.textSecondary(dark: dark);
+    final size = MediaQuery.sizeOf(context);
+    final landscape = size.width > size.height;
+    final keypad = _TradePasswordKeyPad(
+      key: const ValueKey('trade-password-keypad'),
+      enabled: !_submitting,
+      onDigit: _onDigit,
+      onDelete: _onDelete,
+    );
 
     return SettingsScaffold(
-      title: settingsText(context, zh: '设置交易密码', en: 'Set Transaction Password'),
+      title:
+          settingsText(context, zh: '设置交易密码', en: 'Set Transaction Password'),
+      leading: IconButton(
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+        icon: const Icon(Icons.arrow_back_ios_new_rounded),
+        color: AppTokens.accent,
+        onPressed: _submitting ? null : _onBack,
+      ),
       onLeadingPressed: _onBack,
       disableLeading: _submitting,
-      bottom: Padding(
-        padding: EdgeInsets.fromLTRB(
-          (32 * k).w,
-          (8 * k).h,
-          (32 * k).w,
-          (16 * k).h + bottomInset,
-        ),
-        child: _TradePasswordKeyPad(
-          key: const ValueKey('trade-password-keypad'),
-          enabled: !_submitting,
-          onDigit: _onDigit,
-          onDelete: _onDelete,
-          scale: k,
-        ),
+      bottom: landscape ? null : keypad,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final content = Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: TradePasswordTokens.contentMaxWidth,
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          AppTokens.s8,
+                          (constraints.maxHeight * 0.08).clamp(
+                            AppTokens.s5,
+                            AppTokens.s8,
+                          ),
+                          AppTokens.s8,
+                          AppTokens.s5,
+                        ),
+                        child: Column(
+                          children: [
+                            const _PlatformLogo(),
+                            const SizedBox(height: AppTokens.s7),
+                            Text(
+                              _stepHint(context),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: TradePasswordTokens.headingFontSize,
+                                fontWeight: FontWeight.w600,
+                                color: AppTokens.textPrimary(dark: dark),
+                                height: 1.3,
+                              ),
+                            ),
+                            const SizedBox(height: AppTokens.s3),
+                            Text(
+                              settingsText(
+                                context,
+                                zh: '用于支付、转账、红包等资金操作',
+                                en: 'For payments, transfers and red packets',
+                              ),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: TradePasswordTokens.helperFontSize,
+                                color: secondary,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: AppTokens.s7),
+                            _TradePasswordPinCells(
+                              key: const ValueKey('trade-password-pin-dots'),
+                              length: _input.length,
+                              hasError: _error.isNotEmpty,
+                            ),
+                            if (statusText.isNotEmpty)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.only(top: AppTokens.s4),
+                                child: Semantics(
+                                  liveRegion: true,
+                                  child: Text(
+                                    statusText,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize:
+                                          TradePasswordTokens.helperFontSize,
+                                      color: _error.isEmpty
+                                          ? secondary
+                                          : settingsDanger(dark),
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (_step == _SetupStep.confirm)
+                              TextButton(
+                                onPressed: _submitting ? null : _onBack,
+                                child: Text(
+                                  settingsText(
+                                    context,
+                                    zh: '重新设置密码',
+                                    en: 'Reset Password',
+                                  ),
+                                  style: const TextStyle(
+                                    fontSize:
+                                        TradePasswordTokens.helperFontSize,
+                                    color: AppTokens.accent,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppTokens.s7,
+                  AppTokens.s3,
+                  AppTokens.s7,
+                  AppTokens.s5,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.verified_user_outlined,
+                      size: TradePasswordTokens.securityIconSize,
+                      color: secondary,
+                    ),
+                    const SizedBox(width: AppTokens.s3),
+                    Flexible(
+                      child: Text(
+                        settingsText(
+                          context,
+                          zh: '资金安全保障中，请放心设置',
+                          en: 'Set your password to protect your funds',
+                        ),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: TradePasswordTokens.securityFontSize,
+                          color: secondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+          return landscape
+              ? Row(
+                  children: [
+                    Expanded(child: content),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: keypad,
+                      ),
+                    ),
+                  ],
+                )
+              : content;
+        },
       ),
-      children: [
-        SettingsGroup(
-          children: [
-            SizedBox(height: (28 * u).h),
-            _PlatformLogo(scale: u),
-            SizedBox(height: (32 * u).h),
-            Text(
-              _stepHint(context),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: (15 * u).sp,
-                fontWeight: FontWeight.w400,
-                color: subText,
-                height: 1.3,
-              ),
-            ),
-            SizedBox(height: (48 * u).h),
-            _TradePasswordPinDots(
-              key: const ValueKey('trade-password-pin-dots'),
-              length: _input.length,
-              hasError: _error.isNotEmpty,
-              dotSize: (14 * u).w,
-              spacing: (20 * u).w,
-            ),
-            SizedBox(height: (20 * u).h),
-            SizedBox(
-              height: (22 * u).h,
-              child: Center(
-                child: Text(
-                  statusText,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: (13 * u).sp,
-                    color: statusColor,
-                  ),
-                ),
-              ),
-            ),
-            if (_step == _SetupStep.confirm)
-              TextButton(
-                onPressed: _submitting
-                    ? null
-                    : () {
-                        setState(() {
-                          _step = _SetupStep.create;
-                          _input = '';
-                          _firstPin = null;
-                          _error = '';
-                        });
-                      },
-                child: Text(
-                  settingsText(context, zh: '重新设置密码', en: 'Reset Password'),
-                  style: TextStyle(
-                    fontSize: (14 * u).sp,
-                    color: AppTokens.accent,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
+      children: const [],
     );
   }
 }
 
 class _PlatformLogo extends StatelessWidget {
-  const _PlatformLogo({this.scale = 1});
-  final double scale;
+  const _PlatformLogo();
 
   @override
-  Widget build(BuildContext context) {
-    final dark = settingsIsDark(context);
-    final size = (88 * scale).w;
-    final radius = (20 * scale).r;
-    return Center(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
+  Widget build(BuildContext context) => ClipRRect(
+        borderRadius: BorderRadius.circular(TradePasswordTokens.logoRadius),
         child: Image.asset(
           'assets/images/im_new_logo_99chat.jpg',
           package: 'openim_common',
-          width: size,
-          height: size,
+          width: TradePasswordTokens.logoSize,
+          height: TradePasswordTokens.logoSize,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Image.asset(
-            'assets/images/platform_99_fallback.webp',
-            package: 'openim_common',
-            width: size,
-            height: size,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => Container(
-              width: size,
-              height: size,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: settingsSurfaceAlt(dark),
-                borderRadius: BorderRadius.circular(radius),
-              ),
-              child: Icon(
-                Icons.account_balance_wallet_rounded,
-                size: (44 * scale).sp,
-                color: AppTokens.textSecondary(dark: dark),
-              ),
-            ),
-          ),
+          excludeFromSemantics: true,
         ),
-      ),
-    );
-  }
+      );
 }
 
-class _TradePasswordPinDots extends StatelessWidget {
-  const _TradePasswordPinDots({
+class _TradePasswordPinCells extends StatelessWidget {
+  const _TradePasswordPinCells({
     super.key,
     required this.length,
-    this.pinLength = 6,
-    this.hasError = false,
-    this.dotSize,
-    this.spacing,
+    required this.hasError,
   });
 
   final int length;
-  final int pinLength;
   final bool hasError;
-  final double? dotSize;
-  final double? spacing;
 
   @override
   Widget build(BuildContext context) {
     final dark = settingsIsDark(context);
-    final size = dotSize ?? 14.w;
-    final gap = spacing ?? 18.w;
-    final emptyColor = dark ? AppTokens.borderDark : const Color(0xFFE3E3E3);
-    final filledColor = hasError
-        ? settingsDanger(dark)
-        : AppTokens.textPrimary(dark: dark);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(pinLength, (i) {
-        final filled = length > i;
-        return Padding(
-          padding: EdgeInsets.symmetric(horizontal: gap / 2),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: filled ? filledColor : emptyColor,
-            ),
-          ),
-        );
-      }),
+    final border =
+        hasError ? settingsDanger(dark) : AppTokens.border(dark: dark);
+    return Semantics(
+      label: settingsText(context, zh: '六位交易密码', en: 'Six-digit password'),
+      value: settingsText(
+        context,
+        zh: '已输入 $length 位，共 6 位',
+        en: '$length of 6 digits entered',
+      ),
+      liveRegion: true,
+      excludeSemantics: true,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cellSize =
+              ((constraints.maxWidth - TradePasswordTokens.cellGap * 5) / 6)
+                  .clamp(0.0, TradePasswordTokens.cellMaxSize);
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < 6; i++) ...[
+                if (i > 0) const SizedBox(width: TradePasswordTokens.cellGap),
+                AnimatedContainer(
+                  key: ValueKey('trade-password-cell-$i'),
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : TradePasswordTokens.inputAnimation,
+                  width: cellSize,
+                  height: cellSize,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppTokens.rSm),
+                    border: Border.all(color: border),
+                  ),
+                  child: Container(
+                    key: ValueKey('trade-password-dot-$i'),
+                    width: TradePasswordTokens.dotSize,
+                    height: TradePasswordTokens.dotSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: length > i
+                          ? AppTokens.textPrimary(dark: dark)
+                          : AppTokens.border(dark: dark),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -318,100 +399,120 @@ class _TradePasswordKeyPad extends StatelessWidget {
     required this.enabled,
     required this.onDigit,
     required this.onDelete,
-    this.scale = 1,
   });
 
   final bool enabled;
   final ValueChanged<String> onDigit;
   final VoidCallback onDelete;
-  final double scale;
 
-  static const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'];
+  static const keys = [
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    '',
+    '0',
+    'del'
+  ];
 
   @override
   Widget build(BuildContext context) {
     final dark = settingsIsDark(context);
-    final keyBg = dark ? const Color(0xFF2A2D33) : const Color(0xFFE0E0E0);
-    final s = scale;
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: keys.length,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisExtent: (72 * s).h,
-        mainAxisSpacing: (16 * s).h,
-        crossAxisSpacing: (20 * s).w,
-      ),
-      itemBuilder: (_, i) {
-        final key = keys[i];
-        if (key.isEmpty) return const SizedBox.shrink();
-        final isDelete = key == 'del';
-        return _KeyButton(
-          key: ValueKey('trade-password-key-$key'),
-          enabled: enabled,
-          scale: s,
-          backgroundColor: keyBg,
-          label: isDelete ? null : key,
-          icon: isDelete ? Icons.backspace_outlined : null,
-          onTap: isDelete
-              ? () {
-                  HapticFeedback.selectionClick();
-                  onDelete();
-                }
-              : () {
-                  HapticFeedback.selectionClick();
-                  onDigit(key);
-                },
-        );
-      },
+    final keyHeight = (MediaQuery.sizeOf(context).height *
+            TradePasswordTokens.keyHeightScreenRatio)
+        .clamp(
+      TradePasswordTokens.keyMinHeight,
+      TradePasswordTokens.keyMaxHeight,
     );
-  }
-}
+    return ColoredBox(
+      color: AppTokens.surfaceAlt(dark: dark),
+      child: Center(
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: TradePasswordTokens.contentMaxWidth,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppTokens.s3),
+            child: GridView.builder(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: keys.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisExtent: keyHeight,
+                mainAxisSpacing: AppTokens.s3,
+                crossAxisSpacing: AppTokens.s3,
+              ),
+              itemBuilder: (_, i) {
+                final key = keys[i];
+                final isDelete = key == 'del';
+                final keyBackground = isDelete || key.isEmpty
+                    ? AppTokens.border(dark: dark)
+                    : AppTokens.surface(dark: dark);
+                if (key.isEmpty) {
+                  return ExcludeSemantics(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: keyBackground,
+                        borderRadius: BorderRadius.circular(AppTokens.rSm),
+                      ),
+                    ),
+                  );
+                }
+                final label = isDelete
+                    ? settingsText(context, zh: '删除一位', en: 'Delete digit')
+                    : key;
+                final color = enabled
+                    ? AppTokens.textPrimary(dark: dark)
+                    : AppTokens.textSecondary(dark: dark);
+                void activate() {
+                  HapticFeedback.selectionClick();
+                  isDelete ? onDelete() : onDigit(key);
+                }
 
-class _KeyButton extends StatelessWidget {
-  const _KeyButton({
-    super.key,
-    required this.enabled,
-    required this.onTap,
-    required this.scale,
-    required this.backgroundColor,
-    this.label,
-    this.icon,
-  });
-
-  final bool enabled;
-  final VoidCallback onTap;
-  final double scale;
-  final Color backgroundColor;
-  final String? label;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = settingsIsDark(context);
-    final radius = (16 * scale).r;
-    final contentColor = enabled
-        ? AppTokens.textPrimary(dark: dark)
-        : AppTokens.textSecondary(dark: dark);
-    return Material(
-      color: backgroundColor,
-      borderRadius: BorderRadius.circular(radius),
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(radius),
-        child: Container(
-          alignment: Alignment.center,
-          child: icon != null
-              ? Icon(icon, size: (32 * scale).sp, color: contentColor)
-              : Text(
-                  label ?? '',
-                  style: TextStyle(
-                    fontSize: (34 * scale).sp,
-                    fontWeight: FontWeight.w400,
-                    color: contentColor,
+                return Semantics(
+                  button: true,
+                  enabled: enabled,
+                  label: label,
+                  onTap: enabled ? activate : null,
+                  excludeSemantics: true,
+                  child: Material(
+                    key: ValueKey('trade-password-key-$key'),
+                    color: keyBackground,
+                    borderRadius: BorderRadius.circular(AppTokens.rSm),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: enabled ? activate : null,
+                      child: Center(
+                        child: isDelete
+                            ? Icon(
+                                Icons.backspace_outlined,
+                                size: TradePasswordTokens.deleteIconSize,
+                                color: color,
+                              )
+                            : Text(
+                                key,
+                                style: TextStyle(
+                                  fontSize: TradePasswordTokens.digitFontSize,
+                                  fontWeight: FontWeight.w400,
+                                  color: color,
+                                  height: 1,
+                                ),
+                              ),
+                      ),
+                    ),
                   ),
-                ),
+                );
+              },
+            ),
+          ),
         ),
       ),
     );

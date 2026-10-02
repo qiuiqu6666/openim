@@ -6,8 +6,12 @@ class PresenceLabel extends StatelessWidget {
   const PresenceLabel({super.key, required this.presence});
   final UserPresence presence;
   @override
-  Widget build(BuildContext context) => Text(presence.label,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: Styles.ts_8E9AB0_12sp);
+  Widget build(BuildContext context) => ListenableBuilder(
+      listenable: FriendDisplayPreferences.changes,
+      builder: (context, _) => !FriendDisplayPreferences.showOnlineStatus
+          ? const SizedBox.shrink()
+          : Text(presence.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Styles.ts_8E9AB0_12sp));
 }

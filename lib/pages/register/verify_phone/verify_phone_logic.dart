@@ -1,3 +1,4 @@
+import 'package:openim/pages/mine/settings/widgets/account_code_request.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -43,14 +44,13 @@ class VerifyPhoneLogic extends GetxController {
     codeErrorCtrl.add(ErrorAnimationType.shake);
   }
 
-  Future<bool> requestVerificationCode() => LoadingView.singleton.wrap(
-      asyncFunction: () => Apis.requestVerificationCode(
-            areaCode: areaCode,
-            phoneNumber: phoneNumber,
-            email: email,
-            usedFor: usedFor,
-            invitationCode: invitationCode,
-          ));
+  Future<bool> requestVerificationCode() => requestAccountVerificationCode(
+        areaCode: areaCode,
+        phoneNumber: phoneNumber,
+        email: email,
+        usedFor: usedFor,
+        invitationCode: invitationCode,
+      );
 
   Future checkVerificationCode(String verificationCode) => Apis.checkVerificationCode(
         areaCode: areaCode,

@@ -3,7 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 const _assetPackage = 'openim_common';
 
-/// 1:1 port of 99chat profile.dart `_buildSectionCard`.
+/// Groups profile actions in an inset, rounded card.
 class MineSectionCard extends StatelessWidget {
   const MineSectionCard({
     super.key,
@@ -17,9 +17,13 @@ class MineSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      color: color,
-      child: Column(children: children),
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+      child: Material(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: Column(children: children),
+      ),
     );
   }
 }

@@ -1,14 +1,12 @@
+import '../pages/mine/settings/widgets/platform_update.dart';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:url_launcher/url_launcher_string.dart';
-
-import '../widgets/upgrade_view.dart';
 
 mixin UpgradeManger {
   PackageInfo? packageInfo;
@@ -23,7 +21,8 @@ mixin UpgradeManger {
   }
 
   void ignoreUpdate() {
-    DataSp.putIgnoreVersion(upgradeInfoV2!.buildVersion! + upgradeInfoV2!.buildVersionNo!);
+    DataSp.putIgnoreVersion(
+        upgradeInfoV2!.buildVersion! + upgradeInfoV2!.buildVersionNo!);
     Get.back();
   }
 
@@ -32,7 +31,7 @@ mixin UpgradeManger {
     Get.back();
   }
 
-  getAppInfo() async {
+  Future<void> getAppInfo() async {
     packageInfo ??= await PackageInfo.fromPlatform();
   }
 
@@ -46,54 +45,33 @@ mixin UpgradeManger {
   }
 
   void checkUpdate() async {
-    LoadingView.singleton.wrap(asyncFunction: () async {
-      await getAppInfo();
-      return Apis.checkUpgradeV2();
-    }).then((value) {
-      upgradeInfoV2 = value;
-      if (!canUpdate) {
-        IMViews.showToast('Current version is latest');
-        return;
-      }
-      Get.dialog(
-        UpgradeViewV2(
-          upgradeInfo: upgradeInfoV2!,
-          packageInfo: packageInfo!,
-          onNow: nowUpdate,
-          subject: subject,
-        ),
-        routeSettings: const RouteSettings(name: 'upgrade_dialog'),
-      );
-    });
+    final context = Get.context;
+    if (context != null) await checkPlatformUpdate(context);
   }
 
-  autoCheckVersionUpgrade() async {
+  Future<void> autoCheckVersionUpgrade() async {
     if (isShowUpgradeDialog || isNowIgnoreUpdate) return;
-    await getAppInfo();
-    upgradeInfoV2 = await Apis.checkUpgradeV2();
-
-    if (!canUpdate) return;
+    final context = Get.context;
+    if (context == null) return;
     isShowUpgradeDialog = true;
-    Get.dialog(
-      UpgradeViewV2(
-        upgradeInfo: upgradeInfoV2!,
-        packageInfo: packageInfo!,
-        onLater: laterUpdate,
-        onIgnore: ignoreUpdate,
-        onNow: nowUpdate,
-        subject: subject,
-      ),
-      routeSettings: const RouteSettings(name: 'upgrade_dialog'),
-    ).whenComplete(() => isShowUpgradeDialog = false);
+    try {
+      await checkPlatformUpdate(context, automatic: true);
+    } finally {
+      isShowUpgradeDialog = false;
+      isNowIgnoreUpdate = true;
+    }
   }
 
   bool get canUpdate =>
-      packageInfo!.version + packageInfo!.buildNumber != upgradeInfoV2!.buildVersion! + upgradeInfoV2!.buildVersionNo!;
+      packageInfo!.version + packageInfo!.buildNumber !=
+      upgradeInfoV2!.buildVersion! + upgradeInfoV2!.buildVersionNo!;
 }
 
 class NotificationService {
-  static final NotificationService _notificationService = NotificationService._internal();
-  final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  static final NotificationService _notificationService =
+      NotificationService._internal();
+  final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
   final AndroidInitializationSettings _androidInitializationSettings =
       const AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -108,14 +86,16 @@ class NotificationService {
   }
 
   void init() async {
-    final InitializationSettings initializationSettings = InitializationSettings(
+    final InitializationSettings initializationSettings =
+        InitializationSettings(
       android: _androidInitializationSettings,
     );
     await _flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
   Future createNotification(int count, int i, int id, String status) async {
-    var androidPlatformChannelSpecifics = AndroidNotificationDetails('progress channel', 'progress channel',
+    var androidPlatformChannelSpecifics = AndroidNotificationDetails(
+        'progress channel', 'progress channel',
         channelDescription: 'progress channel description',
         channelShowBadge: false,
         importance: Importance.max,
@@ -124,8 +104,10 @@ class NotificationService {
         showProgress: true,
         maxProgress: count,
         progress: i);
-    var platformChannelSpecifics = NotificationDetails(android: androidPlatformChannelSpecifics);
-    await _flutterLocalNotificationsPlugin.show(id, status, '$i%', platformChannelSpecifics, payload: 'item x');
+    var platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+    await _flutterLocalNotificationsPlugin
+        .show(id, status, '$i%', platformChannelSpecifics, payload: 'item x');
 
     return;
   }

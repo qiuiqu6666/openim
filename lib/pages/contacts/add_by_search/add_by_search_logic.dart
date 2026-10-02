@@ -20,6 +20,8 @@ class AddContactsBySearchLogic extends GetxController {
   final groupInfoList = <GroupInfo>[].obs;
   late SearchType searchType;
   int pageNo = 0;
+  final _entryFields = <String, Map<String, String>>{};
+  final _addSources = <String, FriendAddSource>{};
 
   @override
   void onClose() {
@@ -51,6 +53,16 @@ class AddContactsBySearchLogic extends GetxController {
 
   void search() {
     if (searchKey.isEmpty) return;
+    final invite = parseFriendInvite(searchKey);
+    if (isSearchUser && invite != null) {
+      AppNavigator.startUserProfilePane(
+          userID: invite['userID']!,
+          addSource: invite['source'] == 'link'
+              ? FriendAddSource.link
+              : FriendAddSource.qrcode,
+          friendAddFields: {'inviteCode': invite['inviteCode']!});
+      return;
+    }
     if (isSearchUser) {
       searchUser();
     } else {
@@ -59,13 +71,34 @@ class AddContactsBySearchLogic extends GetxController {
   }
 
   void searchUser() async {
+    final keyword = searchKey;
     var list = await LoadingView.singleton.wrap(
       asyncFunction: () => Apis.searchUserFullInfo(
-        content: searchKey,
+        content: keyword,
+        way: keyword.contains('@') && !keyword.startsWith('@')
+            ? 3
+            : RegExp(r'^\+?\d+$').hasMatch(keyword)
+                ? 2
+                : null,
         pageNumber: pageNo = 1,
         showNumber: 20,
       ),
     );
+    _addSources.clear();
+    for (final user in list ?? <UserFullInfo>[]) {
+      if (user.userID != null) {
+        final source = friendSearchSource(keyword, user);
+        _addSources[user.userID!] = source;
+        _entryFields[user.userID!] = {
+          if (source == FriendAddSource.account) 'account': user.account ?? '',
+          if (source == FriendAddSource.phone) ...{
+            'phoneNumber': user.phoneNumber ?? keyword,
+            'areaCode': user.areaCode ?? '',
+          },
+          if (source == FriendAddSource.email) 'email': user.email ?? keyword,
+        };
+      }
+    }
     userInfoList.assignAll(list ?? []);
     refreshCtrl.refreshCompleted();
     if (null == list || list.isEmpty || list.length < 20) {
@@ -76,13 +109,33 @@ class AddContactsBySearchLogic extends GetxController {
   }
 
   void loadMoreUser() async {
+    final keyword = searchKey;
     var list = await LoadingView.singleton.wrap(
       asyncFunction: () => Apis.searchUserFullInfo(
-        content: searchKey,
+        content: keyword,
+        way: keyword.contains('@') && !keyword.startsWith('@')
+            ? 3
+            : RegExp(r'^\+?\d+$').hasMatch(keyword)
+                ? 2
+                : null,
         pageNumber: ++pageNo,
         showNumber: 20,
       ),
     );
+    for (final user in list ?? <UserFullInfo>[]) {
+      if (user.userID != null) {
+        final source = friendSearchSource(keyword, user);
+        _addSources[user.userID!] = source;
+        _entryFields[user.userID!] = {
+          if (source == FriendAddSource.account) 'account': user.account ?? '',
+          if (source == FriendAddSource.phone) ...{
+            'phoneNumber': user.phoneNumber ?? keyword,
+            'areaCode': user.areaCode ?? '',
+          },
+          if (source == FriendAddSource.email) 'email': user.email ?? keyword,
+        };
+      }
+    }
     userInfoList.addAll(list ?? []);
     refreshCtrl.refreshCompleted();
     if (null == list || list.isEmpty || list.length < 20) {
@@ -100,7 +153,6 @@ class AddContactsBySearchLogic extends GetxController {
   }
 
   String getMatchContent(UserFullInfo userInfo) {
-
     return sprintf(StrRes.searchNicknameIs, [userInfo.nickname]);
   }
 
@@ -113,10 +165,33 @@ class AddContactsBySearchLogic extends GetxController {
     return null;
   }
 
-  void viewInfo(dynamic info) {
+  void viewInfo(dynamic info) async {
     if (info is UserFullInfo) {
+      final fields = Map<String, String>.from(_entryFields[info.userID] ?? {});
+      if (_addSources[info.userID] == FriendAddSource.phone &&
+          fields['areaCode']?.isNotEmpty != true) {
+        final controller = TextEditingController(text: '+86');
+        final code = await Get.dialog<String>(AlertDialog(
+            title: const Text('确认手机号区号'),
+            content: TextField(
+                controller: controller,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(hintText: '例如 +86，需与对方资料一致')),
+            actions: [
+              TextButton(onPressed: () => Get.back(), child: const Text('取消')),
+              TextButton(
+                  onPressed: () => Get.back(result: controller.text.trim()),
+                  child: const Text('确定'))
+            ]));
+        controller.dispose();
+        if (isClosed || code == null || !RegExp(r'^\+\d{1,4}$').hasMatch(code))
+          return;
+        fields['areaCode'] = code;
+      }
       AppNavigator.startUserProfilePane(
         userID: info.userID!,
+        addSource: _addSources[info.userID] ?? FriendAddSource.search,
+        friendAddFields: fields,
         nickname: info.nickname,
         faceURL: info.faceURL,
       );
@@ -133,20 +208,14 @@ class AddContactsBySearchLogic extends GetxController {
       return sprintf(StrRes.searchGroupNicknameIs, [getShowName(info)]);
     }
 
-    UserFullInfo userFullInfo = info;
-    String? tips, content;
-    if (int.tryParse(searchKey) != null) {
-      if (searchKey.length == 11) {
-        tips = StrRes.phoneNumber;
-        content = userFullInfo.phoneNumber ?? searchKey;
-      } else {
-        tips = StrRes.userID;
-        content = userFullInfo.userID;
-      }
-    } else {
-      tips = StrRes.searchNicknameIs;
-      content = getShowName(info);
-    }
-    return "$tips:$content";
+    final user = info as UserFullInfo;
+    final source = _addSources[user.userID];
+    final fields = _entryFields[user.userID] ?? const <String, String>{};
+    return switch (source) {
+      FriendAddSource.account => '公开账号:${user.account ?? user.nickname ?? ""}',
+      FriendAddSource.phone => '手机号:${fields['phoneNumber'] ?? ""}',
+      FriendAddSource.email => '邮箱:${fields['email'] ?? ""}',
+      _ => user.nickname ?? '',
+    };
   }
 }

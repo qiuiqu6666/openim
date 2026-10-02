@@ -49,8 +49,19 @@ void main() {
     });
     final requests = <RequestOptions>[];
     var response = <String, dynamic>{'errCode': 0};
+    bool stringOnly = false;
     dio.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) {
       requests.add(request);
+      if (stringOnly && request.data['nickname'] is Map) {
+        handler
+            .resolve(Response(requestOptions: request, statusCode: 200, data: {
+          'errCode': 1001,
+          'errMsg': 'ArgsError',
+          'errDlt':
+              'json: cannot unmarshal object into Go value of type string',
+        }));
+        return;
+      }
       handler.resolve(
           Response(requestOptions: request, statusCode: 200, data: response));
     }));
@@ -67,21 +78,57 @@ void main() {
       await Apis.updateUserInfo(userID: 'current-user', faceURL: 'avatar');
       expect(requests.last.data.containsKey('nickname'), false);
 
+      stringOnly = true;
+      final beforeCompatibility = requests.length;
+      await Apis.updateUserInfo(
+          userID: 'current-user', nickname: ' 秋啦啦啦啦 ', showErrorToast: false);
+      expect(requests.length, beforeCompatibility + 2);
+      expect(requests.last.data['nickname'], ' 秋啦啦啦啦 ');
+      stringOnly = false;
+
       for (final code in [20018, 20019, 1001]) {
         response = {
           'errCode': code,
           'errMsg': 'Rejected',
           'errDlt': code == 1001 ? 'nickname can not be empty' : ''
         };
+        final beforeRejection = requests.length;
         await expectLater(
           Apis.updateUserInfo(userID: 'current-user', nickname: ' Alice '),
           throwsA(isA<(int, String?)>().having((e) => e.$1, 'code', code)),
         );
+        expect(requests.length, beforeRejection + 1);
       }
       response = {'errCode': 0};
       await Apis.updateUserInfo(userID: 'current-user', nickname: ' Alice ');
       expect(requests.last.data['nickname'], {'value': ' Alice '});
 
+      response = {
+        'errCode': 1001,
+        'errMsg': 'ArgsError',
+        'errDlt': 'nickname can not be empty',
+      };
+      await expectLater(
+        Apis.updateUserInfo(
+            userID: 'current-user', nickname: '', showErrorToast: false),
+        throwsA(isA<(int, String?)>().having(
+            (e) => e.$2, 'detailed reason', 'nickname can not be empty')),
+      );
+
+      response = {
+        'errCode': 0,
+        'data': {'userID': 'registered'}
+      };
+      response = {
+        'errCode': 0,
+        'data': {'occupied': false, 'nextUpdateTime': 1791504000000}
+      };
+      final check = await Apis.checkNickname(' 李四 ');
+      expect(check['nextUpdateTime'], 1791504000000);
+      expect(check['occupied'], false);
+      expect(requests.last.path, endsWith('/user/nickname/check'));
+      expect(requests.last.data, {'nickname': ' 李四 '});
+      expect(requests.last.headers['token'], 'chat-token');
       response = {
         'errCode': 0,
         'data': {'userID': 'registered'}

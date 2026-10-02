@@ -13,6 +13,7 @@ void main() {
     final info = UserFullInfo.fromJson({'userID': '123', 'allowAddFriend': 1});
 
     expect(info.allowAddByUserID, 1);
+    expect(info.allowAddByAccount, 1);
     expect(info.allowAddByPhone, 1);
     expect(info.allowAddByEmail, 1);
     expect(info.allowAddByQRCode, 1);
@@ -42,7 +43,7 @@ void main() {
   });
 
   testWidgets(
-      'falls back only for legacy integer parsing and verifies the result',
+      'falls back only for legacy wrapper parsing and verifies the result',
       (tester) async {
     await tester.pumpWidget(const GetMaterialApp(home: Scaffold()));
     await tester.runAsync(() async {
@@ -61,7 +62,8 @@ void main() {
             data: updates.length == 1
                 ? {
                     'errCode': 1001,
-                    'errMsg': 'strconv.ParseInt: invalid syntax',
+                    'errMsg':
+                        'json: cannot unmarshal number into Go value of type wrapperspb.Int32Value',
                   }
                 : {'errCode': 0, 'data': {}},
           ));
@@ -88,8 +90,8 @@ void main() {
           value: 2,
         );
         expect(updates, hasLength(2));
-        expect(updates.first['allowAddByPhone'], {'value': 2});
-        expect(updates.last['allowAddByPhone'], 2);
+        expect(updates.first['allowAddByPhone'], 2);
+        expect(updates.last['allowAddByPhone'], {'value': 2});
         expect(
             updates.every((request) => request.containsKey('platform')), true);
       } finally {

@@ -37,7 +37,15 @@ class HttpUtil {
         response.errDlt == 'nickname can not be empty') {
       return 'nicknameCannotBeEmpty'.tr;
     }
-    return response.errDlt.isNotEmpty ? response.errDlt : response.errMsg;
+    final reason = response.errDlt.isNotEmpty ? response.errDlt : response.errMsg;
+    if (reason.contains('json: cannot unmarshal') ||
+        reason.contains('goroutine') || reason.contains('/tmp/') ||
+        reason.length > 200) {
+      return Get.locale?.languageCode == 'zh'
+          ? '服务器处理失败，请稍后重试（错误码：${response.errCode}）'
+          : 'Server request failed (code: ${response.errCode}). Please try again.';
+    }
+    return reason;
   }
 
   static Future post(
@@ -73,7 +81,9 @@ class HttpUtil {
           IMViews.showToast(businessErrorMessage(resp));
         }
 
-        return Future.error((resp.errCode, resp.errMsg));
+        // Keep the detailed reason available to callers that own their toast.
+        return Future.error((resp.errCode,
+            resp.errDlt.isNotEmpty ? resp.errDlt : resp.errMsg));
       }
     } catch (error) {
       if (error is DioException) {

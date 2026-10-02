@@ -15,11 +15,22 @@ import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.MethodChannel;
 
 public class MainActivity extends FlutterFragmentActivity {
+    private MethodChannel inviteChannel;
+    private String pendingInvite;
     private static final String SYSTEM_SHARE_CHANNEL = "openim_system_share";
 
     @Override
     public void configureFlutterEngine(FlutterEngine flutterEngine) {
         super.configureFlutterEngine(flutterEngine);
+        pendingInvite = getIntent().getDataString();
+        inviteChannel = new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), "openim_friend_invites");
+        inviteChannel.setMethodCallHandler((call, result) -> {
+            if ("takeInvite".equals(call.method)) {
+                String value = pendingInvite;
+                pendingInvite = null;
+                result.success(value);
+            } else result.notImplemented();
+        });
 
         new MethodChannel(
                 flutterEngine.getDartExecutor().getBinaryMessenger(),
@@ -48,6 +59,22 @@ public class MainActivity extends FlutterFragmentActivity {
             } catch (Exception ignored) {
                 result.success(false);
             }
+        });
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        pendingInvite = intent.getDataString();
+        if (inviteChannel == null || pendingInvite == null) return;
+        final String value = pendingInvite;
+        inviteChannel.invokeMethod("openInvite", value, new MethodChannel.Result() {
+            @Override public void success(Object accepted) {
+                if (Boolean.TRUE.equals(accepted) && value.equals(pendingInvite)) pendingInvite = null;
+            }
+            @Override public void error(String code, String message, Object details) {}
+            @Override public void notImplemented() {}
         });
     }
 

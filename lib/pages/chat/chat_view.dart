@@ -306,7 +306,12 @@ class ChatPage extends StatelessWidget {
   Widget? get _groupCallHintView => null;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: FriendDisplayPreferences.changes,
+        builder: (context, _) => _build(context),
+      );
+
+  Widget _build(BuildContext context) {
     // Register a theme dependency so an already open chat refreshes when the
     // user changes appearance without changing the conversation state.
     Theme.of(context);
@@ -321,9 +326,13 @@ class ChatPage extends StatelessWidget {
             appBar: TitleBar.chat(
               title: logic.nickname.value,
               avatarUrl: logic.faceUrl.value,
-              presenceText:
-                  logic.peerTyping.value ? StrRes.typing : presence?.label,
-              isOnline: presence?.displayOnline ?? false,
+              presenceText: logic.peerTyping.value
+                  ? StrRes.typing
+                  : (FriendDisplayPreferences.showOnlineStatus
+                      ? presence?.label
+                      : null),
+              isOnline: FriendDisplayPreferences.showOnlineStatus &&
+                  (presence?.displayOnline ?? false),
               isSingleChat: logic.isSingleChat,
               member: logic.memberStr,
               onCloseMultiModel: logic.exit,

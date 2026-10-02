@@ -16,6 +16,16 @@ class ProfileFixture extends GetxController implements UserProfilePanelLogic {
   final bool allowAdd;
   final bool group;
   @override
+  final commonGroupCount = RxnInt(3);
+  @override
+  final loadingCommonGroups = false.obs;
+  @override
+  final commonGroupsFailed = false.obs;
+  @override
+  Future<void> loadCommonGroupCount() async => action = 'commonGroupsRetry';
+  @override
+  Future<void> openCommonGroups() async => action = 'commonGroups';
+  @override
   bool get showMemberIMID => false;
   @override
   String get displayedUserID => userInfo.value.account ?? '';
@@ -84,6 +94,45 @@ class ProfileFixture extends GetxController implements UserProfilePanelLogic {
 }
 
 void main() {
+  for (final dark in [false, true]) {
+    testWidgets('common group count and retry states in ${dark ? "dark" : "light"}',
+        (tester) async {
+      addTearDown(Get.reset);
+      Styles.isDark = dark;
+      addTearDown(() => Styles.isDark = false);
+      final fixture = ProfileFixture();
+      GetTags.createUserProfileTag();
+      addTearDown(GetTags.destroyUserProfileTag);
+      Get.put<UserProfilePanelLogic>(fixture, tag: GetTags.userProfile);
+      await tester.pumpWidget(ScreenUtilInit(
+        designSize: const Size(375, 812),
+        builder: (_, __) => GetMaterialApp(
+          theme: ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
+          home: UserProfilePanelPage(),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('profileCommonGroups'), findsOneWidget);
+      expect(find.text('3'), findsOneWidget);
+      await tester.tap(find.text('profileCommonGroups'));
+      expect(fixture.action, 'commonGroups');
+      fixture.commonGroupCount.value = 0;
+      await tester.pump();
+      expect(find.text('0'), findsOneWidget);
+      fixture.loadingCommonGroups.value = true;
+      await tester.pump();
+      expect(find.text('profileCommonGroupsLoading'), findsOneWidget);
+      expect(find.text('0'), findsNothing);
+      fixture.loadingCommonGroups.value = false;
+      fixture.commonGroupsFailed.value = true;
+      await tester.pump();
+      await tester.tap(find.text('profileCommonGroupsCountFailed'));
+      expect(fixture.action, 'commonGroups');
+      expect(find.text('0'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
   testWidgets('group owner can open friend request when member disallows adding', (tester) async {
     addTearDown(Get.reset);
     final fixture = ProfileFixture(friend: false, allowAdd: false, group: true);

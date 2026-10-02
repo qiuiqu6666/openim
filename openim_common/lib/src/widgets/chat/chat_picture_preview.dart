@@ -19,7 +19,7 @@ class ChatPicturePreview extends StatelessWidget {
   final Function()? onTap;
   final Function(String url)? onLongPress;
   final ExtendedPageController? controller;
-  GlobalKey<ExtendedImageSlidePageState> slidePagekey = GlobalKey<ExtendedImageSlidePageState>();
+  final GlobalKey<ExtendedImageSlidePageState> slidePagekey = GlobalKey<ExtendedImageSlidePageState>();
   @override
   Widget build(BuildContext context) {
     return ExtendedImageSlidePage(
@@ -34,6 +34,7 @@ class ChatPicturePreview extends StatelessWidget {
         heroTag: heroTag,
         onTap: onTap ?? () => Get.back(),
         onLongPress: () {
+          if (images.isEmpty) return;
           final index = controller?.page?.round() ?? 0;
           onLongPress?.call(images[index].url!);
         },
@@ -97,6 +98,7 @@ class ChatPicturePreview extends StatelessWidget {
                 );
               }
             case LoadState.completed:
+              if (source.url == source.thumbnail) return null;
               final url = source.url;
    
               return Center(

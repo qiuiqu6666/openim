@@ -2,6 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>FlutterDeepLinkingEnabled</key><false/>
+    <key>CFBundleURLTypes</key><array><dict>
+        <key>CFBundleURLSchemes</key><array><string>openim</string></array>
+        <key>CFBundleURLName</key><string>openim.friend.invites</string>
+    </dict></array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -60,7 +65,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>请点击“好”以允许访问。若不允许，你将无法使用拍照、录制视频、扫一扫等功能。</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>请点击“好”以允许访问。若不允许，你将无法使用Touch ID 或 Face ID解锁功能。</string>
+	<string>使用 Face ID 验证身份，以开启生物识别支付或解锁应用。</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>请点击“好”以允许访问。若不允许，你将无法使用聊天时发送定位等功能。</string>
 	<key>NSLocationAlwaysUsageDescription</key>

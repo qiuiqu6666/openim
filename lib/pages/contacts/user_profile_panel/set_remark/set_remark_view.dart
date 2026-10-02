@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
@@ -25,9 +27,14 @@ class SetFriendRemarkPage extends StatelessWidget {
     required this.maxLength,
     this.avatarURL,
     this.avatarName,
+    this.avatarBytes,
     this.keyboardType,
     this.onAvatarTap,
     this.isGroupAvatar = false,
+    this.saving = false,
+    this.footer,
+    this.saveEnabled = true,
+    this.inputStatus,
   });
 
   final TextEditingController controller;
@@ -35,9 +42,14 @@ class SetFriendRemarkPage extends StatelessWidget {
   final int maxLength;
   final String? avatarURL;
   final String? avatarName;
+  final Uint8List? avatarBytes;
   final TextInputType? keyboardType;
   final VoidCallback? onAvatarTap;
   final bool isGroupAvatar;
+  final bool saving;
+  final Widget? footer;
+  final bool saveEnabled;
+  final Widget? inputStatus;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -50,16 +62,29 @@ class SetFriendRemarkPage extends StatelessWidget {
           scrolledUnderElevation: 0,
           automaticallyImplyLeading: false,
           leading: IconButton(
-            onPressed: Get.back,
+            onPressed: saving ? null : () => Navigator.of(context).maybePop(),
             tooltip: MaterialLocalizations.of(context).backButtonTooltip,
             icon: Icon(Icons.arrow_back_ios_new,
                 size: 24.w, color: Styles.c_0089FF),
           ),
           actions: [
             TextButton(
-              onPressed: onSave,
-              child: Text(StrRes.determine,
-                  style: TextStyle(color: Styles.c_0089FF, fontSize: 16.sp)),
+              onPressed: saving || !saveEnabled ? null : onSave,
+              child: saving
+                  ? SizedBox(
+                      width: AppTokens.s6,
+                      height: AppTokens.s6,
+                      child: const CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppTokens.accent,
+                      ),
+                    )
+                  : Text(StrRes.determine,
+                      style: TextStyle(
+                          color: saveEnabled
+                              ? Styles.c_0089FF
+                              : Theme.of(context).disabledColor,
+                          fontSize: 16.sp)),
             ),
             6.horizontalSpace,
           ],
@@ -70,27 +95,42 @@ class SetFriendRemarkPage extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(14.w, 24.h, 14.w, 24.h),
             child: Column(children: [
               Center(
-                child: AvatarView(
-                  onTap: onAvatarTap,
-                  url: avatarURL,
-                  text: avatarName,
-                  isGroup: isGroupAvatar,
-                  isCircle: true,
-                  width: 96.w,
-                  height: 96.w,
-                  textStyle: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      fontSize: 40.sp),
-                ),
+                child: avatarBytes != null
+                    ? GestureDetector(
+                        onTap: onAvatarTap,
+                        child: ClipOval(
+                          child: Image.memory(
+                            avatarBytes!,
+                            width: 96.w,
+                            height: 96.w,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      )
+                    : AvatarView(
+                        onTap: onAvatarTap,
+                        url: avatarURL,
+                        text: avatarName,
+                        isGroup: isGroupAvatar,
+                        isCircle: true,
+                        width: 96.w,
+                        height: 96.w,
+                        textStyle: TextStyle(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            fontSize: 40.sp),
+                      ),
               ),
               30.verticalSpace,
               TextField(
                 controller: controller,
+                enabled: !saving,
                 maxLength: maxLength,
                 keyboardType: keyboardType,
                 maxLines: 1,
                 textInputAction: TextInputAction.done,
-                onSubmitted: (_) => onSave(),
+                onSubmitted: (_) {
+                  if (!saving && saveEnabled) onSave();
+                },
                 style: TextStyle(color: Styles.c_0C1C33, fontSize: 16.sp),
                 decoration: InputDecoration(
                   filled: true,
@@ -106,9 +146,16 @@ class SetFriendRemarkPage extends StatelessWidget {
                       child: Center(
                         widthFactor: 1,
                         heightFactor: 1,
-                        child: Text(
-                          '${value.text.characters.length}/$maxLength',
-                          style: Styles.ts_8E9AB0_13sp,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (inputStatus != null) ...[
+                              inputStatus!,
+                              const SizedBox(width: AppTokens.s3),
+                            ],
+                            Text('${value.text.characters.length}/$maxLength',
+                                style: Styles.ts_8E9AB0_13sp),
+                          ],
                         ),
                       ),
                     ),
@@ -117,6 +164,7 @@ class SetFriendRemarkPage extends StatelessWidget {
                       EdgeInsets.symmetric(horizontal: 18.w, vertical: 13.h),
                 ),
               ),
+              if (footer != null) footer!,
             ]),
           ),
         ),

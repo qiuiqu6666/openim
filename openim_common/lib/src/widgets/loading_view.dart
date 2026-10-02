@@ -11,6 +11,9 @@ class LoadingView {
 
   LoadingView._();
 
+  /// Shared animation for overlays and locally owned loading states.
+  static Widget indicator() => SpinKitCircle(color: Styles.c_0089FF);
+
   OverlayState? _overlayState;
   OverlayEntry? _overlayEntry;
   bool _isVisible = false;
@@ -44,7 +47,7 @@ class LoadingView {
         width: MediaQuery.of(context).size.width,
         color: Colors.transparent,
         child: Center(
-          child: SpinKitCircle(color: Styles.c_0089FF),
+          child: indicator(),
         ),
       ),
     );

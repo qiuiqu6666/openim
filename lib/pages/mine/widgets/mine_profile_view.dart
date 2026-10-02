@@ -172,7 +172,13 @@ class MineProfileView extends StatelessWidget {
                           divider: divider,
                           text: primary,
                           arrow: secondary,
+                          showDivider: false,
                         ),
+                      ],
+                    ),
+                    MineSectionCard(
+                      color: card,
+                      children: [
                         _menu(
                           key: 'mine-menu-calls',
                           asset: 'assets/profile_icons/call.svg',
@@ -194,7 +200,13 @@ class MineProfileView extends StatelessWidget {
                           divider: divider,
                           text: primary,
                           arrow: secondary,
+                          showDivider: false,
                         ),
+                      ],
+                    ),
+                    MineSectionCard(
+                      color: card,
+                      children: [
                         _menu(
                           key: 'mine-menu-share-app',
                           asset: 'assets/profile_icons/share_app.svg',
@@ -203,13 +215,7 @@ class MineProfileView extends StatelessWidget {
                           divider: divider,
                           text: primary,
                           arrow: secondary,
-                          showDivider: false,
                         ),
-                      ],
-                    ),
-                    MineSectionCard(
-                      color: card,
-                      children: [
                         _menu(
                           key: 'mine-menu-settings',
                           asset: 'assets/profile_icons/settings.svg',

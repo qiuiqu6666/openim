@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../settings_service.dart';
+import '../widgets/verification_code_flow.dart';
 import '../widgets/settings_widgets.dart';
 
 class ChangeTradePasswordPage extends StatefulWidget {
@@ -21,6 +22,7 @@ class ChangeTradePasswordPage extends StatefulWidget {
 }
 
 class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
+  final _codeFlow = VerificationCodeFlow();
   final _old = TextEditingController();
   final _next = TextEditingController();
   final _confirm = TextEditingController();
@@ -28,10 +30,17 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
   bool _obscureNext = true;
   bool _obscureConfirm = true;
   bool _submitting = false;
+  bool get _smsMode => widget.phoneNumber.trim().isNotEmpty;
+  String get _maskedPhone {
+    final phone = widget.phoneNumber.trim();
+    if (phone.length <= 7) return phone;
+    return '${phone.substring(0, 3)}****${phone.substring(phone.length - 4)}';
+  }
 
   @override
   void initState() {
     super.initState();
+    _codeFlow.addListener(_refresh);
     _old.addListener(_refresh);
     _next.addListener(_refresh);
     _confirm.addListener(_refresh);
@@ -39,6 +48,7 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
 
   @override
   void dispose() {
+    _codeFlow.dispose();
     _old.removeListener(_refresh);
     _next.removeListener(_refresh);
     _confirm.removeListener(_refresh);
@@ -62,7 +72,7 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
 
   Future<void> _submit() async {
     if (!_canSubmit) return;
-    if (!widget.service.isBackendAvailable) {
+    if (!widget.service.isSecurityBackendAvailable) {
       showUnavailableSettingsAction(
         context,
         settingsText(context, zh: '修改支付密码', en: 'Change payment password'),
@@ -71,16 +81,28 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
     }
     setState(() => _submitting = true);
     try {
-      await widget.service.changeTradePassword(
-        oldPassword: _old.text.trim(),
-        newPassword: _next.text.trim(),
-      );
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } catch (_) {
+      if (_smsMode) {
+        await widget.service.resetTradePassword(
+            code: _old.text.trim(), password: _next.text.trim());
+      } else {
+        await widget.service.changeTradePassword(
+            oldPassword: _old.text.trim(), newPassword: _next.text.trim());
+      }
       if (!mounted) return;
       showSettingsMessage(
         context,
+        settingsText(context,
+            zh: _smsMode ? '支付密码重置成功' : '支付密码修改成功',
+            en: _smsMode
+                ? 'Payment password reset successfully'
+                : 'Payment password changed successfully'),
+      );
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      showSettingsError(
+        context,
+        error,
         settingsText(
           context,
           zh: '修改失败，请稍后重试',
@@ -92,12 +114,26 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
     }
   }
 
-  void _openReset() {
-    if (widget.phoneNumber.trim().isEmpty) return;
-    showUnavailableSettingsAction(
-      context,
-      settingsText(context, zh: '短信重置支付密码', en: 'Reset payment password by SMS'),
-    );
+  Future<void> _openReset() async {
+    if (_submitting || !_smsMode || !_codeFlow.canSend) return;
+    setState(() => _submitting = true);
+    try {
+      final sent = await _codeFlow.send(
+          context,
+          (param) => widget.service
+              .requestTradePasswordCode(captchaVerifyParam: param));
+      if (mounted && sent) {
+        showSettingsMessage(
+            context, settingsText(context, zh: '验证码已发送', en: 'Code sent'));
+      }
+    } catch (error) {
+      if (mounted) {
+        showSettingsError(context, error,
+            settingsText(context, zh: '发送失败，请稍后重试', en: 'Could not send code'));
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   Widget _eye(bool obscure, VoidCallback onTap) => IconButton(
@@ -122,34 +158,63 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
       dismissKeyboardOnOutsideTap: true,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+          padding: const EdgeInsets.fromLTRB(
+              AppTokens.s5, AppTokens.s4, AppTokens.s5, AppTokens.s4),
           child: Text(
             settingsText(
               context,
-              zh: '请输入当前支付密码，并设置新的 6 位数字支付密码。',
-              en: 'Enter your current payment password, then set a new 6-digit one.',
+              zh: _smsMode
+                  ? '通过绑定手机的验证码设置新的 6 位支付密码。'
+                  : '请输入当前支付密码，并设置新的 6 位数字支付密码。',
+              en: _smsMode
+                  ? 'Use a code sent to your bound phone to set a new payment password.'
+                  : 'Enter your current payment password, then set a new 6-digit one.',
             ),
-            style: TextStyle(color: helper, fontSize: 13, height: 1.45),
+            style: TextStyle(
+                color: helper,
+                fontSize: AppTokens.captionFontSize,
+                height: 1.5),
           ),
         ),
         SettingsGroup(
           margin: EdgeInsets.zero,
           children: [
+            if (_smsMode)
+              SettingsCell(
+                title: settingsText(context,
+                    zh: '绑定手机号', en: 'Bound Phone Number'),
+                value: _maskedPhone,
+                showArrow: false,
+              ),
             SettingsInputCell(
-              label: settingsText(context, zh: '原密码', en: 'Current Password'),
-              hint: settingsText(context, zh: '请输入 6 位支付密码', en: 'Enter 6 digits'),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: AppTokens.s5),
+              label: settingsText(context,
+                  zh: _smsMode ? '验证码' : '原密码',
+                  en: _smsMode ? 'SMS Code' : 'Current Password'),
+              hint: settingsText(context,
+                  zh: _smsMode ? '请输入验证码' : '请输入 6 位支付密码',
+                  en: _smsMode ? 'Enter the 6-digit code' : 'Enter 6 digits'),
               controller: _old,
-              obscureText: _obscureOld,
+              obscureText: !_smsMode && _obscureOld,
               keyboardType: TextInputType.number,
               inputFormatters: digits,
-              trailing: _eye(
-                _obscureOld,
-                () => setState(() => _obscureOld = !_obscureOld),
-              ),
+              trailing: _smsMode
+                  ? TextButton(
+                      style: TextButton.styleFrom(
+                          foregroundColor: AppTokens.accent),
+                      onPressed:
+                          _submitting || !_codeFlow.canSend ? null : _openReset,
+                      child: Text(_codeFlow.label(context)))
+                  : _eye(_obscureOld,
+                      () => setState(() => _obscureOld = !_obscureOld)),
             ),
             SettingsInputCell(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: AppTokens.s5),
               label: settingsText(context, zh: '新密码', en: 'New Password'),
-              hint: settingsText(context, zh: '请输入新的 6 位支付密码', en: 'Enter new 6 digits'),
+              hint: settingsText(context,
+                  zh: '请输入 6 位数字', en: 'Enter new 6 digits'),
               controller: _next,
               obscureText: _obscureNext,
               keyboardType: TextInputType.number,
@@ -160,8 +225,10 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
               ),
             ),
             SettingsInputCell(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: AppTokens.s5),
               label: settingsText(context, zh: '确认密码', en: 'Confirm Password'),
-              hint: settingsText(context, zh: '请再次输入支付密码', en: 'Enter it again'),
+              hint: settingsText(context, zh: '再次输入新密码', en: 'Enter it again'),
               controller: _confirm,
               obscureText: _obscureConfirm,
               keyboardType: TextInputType.number,
@@ -174,62 +241,33 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
             ),
           ],
         ),
-        if (widget.phoneNumber.trim().isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-            child: GestureDetector(
-              onTap: _openReset,
-              child: Text(
-                settingsText(
-                  context,
-                  zh: '忘记支付密码？通过短信验证码重置',
-                  en: 'Forgot your payment password? Reset it with an SMS code.',
-                ),
-                style: const TextStyle(
-                  color: AppTokens.accent,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          )
-        else
+        if (_confirm.text.isNotEmpty &&
+            _next.text.trim() != _confirm.text.trim())
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: Text(
-              settingsText(
-                context,
-                zh: '未绑定手机时无法通过短信重置支付密码。',
-                en: 'SMS reset is unavailable without a linked phone number.',
-              ),
-              style: TextStyle(color: helper, fontSize: 12, height: 1.45),
-            ),
+                settingsText(context,
+                    zh: '两次输入的支付密码不一致', en: 'Payment passwords do not match'),
+                style: const TextStyle(color: AppTokens.danger)),
           ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-          child: SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: _canSubmit ? _submit : null,
-              style: ElevatedButton.styleFrom(
-                elevation: 0,
-                backgroundColor: AppTokens.accent,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: AppTokens.border(dark: dark),
-                disabledForegroundColor: helper,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: Text(
-                _submitting
-                    ? settingsText(context, zh: '提交中...', en: 'Submitting...')
-                    : settingsText(context, zh: '完成', en: 'Done'),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-            ),
+        if (!_smsMode)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppTokens.s5, AppTokens.s4, AppTokens.s5, 0),
+            child: Text(
+                settingsText(context,
+                    zh: '绑定手机号后，可通过短信验证码重置支付密码。',
+                    en:
+                        'Link a phone number to reset your payment password by SMS.'),
+                style: TextStyle(
+                    color: helper,
+                    fontSize: AppTokens.captionFontSize,
+                    height: 1.5)),
           ),
+        const SizedBox(height: AppTokens.s5),
+        SettingsPrimaryButton(
+          text: settingsText(context, zh: '完成', en: 'Done'),
+          onPressed: _canSubmit ? _submit : null,
         ),
       ],
     );

@@ -99,3 +99,25 @@ class AppTokens {
   static const double mainTabIndicatorTitleGap = 2;
   static const double chevronSize = 24;
 }
+
+/// Six-digit transaction password setup and numeric input surfaces.
+class TradePasswordTokens {
+  TradePasswordTokens._();
+
+  static const double contentMaxWidth = 480;
+  static const double logoSize = 80;
+  static const double logoRadius = 16;
+  static const double headingFontSize = 20;
+  static const double helperFontSize = 14;
+  static const double securityFontSize = 12;
+  static const double digitFontSize = 24;
+  static const double cellMaxSize = 48;
+  static const double cellGap = 6;
+  static const double dotSize = 9;
+  static const double keyMinHeight = 48;
+  static const double keyMaxHeight = 56;
+  static const double keyHeightScreenRatio = 0.064;
+  static const double deleteIconSize = 24;
+  static const double securityIconSize = 20;
+  static const Duration inputAnimation = Duration(milliseconds: 120);
+}

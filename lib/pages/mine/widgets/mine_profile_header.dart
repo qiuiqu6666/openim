@@ -163,6 +163,7 @@ class MineProfileHeader extends StatelessWidget {
     if (bytes == null) {
       return AvatarView(
         url: avatarUrl,
+        showLoadingAvatar: false,
         text: nickname,
         width: 72,
         height: 72,
@@ -182,6 +183,7 @@ class MineProfileHeader extends StatelessWidget {
         gaplessPlayback: true,
         errorBuilder: (_, __, ___) => AvatarView(
           url: avatarUrl,
+          showLoadingAvatar: false,
           text: nickname,
           width: 72,
           height: 72,

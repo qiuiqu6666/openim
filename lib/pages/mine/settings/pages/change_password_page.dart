@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../settings_service.dart';
+import '../widgets/verification_code_flow.dart';
 import '../widgets/settings_widgets.dart';
 
 class ChangePasswordPage extends StatefulWidget {
@@ -23,6 +24,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   static final RegExp _passwordPattern =
       RegExp(r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$');
 
+  final _codeFlow = VerificationCodeFlow();
   final _oldPassword = TextEditingController();
   final _smsCode = TextEditingController();
   final _newPassword = TextEditingController();
@@ -46,7 +48,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       _newPassword.text != _confirmPassword.text;
 
   bool get _canSubmit {
-    if (_busy || !_passwordPattern.hasMatch(_newPassword.text) || _confirmPasswordMismatch) {
+    if (_busy ||
+        !_passwordPattern.hasMatch(_newPassword.text) ||
+        _confirmPasswordMismatch) {
       return false;
     }
     if (_confirmPassword.text != _newPassword.text) return false;
@@ -57,6 +61,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   @override
   void initState() {
     super.initState();
+    _codeFlow.addListener(_refresh);
     for (final controller in [
       _oldPassword,
       _smsCode,
@@ -73,6 +78,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   @override
   void dispose() {
+    _codeFlow.dispose();
     _oldPassword.dispose();
     _smsCode.dispose();
     _newPassword.dispose();
@@ -82,20 +88,38 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   Future<void> _sendCode() async {
     FocusManager.instance.primaryFocus?.unfocus();
-    if (!widget.service.isBackendAvailable) {
+    if (!widget.service.isSecurityBackendAvailable) {
       showUnavailableSettingsAction(
         context,
         settingsText(context, zh: '获取验证码', en: 'Get code'),
       );
       return;
     }
-    await widget.service.requestPhoneCode(widget.phoneNumber.trim());
+    if (_busy || !_codeFlow.canSend) return;
+    setState(() => _busy = true);
+    try {
+      final sent = await _codeFlow.send(
+          context,
+          (param) => widget.service.requestPhoneCode(widget.phoneNumber.trim(),
+              captchaVerifyParam: param));
+      if (mounted && sent) {
+        showSettingsMessage(
+            context, settingsText(context, zh: '验证码已发送', en: 'Code sent'));
+      }
+    } catch (error) {
+      if (mounted) {
+        showSettingsError(context, error,
+            settingsText(context, zh: '发送失败，请稍后重试', en: 'Could not send code'));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _submit() async {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!_canSubmit) return;
-    if (!widget.service.isBackendAvailable) {
+    if (!widget.service.isSecurityBackendAvailable) {
       showUnavailableSettingsAction(
         context,
         settingsText(context, zh: '修改密码', en: 'Change Password'),
@@ -118,6 +142,15 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         );
       }
       if (mounted) Navigator.of(context).maybePop();
+    } catch (error) {
+      if (mounted) {
+        showSettingsError(
+            context,
+            error,
+            settingsText(context,
+                zh: '修改失败，请检查密码或验证码',
+                en: 'Check your password or code and retry'));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -157,24 +190,28 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
           children: [
             if (_isPhoneBound) ...[
               SettingsCell(
-                title: settingsText(context, zh: '绑定手机号', en: 'Bound Phone Number'),
+                title: settingsText(context,
+                    zh: '绑定手机号', en: 'Bound Phone Number'),
                 value: _boundPhoneMasked,
                 showArrow: false,
               ),
               _CodeInputRow(
-                label: settingsText(context, zh: '验证码', en: 'Verification Code'),
+                label:
+                    settingsText(context, zh: '验证码', en: 'Verification Code'),
                 hint: settingsText(context, zh: '请输入验证码', en: 'Enter code'),
                 controller: _smsCode,
-                buttonText: settingsText(context, zh: '获取验证码', en: 'Get code'),
-                onPressed: _busy ? null : _sendCode,
+                buttonText: _codeFlow.label(context),
+                onPressed: _busy || !_codeFlow.canSend ? null : _sendCode,
               ),
             ] else
               _PasswordInputRow(
                 label: settingsText(context, zh: '旧密码', en: 'Current Password'),
-                hint: settingsText(context, zh: '请输入旧密码', en: 'Enter current password'),
+                hint: settingsText(context,
+                    zh: '请输入旧密码', en: 'Enter current password'),
                 controller: _oldPassword,
                 obscureText: _obscureOld,
-                onToggleObscure: () => setState(() => _obscureOld = !_obscureOld),
+                onToggleObscure: () =>
+                    setState(() => _obscureOld = !_obscureOld),
               ),
             _PasswordInputRow(
               label: settingsText(context, zh: '新密码', en: 'New Password'),
@@ -189,7 +226,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
             ),
             _PasswordInputRow(
               label: settingsText(context, zh: '确认密码', en: 'Confirm Password'),
-              hint: settingsText(context, zh: '再次输入新密码', en: 'Confirm new password'),
+              hint: settingsText(context,
+                  zh: '再次输入新密码', en: 'Confirm new password'),
               controller: _confirmPassword,
               obscureText: _obscureConfirm,
               showDivider: false,
@@ -202,7 +240,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
           child: _confirmPasswordMismatch
               ? Text(
-                  settingsText(context, zh: '两次输入的密码不一致', en: 'Passwords do not match'),
+                  settingsText(context,
+                      zh: '两次输入的密码不一致', en: 'Passwords do not match'),
                   style: const TextStyle(
                     color: AppTokens.danger,
                     fontSize: 12,
@@ -229,8 +268,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                 backgroundColor: _canSubmit
                     ? AppTokens.accent
                     : settingsBorderColor(context),
-                foregroundColor:
-                    _canSubmit ? AppTokens.onAccent : settingsSecondaryTextColor(context),
+                foregroundColor: _canSubmit
+                    ? AppTokens.onAccent
+                    : settingsSecondaryTextColor(context),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -240,7 +280,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                 _busy
                     ? settingsText(context, zh: '提交中...', en: 'Submitting...')
                     : settingsText(context, zh: '完成', en: 'Done'),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
             ),
           ),

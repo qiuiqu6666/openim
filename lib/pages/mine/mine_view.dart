@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'mine_logic.dart';
+import 'settings/openim_profile_service.dart';
 import 'widgets/mine_profile_view.dart';
 
 class MinePage extends StatelessWidget {
@@ -12,7 +13,9 @@ class MinePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Obx(() {
         final user = logic.imLogic.userInfo.value;
-        logic.settingsStore.seedProfile(nickname: user.nickname ?? '');
+        logic.settingsStore.seedProfile(
+            nickname: user.nickname ?? '',
+            signature: OpenIMProfileService.signatureFromEx(user.ex));
         return AnimatedBuilder(
           animation: logic.settingsStore,
           builder: (context, _) => MineProfileView(

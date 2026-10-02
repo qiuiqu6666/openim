@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 
 import 'package:collection/collection.dart';
 import 'package:common_utils/common_utils.dart';
@@ -15,8 +16,30 @@ import '../../../core/controller/app_controller.dart';
 import '../../../core/controller/im_controller.dart';
 import '../../conversation/conversation_logic.dart';
 import '../contacts_logic.dart';
+import '../../../services/common_group_count_service.dart';
+import '../common_groups/common_groups_page.dart';
+import '../../mine/settings/pages/chat_background_page.dart';
+import '../../chat/chat_logic.dart';
 
 class UserProfilePanelLogic extends GetxController {
+  Future<void> setChatBackground() async {
+    final user = userInfo.value;
+    final targetID = user.userID;
+    if (targetID == null || targetID.isEmpty) return;
+    await Get.to(() => ChatBackgroundPage(
+          conversationId: targetID,
+          conversationName: user.remark?.trim().isNotEmpty == true
+              ? user.remark!
+              : user.nickname ?? '',
+        ));
+    if (Get.isRegistered<ChatLogic>(tag: GetTags.chat)) {
+      final chat = Get.find<ChatLogic>(tag: GetTags.chat);
+      if (!chat.isClosed && chat.otherId == targetID) {
+        await chat.reloadChatBackground();
+      }
+    }
+  }
+
   final appLogic = Get.find<AppController>();
   final imLogic = Get.find<IMController>();
   final conversationLogic = Get.find<ConversationLogic>();
@@ -24,6 +47,8 @@ class UserProfilePanelLogic extends GetxController {
   GroupMembersInfo? groupMembersInfo;
   GroupInfo? groupInfo;
   String? groupID;
+  FriendAddSource addSource = FriendAddSource.chat;
+  Map<String, String> friendAddFields = const {};
   bool? offAllWhenDelFriend = false;
   bool? forceCanAdd = false;
   final iHasMutePermissions = false.obs;
@@ -41,6 +66,14 @@ class UserProfilePanelLogic extends GetxController {
   final notAllowAddGroupMemberFriend = false.obs;
   final iHaveAdminOrOwnerPermission = false.obs;
   int _profileRequest = 0;
+  final commonGroupCount = RxnInt();
+  final loadingCommonGroups = true.obs;
+  final commonGroupsFailed = false.obs;
+  final _commonGroupService = CommonGroupCountService();
+  final _commonGroupSubscriptions = <StreamSubscription>[];
+  Timer? _commonGroupRefreshTimer;
+  int _commonGroupRequest = 0;
+  CancelToken? _commonGroupCancel;
   late StreamSubscription _friendAddedSub;
   late StreamSubscription _friendDeletedSub;
   late StreamSubscription _friendInfoChangedSub;
@@ -48,6 +81,12 @@ class UserProfilePanelLogic extends GetxController {
 
   @override
   void onClose() {
+    _commonGroupRequest++;
+    _commonGroupCancel?.cancel();
+    _commonGroupRefreshTimer?.cancel();
+    for (final subscription in _commonGroupSubscriptions) {
+      subscription.cancel();
+    }
     if (Get.isRegistered<ContactsLogic>()) {
       Get.find<ContactsLogic>().setProfilePresence(this, null);
     }
@@ -66,6 +105,10 @@ class UserProfilePanelLogic extends GetxController {
           ..faceURL = Get.arguments['faceURL'])
         .obs;
     groupID = Get.arguments['groupID'];
+    friendAddFields =
+        Map<String, String>.from(Get.arguments['friendAddFields'] ?? {});
+    addSource =
+        resolveFriendAddSource(Get.arguments['addSource'], groupID: groupID);
     offAllWhenDelFriend = Get.arguments['offAllWhenDelFriend'];
     forceCanAdd = Get.arguments['forceCanAdd'];
 
@@ -129,11 +172,60 @@ class UserProfilePanelLogic extends GetxController {
     _getUsersInfo();
     _queryGroupInfo();
     _queryGroupMemberInfo();
+    if (!isMyself) {
+      loadCommonGroupCount();
+      _commonGroupSubscriptions.addAll([
+        imLogic.joinedGroupAddedSubject.listen((_) => _refreshCommonGroups()),
+        imLogic.joinedGroupDeletedSubject.listen((_) => _refreshCommonGroups()),
+        imLogic.memberAddedSubject.listen(_onCommonGroupMemberChanged),
+        imLogic.memberDeletedSubject.listen(_onCommonGroupMemberChanged),
+      ]);
+    }
 
     super.onReady();
   }
 
   bool get isMyself => userInfo.value.userID == OpenIM.iMManager.userID;
+
+  void _onCommonGroupMemberChanged(GroupMembersInfo member) {
+    if (member.userID == userInfo.value.userID ||
+        member.userID == OpenIM.iMManager.userID) {
+      _refreshCommonGroups();
+    }
+  }
+
+  void _refreshCommonGroups() {
+    _commonGroupRefreshTimer?.cancel();
+    _commonGroupRefreshTimer =
+        Timer(const Duration(milliseconds: 300), loadCommonGroupCount);
+  }
+
+  Future<void> loadCommonGroupCount() async {
+    if (isClosed || isMyself) return;
+    final request = ++_commonGroupRequest;
+    final owner = DataSp.userID;
+    _commonGroupCancel?.cancel();
+    final cancel = _commonGroupCancel = CancelToken();
+    loadingCommonGroups.value = true;
+    commonGroupsFailed.value = false;
+    try {
+      final count = await _commonGroupService.count(userInfo.value.userID!, cancelToken: cancel);
+      if (isClosed || request != _commonGroupRequest || DataSp.userID != owner) return;
+      commonGroupCount.value = count;
+    } catch (_) {
+      if (isClosed || request != _commonGroupRequest || DataSp.userID != owner) return;
+      commonGroupsFailed.value = true;
+    } finally {
+      if (!isClosed && request == _commonGroupRequest && DataSp.userID == owner) {
+        loadingCommonGroups.value = false;
+      }
+    }
+  }
+
+  Future<void> openCommonGroups() async {
+    await Get.to(() => CommonGroupsPage(peerUserID: userInfo.value.userID!));
+    if (!isClosed) await loadCommonGroupCount();
+  }
 
   bool get isGroupMemberPage => null != groupID && groupID!.isNotEmpty;
 
@@ -162,15 +254,18 @@ class UserProfilePanelLogic extends GetxController {
         val?.email = existUser.email;
         val?.gender = existUser.gender;
         val?.mobile = existUser.mobile;
+        val?.ex = existUser.ex;
       });
     }
 
     if (userID == OpenIM.iMManager.userID) {
       final user = await OpenIM.iMManager.userManager.getSelfUserInfo();
+      if (isClosed) return;
 
       userInfo.update((val) {
         val?.nickname = user.nickname;
         val?.faceURL = user.faceURL;
+        val?.ex = user.ex;
       });
 
       UserCacheManager().addOrUpdateUserInfo(userID, userInfo.value);
@@ -204,6 +299,7 @@ class UserProfilePanelLogic extends GetxController {
         userInfo.update((val) {
           val?.nickname = user.nickname;
           val?.faceURL = user.faceURL;
+          val?.ex = user.ex;
           val?.remark = friendInfo?.remark;
           val?.isBlacklist = isBlack;
           val?.isFriendship = isFriendship;
@@ -217,6 +313,17 @@ class UserProfilePanelLogic extends GetxController {
         val?.isBlacklist = isBlack;
         val?.isFriendship = isFriendship;
       });
+      // FriendInfo.ex belongs to the friend relationship. The signature is in
+      // the user's SDK profile extension, so read UserInfo for this field.
+      try {
+        final profiles = await OpenIM.iMManager.userManager
+            .getUsersInfo(userIDList: [userID]);
+        if (isClosed) return;
+        final profile = profiles.firstOrNull;
+        if (profile != null) userInfo.update((value) => value?.ex = profile.ex);
+      } catch (_) {
+        // Keep cached profile data if this optional refresh fails.
+      }
     }
     UserCacheManager().addOrUpdateUserInfo(userID, userInfo.value);
     await _loadProfileGender(userID);
@@ -231,7 +338,9 @@ class UserProfilePanelLogic extends GetxController {
       // Keep SDK information usable when the optional full profile is unavailable.
       return;
     }
-    if (isClosed || request != _profileRequest || userInfo.value.userID != userID) return;
+    if (isClosed ||
+        request != _profileRequest ||
+        userInfo.value.userID != userID) return;
     final profile = profiles?.firstWhereOrNull((info) => info.userID == userID);
     if (profile == null) return;
     userInfo.update((value) {
@@ -449,6 +558,12 @@ class UserProfilePanelLogic extends GetxController {
 
   void addFriend() => AppNavigator.startSendVerificationApplication(
         userID: userInfo.value.userID!,
+        addSource: addSource == FriendAddSource.group &&
+                iHaveAdminOrOwnerPermission.value
+            ? FriendAddSource.manage
+            : addSource,
+        friendAddFields: friendAddFields,
+        friendGroupID: groupID,
       );
 
   void viewInviter() {

@@ -731,14 +731,14 @@ class IMUtils {
           break;
         case MessageType.atText:
           content = message.atTextElem?.text ?? '';
-          final members = [...?message.atTextElem?.atUsersInfo]
-            ..sort((a, b) => (b.atUserID?.length ?? 0)
-                .compareTo(a.atUserID?.length ?? 0));
+          final members = [...?message.atTextElem?.atUsersInfo]..sort((a, b) =>
+              (b.atUserID?.length ?? 0).compareTo(a.atUserID?.length ?? 0));
           for (final member in members) {
             final id = member.atUserID;
             final name = member.groupNickname;
             if (id != null && id.isNotEmpty && name != null) {
-              content = content!.replaceAll('@$id', '@${getAtNickname(id, name)}');
+              content =
+                  content!.replaceAll('@$id', '@${getAtNickname(id, name)}');
             }
           }
           content = content!.replaceAll('@atAllTag', '@${StrRes.everyone}');
@@ -753,7 +753,8 @@ class IMUtils {
           content = '[${StrRes.chatRecord}] ${message.mergeElem?.title ?? ''}';
           break;
         case MessageType.location:
-          content = '[${StrRes.toolboxLocation}] ${message.locationElem?.description ?? ''}';
+          content =
+              '[${StrRes.toolboxLocation}] ${message.locationElem?.description ?? ''}';
           break;
         case MessageType.customFace:
           content = '[${StrRes.emoji}]';
@@ -766,11 +767,13 @@ class IMUtils {
           break;
         case MessageType.voice:
           final duration = message.soundElem?.duration;
-          content = '[${StrRes.voice}]${duration != null && duration > 0 ? ' ${duration}″' : ''}';
+          content =
+              '[${StrRes.voice}]${duration != null && duration > 0 ? ' ${duration}″' : ''}';
           break;
         case MessageType.file:
           final name = message.fileElem?.fileName;
-          content = '[${StrRes.file}]${name != null && name.isNotEmpty ? ' $name' : ''}';
+          content =
+              '[${StrRes.file}]${name != null && name.isNotEmpty ? ' $name' : ''}';
           break;
         case MessageType.card:
           content = '[${StrRes.carte}]${message.cardElem?.nickname ?? ''}';
@@ -789,8 +792,11 @@ class IMUtils {
               final type = map['data'] is Map ? map['data']['type'] : null;
               final label = type == 'audio'
                   ? StrRes.callVoice
-                  : type == 'video' ? StrRes.callVideo : StrRes.audioAndVideoCall;
-              content = '[$label]${call?['content'] != null ? ' ${call['content']}' : ''}';
+                  : type == 'video'
+                      ? StrRes.callVideo
+                      : StrRes.audioAndVideoCall;
+              content =
+                  '[$label]${call?['content'] != null ? ' ${call['content']}' : ''}';
               break;
             case CustomMessageType.blockedByFriend:
               content = StrRes.blockedByFriendHint;
@@ -989,6 +995,23 @@ class IMUtils {
         },
       ));
 
+  static Future<void> saveImageBytes(Uint8List bytes) async {
+    EasyLoading.show();
+    try {
+      final extension =
+          lookupMimeType('', headerBytes: bytes)?.split('/').last ?? 'png';
+      final name = 'avatar_${DateTime.now().microsecondsSinceEpoch}.$extension';
+      final path = await createTempFile(dir: 'picture', name: name);
+      final file = await File(path).writeAsBytes(bytes);
+      await HttpUtil.saveFileToGallerySaver(file, name: name);
+    } catch (error) {
+      Logger.print('saveImageBytes failed: $error');
+      IMViews.showToast(StrRes.saveFailed);
+    } finally {
+      EasyLoading.dismiss();
+    }
+  }
+
   /*Get.to(
         () => ChatPicturePreview(
           currentIndex: currentIndex,
@@ -1043,6 +1066,16 @@ class IMUtils {
     }
   }
 
+  static Future<String> cachedChatFilePath(Message message) async {
+    final fileName = message.fileElem?.fileName ?? 'file.bin';
+    final extension =
+        fileName.split('.').last.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    final cacheName = md5.convert(utf8.encode(
+        message.clientMsgID ?? message.fileElem?.sourceUrl ?? fileName));
+    final directory = await getTempDirectory('file');
+    return '${directory.path}/$cacheName.${extension.isEmpty ? 'bin' : extension}';
+  }
+
   static void previewFile(Message message) async {
     final fileElem = message.fileElem;
     if (null != fileElem) {
@@ -1057,10 +1090,12 @@ class IMUtils {
       final dir = await getDownloadFileDir();
 
       var cachePath = '$dir/${name}_${message.clientMsgID}.$ext';
+      final localCachePath = await cachedChatFilePath(message);
 
       final isExitSourcePath = await isExitFile(sourcePath);
 
       final isExitCachePath = await isExitFile(cachePath);
+      final isExitLocalCachePath = await isExitFile(localCachePath);
 
       Logger.print(
           'isExitSourcePath:$isExitSourcePath, isExitCachePath:$isExitCachePath, cachePath:$cachePath');
@@ -1071,15 +1106,33 @@ class IMUtils {
         availablePath = sourcePath;
       } else if (isExitCachePath) {
         availablePath = cachePath;
+      } else if (isExitLocalCachePath) {
+        availablePath = localCachePath;
       }
-      final isAvailableFileSize = isExitSourcePath || isExitCachePath
-          ? (await File(availablePath!).length() == fileSize)
+      var isAvailableFileSize = availablePath != null
+          ? (fileSize == null || await File(availablePath).length() == fileSize)
           : false;
+      if (!isAvailableFileSize && isExitNetwork && url != null) {
+        try {
+          await File(localCachePath).parent.create(recursive: true);
+          await HttpUtil.download(url, cachePath: localCachePath);
+          availablePath = localCachePath;
+          isAvailableFileSize = fileSize == null ||
+              await File(localCachePath).length() == fileSize;
+          if (!isAvailableFileSize) await File(localCachePath).delete();
+        } catch (error) {
+          Logger.print('previewFile download failed: $error');
+          try {
+            await File(localCachePath).delete();
+          } catch (_) {}
+        }
+      }
       Logger.print(
           'previewFile isAvailableFileSize: $isAvailableFileSize   isExitNetwork: $isExitNetwork');
       if (isAvailableFileSize) {
         String? mimeType = lookupMimeType(fileName ?? '');
         if (null != mimeType && allowVideoType(mimeType)) {
+          openFileByOtherApp(availablePath!);
         } else if (null != mimeType && mimeType.contains('image')) {
           previewPicture(Message()
             ..clientMsgID = message.clientMsgID
@@ -1088,9 +1141,9 @@ class IMUtils {
                 sourcePath: availablePath,
                 sourcePicture: PictureInfo(url: url)));
         } else {
-          openFileByOtherApp(availablePath);
+          openFileByOtherApp(availablePath!);
         }
-      } else {}
+      }
     }
   }
 
@@ -1104,7 +1157,9 @@ class IMUtils {
       ValueChanged<int>? onPageChanged,
       ValueChanged<int>? onForward,
       ValueChanged<int>? onDelete,
-      bool onlySave = false}) {
+      bool onlySave = false,
+      bool showGallery = true,
+      bool showCounter = true}) {
     final mediaSources = sources ??
         [
           message.isVideoType
@@ -1129,11 +1184,15 @@ class IMUtils {
 
     final mb = MediaBrowser(
       sources: mediaSources,
+      showGallery: showGallery,
+      showCounter: showCounter,
       initialIndex: initialIndex,
       onSave: (index) async {
         final source = mediaSources[index];
         final file = source.file;
-        if (file != null && file.existsSync()) {
+        if (source.bytes != null) {
+          await saveImageBytes(source.bytes!);
+        } else if (file != null && file.existsSync()) {
           try {
             await HttpUtil.saveFileToGallerySaver(file);
           } catch (error) {

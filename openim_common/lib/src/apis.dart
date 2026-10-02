@@ -1,10 +1,37 @@
 import 'dart:async';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 class Apis {
+  static Future<String> createFriendGrant(Map<String, String> input) async {
+    final data = await HttpUtil.post('${Config.appAuthUrl}/chat/friend-grants',
+        data: input, options: chatTokenOptions..contentType = Headers.jsonContentType, showErrorToast: false);
+    final grant = data['friendGrant'];
+    if (grant is! String || grant.isEmpty) throw StateError('Missing friend grant');
+    return grant;
+  }
+
+  static Future<void> applyFriendGrant({required String grant, required String message}) async {
+    await HttpUtil.post('${Config.appAuthUrl}/chat/friend-apply',
+        data: {'friendGrant': grant, 'message': message},
+        options: chatTokenOptions..contentType = Headers.jsonContentType, showErrorToast: false);
+  }
+
+  static Future<String> createFriendInvite(FriendAddSource source, {String? targetUserID}) async {
+    if (!{FriendAddSource.qrcode, FriendAddSource.link, FriendAddSource.card}.contains(source)) {
+      throw ArgumentError('Invalid invite source');
+    }
+    final data = await HttpUtil.post('${Config.appAuthUrl}/chat/friend-invites',
+        data: {'source': source.name, if (source == FriendAddSource.card) 'targetUserID': targetUserID},
+        options: chatTokenOptions..contentType = Headers.jsonContentType, showErrorToast: false);
+    final code = data['inviteCode'];
+    if (code is! String || code.isEmpty) throw StateError('Missing invite code');
+    return code;
+  }
   static Options get imTokenOptions =>
       Options(headers: {'token': DataSp.imToken});
 
@@ -22,6 +49,30 @@ class Apis {
     }
   }
 
+  static Future<Map<String, String>> _deviceMetadata() async {
+    var deviceName = '';
+    var version = '';
+    try {
+      final info = await DeviceInfoPlugin().deviceInfo;
+      if (info is AndroidDeviceInfo) {
+        deviceName = '${info.manufacturer} ${info.model}';
+      }
+      if (info is IosDeviceInfo) deviceName = info.name;
+      if (info is WindowsDeviceInfo) deviceName = info.computerName;
+    } catch (_) {}
+    try {
+      final package = await PackageInfo.fromPlatform();
+      version = package.buildNumber.isEmpty
+          ? package.version
+          : '${package.version}+${package.buildNumber}';
+    } catch (_) {}
+    return {
+      'deviceID': DataSp.getDeviceID(),
+      'deviceName': deviceName,
+      'version': version
+    };
+  }
+
   static Future<LoginCertificate> login({
     String? areaCode,
     String? phoneNumber,
@@ -32,6 +83,7 @@ class Apis {
   }) async {
     try {
       var data = await HttpUtil.post(Urls.login, data: {
+        ...await _deviceMetadata(),
         "areaCode": areaCode,
         'account': account,
         'phoneNumber': phoneNumber,
@@ -65,7 +117,7 @@ class Apis {
   }) async {
     try {
       var data = await HttpUtil.post(Urls.register, data: {
-        'deviceID': DataSp.getDeviceID(),
+        ...await _deviceMetadata(),
         'verifyCode': verificationCode,
         'platform': IMUtils.getPlatform(),
         'invitationCode': invitationCode,
@@ -160,6 +212,18 @@ class Apis {
     }
   }
 
+  static Future<Map<String, dynamic>> checkNickname(String nickname) async {
+    final data = await HttpUtil.post(
+      '${Config.appAuthUrl}/user/nickname/check',
+      data: {'nickname': nickname},
+      options: chatTokenOptions,
+      showErrorToast: false,
+    );
+    if (data is! Map)
+      throw const FormatException('Invalid nickname check response');
+    return Map<String, dynamic>.from(data);
+  }
+
   static Future<dynamic> updateUserInfo({
     required String userID,
     String? account,
@@ -174,6 +238,7 @@ class Apis {
     int? allowAddFriend,
     int? allowBeep,
     int? allowVibration,
+    bool showErrorToast = true,
   }) async {
     try {
       Map<String, dynamic> param = {'userID': userID};
@@ -197,15 +262,35 @@ class Apis {
       put('allowBeep', allowBeep);
       put('allowVibration', allowVibration);
 
-      return await HttpUtil.post(
-        Urls.updateUserInfo,
-        data: {
-          ...param,
-          'platform': IMUtils.getPlatform(),
-        },
-        options: chatTokenOptions,
-      );
+      Future<dynamic> save() => HttpUtil.post(
+            Urls.updateUserInfo,
+            data: {...param, 'platform': IMUtils.getPlatform()},
+            options: chatTokenOptions,
+            showErrorToast: false,
+          );
+      try {
+        return await save();
+      } catch (error) {
+        // Older deployments bind nickname as a string instead of StringValue.
+        // Retry only a binding error: the first request never reached a write.
+        if (nickname == null ||
+            error is! (int, String?) ||
+            error.$1 != 1001 ||
+            !(error.$2 ?? '').contains(
+                'cannot unmarshal object into Go value of type string')) {
+          rethrow;
+        }
+        param['nickname'] = nickname;
+        return await save();
+      }
     } catch (e, s) {
+      if (showErrorToast && e is (int, String?)) {
+        final reason = HttpUtil.businessErrorMessage(ApiResp.fromJson({
+          'errCode': e.$1,
+          'errDlt': e.$2 ?? '',
+        }));
+        IMViews.showToast(reason);
+      }
       if (e is (int, String?)) _catchErrorHelper(e, s);
       rethrow;
     }
@@ -219,6 +304,7 @@ class Apis {
   }) async {
     const fields = {
       'allowAddByUserID',
+      'allowAddByAccount',
       'allowAddByPhone',
       'allowAddByEmail',
       'allowAddByQRCode',
@@ -249,16 +335,16 @@ class Apis {
     }
 
     try {
-      await save({'value': value});
+      await save(value);
     } catch (error) {
-      // Older deployments parse these fields as integers. Only retry that
+      // Older deployments require wrapper objects. Only retry that
       // specific format error; other failures must reach the caller.
       if (error is! (int, String) ||
           error.$1 != 1001 ||
-          !error.$2.contains('strconv.ParseInt')) {
+          !error.$2.contains('cannot unmarshal number')) {
         rethrow;
       }
-      await save(value);
+      await save({'value': value});
       final refreshed = await getUserFullInfo(userIDList: [userID]);
       if (refreshed == null || refreshed.isEmpty) {
         throw StateError('Could not verify friend add permission');
@@ -368,6 +454,7 @@ class Apis {
     String? phoneNumber,
     String? email,
     required int usedFor,
+    required String captchaVerifyParam,
     String? invitationCode,
   }) async {
     return HttpUtil.post(
@@ -377,11 +464,15 @@ class Apis {
         "phoneNumber": phoneNumber,
         "email": email,
         'usedFor': usedFor,
-        'invitationCode': invitationCode
+        'invitationCode': invitationCode,
+        'captchaVerifyParam': captchaVerifyParam
       },
     ).then((value) {
-      IMViews.showToast(StrRes.sentSuccessfully);
-      return true;
+      final sent = value is Map &&
+          value['captchaVerifyResult'] == true &&
+          value['bizResult'] == true;
+      IMViews.showToast(sent ? StrRes.sentSuccessfully : StrRes.sendFailed);
+      return sent;
     }).catchError((e, s) {
       _catchErrorHelper(e, s);
 

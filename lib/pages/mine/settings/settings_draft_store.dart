@@ -58,11 +58,33 @@ class SettingsDraftStore extends ChangeNotifier {
   String profileSignature = '';
 
   bool requireFriendVerification = true;
+  bool allowAddFriend = true;
+  bool friendPermissionsLoaded = false;
+  void syncFriendPermissions(Map<String, int> data) {
+    allowAddFriend = data['allowAddFriend'] == 1;
+    allowQrCode = data['allowAddByQRCode'] != 2;
+    allowBusinessCard = data['allowAddByCard'] != 2;
+    allowGroup = data['allowAddByGroup'] != 2;
+    allowPhone = data['allowAddByPhone'] != 2;
+    allowUid = data['allowAddByUserID'] != 2;
+    allowAccount = data['allowAddByAccount'] != 2;
+    allowEmail = data['allowAddByEmail'] != 2;
+    friendPermissionsLoaded = true;
+    notifyListeners();
+  }
+
+  void setAllowAddFriend(bool value) {
+    allowAddFriend = value;
+    notifyListeners();
+  }
+
   bool allowQrCode = true;
   bool allowBusinessCard = true;
   bool allowGroup = true;
   bool allowPhone = true;
   bool allowUid = true;
+  bool allowAccount = true;
+  bool allowEmail = true;
   String lastSeenScope = 'all';
   bool showOnlineStatus = true;
   bool readReceipts = true;
@@ -96,7 +118,7 @@ class SettingsDraftStore extends ChangeNotifier {
   DateTime? nodeLastTestAt;
 
   void seedProfile({required String nickname, String signature = ''}) {
-    final nextNickname = nickname.trim();
+    final nextNickname = nickname;
     final nextSignature = signature.trim();
 
     // The OpenIM profile arrives asynchronously. Keep following each server
@@ -111,7 +133,7 @@ class SettingsDraftStore extends ChangeNotifier {
   }
 
   void setProfileNickname(String value) {
-    final next = value.trim();
+    final next = value;
     _profileNicknameDirty = true;
     if (profileNickname == next) return;
     profileNickname = next;
@@ -126,6 +148,15 @@ class SettingsDraftStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Apply confirmed SDK data, including a signature cleared on another device.
+  void syncProfileSignature(String value) {
+    _profileSignatureDirty = false;
+    final next = value.trim();
+    if (profileSignature == next) return;
+    profileSignature = next;
+    notifyListeners();
+  }
+
   void setRequireFriendVerification(bool value) {
     if (requireFriendVerification == value) return;
     requireFriendVerification = value;
@@ -135,14 +166,14 @@ class SettingsDraftStore extends ChangeNotifier {
   void setShowOnlineStatus(bool value) {
     if (showOnlineStatus == value) return;
     showOnlineStatus = value;
-    _putBool('show_online_status', value);
+    FriendDisplayPreferences.setOnlineStatus(value);
     notifyListeners();
   }
 
   void setReadReceipts(bool value) {
     if (readReceipts == value) return;
     readReceipts = value;
-    _putBool('read_receipts', value);
+    FriendDisplayPreferences.setReadReceipts(value);
     notifyListeners();
   }
 
@@ -152,12 +183,16 @@ class SettingsDraftStore extends ChangeNotifier {
     bool? group,
     bool? phone,
     bool? uid,
+    bool? account,
+    bool? email,
   }) {
     if (qrCode != null) allowQrCode = qrCode;
     if (businessCard != null) allowBusinessCard = businessCard;
     if (group != null) allowGroup = group;
     if (phone != null) allowPhone = phone;
     if (uid != null) allowUid = uid;
+    if (account != null) allowAccount = account;
+    if (email != null) allowEmail = email;
     notifyListeners();
   }
 
@@ -270,12 +305,12 @@ class SettingsDraftStore extends ChangeNotifier {
   }
 
   void resetChatBackground() {
-    if (chatBackgroundId == 'default' && chatBackgroundImageBytes == null) return;
+    if (chatBackgroundId == 'default' && chatBackgroundImageBytes == null)
+      return;
     chatBackgroundId = 'default';
     chatBackgroundImageBytes = null;
     notifyListeners();
   }
-
 
   void setProfileAvatarPreview(Uint8List bytes) {
     profileAvatarPreviewBytes = bytes;

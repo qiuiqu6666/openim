@@ -36,7 +36,10 @@ class _GroupContactPickerState extends State<GroupContactPicker> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => ListenableBuilder(
+      listenable: FriendDisplayPreferences.changes,
+      builder: (context, _) => _build(context));
+  Widget _build(BuildContext context) => Scaffold(
         backgroundColor: Styles.c_FFFFFF,
         appBar: AppBar(
           backgroundColor: Styles.c_FFFFFF,
@@ -185,7 +188,8 @@ class _GroupContactPickerState extends State<GroupContactPicker> {
                               isCircle: true,
                               url: friend.faceURL,
                               text: friend.showName),
-                          if (presence?.displayOnline == true)
+                          if (FriendDisplayPreferences.showOnlineStatus &&
+                              presence?.displayOnline == true)
                             Positioned(
                                 right: 0,
                                 bottom: 0,

@@ -1,3 +1,4 @@
+import 'package:openim/pages/mine/settings/widgets/account_code_request.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:openim/routes/app_navigator.dart';
@@ -51,13 +52,12 @@ class ForgetPasswordLogic extends GetxController {
     return success;
   }
 
-  Future<bool> sendVerificationCode() => LoadingView.singleton.wrap(
-      asyncFunction: () => Apis.requestVerificationCode(
-            areaCode: areaCode.value,
-            phoneNumber: phone,
-            email: email,
-            usedFor: 2,
-          ));
+  Future<bool> sendVerificationCode() => requestAccountVerificationCode(
+        areaCode: areaCode.value,
+        phoneNumber: phone,
+        email: email,
+        usedFor: 2,
+      );
 
   checkVerificationCode() => LoadingView.singleton.wrap(
       asyncFunction: () => Apis.checkVerificationCode(
