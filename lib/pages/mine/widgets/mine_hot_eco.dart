@@ -26,6 +26,7 @@ class MineHotEcoSection extends StatelessWidget {
     required this.arrowColor,
     required this.dark,
     required this.onFeatureTap,
+    required this.onWalletTap,
     required this.onUnavailableFeatureTap,
   });
 
@@ -34,6 +35,7 @@ class MineHotEcoSection extends StatelessWidget {
   final Color arrowColor;
   final bool dark;
   final ValueChanged<String> onFeatureTap;
+  final VoidCallback onWalletTap;
   final ValueChanged<String> onUnavailableFeatureTap;
 
   @override
@@ -51,6 +53,7 @@ class MineHotEcoSection extends StatelessWidget {
       _MineHotEcoItem(
         title: mineText(context, zh: '数字资产', en: 'Digital Assets'),
         assetName: 'profile_eco_wallet_99chat.webp',
+        opensWallet: true,
       ),
       _MineHotEcoItem(
         title: mineText(context, zh: '社区广场', en: 'Community'),
@@ -146,7 +149,9 @@ class MineHotEcoSection extends StatelessWidget {
                         item: items[i],
                         onTap: () {
                           final item = items[i];
-                          if (item.enabled) {
+                          if (item.opensWallet) {
+                            onWalletTap();
+                          } else if (item.enabled) {
                             onFeatureTap(item.title);
                           } else {
                             onUnavailableFeatureTap(item.title);
@@ -191,11 +196,13 @@ class _MineHotEcoItem {
     required this.title,
     required this.assetName,
     this.enabled = true,
+    this.opensWallet = false,
   });
 
   final String title;
   final String assetName;
   final bool enabled;
+  final bool opensWallet;
 }
 
 class _MineHotEcoTile extends StatefulWidget {

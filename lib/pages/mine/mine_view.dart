@@ -6,7 +6,12 @@ import 'settings/openim_profile_service.dart';
 import 'widgets/mine_profile_view.dart';
 
 class MinePage extends StatelessWidget {
-  MinePage({super.key});
+  MinePage({
+    super.key,
+    required this.onWalletTap,
+  });
+
+  final VoidCallback onWalletTap;
 
   final MineLogic logic = Get.find<MineLogic>();
 
@@ -34,6 +39,7 @@ class MinePage extends StatelessWidget {
             onShareAppTap: () => logic.openShareApp(context),
             onSettingsTap: () => logic.openSettings(context),
             onFeatureTap: logic.showReservedFeature,
+            onWalletTap: onWalletTap,
             onUnavailableFeatureTap: logic.showUnavailableFeature,
           ),
         );

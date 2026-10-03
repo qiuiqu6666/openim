@@ -8,11 +8,14 @@ import '../conversation/conversation_view.dart';
 import '../conversation/conversation_logic.dart';
 import '../mine/mine_view.dart';
 import '../mine/widgets/mine_hot_eco.dart';
+import '../wallet/wallet_tab_shell.dart';
 import 'home_logic.dart';
 import 'glass_bottom_nav_bar.dart';
 import '../../widgets/theme_aware_page.dart';
 import '../../core/controller/im_controller.dart';
 import 'package:persistent_bottom_nav_bar_v2/persistent_bottom_nav_bar_v2.dart';
+
+enum _MainTab { messages, groups, contacts, wallet, me }
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,6 +26,9 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final logic = Get.find<HomeLogic>();
+  final PersistentTabController _tabController =
+      PersistentTabController(initialIndex: 0);
+  final ValueNotifier<int> _activeTabIndex = ValueNotifier<int>(0);
   final conversationLogic = Get.find<ConversationLogic>();
   bool _profileImagesWarmed = false;
   Worker? _avatarWorker;
@@ -40,6 +46,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _avatarWorker?.dispose();
+    _activeTabIndex.dispose();
     super.dispose();
   }
 
@@ -71,7 +78,7 @@ class _HomePageState extends State<HomePage> {
           inactiveIcon: _setupIcon(
               _navIcon('nav_chat_99chat.png', inactiveColor),
               () => _unreadCount(groupChats: false)),
-          title: StrRes.singleChat,
+          title: _mainTabTitle(context, _MainTab.messages),
           textStyle: Styles.ts_0089FF_10sp_semibold,
         ),
       ),
@@ -84,7 +91,7 @@ class _HomePageState extends State<HomePage> {
           inactiveIcon: _setupIcon(
               _navIcon('nav_group_conv_99chat.png', inactiveColor),
               () => _unreadCount(groupChats: true)),
-          title: StrRes.groupChat,
+          title: _mainTabTitle(context, _MainTab.groups),
           textStyle: Styles.ts_0089FF_10sp_semibold,
         ),
       ),
@@ -97,20 +104,38 @@ class _HomePageState extends State<HomePage> {
           inactiveIcon: _setupIcon(
               _navIcon('nav_contact_99chat.png', inactiveColor),
               () => logic.unhandledCount.value),
-          title: StrRes.contacts,
+          title: _mainTabTitle(context, _MainTab.contacts),
           textStyle: Styles.ts_0089FF_10sp_semibold,
         ),
       ),
       PersistentTabConfig(
-        screen: ThemeAwarePage(builder: (_) => MinePage()),
+        screen: WalletTabShell(activeTabIndexListenable: _activeTabIndex),
+        item: ItemConfig(
+          icon: _walletNavIcon(selectedColor),
+          inactiveIcon: _walletNavIcon(inactiveColor),
+          title: _mainTabTitle(context, _MainTab.wallet),
+          textStyle: Styles.ts_0089FF_10sp_semibold,
+        ),
+      ),
+      PersistentTabConfig(
+        screen: ThemeAwarePage(
+          builder: (_) => MinePage(
+            onWalletTap: _jumpToWallet,
+          ),
+        ),
         item: ItemConfig(
           icon: _navIcon('nav_profile_active_99chat.png', selectedColor),
           inactiveIcon: _navIcon('nav_profile_99chat.png', inactiveColor),
-          title: StrRes.mine,
+          title: _mainTabTitle(context, _MainTab.me),
           textStyle: Styles.ts_0089FF_10sp_semibold,
         ),
       ),
     ];
+  }
+
+  void _jumpToWallet() {
+    _activeTabIndex.value = 3;
+    _tabController.jumpToTab(3);
   }
 
   int _unreadCount({required bool groupChats}) => conversationLogic.list
@@ -118,6 +143,58 @@ class _HomePageState extends State<HomePage> {
           (groupChats ? info.isGroupChat : info.isSingleChat) &&
           !conversationLogic.isArchived(info))
       .fold(0, (count, info) => count + info.unreadCount);
+
+  Widget _walletNavIcon(Color color) => ColorFiltered(
+        colorFilter: ColorFilter.mode(color, BlendMode.srcATop),
+        child: Image.asset('assets/wallet.png', width: 24, height: 24),
+      );
+
+  String _mainTabTitle(BuildContext context, _MainTab tab) {
+    final locale = Localizations.localeOf(context);
+    final language = locale.languageCode;
+    final traditionalChinese = language == 'zh' &&
+        (locale.scriptCode == 'Hant' ||
+            const {'TW', 'HK', 'MO'}.contains(locale.countryCode));
+    if (traditionalChinese) {
+      return switch (tab) {
+        _MainTab.messages => '訊息',
+        _MainTab.groups => '群聊',
+        _MainTab.contacts => '通訊錄',
+        _MainTab.wallet => '錢包',
+        _MainTab.me => '我的',
+      };
+    }
+    return switch (language) {
+      'zh' => switch (tab) {
+          _MainTab.messages => '消息',
+          _MainTab.groups => '群聊',
+          _MainTab.contacts => '通讯录',
+          _MainTab.wallet => '钱包',
+          _MainTab.me => '我的',
+        },
+      'ja' => switch (tab) {
+          _MainTab.messages => 'メッセージ',
+          _MainTab.groups => 'グループ',
+          _MainTab.contacts => '連絡先',
+          _MainTab.wallet => 'ウォレット',
+          _MainTab.me => 'マイページ',
+        },
+      'ko' => switch (tab) {
+          _MainTab.messages => '메시지',
+          _MainTab.groups => '그룹',
+          _MainTab.contacts => '연락처',
+          _MainTab.wallet => '지갑',
+          _MainTab.me => '내 정보',
+        },
+      _ => switch (tab) {
+          _MainTab.messages => 'Messages',
+          _MainTab.groups => 'Groups',
+          _MainTab.contacts => 'Contacts',
+          _MainTab.wallet => 'Wallet',
+          _MainTab.me => 'Me',
+        },
+    };
+  }
 
   Widget _navIcon(String filename, Color color) => ColorFiltered(
         colorFilter: ColorFilter.mode(color, BlendMode.srcATop),
@@ -159,7 +236,9 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: Styles.c_FFFFFF,
       body: PersistentTabView(
+        controller: _tabController,
         tabs: _tabs(context),
+        onTabChanged: (index) => _activeTabIndex.value = index,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         navBarBuilder: (config) => GlassBottomNavBar(config: config),
         navBarOverlap: const NavBarOverlap.full(),

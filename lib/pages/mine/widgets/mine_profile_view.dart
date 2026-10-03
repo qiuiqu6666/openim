@@ -9,6 +9,7 @@ import 'mine_hot_eco.dart';
 import 'mine_menu_section.dart';
 import 'mine_profile_header.dart';
 import 'mine_profile_localization.dart';
+import '../../home/widgets/main_tab_title.dart';
 
 class MineProfileView extends StatelessWidget {
   const MineProfileView({
@@ -26,6 +27,7 @@ class MineProfileView extends StatelessWidget {
     required this.onShareAppTap,
     required this.onSettingsTap,
     required this.onFeatureTap,
+    required this.onWalletTap,
     required this.onUnavailableFeatureTap,
   });
 
@@ -42,6 +44,7 @@ class MineProfileView extends StatelessWidget {
   final VoidCallback onShareAppTap;
   final VoidCallback onSettingsTap;
   final ValueChanged<String> onFeatureTap;
+  final VoidCallback onWalletTap;
   final ValueChanged<String> onUnavailableFeatureTap;
 
   @override
@@ -100,9 +103,12 @@ class MineProfileView extends StatelessWidget {
           titleSpacing: 16,
           systemOverlayStyle: overlay,
           flexibleSpace: MineTopSparkles(dark: dark),
-          title: _MineMainTabTitle(
+          title: MainTabTitle(
             title: mineText(context, zh: '我的', en: 'Me'),
             color: primary,
+            titleKey: const ValueKey('mine-title-text'),
+            indicatorLineKey: const ValueKey('mine-title-indicator-line'),
+            indicatorDotKey: const ValueKey('mine-title-indicator-dot'),
           ),
           actions: [
             IconButton(
@@ -158,6 +164,7 @@ class MineProfileView extends StatelessWidget {
                       arrowColor: secondary,
                       dark: dark,
                       onFeatureTap: onFeatureTap,
+                      onWalletTap: onWalletTap,
                       onUnavailableFeatureTap: onUnavailableFeatureTap,
                     ),
                     const SizedBox(height: 14),
@@ -259,64 +266,5 @@ class MineProfileView extends StatelessWidget {
         arrowColor: arrow,
         showDivider: showDivider,
         onTap: onTap,
-      );
-}
-
-class _MineMainTabTitle extends StatelessWidget {
-  const _MineMainTabTitle({
-    required this.title,
-    required this.color,
-  });
-
-  final String title;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              key: const ValueKey('mine-title-text'),
-              title,
-              style: TextStyle(
-                color: color,
-                fontSize: AppTokens.mainTabTitleFontSize,
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
-            ),
-            const SizedBox(height: AppTokens.mainTabIndicatorTitleGap),
-            Transform.translate(
-              offset: const Offset(0, -2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    key: const ValueKey('mine-title-indicator-line'),
-                    width: AppTokens.mainTabIndicatorWidth,
-                    height: AppTokens.mainTabIndicatorHeight,
-                    decoration: BoxDecoration(
-                      color: AppTokens.accent,
-                      borderRadius: BorderRadius.circular(AppTokens.rPill),
-                    ),
-                  ),
-                  const SizedBox(width: AppTokens.mainTabIndicatorGap),
-                  Container(
-                    key: const ValueKey('mine-title-indicator-dot'),
-                    width: AppTokens.mainTabIndicatorDotSize,
-                    height: AppTokens.mainTabIndicatorDotSize,
-                    decoration: BoxDecoration(
-                      color: AppTokens.accent.withValues(alpha: 0.78),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       );
 }

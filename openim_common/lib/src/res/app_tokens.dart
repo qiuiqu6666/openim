@@ -84,6 +84,7 @@ class AppTokens {
 
   static const double listItemHeight = 56;
   static const double mainTabTitleFontSize = 22;
+  static const double mainTabTitleVerticalOffset = -2;
   static const double profileNameFontSize = 19;
   static const double listTitleFontSize = 17;
   static const double secondaryFontSize = 15;

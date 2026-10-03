@@ -61,6 +61,7 @@ dependencies:
   wechat_camera_picker: ^4.4.0
   extended_image: ^10.0.1
   flutter_screenutil: ^5.7.0
+  intl: ^0.20.2
   device_info_plus: ^11.5.0
   country_picker: ^2.0.20
   file_picker: ^10.3.3
@@ -116,7 +117,8 @@ dependencies:
     path: openim_common
   openim_live:
     path: openim_live
-  webview_flutter: ^4.14.1
+  provider: 6.1.5+1
+  webview_flutter: 4.13.1
 
 dependency_overrides:
   # livekit_client 2.5.0+hotfix.3 requires WebRTC-SDK 137.7151.03 on iOS.
@@ -133,7 +135,7 @@ dev_dependencies:
   hive_generator: ^2.0.1
   build_runner: 2.4.13
   flutter_lints: ^6.0.0
-  webview_flutter_platform_interface: ^2.15.1
+  webview_flutter_platform_interface: 2.14.0
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -148,6 +150,7 @@ flutter:
   assets:
     - assets/images/
     - assets/img/
+    - assets/wallet.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware
