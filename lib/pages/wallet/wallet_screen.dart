@@ -301,7 +301,7 @@ class _WalletView extends StatelessWidget {
     final cardGap = 18.h99;
     final horizontalPadding = 16.w99;
     final cardWidth = MediaQuery.sizeOf(context).width - horizontalPadding * 2;
-    final actionBarHeight = (cardWidth * 0.18).clamp(76.0, 124.0);
+    final actionBarHeight = (cardWidth * 0.235).clamp(90.0, 112.0);
     final headerBgHeight = cardWidth / _walletHeaderBgAspectRatio;
     final headerSectionHeight = headerBgHeight + cardGap + actionBarHeight;
     final inviteCardHeight =
@@ -807,8 +807,14 @@ class _ActionBar extends StatelessWidget {
       height: double.infinity,
       padding: EdgeInsets.zero,
       decoration: BoxDecoration(
-        color: cs.card,
-        borderRadius: BorderRadius.circular(AppTokens.rCard.r99),
+        color: cs.dark ? cs.card : const Color(0xFFFFFEFC),
+        borderRadius: BorderRadius.circular(AppTokens.rXl.r99),
+        border: Border.all(
+          color: cs.dark
+              ? cs.line.withValues(alpha: 0.72)
+              : const Color(0xFFEEE8DF),
+          width: 0.8.w99,
+        ),
         boxShadow: [
           BoxShadow(
             color: cs.shadow,
@@ -818,8 +824,11 @@ class _ActionBar extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        children: items
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 2.w99),
+        child: Row(
+          children: items
             .map(
               (e) => Expanded(
                 child: InkWell(
@@ -864,6 +873,7 @@ class _ActionBar extends StatelessWidget {
                 ),
               ),
             ).toList(),
+        ),
       ),
     );
   }
@@ -896,14 +906,19 @@ class _CoinListState extends State<_CoinList> {
     );
     final cs = _WalletCs.of(context);
     final i18n = AppI18n.of(context);
-    final radius = BorderRadius.circular(AppTokens.rCard.r99);
-    final decorHeight = 72.h99;
+    final radius = BorderRadius.circular(AppTokens.rXl.r99);
 
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: cs.card,
+        color: cs.dark ? cs.card : const Color(0xFFFFFEFC),
         borderRadius: radius,
+        border: Border.all(
+          color: cs.dark
+              ? cs.line.withValues(alpha: 0.72)
+              : const Color(0xFFEEE8DF),
+          width: 0.8.w99,
+        ),
         boxShadow: [
           BoxShadow(
             color: cs.shadow,
@@ -914,138 +929,129 @@ class _CoinListState extends State<_CoinList> {
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: decorHeight,
-            child: CustomPaint(
-              painter: _CoinListHeaderDecorPainter(
-                dark: cs.dark,
-                pageBg: cs.bg,
-              ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(26.w99, 22.h99, 22.w99, 10.h99),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        i18n.t(
-                          zhHans: '资产列表',
-                          zhHant: '資產列表',
-                          en: 'Assets',
-                          ja: '資産リスト',
-                          ko: '자산 목록',
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 28.sp99,
-                          color: cs.text,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        setState(() => _hideSmallAssets = !_hideSmallAssets);
-                      },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 18.w99,
-                            height: 18.w99,
-                            child: Transform.scale(
-                              scale: 0.72,
-                              child: Checkbox(
-                                value: _hideSmallAssets,
-                                onChanged: (v) {
-                                  setState(
-                                    () => _hideSmallAssets = v ?? false,
-                                  );
-                                },
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: const VisualDensity(
-                                  horizontal: -4,
-                                  vertical: -4,
-                                ),
-                                side: BorderSide(
-                                  color: cs.subText.withValues(alpha: 0.55),
-                                  width: 1.2,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(3.r99),
-                                ),
-                                activeColor: cs.blue,
-                                checkColor: Colors.white,
-                                fillColor:
-                                    WidgetStateProperty.resolveWith((states) {
-                                  if (states.contains(WidgetState.selected)) {
-                                    return cs.blue;
-                                  }
-                                  return Colors.transparent;
-                                }),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 6.w99),
-                          Text(
-                            i18n.t(
-                              zhHans: '隐藏小额资产',
-                              zhHant: '隱藏小額資產',
-                              en: 'Hide small',
-                              ja: '少額を非表示',
-                              ko: '소액 숨기기',
-                            ),
-                            style: TextStyle(
-                              fontSize: 22.sp99,
-                              color: cs.subText,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (coins.isEmpty)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(26.w99, 20.h99, 26.w99, 28.h99),
+          Padding(
+            padding: EdgeInsets.fromLTRB(26.w99, 20.h99, 22.w99, 14.h99),
+            child: Row(
+              children: [
+                Expanded(
                   child: Text(
                     i18n.t(
-                      zhHans: '暂无资产',
-                      zhHant: '暫無資產',
-                      en: 'No assets',
-                      ja: '資産がありません',
-                      ko: '자산 없음',
+                      zhHans: '资产列表',
+                      zhHant: '資產列表',
+                      en: 'Assets',
+                      ja: '資産リスト',
+                      ko: '자산 목록',
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 24.sp99,
-                      color: cs.subText,
+                      fontSize: 28.sp99,
+                      height: 1.12,
+                      color: cs.text,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ),
-                )
-              else
-                ...List.generate(
-                  coins.length,
-                  (i) => _CoinRow(
-                    item: coins[i],
-                    hasLine: i != coins.length - 1,
                   ),
                 ),
-            ],
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    setState(() => _hideSmallAssets = !_hideSmallAssets);
+                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 20.w99,
+                        height: 20.w99,
+                        child: Transform.scale(
+                          scale: 0.78,
+                          child: Checkbox(
+                            value: _hideSmallAssets,
+                            onChanged: (v) {
+                              setState(() => _hideSmallAssets = v ?? false);
+                            },
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: const VisualDensity(
+                              horizontal: -4,
+                              vertical: -4,
+                            ),
+                            side: BorderSide(
+                              color: cs.subText.withValues(alpha: 0.50),
+                              width: 1.15,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4.r99),
+                            ),
+                            activeColor: cs.blue,
+                            checkColor: Colors.white,
+                            fillColor: WidgetStateProperty.resolveWith((states) {
+                              if (states.contains(WidgetState.selected)) {
+                                return cs.blue;
+                              }
+                              return Colors.transparent;
+                            }),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 6.w99),
+                      Text(
+                        i18n.t(
+                          zhHans: '隐藏小额资产',
+                          zhHant: '隱藏小額資產',
+                          en: 'Hide small',
+                          ja: '少額を非表示',
+                          ko: '소액 숨기기',
+                        ),
+                        style: TextStyle(
+                          fontSize: 21.sp99,
+                          height: 1.15,
+                          color: cs.subText,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
+          Container(
+            height: 1.w99,
+            margin: EdgeInsets.symmetric(horizontal: 22.w99),
+            color: cs.dark
+                ? cs.line.withValues(alpha: 0.62)
+                : const Color(0xFFF0ECE6),
+          ),
+          if (coins.isEmpty)
+            Padding(
+              padding: EdgeInsets.fromLTRB(26.w99, 22.h99, 26.w99, 28.h99),
+              child: Text(
+                i18n.t(
+                  zhHans: '暂无资产',
+                  zhHant: '暫無資產',
+                  en: 'No assets',
+                  ja: '資産がありません',
+                  ko: '자산 없음',
+                ),
+                style: TextStyle(
+                  fontSize: 24.sp99,
+                  color: cs.subText,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            )
+          else
+            ...List.generate(
+              coins.length,
+              (i) => _CoinRow(
+                item: coins[i],
+                hasLine: i != coins.length - 1,
+              ),
+            ),
         ],
       ),
     );
@@ -1097,14 +1103,14 @@ class _CoinRow extends StatelessWidget {
       child: InkWell(
         onTap: () => _openCoinRecords(context),
         child: Container(
-          constraints: BoxConstraints(minHeight: 120.h99),
-          padding: EdgeInsets.fromLTRB(26.w99, 18.h99, 18.w99, 18.h99),
+          constraints: BoxConstraints(minHeight: 116.h99),
+          padding: EdgeInsets.fromLTRB(24.w99, 16.h99, 16.w99, 16.h99),
           decoration: BoxDecoration(
             border: hasLine
                 ? Border(
                     bottom: BorderSide(
-                      color: cs.line,
-                      width: 1.w99,
+                      color: cs.line.withValues(alpha: 0.58),
+                      width: 0.8.w99,
                     ),
                   )
                 : null,
@@ -1128,7 +1134,8 @@ class _CoinRow extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 28.sp99,
+                              fontSize: 27.sp99,
+                              height: 1.12,
                               color: cs.text,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1145,11 +1152,11 @@ class _CoinRow extends StatelessWidget {
                               ko: '메인',
                             ),
                             foreground: cs.dark
-                                ? const Color(0xFF93C5FD)
-                                : const Color(0xFF3B82F6),
+                                ? const Color(0xFFD0B58E)
+                                : const Color(0xFF8E6B43),
                             background: cs.dark
-                                ? const Color(0xFF1E3A5F)
-                                : const Color(0xFFE8F1FF),
+                                ? const Color(0xFF332C24)
+                                : const Color(0xFFF5EFE6),
                           ),
                         ],
                       ],
@@ -1160,8 +1167,10 @@ class _CoinRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 22.sp99,
+                        fontSize: 21.sp99,
+                        height: 1.15,
                         color: cs.subText,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -1183,7 +1192,8 @@ class _CoinRow extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.end,
                             style: TextStyle(
-                              fontSize: 28.sp99,
+                              fontSize: 27.sp99,
+                              height: 1.12,
                               color: cs.text,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1195,8 +1205,10 @@ class _CoinRow extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.end,
                             style: TextStyle(
-                              fontSize: 22.sp99,
+                              fontSize: 21.sp99,
+                              height: 1.15,
                               color: cs.subText,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
@@ -1206,7 +1218,9 @@ class _CoinRow extends StatelessWidget {
                     Icon(
                       Icons.chevron_right_rounded,
                       size: 28.sp99,
-                      color: cs.subText.withValues(alpha: 0.55),
+                      color: cs.dark
+                          ? cs.subText.withValues(alpha: 0.34)
+                          : const Color(0xFFB8B4AE),
                     ),
                   ],
                 ),
@@ -1233,145 +1247,21 @@ class _CoinTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8.w99, vertical: 2.h99),
+      padding: EdgeInsets.symmetric(horizontal: 9.w99, vertical: 3.h99),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(6.r99),
+        borderRadius: BorderRadius.circular(AppTokens.rPill.r99),
       ),
       child: Text(
         text,
         style: TextStyle(
-          fontSize: 18.sp99,
-          height: 1.2,
+          fontSize: 17.sp99,
+          height: 1.1,
           color: foreground,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
-  }
-}
-
-/// 资产列表标题区右上角斜切装饰。
-///
-/// 斜边为直线，两端用与两边相切的圆弧过渡（circular fillet），
-/// 避免整条边被拉成 C / S 形曲线。几何参考常见 chamfer + fillet 做法：
-/// 切点距顶点 `d = r / tan(φ/2)`，再用 [Path.arcToPoint] 画圆弧。
-class _CoinListHeaderDecorPainter extends CustomPainter {
-  const _CoinListHeaderDecorPainter({
-    required this.dark,
-    required this.pageBg,
-  });
-
-  final bool dark;
-  final Color pageBg;
-
-  /// 与首页钱包 Tab 装饰背景一致，便于融入页面。
-  static const _pageGradientColors = [
-    Color(0xFFFCFCFE),
-    Color(0xFFFAF9FD),
-    Color(0xFFFAFBFC),
-  ];
-
-  static Offset _unit(Offset v) {
-    final d = v.distance;
-    if (d < 1e-6) return Offset.zero;
-    return v / d;
-  }
-
-  /// 两边单位向量夹角（0, π]。
-  static double _angleBetween(Offset a, Offset b) {
-    final dot = (a.dx * b.dx + a.dy * b.dy).clamp(-1.0, 1.0);
-    return math.acos(dot);
-  }
-
-  /// 顶点 [corner] 处圆形圆角：两边单位向量 [uA]/[uB] 均背离顶点沿边指向。
-  static ({Offset a, Offset b, double d}) _filletPoints({
-    required Offset corner,
-    required Offset uA,
-    required Offset uB,
-    required double radius,
-    required double maxD,
-  }) {
-    final phi = _angleBetween(uA, uB);
-    if (phi < 1e-3 || phi > math.pi - 1e-3) {
-      return (a: corner, b: corner, d: 0);
-    }
-    final d = math.min(radius / math.tan(phi / 2), maxD);
-    return (a: corner + uA * d, b: corner + uB * d, d: d);
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    // 左侧白底约 30%，右侧装饰约 70%；上端偏右、下端偏左（轻微左倾）。
-    final top = Offset(w * 0.34, 0);
-    final bottom = Offset(w * 0.30, h);
-    final r = (h * 0.20).clamp(8.0, 16.0);
-
-    final diag = top - bottom;
-    final diagLen = diag.distance;
-    if (diagLen < 1e-3) return;
-
-    final uDiagUp = _unit(diag);
-    final uDiagDown = -uDiagUp;
-    const uRight = Offset(1, 0);
-
-    // 切点距不超过斜边一半，避免两端圆角相交。
-    final maxD = diagLen * 0.45;
-    final bottomFillet = _filletPoints(
-      corner: bottom,
-      uA: uRight,
-      uB: uDiagUp,
-      radius: r,
-      maxD: maxD,
-    );
-    final topFillet = _filletPoints(
-      corner: top,
-      uA: uDiagDown,
-      uB: uRight,
-      radius: r,
-      maxD: maxD,
-    );
-
-    // 路径：右上 → 右下 → 底边 → 底圆角弧 → 直线斜边 → 顶圆角弧 → 顶边。
-    // 圆弧在装饰区内侧切角（fillet），斜边中段保持直线。
-    final path = Path()
-      ..moveTo(w, 0)
-      ..lineTo(w, h)
-      ..lineTo(bottomFillet.a.dx, bottomFillet.a.dy)
-      ..arcToPoint(
-        bottomFillet.b,
-        radius: Radius.circular(r),
-        // 底角 / 顶角：短弧切在装饰区内侧（fillet）。
-        clockwise: true,
-      )
-      ..lineTo(topFillet.a.dx, topFillet.a.dy)
-      ..arcToPoint(
-        topFillet.b,
-        radius: Radius.circular(r),
-        clockwise: true,
-      )
-      ..lineTo(w, 0)
-      ..close();
-
-    final paint = Paint()
-      ..style = PaintingStyle.fill
-      ..shader = dark
-          ? null
-          : const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: _pageGradientColors,
-            ).createShader(Offset.zero & size)
-      ..color = pageBg;
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _CoinListHeaderDecorPainter oldDelegate) {
-    return oldDelegate.dark != dark || oldDelegate.pageBg != pageBg;
   }
 }
 
