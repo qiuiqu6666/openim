@@ -5,9 +5,11 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import '../../contacts_logic.dart';
+import '../../presence/contact_presence_policy.dart';
 import '../../presence_label.dart';
 import '../select_contacts_logic.dart';
 import 'friend_list_logic.dart';
+import '../../../official_account/widgets/official_account_name_label.dart';
 
 class GroupContactPicker extends StatefulWidget {
   const GroupContactPicker(
@@ -41,7 +43,8 @@ class _GroupContactPickerState extends State<GroupContactPicker> {
       builder: (context, _) => _build(context));
   Widget _build(BuildContext context) => Scaffold(
         backgroundColor: Styles.c_FFFFFF,
-        appBar: AppBar(
+        appBar: GlassAppBar(
+          toolbarHeight: kToolbarHeight,
           backgroundColor: Styles.c_FFFFFF,
           surfaceTintColor: Colors.transparent,
           centerTitle: true,
@@ -104,6 +107,7 @@ class _GroupContactPickerState extends State<GroupContactPicker> {
                   )),
               Expanded(child: Obx(() {
                 final data = widget.friends.friendList
+                    .where(widget.selection.isVisible)
                     .where((friend) =>
                         query.isEmpty ||
                         [
@@ -162,7 +166,11 @@ class _GroupContactPickerState extends State<GroupContactPicker> {
           final selected = widget.selection.isChecked(friend);
           final enabled = !widget.selection.isDefaultChecked(friend) &&
               (selected || widget.selection.checkedList.length < limit);
-          final presence = contacts?.presence.users[friend.userID];
+          final presence = ContactPresencePolicy.resolve(
+            userID: friend.userID,
+            ex: friend.ex,
+            presence: contacts?.presence.users[friend.userID],
+          );
           return Semantics(
             selected: selected,
             button: true,
@@ -216,9 +224,10 @@ class _GroupContactPickerState extends State<GroupContactPicker> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(friend.showName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                OfficialAccountNameLabel(
+                                    name: friend.showName,
+                                    userID: friend.userID,
+                                    ex: friend.ex,
                                     style: TextStyle(
                                         fontSize: 16, color: Styles.c_0C1C33)),
                                 if (presence != null) ...[

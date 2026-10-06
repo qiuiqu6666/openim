@@ -199,8 +199,12 @@ void main() {
       ],
     )));
 
-    final list = tester.widget<ListView>(find.byType(ListView).first);
-    expect(list.padding, const EdgeInsets.fromLTRB(12, 12, 12, 24));
+    final header = tester.getRect(find.byType(GlassAppBar));
+    final group = tester.getRect(find.byType(SettingsGroup));
+    expect(group.top - header.bottom, closeTo(12, .01));
+    expect(group.left, 12);
+    expect(tester.widget<Scaffold>(find.byType(Scaffold)).extendBodyBehindAppBar,
+        isTrue);
 
     final material =
         tester.widgetList<Material>(find.byType(Material)).firstWhere(
@@ -284,7 +288,8 @@ void main() {
     addTearDown(store.dispose);
     await tester.pumpWidget(_host(ProfileInfoPage(
       nickname: 'Alice',
-      userId: '990001',
+      userId: 'im_internal_001',
+      account: '990001',
       avatarUrl: '',
       phoneNumber: '13800138000',
       gender: 1,
@@ -307,6 +312,8 @@ void main() {
       expect(find.text(text), findsOneWidget);
     }
     expect(find.text('查看我的动态'), findsOneWidget);
+    expect(find.text('990001'), findsOneWidget);
+    expect(find.textContaining('im_internal_001'), findsNothing);
     expect(find.text('2000-01-02'), findsOneWidget);
   });
 
@@ -398,12 +405,14 @@ void main() {
       (tester) async {
     await tester.pumpWidget(_host(QrProfilePage(
       nickname: 'Alice',
-      userId: '990001',
+      userId: 'im_internal_001',
+      account: '990001',
       inviteFactory: (_) async => 'fi_test',
       avatarUrl: '',
     )));
 
     expect(find.text('扫一扫，添加我为好友'), findsOneWidget);
+    expect(find.text('99号ID: 990001'), findsOneWidget);
     expect(find.text('99Chat'), findsOneWidget);
     expect(find.text('保存图片'), findsOneWidget);
     expect(find.text('扫一扫'), findsOneWidget);
@@ -461,10 +470,10 @@ void main() {
 
   test('message sound picker previews selected 99chat sound asset', () {
     final source = File(
-      'lib/pages/mine/settings/pages/message_notification_sound_picker_page.dart',
+      'lib/pages/mine/settings/notifications/message_notification_sound_preview.dart',
     ).readAsStringSync();
-    expect(source, contains("assets/audio/99chat/\$id.wav"));
+    expect(source, contains('MessageNotificationSoundIds.assetPath(id)'));
     expect(source, contains("package: 'openim_common'"));
-    expect(source, contains('await _player.play()'));
+    expect(source, contains('Future<void> play()'));
   });
 }

@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:sprintf/sprintf.dart';
 
+import '../widgets/group_request_handler_label.dart';
 import 'process_group_requests_logic.dart';
 
 class ProcessGroupRequestsPage extends StatelessWidget {
@@ -34,24 +35,31 @@ class ProcessGroupRequestsPage extends StatelessWidget {
                   text: logic.applicationInfo.nickname,
                 ),
                 10.horizontalSpace,
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    (logic.applicationInfo.nickname ?? '').toText..style = Styles.ts_0C1C33_17sp,
-                    RichText(
-                      text: TextSpan(
-                        text: StrRes.applyJoin,
-                        style: Styles.ts_8E9AB0_14sp,
-                        children: [
-                          WidgetSpan(child: 2.horizontalSpace),
-                          TextSpan(
-                            text: logic.groupName,
-                            style: Styles.ts_0089FF_14sp,
-                          ),
-                        ],
-                      ),
-                    )
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      (logic.applicationInfo.nickname ?? '').toText
+                        ..style = Styles.ts_0C1C33_17sp
+                        ..maxLines = 1
+                        ..overflow = TextOverflow.ellipsis,
+                      RichText(
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        text: TextSpan(
+                          text: StrRes.applyJoin,
+                          style: Styles.ts_8E9AB0_14sp,
+                          children: [
+                            WidgetSpan(child: 2.horizontalSpace),
+                            TextSpan(
+                              text: logic.groupName,
+                              style: Styles.ts_0089FF_14sp,
+                            ),
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -73,7 +81,8 @@ class ProcessGroupRequestsPage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      (logic.applicationInfo.reqMsg ?? '').toText..style = Styles.ts_0C1C33_17sp,
+                      (logic.applicationInfo.reqMsg ?? '').toText
+                        ..style = Styles.ts_0C1C33_17sp,
                     ],
                   ),
                 ),
@@ -81,31 +90,45 @@ class ProcessGroupRequestsPage extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                sprintf(StrRes.sourceFrom, [logic.sourceFrom]).toText..style = Styles.ts_8E9AB0_14sp
+                sprintf(StrRes.sourceFrom, [logic.sourceFrom]).toText
+                  ..style = Styles.ts_8E9AB0_14sp
               ],
             ),
             12.verticalSpace,
-            Obx(() => logic.handleResult.value != 0
+            Obx(() => logic.currentHandleResult != 0
                 ? Padding(
                     padding: EdgeInsets.symmetric(vertical: 12.h),
-                    child: Text(
-                      logic.handleResult.value == 1 ? StrRes.approved : StrRes.rejected,
-                      style: Styles.ts_8E9AB0_14sp,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          logic.currentHandleResult == 1
+                              ? StrRes.approved
+                              : StrRes.rejected,
+                          style: Styles.ts_8E9AB0_14sp,
+                          textAlign: TextAlign.center,
+                        ),
+                        GroupRequestHandlerLabel(
+                          nickname: logic.handlerNickname,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
                   )
                 : Row(
-              children: [
-                Flexible(child: _buildRejectButton()),
-                12.horizontalSpace,
-                Flexible(
-                  child: Button(
-                    onTap: logic.approve,
-                    text: StrRes.accept,
-                    textStyle: Styles.ts_FFFFFF_17sp,
-                  ),
-                ),
-              ],
-            ))
+                    children: [
+                      Flexible(child: _buildRejectButton()),
+                      12.horizontalSpace,
+                      Flexible(
+                        child: Button(
+                          onTap: logic.approve,
+                          text: StrRes.accept,
+                          textStyle: Styles.ts_FFFFFF_17sp,
+                        ),
+                      ),
+                    ],
+                  ))
           ],
         ),
       ),
@@ -113,6 +136,8 @@ class ProcessGroupRequestsPage extends StatelessWidget {
   }
 
   Widget _buildRejectButton() => Material(
+        borderRadius: BorderRadius.circular(6.r),
+        clipBehavior: Clip.antiAlias,
         child: Ink(
           height: 44.h,
           decoration: BoxDecoration(
@@ -125,6 +150,7 @@ class ProcessGroupRequestsPage extends StatelessWidget {
           ),
           child: InkWell(
             onTap: logic.reject,
+            borderRadius: BorderRadius.circular(6.r),
             child: Container(
               alignment: Alignment.center,
               child: StrRes.reject.toText..style = Styles.ts_0C1C33_17sp,

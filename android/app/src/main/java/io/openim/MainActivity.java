@@ -4,6 +4,7 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.Configuration;
 import android.os.Build;
 
 import java.util.ArrayList;
@@ -13,15 +14,29 @@ import java.util.Locale;
 import io.flutter.embedding.android.FlutterFragmentActivity;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.MethodChannel;
+import io.openim.live.LiveCastBridge;
+import io.openim.calling.CallPictureInPictureBridge;
+import io.openim.location.NativeChatLocationMapFactory;
 
 public class MainActivity extends FlutterFragmentActivity {
     private MethodChannel inviteChannel;
+    private LiveCastBridge liveCastBridge;
+    private CallPictureInPictureBridge callPipBridge;
+    private NativeChatLocationMapFactory chatLocationMapFactory;
     private String pendingInvite;
     private static final String SYSTEM_SHARE_CHANNEL = "openim_system_share";
 
     @Override
     public void configureFlutterEngine(FlutterEngine flutterEngine) {
         super.configureFlutterEngine(flutterEngine);
+        chatLocationMapFactory = new NativeChatLocationMapFactory(
+                getLifecycle(), flutterEngine.getDartExecutor().getBinaryMessenger());
+        flutterEngine.getPlatformViewsController().getRegistry().registerViewFactory(
+                "openim/chat-location-map", chatLocationMapFactory);
+        liveCastBridge = new LiveCastBridge(
+                this, flutterEngine.getDartExecutor().getBinaryMessenger());
+        callPipBridge = new CallPictureInPictureBridge(
+                this, flutterEngine.getDartExecutor().getBinaryMessenger());
         pendingInvite = getIntent().getDataString();
         inviteChannel = new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), "openim_friend_invites");
         inviteChannel.setMethodCallHandler((call, result) -> {
@@ -60,6 +75,53 @@ public class MainActivity extends FlutterFragmentActivity {
                 result.success(false);
             }
         });
+    }
+
+    @Override
+    public void cleanUpFlutterEngine(FlutterEngine flutterEngine) {
+        if (chatLocationMapFactory != null) {
+            chatLocationMapFactory.dispose();
+            chatLocationMapFactory = null;
+        }
+        if (callPipBridge != null) {
+            callPipBridge.dispose();
+            callPipBridge = null;
+        }
+        if (liveCastBridge != null) {
+            liveCastBridge.dispose();
+            liveCastBridge = null;
+        }
+        super.cleanUpFlutterEngine(flutterEngine);
+    }
+
+    @Override
+    public void onUserLeaveHint() {
+        if (callPipBridge != null) callPipBridge.onUserLeaveHint();
+        super.onUserLeaveHint();
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean inPip, Configuration config) {
+        super.onPictureInPictureModeChanged(inPip, config);
+        if (callPipBridge != null) callPipBridge.onModeChanged(inPip);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (callPipBridge != null) callPipBridge.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        if (callPipBridge != null) callPipBridge.onPause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onStop() {
+        if (callPipBridge != null) callPipBridge.onStop();
+        super.onStop();
     }
 
     @Override

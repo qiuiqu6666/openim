@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../group_features/widgets/group_live_avatar.dart';
+import '../../group_features/models/group_features.dart';
+import '../../group_features/live/widgets/live_list_scope.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -13,8 +16,20 @@ class GroupListPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final store = logic.groupFeatures;
+    if (store == null) return _build(context);
+    return GroupLiveListScope(
+      store: store,
+      userID: OpenIM.iMManager.userID,
+      sessionCurrent: () => store.active,
+      child: Builder(builder: _build),
+    );
+  }
+
+  Widget _build(BuildContext context) {
     return Scaffold(
-      appBar: TitleBar.back(title: StrRes.myGroup),
+      appBar:
+          TitleBar.back(title: StrRes.myGroup, backIconColor: Styles.c_0089FF),
       backgroundColor: Styles.c_F8F9FA,
       body: Column(
         children: [
@@ -29,8 +44,8 @@ class GroupListPage extends StatelessWidget {
           Expanded(
             child: Obx(
               () => logic.index.value == 0
-                  ? _buildICreatedListView()
-                  : _buildIJoinedListView(),
+                  ? _buildICreatedListView(context)
+                  : _buildIJoinedListView(context),
             ),
           ),
         ],
@@ -38,14 +53,17 @@ class GroupListPage extends StatelessWidget {
     );
   }
 
-  Widget _buildICreatedListView() => SmartRefresher(
+  Widget _buildICreatedListView(BuildContext context) => SmartRefresher(
         key: logic.iCreateGlobalKey,
         controller: logic.iCreateRefreshController,
         header: IMViews.buildHeader(30),
         footer: IMViews.buildFooter(),
         enablePullUp: true,
         enablePullDown: true,
-        onRefresh: logic.iCreatedInitial,
+        onRefresh: () {
+          GroupLiveListScope.maybeOf(context)?.refreshVisible();
+          logic.iCreatedInitial();
+        },
         onLoading: logic.iCreatedLoadMore,
         child: ListView.builder(
           physics: const BouncingScrollPhysics(),
@@ -55,14 +73,17 @@ class GroupListPage extends StatelessWidget {
         ),
       );
 
-  Widget _buildIJoinedListView() => SmartRefresher(
+  Widget _buildIJoinedListView(BuildContext context) => SmartRefresher(
         key: logic.iJoinGlobalKey,
         controller: logic.iJoinRefreshController,
         header: IMViews.buildHeader(30),
         footer: IMViews.buildFooter(),
         enablePullUp: true,
         enablePullDown: true,
-        onRefresh: logic.iJoinedInitial,
+        onRefresh: () {
+          GroupLiveListScope.maybeOf(context)?.refreshVisible();
+          logic.iJoinedInitial();
+        },
         onLoading: logic.iJoinedLoadMore,
         child: ListView.builder(
           physics: const BouncingScrollPhysics(),
@@ -82,13 +103,18 @@ class GroupListPage extends StatelessWidget {
             horizontalTitleGap: AppTokens.s5,
             contentPadding: const EdgeInsets.symmetric(
                 horizontal: AppTokens.s5, vertical: AppTokens.s2),
-            leading: AvatarView(
-              url: info.faceURL,
-              text: info.groupName,
-              isGroup: true,
-              isCircle: true,
-              width: AppTokens.s7 + AppTokens.s6,
-              height: AppTokens.s7 + AppTokens.s6,
+            leading: GroupLiveAvatar(
+              store: logic.groupFeatures,
+              groupID: info.groupID,
+              features: GroupFeatures.fromEx(info.ex),
+              child: AvatarView(
+                url: info.faceURL,
+                text: info.groupName,
+                isGroup: true,
+                isCircle: true,
+                width: AppTokens.s7 + AppTokens.s6,
+                height: AppTokens.s7 + AppTokens.s6,
+              ),
             ),
             title: Text(
               (info.groupName ?? '').trim().isEmpty

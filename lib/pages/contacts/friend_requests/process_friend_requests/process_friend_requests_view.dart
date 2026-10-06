@@ -78,6 +78,8 @@ class ProcessFriendRequestsPage extends StatelessWidget {
   }
 
   Widget _buildRejectButton() => Material(
+        borderRadius: BorderRadius.circular(6.r),
+        clipBehavior: Clip.antiAlias,
         child: Ink(
           height: 44.h,
           decoration: BoxDecoration(
@@ -90,6 +92,7 @@ class ProcessFriendRequestsPage extends StatelessWidget {
           ),
           child: InkWell(
             onTap: logic.refuseFriendApplication,
+            borderRadius: BorderRadius.circular(6.r),
             child: Container(
               alignment: Alignment.center,
               child: StrRes.reject.toText..style = Styles.ts_0C1C33_17sp,

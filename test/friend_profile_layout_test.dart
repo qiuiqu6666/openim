@@ -9,12 +9,29 @@ import 'package:openim_common/openim_common.dart';
 import 'package:openim/pages/contacts/user_profile_panel/user_profile _panel_logic.dart';
 import 'package:openim/pages/contacts/user_profile_panel/user_profile _panel_view.dart';
 
+import 'pages/contacts/user_profile_panel/support/profile_panel_fixture.dart';
+
 class ProfileFixture extends GetxController implements UserProfilePanelLogic {
   ProfileFixture(
       {this.friend = true, this.allowAdd = true, this.group = false});
   final bool friend;
   final bool allowAdd;
   final bool group;
+  @override
+  String? get groupID => group ? 'fixture-group' : null;
+  @override
+  final profileLayoutReady = true.obs;
+  @override
+  final initialProfileFailed = false.obs;
+  final moments =
+      profileMomentsRepository(peerUserId: '123456789012345678901234567890');
+
+  @override
+  void onClose() {
+    moments.dispose();
+    super.onClose();
+  }
+
   @override
   final commonGroupCount = RxnInt(3);
   @override
@@ -66,6 +83,17 @@ class ProfileFixture extends GetxController implements UserProfilePanelLogic {
   @override
   bool get isGroupMemberPage => group;
   @override
+  bool get hasActiveGroupMemberContext => true;
+  @override
+  bool get hasFriendAddEntry => true;
+  @override
+  final preparingFriendAdd = false.obs;
+  @override
+  bool get canPrepareFriendAdd =>
+      hasFriendAddEntry ||
+      (!isGroupMemberPage &&
+          normalizePublicAccountSearch(displayedUserID) != null);
+  @override
   final updatingBlacklist = false.obs;
   String? action;
   @override
@@ -95,7 +123,8 @@ class ProfileFixture extends GetxController implements UserProfilePanelLogic {
 
 void main() {
   for (final dark in [false, true]) {
-    testWidgets('common group count and retry states in ${dark ? "dark" : "light"}',
+    testWidgets(
+        'common group count and retry states in ${dark ? "dark" : "light"}',
         (tester) async {
       addTearDown(Get.reset);
       Styles.isDark = dark;
@@ -107,8 +136,9 @@ void main() {
       await tester.pumpWidget(ScreenUtilInit(
         designSize: const Size(375, 812),
         builder: (_, __) => GetMaterialApp(
-          theme: ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
-          home: UserProfilePanelPage(),
+          theme:
+              ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
+          home: UserProfilePanelPage(momentsRepository: fixture.moments),
         ),
       ));
       await tester.pumpAndSettle();
@@ -133,7 +163,9 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
   }
-  testWidgets('group owner can open friend request when member disallows adding', (tester) async {
+  testWidgets(
+      'group owner can open friend request when member disallows adding',
+      (tester) async {
     addTearDown(Get.reset);
     final fixture = ProfileFixture(friend: false, allowAdd: false, group: true);
     fixture.iAmOwner.value = true;
@@ -141,11 +173,13 @@ void main() {
     GetTags.createUserProfileTag();
     addTearDown(GetTags.destroyUserProfileTag);
     Get.put<UserProfilePanelLogic>(fixture, tag: GetTags.userProfile);
-    await tester.pumpWidget(ScreenUtilInit(designSize: const Size(375, 812),
-      builder: (_, __) => GetMaterialApp(home: UserProfilePanelPage())));
+    await tester.pumpWidget(ScreenUtilInit(
+        designSize: const Size(375, 812),
+        builder: (_, __) => GetMaterialApp(
+            home: UserProfilePanelPage(momentsRepository: fixture.moments))));
     await tester.pumpAndSettle();
     expect(find.textContaining(fixture.userInfo.value.userID!), findsNothing);
-    await tester.tap(find.text('profileAdd'.tr));
+    await tester.tap(find.text(StrRes.addFriend));
     expect(fixture.action, 'add');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
@@ -164,14 +198,15 @@ void main() {
     Get.put<UserProfilePanelLogic>(fixture, tag: GetTags.userProfile);
     await tester.pumpWidget(ScreenUtilInit(
         designSize: const Size(375, 812),
-        builder: (_, __) => GetMaterialApp(home: UserProfilePanelPage())));
+        builder: (_, __) => GetMaterialApp(
+            home: UserProfilePanelPage(momentsRepository: fixture.moments))));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await tester.tap(find.byIcon(Icons.call_outlined));
+    await tester.tap(find.byIcon(Icons.call_rounded));
     expect(fixture.action, 'voice');
-    await tester.tap(find.byIcon(Icons.videocam_outlined));
+    await tester.tap(find.byIcon(Icons.videocam_rounded));
     expect(fixture.action, 'video');
-    await tester.tap(find.byIcon(Icons.chat_bubble_outline));
+    await tester.tap(find.byIcon(Icons.chat_bubble_rounded));
     expect(fixture.action, 'chat');
     await tester.tap(find.text('profileRemarkName'));
     expect(fixture.action, 'remark');
@@ -200,15 +235,16 @@ void main() {
                 brightness: dark ? Brightness.dark : Brightness.light),
             home: RepaintBoundary(
                 key: const ValueKey('profile-preview'),
-                child: UserProfilePanelPage())),
+                child:
+                    UserProfilePanelPage(momentsRepository: fixture.moments))),
       ));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.byIcon(Icons.call_outlined), findsNothing);
-      expect(find.byIcon(Icons.chat_bubble_outline), findsNothing);
+      expect(find.byIcon(Icons.call_rounded), findsNothing);
+      expect(find.byIcon(Icons.chat_bubble_rounded), findsNothing);
       expect(find.text('profileRemarkName'), findsNothing);
       expect(find.text('profileGenderPrivate'), findsOneWidget);
-      expect(find.text('profileAdd'), findsOneWidget);
+      expect(find.text(StrRes.addFriend), findsOneWidget);
       expect(find.text('profileAddBlacklist'), findsOneWidget);
       final previewDir = Platform.environment['PROFILE_PREVIEW_DIR'];
       if (previewDir != null) {
@@ -226,7 +262,7 @@ void main() {
         image.dispose();
       }
 
-      await tester.tap(find.text('profileAdd'));
+      await tester.tap(find.text(StrRes.addFriend));
       expect(fixture.action, 'add');
       await tester.tap(find.text('profileAddBlacklist'));
       await tester.pumpAndSettle();
@@ -248,15 +284,16 @@ void main() {
     Get.put<UserProfilePanelLogic>(fixture, tag: GetTags.userProfile);
     await tester.pumpWidget(ScreenUtilInit(
       designSize: const Size(375, 812),
-      builder: (_, __) => GetMaterialApp(home: UserProfilePanelPage()),
+      builder: (_, __) => GetMaterialApp(
+          home: UserProfilePanelPage(momentsRepository: fixture.moments)),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('profileAdd'), findsNothing);
+    expect(find.text(StrRes.addFriend), findsNothing);
     expect(find.text('profileAddBlacklist'), findsOneWidget);
     fixture.userInfo.update((user) => user?.isFriendship = true);
     await tester.pumpAndSettle();
-    expect(find.text('profileAdd'), findsNothing);
-    expect(find.byIcon(Icons.chat_bubble_outline), findsOneWidget);
+    expect(find.text(StrRes.addFriend), findsNothing);
+    expect(find.byIcon(Icons.chat_bubble_rounded), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets('group nonfriend displays SDK join time and inviter action',
@@ -271,7 +308,8 @@ void main() {
     Get.put<UserProfilePanelLogic>(fixture, tag: GetTags.userProfile);
     await tester.pumpWidget(ScreenUtilInit(
       designSize: const Size(375, 812),
-      builder: (_, __) => GetMaterialApp(home: UserProfilePanelPage()),
+      builder: (_, __) => GetMaterialApp(
+          home: UserProfilePanelPage(momentsRepository: fixture.moments)),
     ));
     await tester.pumpAndSettle();
     expect(find.text('Inviter'), findsOneWidget);

@@ -5,9 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../res/app_tokens.dart';
 import 'chat_composer_palette.dart';
 
-enum _EmojiSection { all, favorites, gestures }
+enum _EmojiSection { all, favorites, gestures, builtin }
 
 class ChatEmojiPanel extends StatefulWidget {
   const ChatEmojiPanel({
@@ -17,6 +18,8 @@ class ChatEmojiPanel extends StatefulWidget {
     required this.onSend,
     required this.canSend,
     this.stickerPanel,
+    this.builtinStickerPanel,
+    this.builtinStickerIcon,
   });
 
   final ValueChanged<String> onEmojiSelected;
@@ -24,6 +27,8 @@ class ChatEmojiPanel extends StatefulWidget {
   final VoidCallback onSend;
   final bool canSend;
   final Widget? stickerPanel;
+  final Widget? builtinStickerPanel;
+  final Widget? builtinStickerIcon;
 
   @override
   State<ChatEmojiPanel> createState() => _ChatEmojiPanelState();
@@ -128,6 +133,15 @@ class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
     _loadSupportedEmoji();
   }
 
+  @override
+  void didUpdateWidget(covariant ChatEmojiPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_section == _EmojiSection.builtin &&
+        widget.builtinStickerPanel == null) {
+      _section = _EmojiSection.all;
+    }
+  }
+
   Future<void> _loadSupportedEmoji() async {
     try {
       final categories = await emoji_picker.EmojiPickerUtils()
@@ -206,8 +220,12 @@ class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
         .toList();
     final colors = Theme.of(context).colorScheme;
     final panelColor = chatComposerSurface(context);
-    final showingStickers =
-        _section == _EmojiSection.favorites && widget.stickerPanel != null;
+    final stickerPanel = switch (_section) {
+      _EmojiSection.favorites => widget.stickerPanel,
+      _EmojiSection.builtin => widget.builtinStickerPanel,
+      _ => null,
+    };
+    final showingStickers = stickerPanel != null;
     return Container(
       height: math.min(280.h, MediaQuery.sizeOf(context).height * .36),
       color: panelColor,
@@ -229,10 +247,14 @@ class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
                 _EmojiSection.favorites),
             _tab(Icons.back_hand_outlined, 'sdkGestureEmoji'.tr,
                 _EmojiSection.gestures),
+            if (widget.builtinStickerPanel != null)
+              _tab(Icons.emoji_emotions_outlined, '99CHAT表情',
+                  _EmojiSection.builtin,
+                  iconWidget: widget.builtinStickerIcon),
           ]),
         ),
         if (showingStickers)
-          Expanded(child: widget.stickerPanel!)
+          Expanded(child: stickerPanel)
         else
           Expanded(
             child: CustomScrollView(slivers: [
@@ -313,6 +335,10 @@ class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
               8.horizontalSpace,
               FilledButton(
                 onPressed: widget.canSend ? widget.onSend : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTokens.accent,
+                  foregroundColor: AppTokens.onAccent,
+                ),
                 child: Text('sdkEmojiSend'.tr),
               ),
             ]),
@@ -321,7 +347,8 @@ class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
     );
   }
 
-  Widget _tab(IconData icon, String tooltip, _EmojiSection section) {
+  Widget _tab(IconData icon, String tooltip, _EmojiSection section,
+      {Widget? iconWidget}) {
     final selected = _section == section;
     final colors = Theme.of(context).colorScheme;
     return Container(
@@ -335,9 +362,11 @@ class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
       child: IconButton(
         tooltip: tooltip,
         onPressed: () => setState(() => _section = section),
-        icon: Icon(icon,
-            size: 23.w,
-            color: selected ? colors.onSurface : colors.onSurfaceVariant),
+        icon: iconWidget == null
+            ? Icon(icon,
+                size: 23.w,
+                color: selected ? colors.onSurface : colors.onSurfaceVariant)
+            : SizedBox.square(dimension: 23.w, child: iconWidget),
       ),
     );
   }

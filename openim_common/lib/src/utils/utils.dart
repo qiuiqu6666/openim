@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:azlistview/azlistview.dart';
-import 'package:collection/collection.dart';
 import 'package:common_utils/common_utils.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dart_date/dart_date.dart';
@@ -250,11 +249,11 @@ class IMUtils {
   }
 
   static int getPlatform() {
-    final context = Get.context!;
+    final tablet = Get.context?.isTablet ?? false;
     if (Platform.isAndroid) {
-      return context.isTablet ? 8 : 2;
+      return tablet ? 8 : 2;
     } else {
-      return context.isTablet ? 9 : 1;
+      return tablet ? 9 : 1;
     }
   }
 
@@ -310,20 +309,15 @@ class IMUtils {
   static List<Message> calChatTimeInterval(List<Message> list,
       {bool calculate = true}) {
     if (!calculate) return list;
-    var milliseconds = list.firstOrNull?.sendTime;
-    if (null == milliseconds) return list;
-    list.first.exMap['showTime'] = true;
-    var lastShowTimeStamp = milliseconds;
-    for (var i = 0; i < list.length; i++) {
-      var index = i + 1;
-      if (index <= list.length - 1) {
-        var cur = getDateTimeByMs(lastShowTimeStamp);
-        var milliseconds = list.elementAt(index).sendTime!;
-        var next = getDateTimeByMs(milliseconds);
-        if (next.difference(cur).inMinutes > 5) {
-          lastShowTimeStamp = milliseconds;
-          list.elementAt(index).exMap['showTime'] = true;
-        }
+    int? lastShowTimeStamp;
+    for (final message in list) {
+      final milliseconds = message.sendTime;
+      message.exMap = Map<String, dynamic>.of(message.exMap)..remove('showTime');
+      if (milliseconds == null) continue;
+      if (lastShowTimeStamp == null ||
+          milliseconds - lastShowTimeStamp >= const Duration(minutes: 6).inMilliseconds) {
+        message.exMap['showTime'] = true;
+        lastShowTimeStamp = milliseconds;
       }
     }
     return list;
@@ -779,11 +773,24 @@ class IMUtils {
           content = '[${StrRes.carte}]${message.cardElem?.nickname ?? ''}';
           break;
         case MessageType.custom:
+          final fund = FundMessageData.tryParse(message.customElem?.data);
+          if (fund != null) {
+            content = fund.isPacket
+                ? '[${fund.typeLabel}]'
+                : '[${fund.typeLabel}] ${fund.amount} ${fund.currencyLabel}';
+            break;
+          }
           var data = message.customElem!.data;
           var map = json.decode(data!);
           var customType = map['customType'];
 
           switch (customType) {
+            case CustomMessageType.dice:
+              final dice = DiceMessageData.tryParse(data);
+              content = dice == null
+                  ? '[${StrRes.diceLabel}]'
+                  : '[${StrRes.diceLabel}] ${StrRes.dicePoint(dice.value)}';
+              break;
             case CustomMessageType.emoji:
               content = '[${StrRes.emoji}]';
               break;
@@ -839,6 +846,15 @@ class IMUtils {
             var map = json.decode(data!);
             var customType = map['customType'];
             switch (customType) {
+              case CustomMessageType.dice:
+                final dice = DiceMessageData.tryParse(data);
+                return dice == null
+                    ? {'viewType': CustomMessageType.dice}
+                    : {
+                        'viewType': CustomMessageType.dice,
+                        'version': DiceMessageData.protocolVersion,
+                        'value': dice.value,
+                      };
               case CustomMessageType.call:
                 {
                   final duration = map['data']['duration'];
@@ -1157,6 +1173,7 @@ class IMUtils {
       ValueChanged<int>? onPageChanged,
       ValueChanged<int>? onForward,
       ValueChanged<int>? onDelete,
+      ValueChanged<int>? onViewInChat,
       bool onlySave = false,
       bool showGallery = true,
       bool showCounter = true}) {
@@ -1209,6 +1226,7 @@ class IMUtils {
       onPageChanged: onPageChanged,
       onForward: onForward,
       onDelete: onDelete,
+      onViewInChat: onViewInChat,
       muted: muted,
     );
     return Navigator.of(context).push(

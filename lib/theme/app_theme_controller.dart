@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
 
 class AppThemeController extends ChangeNotifier with WidgetsBindingObserver {
@@ -35,16 +34,8 @@ class AppThemeController extends ChangeNotifier with WidgetsBindingObserver {
         (_mode == ThemeMode.system &&
             WidgetsBinding.instance.platformDispatcher.platformBrightness ==
                 Brightness.dark);
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness:
-          Styles.isDark ? Brightness.light : Brightness.dark,
-      statusBarBrightness: Styles.isDark ? Brightness.dark : Brightness.light,
-      systemNavigationBarColor:
-          Styles.isDark ? const Color(0xFF141D27) : Colors.white,
-      systemNavigationBarIconBrightness:
-          Styles.isDark ? Brightness.light : Brightness.dark,
-    ));
+    // Visible routes declare system-bar styles. Theme changes must not
+    // imperatively overwrite a scanner, photo viewer or nested tab's style.
   }
 
   @override

@@ -2,6 +2,7 @@ class ImageRes {
   ImageRes._();
 
   static const _dir = "assets/images";
+  static const _callDir = "assets/call_ui";
 
   static const voiceWhiteAnim = "assets/anim/voice_white.json";
   static const voiceBlueAnim = "assets/anim/voice_blue.json";
@@ -136,12 +137,12 @@ class ImageRes {
   static const remindWhoToWatch = "$_dir/ic_remind_who_to_watch.webp";
   static const circle = "$_dir/ic_circle.webp";
   static const liveClose = "$_dir/ic_live_close.webp";
-  static const liveHangUp = "$_dir/ic_live_hang_up.webp";
-  static const liveMicOff = "$_dir/ic_live_mic_off.webp";
-  static const liveMicOn = "$_dir/ic_live_mic_on.webp";
-  static const livePicUp = "$_dir/ic_live_pick_up.webp";
-  static const liveSpeakerOff = "$_dir/ic_live_speaker_off.webp";
-  static const liveSpeakerOn = "$_dir/ic_live_speaker_on.webp";
+  static const liveHangUp = "$_callDir/hangup.png";
+  static const liveMicOff = "$_callDir/mute_on.png";
+  static const liveMicOn = "$_callDir/mute.png";
+  static const livePicUp = "$_callDir/dialing.png";
+  static const liveSpeakerOff = "$_callDir/handsfree.png";
+  static const liveSpeakerOn = "$_callDir/handsfree_on.png";
   static const liveCameraOn = "$_dir/ic_live_camera_on.webp";
   static const liveCameraOff = "$_dir/ic_live_camera_off.webp";
   static const liveSwitchCamera = "$_dir/ic_live_switch_camera.webp";

@@ -3,35 +3,50 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
-import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:uuid/uuid.dart';
 
 class Apis {
   static Future<String> createFriendGrant(Map<String, String> input) async {
     final data = await HttpUtil.post('${Config.appAuthUrl}/chat/friend-grants',
-        data: input, options: chatTokenOptions..contentType = Headers.jsonContentType, showErrorToast: false);
+        data: input,
+        options: chatTokenOptions..contentType = Headers.jsonContentType,
+        showErrorToast: false);
     final grant = data['friendGrant'];
-    if (grant is! String || grant.isEmpty) throw StateError('Missing friend grant');
+    if (grant is! String || grant.isEmpty) {
+      throw StateError('Missing friend grant');
+    }
     return grant;
   }
 
-  static Future<void> applyFriendGrant({required String grant, required String message}) async {
+  static Future<void> applyFriendGrant(
+      {required String grant, required String message}) async {
     await HttpUtil.post('${Config.appAuthUrl}/chat/friend-apply',
         data: {'friendGrant': grant, 'message': message},
-        options: chatTokenOptions..contentType = Headers.jsonContentType, showErrorToast: false);
+        options: chatTokenOptions..contentType = Headers.jsonContentType,
+        showErrorToast: false);
   }
 
-  static Future<String> createFriendInvite(FriendAddSource source, {String? targetUserID}) async {
-    if (!{FriendAddSource.qrcode, FriendAddSource.link, FriendAddSource.card}.contains(source)) {
+  static Future<String> createFriendInvite(FriendAddSource source,
+      {String? targetUserID}) async {
+    if (!{FriendAddSource.qrcode, FriendAddSource.link, FriendAddSource.card}
+        .contains(source)) {
       throw ArgumentError('Invalid invite source');
     }
     final data = await HttpUtil.post('${Config.appAuthUrl}/chat/friend-invites',
-        data: {'source': source.name, if (source == FriendAddSource.card) 'targetUserID': targetUserID},
-        options: chatTokenOptions..contentType = Headers.jsonContentType, showErrorToast: false);
+        data: {
+          'source': source.name,
+          if (source == FriendAddSource.card) 'targetUserID': targetUserID
+        },
+        options: chatTokenOptions..contentType = Headers.jsonContentType,
+        showErrorToast: false);
     final code = data['inviteCode'];
-    if (code is! String || code.isEmpty) throw StateError('Missing invite code');
+    if (code is! String || code.isEmpty) {
+      throw StateError('Missing invite code');
+    }
     return code;
   }
+
   static Options get imTokenOptions =>
       Options(headers: {'token': DataSp.imToken});
 
@@ -40,16 +55,8 @@ class Apis {
 
   static StreamController kickoffController = StreamController<int>.broadcast();
 
-  static void _kickoff(int? errCode) {
-    if (errCode == 1501 ||
-        errCode == 1503 ||
-        errCode == 1504 ||
-        errCode == 1505) {
-      kickoffController.sink.add(errCode);
-    }
-  }
-
-  static Future<Map<String, String>> _deviceMetadata() async {
+  static Future<Map<String, String>> _deviceMetadata(
+      {bool validateLoginDeviceID = false}) async {
     var deviceName = '';
     var version = '';
     try {
@@ -67,7 +74,9 @@ class Apis {
           : '${package.version}+${package.buildNumber}';
     } catch (_) {}
     return {
-      'deviceID': DataSp.getDeviceID(),
+      'deviceID': validateLoginDeviceID
+          ? await DataSp.ensureLoginDeviceID()
+          : DataSp.getDeviceID(),
       'deviceName': deviceName,
       'version': version
     };
@@ -80,23 +89,83 @@ class Apis {
     String? email,
     String? password,
     String? verificationCode,
+    bool Function()? isCurrent,
+    bool showErrorToast = true,
+  }) async {
+    final request = await prepareLoginRequest(
+      areaCode: areaCode,
+      phoneNumber: phoneNumber,
+      account: account,
+      email: email,
+      password: password,
+      verificationCode: verificationCode,
+    );
+    return loginWithRequest(request,
+        isCurrent: isCurrent, showErrorToast: showErrorToast);
+  }
+
+  /// Freeze the existing OpenIM identity and MD5 password with this device.
+  /// The map belongs to one attempt and must remain in memory only.
+  static Future<Map<String, dynamic>> prepareLoginRequest({
+    String? areaCode,
+    String? phoneNumber,
+    String? account,
+    String? email,
+    String? password,
+    String? verificationCode,
+  }) async {
+    final identities = <String, String>{
+      if (phoneNumber != null && phoneNumber.trim().isNotEmpty)
+        'phoneNumber': phoneNumber.trim(),
+      if (account != null && account.trim().isNotEmpty)
+        'account': account.trim(),
+      if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+    };
+    if (identities.length != 1) {
+      throw const FormatException('Exactly one login identity is required');
+    }
+    final metadata = await _deviceMetadata(validateLoginDeviceID: true);
+    return Map<String, dynamic>.unmodifiable({
+      ...metadata,
+      if (areaCode != null) 'areaCode': areaCode,
+      ...identities,
+      if (password != null) 'password': IMUtils.generateMD5(password),
+      'platform': IMUtils.getPlatform(),
+      if (verificationCode != null) 'verifyCode': verificationCode,
+    });
+  }
+
+  /// Submit a frozen login payload, adding an SMS proof only at its owner.
+  /// Neither business errors nor incomplete credentials can become a login.
+  static Future<LoginCertificate> loginWithRequest(
+    Map<String, dynamic> request, {
+    bool Function()? isCurrent,
+    bool showErrorToast = true,
   }) async {
     try {
-      var data = await HttpUtil.post(Urls.login, data: {
-        ...await _deviceMetadata(),
-        "areaCode": areaCode,
-        'account': account,
-        'phoneNumber': phoneNumber,
-        'email': email,
-        'password': null != password ? IMUtils.generateMD5(password) : null,
-        'platform': IMUtils.getPlatform(),
-        'verifyCode': verificationCode,
-      });
-      final cert = LoginCertificate.fromJson(data!);
-
-      return cert;
+      if (isCurrent != null && !isCurrent()) {
+        throw StateError('Login attempt is no longer current');
+      }
+      final data = await HttpUtil.post(Urls.login,
+          showErrorToast: showErrorToast,
+          withoutToken: true,
+          requestOperationID: const Uuid().v4(),
+          options: Options(contentType: Headers.jsonContentType),
+          data: Map<String, dynamic>.from(request));
+      if (data is! Map ||
+          ['userID', 'chatToken', 'imToken'].any((key) =>
+              data[key] is! String || (data[key] as String).trim().isEmpty)) {
+        throw const FormatException('Incomplete login credentials');
+      }
+      return LoginCertificate.fromJson(Map<String, dynamic>.from(data));
     } catch (e, s) {
-      _catchErrorHelper(e, s);
+      if (isCurrent == null) {
+        _catchErrorHelper(e, s);
+      } else if (isCurrent()) {
+        // A scoped login owns its feedback and navigation. Never let an old
+        // request clear credentials belonging to a later route/session.
+        Logger.print('Login request failed: ${e.runtimeType}');
+      }
 
       return Future.error(e);
     }
@@ -114,34 +183,38 @@ class Apis {
     int gender = 1,
     required String verificationCode,
     String? invitationCode,
+    bool showErrorToast = true,
   }) async {
     try {
-      var data = await HttpUtil.post(Urls.register, data: {
-        ...await _deviceMetadata(),
-        'verifyCode': verificationCode,
-        'platform': IMUtils.getPlatform(),
-        'invitationCode': invitationCode,
-        'autoLogin': true,
-        'user': {
-          "nickname": nickname,
-          "faceURL": faceURL,
-          'birth': birth,
-          'gender': gender,
-          'email': email,
-          "areaCode": areaCode,
-          'phoneNumber': phoneNumber,
-          'account': account,
-          'password': IMUtils.generateMD5(password),
-        },
-      });
+      var data = await HttpUtil.post(Urls.register,
+          showErrorToast: showErrorToast,
+          data: {
+            ...await _deviceMetadata(),
+            'verifyCode': verificationCode,
+            'platform': IMUtils.getPlatform(),
+            'invitationCode': invitationCode,
+            'autoLogin': true,
+            'user': {
+              "nickname": nickname,
+              "faceURL": faceURL,
+              'birth': birth,
+              'gender': gender,
+              'email': email,
+              "areaCode": areaCode,
+              'phoneNumber': phoneNumber,
+              'account': account,
+              'password': IMUtils.generateMD5(password),
+            },
+          });
 
       final cert = LoginCertificate.fromJson(data!);
 
       return cert;
     } catch (e, s) {
-      _catchErrorHelper(e, s);
-
-      return Future.error(e);
+      // Authentication requests own their UI and must not clear another session
+      // just because a transport failure occurred.
+      Logger.print('Registration request failed: ${e.runtimeType}');
+      return Future.error(e, s);
     }
   }
 
@@ -151,10 +224,12 @@ class Apis {
     String? email,
     required String password,
     required String verificationCode,
+    bool showErrorToast = true,
   }) async {
     try {
-      return HttpUtil.post(
+      return await HttpUtil.post(
         Urls.resetPwd,
+        showErrorToast: showErrorToast,
         data: {
           "areaCode": areaCode,
           'phoneNumber': phoneNumber,
@@ -166,7 +241,8 @@ class Apis {
         options: chatTokenOptions,
       );
     } catch (e, s) {
-      _catchErrorHelper(e, s);
+      Logger.print('Password reset request failed: ${e.runtimeType}');
+      return Future.error(e, s);
     }
   }
 
@@ -219,8 +295,9 @@ class Apis {
       options: chatTokenOptions,
       showErrorToast: false,
     );
-    if (data is! Map)
+    if (data is! Map) {
       throw const FormatException('Invalid nickname check response');
+    }
     return Map<String, dynamic>.from(data);
   }
 
@@ -239,6 +316,7 @@ class Apis {
     int? allowBeep,
     int? allowVibration,
     bool showErrorToast = true,
+    bool Function()? isCurrent,
   }) async {
     try {
       Map<String, dynamic> param = {'userID': userID};
@@ -284,14 +362,18 @@ class Apis {
         return await save();
       }
     } catch (e, s) {
-      if (showErrorToast && e is (int, String?)) {
+      if (showErrorToast &&
+          (isCurrent?.call() ?? true) &&
+          e is (int, String?)) {
         final reason = HttpUtil.businessErrorMessage(ApiResp.fromJson({
           'errCode': e.$1,
           'errDlt': e.$2 ?? '',
         }));
         IMViews.showToast(reason);
       }
-      if (e is (int, String?)) _catchErrorHelper(e, s);
+      if (e is (int, String?) && (isCurrent?.call() ?? true)) {
+        _catchErrorHelper(e, s);
+      }
       rethrow;
     }
   }
@@ -388,8 +470,10 @@ class Apis {
   static Future<List<UserFullInfo>?> getUserFullInfo({
     int pageNumber = 0,
     int showNumber = 10,
+    bool showErrorToast = true,
     required List<String> userIDList,
   }) async {
+    final requestOptions = chatTokenOptions;
     try {
       final data = await HttpUtil.post(
         Urls.getUsersFullInfo,
@@ -398,7 +482,8 @@ class Apis {
           'userIDs': userIDList,
           'platform': IMUtils.getPlatform(),
         },
-        options: chatTokenOptions,
+        options: requestOptions,
+        showErrorToast: showErrorToast,
       );
       if (data['users'] is List) {
         return (data['users'] as List)
@@ -407,9 +492,11 @@ class Apis {
       }
       return null;
     } catch (e, s) {
-      _catchErrorHelper(e, s);
+      if (showErrorToast) {
+        _catchErrorHelper(e, s);
+      }
 
-      return [];
+      return showErrorToast ? [] : null;
     }
   }
 
@@ -506,9 +593,11 @@ class Apis {
     required String verificationCode,
     required int usedFor,
     String? invitationCode,
+    bool showErrorToast = true,
   }) {
     return HttpUtil.post(
       Urls.checkVerificationCode,
+      showErrorToast: showErrorToast,
       data: {
         "phoneNumber": phoneNumber,
         "areaCode": areaCode,
@@ -548,22 +637,11 @@ class Apis {
 
   static void _catchErrorHelper(Object e, StackTrace s) {
     if (e is (int, String?)) {
-      final errCode = e.$1;
-      final errMsg = e.$2;
-      _kickoff(errCode);
-
-      Logger.print('e:$errCode s:$errMsg');
+      Logger.print('API request failed: errCode=${e.$1}');
     } else {
-      _catchError(e, s);
-    }
-  }
-
-  static void _catchError(Object e, StackTrace s, {bool forceBack = true}) {
-    IMViews.showToast(e.toString());
-
-    if (forceBack) {
-      DataSp.removeLoginCertificate();
-      Get.offAllNamed('/login');
+      // HttpUtil owns localized feedback. Network failures do not expire a
+      // session; authenticated business errors go through its token guard.
+      Logger.print('API request failed: ${e.runtimeType}');
     }
   }
 }

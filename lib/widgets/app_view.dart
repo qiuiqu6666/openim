@@ -19,12 +19,18 @@ class AppView extends StatelessWidget {
       builder: (ctrl) => FocusDetector(
         onForegroundGained: () => ctrl.runningBackground(false),
         onForegroundLost: () => ctrl.runningBackground(true),
-        child: ScreenUtilInit(
-          designSize: const Size(Config.uiW, Config.uiH),
-          minTextAdapt: true,
-          splitScreenMode: true,
-          fontSizeResolver: (fontSize, _) => fontSize.toDouble(),
-          builder: (_, child) => builder(ctrl.getLocale(), _builder()),
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (_) => ctrl.markDeviceSyncUserActivity(),
+          onPointerMove: (_) => ctrl.markDeviceSyncUserActivity(),
+          onPointerSignal: (_) => ctrl.markDeviceSyncUserActivity(),
+          child: ScreenUtilInit(
+            designSize: const Size(Config.uiW, Config.uiH),
+            minTextAdapt: true,
+            splitScreenMode: true,
+            fontSizeResolver: (fontSize, _) => fontSize.toDouble(),
+            builder: (_, child) => builder(ctrl.getLocale(), _builder()),
+          ),
         ),
       ),
     );
@@ -37,13 +43,18 @@ class AppView extends StatelessWidget {
           data: MediaQuery.of(context).copyWith(
             textScaleFactor: Config.textScaleFactor,
           ),
-          child: widget!,
+          child: AppSystemBars(
+            background: Theme.of(context).appBarTheme.backgroundColor ??
+                Theme.of(context).colorScheme.surface,
+            navigationBackground: Theme.of(context).scaffoldBackgroundColor,
+            child: widget!,
+          ),
         );
       },
     );
 
+    configureEasyLoadingInteractions();
     EasyLoading.instance
-      ..userInteractions = false
       ..indicatorSize = 50
       ..backgroundColor = Styles.c_0C1C33
       ..indicatorColor = CupertinoColors.systemGrey2

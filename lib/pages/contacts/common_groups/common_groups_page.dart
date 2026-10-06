@@ -101,7 +101,8 @@ class _CommonGroupsPageState extends State<CommonGroupsPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Styles.c_F8F9FA,
-        appBar: TitleBar.back(title: 'profileCommonGroups'.tr),
+        appBar: TitleBar.back(
+            title: 'profileCommonGroups'.tr, backIconColor: Styles.c_0089FF),
         body: SafeArea(
             top: false,
             child: Column(children: [

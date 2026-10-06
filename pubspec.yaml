@@ -20,6 +20,7 @@ version: 3.8.3+235
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
+  flutter: ">=3.41.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -28,13 +29,15 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
-  # Pinned for the project Flutter 3.32.8 SDK.
+  # Keep the existing glass widget API; the SDK is pinned in .flutter-version.
   liquid_glass_widgets: 0.5.0
   flutter:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
   flutter_svg: 2.2.3
+  flutter_markdown: ^0.7.7
+  scrollable_positioned_list: ^0.2.3
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -45,12 +48,15 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   shared_preferences: ^2.0.18
+  flutter_secure_storage: 10.3.1
   sprintf: ^7.0.0
   uuid: ^4.2.1
   path_provider: ^2.0.13
   path: ^1.9.1
   flutter_cache_manager: ^3.4.1
   image_picker: ^1.0.4
+  image: ^4.5.4
+  zxing2: ^0.2.4
   image_gallery_saver_plus: ^4.0.1
   azlistview: ^2.0.0
   lpinyin: ^2.0.3
@@ -63,6 +69,8 @@ dependencies:
   flutter_screenutil: ^5.7.0
   intl: ^0.20.2
   device_info_plus: ^11.5.0
+  connectivity_plus: ^6.1.5
+  geolocator: ^14.0.2
   country_picker: ^2.0.20
   file_picker: ^10.3.3
   open_filex: ^4.3.2
@@ -128,14 +136,24 @@ dependency_overrides:
     path: local_plugin/uri_to_file
 
 dev_dependencies:
+  # Location picker boundary/interaction fixtures use the same coordinate type.
+  latlong2: ^0.9.1
+  # Exercise the existing local recorder's native lifecycle and custom surface.
+  voice_note_kit:
+    path: local_plugin/voice_note_kit
+  # Independent 99chat composer rendering fixture; already used by common.
+  extended_text_field: ^16.0.0
   flutter_test:
     sdk: flutter
+  fake_async: ^1.3.3
   flutter_launcher_icons: ^0.13.1
   flutter_native_splash: ^2.2.19
   hive_generator: ^2.0.1
   build_runner: 2.4.13
   flutter_lints: ^6.0.0
-  webview_flutter_platform_interface: 2.14.0
+  webview_flutter_platform_interface: ^2.15.1
+  video_player_platform_interface: ^6.6.0
+  just_audio_platform_interface: ^4.6.0
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -146,11 +164,22 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # App-owned 99chat parity assets.
+  # App-owned 99chat parity assets, including live artwork/tutorial and lottery balls.
   assets:
     - assets/images/
+    - assets/ai/
     - assets/img/
     - assets/wallet.png
+    - lib/pages/chat/messages/selection/assets/
+    - lib/pages/chat/stickers/builtin/assets/4351/
+    - lib/pages/official_account/assets/
+    - lib/pages/contacts/create_group/assets/
+    - lib/pages/conversation/empty/assets/
+    - lib/pages/wallet/record/assets/
+    - lib/pages/wallet/widgets/assets/
+    - lib/pages/splash/assets/
+    - lib/pages/group_features/mark_six/assets/
+    - shorebird.yaml
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

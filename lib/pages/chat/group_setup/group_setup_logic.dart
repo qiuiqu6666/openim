@@ -2,7 +2,6 @@ import 'group_member_order.dart';
 import 'dart:async';
 import 'dart:io';
 
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -13,20 +12,48 @@ import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import '../../../core/controller/app_controller.dart';
 import '../../../core/controller/im_controller.dart';
 import '../../../routes/app_navigator.dart';
+import '../../../services/chat_history_cache.dart';
 import '../../contacts/select_contacts/select_contacts_logic.dart';
 import '../../conversation/conversation_logic.dart';
 import '../chat_logic.dart';
 import '../chat_setup/chat_history_search_page.dart';
 import 'edit_name/edit_name_logic.dart';
 import 'group_member_list/group_member_list_logic.dart';
+import '../group/identity/group_member_identity.dart';
+import 'members/group_member_preview_controller.dart';
+
+typedef GroupSetupPermissionContext = ({
+  String? account,
+  String sdkAccount,
+  String? token,
+  String server,
+  String groupID,
+  int generation,
+});
 
 class GroupSetupLogic extends GetxController {
+  GroupSetupLogic({GroupMemberIdentitySource? memberIdentitySource})
+      : _memberPreview = GroupMemberPreviewController(
+          source: memberIdentitySource ?? GroupMemberIdentitySource(),
+        );
+
+  final GroupMemberPreviewController _memberPreview;
+  int _groupInfoRequest = 0;
+  int _myMemberRequest = 0;
+  int _joinedRequest = 0;
+  int _permissionGeneration = 0;
+  bool _closed = false;
+  late final GroupSetupPermissionContext _initialPermissionContext;
+  int? _memberLookMemberInfo;
+  bool _hasGroupInfo = false;
   final imLogic = Get.find<IMController>();
 
   final chatLogic = Get.find<ChatLogic>(tag: GetTags.chat);
   final appLogic = Get.find<AppController>();
   final conversationLogic = Get.find<ConversationLogic>();
-  final memberList = <GroupMembersInfo>[].obs;
+  RxList<GroupMembersInfo> get memberList => _memberPreview.members;
+  RxBool get membersLoading => _memberPreview.loading;
+  RxBool get membersFailed => _memberPreview.failed;
   late Rx<ConversationInfo> conversationInfo;
   late Rx<GroupInfo> groupInfo;
   late Rx<GroupMembersInfo> myGroupMembersInfo;
@@ -37,6 +64,7 @@ class GroupSetupLogic extends GetxController {
   late StreamSubscription _ccSub;
   late StreamSubscription _jasSub;
   late StreamSubscription _jdsSub;
+  StreamSubscription? _selfInfoSubscription;
   final lock = Lock();
   final isJoinedGroup = false.obs;
   final avatar = Rx<File?>(null);
@@ -56,6 +84,7 @@ class GroupSetupLogic extends GetxController {
     }
     groupInfo = Rx(_defaultGroupInfo);
     myGroupMembersInfo = Rx(_defaultMemberInfo);
+    _initialPermissionContext = capturePermissionContext();
 
     _ccSub = imLogic.conversationChangedSubject.listen((newList) {
       final newValue = newList.firstWhereOrNull((element) =>
@@ -72,33 +101,49 @@ class GroupSetupLogic extends GetxController {
     });
 
     _guSub = imLogic.groupInfoUpdatedSubject.listen((value) {
-      if (value.groupID == groupInfo.value.groupID) {
-        _updateGroupInfo(value);
+      if (_isCurrentGroupSession && value.groupID == groupInfo.value.groupID) {
+        applyGroupInfo(value);
       }
     });
 
+    final selfInfo = imLogic.selfInfoUpdatedSubject;
+    _selfInfoSubscription = (selfInfo.hasValue ? selfInfo.skip(1) : selfInfo)
+        .listen(onSelfInfoUpdated);
+
     _jasSub = imLogic.joinedGroupAddedSubject.listen((value) {
-      if (value.groupID == groupInfo.value.groupID) {
+      if (_isCurrentGroupSession && value.groupID == groupInfo.value.groupID) {
+        _joinedRequest++;
+        _permissionGeneration++;
         isJoinedGroup.value = true;
         _queryAllInfo();
       }
     });
 
     _jdsSub = imLogic.joinedGroupDeletedSubject.listen((value) {
-      if (value.groupID == groupInfo.value.groupID) {
-        isJoinedGroup.value = false;
+      if (_isCurrentGroupSession && value.groupID == groupInfo.value.groupID) {
+        _leaveGroup();
       }
     });
 
     _mISub = imLogic.memberInfoChangedSubject.listen((e) {
+      if (!_isCurrentGroupSession) return;
       if (e.groupID == groupInfo.value.groupID &&
           e.userID == myGroupMembersInfo.value.userID) {
+        final permissionChanged = (e.roleLevel != null &&
+                myGroupMembersInfo.value.roleLevel != e.roleLevel) ||
+            (e.appManagerLevel != null &&
+                myGroupMembersInfo.value.appManagerLevel != e.appManagerLevel);
+        if (permissionChanged) _permissionGeneration++;
         myGroupMembersInfo.update((val) {
           val?.nickname = e.nickname;
-          val?.roleLevel = e.roleLevel;
+          if (e.roleLevel != null) val?.roleLevel = e.roleLevel;
+          if (e.appManagerLevel != null) {
+            val?.appManagerLevel = e.appManagerLevel;
+          }
         });
+        if (permissionChanged) _refreshMemberIdentity();
       }
-      if (e.groupID != groupInfo.value.groupID) return;
+      if (!isJoinedGroup.value || e.groupID != groupInfo.value.groupID) return;
       final index = memberList.indexWhere((m) => m.userID == e.userID);
       if (index >= 0) {
         memberList[index] = e;
@@ -109,8 +154,10 @@ class GroupSetupLogic extends GetxController {
       memberList.sort(compareGroupMembers);
     });
     _mASub = imLogic.memberAddedSubject.listen((e) async {
-      if (e.groupID == groupInfo.value.groupID) {
+      if (_isCurrentGroupSession && e.groupID == groupInfo.value.groupID) {
         if (e.userID == OpenIM.iMManager.userID) {
+          _joinedRequest++;
+          _permissionGeneration++;
           isJoinedGroup.value = true;
           _queryAllInfo();
         } else {
@@ -120,9 +167,9 @@ class GroupSetupLogic extends GetxController {
       }
     });
     _mDSub = imLogic.memberDeletedSubject.listen((e) {
-      if (e.groupID == groupInfo.value.groupID) {
+      if (_isCurrentGroupSession && e.groupID == groupInfo.value.groupID) {
         if (e.userID == OpenIM.iMManager.userID) {
-          isJoinedGroup.value = false;
+          _leaveGroup();
         } else {
           memberList.removeWhere((element) => element.userID == e.userID);
         }
@@ -139,6 +186,10 @@ class GroupSetupLogic extends GetxController {
 
   @override
   void onClose() {
+    _closed = true;
+    _permissionGeneration++;
+    _joinedRequest++;
+    _memberPreview.dispose();
     _guSub.cancel();
     _mASub.cancel();
     _mDSub.cancel();
@@ -146,7 +197,17 @@ class GroupSetupLogic extends GetxController {
     _mISub.cancel();
     _jdsSub.cancel();
     _jasSub.cancel();
+    _selfInfoSubscription?.cancel();
     super.onClose();
+  }
+
+  void onSelfInfoUpdated(UserInfo value) {
+    if (!_isCurrentGroupSession || value.userID != OpenIM.iMManager.userID) {
+      return;
+    }
+    _permissionGeneration++;
+    _memberPreview.invalidate();
+    _queryAllInfo();
   }
 
   get _defaultGroupInfo => GroupInfo(
@@ -203,8 +264,8 @@ class GroupSetupLogic extends GetxController {
     }
   }
 
-  void searchHistory() =>
-      Get.to(() => ChatHistorySearchPage(conversationID: conversationID));
+  void searchHistory() => Get.to(() =>
+      ChatHistorySearchPage(conversationID: conversationID, isGroup: true));
 
   void editMyGroupNickname() =>
       AppNavigator.startEditGroupName(type: EditNameType.myGroupMemberNickname);
@@ -215,57 +276,155 @@ class GroupSetupLogic extends GetxController {
 
   String get conversationID => conversationInfo.value.conversationID;
 
+  GroupSetupPermissionContext capturePermissionContext() => (
+        account: DataSp.userID,
+        sdkAccount: OpenIM.iMManager.userID,
+        token: DataSp.imToken,
+        server: Config.imApiUrl,
+        groupID: groupInfo.value.groupID,
+        generation: _permissionGeneration,
+      );
+
+  bool get _isCurrentGroupSession =>
+      _isGroupContextCurrent(_initialPermissionContext);
+
+  bool _isGroupContextCurrent(GroupSetupPermissionContext context) =>
+      !_closed &&
+      !isClosed &&
+      context.groupID == groupInfo.value.groupID &&
+      context.groupID == _initialPermissionContext.groupID &&
+      context.account == _initialPermissionContext.account &&
+      context.sdkAccount == _initialPermissionContext.sdkAccount &&
+      context.token == _initialPermissionContext.token &&
+      context.server == _initialPermissionContext.server &&
+      context.account == DataSp.userID &&
+      context.sdkAccount == OpenIM.iMManager.userID &&
+      context.token == DataSp.imToken &&
+      context.server == Config.imApiUrl;
+
+  bool isPermissionContextCurrent(GroupSetupPermissionContext context) =>
+      _isGroupContextCurrent(context) &&
+      context.generation == _permissionGeneration &&
+      isJoinedGroup.value;
+
+  void _leaveGroup() {
+    _joinedRequest++;
+    _permissionGeneration++;
+    isJoinedGroup.value = false;
+    _memberPreview.invalidate();
+  }
+
   void _checkIsJoinedGroup() async {
-    isJoinedGroup.value = await OpenIM.iMManager.groupManager.isJoinedGroup(
-      groupID: groupInfo.value.groupID,
-    );
-    _queryAllInfo();
+    final request = ++_joinedRequest;
+    final context = capturePermissionContext();
+    if (!_isGroupContextCurrent(context)) return;
+    try {
+      final joined = await OpenIM.iMManager.groupManager.isJoinedGroup(
+        groupID: context.groupID,
+      );
+      if (request != _joinedRequest || !_isGroupContextCurrent(context)) return;
+      isJoinedGroup.value = joined;
+      _queryAllInfo();
+    } catch (_) {
+      // Leave membership unchanged when the SDK check is unavailable.
+    }
   }
 
   void _queryAllInfo() {
-    if (isJoinedGroup.value) {
+    if (_isCurrentGroupSession && isJoinedGroup.value) {
       getGroupInfo();
       getGroupMembers();
       getMyGroupMemberInfo();
     }
   }
 
-  getGroupMembers() async {
-    final page = await OpenIM.iMManager.groupManager.getGroupMemberList(
-      groupID: groupInfo.value.groupID,
-      filter: 0,
-      count: 20,
+  Future<void> getGroupMembers() {
+    final context = capturePermissionContext();
+    return _memberPreview.refresh(
+      groupID: context.groupID,
+      scope: context,
+      isCurrent: () => isPermissionContextCurrent(context),
     );
-    if (isClosed) return;
-    final members = page.toList()..sort(compareGroupMembers);
-    memberList.assignAll(members);
   }
 
-  getGroupInfo() async {
-    var list = await OpenIM.iMManager.groupManager.getGroupsInfo(
-      groupIDList: [groupInfo.value.groupID],
-    );
-    var value = list.firstOrNull;
-    if (null != value) {
-      _updateGroupInfo(value);
+  void _refreshMemberIdentity() {
+    _memberPreview.invalidate();
+    if (_isCurrentGroupSession && isJoinedGroup.value) {
+      unawaited(getGroupMembers());
     }
   }
 
-  getMyGroupMemberInfo() async {
-    final list = await OpenIM.iMManager.groupManager.getGroupMembersInfo(
-      groupID: groupInfo.value.groupID,
-      userIDList: [OpenIM.iMManager.userID],
-    );
-    final info = list.firstOrNull;
-    if (null != info) {
-      myGroupMembersInfo.update((val) {
-        val?.nickname = info.nickname;
-        val?.roleLevel = info.roleLevel;
-      });
+  Future<void> getGroupInfo() async {
+    final request = ++_groupInfoRequest;
+    final context = capturePermissionContext();
+    if (!isPermissionContextCurrent(context)) return;
+    try {
+      final list = await OpenIM.iMManager.groupManager.getGroupsInfo(
+        groupIDList: [context.groupID],
+      );
+      if (request != _groupInfoRequest ||
+          !isPermissionContextCurrent(context)) {
+        return;
+      }
+      final value =
+          list.firstWhereOrNull((info) => info.groupID == context.groupID);
+      if (null != value) {
+        // A first group read must not invalidate the concurrent role read.
+        _applyGroupInfo(value, externalEvent: false);
+      }
+    } catch (_) {
+      // Optional metadata failures must not replace the latest group event.
     }
   }
 
-  void _updateGroupInfo(GroupInfo value) {
+  Future<void> getMyGroupMemberInfo() async {
+    final request = ++_myMemberRequest;
+    final context = capturePermissionContext();
+    if (!isPermissionContextCurrent(context)) return;
+    try {
+      final list = await OpenIM.iMManager.groupManager.getGroupMembersInfo(
+        groupID: context.groupID,
+        userIDList: [context.sdkAccount],
+      );
+      if (request != _myMemberRequest || !isPermissionContextCurrent(context)) {
+        return;
+      }
+      final info = list.firstWhereOrNull((member) =>
+          member.groupID == context.groupID &&
+          member.userID == context.sdkAccount);
+      if (null != info) {
+        final firstRoleRead = myGroupMembersInfo.value.roleLevel == null &&
+            myGroupMembersInfo.value.appManagerLevel == null;
+        final permissionChanged = myGroupMembersInfo.value.roleLevel !=
+                info.roleLevel ||
+            myGroupMembersInfo.value.appManagerLevel != info.appManagerLevel;
+        myGroupMembersInfo.update((val) {
+          val?.nickname = info.nickname;
+          val?.roleLevel = info.roleLevel;
+          val?.appManagerLevel = info.appManagerLevel;
+        });
+        if (permissionChanged && !firstRoleRead) _refreshMemberIdentity();
+      }
+    } catch (_) {
+      // Preserve event-confirmed permissions, including after leaving/closing.
+    }
+  }
+
+  void applyGroupInfo(GroupInfo value) =>
+      _applyGroupInfo(value, externalEvent: true);
+
+  void _applyGroupInfo(GroupInfo value, {required bool externalEvent}) {
+    if (!_isCurrentGroupSession || value.groupID != groupInfo.value.groupID) {
+      return;
+    }
+    final firstMetadataRead = !_hasGroupInfo && !externalEvent;
+    _hasGroupInfo = true;
+    final privacyChanged = _memberLookMemberInfo != value.lookMemberInfo;
+    final ownerChanged = groupInfo.value.ownerUserID != value.ownerUserID;
+    if (externalEvent && (privacyChanged || ownerChanged)) {
+      _permissionGeneration++;
+    }
+    _memberLookMemberInfo = value.lookMemberInfo;
     groupInfo.update((val) {
       val?.groupName = value.groupName;
       val?.faceURL = value.faceURL;
@@ -282,6 +441,14 @@ class GroupSetupLogic extends GetxController {
       val?.notificationUpdateTime = value.notificationUpdateTime;
       val?.ex = value.ex;
     });
+    if (!firstMetadataRead && (privacyChanged || ownerChanged)) {
+      _refreshMemberIdentity();
+    }
+    if (externalEvent &&
+        (privacyChanged || ownerChanged) &&
+        isJoinedGroup.value) {
+      unawaited(getMyGroupMemberInfo());
+    }
   }
 
   void modifyGroupAvatar() async {
@@ -336,11 +503,18 @@ class GroupSetupLogic extends GetxController {
         groupInfo: groupInfo.value,
       );
 
-  void _removeConversation() async {
+  Future<void> _removeConversation() async {
+    final conversationID = conversationInfo.value.conversationID;
+    final accountID = OpenIM.iMManager.userID;
     await OpenIM.iMManager.conversationManager
         .deleteConversationAndDeleteAllMsg(
-      conversationID: conversationInfo.value.conversationID,
+      conversationID: conversationID,
     );
+    if (!chatLogic.isClosed &&
+        chatLogic.conversationInfo.conversationID == conversationID) {
+      chatLogic.clearAllMessage();
+    }
+    ChatHistoryCache.removeConversation(accountID, conversationID);
   }
 
   void quitGroup() async {
@@ -369,7 +543,7 @@ class GroupSetupLogic extends GetxController {
         }
       }
     } else {
-      _removeConversation();
+      await _removeConversation();
     }
 
     AppNavigator.startBackMain();

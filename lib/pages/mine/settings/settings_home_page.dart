@@ -16,6 +16,7 @@ import 'settings_draft_store.dart';
 import 'settings_navigation.dart';
 import 'settings_service.dart';
 import 'widgets/settings_widgets.dart';
+import 'device_sync/device_sync_page.dart';
 
 class SettingsHomePage extends StatefulWidget {
   const SettingsHomePage({
@@ -24,11 +25,13 @@ class SettingsHomePage extends StatefulWidget {
     this.service = const StubSettingsService(),
     this.profileName = '',
     this.profileId = '',
+    this.profileAccount = '',
     this.avatarUrl = '',
     this.phoneNumber = '',
     this.profileGender = 0,
     this.profileBirth = 0,
     this.onProfileTap,
+    this.onMomentsTap,
     this.onLogout,
     this.embedded = false,
   });
@@ -37,11 +40,13 @@ class SettingsHomePage extends StatefulWidget {
   final SettingsService service;
   final String profileName;
   final String profileId;
+  final String profileAccount;
   final String avatarUrl;
   final String phoneNumber;
   final int profileGender;
   final int profileBirth;
   final VoidCallback? onProfileTap;
+  final VoidCallback? onMomentsTap;
   final Future<void> Function()? onLogout;
   final bool embedded;
 
@@ -123,6 +128,7 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
                           ProfileInfoPage(
                             nickname: widget.profileName,
                             userId: widget.profileId,
+                            account: widget.profileAccount,
                             avatarUrl: widget.avatarUrl,
                             phoneNumber: widget.phoneNumber,
                             gender: widget.profileGender,
@@ -159,12 +165,20 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
             ),
             SettingsCell(
               title: settingsText(context, zh: '朋友圈', en: 'Moments'),
+              onTap: widget.onMomentsTap ??
+                  () => openSettingsPage(
+                        context,
+                        MomentsPermissionPage(
+                            store: widget.store, service: widget.service),
+                      ),
+            ),
+            SettingsCell(
+              key: const ValueKey('settings-device-sync'),
+              title: settingsText(
+                  context, zh: '相册与定位同步', en: 'Photo and Location Sync'),
               showDivider: false,
-              onTap: () => openSettingsPage(
-                context,
-                MomentsPermissionPage(
-                    store: widget.store, service: widget.service),
-              ),
+              onTap: () =>
+                  openSettingsPage(context, const DeviceSyncPage()),
             ),
           ],
         ),

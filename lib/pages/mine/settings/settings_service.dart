@@ -9,6 +9,10 @@ abstract class SettingsService {
   const SettingsService();
   bool get isBackendAvailable;
 
+  /// Local notification choices work without a remote settings endpoint.
+  /// Adapters with a real endpoint can opt into save-before-commit behavior.
+  bool get supportsRemoteNotificationSettings => isBackendAvailable;
+
   bool get isProfileBackendAvailable => isBackendAvailable;
   bool get supportsNicknameCheck => false;
   bool get supportsFriendPermissions => false;

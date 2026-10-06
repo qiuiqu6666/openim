@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'friend_list_logic.dart';
+import '../../official_account/widgets/official_account_name_label.dart';
 
 class FriendListPage extends StatelessWidget {
   final logic = Get.find<FriendListLogic>();
@@ -45,7 +46,14 @@ class FriendListPage extends StatelessWidget {
                   text: info.showName,
                 ),
                 10.horizontalSpace,
-                info.showName.toText..style = Styles.ts_0C1C33_17sp,
+                Expanded(
+                  child: OfficialAccountNameLabel(
+                    name: info.showName,
+                    userID: info.userID,
+                    ex: info.ex,
+                    style: Styles.ts_0C1C33_17sp,
+                  ),
+                ),
               ],
             ),
           ),

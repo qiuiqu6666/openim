@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -6,7 +8,12 @@ import 'package:visibility_detector/visibility_detector.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'contacts_logic.dart';
+import 'directory/widgets/contacts_search_bar.dart';
 import 'presence_label.dart';
+import 'presence/contact_presence_policy.dart';
+import '../../core/controller/im_controller.dart';
+import 'navigation/contacts_header.dart';
+import '../official_account/widgets/official_account_name_label.dart';
 
 class ContactsPage extends StatelessWidget {
   ContactsPage({super.key, ContactsLogic? logic})
@@ -20,52 +27,29 @@ class ContactsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Styles.c_F8F9FA,
-        appBar: GlassAppBar(
-          toolbarHeight: 56.h,
-          titleSpacing: 16.w,
-          title: Text(StrRes.contacts,
-              style: TextStyle(
-                  color: Styles.c_0C1C33,
-                  fontSize: 22.sp,
-                  fontWeight: FontWeight.w600)),
-          actions: [
-            Padding(
-              padding: EdgeInsets.only(right: 8.w),
-              child: IconButton(
-                onPressed: logic.addContacts,
-                tooltip: StrRes.addFriend,
-                icon: Image.asset('assets/images/contact_plus_99chat.png',
-                    package: 'openim_common',
-                    width: 24.w,
-                    height: 24.w,
-                    errorBuilder: (_, __, ___) =>
-                        Icon(Icons.add, size: 24.w, color: Styles.c_0089FF)),
-              ),
-            ),
-          ],
+        appBar: ContactsHeader(
+          toolbarHeight: math.max(
+              kToolbarHeight,
+              MediaQuery.textScalerOf(context)
+                      .scale(AppTokens.mainTabTitleFontSize) +
+                  AppTokens.mainTabIndicatorDotSize +
+                  AppTokens.mainTabIndicatorTitleGap +
+                  AppTokens.s2 * 4),
+          onSearchAdd: logic.searchAddContacts,
+          onCreateGroup: logic.createContactsGroup,
+          onScan: logic.scanContacts,
+          initialStatus: Get.isRegistered<IMController>()
+              ? Get.find<IMController>().currentSdkStatus
+              : null,
+          sdkStatus: Get.isRegistered<IMController>()
+              ? Get.find<IMController>()
+                  .imSdkStatusSubject
+                  .map((event) => event.status)
+                  .distinct()
+              : null,
         ),
         body: Column(children: [
-          Material(
-            color: Styles.c_FFFFFF,
-            child: InkWell(
-              onTap: logic.searchContacts,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(12.w, 8.h, 12.w, 8.h),
-                child: Container(
-                  height: 40.h,
-                  padding: EdgeInsets.symmetric(horizontal: 12.w),
-                  decoration: BoxDecoration(
-                      color: Styles.c_F4F5F7,
-                      borderRadius: BorderRadius.circular(10.r)),
-                  child: Row(children: [
-                    Icon(Icons.search, size: 19.w, color: Styles.c_8E9AB0),
-                    8.horizontalSpace,
-                    Text(StrRes.search, style: Styles.ts_8E9AB0_15sp),
-                  ]),
-                ),
-              ),
-            ),
-          ),
+          ContactsSearchBar(onTap: logic.searchContacts),
           Expanded(child: Obx(() => _buildDirectory(context))),
         ]),
       );
@@ -176,30 +160,41 @@ class ContactsPage extends StatelessWidget {
         title: row.label!,
       );
 
-  Widget _buildFriend(ISUserInfo friend) => Obx(() => _buildRow(
-        onTap: () => logic.viewFriend(friend),
-        avatar: AvatarView(
-            url: friend.faceURL,
-            text: friend.showName,
-            width: 44.w,
-            height: 44.w),
-        title: friend.showName,
-        reserveSubtitle: true,
-        subtitle: logic.presence.users[friend.userID] == null
-            ? null
-            : PresenceLabel(presence: logic.presence.users[friend.userID]!),
-        trailing: logic.stars.isStarred(friend.userID!)
-            ? Builder(
-                builder: (context) => Tooltip(
-                    message: 'starredFriend'.tr,
-                    child: Icon(Icons.star_rounded,
-                        size: 20.w, color: Styles.c_FFB300)))
-            : null,
-      ));
+  Widget _buildFriend(ISUserInfo friend) => Obx(() {
+        final presence = ContactPresencePolicy.resolve(
+            userID: friend.userID,
+            ex: friend.ex,
+            presence: logic.presence.users[friend.userID]);
+        return _buildRow(
+          onTap: () => logic.viewFriend(friend),
+          avatar: AvatarView(
+              url: friend.faceURL,
+              text: friend.showName,
+              width: 44.w,
+              height: 44.w),
+          title: friend.showName,
+          titleWidget: OfficialAccountNameLabel(
+            name: friend.showName,
+            userID: friend.userID,
+            ex: friend.ex,
+            style: _nameStyle,
+          ),
+          reserveSubtitle: true,
+          subtitle: presence == null ? null : PresenceLabel(presence: presence),
+          trailing: logic.stars.isStarred(friend.userID!)
+              ? Builder(
+                  builder: (context) => Tooltip(
+                      message: 'starredFriend'.tr,
+                      child: Icon(Icons.star_rounded,
+                          size: 20.w, color: Styles.c_FFB300)))
+              : null,
+        );
+      });
 
   Widget _buildRow(
           {required Widget avatar,
           required String title,
+          Widget? titleWidget,
           Widget? trailing,
           Widget? subtitle,
           bool reserveSubtitle = false,
@@ -221,13 +216,11 @@ class ContactsPage extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: Styles.c_0C1C33,
-                              fontSize: 16.sp,
-                              fontWeight: FontWeight.w500)),
+                      titleWidget ??
+                          Text(title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _nameStyle),
                       if (subtitle != null)
                         subtitle
                       else if (reserveSubtitle)
@@ -244,6 +237,9 @@ class ContactsPage extends StatelessWidget {
           ]),
         ),
       );
+
+  TextStyle get _nameStyle => TextStyle(
+      color: Styles.c_0C1C33, fontSize: 16.sp, fontWeight: FontWeight.w500);
 
   Widget _buildFooter(BuildContext context) {
     final chinese = Localizations.localeOf(context).languageCode == 'zh';

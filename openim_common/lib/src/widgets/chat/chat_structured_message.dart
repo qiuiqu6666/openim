@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'chat_attachment_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -13,19 +11,9 @@ class ChatStructuredMessage extends StatelessWidget {
   final Message message;
   final int depth;
 
-  static String? emojiUrl(Message message) {
-    var data = message.faceElem?.data ?? message.customElem?.data;
-    if (data == null) return null;
-    try {
-      final decoded = jsonDecode(data);
-      if (decoded is Map) {
-        final payload = decoded['data'];
-        data = (payload is Map ? payload['url'] : decoded['url']) as String?;
-      }
-    } catch (_) {}
-    final uri = Uri.tryParse(data ?? '');
-    return uri != null && ['http', 'https'].contains(uri.scheme) ? data : null;
-  }
+  static String? emojiUrl(Message message) => StickerImageData.tryParse(
+          message.faceElem?.data ?? message.customElem?.data)
+      ?.url;
 
   Future<void> _openLocation() async {
     final point = message.locationElem;
@@ -42,8 +30,9 @@ class ChatStructuredMessage extends StatelessWidget {
     try {
       final url = Uri.https('www.google.com', '/maps/search/',
           {'api': '1', 'query': '$lat,$lng'});
-      if (!await launchUrl(url, mode: LaunchMode.externalApplication))
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
         throw StateError('Map unavailable');
+      }
     } catch (_) {
       IMViews.showToast('sdkOpenFailed'.tr);
     }
@@ -51,20 +40,44 @@ class ChatStructuredMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message.isDiceType) {
+      final data = DiceMessageData.tryParse(message.customElem?.data);
+      return ChatDiceSticker(
+        value: data?.value ?? 0,
+        messageId: '${OpenIM.iMManager.userID}:${message.clientMsgID ?? ''}',
+        sentAt: message.sendTime,
+        animate: depth == 0 && message.clientMsgID?.isNotEmpty == true,
+      );
+    }
     if (message.contentType == MessageType.customFace || message.isEmojiType) {
-      final url = emojiUrl(message);
-      return SizedBox(
-          width: 100.w,
-          height: 100.w,
-          child: url == null
-              ? Center(
-                  child:
-                      Text('[${StrRes.emoji}]', style: Styles.ts_0C1C33_17sp))
-              : Image.network(url,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Icon(
-                      Icons.broken_image_outlined,
-                      color: Styles.c_8E9AB0)));
+      final data = StickerImageData.tryParse(
+          message.faceElem?.data ?? message.customElem?.data);
+      final url = data?.url;
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: url == null
+            ? null
+            : () {
+                if (message.hasExpired) return;
+                showStickerPreview(
+                    context,
+                    MediaSource(
+                        url: url, thumbnail: url, tag: message.clientMsgID));
+              },
+        child: url == null
+            ? SizedBox(
+                width: 100.w,
+                height: 100.w,
+                child: Center(
+                    child: Text('[${StrRes.emoji}]',
+                        style: Styles.ts_0C1C33_17sp)))
+            : ChatImageSticker(
+                url: url,
+                intrinsicSize: data?.width != null && data?.height != null
+                    ? Size(data!.width!.toDouble(), data.height!.toDouble())
+                    : null,
+              ),
+      );
     }
     final merge = message.contentType == MessageType.merger;
     return InkWell(
@@ -137,8 +150,9 @@ class _MergedHistory extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(message.mergeElem?.title ?? 'sdkMergedHistory'.tr,
-          maxLines: 1, overflow: TextOverflow.ellipsis,
-          style: Styles.ts_0C1C33_17sp_semibold),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Styles.ts_0C1C33_17sp_semibold),
       ),
       body: records.isEmpty
           ? Center(child: Text('chatSearchEmpty'.tr))
@@ -166,17 +180,21 @@ class _MergedHistory extends StatelessWidget {
                     }
                   },
                   mediaItemBuilder: (context, media) => GestureDetector(
-                    onTap: () => IMUtils.previewMediaFile(context: context, message: media),
+                    onTap: () => IMUtils.previewMediaFile(
+                        context: context, message: media),
                     child: media.isPictureType
                         ? ChatPictureView(
                             isISend: media.sendID == OpenIM.iMManager.userID,
                             message: media)
                         : Stack(alignment: Alignment.center, children: [
                             Image.network(media.videoElem?.snapshotUrl ?? '',
-                              width: 180.w, height: 180.w, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => SizedBox(
-                                width: 180.w, height: 180.w)),
-                            Icon(Icons.play_circle_fill, color: Styles.c_0089FF, size: 40),
+                                width: 180.w,
+                                height: 180.w,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    SizedBox(width: 180.w, height: 180.w)),
+                            Icon(Icons.play_circle_fill,
+                                color: Styles.c_0089FF, size: 40),
                           ]),
                   ),
                 );

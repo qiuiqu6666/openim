@@ -4,6 +4,9 @@ import 'package:openim_common/openim_common.dart';
 import 'package:rxdart/rxdart.dart';
 
 import 'controller/app_controller.dart';
+import 'conversation_reads/conversation_read_request.dart';
+import '../services/chat_history_cache.dart';
+import '../services/fund/fund_refresh_events.dart';
 
 enum IMSdkStatus {
   connectionFailed,
@@ -47,6 +50,9 @@ mixin IMCallback {
 
   final conversationChangedSubject = BehaviorSubject<List<ConversationInfo>>();
 
+  final conversationReadRequestSubject =
+      PublishSubject<ConversationReadRequest>(sync: true);
+
   final unreadMsgCountEventSubject = PublishSubject<int>();
 
   final friendApplicationChangedSubject =
@@ -57,6 +63,8 @@ mixin IMCallback {
   final friendDelSubject = BehaviorSubject<FriendInfo>();
 
   final friendInfoChangedSubject = PublishSubject<FriendInfo>();
+
+  final blacklistChangedSubject = PublishSubject<BlacklistInfo>();
 
   final selfInfoUpdatedSubject = BehaviorSubject<UserInfo>();
 
@@ -82,7 +90,11 @@ mixin IMCallback {
   final onKickedOfflineSubject = PublishSubject<KickoffType>();
 
   final imSdkStatusSubject =
-      ReplaySubject<({IMSdkStatus status, bool reInstall, int? progress})>();
+      ReplaySubject<({IMSdkStatus status, bool reInstall, int? progress})>(
+          maxSize: 1);
+
+  IMSdkStatus? _currentSdkStatus;
+  IMSdkStatus? get currentSdkStatus => _currentSdkStatus;
 
   final imSdkStatusPublishSubject =
       PublishSubject<({IMSdkStatus status, bool reInstall, int? progress})>();
@@ -93,10 +105,14 @@ mixin IMCallback {
 
   void imSdkStatus(IMSdkStatus status,
       {bool reInstall = false, int? progress}) {
+    _currentSdkStatus = status;
     imSdkStatusSubject
         .add((status: status, reInstall: reInstall, progress: progress));
     imSdkStatusPublishSubject
         .add((status: status, reInstall: reInstall, progress: progress));
+    if (status == IMSdkStatus.syncEnded) {
+      initLogic.onApplicationSessionReady(authenticated: true);
+    }
   }
 
   void kickedOffline() {
@@ -120,8 +136,15 @@ mixin IMCallback {
   }
 
   void recvMessageRevoked(RevokedInfo info) {
+    ChatHistoryCache.removeMessage(OpenIM.iMManager.userID, info.clientMsgID);
     revokedMessages.addSafely(info);
     onRecvMessageRevoked?.call(info);
+  }
+
+  void messageDeleted(Message message) {
+    ChatHistoryCache.removeMessage(
+        OpenIM.iMManager.userID, message.clientMsgID);
+    deletedMessages.addSafely(message);
   }
 
   void recvC2CMessageReadReceipt(List<ReadReceiptInfo> list) {
@@ -129,12 +152,26 @@ mixin IMCallback {
   }
 
   void recvNewMessage(Message msg) {
+    FundRefreshEvents.observeMessage(msg);
+    if (msg.contentType == MessageType.custom &&
+        msg.customElem?.description == 'assistantStream') {
+      onRecvNewMessage?.call(msg);
+      return;
+    }
     initLogic.showNotification(msg);
     onRecvNewMessage?.call(msg);
   }
 
   void recvOfflineMessage(Message msg) {
-    initLogic.showNotification(msg);
+    FundRefreshEvents.observeMessage(msg);
+    if (msg.contentType == MessageType.custom &&
+        msg.customElem?.description == 'assistantStream') {
+      onRecvNewMessage?.call(msg);
+      return;
+    }
+    if (currentSdkStatus == IMSdkStatus.syncEnded) {
+      initLogic.showNotification(msg);
+    }
     onRecvOfflineMessage?.call(msg);
   }
 
@@ -147,10 +184,12 @@ mixin IMCallback {
   }
 
   void blacklistAdded(BlacklistInfo u) {
+    blacklistChangedSubject.addSafely(u);
     onBlacklistAdd?.call(u);
   }
 
   void blacklistDeleted(BlacklistInfo u) {
+    blacklistChangedSubject.addSafely(u);
     onBlacklistDeleted?.call(u);
   }
 
@@ -242,16 +281,21 @@ mixin IMCallback {
   void close() {
     revokedMessages.close();
     deletedMessages.close();
+    unreadMsgCountEventSubject.close();
+    userStatusChangedSubject.close();
+    customBusinessMessageSubject.close();
     inputStateChangedSubject.close();
     initializedSubject.close();
     friendApplicationChangedSubject.close();
     friendAddSubject.close();
     friendDelSubject.close();
     friendInfoChangedSubject.close();
+    blacklistChangedSubject.close();
     selfInfoUpdatedSubject.close();
     groupInfoUpdatedSubject.close();
     conversationAddedSubject.close();
     conversationChangedSubject.close();
+    conversationReadRequestSubject.close();
     memberAddedSubject.close();
     memberDeletedSubject.close();
     memberInfoChangedSubject.close();

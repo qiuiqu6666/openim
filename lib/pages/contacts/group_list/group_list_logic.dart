@@ -8,6 +8,7 @@ import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 import '../../../core/controller/im_controller.dart';
 import '../../../core/im_callback.dart';
 import '../../conversation/conversation_logic.dart';
+import '../../group_features/data/group_feature_runtime.dart';
 
 class GroupListLogic extends GetxController {
   GroupListLogic({
@@ -25,6 +26,9 @@ class GroupListLogic extends GetxController {
   final iCreateGlobalKey = GlobalKey();
   final iJoinGlobalKey = GlobalKey();
   ConversationLogic get conversationLogic => Get.find<ConversationLogic>();
+  GroupFeatureStore? get groupFeatures => Get.isRegistered<IMController>()
+      ? GroupFeatureRuntime.forAccount(Get.find<IMController>())
+      : null;
   final index = 0.obs;
   final iCreatedList = <GroupInfo>[].obs;
   final iJoinedList = <GroupInfo>[].obs;
@@ -74,6 +78,12 @@ class GroupListLogic extends GetxController {
     try {
       final page = await _fetchPage(offset, count);
       if (_disposed || _versions[iCreate] != version) return;
+      final features = groupFeatures;
+      if (features != null) {
+        for (final group in page) {
+          features.seed(group);
+        }
+      }
       final groups = <String?, GroupInfo>{
         if (!refresh)
           for (final group in target) group.groupID: group,

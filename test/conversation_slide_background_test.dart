@@ -10,12 +10,19 @@ import 'package:get/get.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/pages/conversation/conversation_view.dart';
 import 'package:openim_common/openim_common.dart';
+import 'support/conversation_live_fixture.dart';
 
-class _Logic extends GetxController implements ConversationLogic {
+class _Logic extends GetxController
+    with ConversationLiveFixture
+    implements ConversationLogic {
   @override
   final list = <ConversationInfo>[
     ConversationInfo(conversationID: 'group', conversationType: 3),
   ].obs;
+  @override
+  final organizerLoading = false.obs;
+  @override
+  final organizerError = RxnString();
   @override
   bool isArchived(ConversationInfo info) => true;
   @override
@@ -42,7 +49,9 @@ class _Logic extends GetxController implements ConversationLogic {
 
 void main() {
   for (final dark in [false, true]) {
-    testWidgets('slide background returns with row (dark=$dark)', (tester) async {
+    testWidgets('slide background returns with row (dark=$dark)',
+        (tester) async {
+      OpenIM.iMManager.userID = 'self';
       tester.view.physicalSize = const Size(375, 812);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);

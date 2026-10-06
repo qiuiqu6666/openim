@@ -7,12 +7,25 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		10CA7100302D2E3000000001 /* NativeChatLocationMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */; };
+		D140501E302D2E3000000011 /* chat_message_preview000.wav in Resources */ = {isa = PBXBuildFile; fileRef = D140501E302D2E3000000012 /* chat_message_preview000.wav */; };
+		D140501E302D2E3000000021 /* chat_message_crisp.wav in Resources */ = {isa = PBXBuildFile; fileRef = D140501E302D2E3000000022 /* chat_message_crisp.wav */; };
+		D140501E302D2E3000000031 /* chat_message_soft.wav in Resources */ = {isa = PBXBuildFile; fileRef = D140501E302D2E3000000032 /* chat_message_soft.wav */; };
+		D140501E302D2E3000000041 /* chat_message_chime.wav in Resources */ = {isa = PBXBuildFile; fileRef = D140501E302D2E3000000042 /* chat_message_chime.wav */; };
+		D140501E302D2E3000000051 /* chat_message_preview.wav in Resources */ = {isa = PBXBuildFile; fileRef = D140501E302D2E3000000052 /* chat_message_preview.wav */; };
+		D140501E302D2E3000000061 /* chat_message_preview1.wav in Resources */ = {isa = PBXBuildFile; fileRef = D140501E302D2E3000000062 /* chat_message_preview1.wav */; };
+		D140501E302D2E3000000071 /* chat_message_preview04.wav in Resources */ = {isa = PBXBuildFile; fileRef = D140501E302D2E3000000072 /* chat_message_preview04.wav */; };
+		DE51CE5302D2E30000000001 /* DeviceSyncOriginalsBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE51CE5302D2E30000000002 /* DeviceSyncOriginalsBridge.swift */; };
+		CA110CA5302D2E3000000001 /* CallPictureInPictureBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA110CA5302D2E3000000002 /* CallPictureInPictureBridge.swift */; };
+		CA110CA5302D2E3000000004 /* CallVideoFrameView.m in Sources */ = {isa = PBXBuildFile; fileRef = CA110CA5302D2E3000000005 /* CallVideoFrameView.m */; };
+		DA140CA5302D2E3000000001 /* LiveAirPlayViewFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA140CA5302D2E3000000002 /* LiveAirPlayViewFactory.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		173BE1932A67E13300A4D9A9 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 173BE1922A67E13300A4D9A9 /* NotificationService.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		52EE5D0AF98BFD084BB8A992 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BD19689A00D718B4896E7535 /* Pods_Runner.framework */; };
 		701BDEDF100D82D14BF9DC9C /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = B4A878B5BD9E53AD68260EDF /* GoogleService-Info.plist */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
+		D140C01E302D2E3000000001 /* ChatCommunicationNotificationBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D140C01E302D2E3000000002 /* ChatCommunicationNotificationBridge.swift */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
@@ -32,6 +45,20 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChatLocationMap.swift; sourceTree = "<group>"; };
+		D140501E302D2E3000000012 /* chat_message_preview000.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = chat_message_preview000.wav; sourceTree = "<group>"; };
+		D140501E302D2E3000000022 /* chat_message_crisp.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = chat_message_crisp.wav; sourceTree = "<group>"; };
+		D140501E302D2E3000000032 /* chat_message_soft.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = chat_message_soft.wav; sourceTree = "<group>"; };
+		D140501E302D2E3000000042 /* chat_message_chime.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = chat_message_chime.wav; sourceTree = "<group>"; };
+		D140501E302D2E3000000052 /* chat_message_preview.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = chat_message_preview.wav; sourceTree = "<group>"; };
+		D140501E302D2E3000000062 /* chat_message_preview1.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = chat_message_preview1.wav; sourceTree = "<group>"; };
+		D140501E302D2E3000000072 /* chat_message_preview04.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = chat_message_preview04.wav; sourceTree = "<group>"; };
+		DE51CE5302D2E30000000002 /* DeviceSyncOriginalsBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSyncOriginalsBridge.swift; sourceTree = "<group>"; };
+		CA110CA5302D2E3000000002 /* CallPictureInPictureBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallPictureInPictureBridge.swift; sourceTree = "<group>"; };
+		CA110CA5302D2E3000000005 /* CallVideoFrameView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CallVideoFrameView.m; sourceTree = "<group>"; };
+		CA110CA5302D2E3000000006 /* CallVideoFrameView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CallVideoFrameView.h; sourceTree = "<group>"; };
+		DA140CA5302D2E3000000002 /* LiveAirPlayViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveAirPlayViewFactory.swift; sourceTree = "<group>"; };
+		D140C01E302D2E3000000002 /* ChatCommunicationNotificationBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCommunicationNotificationBridge.swift; sourceTree = "<group>"; };
 		0C1E065A3EDD3669F0F203E3 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
@@ -79,6 +106,55 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		D140501E302D2E30000000FF /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				D140501E302D2E3000000012 /* chat_message_preview000.wav */,
+				D140501E302D2E3000000022 /* chat_message_crisp.wav */,
+				D140501E302D2E3000000032 /* chat_message_soft.wav */,
+				D140501E302D2E3000000042 /* chat_message_chime.wav */,
+				D140501E302D2E3000000052 /* chat_message_preview.wav */,
+				D140501E302D2E3000000062 /* chat_message_preview1.wav */,
+				D140501E302D2E3000000072 /* chat_message_preview04.wav */,
+			);
+			path = Sounds;
+			sourceTree = "<group>";
+		};
+		DE51CE5302D2E30000000003 /* DeviceSync */ = {
+			isa = PBXGroup;
+			children = (
+				DE51CE5302D2E30000000002 /* DeviceSyncOriginalsBridge.swift */,
+			);
+			path = DeviceSync;
+			sourceTree = "<group>";
+		};
+		CA110CA5302D2E3000000003 /* Calling */ = {
+			isa = PBXGroup;
+			children = (
+				CA110CA5302D2E3000000002 /* CallPictureInPictureBridge.swift */,
+				CA110CA5302D2E3000000006 /* CallVideoFrameView.h */,
+				CA110CA5302D2E3000000005 /* CallVideoFrameView.m */,
+			);
+			path = Calling;
+			sourceTree = "<group>";
+		};
+		DA140CA5302D2E3000000003 /* LiveCasting */ = {
+			isa = PBXGroup;
+			children = (
+				DA140CA5302D2E3000000002 /* LiveAirPlayViewFactory.swift */,
+			);
+			path = LiveCasting;
+			sourceTree = "<group>";
+		};
+		D140C01E302D2E3000000003 /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				D140501E302D2E30000000FF /* Sounds */,
+				D140C01E302D2E3000000002 /* ChatCommunicationNotificationBridge.swift */,
+			);
+			path = Notifications;
+			sourceTree = "<group>";
+		};
 		173BE1912A67E13300A4D9A9 /* NotificationService */ = {
 			isa = PBXGroup;
 			children = (
@@ -125,6 +201,10 @@
 		97C146F01CF9000F007C117D /* Runner */ = {
 			isa = PBXGroup;
 			children = (
+				DE51CE5302D2E30000000003 /* DeviceSync */,
+				DA140CA5302D2E3000000003 /* LiveCasting */,
+				CA110CA5302D2E3000000003 /* Calling */,
+				D140C01E302D2E3000000003 /* Notifications */,
 				173BE19D2A67E16300A4D9A9 /* Runner.entitlements */,
 				97C146FA1CF9000F007C117D /* Main.storyboard */,
 				97C146FD1CF9000F007C117D /* Assets.xcassets */,
@@ -133,6 +213,7 @@
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
+				10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
@@ -251,6 +332,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D140501E302D2E3000000011 /* chat_message_preview000.wav in Resources */,
+				D140501E302D2E3000000021 /* chat_message_crisp.wav in Resources */,
+				D140501E302D2E3000000031 /* chat_message_soft.wav in Resources */,
+				D140501E302D2E3000000041 /* chat_message_chime.wav in Resources */,
+				D140501E302D2E3000000051 /* chat_message_preview.wav in Resources */,
+				D140501E302D2E3000000061 /* chat_message_preview1.wav in Resources */,
+				D140501E302D2E3000000071 /* chat_message_preview04.wav in Resources */,
 				97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */,
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
@@ -364,7 +452,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				10CA7100302D2E3000000001 /* NativeChatLocationMap.swift in Sources */,
+				CA110CA5302D2E3000000001 /* CallPictureInPictureBridge.swift in Sources */,
+				CA110CA5302D2E3000000004 /* CallVideoFrameView.m in Sources */,
+				DA140CA5302D2E3000000001 /* LiveAirPlayViewFactory.swift in Sources */,
+				D140C01E302D2E3000000001 /* ChatCommunicationNotificationBridge.swift in Sources */,
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
+				DE51CE5302D2E30000000001 /* DeviceSyncOriginalsBridge.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

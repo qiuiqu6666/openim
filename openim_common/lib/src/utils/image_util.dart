@@ -32,6 +32,8 @@ class ImageUtil {
     double? height,
     int? cacheWidth,
     int? cacheHeight,
+    ResizeImagePolicy resizePolicy = ResizeImagePolicy.exact,
+    bool cacheRawData = true,
     BoxFit? fit,
     bool loadProgress = true,
     bool clearMemoryCacheWhenDispose = false,
@@ -40,16 +42,23 @@ class ImageUtil {
     Widget? loadingWidget,
     BorderRadius? borderRadius,
   }) =>
-      ExtendedImage.network(
-        url,
+      ExtendedImage(
+        image: _resizeProvider(
+          ExtendedNetworkImageProvider(
+              OpenIMMediaUrl.resolve(url, imApiUrl: Config.imApiUrl),
+              cache: true,
+              cacheRawData: cacheRawData),
+          _calculateCacheWidth(width, cacheWidth, lowMemory),
+          _calculateCacheHeight(height, cacheHeight, lowMemory),
+          resizePolicy,
+          cacheRawData,
+        ),
         gaplessPlayback: true,
         width: width,
         height: height,
         fit: fit,
         borderRadius: borderRadius,
-        cacheWidth: _calculateCacheWidth(width, cacheWidth, lowMemory),
-        cacheHeight: _calculateCacheHeight(height, cacheHeight, lowMemory),
-        cacheRawData: true,
+        enableLoadState: true,
         clearMemoryCacheWhenDispose: clearMemoryCacheWhenDispose,
         handleLoadingProgress: true,
         clearMemoryCacheIfFailed: true,
@@ -100,6 +109,8 @@ class ImageUtil {
     double? height,
     int? cacheWidth,
     int? cacheHeight,
+    ResizeImagePolicy resizePolicy = ResizeImagePolicy.exact,
+    bool cacheRawData = true,
     BoxFit? fit,
     bool loadProgress = true,
     bool clearMemoryCacheWhenDispose = false,
@@ -107,17 +118,21 @@ class ImageUtil {
     Widget? errorWidget,
     BorderRadius? borderRadius,
   }) =>
-      ExtendedImage.file(
-        file,
+      ExtendedImage(
+        image: _resizeProvider(
+          ExtendedFileImageProvider(file, cacheRawData: cacheRawData),
+          _calculateCacheWidth(width, cacheWidth, lowMemory),
+          _calculateCacheHeight(height, cacheHeight, lowMemory),
+          resizePolicy,
+          cacheRawData,
+        ),
         width: width,
         height: height,
         fit: fit,
         borderRadius: borderRadius,
-        cacheWidth: _calculateCacheWidth(width, cacheWidth, lowMemory),
-        cacheHeight: _calculateCacheHeight(height, cacheHeight, lowMemory),
+        enableLoadState: true,
         clearMemoryCacheWhenDispose: clearMemoryCacheWhenDispose,
         clearMemoryCacheIfFailed: true,
-        cacheRawData: true,
         loadStateChanged: (ExtendedImageState state) {
           switch (state.extendedImageLoadState) {
             case LoadState.loading:
@@ -151,13 +166,41 @@ class ImageUtil {
         },
       );
 
+  /// Decode bounds use physical pixels; full-screen previews opt out by default.
+  static int? decodeDimension(double? logicalSize, double devicePixelRatio) {
+    if (logicalSize == null || !logicalSize.isFinite || logicalSize <= 0) {
+      return null;
+    }
+    final ratio = devicePixelRatio.isFinite && devicePixelRatio > 0
+        ? devicePixelRatio
+        : 1.0;
+    final pixels = logicalSize * ratio;
+    return pixels.isFinite ? pixels.ceil() : null;
+  }
+
+  static ImageProvider _resizeProvider(
+    ImageProvider provider,
+    int? width,
+    int? height,
+    ResizeImagePolicy policy,
+    bool cacheRawData,
+  ) =>
+      width == null && height == null
+          ? provider
+          : ExtendedResizeImage(provider,
+              width: width,
+              height: height,
+              maxBytes: null,
+              policy: policy,
+              cacheRawData: cacheRawData);
+
   static int? _calculateCacheWidth(
     double? width,
     int? cacheWidth,
     bool lowMemory,
   ) {
-    if (!lowMemory) return null;
     if (null != cacheWidth) return cacheWidth;
+    if (!lowMemory) return null;
     final maxW = .6.sw;
     return (width == null ? maxW : (width < maxW ? width : maxW)).toInt();
   }
@@ -167,8 +210,8 @@ class ImageUtil {
     int? cacheHeight,
     bool lowMemory,
   ) {
-    if (!lowMemory) return null;
     if (null != cacheHeight) return cacheHeight;
+    if (!lowMemory) return null;
     final maxH = .6.sh;
     return (height == null ? maxH : (height < maxH ? height : maxH)).toInt();
   }

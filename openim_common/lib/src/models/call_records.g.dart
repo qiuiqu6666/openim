@@ -19,13 +19,20 @@ class CallRecordsAdapter extends TypeAdapter<CallRecords> {
       incomingCall: fields[6] as bool,
       date: fields[7] as int,
       duration: fields[8] as int,
+      roomID: fields[9] as String?,
+      state: fields[10] as String?,
+      roomType: fields[11] as String? ?? 'single',
+      groupID: fields[12] as String? ?? '',
+      participantUserIDs: (fields[13] as List?)?.cast<String>() ?? const [],
+      endedAt: fields[14] as int? ?? 0,
+      updatedAt: fields[15] as int? ?? 0,
     );
   }
 
   @override
   void write(BinaryWriter writer, CallRecords obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(15)
       ..writeByte(1)
       ..write(obj.userID)
       ..writeByte(2)
@@ -41,7 +48,21 @@ class CallRecordsAdapter extends TypeAdapter<CallRecords> {
       ..writeByte(7)
       ..write(obj.date)
       ..writeByte(8)
-      ..write(obj.duration);
+      ..write(obj.duration)
+      ..writeByte(9)
+      ..write(obj.roomID)
+      ..writeByte(10)
+      ..write(obj.state)
+      ..writeByte(11)
+      ..write(obj.roomType)
+      ..writeByte(12)
+      ..write(obj.groupID)
+      ..writeByte(13)
+      ..write(obj.participantUserIDs)
+      ..writeByte(14)
+      ..write(obj.endedAt)
+      ..writeByte(15)
+      ..write(obj.updatedAt);
   }
 
   @override
@@ -50,5 +71,7 @@ class CallRecordsAdapter extends TypeAdapter<CallRecords> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is CallRecordsAdapter && runtimeType == other.runtimeType && typeId == other.typeId;
+      other is CallRecordsAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
 }

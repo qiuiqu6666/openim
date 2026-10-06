@@ -10,10 +10,22 @@ class VoiceCaptureDialog extends StatelessWidget {
         title: Text(StrRes.voiceCapture),
         content: SizedBox(
             width: MediaQuery.sizeOf(context).width * .7,
-            child: HoldToRecordButton(onRecorded: (path, seconds) async {
-              if (context.mounted)
-                Navigator.pop(context, {'path': path, 'duration': seconds});
-            })),
+            child: HoldToRecordButton(
+              onRecorded: (path, seconds) async {
+                if (context.mounted) {
+                  Navigator.pop(context, {'path': path, 'duration': seconds});
+                }
+              },
+              onConvertToText: (path, seconds) async {
+                if (context.mounted) {
+                  Navigator.pop(context, {
+                    'path': path,
+                    'duration': seconds,
+                    'convertToText': true,
+                  });
+                }
+              },
+            )),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),

@@ -821,7 +821,8 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
     }
     return Scaffold(
       backgroundColor: AppTokens.background(dark: dark),
-      appBar: AppBar(
+      appBar: GlassAppBar(
+        toolbarHeight: kToolbarHeight,
         elevation: 0,
         centerTitle: true,
         backgroundColor: AppTokens.background(dark: dark),

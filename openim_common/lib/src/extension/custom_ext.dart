@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:rxdart/rxdart.dart';
 
+import '../utils/media/openim_media_url.dart';
+
 extension SubjectExt<T> on Subject<T> {
   T addSafely(T data) {
     if (!isClosed) sink.add(data);
@@ -45,23 +47,11 @@ extension StrExt on String {
     return Characters(this).join('\u{200B}');
   }
 
-  String get thumbnailAbsoluteString {
-    final host = split('?').first;
-    final isGif = host.split('.').last.toLowerCase() == 'gif';
-    if (isGif) {
-      return host;
-    }
-    return '$host?height=640&width=360&type=image';
-  }
+  String get thumbnailAbsoluteString =>
+      OpenIMMediaUrl.thumbnail(this, width: 360, height: 640);
 
-  String adjustThumbnailAbsoluteString(int size) {
-    final host = split('?').first;
-    final isGif = host.split('.').last.toLowerCase() == 'gif';
-    if (isGif) {
-      return host;
-    }
-    return '$host?height=$size&width=$size&type=image';
-  }
+  String adjustThumbnailAbsoluteString(int size) =>
+      OpenIMMediaUrl.thumbnail(this, width: size, height: size);
 }
 
 class LottieView extends StatelessWidget {

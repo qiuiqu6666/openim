@@ -1,0 +1,618 @@
+diff --git a/internal/rpc/chat/favorite_archive.go b/internal/rpc/chat/favorite_archive.go
+--- a/internal/rpc/chat/favorite_archive.go
++++ b/internal/rpc/chat/favorite_archive.go
+@@ -330,25 +330,15 @@
+ 		o.releaseFavoriteReserve(ctx, store, job.OwnerIMID, 1, snap.SizeBytes)
+ 		return
+ 	}
+-	if err := o.Favorite.statKey(ctx, snap.ObjectName); err != nil {
+-		_, _ = store.MarkArchiveFailed(ctx, job.OwnerIMID, job.FavoriteID, now)
+-		_ = store.FinishJob(ctx, job.JobID, chatdb.FavoriteJobFailed, now)
+-		o.releaseFavoriteReserve(ctx, store, job.OwnerIMID, 1, snap.SizeBytes)
+-		o.notifyFavorite(ctx, job.OwnerIMID, job.FavoriteID, "upsert", item.Version+1)
+-		return
+-	}
+ 	assetID, err := newFavID("ast_")
+ 	if err != nil {
+ 		_ = store.FinishJob(ctx, job.JobID, chatdb.FavoriteJobPending, now)
+ 		return
+ 	}
+ 	dst := favoriteObjectKey(job.OwnerIMID, assetID)
+-	if err := o.Favorite.copyKey(ctx, snap.ObjectName, dst); err != nil {
+-		o.failFavoriteJob(ctx, store, job, snap, now)
+-		return
+-	}
++	// ObjectName is OpenIM's logical metadata name, never a MinIO key.
+ 	limit := o.favoriteReadLimit(snap.ContentType)
+-	body, err := o.Favorite.readKey(ctx, dst, limit)
++	body, err := o.readFavoriteSource(ctx, snap.ObjectName, limit)
+ 	if err != nil {
+ 		o.Favorite.removeKey(ctx, dst)
+ 		o.failFavoriteJob(ctx, store, job, snap, now)
+@@ -362,6 +352,12 @@
+ 		return
+ 	}
+ 	if snap.SizeBytes > 0 && info.SizeBytes > snap.SizeBytes && info.SizeBytes > o.typeMax(purpose) {
++		o.Favorite.removeKey(ctx, dst)
++		o.failFavoriteJob(ctx, store, job, snap, now)
++		return
++	}
++	// Inspect the bounded original before creating the private favorite copy.
++	if err := o.Favorite.putKey(ctx, dst, info.MimeType, body); err != nil {
+ 		o.Favorite.removeKey(ctx, dst)
+ 		o.failFavoriteJob(ctx, store, job, snap, now)
+ 		return
+diff --git a/internal/rpc/chat/favorite_write.go b/internal/rpc/chat/favorite_write.go
+--- a/internal/rpc/chat/favorite_write.go
++++ b/internal/rpc/chat/favorite_write.go
+@@ -1099,7 +1099,7 @@
+ 	if err := json.Unmarshal([]byte(job.SnapshotJSON), &snap); err != nil {
+ 		return nil, eerrs.ErrArchiveFailed
+ 	}
+-	if err := o.Favorite.statKey(ctx, snap.ObjectName); err != nil {
++	if err := o.probeFavoriteSource(ctx, snap.ObjectName); err != nil {
+ 		return nil, eerrs.ErrAssetMissing
+ 	}
+ 	if err := store.ReserveQuota(ctx, owner, 1, snap.SizeBytes, o.Favorite.MaxCount, o.Favorite.MaxBytes); err != nil {
+diff --git a/internal/rpc/chat/favorite_source.go b/internal/rpc/chat/favorite_source.go
+new file mode 100644
+--- /dev/null
++++ b/internal/rpc/chat/favorite_source.go
+@@ -0,0 +1,136 @@
++package chat
++
++import (
++	"context"
++	"io"
++	"net/http"
++	"net/url"
++	"strings"
++	"time"
++
++	"github.com/minio/minio-go/v7"
++	"github.com/openimsdk/chat/pkg/eerrs"
++)
++
++// Called only with a snapshot captured after PullMsgsBySeq and message eligibility
++// checks. Resolve the logical name using OpenIM's metadata, without guessing a key.
++func (o *chatSvr) readFavoriteSource(ctx context.Context, name string, limit int64) ([]byte, error) {
++	if o.IM == nil || name == "" || limit <= 0 {
++		return nil, eerrs.ErrSourceNotAccessible
++	}
++	raw, err := o.IM.ResolveObjectURL(ctx, name)
++	if err != nil {
++		return nil, eerrs.ErrSourceNotAccessible
++	}
++	return o.Favorite.readResolvedSource(ctx, raw, limit)
++}
++
++// Retry preflight uses the same old snapshot name and fresh metadata lease. A
++// one-byte GET range avoids signing a HEAD method with a GET-only signature.
++func (o *chatSvr) probeFavoriteSource(ctx context.Context, name string) error {
++	if o.IM == nil || name == "" {
++		return eerrs.ErrAssetMissing
++	}
++	raw, err := o.IM.ResolveObjectURL(ctx, name)
++	if err != nil {
++		return eerrs.ErrAssetMissing
++	}
++	resp, err := o.Favorite.openResolvedSource(ctx, raw, "bytes=0-0")
++	if err != nil {
++		return eerrs.ErrAssetMissing
++	}
++	resp.Body.Close()
++	return nil
++}
++
++func (f favoriteSettings) trustedSourceURL(raw string) (*url.URL, error) {
++	parsed, err := url.Parse(raw)
++	if err != nil || parsed == nil || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" ||
++		(parsed.Scheme != "http" && parsed.Scheme != "https") || f.Bucket == "" {
++		return nil, eerrs.ErrSourceNotAccessible
++	}
++	allowed := false
++	for _, client := range []*minio.Client{f.Client, f.PublicSigner} {
++		if client != nil && sameFavoriteStorageOrigin(parsed, client.EndpointURL()) {
++			allowed = true
++			break
++		}
++	}
++	prefix := "/" + f.Bucket + "/"
++	if !allowed || !strings.HasPrefix(parsed.Path, prefix) || len(parsed.Path) == len(prefix) {
++		return nil, eerrs.ErrSourceNotAccessible
++	}
++	for _, segment := range strings.Split(parsed.Path, "/") {
++		if segment == "." || segment == ".." || strings.ContainsRune(segment, '\\') {
++			return nil, eerrs.ErrSourceNotAccessible
++		}
++	}
++	return parsed, nil
++}
++
++func sameFavoriteStorageOrigin(a, b *url.URL) bool {
++	if a.Scheme != b.Scheme || !strings.EqualFold(a.Hostname(), b.Hostname()) {
++		return false
++	}
++	port := func(u *url.URL) string {
++		if u.Port() != "" {
++			return u.Port()
++		}
++		if u.Scheme == "https" {
++			return "443"
++		}
++		return "80"
++	}
++	return port(a) == port(b)
++}
++
++func (f favoriteSettings) openResolvedSource(ctx context.Context, raw, byteRange string) (*http.Response, error) {
++	parsed, err := f.trustedSourceURL(raw)
++	if err != nil {
++		return nil, err
++	}
++	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
++	if err != nil {
++		return nil, eerrs.ErrSourceNotAccessible
++	}
++	if byteRange != "" {
++		request.Header.Set("Range", byteRange)
++	}
++	client := &http.Client{
++		Timeout:       30 * time.Second,
++		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
++	}
++	// This storage request carries no OpenIM/business token or caller headers.
++	resp, err := client.Do(request)
++	if err != nil {
++		// net/http errors include the request URL; never expose the private lease.
++		return nil, eerrs.ErrSourceNotAccessible
++	}
++	if resp.StatusCode != http.StatusOK && !(byteRange != "" && resp.StatusCode == http.StatusPartialContent) {
++		resp.Body.Close()
++		return nil, eerrs.ErrSourceNotAccessible
++	}
++	return resp, nil
++}
++
++func (f favoriteSettings) readResolvedSource(ctx context.Context, raw string, limit int64) ([]byte, error) {
++	if limit <= 0 {
++		return nil, eerrs.ErrMediaTooLarge
++	}
++	resp, err := f.openResolvedSource(ctx, raw, "")
++	if err != nil {
++		return nil, err
++	}
++	defer resp.Body.Close()
++	if resp.ContentLength > limit {
++		return nil, eerrs.ErrMediaTooLarge
++	}
++	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
++	if err != nil {
++		return nil, eerrs.ErrSourceNotAccessible
++	}
++	if int64(len(body)) > limit {
++		return nil, eerrs.ErrMediaTooLarge
++	}
++	return body, nil
++}
+diff --git a/internal/rpc/chat/favorite_source_test.go b/internal/rpc/chat/favorite_source_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/rpc/chat/favorite_source_test.go
+@@ -0,0 +1,278 @@
++package chat
++
++import (
++	"bytes"
++	"context"
++	"encoding/json"
++	"errors"
++	"image"
++	"image/png"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++
++	"github.com/openimsdk/chat/pkg/common/config"
++	chatconstant "github.com/openimsdk/chat/pkg/common/constant"
++	"github.com/openimsdk/chat/pkg/common/db/database"
++	chatdb "github.com/openimsdk/chat/pkg/common/db/table/chat"
++	"github.com/openimsdk/chat/pkg/common/imapi"
++	"github.com/openimsdk/chat/pkg/common/mctx"
++	"github.com/openimsdk/chat/pkg/eerrs"
++	chatpb "github.com/openimsdk/chat/pkg/protocol/chat"
++	"github.com/openimsdk/protocol/constant"
++)
++
++type favoriteSourceTestResolver struct {
++	imapi.CallerInterface
++	url, name string
++	calls     int
++}
++
++func (r *favoriteSourceTestResolver) ResolveObjectURL(_ context.Context, name string) (string, error) {
++	r.name = name
++	r.calls++
++	return r.url, nil
++}
++func (r *favoriteSourceTestResolver) ImAdminTokenWithDefaultAdmin(context.Context) (string, error) {
++	return "", errors.New("notifications are outside this test")
++}
++
++func favoriteSourceTestSettings(t *testing.T, internal, public string) favoriteSettings {
++	t.Helper()
++	f, err := newFavoriteSettings(config.FavoriteConfig{
++		PublicStorageURL: public,
++		Minio:            config.StickerMinio{Bucket: "favorites", InternalAddress: internal, AccessKeyID: "test-access", SecretAccessKey: "test-secret"},
++	}, config.StickerConfig{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	return f
++}
++
++func TestFavoriteSourceResolvesLogicalNameAndReadsOnlyConfiguredBucket(t *testing.T) {
++	calls := 0
++	storage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
++		calls++
++		if req.Method != http.MethodGet || req.URL.Path != "/favorites/2026/user/random-key.png" {
++			t.Error("archive must use OpenIM's resolved physical object path")
++		}
++		if req.Header.Get("token") != "" || req.Header.Get("Authorization") != "" || req.Header.Get("operationID") != "" {
++			t.Error("storage fetch must not inherit caller authorization headers")
++		}
++		_, _ = w.Write([]byte("original"))
++	}))
++	defer storage.Close()
++	resolver := &favoriteSourceTestResolver{url: storage.URL + "/favorites/2026/user/random-key.png?X-Amz-Signature=test"}
++	server := &chatSvr{Favorite: favoriteSourceTestSettings(t, storage.URL, ""), IM: resolver}
++	body, err := server.readFavoriteSource(context.Background(), "logical-message.png", 20)
++	if err != nil || string(body) != "original" || calls != 1 || resolver.name != "logical-message.png" {
++		t.Fatal("verified logical name must resolve through the API before a bounded storage fetch")
++	}
++	publicSettings := favoriteSourceTestSettings(t, "http://localhost:10005", storage.URL)
++	if _, err := publicSettings.readResolvedSource(context.Background(), resolver.url, 20); err != nil {
++		t.Fatal("configured public storage origin is also a trusted source")
++	}
++}
++
++func TestFavoriteSourceRejectsForeignOriginBucketTraversalAndRedirect(t *testing.T) {
++	fetched := 0
++	foreign := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { fetched++ }))
++	defer foreign.Close()
++	storage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
++		http.Redirect(w, req, foreign.URL+"/favorites/secret", http.StatusFound)
++	}))
++	defer storage.Close()
++	f := favoriteSourceTestSettings(t, storage.URL, "")
++	for _, raw := range []string{
++		foreign.URL + "/favorites/key", storage.URL + "/other/key", storage.URL + "/favorites/",
++		storage.URL + "/favorites/%2e%2e/key", storage.URL + "/favorites/./key", storage.URL + "/favorites/a%5cb",
++		strings.Replace(storage.URL, "http://", "http://user:pass@", 1) + "/favorites/key",
++		storage.URL + "/favorites/key#part", strings.Replace(storage.URL, "http://", "https://", 1) + "/favorites/key",
++	} {
++		if _, err := f.readResolvedSource(context.Background(), raw, 20); err == nil {
++			t.Fatal("untrusted source accepted")
++		}
++	}
++	if _, err := f.readResolvedSource(context.Background(), storage.URL+"/favorites/redirect", 20); err == nil {
++		t.Fatal("storage redirects must be rejected")
++	}
++	if fetched != 0 {
++		t.Fatal("no request may reach a foreign origin")
++	}
++}
++
++func TestFavoriteSourceBoundsKnownAndChunkedBodiesAndSanitizesFailures(t *testing.T) {
++	storage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
++		if strings.HasSuffix(req.URL.Path, "/known") {
++			w.Header().Set("Content-Length", "30")
++		} else {
++			w.(http.Flusher).Flush()
++		}
++		_, _ = w.Write(bytes.Repeat([]byte("a"), 30))
++	}))
++	f := favoriteSourceTestSettings(t, storage.URL, "")
++	for _, key := range []string{"known", "chunked"} {
++		if _, err := f.readResolvedSource(context.Background(), storage.URL+"/favorites/"+key, 10); err != eerrs.ErrMediaTooLarge {
++			t.Fatal("declared and streamed bodies must obey the same maximum size")
++		}
++	}
++	storage.Close()
++	_, err := f.readResolvedSource(context.Background(), storage.URL+"/favorites/key?X-Amz-Signature=private-lease", 10)
++	if err == nil || strings.Contains(err.Error(), "private-lease") || strings.Contains(err.Error(), storage.URL) {
++		t.Fatal("network errors must not expose the source signed URL")
++	}
++}
++
++func TestFavoriteSourceTrustUsesEffectivePortWithoutChangingSignedURL(t *testing.T) {
++	for _, test := range []struct {
++		endpoint, raw string
++		allowed       bool
++	}{
++		{"https://storage.test:443", "https://STORAGE.test/favorites/key?X-Amz-Signature=test", true},
++		{"http://storage.test:80", "http://storage.test/favorites/key?X-Amz-Signature=test", true},
++		{"https://storage.test", "https://storage.test:443/favorites/key?X-Amz-Signature=test", true},
++		{"http://storage.test:10005", "http://storage.test/favorites/key", false},
++		{"http://storage.test:10005", "http://storage.test:10006/favorites/key", false},
++		{"https://storage.test:443", "http://storage.test:443/favorites/key", false},
++	} {
++		f := favoriteSourceTestSettings(t, test.endpoint, "")
++		parsed, err := f.trustedSourceURL(test.raw)
++		if (err == nil) != test.allowed {
++			t.Fatal("only equivalent default ports may be normalized for origin checks")
++		}
++		if err == nil && parsed.String() != test.raw {
++			t.Fatal("trusted origin comparison must preserve the original signed URL")
++		}
++	}
++}
++
++type favoriteSourceTestStore struct {
++	chatdb.FavoriteStore
++	item               *chatdb.FavoriteItem
++	asset              *chatdb.FavoriteAsset
++	jobState           string
++	ready              bool
++	job                *chatdb.FavoriteArchiveJob
++	requeued, reopened bool
++	reserved           int
++}
++
++func (s *favoriteSourceTestStore) TakeItem(context.Context, string, string) (*chatdb.FavoriteItem, error) {
++	return s.item, nil
++}
++func (s *favoriteSourceTestStore) InsertAsset(_ context.Context, asset *chatdb.FavoriteAsset) error {
++	s.asset = asset
++	return nil
++}
++func (s *favoriteSourceTestStore) InsertRevision(context.Context, *chatdb.FavoriteRevision, []*chatdb.FavoriteRevisionAsset) error {
++	return nil
++}
++func (s *favoriteSourceTestStore) MarkReady(_ context.Context, _, _, _, _, _, _, _ string, _, _, _ int64) (bool, error) {
++	s.ready = true
++	return true, nil
++}
++func (s *favoriteSourceTestStore) CommitQuota(context.Context, string, int64, int64, int64) error {
++	return nil
++}
++func (s *favoriteSourceTestStore) FinishJob(_ context.Context, _ string, state string, _ int64) error {
++	s.jobState = state
++	return nil
++}
++func (s *favoriteSourceTestStore) TakeJob(context.Context, string, string) (*chatdb.FavoriteArchiveJob, error) {
++	return s.job, nil
++}
++func (s *favoriteSourceTestStore) ReserveQuota(context.Context, string, int64, int64, int64, int64) error {
++	s.reserved++
++	return nil
++}
++func (s *favoriteSourceTestStore) RequeueJob(context.Context, string, string, int64) (bool, error) {
++	s.requeued = true
++	return true, nil
++}
++func (s *favoriteSourceTestStore) ReopenArchive(context.Context, string, string, int64) (bool, error) {
++	s.reopened = true
++	return true, nil
++}
++
++type favoriteSourceTestDatabase struct {
++	database.ChatDatabaseInterface
++	store chatdb.FavoriteStore
++}
++
++func (d *favoriteSourceTestDatabase) Favorite() chatdb.FavoriteStore { return d.store }
++
++func TestFavoriteSourceRetryArchiveUsesLegacySnapshotResolverAndKeepsMissingAssetError(t *testing.T) {
++	missing := false
++	storage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
++		if req.Method != http.MethodGet || req.URL.Path != "/favorites/2026/user/actual.png" || req.Header.Get("Range") != "bytes=0-0" {
++			t.Error("retry must probe the resolved object with a GET signature")
++		}
++		if missing {
++			w.WriteHeader(http.StatusNotFound)
++			return
++		}
++		w.WriteHeader(http.StatusPartialContent)
++		_, _ = w.Write([]byte("a"))
++	}))
++	defer storage.Close()
++	resolver := &favoriteSourceTestResolver{url: storage.URL + "/favorites/2026/user/actual.png?X-Amz-Signature=test"}
++	// This is the original snapshot wire shape, without a new physical-key field.
++	snapshot := `{"objectName":"logical-message.png","contentType":102,"sizeBytes":100}`
++	store := &favoriteSourceTestStore{
++		item: &chatdb.FavoriteItem{ID: "favorite", OwnerIMID: "owner", Status: chatdb.FavoriteArchiveFailed, Version: 2},
++		job:  &chatdb.FavoriteArchiveJob{JobID: "legacy-job", OwnerIMID: "owner", FavoriteID: "favorite", SnapshotJSON: snapshot},
++	}
++	server := &chatSvr{Favorite: favoriteSourceTestSettings(t, storage.URL, ""), IM: resolver, Database: &favoriteSourceTestDatabase{store: store}}
++	ctx := mctx.WithOpUserID(context.Background(), "owner", chatconstant.NormalUser)
++	req := &chatpb.RetryChatFavoriteArchiveReq{Id: "favorite", ClientRequestID: "12345678-1234-4234-8234-123456789abc"}
++	resp, err := server.RetryChatFavoriteArchive(ctx, req)
++	if err != nil || resp.Status != chatdb.FavoritePendingArchive || resp.JobID != "legacy-job" || !store.requeued || !store.reopened || resolver.name != "logical-message.png" {
++		t.Fatal("legacy archive retry must resolve metadata and reopen the original job")
++	}
++	missing = true
++	store.requeued, store.reopened = false, false
++	store.reserved = 0
++	if _, err := server.RetryChatFavoriteArchive(ctx, req); err != eerrs.ErrAssetMissing || store.reserved != 0 || store.requeued || store.reopened {
++		t.Fatal("missing resolved object must remain ASSET_MISSING without reserving or requeueing")
++	}
++}
++
++func TestFavoriteSourceArchiveJobInspectsAndWritesPrivateCopyWithoutLogicalKeyStat(t *testing.T) {
++	var original bytes.Buffer
++	if err := png.Encode(&original, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
++		t.Fatal(err)
++	}
++	var copied []byte
++	storage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
++		switch {
++		case req.Method == http.MethodGet && req.URL.Query().Has("location"):
++			_, _ = w.Write([]byte(`<LocationConstraint xmlns="http://s3.amazonaws.com/doc/2006-03-01/">us-east-1</LocationConstraint>`))
++		case req.Method == http.MethodGet && req.URL.Path == "/favorites/2026/user/random.png":
++			_, _ = w.Write(original.Bytes())
++		case req.Method == http.MethodPut && strings.HasPrefix(req.URL.Path, "/favorites/favorite/owner/ast_"):
++			copied, _ = io.ReadAll(req.Body)
++			w.Header().Set("ETag", `"test-etag"`)
++		default:
++			t.Errorf("unexpected storage operation: %s", req.Method)
++			w.WriteHeader(http.StatusBadRequest)
++		}
++	}))
++	defer storage.Close()
++	resolver := &favoriteSourceTestResolver{url: storage.URL + "/favorites/2026/user/random.png?X-Amz-Signature=test"}
++	server := &chatSvr{Favorite: favoriteSourceTestSettings(t, storage.URL, ""), IM: resolver}
++	store := &favoriteSourceTestStore{item: &chatdb.FavoriteItem{ID: "favorite", OwnerIMID: "owner", Status: chatdb.FavoritePendingArchive, Version: 1}}
++	snap, _ := json.Marshal(archiveSnapshot{ObjectName: "logical-message.png", FileName: "photo.png", ContentType: constant.Picture, SizeBytes: int64(original.Len())})
++	server.runFavoriteJob(context.Background(), store, &chatdb.FavoriteArchiveJob{OwnerIMID: "owner", FavoriteID: "favorite", JobID: "job", SnapshotJSON: string(snap)})
++	if !store.ready || store.jobState != chatdb.FavoriteJobDone || store.asset == nil || store.asset.MimeType != "image/png" || !strings.HasPrefix(store.asset.ObjectKey, "favorite/owner/") {
++		t.Fatal("resolved original must become an inspected private favorite asset")
++	}
++	// minio-go may use aws-chunked transfer for PUT. The full original must be present.
++	if !bytes.Contains(copied, original.Bytes()) {
++		t.Fatal("private copy must retain the original bytes")
++	}
++	if resolver.name != "logical-message.png" || resolver.calls != 1 {
++		t.Fatal("logical metadata resolution must occur exactly once")
++	}
++}
+diff --git a/pkg/common/imapi/api.go b/pkg/common/imapi/api.go
+--- a/pkg/common/imapi/api.go
++++ b/pkg/common/imapi/api.go
+@@ -19,6 +19,7 @@
+ 	"github.com/openimsdk/protocol/group"
+ 	"github.com/openimsdk/protocol/relation"
+ 	"github.com/openimsdk/protocol/sdkws"
++	"github.com/openimsdk/protocol/third"
+ 	"github.com/openimsdk/protocol/user"
+ )
+ 
+@@ -47,6 +48,7 @@
+ 	sendMsg                  = NewApiCaller[sendMsgReq, sendMsgResp]("/msg/send_msg")
+ 	kickTokens               = NewApiCaller[kickTokensReq, kickTokensResp]("/auth/kick_tokens")
+ 	getOnlineTokenDetail     = NewApiCaller[onlineTokenDetailReq, []imOnlineTokenDetail]("/user/get_users_online_token_detail")
++	resolveObjectURL         = NewApiCaller[third.AccessURLReq, third.AccessURLResp]("/object/access_url")
+ 	pullMsgBySeq             = NewApiCaller[sdkws.PullMessageBySeqsReq, sdkws.PullMessageBySeqsResp]("/msg/pull_msg_by_seq")
+ )
+ 
+diff --git a/pkg/common/imapi/caller.go b/pkg/common/imapi/caller.go
+--- a/pkg/common/imapi/caller.go
++++ b/pkg/common/imapi/caller.go
+@@ -15,10 +15,12 @@
+ 	"github.com/openimsdk/protocol/group"
+ 	"github.com/openimsdk/protocol/relation"
+ 	"github.com/openimsdk/protocol/sdkws"
++	"github.com/openimsdk/protocol/third"
+ 	"github.com/openimsdk/protocol/user"
+ )
+ 
+ type CallerInterface interface {
++	ResolveObjectURL(ctx context.Context, name string) (string, error)
+ 	ImAdminTokenWithDefaultAdmin(ctx context.Context) (string, error)
+ 	ImportFriend(ctx context.Context, ownerUserID string, friendUserID []string) error
+ 	GetUserToken(ctx context.Context, userID string, platform int32) (string, error)
+@@ -520,3 +522,20 @@
+ 	})
+ 	return err
+ }
++
++// Resolve only OpenIM's verified logical object name through its metadata API.
++// The response contains a private signed URL and must not enter ordinary logs.
++func (c *Caller) ResolveObjectURL(ctx context.Context, name string) (string, error) {
++	if name == "" {
++		return "", eerrs.ErrSourceNotAccessible
++	}
++	apiCtx, err := c.adminCtx(ctx)
++	if err != nil {
++		return "", eerrs.ErrSourceNotAccessible
++	}
++	resp, err := resolveObjectURL.Call(apiCtx, c.imApi, &third.AccessURLReq{Name: name})
++	if err != nil || resp == nil || resp.Url == "" || resp.ExpireTime <= time.Now().UnixMilli() {
++		return "", eerrs.ErrSourceNotAccessible
++	}
++	return resp.Url, nil
++}
+diff --git a/pkg/common/imapi/call.go b/pkg/common/imapi/call.go
+--- a/pkg/common/imapi/call.go
++++ b/pkg/common/imapi/call.go
+@@ -18,6 +18,7 @@
+ 	"bytes"
+ 	"context"
+ 	"encoding/json"
++	"errors"
+ 	"io"
+ 	"net/http"
+ 	"time"
+@@ -57,6 +58,16 @@
+ func (a caller[Req, Resp]) Call(ctx context.Context, apiPrefix string, req *Req) (*Resp, error) {
+ 	start := time.Now()
+ 	resp, err := a.call(ctx, apiPrefix, req)
++	if a.api == "/object/access_url" {
++		// Neither upstream error details nor response bodies may log a signed URL.
++		if err != nil {
++			safeErr := errors.New("object URL resolution failed")
++			log.ZError(ctx, "api caller failed", safeErr, "api", a.api, "duration", time.Since(start))
++			return nil, safeErr
++		}
++		log.ZInfo(ctx, "api caller success", "api", a.api, "duration", time.Since(start))
++		return resp, nil
++	}
+ 	if a.api == "/friend/add_friend" {
+ 		if err != nil {
+ 			log.ZError(ctx, "api caller failed", err, "api", a.api, "duration", time.Since(start))
+diff --git a/pkg/common/imapi/favorite_object_url_test.go b/pkg/common/imapi/favorite_object_url_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/common/imapi/favorite_object_url_test.go
+@@ -0,0 +1,49 @@
++package imapi
++
++import (
++	"context"
++	"encoding/json"
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/openimsdk/protocol/third"
++)
++
++func favoriteObjectTestCaller(server *httptest.Server) *Caller {
++	return &Caller{imApi: server.URL, defaultIMUserID: "test-admin", tokenCache: map[string]*authToken{
++		"test-admin": {token: "test-admin-token", timeout: time.Now().Add(time.Minute)},
++	}}
++}
++
++func TestFavoriteObjectURLCallerUsesLogicalMetadataAPIAndAdminContext(t *testing.T) {
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
++		var body third.AccessURLReq
++		if req.Method != http.MethodPost || req.URL.Path != "/object/access_url" || req.Header.Get("token") != "test-admin-token" || json.NewDecoder(req.Body).Decode(&body) != nil || body.Name != "logical-message.png" || len(body.Query) != 0 {
++			t.Error("logical original must be resolved through the authenticated metadata API")
++		}
++		_ = json.NewEncoder(w).Encode(map[string]any{"errCode": 0, "data": map[string]any{"url": "http://storage.test/bucket/random?X-Amz-Signature=test", "expireTime": time.Now().Add(time.Minute).UnixMilli()}})
++	}))
++	defer server.Close()
++	raw, err := favoriteObjectTestCaller(server).ResolveObjectURL(context.Background(), "logical-message.png")
++	if err != nil || !strings.Contains(raw, "/bucket/random?") {
++		t.Fatal("metadata response was not returned")
++	}
++}
++
++func TestFavoriteObjectURLCallerRejectsExpiredAndSanitizesUpstreamErrors(t *testing.T) {
++	for _, body := range []string{
++		`{"errCode":0,"data":{"url":"http://storage.test/key?X-Amz-Signature=private-lease","expireTime":1}}`,
++		`{"errCode":1001,"errMsg":"http://storage.test/key?X-Amz-Signature=private-lease","errDlt":"private-lease"}`,
++		`malformed response http://storage.test/key?X-Amz-Signature=private-lease`,
++	} {
++		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) }))
++		_, err := favoriteObjectTestCaller(server).ResolveObjectURL(context.Background(), "logical-message.png")
++		server.Close()
++		if err == nil || strings.Contains(err.Error(), "private-lease") || strings.Contains(err.Error(), "storage.test") {
++			t.Fatal("expired or failed resolution must not expose a private signed URL")
++		}
++	}
++}

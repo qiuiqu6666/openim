@@ -1,43 +1,129 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:sprintf/sprintf.dart';
 
+import '../../mine/settings/pages/legal_document_page.dart';
 import 'create_group_logic.dart';
+import 'create_group_strings.dart';
+import 'create_group_tokens.dart';
+import 'widgets/create_group_members.dart';
 
-class CreateGroupPage extends StatelessWidget {
-  final logic = Get.find<CreateGroupLogic>();
+class CreateGroupPage extends StatefulWidget {
+  const CreateGroupPage({super.key});
 
-  CreateGroupPage({super.key});
+  @override
+  State<CreateGroupPage> createState() => _CreateGroupPageState();
+}
+
+class _CreateGroupPageState extends State<CreateGroupPage> {
+  late final logic = Get.find<CreateGroupLogic>();
+  bool _saving = false;
+
+  Future<void> _create() async {
+    if (_saving) return;
+    final failureText = CreateGroupStrings.of(context).createFailed;
+    FocusScope.of(context).unfocus();
+    setState(() => _saving = true);
+    try {
+      await logic.completeCreation();
+    } catch (_) {
+      if (mounted) IMViews.showToast(failureText);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return TouchCloseSoftKeyboard(
-      child: Scaffold(
-        appBar: TitleBar.back(title: StrRes.createGroup),
-        backgroundColor: Styles.c_F8F9FA,
-        body: SingleChildScrollView(
-          child: SizedBox(
-            height: 1.sh - 44.h - 10.h - 34.h,
-            child: Column(
-              children: [
-                _buildGroupBaseInfoView(),
-                _buildGroupMemberView(),
-                const Spacer(),
-                Container(
-                  color: Styles.c_FFFFFF,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 16.w,
-                    vertical: 12.h,
-                  ),
-                  child: Button(
-                    text: StrRes.completeCreation,
-                    onTap: logic.completeCreation,
-                  ),
+    final tokens = CreateGroupTokens.of(context);
+    final strings = CreateGroupStrings.of(context);
+    return AppSystemBars(
+      background: tokens.background,
+      child: TouchCloseSoftKeyboard(
+        child: Scaffold(
+          backgroundColor: tokens.background,
+          appBar: GlassAppBar(
+            opaque: true,
+            backgroundColor: tokens.background,
+            toolbarHeight: kToolbarHeight,
+            centerTitle: true,
+            automaticallyImplyLeading: false,
+            leading: IconButton(
+              onPressed:
+                  _saving ? null : () => Navigator.of(context).maybePop(),
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              color: tokens.accent,
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            ),
+            title: Text(
+              strings.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: tokens.title,
+                fontSize: CreateGroupTokens.toolbarTitleSize,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            actions: [
+              TextButton(
+                key: const ValueKey('create-group-create'),
+                onPressed: _saving ? null : _create,
+                style: TextButton.styleFrom(
+                  foregroundColor: tokens.accent,
+                  minimumSize: const Size(CreateGroupTokens.actionTarget,
+                      CreateGroupTokens.actionTarget),
+                  textStyle: Theme.of(context)
+                      .textTheme
+                      .labelLarge
+                      ?.copyWith(fontSize: CreateGroupTokens.actionSize),
                 ),
-              ],
+                child: _saving
+                    ? SizedBox.square(
+                        dimension: CreateGroupTokens.progressSize,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: tokens.accent),
+                      )
+                    : Text(strings.create),
+              ),
+              const SizedBox(width: AppTokens.s3),
+            ],
+          ),
+          body: SafeArea(
+            top: false,
+            child: AbsorbPointer(
+              absorbing: _saving,
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(
+                    CreateGroupTokens.cardPadding,
+                    AppTokens.s2,
+                    CreateGroupTokens.cardPadding,
+                    AppTokens.s7),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _card(tokens, _avatar(tokens, strings)),
+                    _card(tokens, _name(tokens, strings)),
+                    _card(
+                      tokens,
+                      Obx(() => CreateGroupMembers(
+                            members: logic.allList.toList(),
+                            onAddMembers: logic.opMember,
+                            onOpenTerms: () {
+                              FocusScope.of(context).unfocus();
+                              Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                      builder: (_) => const LegalDocumentPage(
+                                          kind: LegalDocumentKind.terms)));
+                            },
+                          )),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -45,100 +131,114 @@ class CreateGroupPage extends StatelessWidget {
     );
   }
 
-  Widget _buildGroupBaseInfoView() => Container(
-        margin: EdgeInsets.fromLTRB(12.w, 8.h, 12.w, 12.h),
-        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
-        decoration: BoxDecoration(
-          color: Styles.c_FFFFFF,
-          borderRadius: BorderRadius.circular(6.r),
+  Widget _card(CreateGroupTokens tokens, Widget child) => Padding(
+        padding: const EdgeInsets.only(bottom: CreateGroupTokens.cardGap),
+        child: Material(
+          color: tokens.surface,
+          borderRadius: BorderRadius.circular(CreateGroupTokens.cardRadius),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+              padding: const EdgeInsets.all(CreateGroupTokens.cardPadding),
+              child: child),
         ),
-        child: Obx(() => Row(
-              children: [
-                if (logic.faceURL.isNotEmpty)
-                  AvatarView(
-                    width: 48.w,
-                    height: 48.h,
-                    url: logic.faceURL.value,
-                    isGroup: true,
-                    onTap: logic.selectAvatar,
-                  )
-                else
-                  ImageRes.cameraGray.toImage
-                    ..width = 48.w
-                    ..height = 48.h
-                    ..onTap = logic.selectAvatar,
-                12.horizontalSpace,
-                Flexible(
-                  child: TextField(
-                    style: Styles.ts_0C1C33_17sp,
-                    autofocus: true,
-                    controller: logic.nameCtrl,
-                    inputFormatters: [LengthLimitingTextInputFormatter(30)],
-                    decoration: InputDecoration(
-                      hintStyle: Styles.ts_8E9AB0_17sp,
-                      hintText: StrRes.plsEnterGroupNameHint,
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ),
-              ],
-            )),
       );
 
-  Widget _buildGroupMemberView() => Obx(() => Container(
-        decoration: BoxDecoration(
-          color: Styles.c_FFFFFF,
-          borderRadius: BorderRadius.circular(6.r),
-        ),
-        margin: EdgeInsets.symmetric(horizontal: 10.w),
-        child: Column(
-          children: [
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
-              child: Row(
+  TextStyle _titleStyle(CreateGroupTokens tokens) => TextStyle(
+      color: tokens.title,
+      fontSize: CreateGroupTokens.sectionTitleSize,
+      fontWeight: FontWeight.w700);
+
+  Widget _avatar(CreateGroupTokens tokens, CreateGroupStrings strings) =>
+      InkWell(
+        key: const ValueKey('create-group-avatar'),
+        onTap: logic.selectAvatar,
+        borderRadius: BorderRadius.circular(CreateGroupTokens.cardRadius),
+        child: Semantics(
+          button: true,
+          child: Row(children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  StrRes.groupMember.toText..style = Styles.ts_8E9AB0_17sp,
-                  const Spacer(),
-                  sprintf(StrRes.nPerson, [logic.allList.length]).toText
-                    ..style = Styles.ts_8E9AB0_17sp,
+                  Text(strings.avatar, style: _titleStyle(tokens)),
+                  const SizedBox(height: CreateGroupTokens.subtitleGap),
+                  Text(strings.avatarHint,
+                      style: TextStyle(
+                          fontSize: CreateGroupTokens.subtitleSize,
+                          color: tokens.secondary)),
                 ],
               ),
             ),
-            GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: logic.length(),
-              shrinkWrap: true,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                crossAxisSpacing: 3.w,
-                mainAxisSpacing: 2.h,
-                childAspectRatio: 68.w / 78.h,
-              ),
-              itemBuilder: (BuildContext context, int index) {
-                return logic.itemBuilder(
-                  index: index,
-                  builder: (info) => Column(
-                    children: [
-                      AvatarView(
-                        width: 48.w,
-                        height: 48.h,
-                        url: info.faceURL,
-                        text: info.nickname,
-                        textStyle: Styles.ts_FFFFFF_14sp,
-                      ),
-                      2.verticalSpace,
-                      (info.nickname ?? '').toText
-                        ..style = Styles.ts_8E9AB0_10sp
-                        ..maxLines = 1
-                        ..overflow = TextOverflow.ellipsis,
-                    ],
-                  ),
-                  addButton: () => const SizedBox.shrink(),
-                  delButton: () => const SizedBox.shrink(),
-                );
-              },
+            const SizedBox(width: AppTokens.s3),
+            ExcludeSemantics(
+              child: Obx(() => AvatarView(
+                    width: CreateGroupTokens.avatarSize,
+                    height: CreateGroupTokens.avatarSize,
+                    isGroup: true,
+                    isCircle: true,
+                    url: logic.faceURL.value,
+                    builder: logic.faceURL.isEmpty
+                        ? () => SvgPicture.asset(
+                            CreateGroupTokens.defaultAvatarAsset,
+                            width: CreateGroupTokens.avatarSize,
+                            height: CreateGroupTokens.avatarSize)
+                        : null,
+                  )),
             ),
-          ],
+            const SizedBox(width: CreateGroupTokens.avatarChevronGap),
+            Icon(Icons.chevron_right_rounded,
+                color: tokens.secondary, size: CreateGroupTokens.chevronSize),
+          ]),
         ),
-      ));
+      );
+
+  Widget _name(CreateGroupTokens tokens, CreateGroupStrings strings) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(strings.name, style: _titleStyle(tokens)),
+          const SizedBox(height: CreateGroupTokens.nameGap),
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: CreateGroupTokens.nameInputPadding),
+            decoration: BoxDecoration(
+                color: tokens.inset,
+                borderRadius:
+                    BorderRadius.circular(CreateGroupTokens.insetRadius)),
+            child: Row(children: [
+              Expanded(
+                child: TextField(
+                  key: const ValueKey('create-group-name-input'),
+                  controller: logic.nameCtrl,
+                  enabled: !_saving,
+                  maxLength: CreateGroupTokens.maxNameLength,
+                  textInputAction: TextInputAction.done,
+                  style: TextStyle(
+                      color: tokens.title,
+                      fontSize: CreateGroupTokens.nameInputSize),
+                  decoration: InputDecoration(
+                    hintText: strings.nameHint,
+                    hintStyle: TextStyle(color: tokens.secondary),
+                    counterText: '',
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppTokens.s3),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: logic.nameCtrl,
+                builder: (_, value, __) => Text(
+                  '${value.text.characters.length}/${CreateGroupTokens.maxNameLength}',
+                  key: const ValueKey('create-group-name-count'),
+                  style: TextStyle(
+                      color: tokens.secondary,
+                      fontSize: CreateGroupTokens.nameCountSize),
+                ),
+              ),
+            ]),
+          ),
+        ],
+      );
 }

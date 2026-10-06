@@ -1,0 +1,27 @@
+{
+  "errCode": 0,
+  "errMsg": "",
+  "errDlt": "",
+  "data": {
+    "order": {
+      "orderID": "packet-fixture-1",
+      "biz": "packet_normal",
+      "scene": "single",
+      "currency": "BI99",
+      "amount": "10",
+      "status": "done",
+      "recvID": "fixture-recipient",
+      "groupID": "",
+      "createdAt": 1791032141597,
+      "expireAt": 0,
+      "shareAmount": "0",
+      "shareCount": 0,
+      "targetCurrency": "",
+      "targetAmount": "0",
+      "fee": "0",
+      "toAddress": "",
+      "remark": "测试祝福"
+    },
+    "shares": null
+  }
+}

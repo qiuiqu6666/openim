@@ -1,0 +1,13 @@
+export '../theme/ai_palette.dart';
+export '../localization/ai_assistant_i18n.dart';
+export 'background/ai_canvas_backdrop.dart';
+export 'guide/ai_first_guide.dart';
+export 'empty/ai_empty_chat_art.dart';
+export 'messages/ai_message_bubbles.dart';
+export 'messages/ai_assistant_text.dart';
+export 'messages/ai_attachment_rows.dart';
+export 'composer/ai_draft_bar.dart';
+export 'composer/ai_composer.dart';
+export 'messages/ai_output_cards.dart';
+export 'composer/ai_assistant_file_kind.dart';
+export 'composer/ai_more_sheet.dart';

@@ -7,18 +7,36 @@ import 'package:openim_common/openim_common.dart';
 import '../group_profile_panel/group_profile_panel_logic.dart';
 
 class SendVerificationApplicationLogic extends GetxController {
+  static const maxMessageLength = 20;
   final inputCtrl = TextEditingController();
+  final sending = false.obs;
+  String targetName = '', targetAccount = '';
+  String? targetAvatarURL;
   String? userID;
   String? groupID;
   String? friendGroupID;
   FriendAddSource addSource = FriendAddSource.chat;
   Map<String, String> friendAddFields = const {};
-  bool _sending = false;
   JoinGroupMethod? joinGroupMethod;
 
   bool get isEnterGroup => groupID != null;
 
   bool get isAddFriend => userID != null;
+
+  bool get canSubmit => isAddFriend
+      ? FriendAddRequest.canSend(
+          userID: userID!,
+          source: addSource,
+          groupID: friendGroupID,
+          fields: friendAddFields,
+        )
+      : isEnterGroup;
+
+  String? get unavailableMessage => canSubmit
+      ? null
+      : Get.locale?.languageCode == 'en'
+          ? 'Add this person using their chat ID, QR code, or contact card.'
+          : '请通过对方的聊天号、二维码或好友名片添加。';
 
   @override
   void onInit() {
@@ -30,25 +48,41 @@ class SendVerificationApplicationLogic extends GetxController {
     addSource = resolveFriendAddSource(Get.arguments['addSource'],
         groupID: friendGroupID);
     joinGroupMethod = Get.arguments['joinGroupMethod'];
+    targetName = Get.arguments['targetName'] ?? '';
+    targetAvatarURL = Get.arguments['targetAvatarURL'];
+    targetAccount = Get.arguments['targetAccount'] ?? '';
+    final selfName = (Get.arguments['selfNickname'] as String?)?.trim() ?? '';
+    if (isAddFriend && selfName.isNotEmpty) {
+      final greeting = Get.locale?.languageCode == 'en'
+          ? 'Hi, I’m $selfName'
+          : '我是：$selfName';
+      inputCtrl.text = greeting.characters.take(maxMessageLength).join();
+    }
     super.onInit();
   }
 
-  void send() async {
-    if (isAddFriend) {
-      _applyAddFriend();
-    } else if (isEnterGroup) {
-      _applyEnterGroup();
+  Future<void> send() async {
+    if (isClosed || sending.value || !canSubmit) return;
+    sending.value = true;
+    FocusManager.instance.primaryFocus?.unfocus();
+    try {
+      if (isAddFriend) {
+        await _applyAddFriend();
+      } else {
+        await _applyEnterGroup();
+      }
+    } finally {
+      if (!isClosed) sending.value = false;
     }
   }
 
-  _applyAddFriend() async {
-    if (_sending) return;
-    _sending = true;
+  Future<void> _applyAddFriend() async {
+    final reason = inputCtrl.text.trim();
     try {
       await LoadingView.singleton.wrap(
         asyncFunction: () => FriendAddRequest.send(
           userID: userID!,
-          reason: inputCtrl.text.trim(),
+          reason: reason,
           source: addSource,
           groupID: friendGroupID,
           fields: friendAddFields,
@@ -58,6 +92,7 @@ class SendVerificationApplicationLogic extends GetxController {
       Get.back();
       IMViews.showToast(StrRes.sendSuccessfully);
     } catch (error) {
+      if (isClosed) return;
       final message = friendAddErrorMessage(error,
           chinese: Get.locale?.languageCode == 'zh');
       if (message != null) {
@@ -71,22 +106,30 @@ class SendVerificationApplicationLogic extends GetxController {
         }
       }
       IMViews.showToast(StrRes.sendFailed);
-    } finally {
-      _sending = false;
     }
   }
 
-  _applyEnterGroup() {
-    LoadingView.singleton
-        .wrap(
-          asyncFunction: () => OpenIM.iMManager.groupManager.joinGroup(
-            groupID: groupID!,
-            reason: inputCtrl.text.trim(),
-            joinSource: joinGroupMethod == JoinGroupMethod.qrcode ? 4 : 3,
-          ),
-        )
-        .then((value) => IMViews.showToast(StrRes.sendSuccessfully))
-        .then((value) => Get.back())
-        .catchError((e) => IMViews.showToast(StrRes.sendFailed));
+  Future<void> _applyEnterGroup() async {
+    final reason = inputCtrl.text.trim();
+    try {
+      await LoadingView.singleton.wrap(
+        asyncFunction: () => OpenIM.iMManager.groupManager.joinGroup(
+          groupID: groupID!,
+          reason: reason,
+          joinSource: joinGroupMethod == JoinGroupMethod.qrcode ? 4 : 3,
+        ),
+      );
+      if (isClosed) return;
+      IMViews.showToast(StrRes.sendSuccessfully);
+      Get.back();
+    } catch (_) {
+      if (!isClosed) IMViews.showToast(StrRes.sendFailed);
+    }
+  }
+
+  @override
+  void onClose() {
+    inputCtrl.dispose();
+    super.onClose();
   }
 }

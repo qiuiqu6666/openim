@@ -35,10 +35,12 @@ This repository is licensed under the GNU Affero General Public License Version 
 Before you start development, ensure that the following software is installed on your system:
 
 - **Operating System**: macOS 15 or later
-- **Flutter**: Version 3.32.8 ([Installation Guide](https://docs.flutter.dev/get-started/install)), XCode: 16.1, Android Studio: Koala | 2024.1.1 Patch 1, JDK 17
+- **Flutter**: Version 3.41.6, pinned in `.flutter-version` ([Installation Guide](https://docs.flutter.dev/get-started/install)), XCode: 16.1, Android Studio: Koala | 2024.1.1 Patch 1, JDK 17
 - **Git**: For version control
 
 Additionally, make sure you have [deployed](https://docs.openim.io/zh-Hans/guides/gettingStarted/dockerCompose) the latest version of the OpenIM Server. After deployment, you can compile the project and connect it to your server for testing.
+
+For Shorebird base releases, patches, and device verification, see the [hot update workflow](tool/shorebird/README.md).
 
 ## Supported Platforms
 
@@ -255,3 +257,7 @@ A: [Doc](CONFIGKEY.md)
 ##### 9. Why is offline push not working?
 
 A: [Doc](CONFIGKEY.md)
+
+## 项目维护规范
+
+开发前阅读 [AGENTS.md](AGENTS.md) 和 [模块目录与长期维护规范](docs/module-organization.md)。所有独立功能应有自己的目录和实现文件，业务代码按模块集中维护，测试对应模块组织。现有代码按功能逐步整理，保留 OpenIM SDK、GetX 和现有数据链路。

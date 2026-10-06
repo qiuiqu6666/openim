@@ -7,22 +7,26 @@ import 'package:openim_common/openim_common.dart';
 import 'host/wallet_i18n.dart';
 import 'host/wallet_navigation.dart';
 import 'host/wallet_qr_scanner.dart';
+import 'operations/wallet_friend_transfer_navigation.dart';
 import 'wallet_repository.dart';
 import 'wallet_repository_provider.dart';
 import 'widgets/wallet_page_colors.dart';
-import 'withdraw_transfer_confirm_screen.dart';
+import 'widgets/wallet_tip.dart';
 import 'withdraw_transfer_target_validator.dart';
+import 'withdrawal/form/wallet_chain_withdrawal_screen.dart';
 
 enum _WithdrawTargetTab { wallet, friends }
 
 class WithdrawAddressScreen extends StatefulWidget {
   final CoinDto coin;
   final WalletPayMethodDto payMethod;
+  final WithdrawTransferTargetKind initialTargetKind;
 
   const WithdrawAddressScreen({
     super.key,
     required this.coin,
     required this.payMethod,
+    this.initialTargetKind = WithdrawTransferTargetKind.friend,
   });
 
   @override
@@ -36,7 +40,7 @@ class _WithdrawAddressScreenState extends State<WithdrawAddressScreen> {
 
   List<ISUserInfo> _friends = const [];
   bool _friendsLoading = true;
-  _WithdrawTargetTab _activeTab = _WithdrawTargetTab.friends;
+  late _WithdrawTargetTab _activeTab;
   String _walletAddress = '';
   bool _walletLoading = true;
   ISUserInfo? _selectedFriend;
@@ -44,6 +48,10 @@ class _WithdrawAddressScreenState extends State<WithdrawAddressScreen> {
   @override
   void initState() {
     super.initState();
+    _activeTab = widget.initialTargetKind == WithdrawTransferTargetKind.chain
+        ? _WithdrawTargetTab.wallet
+        : _WithdrawTargetTab.friends;
+    if (widget.initialTargetKind == WithdrawTransferTargetKind.chain) return;
     _loadFriends();
     _loadWalletAddress();
   }
@@ -119,7 +127,8 @@ class _WithdrawAddressScreenState extends State<WithdrawAddressScreen> {
   }
 
   ISUserInfo? _findFriendByTarget(String value) {
-    final normalized = WithdrawTransferTargetValidator.normalizePlainText(value);
+    final normalized =
+        WithdrawTransferTargetValidator.normalizePlainText(value);
     if (normalized.isEmpty) return null;
     final id = WithdrawTransferTargetValidator.normalizeChatUserId(normalized);
     if (id != null) {
@@ -149,7 +158,8 @@ class _WithdrawAddressScreenState extends State<WithdrawAddressScreen> {
       );
 
   String? get _addressError {
-    final raw = WithdrawTransferTargetValidator.normalizePlainText(_addrCtrl.text);
+    final raw =
+        WithdrawTransferTargetValidator.normalizePlainText(_addrCtrl.text);
     if (raw.isEmpty) return null;
     final target = _resolvedTransferTarget;
     if (target == null) {
@@ -164,7 +174,8 @@ class _WithdrawAddressScreenState extends State<WithdrawAddressScreen> {
     if (target.isChain &&
         _walletAddress.isNotEmpty &&
         target.value ==
-            WithdrawTransferTargetValidator.normalizePlainText(_walletAddress)) {
+            WithdrawTransferTargetValidator.normalizePlainText(
+                _walletAddress)) {
       return AppI18n.current.t(
         zhHans: '提现地址不能和转出地址相同',
         zhHant: '提現地址不能和轉出地址相同',
@@ -218,23 +229,35 @@ class _WithdrawAddressScreenState extends State<WithdrawAddressScreen> {
     final target = _resolvedTransferTarget;
     if (target == null || _addressError != null) return;
     final friend = _selectedFriend ?? _findFriendByTarget(_addrCtrl.text);
+    if (target.isFriend) {
+      // A display account/short number is not a transfer receiver user ID.
+      if (friend == null || (friend.userID ?? '').trim() != target.value) {
+        WalletTip.show(context, '请从联系人中选择收款人');
+        return;
+      }
+      await openWalletFriendTransfer(context,
+          userID: target.value,
+          coinCode: widget.payMethod.coin,
+          name: _displayName(friend),
+          faceURL: friend.faceURL?.trim());
+      return;
+    }
     await openWalletPage<void>(
       context,
-      WithdrawTransferConfirmScreen(
-        mode: target.isFriend
-            ? WithdrawTransferMode.friend
-            : WithdrawTransferMode.chain,
+      WalletChainWithdrawalScreen(
         coin: widget.coin,
         payMethod: widget.payMethod,
-        targetValue: target.value,
-        targetName: friend == null ? null : _displayName(friend),
-        targetAvatar: friend?.faceURL?.trim(),
+        initialAddress: target.value,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.initialTargetKind == WithdrawTransferTargetKind.chain) {
+      return WalletChainWithdrawalScreen(
+          coin: widget.coin, payMethod: widget.payMethod);
+    }
     final i18n = AppI18n.of(context);
     final cs = WalletPageColors.of(context);
     final appBar = WalletAppBarColors.of(context);
@@ -388,8 +411,8 @@ class _WithdrawAddressScreenState extends State<WithdrawAddressScreen> {
                       const SizedBox(height: 26),
                       _AddressTabs(
                         activeTab: _activeTab,
-                        onSelectWallet: () =>
-                            setState(() => _activeTab = _WithdrawTargetTab.wallet),
+                        onSelectWallet: () => setState(
+                            () => _activeTab = _WithdrawTargetTab.wallet),
                         onSelectFriends: () => setState(
                           () => _activeTab = _WithdrawTargetTab.friends,
                         ),
@@ -717,7 +740,8 @@ class _AddressAction extends StatelessWidget {
 }
 
 class _AddressSearchField extends StatelessWidget {
-  const _AddressSearchField({required this.controller, required this.onChanged});
+  const _AddressSearchField(
+      {required this.controller, required this.onChanged});
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;

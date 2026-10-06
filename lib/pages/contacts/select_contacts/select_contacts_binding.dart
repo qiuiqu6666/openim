@@ -7,7 +7,9 @@ class SelectContactsBinding extends Bindings {
   @override
   void dependencies() {
     Get.lazyPut(() => SelectContactsLogic());
-    if (Get.arguments?['action'] == SelAction.crateGroup) {
+    if (Get.arguments?['action'] == SelAction.crateGroup ||
+        Get.arguments?['action'] == SelAction.addMember ||
+        Get.arguments?['action'] == SelAction.carte) {
       Get.lazyPut(() => SelectContactsFromFriendsLogic());
     }
   }

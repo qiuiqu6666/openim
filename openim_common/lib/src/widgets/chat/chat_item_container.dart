@@ -1,4 +1,5 @@
 import 'chat_inline_metadata.dart';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:openim_common/openim_common.dart';
@@ -8,14 +9,20 @@ class ChatItemContainer extends StatelessWidget {
     super.key,
     required this.id,
     this.leftFaceUrl,
+    this.leftAvatar,
+    this.textBubbleStyle,
+    this.textBubbleText,
     this.rightFaceUrl,
     this.leftNickname,
     this.rightNickname,
     this.timelineStr,
+    this.onTapTimeline,
+    this.timelineSemanticLabel,
     this.timeStr,
     required this.isBubbleBg,
     this.mediaOverlay = false,
     this.bareMedia = false,
+    this.stickerMedia = false,
     this.standaloneCard = false,
     this.metadataBelow = false,
     this.compactBubble = false,
@@ -29,6 +36,8 @@ class ChatItemContainer extends StatelessWidget {
     this.showLeftNickname = true,
     this.showRightNickname = false,
     required this.child,
+    this.childWithStatusBuilder,
+    this.embeddedStatusColor,
     this.sendStatusStream,
     this.onTapLeftAvatar,
     this.onTapRightAvatar,
@@ -37,17 +46,24 @@ class ChatItemContainer extends StatelessWidget {
     this.onFailedToResend,
     this.messageMenus = const [],
     this.menuController,
+    this.avatarSize = 44,
   });
   final String id;
   final String? leftFaceUrl;
+  final Widget? leftAvatar;
+  final ChatTextBubbleStyle? textBubbleStyle;
+  final String? textBubbleText;
   final String? rightFaceUrl;
   final String? leftNickname;
   final String? rightNickname;
   final String? timelineStr;
+  final VoidCallback? onTapTimeline;
+  final String? timelineSemanticLabel;
   final String? timeStr;
   final bool isBubbleBg;
   final bool mediaOverlay;
   final bool bareMedia;
+  final bool stickerMedia;
   final bool standaloneCard;
   final bool metadataBelow;
   final bool compactBubble;
@@ -61,6 +77,10 @@ class ChatItemContainer extends StatelessWidget {
   final bool showLeftNickname;
   final bool showRightNickname;
   final Widget child;
+
+  /// Content that reserves a place for the same delivery state inside itself.
+  final Widget Function(Widget? status)? childWithStatusBuilder;
+  final Color? embeddedStatusColor;
   final Stream<MsgStreamEv<bool>>? sendStatusStream;
   final Function()? onTapLeftAvatar;
   final Function()? onTapRightAvatar;
@@ -69,6 +89,7 @@ class ChatItemContainer extends StatelessWidget {
   final Function()? onFailedToResend;
   final List<PopMenuInfo> messageMenus;
   final CustomPopupMenuController? menuController;
+  final double avatarSize;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -82,14 +103,27 @@ class ChatItemContainer extends StatelessWidget {
       child: Column(
         children: [
           if (null != timelineStr)
-            ChatTimelineView(
-              timeStr: timelineStr!,
-              margin: EdgeInsets.only(bottom: 20.h),
-            ),
+            if (textBubbleStyle != null)
+              Padding(
+                padding: textBubbleStyle!.timelineMargin,
+                child: Text(timelineStr!,
+                    textAlign: TextAlign.center,
+                    style: textBubbleStyle!.timelineTextStyle),
+              )
+            else
+              ChatTimelineView(
+                timeStr: timelineStr!,
+                onTap: onTapTimeline,
+                semanticLabel: timelineSemanticLabel,
+                margin: EdgeInsets.only(bottom: 20.h),
+              ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: isISend ? _buildRightView() : _buildLeftView()),
+              Expanded(
+                  child: isISend
+                      ? _buildRightView(context)
+                      : _buildLeftView(context)),
             ],
           ),
         ],
@@ -97,14 +131,19 @@ class ChatItemContainer extends StatelessWidget {
     );
   }
 
-  Widget _buildChildView(BubbleType type) {
-    final showReadStatus =
-        this.showReadStatus && FriendDisplayPreferences.showReadReceipts;
+  Widget _buildChildView(BuildContext context, BubbleType type) {
+    final textStyle = textBubbleStyle;
+    final overlay = mediaOverlay || stickerMedia;
+    final showReadStatus = this.showReadStatus &&
+        (textStyle?.showReadStatus ?? true) &&
+        FriendDisplayPreferences.showReadReceipts;
     final time = timeStr == null
         ? null
         : Text(timeStr!,
-            style: Styles.ts_8E9AB0_12sp.copyWith(
-                fontSize: 10.sp, color: mediaOverlay ? Colors.white : null));
+            style: textStyle?.metadataStyle(isISend) ??
+                Styles.ts_8E9AB0_12sp.copyWith(
+                    fontSize: 10.sp,
+                    color: overlay ? AppTokens.onAccent : null));
     final Widget? status = !isISend || !showStatus
         ? null
         : isSendFailed
@@ -116,15 +155,17 @@ class ChatItemContainer extends StatelessWidget {
                 stream: sendStatusStream,
               )
             : isSending
-                ? ChatDelayedStatusView(isSending: true)
+                ? ChatDelayedStatusView(
+                    isSending: true, color: embeddedStatusColor)
                 : ChatReadReceiptIcon(
                     isRead: showReadStatus && hasRead,
                     size: compactBubble ? 16.w : null,
-                    color: mediaOverlay
-                        ? Colors.white
-                        : showReadStatus && hasRead
-                            ? Styles.c_0089FF
-                            : Styles.c_8E9AB0,
+                    color: embeddedStatusColor ??
+                        (overlay
+                            ? AppTokens.onAccent
+                            : showReadStatus && hasRead
+                                ? Styles.c_0089FF
+                                : Styles.c_8E9AB0),
                     semanticLabel: showReadStatus
                         ? (hasRead ? StrRes.hasRead : StrRes.unread)
                         : StrRes.sentSuccessfully,
@@ -136,29 +177,82 @@ class ChatItemContainer extends StatelessWidget {
         if (status != null) ...[5.horizontalSpace, status],
       ],
     );
-    final content = mediaOverlay
-        ? ClipRRect(
-            borderRadius: BorderRadius.circular(12.r),
-            child: Stack(
-              children: [
-                child,
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: 38.h,
-                  child: const IgnorePointer(
-                      child: DecoratedBox(
-                    decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Color(0x66000000)],
-                    )),
-                  )),
-                ),
-                Positioned(right: 6.w, bottom: 5.h, child: metadata),
-              ],
+    final hasMetadata = time != null || status != null;
+    final contentChild = childWithStatusBuilder?.call(status) ?? child;
+    final content = overlay
+        ? ChatMessageContentAnchor(
+            messageID: id,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(
+                  stickerMedia ? StickerBubbleLayout.radius : 12.r),
+              child: Stack(
+                children: [
+                  if (stickerMedia && hasMetadata)
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(
+                          minHeight: StickerBubbleLayout.metadataMinHeight),
+                      child: contentChild,
+                    )
+                  else
+                    contentChild,
+                  if (!stickerMedia)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: 38.h,
+                      child: const IgnorePointer(
+                          child: DecoratedBox(
+                        decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Color(0x66000000)],
+                        )),
+                      )),
+                    ),
+                  if (stickerMedia && hasMetadata)
+                    Positioned.fill(
+                      left: StickerBubbleLayout.metadataInset,
+                      top: StickerBubbleLayout.metadataInset,
+                      right: StickerBubbleLayout.metadataInset,
+                      bottom: StickerBubbleLayout.metadataInset,
+                      child: Align(
+                        alignment: Alignment.bottomRight,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.bottomRight,
+                          child: IgnorePointer(
+                            ignoring: !isSendFailed,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .scrim
+                                    .withValues(
+                                        alpha: StickerBubbleLayout
+                                            .metadataBackgroundOpacity),
+                                borderRadius:
+                                    BorderRadius.circular(AppTokens.rSm),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: StickerBubbleLayout
+                                      .metadataHorizontalPadding,
+                                  vertical: StickerBubbleLayout
+                                      .metadataVerticalPadding,
+                                ),
+                                child: metadata,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (!stickerMedia)
+                    Positioned(right: 6.w, bottom: 5.h, child: metadata),
+                ],
+              ),
             ),
           )
         : bareMedia
@@ -167,9 +261,9 @@ class ChatItemContainer extends StatelessWidget {
                 crossAxisAlignment:
                     isISend ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
-                  child,
+                  ChatMessageContentAnchor(messageID: id, child: contentChild),
                   if (time != null || status != null) ...[
-                    4.verticalSpace,
+                    SizedBox(height: 4.h),
                     metadata,
                   ],
                 ],
@@ -182,75 +276,113 @@ class ChatItemContainer extends StatelessWidget {
                         : CrossAxisAlignment.start,
                     children: [
                       if (time != null) ...[time, 4.verticalSpace],
-                      child,
-                      if (status != null) ...[4.verticalSpace, status],
+                      ChatMessageContentAnchor(
+                          messageID: id, child: contentChild),
+                      if (status != null && childWithStatusBuilder == null) ...[
+                        4.verticalSpace,
+                        status
+                      ],
                     ],
                   )
-                : ChatBubble(
-                    compact: compactBubble,
-                    bubbleType: type,
-                    // Position the bubble in the message row; do not expand its background.
-                    alignment: null,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                          maxWidth: compactBubble ? 200.w : 247.w),
-                      child: metadataBelow
-                          ? Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                child,
-                                compactBubble
-                                    ? 0.verticalSpace
-                                    : 4.verticalSpace,
-                                metadata
-                              ],
-                            )
-                          : isBubbleBg
-                              ? ChatInlineMetadata(
-                                  content: child, metadata: metadata)
-                              : Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: isISend
-                                      ? CrossAxisAlignment.end
-                                      : CrossAxisAlignment.start,
-                                  children: [
-                                    if (time != null) ...[
-                                      time,
-                                      4.verticalSpace
+                : ChatMessageContentAnchor(
+                    messageID: id,
+                    child: ChatBubble(
+                      compact: compactBubble,
+                      bubbleType: type,
+                      padding: textStyle?.padding,
+                      borderRadius: textStyle?.radius(isISend),
+                      backgroundColor: textStyle?.background(isISend),
+                      constraints: textStyle == null
+                          ? null
+                          : BoxConstraints(maxWidth: textStyle.maxBubbleWidth),
+                      // Position the bubble in the message row; do not expand its background.
+                      alignment: null,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                            maxWidth: textStyle == null
+                                ? (compactBubble ? 200.w : 247.w)
+                                : math.max(
+                                    0,
+                                    textStyle.maxBubbleWidth -
+                                        textStyle.padding.horizontal)),
+                        child: textStyle != null && textBubbleText != null
+                            ? hasMetadata
+                                ? ChatTextBubbleLayout(
+                                    text: textBubbleText!,
+                                    textStyle: textStyle.textStyle(isISend),
+                                    timeText: timeStr ?? '',
+                                    metadataTextStyle:
+                                        textStyle.metadataStyle(isISend),
+                                    reserveReceipt: status != null,
+                                    forceSeparateFooter: metadataBelow,
+                                    body: contentChild,
+                                    metadata: metadata,
+                                  )
+                                : contentChild
+                            : metadataBelow
+                                ? Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      child,
+                                      compactBubble
+                                          ? 0.verticalSpace
+                                          : 4.verticalSpace,
+                                      metadata
                                     ],
-                                    child,
-                                    if (status != null) ...[
-                                      4.verticalSpace,
-                                      status
-                                    ],
-                                  ],
-                                ),
+                                  )
+                                : isBubbleBg
+                                    ? ChatInlineMetadata(
+                                        content: child, metadata: metadata)
+                                    : Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: isISend
+                                            ? CrossAxisAlignment.end
+                                            : CrossAxisAlignment.start,
+                                        children: [
+                                          if (time != null) ...[
+                                            time,
+                                            4.verticalSpace
+                                          ],
+                                          child,
+                                          if (status != null) ...[
+                                            4.verticalSpace,
+                                            status
+                                          ],
+                                        ],
+                                      ),
+                      ),
                     ),
                   );
     if (messageMenus.isEmpty) return content;
-    return PopButton(
+    return ChatMessageMenu(
       menus: messageMenus,
-      popCtrl: menuController,
-      pressType: PressType.longPress,
+      controller: menuController,
+      isOutgoing: isISend,
       child: content,
     );
   }
 
-  Widget _buildLeftView() => Row(
+  Widget _buildLeftView(BuildContext context) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          AvatarView(
-            width: 44.w,
-            height: 44.h,
-            textStyle: Styles.ts_FFFFFF_14sp_medium,
-            url: leftFaceUrl,
-            text: leftNickname,
-            onTap: onTapLeftAvatar,
-            onLongPress: onLongPressLeftAvatar,
-          ),
-          10.horizontalSpace,
+          leftAvatar ??
+              AvatarView(
+                width: textBubbleStyle != null ? avatarSize : avatarSize.w,
+                height: textBubbleStyle != null ? avatarSize : avatarSize.h,
+                isCircle: textBubbleStyle != null ? true : null,
+                textStyle: textBubbleStyle?.avatarTextStyle ??
+                    Styles.ts_FFFFFF_14sp_medium,
+                textScaler: textBubbleStyle?.avatarTextScaler,
+                url: leftFaceUrl,
+                text: leftNickname,
+                onTap: onTapLeftAvatar,
+                onLongPress: onLongPressLeftAvatar,
+              ),
+          textBubbleStyle == null
+              ? 10.horizontalSpace
+              : SizedBox(width: textBubbleStyle!.avatarGap),
           Flexible(
               child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,14 +394,14 @@ class ChatItemContainer extends StatelessWidget {
               ],
               Align(
                 alignment: Alignment.centerLeft,
-                child: _buildChildView(BubbleType.receiver),
+                child: _buildChildView(context, BubbleType.receiver),
               ),
             ],
           )),
         ],
       );
 
-  Widget _buildRightView() => Row(
+  Widget _buildRightView(BuildContext context) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
@@ -284,7 +416,7 @@ class ChatItemContainer extends StatelessWidget {
               ],
               Align(
                 alignment: Alignment.centerRight,
-                child: _buildChildView(BubbleType.send),
+                child: _buildChildView(context, BubbleType.send),
               ),
             ],
           )),

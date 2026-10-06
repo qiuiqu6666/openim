@@ -19,8 +19,7 @@ bool settingsIsDark(BuildContext context) =>
 
 Color settingsSurfaceAlt(bool dark) => AppTokens.surfaceAlt(dark: dark);
 
-Color settingsDanger(bool dark) =>
-    dark ? const Color(0xFFFF6B73) : AppTokens.walletDanger;
+Color settingsDanger(bool dark) => AppTokens.paymentError(dark: dark);
 
 Color settingsTextColor(BuildContext context) =>
     AppTokens.textPrimary(dark: settingsIsDark(context));
@@ -125,6 +124,8 @@ class SettingsScaffold extends StatelessWidget {
     this.dismissKeyboardOnOutsideTap = false,
     this.embedded = false,
     this.scrollController,
+    this.backgroundColor,
+    this.leadingColor,
   });
 
   final String title;
@@ -142,30 +143,34 @@ class SettingsScaffold extends StatelessWidget {
   final bool dismissKeyboardOnOutsideTap;
   final bool embedded;
   final ScrollController? scrollController;
+  final Color? backgroundColor;
+  final Color? leadingColor;
 
   @override
   Widget build(BuildContext context) {
     final dark = settingsIsDark(context);
-    final background = AppTokens.background(dark: dark);
+    final background = backgroundColor ?? AppTokens.background(dark: dark);
     final text = AppTokens.textPrimary(dark: dark);
     final canShowLeading =
         showLeading && !disableLeading && Navigator.of(context).canPop();
 
-    final overlay = SystemUiOverlayStyle(
-      statusBarColor: background,
-      statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
-      statusBarBrightness: dark ? Brightness.dark : Brightness.light,
-      systemNavigationBarColor: background,
-      systemNavigationBarIconBrightness:
-          dark ? Brightness.light : Brightness.dark,
-    );
+    final overlay = AppSystemBars.styleFor(background);
+    final scrollsUnderHeader = !embedded && body == null;
 
     Widget listView = ListView(
       controller: scrollController,
       keyboardDismissBehavior: dismissKeyboardOnOutsideTap
           ? ScrollViewKeyboardDismissBehavior.onDrag
           : ScrollViewKeyboardDismissBehavior.manual,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      padding: EdgeInsets.fromLTRB(
+        12,
+        12 +
+            (scrollsUnderHeader
+                ? MediaQuery.paddingOf(context).top + kToolbarHeight
+                : 0),
+        12,
+        24,
+      ),
       children: children,
     );
     if (dismissKeyboardOnOutsideTap) {
@@ -180,9 +185,11 @@ class SettingsScaffold extends StatelessWidget {
       child: Scaffold(
         backgroundColor: background,
         extendBody: true,
+        extendBodyBehindAppBar: scrollsUnderHeader,
         appBar: embedded
             ? null
-            : AppBar(
+            : GlassAppBar(
+                toolbarHeight: kToolbarHeight,
                 elevation: 0,
                 scrolledUnderElevation: 0,
                 centerTitle: true,
@@ -194,7 +201,7 @@ class SettingsScaffold extends StatelessWidget {
                     ? leading ??
                         IconButton(
                           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                          color: AppTokens.accent,
+                          color: leadingColor ?? AppTokens.accent,
                           onPressed: onLeadingPressed ??
                               () => Navigator.of(context).pop(),
                         )
@@ -233,10 +240,14 @@ class SettingsGroup extends StatelessWidget {
     super.key,
     required this.children,
     this.margin = const EdgeInsets.only(bottom: 12),
+    this.backgroundColor,
+    this.borderRadius,
   });
 
   final List<Widget> children;
   final EdgeInsetsGeometry margin;
+  final Color? backgroundColor;
+  final double? borderRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -244,8 +255,8 @@ class SettingsGroup extends StatelessWidget {
     return Container(
       margin: margin,
       child: Material(
-        color: AppTokens.surface(dark: dark),
-        borderRadius: BorderRadius.circular(AppTokens.rLg),
+        color: backgroundColor ?? AppTokens.surface(dark: dark),
+        borderRadius: BorderRadius.circular(borderRadius ?? AppTokens.rLg),
         clipBehavior: Clip.antiAlias,
         child: Column(children: children),
       ),
@@ -268,6 +279,7 @@ class SettingsCell extends StatelessWidget {
     this.onTap,
     this.trailing,
     this.titleStyle,
+    this.valueStyle,
     this.enabled = true,
     this.indent = 0,
   });
@@ -284,6 +296,7 @@ class SettingsCell extends StatelessWidget {
   final VoidCallback? onTap;
   final Widget? trailing;
   final TextStyle? titleStyle;
+  final TextStyle? valueStyle;
   final bool enabled;
   final double indent;
 
@@ -381,7 +394,8 @@ class SettingsCell extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.end,
-                style: TextStyle(color: secondaryColor, fontSize: 14),
+                style: valueStyle ??
+                    TextStyle(color: secondaryColor, fontSize: 14),
               ),
             ),
           ],
@@ -601,37 +615,48 @@ class SettingsPrimaryButton extends StatelessWidget {
     required this.text,
     required this.onPressed,
     this.loading = false,
+    this.backgroundColor,
+    this.foregroundColor,
+    this.borderRadius,
+    this.padding = const EdgeInsets.fromLTRB(16, 8, 16, 20),
   });
 
   final String text;
   final VoidCallback? onPressed;
   final bool loading;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+  final double? borderRadius;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+        padding: padding,
         child: SizedBox(
           width: double.infinity,
           height: SettingsResponsive.controlHeight(context),
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               elevation: 0,
-              backgroundColor: AppTokens.accent,
-              foregroundColor: Colors.white,
+              backgroundColor: backgroundColor ?? AppTokens.accent,
+              foregroundColor: foregroundColor ?? AppTokens.onAccent,
               disabledBackgroundColor: AppTokens.border(
                 dark: settingsIsDark(context),
               ),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppTokens.rMd),
+                borderRadius:
+                    BorderRadius.circular(borderRadius ?? AppTokens.rMd),
               ),
             ),
             onPressed: loading ? null : onPressed,
             child: loading
-                ? const SizedBox.square(
+                ? SizedBox.square(
                     dimension: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                      valueColor: AlwaysStoppedAnimation(
+                        foregroundColor ?? AppTokens.onAccent,
+                      ),
                     ),
                   )
                 : Text(
@@ -725,60 +750,16 @@ class SettingsEmptyState extends StatelessWidget {
   }
 }
 
-class SettingsAction<T> {
-  const SettingsAction(
-    this.label,
-    this.value, {
-    this.selected = false,
-    this.enabled = true,
-    this.destructive = false,
-  });
+/// Compatibility name for existing settings and application callers.
+typedef SettingsAction<T> = AppAction<T>;
 
-  final String label;
-  final T value;
-  final bool selected;
-  final bool enabled;
-  final bool destructive;
-}
-
-/// Mobile action sheet follows 99chat's CupertinoActionSheet implementation.
+/// Kept as a thin adapter while callers migrate to the shared package API.
 Future<T?> showSettingsActionSheet<T>(
   BuildContext context, {
   required String title,
   required List<SettingsAction<T>> actions,
-}) {
-  HapticFeedback.selectionClick();
-  return showCupertinoModalPopup<T>(
-    context: context,
-    builder: (sheetContext) => CupertinoActionSheet(
-      title: title.trim().isEmpty
-          ? null
-          : Text(
-              title,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-      actions: [
-        for (final action in actions)
-          CupertinoActionSheetAction(
-            isDestructiveAction: action.destructive,
-            onPressed: action.enabled
-                ? () => Navigator.of(sheetContext).pop<T>(action.value)
-                : () {},
-            child: Text(
-              action.label,
-              style: action.enabled
-                  ? null
-                  : const TextStyle(color: CupertinoColors.systemGrey),
-            ),
-          ),
-      ],
-      cancelButton: CupertinoActionSheetAction(
-        onPressed: () => Navigator.of(sheetContext).pop(),
-        child: Text(settingsText(context, zh: '取消', en: 'Cancel')),
-      ),
-    ),
-  );
-}
+}) =>
+    showAppActionSheet<T>(context, title: title, actions: actions);
 
 Future<bool> showSettingsConfirm(
   BuildContext context, {

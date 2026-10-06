@@ -5,6 +5,21 @@ plugins {
     id 'com.google.gms.google-services'
 }
 
+def amapLocalProperties = new Properties()
+def amapLocalFile = rootProject.file('amap.properties')
+if (amapLocalFile.exists()) {
+    amapLocalFile.withInputStream { amapLocalProperties.load(it) }
+}
+def amapAndroidKey = (project.findProperty('AMAP_ANDROID_KEY')
+        ?: System.getenv('AMAP_ANDROID_KEY')
+        ?: amapLocalProperties.getProperty('AMAP_ANDROID_KEY')
+        ?: '').toString().trim()
+def localSigningProperties = new Properties()
+def localSigningFile = rootProject.file('key.properties')
+if (localSigningFile.exists()) {
+    localSigningFile.withInputStream { localSigningProperties.load(it) }
+}
+
 android {
     namespace "io.openim"
     compileSdk 35
@@ -21,22 +36,30 @@ android {
     }
 
     defaultConfig {
-        applicationId "io.openim.flutter.demo"
-        minSdkVersion 23
+        applicationId "chat.chat99.chatpro"
+        minSdkVersion flutter.minSdkVersion
         targetSdk 33
         versionCode flutter.versionCode
         versionName flutter.versionName
         multiDexEnabled true
+        manifestPlaceholders += [AMAP_ANDROID_KEY: amapAndroidKey]
 
         ndk { abiFilters "arm64-v8a", "x86_64" }
     }
 
     signingConfigs {
         release {
-            keyAlias 'openim'
-            keyPassword 'openim'
-            storeFile file('./openim')
-            storePassword 'openim'
+            if (localSigningFile.exists()) {
+                keyAlias localSigningProperties.getProperty('keyAlias')
+                keyPassword localSigningProperties.getProperty('keyPassword')
+                storeFile rootProject.file(localSigningProperties.getProperty('storeFile'))
+                storePassword localSigningProperties.getProperty('storePassword')
+            } else {
+                keyAlias 'openim'
+                keyPassword 'openim'
+                storeFile file('./openim')
+                storePassword 'openim'
+            }
         }
     }
 
@@ -64,10 +87,12 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
     implementation 'androidx.multidex:multidex:2.0.1'
+    implementation 'com.amap.api:3dmap-location-search:11.3.100_loc11.3.000_sea9.8.1'
 
     // Firebase
     implementation platform("com.google.firebase:firebase-bom:33.7.0")
     implementation "com.google.firebase:firebase-messaging"
+
 }
 
 static def buildTime() {

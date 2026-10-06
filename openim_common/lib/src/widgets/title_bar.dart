@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +9,40 @@ import 'package:openim_common/openim_common.dart';
 
 class TitleBar extends StatelessWidget implements PreferredSizeWidget {
   static double get chatToolbarHeight => NavigationGlassTokens.toolbarHeight;
+
+  /// Keeps the regular toolbar while allowing both text lines to scale.
+  static double chatToolbarHeightFor(BuildContext context,
+      {bool hasSubtitle = true, bool isSingleChat = true}) {
+    // A caller calculates the app-bar size before Scaffold installs Material's
+    // default text style, so use that same theme style for measurement.
+    final inherited = Theme.of(context).textTheme.bodyMedium ??
+        DefaultTextStyle.of(context).style;
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+    double lineHeight(TextStyle style, {StrutStyle? strutStyle}) {
+      final painter = TextPainter(
+        text: TextSpan(text: 'Ag国', style: inherited.merge(style)),
+        textDirection: direction,
+        textScaler: scaler,
+        strutStyle: strutStyle,
+        maxLines: 1,
+      )..layout();
+      final height = painter.height;
+      painter.dispose();
+      return height;
+    }
+
+    final titleHeight = lineHeight(Styles.ts_0C1C33_17sp);
+    final subtitleHeight = hasSubtitle
+        ? lineHeight(TextStyle(fontSize: 11.sp),
+            strutStyle: isSingleChat
+                ? StrutStyle(fontSize: 11.sp, forceStrutHeight: true)
+                : null)
+        : 0.0;
+    return math.max(
+        chatToolbarHeight, titleHeight + subtitleHeight + AppTokens.s3.h);
+  }
+
   const TitleBar({
     Key? key,
     this.height,
@@ -27,9 +63,8 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: Theme.of(context).brightness == Brightness.dark
-          ? SystemUiOverlayStyle.light
-          : SystemUiOverlayStyle.dark,
+      value: AppSystemBars.styleFor(
+          backgroundColor ?? NavigationGlassTokens.backgroundColor(context)),
       child: LiquidGlassSurface(
         tint: backgroundColor,
         child: Padding(
@@ -114,6 +149,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
 
   TitleBar.chat({
     super.key,
+    double? toolbarHeight,
     String? title,
     String? avatarUrl,
     String? presenceText,
@@ -128,7 +164,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
     Function()? onClickMoreBtn,
     Function()? onCloseMultiModel,
   })  : backgroundColor = null,
-        height = chatToolbarHeight,
+        height = toolbarHeight ?? chatToolbarHeight,
         showUnderline = false,
         center = Expanded(
           child: GestureDetector(
@@ -168,10 +204,20 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Styles.ts_0C1C33_17sp),
-                      if (isSingleChat ? presenceText != null : member != null)
-                        Text(isSingleChat ? presenceText! : member!,
+                      // Keep one status line while presence loads or is hidden.
+                      // Empty text preserves its geometry without inventing a
+                      // status or retaining the previous label in semantics.
+                      if (isSingleChat || member != null)
+                        Text(isSingleChat ? (presenceText ?? '') : member!,
+                            key: isSingleChat
+                                ? const ValueKey('chat-header-presence')
+                                : null,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                            strutStyle: isSingleChat
+                                ? StrutStyle(
+                                    fontSize: 11.sp, forceStrutHeight: true)
+                                : null,
                             style: TextStyle(
                                 color: isOnline
                                     ? Styles.c_0089FF
@@ -256,7 +302,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
               ImageRes.backBlack.toImage
                 ..width = 24.w
                 ..height = 24.h
-                ..color = backIconColor,
+                ..color = backIconColor ?? Styles.c_0089FF,
               if (null != leftTitle)
                 leftTitle.toText
                   ..style = (leftTitleStyle ?? Styles.ts_0C1C33_17sp_semibold),
@@ -320,5 +366,6 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
         left = ImageRes.backBlack.toImage
           ..width = 24.w
           ..height = 24.h
+          ..color = Styles.c_0089FF
           ..onTap = (() => Get.back());
 }

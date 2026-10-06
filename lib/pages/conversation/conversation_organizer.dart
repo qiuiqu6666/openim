@@ -72,9 +72,10 @@ class ChatOrganizerApi {
         .toList();
   }
 
-  static Future<ChatFolder> createFolder(String name) async {
+  static Future<ChatFolder> createFolder(String name,
+      {int sortOrder = 0}) async {
     final data = _data(await dio.post('$_base/folders',
-        data: {'name': name, 'sortOrder': 0}, options: _options));
+        data: {'name': name, 'sortOrder': sortOrder}, options: _options));
     return ChatFolder.fromJson(data);
   }
 
@@ -86,15 +87,27 @@ class ChatOrganizerApi {
     return ChatFolder.fromJson(data);
   }
 
+  static Future<ChatFolder> setFolderSortOrder(String id, int sortOrder) async {
+    final data = _data(await dio.patch(
+        '$_base/folders/${Uri.encodeComponent(id)}',
+        data: {'sortOrder': sortOrder},
+        options: _options));
+    return ChatFolder.fromJson(data);
+  }
+
   static Future<void> deleteFolder(String id) async {
     _data(await dio.delete('$_base/folders/${Uri.encodeComponent(id)}',
         options: _options));
   }
 
   static Future<ChatStatesSync> getStates({int updatedAfter = 0}) async {
+    final token = DataSp.chatToken;
     final states = <String, ChatConversationState>{};
     var cursor = updatedAfter;
     while (true) {
+      if (DataSp.chatToken != token) {
+        throw StateError('Session changed while loading conversation states');
+      }
       final data = _data(await dio.get('$_base/conversation-states',
           queryParameters: {'updatedAfter': cursor, 'limit': 500},
           options: _options));

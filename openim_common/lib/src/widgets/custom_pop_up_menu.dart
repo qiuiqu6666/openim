@@ -15,20 +15,32 @@ enum PreferredPosition {
 
 class CustomPopupMenuController extends ChangeNotifier {
   bool menuIsShowing = false;
+  bool _disposed = false;
+  bool get isDisposed => _disposed;
 
   void showMenu() {
+    if (_disposed) return;
     menuIsShowing = true;
     notifyListeners();
   }
 
   void hideMenu() {
+    if (_disposed) return;
     menuIsShowing = false;
     notifyListeners();
   }
 
   void toggleMenu() {
+    if (_disposed) return;
     menuIsShowing = !menuIsShowing;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    menuIsShowing = false;
+    super.dispose();
   }
 }
 

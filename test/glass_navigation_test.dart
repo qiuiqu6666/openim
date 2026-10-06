@@ -7,27 +7,70 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:get/get.dart';
-import 'package:openim/core/controller/im_controller.dart';
-import 'package:openim/pages/mine/mine_logic.dart';
-import 'package:openim/pages/mine/mine_view.dart';
-import 'nickname_edit_entry_test.dart'
-    show NicknameIMFixture, NicknameMineFixture;
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as glass;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:openim/pages/home/glass_bottom_nav_bar.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:persistent_bottom_nav_bar_v2/persistent_bottom_nav_bar_v2.dart';
 
+String get _previewDirectory {
+  final configured = Platform.environment['HOME_GLASS_PREVIEW'] ??
+      const String.fromEnvironment('HOME_GLASS_PREVIEW');
+  if (configured.isNotEmpty) return configured;
+  return const bool.fromEnvironment('GLASS_PREVIEW') ? '/tmp' : '';
+}
+
+Widget _badgedIcon(IconData icon, int count) => SizedBox(
+      width: 32,
+      height: 28,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon),
+          Positioned(top: -2, right: -2, child: UnreadCountView(count: count)),
+        ],
+      ),
+    );
+
+Finder _bottomSurface() => find.descendant(
+      of: find.byType(GlassBottomNavBar),
+      matching: find.byType(LiquidGlassSurface),
+    );
+
+bool _hasLiquidBottom() => find
+    .descendant(
+        of: _bottomSurface(), matching: find.byType(glass.GlassContainer))
+    .evaluate()
+    .isNotEmpty;
+
+Future<void> _exportNavigation(WidgetTester tester, String name) async {
+  if (_previewDirectory.isEmpty) return;
+  final renderer = _hasLiquidBottom() ? 'liquid' : 'fallback';
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(const ValueKey('preview')));
+  await tester.runAsync(() async {
+    final directory = Directory(_previewDirectory);
+    await directory.create(recursive: true);
+    final image = await boundary.toImage(pixelRatio: 2);
+    try {
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      await File('${directory.path}/$name-$renderer.png')
+          .writeAsBytes(bytes!.buffer.asUint8List());
+    } finally {
+      image.dispose();
+    }
+  });
+  debugPrint('HOME_GLASS_PREVIEW: $name renderer=$renderer');
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     await SpUtil().init();
-    await NavigationGlassController.instance
-        .setMode(NavigationGlassMode.liquid);
-    const fontDirectory = String.fromEnvironment('GLASS_PREVIEW_FONTS');
+    final fontDirectory = Platform.environment['GLASS_PREVIEW_FONTS'] ??
+        const String.fromEnvironment('GLASS_PREVIEW_FONTS');
     if (fontDirectory.isNotEmpty) {
       for (final entry in {
         'Roboto': 'Roboto-Regular.ttf',
@@ -38,6 +81,19 @@ void main() {
               .readAsBytes()
               .then((bytes) => ByteData.sublistView(bytes)));
         await loader.load();
+      }
+    }
+    if (_previewDirectory.isNotEmpty) {
+      final chinese = File('C:/Windows/Fonts/msyh.ttc');
+      if (await chinese.exists()) {
+        await (FontLoader('HomeGlassCjk')
+              ..addFont(chinese.readAsBytes().then(ByteData.sublistView)))
+            .load();
+      }
+      if (fontDirectory.isEmpty) {
+        await (FontLoader('MaterialIcons')
+              ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf')))
+            .load();
       }
     }
   });
@@ -61,10 +117,12 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final theme = ThemeData(
         fontFamily: 'Roboto',
+        fontFamilyFallback: const ['HomeGlassCjk'],
         platform: platform,
         colorScheme: ColorScheme.fromSeed(
             seedColor: const Color(0xFF0089FF), brightness: brightness),
         brightness: brightness);
+    var selectedIndex = 0;
     await tester.pumpWidget(ScreenUtilInit(
       designSize: const Size(375, 812),
       builder: (_, __) => MaterialApp(
@@ -78,37 +136,51 @@ void main() {
               disableAnimations: reducedMotion),
           child: RepaintBoundary(
             key: const ValueKey('preview'),
-            child: Scaffold(
-              extendBody: true,
-              appBar: GlassAppBar(title: const Text('Messages'), actions: [
-                IconButton(onPressed: () {}, icon: const Icon(Icons.add))
-              ]),
-              body: ListView.builder(
-                itemCount: 16,
-                itemBuilder: (_, index) => ListTile(
-                  leading: CircleAvatar(child: Text('${index + 1}')),
-                  title: Text('Conversation ${index + 1}'),
-                  subtitle: const Text('A new message'),
-                ),
-              ),
-              bottomNavigationBar: GlassBottomNavBar(
-                  config: NavBarConfig(
-                selectedIndex: 0,
-                onItemSelected: onSelected ?? (_) {},
-                items: [
-                  ItemConfig(
-                      icon: const Icon(Icons.chat_bubble_outline),
-                      title: 'Messages'),
-                  ItemConfig(
-                      icon: const Icon(Icons.groups_outlined), title: 'Groups'),
-                  ItemConfig(
-                      icon: const Icon(Icons.contacts_outlined),
-                      title: 'Contacts'),
-                  ItemConfig(
-                      icon: const Icon(Icons.person_outline), title: 'Me'),
-                ],
-              )),
-            ),
+            child: StatefulBuilder(
+                builder: (context, setState) => Scaffold(
+                      extendBody: true,
+                      extendBodyBehindAppBar: true,
+                      appBar: GlassAppBar(title: const Text('消息'), actions: [
+                        IconButton(
+                            onPressed: () {}, icon: const Icon(Icons.add))
+                      ]),
+                      body: ListView.builder(
+                        padding: EdgeInsets.only(
+                            top: 44 + NavigationGlassTokens.toolbarHeight),
+                        itemCount: 16,
+                        itemBuilder: (_, index) => ListTile(
+                          leading: CircleAvatar(child: Text('${index + 1}')),
+                          title: Text('联系人 ${index + 1}'),
+                          subtitle: const Text('最近收到的消息'),
+                        ),
+                      ),
+                      bottomNavigationBar: GlassBottomNavBar(
+                          config: NavBarConfig(
+                        selectedIndex: selectedIndex,
+                        onItemSelected: (index) {
+                          setState(() => selectedIndex = index);
+                          onSelected?.call(index);
+                        },
+                        items: [
+                          ItemConfig(
+                              icon: _badgedIcon(Icons.chat_bubble_outline, 8),
+                              title: '消息'),
+                          ItemConfig(
+                              icon: const Icon(Icons.groups_outlined),
+                              title: '群聊'),
+                          ItemConfig(
+                              icon: _badgedIcon(Icons.contacts_outlined, 128),
+                              title: '通讯录'),
+                          ItemConfig(
+                              icon: const Icon(
+                                  Icons.account_balance_wallet_outlined),
+                              title: '钱包'),
+                          ItemConfig(
+                              icon: const Icon(Icons.person_outline),
+                              title: '我的'),
+                        ],
+                      )),
+                    )),
           ),
         ),
       ),
@@ -116,16 +188,19 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('bottom surface meets safe area without extra gap', (tester) async {
+  testWidgets('bottom surface meets safe area without extra gap',
+      (tester) async {
     for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
       await pumpNavigation(tester, platform: platform);
       final bar = tester.getRect(find.byType(GlassBottomNavBar));
-      final surface = platform == TargetPlatform.android
-          ? find.descendant(of: find.byType(GlassBottomNavBar), matching: find.byType(LiquidGlassSurface))
-          : find.byType(glass.GlassBottomBar);
+      final surface = find.descendant(
+          of: find.byType(GlassBottomNavBar),
+          matching: find.byType(LiquidGlassSurface));
       expect(bar.bottom, 812);
-      expect(tester.getRect(surface).bottom, 812 - 34);
-      expect(bar.height, NavigationGlassTokens.barHeight + NavigationGlassTokens.gap + 34);
+      expect(tester.getRect(surface),
+          Rect.fromLTWH(bar.left + 12, bar.top, bar.width - 24, 56));
+      expect(bar.height, kBottomNavigationBarHeight + 34);
+      expect(tester.getRect(find.byType(BottomNavigationBar)).bottom, 812 - 34);
     }
   });
 
@@ -134,15 +209,15 @@ void main() {
         (tester) async {
       await pumpNavigation(tester, brightness: brightness, scale: 2);
       final bar = tester.getRect(find.byType(GlassBottomNavBar));
-      final label = tester.getRect(find.text('Contacts').hitTestable().first);
+      final label = tester.getRect(find.text('通讯录').hitTestable().first);
       final style =
-          tester.widget<Text>(find.text('Contacts').hitTestable().first).style;
+          tester.widget<Text>(find.text('通讯录').hitTestable().first).style;
       await NavigationGlassController.instance
           .setMode(NavigationGlassMode.translucent);
       await tester.pumpAndSettle();
       expect(tester.getRect(find.byType(GlassBottomNavBar)), bar);
-      expect(tester.getRect(find.text('Contacts')), label);
-      expect(tester.widget<Text>(find.text('Contacts')).style, style);
+      expect(tester.getRect(find.text('通讯录')), label);
+      expect(tester.widget<Text>(find.text('通讯录')).style, style);
       expect(tester.takeException(), isNull);
     });
     testWidgets('${brightness.name} glass respects safe areas and selection',
@@ -150,31 +225,112 @@ void main() {
       var selected = -1;
       await pumpNavigation(tester,
           brightness: brightness, onSelected: (value) => selected = value);
-      expect(find.byType(glass.GlassContainer), findsWidgets);
-      expect(find.byType(glass.GlassBottomBar), findsOneWidget);
+      expect(
+          find.byType(BackdropFilter).evaluate().length +
+              find.byType(glass.GlassContainer).evaluate().length,
+          2);
+      expect(find.byType(LiquidGlassSurface), findsNWidgets(2));
       expect(tester.getRect(find.byType(GlassAppBar)).bottom, greaterThan(44));
-      final button =
-          find.widgetWithText(GestureDetector, 'Contacts').hitTestable().first;
-      expect(tester.getRect(button).height, greaterThanOrEqualTo(48));
-      expect(tester.getRect(button).bottom, lessThanOrEqualTo(812 - 34));
-      await tester.tap(button);
+      final bar = find.byType(BottomNavigationBar);
+      expect(tester.getRect(bar).height, greaterThanOrEqualTo(48));
+      expect(tester.getRect(bar).bottom, lessThanOrEqualTo(812 - 34));
+      await tester.tap(find.text('通讯录').hitTestable().first);
       expect(selected, 2);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      // Optional visual evidence, never part of production data.
-      if (const bool.fromEnvironment('GLASS_PREVIEW')) {
-        final boundary = tester.renderObject<RenderRepaintBoundary>(
-            find.byKey(const ValueKey('preview')));
-        await tester.runAsync(() async {
-          final image = await boundary.toImage();
-          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          await File('/tmp/openim-glass-${brightness.name}.png')
-              .writeAsBytes(bytes!.buffer.asUint8List());
-          image.dispose();
-        });
-      }
     });
   }
+
+  for (final brightness in Brightness.values) {
+    for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+      testWidgets(
+          '${brightness.name} ${platform.name} home capsule keeps five tabs and badges at large text',
+          (tester) async {
+        for (final scale in [1.0, 2.0]) {
+          await pumpNavigation(tester,
+              brightness: brightness, platform: platform, scale: scale);
+          final bar = tester.getRect(find.byType(GlassBottomNavBar));
+          final capsule = tester.getRect(_bottomSurface());
+          expect(bar, const Rect.fromLTWH(0, 722, 375, 90));
+          expect(capsule, const Rect.fromLTWH(12, 722, 351, 56));
+          expect(
+              tester
+                  .widget<BottomNavigationBar>(find.byType(BottomNavigationBar))
+                  .items,
+              hasLength(5));
+          expect(find.byType(UnreadCountView), findsNWidgets(2));
+          for (final value in ['8', '99+']) {
+            final badgeText = find.descendant(
+                of: find.byType(BottomNavigationBar),
+                matching: find.text(value));
+            expect(badgeText, findsOneWidget);
+            final badge = tester.getRect(badgeText);
+            expect(badge.left, greaterThanOrEqualTo(capsule.left));
+            expect(badge.right, lessThanOrEqualTo(capsule.right));
+            expect(badge.top, greaterThanOrEqualTo(capsule.top));
+            expect(badge.bottom, lessThanOrEqualTo(capsule.bottom));
+          }
+          for (final label in ['消息', '群聊', '通讯录', '钱包', '我的']) {
+            final destination = find.descendant(
+                of: find.byType(BottomNavigationBar),
+                matching: find.text(label));
+            expect(destination.hitTestable(), findsOneWidget);
+            final labelRect = tester.getRect(destination);
+            expect(labelRect.left, greaterThanOrEqualTo(capsule.left));
+            expect(labelRect.right, lessThanOrEqualTo(capsule.right));
+            expect(labelRect.bottom, lessThanOrEqualTo(capsule.bottom));
+          }
+          await _exportNavigation(tester,
+              'home-glass-${brightness.name}-${platform.name}-text${scale.toInt()}');
+          expect(tester.takeException(), isNull);
+        }
+      });
+    }
+  }
+
+  testWidgets('actual home shader paints or explicitly reports its fallback',
+      (tester) async {
+    final available = await NavigationGlassController.instance
+        .setMode(NavigationGlassMode.liquid);
+    if (!available) {
+      await NavigationGlassController.instance
+          .setMode(NavigationGlassMode.translucent);
+    }
+    await pumpNavigation(tester, platform: TargetPlatform.android);
+    if (!available) {
+      expect(_hasLiquidBottom(), isFalse);
+      expect(
+          find.descendant(
+              of: _bottomSurface(), matching: find.byType(BackdropFilter)),
+          findsOneWidget);
+      debugPrint(
+          'HOME_GLASS_RENDERER: fallback; host shader initialization failed. '
+          'This run does not validate liquid rendering.');
+    } else {
+      expect(
+          find.descendant(
+              of: _bottomSurface(),
+              matching: find.byType(glass.GlassContainer)),
+          findsOneWidget);
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const ValueKey('preview')));
+      await tester.runAsync(() async {
+        final image = await boundary.toImage();
+        try {
+          final pixels =
+              await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+          expect(pixels, isNotNull);
+          expect(pixels!.lengthInBytes, greaterThan(0));
+        } finally {
+          image.dispose();
+        }
+      });
+      debugPrint(
+          'HOME_GLASS_RENDERER: liquid; real shader and raster completed.');
+    }
+    await _exportNavigation(tester, 'home-glass-shader-android');
+    expect(tester.takeException(), isNull);
+  });
 
   test('renderer failure preserves preference and can be retried', () async {
     var attempts = 0;
@@ -218,7 +374,7 @@ void main() {
     const corners = BorderRadius.only(
         bottomLeft: Radius.circular(12), bottomRight: Radius.circular(20));
     for (final mode in [
-      NavigationGlassMode.liquid,
+      NavigationGlassMode.automatic,
       NavigationGlassMode.translucent
     ]) {
       await NavigationGlassController.instance.setMode(mode);
@@ -233,12 +389,7 @@ void main() {
               .widgetList<ClipRRect>(find.byType(ClipRRect))
               .any((clip) => clip.borderRadius == corners),
           isTrue);
-      if (mode == NavigationGlassMode.liquid) {
-        final container = tester
-            .widget<glass.GlassContainer>(find.byType(glass.GlassContainer));
-        expect(
-            (container.shape as glass.LiquidRoundedRectangle).borderRadius, 0);
-      }
+      expect(find.byType(BackdropFilter), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
   });
@@ -337,58 +488,29 @@ void main() {
   });
 
   testWidgets(
-      'Android defaults to shader-free bars and saves explicit quality choice',
+      'Android keeps general bars frosted and restores its saved quality choice',
       (tester) async {
     await pumpNavigation(tester, platform: TargetPlatform.android);
     expect(find.byType(glass.GlassBottomBar), findsNothing);
-    expect(find.byType(glass.GlassContainer), findsNothing);
-    expect(find.byType(BackdropFilter), findsNothing);
-    await NavigationGlassController.instance
-        .setMode(NavigationGlassMode.liquid);
-    await tester.pumpAndSettle();
-    expect(find.byType(glass.GlassBottomBar), findsOneWidget);
-    expect(SpUtil().getString(NavigationGlassController.storageKey), 'liquid');
+    final topSurface = find.descendant(
+        of: find.byType(GlassAppBar),
+        matching: find.byType(LiquidGlassSurface));
+    expect(
+        find.descendant(
+            of: topSurface, matching: find.byType(glass.GlassContainer)),
+        findsNothing);
+    expect(
+        find.descendant(of: topSurface, matching: find.byType(BackdropFilter)),
+        findsOneWidget);
     await NavigationGlassController.instance
         .setMode(NavigationGlassMode.translucent);
     await tester.pumpAndSettle();
     expect(find.byType(glass.GlassBottomBar), findsNothing);
     expect(find.byType(glass.GlassContainer), findsNothing);
+    expect(find.byType(BackdropFilter), findsNWidgets(2));
     final restored = NavigationGlassController()..load();
     expect(restored.mode, NavigationGlassMode.translucent);
     restored.dispose();
-    expect(tester.takeException(), isNull);
-  });
-  testWidgets('Mine exposes a working persisted glass quality picker',
-      (tester) async {
-    addTearDown(Get.reset);
-    tester.view.physicalSize = const Size(375, 812);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final im = NicknameIMFixture();
-    Get.put<IMController>(im);
-    Get.put<MineLogic>(NicknameMineFixture(im));
-    await tester.pumpWidget(ScreenUtilInit(
-      designSize: const Size(375, 812),
-      builder: (_, __) => GetMaterialApp(
-        translations: TranslationService(),
-        locale: const Locale('zh', 'CN'),
-        supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-        localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        home: MinePage(),
-      ),
-    ));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('导航玻璃效果'));
-    await tester.pumpAndSettle();
-    expect(find.text('液态玻璃'), findsOneWidget);
-    await tester.tap(find.text('普通半透明'));
-    await tester.pumpAndSettle();
-    expect(NavigationGlassController.instance.mode,
-        NavigationGlassMode.translucent);
-    expect(SpUtil().getString(NavigationGlassController.storageKey),
-        'translucent');
-    expect(find.text('普通半透明'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

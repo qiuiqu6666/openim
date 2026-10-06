@@ -1,0 +1,27 @@
+{
+  "errCode": 0,
+  "errMsg": "",
+  "errDlt": "",
+  "data": {
+    "order": {
+      "orderID": "transfer-fixture-1",
+      "biz": "group_transfer",
+      "scene": "group",
+      "currency": "USDT",
+      "amount": "10",
+      "status": "done",
+      "recvID": "fixture-recipient",
+      "groupID": "fixture-group",
+      "createdAt": 1791032256531,
+      "expireAt": 0,
+      "shareAmount": "0",
+      "shareCount": 0,
+      "targetCurrency": "",
+      "targetAmount": "0",
+      "fee": "0",
+      "toAddress": "",
+      "remark": "测试备注"
+    },
+    "shares": null
+  }
+}

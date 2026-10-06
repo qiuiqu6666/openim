@@ -1,159 +1,501 @@
-import 'package:file_picker/file_picker.dart';
-import 'package:openim_common/src/widgets/chat/location_picker.dart';
-import 'message_selection_page.dart';
-import 'formatted_message_page.dart';
-import 'package:openim_common/src/widgets/voice_capture_dialog.dart';
-import 'package:just_audio/just_audio.dart' as audio;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
-import 'dart:io';
-
-import 'package:collection/collection.dart';
-import 'package:common_utils/common_utils.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:openim_live/openim_live.dart';
 import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 import 'package:rxdart/rxdart.dart';
-import 'package:sprintf/sprintf.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
-import 'package:wechat_camera_picker/wechat_camera_picker.dart';
-import 'package:openim_live/openim_live.dart';
-import 'package:uuid/uuid.dart';
-
-import '../../core/controller/app_controller.dart';
 import '../../core/controller/im_controller.dart';
 import '../../core/im_callback.dart';
 import '../../routes/app_navigator.dart';
-import '../contacts/select_contacts/select_contacts_logic.dart';
+import '../../services/favorite_send_coordinator.dart';
+import '../contacts/add_by_search/add_by_search_logic.dart';
 import '../contacts/contacts_logic.dart';
-import '../contacts/group_profile_panel/group_profile_panel_logic.dart';
-import 'mention_id.dart';
-import '../conversation/conversation_logic.dart';
-import '../mine/settings/chat_background_local_service.dart';
-import 'personal_sticker_store.dart';
-import 'sticker_video_message.dart';
+import '../official_account/models/official_account.dart';
+import '../official_account/presentation/official_account_timeline_policy.dart';
+import '../ai_assistant/streaming/assistant_stream_chunk.dart';
+import '../ai_assistant/streaming/assistant_stream_state.dart';
+import '../group_features/data/group_feature_runtime.dart';
+import '../group_features/models/group_feature_context.dart';
+import 'composer/chat_composer_controller.dart';
+import 'calling/chat_call_controller.dart';
+import 'appearance/chat_appearance_controller.dart';
+import 'favorites/chat_favorites_controller.dart';
+import 'fund/chat_fund_controller.dart';
+import 'fund/fund_card_recipient.dart';
 import 'group_setup/group_member_list/group_member_list_logic.dart';
+import 'group/chat_group_controller.dart';
+import 'group/member_actions/chat_member_action_sheet.dart';
+import 'group/member_actions/chat_member_actions_controller.dart';
+import 'history/chat_timeline_controller.dart';
+import 'history/chat_history_prefetcher.dart';
+import 'history/date_jump/chat_date_jump_controller.dart';
+import 'history/date_jump/chat_date_window_controller.dart';
+import 'history/date_jump/widgets/chat_date_picker_dialog.dart';
+import 'media/chat_media_controller.dart';
+import 'messages/chat_delivery_controller.dart';
+import 'messages/chat_message_actions.dart';
+import 'messages/arrival/chat_message_arrival_controller.dart';
+import 'messages/presentation/chat_message_presentation.dart';
+import 'messages/forwarding/chat_forwarding_controller.dart';
+import 'messages/selection/message_selection_controller.dart';
+import 'navigation/chat_message_navigation.dart';
+import 'navigation/chat_message_focus_controller.dart';
+import 'receipts/chat_read_receipts.dart';
+import 'scrolling/chat_new_message_tracker.dart';
+import 'scrolling/chat_latest_scroll_controller.dart';
+import 'stickers/chat_sticker_controller.dart';
+import 'stickers/builtin/chat_builtin_sticker.dart';
+import 'stickers/personal_sticker_store.dart';
+import 'voice/chat_voice_controller.dart';
+import 'voice/voice_to_text_service.dart';
+import 'voice/voice_transcription_controller.dart';
 
 class ChatLogic extends SuperController {
-  late final voicePlayback = VoicePlaybackController(
-    messages: () => messageList,
-    onPlayed: markVoicePlayed,
+  bool _chatClosing = false;
+  String? _chatToken;
+  String? _imToken;
+  String? _chatRouteName;
+  bool get _sameAccount =>
+      _chatAccountID == OpenIM.iMManager.userID &&
+      _chatToken == DataSp.chatToken &&
+      _imToken == DataSp.imToken;
+  bool get _sessionInactive => _chatClosing || isClosed || !_sameAccount;
+  final assistantStreams = AssistantStreamState();
+  late final messageArrivals =
+      ChatMessageArrivalController(currentUserID: () => _chatAccountID);
+  late final newMessages = ChatNewMessageTracker(
+    currentUserID: () => OpenIM.iMManager.userID,
+    isClosed: () => _sessionInactive,
   );
-  final personalStickers = PersonalStickerStore();
-  ({String url, String requestID})? _pendingSticker;
-  final imLogic = Get.find<IMController>();
-  final appLogic = Get.find<AppController>();
-  final conversationLogic = Get.find<ConversationLogic>();
-  final cacheLogic = Get.find<CacheController>();
+  late final _latestScroll = ChatLatestScrollController(
+    controller: scrollController,
+    isClosed: () => _sessionInactive,
+    shouldFollow: () => !newMessages.awayFromLatest.value,
+    onReachedLatest: () => newMessages.updateScrollOffset(0),
+  );
+  late final _composer = ChatComposerController(
+    conversationID: () => conversationInfo.conversationID,
+    currentUserID: () => OpenIM.iMManager.userID,
+    isGroupChat: () => isGroupChat,
+    groupInfo: () => groupInfo,
+    sendingMuted: () => sendingMuted,
+    isSessionInactive: () => _sessionInactive || isOfficialNotificationChat,
+    sendMessage: (message) async {
+      await _sendMessage(message);
+    },
+    persistDraft: (id, draft) async {
+      if (!_sameAccount || isOfficialNotificationChat) return;
+      await OpenIM.iMManager.conversationManager
+          .setConversationDraft(conversationID: id, draftText: draft);
+    },
+    selectMembers: (group, operation) async {
+      final result = await AppNavigator.startGroupMemberList(
+          groupInfo: group,
+          opType: operation == ComposerMemberSelection.mention
+              ? GroupMemberOpType.at
+              : GroupMemberOpType.call);
+      return result is List<GroupMembersInfo> ? result : null;
+    },
+    closeToolbox: closeToolbox,
+    scrollBottom: () => scrollBottom(smooth: true),
+    onTypingChanged: (focus) => sendTypingMsg(focus: focus),
+    showError: IMViews.showToast,
+  );
+  late final _delivery = ChatDeliveryController(
+    accountID: _chatAccountID,
+    messageList: messageList,
+    conversation: () => conversationInfo,
+    isClosed: () => _sessionInactive || isOfficialNotificationChat,
+    groupStatus: () => groupInfo?.status,
+    scrollBottom: scrollBottom,
+    resetInput: (message) => _composer.resetAfterSend(message),
+  );
+  late final _receipts = ChatReadReceipts(
+    messageList: messageList,
+    conversation: () => conversationInfo,
+    isClosed: () => _sessionInactive,
+    canReadConversation: () => !messageArrivals.hasEntering,
+    isActive: () =>
+        Get.currentRoute == _chatRouteName &&
+        (WidgetsBinding.instance.lifecycleState == null ||
+            WidgetsBinding.instance.lifecycleState ==
+                AppLifecycleState.resumed),
+    isSessionActive: () => _sameAccount,
+    onConversationRead: (request) =>
+        imLogic.conversationReadRequestSubject.addSafely(request),
+  );
+  late final ChatVoiceController _voice = ChatVoiceController(
+    conversationID: conversationInfo.conversationID,
+    messages: () => messageList,
+    bufferedMessages: () => scrollingCacheMessageList,
+    isMessageRemoved: _removedMessageIDs.contains,
+    markMessageRead: _receipts.markRead,
+    sendMessage: (message, {resetInput = true}) async {
+      await _sendMessage(message, resetInput: resetInput);
+    },
+    canSend: () => !_sessionInactive && !sendingMuted && !isInvalidGroup,
+    attachmentBusy: () => _media.pickingAttachment,
+  );
+  late final ChatMediaController _media = ChatMediaController(
+    conversationID: () => conversationInfo.conversationID,
+    isClosed: () => _sessionInactive,
+    sendingMuted: () => sendingMuted,
+    isInvalidGroup: () => isInvalidGroup,
+    voiceBusy: () => _voice.busy,
+    sendMessage: (message, {addToUI = true, resetInput = true}) =>
+        _sendMessage(message, addToUI: addToUI, resetInput: resetInput),
+    stageMessage: (message) {
+      if (!_sessionInactive) messageList.add(message);
+    },
+    previewVoice: _voice.previewAndSendVoice,
+    closeToolbox: closeToolbox,
+  );
+  late final _stickers = ChatStickerController(
+    isClosed: () => _sessionInactive,
+    sendingMuted: () => sendingMuted,
+    isInvalidGroup: () => isInvalidGroup,
+    sendMessage: _sendMessage,
+    sendBuiltinMessage: (message) => _sendMessage(message, resetInput: false),
+    closeToolbox: closeToolbox,
+  );
+  late final _funds = ChatFundController(
+    isClosed: () => _sessionInactive,
+    canSend: () => !sendingMuted && !isInvalidGroup,
+    userID: () => isSingleChat ? userID : null,
+    groupID: () => isGroupChat ? groupID : null,
+    recipientName: () => isSingleChat ? nickname.value : null,
+    recipientFaceURL: () => isSingleChat ? faceUrl.value : null,
+    closeToolbox: closeToolbox,
+  );
+  late final _favorites = ChatFavoritesController(
+    messageList: messageList,
+    delivery: _delivery,
+    conversation: () => conversationInfo,
+    accountID: _chatAccountID,
+    isClosed: () => _sessionInactive || isOfficialNotificationChat,
+    sendingMuted: () => sendingMuted,
+    isInvalidGroup: () => isInvalidGroup,
+    displayName: () => nickname.value,
+    unfocus: () => focusNode.unfocus(),
+  );
+  late final _actions = ChatMessageActions(
+    conversationID: () => conversationInfo.conversationID,
+    removeMessage: _removeMessageByID,
+    isClosed: () => _sessionInactive || isOfficialNotificationChat,
+  );
+  late final ChatForwardingController _forwarding = ChatForwardingController(
+    delivery: _delivery,
+    messages: () => messageList,
+    isClosed: () => _sessionInactive || isOfficialNotificationChat,
+    isGroupChat: () => isGroupChat,
+    nickname: () => nickname.value,
+    faceUrl: () => faceUrl.value,
+    canForward: canForward,
+    closeToolbox: closeToolbox,
+    onForwardNeedsReview: () => messageSelection.cancel(),
+  );
+  late final MessageSelectionController messageSelection =
+      MessageSelectionController(
+    messages: () => messageList,
+    isClosed: () => _sessionInactive || isOfficialNotificationChat,
+    onStart: () {
+      messageArrivals.cancel();
+      closeToolbox();
+      focusNode.unfocus();
+      _latestScroll.cancel();
+    },
+    deleteMessages: _actions.deleteMessages,
+    forwardMessages: _forwarding.forwardMessages,
+  );
+  Worker? _messageSelectionWorker;
+  late final _navigation = ChatMessageNavigation(
+    isClosed: () => _sessionInactive,
+    isGroupChat: () => isGroupChat,
+    isSingleChat: () => isSingleChat,
+    isAdminOrOwner: () => isAdminOrOwner,
+    groupID: () => groupID,
+    groupInfo: () => groupInfo,
+  );
+  TextEditingController get inputCtrl => _composer.inputCtrl;
+  FocusNode get focusNode => _composer.focusNode;
+  Rxn<Message> get quotedMessage => _composer.quotedMessage;
+  RxList<GroupMembersInfo> get directionalUsers => _composer.directionalUsers;
+  VoicePlaybackController get voicePlayback => _voice.playback;
+  VoiceTranscriptionController get voiceTranscriptions => _voice.transcriptions;
+  VoiceToTextService get voiceToTextService => _voice.service;
+  PersonalStickerStore get personalStickers => _stickers.personalStickers;
+  PublishSubject<MsgStreamEv<bool>> get sendStatusSub =>
+      _delivery.sendStatusSub;
 
-  final inputCtrl = TextEditingController();
-  final focusNode = FocusNode();
+  late final _calling = ChatCallController(
+    im: imLogic,
+    userID: () => userID,
+    nickname: () => nickname.value,
+    isClosed: () => _sessionInactive || isOfficialNotificationChat,
+    isSingleChat: () => isSingleChat,
+    busy: () => PackageBridge.rtcBridge?.hasConnection == true,
+  );
+  late final _appearance = ChatAppearanceController(
+    otherID: () => otherId,
+    isClosed: () => _sessionInactive,
+  );
+  RxDouble get scaleFactor => _appearance.scaleFactor;
+  RxString get background => _appearance.background;
+  bool get rtcIsBusy => _calling.rtcIsBusy;
+
+  late final _group = ChatGroupController(
+    im: imLogic,
+    groupID: () => groupID,
+    messages: messageList,
+    clearInput: () => inputCtrl.clear(),
+    readCachedGroupInfo: (id) => groupFeatures.cachedGroupInfo(id),
+    onGroupInfoApplied: (info) {
+      if (!_sessionInactive) groupFeatures.seed(info);
+    },
+    onGroupProfileChanged: (name, face) {
+      if (_sessionInactive) return;
+      nickname.value = name;
+      faceUrl.value = face;
+    },
+  );
+  GroupInfo? get groupInfo => _group.groupInfo;
+  late final GroupFeatureStore groupFeatures =
+      GroupFeatureRuntime.forAccount(imLogic);
+  GroupFeatureContext get groupFeatureContext => groupFeatures.context(
+      id: groupID ?? '',
+      name: nickname.value,
+      userID: _chatAccountID,
+      admin: isAdminOrOwner,
+      current: () => !_sessionInactive && !isInvalidGroup);
+  GroupMembersInfo? get groupMembersInfo => _group.groupMembersInfo;
+  List<GroupMembersInfo> get ownerAndAdmin => _group.ownerAndAdmin;
+  Map<String, GroupMembersInfo> get memberUpdateInfoMap =>
+      _group.memberUpdateInfoMap;
+  RxInt get groupMemberRoleLevel => _group.groupMemberRoleLevel;
+  RxBool get isInGroup => _group.isInGroup;
+  RxInt get memberCount => _group.memberCount;
+  RxString get announcement => _group.announcement;
+  RxString get announcementVersion => _group.announcementVersion;
+  String? get groupOwnerID => _group.groupOwnerID;
+  bool get sendingMuted => isOfficialNotificationChat || _group.sendingMuted;
+
+  late final _memberActions = ChatMemberActionsController(
+    groupID: () => groupID,
+    currentUserID: () => OpenIM.iMManager.userID,
+    isSessionInactive: () => _sessionInactive,
+    isJoined: () => isInGroup.value,
+    groupRevision: () => _group.memberActionRevision,
+    sendingMuted: () => sendingMuted,
+    latestMember: (id) => memberUpdateInfoMap[id],
+    latestGroup: () => groupInfo,
+    isKnownRemoved: _group.hasMemberLeft,
+    mention: mentionMessageSender,
+    sendExclusiveRedPacket: _funds.sendExclusiveRedPacket,
+    memberUpdated: imLogic.memberInfoChangedSubject.addSafely,
+    memberRemoved: imLogic.memberDeletedSubject.addSafely,
+    showFeedback: IMViews.showToast,
+    runLoading: <T>(action) =>
+        LoadingView.singleton.wrap<T>(asyncFunction: action),
+  );
+
+  final imLogic = Get.find<IMController>();
+
   final scrollController = ScrollController();
+  final messagePositionController = ChatListPositionController();
   final refreshController = RefreshController();
   bool playOnce = false;
   final peerTyping = false.obs;
   final _messageSubscriptions = <StreamSubscription>[];
   Timer? _typingExpiry;
 
-  final _removedMessageIDs = <String>{};
+  Set<String> get _removedMessageIDs => _timeline.removedIDs;
   void _removeMessageByID(String? id) {
-    if (id == null) return;
-    _removedMessageIDs.add(id);
-    messageList.removeWhere((m) => m.clientMsgID == id);
-    scrollingCacheMessageList.removeWhere((m) => m.clientMsgID == id);
+    if (id == null || _sessionInactive) return;
+    newMessages.remove(id);
+    _timeline.remove(id);
+    if (messageList.isEmpty && scrollingCacheMessageList.isEmpty) {
+      newMessages.reset();
+    }
+    _voice.removeMessage(id);
     copyTextMap.remove(id);
     if (quotedMessage.value?.clientMsgID == id) clearReply();
   }
 
-  final _muteRevision = 0.obs;
-  Timer? _muteExpiry;
-  void _refreshMute() {
-    _muteRevision.value++;
-    _muteExpiry?.cancel();
-    final until = groupMembersInfo?.muteEndTime ?? 0;
-    final seconds = until - DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    if (seconds > 0)
-      _muteExpiry =
-          Timer(Duration(seconds: seconds + 1), () => _muteRevision.value++);
-  }
-
-  bool get sendingMuted {
-    _muteRevision.value;
-    return isGroupChat &&
-        ((groupMembersInfo?.muteEndTime ?? 0) >
-                DateTime.now().millisecondsSinceEpoch ~/ 1000 ||
-            (groupMemberRoleLevel.value == GroupRoleLevel.member &&
-                groupInfo?.status == 3));
-  }
-
   final forceCloseToolbox = PublishSubject<bool>();
-  final sendStatusSub = PublishSubject<MsgStreamEv<bool>>();
 
   late ConversationInfo conversationInfo;
+  OfficialAccount? _officialAccount;
+  OfficialAccount? get officialAccount => isSingleChat
+      ? _officialAccount ??
+          OfficialAccount.from(userID: userID, ex: conversationInfo.ex)
+      : null;
+  bool get isOfficialNotificationChat => officialAccount != null;
   Message? searchMessage;
   final nickname = ''.obs;
   final faceUrl = ''.obs;
-  Timer? _debounce;
-  Timer? _draftTimer;
-  Future<void> _draftWrites = Future.value();
-  final Map<String, String> _mentions = {};
-  String _previousInput = '';
-  bool _choosingMention = false;
-  final messageList = <Message>[].obs;
-  final tempMessages = <Message>[];
-  final scaleFactor = Config.textScaleFactor.obs;
-  final background = "".obs;
-  final memberUpdateInfoMap = <String, GroupMembersInfo>{};
-  final groupMessageReadMembers = <String, List<String>>{};
-  final groupMemberRoleLevel = 1.obs;
-  GroupInfo? groupInfo;
-  GroupMembersInfo? groupMembersInfo;
-  List<GroupMembersInfo> ownerAndAdmin = [];
+  String _chatAccountID = '';
+  Function(Message)? _ownedMessageCallback;
+  Function(List<ReadReceiptInfo>)? _ownedReceiptCallback;
+  Function(SignalingMessageEvent)? _ownedSignalingCallback;
+  late final ChatTimelineController _timeline = ChatTimelineController(
+    accountID: _chatAccountID,
+    isSessionCurrent: () => _sameAccount,
+    conversation: () => conversationInfo,
+    timelineTimeMarker: isOfficialNotificationChat
+        ? OfficialAccountTimelinePolicy.markTimes
+        : null,
+    fetch: ({required count, startMsg}) => startMsg == null
+        ? ChatHistoryPrefetcher.shared
+            .readLatest(conversationInfo, count: count)
+        : OpenIM.iMManager.messageManager.getAdvancedHistoryMessageList(
+            conversationID: conversationInfo.conversationID,
+            count: count,
+            startMsg: startMsg),
+    fetchNewer: ({required count, startMsg}) => OpenIM.iMManager.messageManager
+        .getAdvancedHistoryMessageListReverse(
+            conversationID: conversationInfo.conversationID,
+            count: count,
+            startMsg: startMsg),
+    isClosed: () => _sessionInactive,
+    onFirstPage: () {
+      if (!_dateWindow.buffering && !newMessages.awayFromLatest.value) {
+        scrollBottom(force: false);
+      }
+    },
+    captureOffset: () =>
+        scrollController.hasClients ? scrollController.offset : 0.0,
+    restoreOffset: (offset) {
+      final followLatest = !newMessages.awayFromLatest.value;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_sessionInactive && scrollController.hasClients) {
+          final position = scrollController.position;
+          scrollController.jumpTo(followLatest
+              ? position.minScrollExtent
+              : offset.clamp(
+                  position.minScrollExtent, position.maxScrollExtent));
+        }
+      });
+    },
+    onFirstLoaded: _getGroupInfoAfterLoadMessage,
+  );
+  RxList<Message> get messageList => _timeline.messageList;
+  List<Message> get scrollingCacheMessageList =>
+      _timeline.scrollingCacheMessageList;
+  RxBool get initialHistoryLoading => _timeline.initialHistoryLoading;
+  RxBool get historyLoading => _timeline.historyLoading;
+  RxnString get historyError => _timeline.historyError;
+  RxBool get historyHasMore => _timeline.historyHasMore;
+  RxBool get viewingHistory => _timeline.viewingHistory;
+  RxBool get historyNewerHasMore => _timeline.newerHasMore;
+  bool get bufferingLiveMessages => _dateWindow.buffering;
 
-  final isInGroup = true.obs;
-  final memberCount = 0.obs;
-  final privateMessageList = <Message>[];
+  late final _dateWindow = ChatDateWindowController(
+    timeline: _timeline,
+    positions: messagePositionController,
+    isClosed: () => _sessionInactive,
+    cancelLatestScroll: _latestScroll.cancel,
+    updateScrollOffset: newMessages.updateScrollOffset,
+    distanceFromLatest: () => scrollController.hasClients
+        ? scrollController.offset - scrollController.position.minScrollExtent
+        : 0,
+    requestLatestScroll: (smooth) =>
+        _latestScroll.request(force: true, animated: smooth),
+  );
+
+  Future<bool> jumpToDateMessage(Message message) =>
+      _dateWindow.jumpToMessage(message);
+
+  Route<dynamic>? _messageRoute;
+  bool get isMessageNavigationCurrent => !_sessionInactive;
+  Route<dynamic>? get messageRoute => _messageRoute;
+  void bindMessageRoute(Route<dynamic>? route) {
+    if (!_sessionInactive) _messageRoute = route;
+  }
+
+  late final _messageFocus = ChatMessageFocusController(
+    canFocus: (message) =>
+        !_sessionInactive &&
+        isCurrentChat(message) &&
+        message.clientMsgID?.isNotEmpty == true &&
+        !_removedMessageIDs.contains(message.clientMsgID),
+    jump: jumpToDateMessage,
+  );
+  RxnString get focusedMessageID => _messageFocus.highlightedID;
+  RxInt get historyWindowRevision => _timeline.windowRevision;
+
+  Future<bool> focusSearchMessage(Message message) {
+    if (_sessionInactive || !isCurrentChat(message) || message.hasExpired) {
+      return Future.value(false);
+    }
+    messageSelection.cancel();
+    closeToolbox();
+    focusNode.unfocus();
+    return _messageFocus.focus(message);
+  }
+
+  late final _dateJump = ChatDateJumpController(
+    conversationID: () => conversationInfo.conversationID,
+    isClosed: () => _sessionInactive,
+    isRemoved: (message) => _removedMessageIDs.contains(message.clientMsgID),
+    messages: () => messageList,
+    search: (
+            {required conversationID,
+            required messageTypeList,
+            required searchTimePosition,
+            required searchTimePeriod,
+            required pageIndex,
+            required count}) =>
+        OpenIM.iMManager.messageManager.searchLocalMessages(
+            conversationID: conversationID,
+            messageTypeList: messageTypeList,
+            searchTimePosition: searchTimePosition,
+            searchTimePeriod: searchTimePeriod,
+            pageIndex: pageIndex,
+            count: count),
+    jumpToMessage: (id, message, day) async {
+      if (!await jumpToDateMessage(message) && !_sessionInactive) {
+        throw StateError('The date message could not be positioned');
+      }
+    },
+    showFeedback: IMViews.showToast,
+    runLoading: (action) => LoadingView.singleton.wrap(asyncFunction: action),
+  );
+
+  Future<void> onTapTimeline(BuildContext context, Message message) async {
+    final time = message.sendTime;
+    if (_sessionInactive || time == null || messageSelection.active) return;
+    closeToolbox();
+    focusNode.unfocus();
+    await _dateJump.pickAndJump(
+      initialDate: DateTime.fromMillisecondsSinceEpoch(time),
+      pickDate: (date) => showChatDatePicker(
+        context: context,
+        conversationID: conversationInfo.conversationID,
+        initialDate: date,
+        isCurrent: () => !_sessionInactive,
+        knownDayHasMessages: _dateJump.hasLoadedMessagesOn,
+        isRemoved: (message) =>
+            _removedMessageIDs.contains(message.clientMsgID),
+      ),
+    );
+  }
+
   final isInBlacklist = false.obs;
 
-  final scrollingCacheMessageList = <Message>[];
-  final announcement = ''.obs;
-  final announcementVersion = ''.obs;
   late StreamSubscription conversationSub;
-  late StreamSubscription memberAddSub;
-  late StreamSubscription memberDelSub;
-  late StreamSubscription joinedGroupAddedSub;
-  late StreamSubscription joinedGroupDeletedSub;
-  late StreamSubscription memberInfoChangedSub;
-  late StreamSubscription groupInfoUpdatedSub;
   late StreamSubscription friendInfoChangedSub;
   StreamSubscription? userStatusChangedSub;
   StreamSubscription? selfInfoUpdatedSub;
 
   late StreamSubscription connectionSub;
   final syncStatus = IMSdkStatus.syncEnded.obs;
-  int? lastMinSeq;
-
-  final showCallingMember = false.obs;
-
-  bool _isReceivedMessageWhenSyncing = false;
-  bool _isStartSyncing = false;
-  bool _isFirstLoad = true;
 
   final copyTextMap = <String?, String?>{};
-  final quotedMessage = Rxn<Message>();
-
-  String? groupOwnerID;
-
-  final _pageSize = 40;
-
-  RTCBridge? get rtcBridge => PackageBridge.rtcBridge;
-
-  bool get rtcIsBusy => rtcBridge?.hasConnection == true;
 
   String? get userID => conversationInfo.userID;
 
@@ -170,11 +512,7 @@ class ChatLogic extends SuperController {
       ? OpenIM.iMManager.userInfo.nickname
       : groupMembersInfo?.nickname;
 
-  bool get isAdminOrOwner =>
-      groupMemberRoleLevel.value == GroupRoleLevel.admin ||
-      groupMemberRoleLevel.value == GroupRoleLevel.owner;
-
-  final directionalUsers = <GroupMembersInfo>[].obs;
+  bool get isAdminOrOwner => _group.isAdminOrOwner;
 
   bool isCurrentChat(Message message) {
     var senderId = message.sendID;
@@ -190,31 +528,155 @@ class ChatLogic extends SuperController {
     return isCurSingleChat || isCurGroupChat;
   }
 
-  void scrollBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      scrollController.jumpTo(0);
-    });
+  void scrollBottom({bool force = true, bool smooth = false}) {
+    if (_sessionInactive) return;
+    if (force) {
+      _dateJump.invalidate();
+      unawaited(_dateWindow.returnToLatest(smooth: smooth));
+    } else if (!_dateWindow.buffering) {
+      _latestScroll.request(force: false, animated: smooth);
+    }
   }
 
-  Future<List<Message>> searchMediaMessage() async {
-    final messageList = await OpenIM.iMManager.messageManager
-        .searchLocalMessages(
-            conversationID: conversationInfo.conversationID,
-            messageTypeList: [MessageType.picture, MessageType.video],
-            count: 500);
-    return messageList.searchResultItems?.first.messageList?.reversed
-            .toList() ??
-        [];
+  bool onChatScrollNotification(ScrollNotification notification) {
+    if (_sessionInactive) return false;
+    if (notification.depth == 0 &&
+        notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      messageArrivals.cancel();
+      _latestScroll.cancel();
+      _messageFocus.cancel();
+      _dateWindow.invalidate();
+      _dateJump.invalidate();
+      focusNode.unfocus();
+    }
+    return false;
   }
+
+  void _onChatScrolled() {
+    if (_sessionInactive || !scrollController.hasClients) return;
+    final distance =
+        scrollController.offset - scrollController.position.minScrollExtent;
+    // Lazy, variable-height rows can refine an estimated latest edge in layout.
+    // Only the painted viewport (or an explicit return) confirms reaching it.
+    if (distance > 1) newMessages.updateScrollOffset(distance);
+  }
+
+  void onChatViewportChanged(List<String> readIDs, double distanceFromLatest) {
+    if (_sessionInactive) return;
+    // A size transition is a clipped slice until its final layout. Only that
+    // full-height painted frame may count as seeing the message or start burn.
+    readIDs = readIDs.where((id) => !messageArrivals.isEntering(id)).toList();
+    newMessages
+        .updateScrollOffset(_dateWindow.buffering ? 2 : distanceFromLatest);
+    for (final id in readIDs) {
+      newMessages.markVisible(id);
+    }
+    unawaited(_receipts.markVisibleMessages(readIDs,
+        atLatest: !_dateWindow.buffering));
+  }
+
+  bool _isAssistantReply(Message message) =>
+      isSingleChat &&
+      userID == 'assistant' &&
+      message.isSingleChat &&
+      message.sendID == 'assistant' &&
+      message.recvID == _chatAccountID;
+
+  void _reconcileAssistantReplies() {
+    if (_sessionInactive || userID != 'assistant') return;
+    for (final message in messageList) {
+      if (_isAssistantReply(message)) {
+        assistantStreams.markFinalMessage(message);
+      }
+    }
+  }
+
+  void _appendLiveMessage(Message message) {
+    // Online deltas have no history, read receipt, unread count or message menu.
+    if (AssistantStreamChunk.isStreamMessage(message)) {
+      if (!_sessionInactive && _isAssistantReply(message)) {
+        final chunk = AssistantStreamChunk.tryParse(message);
+        if (chunk != null) {
+          _typingExpiry?.cancel();
+          peerTyping.value = false;
+          if (assistantStreams.accept(chunk) != null) {
+            scrollBottom(force: false);
+          }
+        }
+      }
+      return;
+    }
+    if (!_sessionInactive && _isAssistantReply(message)) {
+      assistantStreams.markFinalMessage(message);
+    }
+    if (!_sessionInactive && isSingleChat && message.sendID == userID) {
+      if (message.contentType == MessageType.typing) {
+        _typingExpiry?.cancel();
+        peerTyping.value = message.typingElem?.msgTips == 'yes';
+        if (peerTyping.value) {
+          _typingExpiry = Timer(
+              const Duration(seconds: 65), () => peerTyping.value = false);
+        }
+        return;
+      }
+      // A complete SDK reply ends the transient typing state immediately.
+      _typingExpiry?.cancel();
+      peerTyping.value = false;
+    }
+    if (_sessionInactive ||
+        message.contentType == MessageType.typing ||
+        _removedMessageIDs.contains(message.clientMsgID) ||
+        messageList.any((m) => m.clientMsgID == message.clientMsgID) ||
+        scrollingCacheMessageList
+            .any((m) => m.clientMsgID == message.clientMsgID)) {
+      return;
+    }
+    if (scrollController.hasClients) {
+      final distance =
+          scrollController.offset - scrollController.position.minScrollExtent;
+      if (distance > 1) newMessages.updateScrollOffset(distance);
+    }
+    final followLatest = !newMessages.awayFromLatest.value;
+    if (_dateWindow.buffering) {
+      newMessages.updateScrollOffset(2);
+      newMessages.recordIncoming(message);
+      scrollingCacheMessageList.add(message);
+      return;
+    }
+    messageArrivals.register(message,
+        enabled: followLatest &&
+            _timeline.hasLoadedHistory &&
+            !isOfficialNotificationChat &&
+            !messageSelection.active &&
+            _messageRoute?.isCurrent == true &&
+            (messageList.isEmpty ||
+                (scrollController.hasClients &&
+                    !scrollController.position.isScrollingNotifier.value)) &&
+            (WidgetsBinding.instance.lifecycleState == null ||
+                WidgetsBinding.instance.lifecycleState ==
+                    AppLifecycleState.resumed) &&
+            !WidgetsBinding.instance.platformDispatcher.accessibilityFeatures
+                .disableAnimations);
+    newMessages.recordIncoming(message);
+    messageList.add(message);
+    if (followLatest) {
+      scrollBottom(force: false);
+    }
+  }
+
+  Future<List<Message>> searchMediaMessage() => _media.searchMediaMessage();
 
   @override
   void onReady() {
+    if (_sessionInactive) return;
     _resetGroupAtType();
     _clearUnreadCount();
 
-    scrollController.addListener(() {
-      focusNode.unfocus();
-    });
+    final target = searchMessage;
+    searchMessage = null;
+    if (target != null) unawaited(focusSearchMessage(target));
+
     super.onReady();
   }
 
@@ -222,7 +684,24 @@ class ChatLogic extends SuperController {
   void onInit() {
     var arguments = Get.arguments;
     conversationInfo = arguments['conversationInfo'];
-    _restoreDraft(conversationInfo.draftText);
+    final account = arguments['officialAccount'];
+    if (account is OfficialAccount &&
+        account.userID == conversationInfo.userID) {
+      _officialAccount = account;
+    }
+    _chatRouteName = Get.currentRoute;
+    _chatAccountID = OpenIM.iMManager.userID;
+    _chatToken = DataSp.chatToken;
+    _imToken = DataSp.imToken;
+    _timeline.initialize(prefetch: false);
+    _reconcileAssistantReplies();
+    _messageSelectionWorker = ever(messageList, (_) {
+      messageSelection.sync();
+      _reconcileAssistantReplies();
+    });
+    _composer.initialize(
+        isOfficialNotificationChat ? null : conversationInfo.draftText);
+    scrollController.addListener(_onChatScrolled);
     _messageSubscriptions.addAll([
       imLogic.revokedMessages
           .listen((event) => _removeMessageByID(event.clientMsgID)),
@@ -230,22 +709,28 @@ class ChatLogic extends SuperController {
           .listen((event) => _removeMessageByID(event.clientMsgID)),
       imLogic.inputStateChangedSubject.listen((event) {
         if (event.conversationID != conversationInfo.conversationID ||
-            event.userID != userID) return;
+            event.userID != userID) {
+          return;
+        }
         _typingExpiry?.cancel();
         peerTyping.value = event.platformIDs?.isNotEmpty == true;
-        if (peerTyping.value)
+        if (peerTyping.value) {
           _typingExpiry =
               Timer(const Duration(seconds: 8), () => peerTyping.value = false);
+        }
       }),
     ]);
-    if (isSingleChat && Get.isRegistered<ContactsLogic>()) {
+    if (isSingleChat &&
+        !isOfficialNotificationChat &&
+        Get.isRegistered<ContactsLogic>()) {
       Get.find<ContactsLogic>().setProfilePresence(this, userID);
     }
     searchMessage = arguments['searchMessage'];
     nickname.value = conversationInfo.showName ?? '';
     faceUrl.value = conversationInfo.faceURL ?? '';
-    _initChatConfig();
+    _appearance.initialize();
     _setSdkSyncDataListener();
+    unawaited(onScrollToBottomLoad());
 
     conversationSub = imLogic.conversationChangedSubject.listen((value) {
       final obj = value.firstWhereOrNull(
@@ -253,128 +738,22 @@ class ChatLogic extends SuperController {
 
       if (obj != null) {
         conversationInfo = obj;
+        _receipts.conversationChanged();
       }
     });
 
-    imLogic.onRecvNewMessage = (Message message) async {
-      if (isCurrentChat(message)) {
-        if (message.contentType == MessageType.typing) {
-        } else {
-          if (!_removedMessageIDs.contains(message.clientMsgID) &&
-              !messageList.contains(message) &&
-              !scrollingCacheMessageList.contains(message)) {
-            _isReceivedMessageWhenSyncing = true;
-            if (scrollController.offset != 0) {
-              scrollingCacheMessageList.add(message);
-            } else {
-              messageList.add(message);
-              scrollBottom();
-            }
-          }
-        }
+    _ownedMessageCallback = (Message message) {
+      if (!_sessionInactive && isCurrentChat(message)) {
+        _appendLiveMessage(message);
       }
     };
+    imLogic.onRecvNewMessage = _ownedMessageCallback;
 
-    imLogic.onRecvC2CReadReceipt = (List<ReadReceiptInfo> list) {
-      try {
-        for (var readInfo in list) {
-          if (readInfo.userID == userID) {
-            for (var e in messageList) {
-              if (readInfo.msgIDList?.contains(e.clientMsgID) == true) {
-                e.isRead = true;
-                e.hasReadTime = _timestamp;
-              }
-            }
-          }
-        }
-        messageList.refresh();
-      } catch (e) {}
-    };
+    _ownedReceiptCallback =
+        (receipts) => _receipts.applyC2CReceipt(receipts, userID);
+    imLogic.onRecvC2CReadReceipt = _ownedReceiptCallback;
 
-    joinedGroupAddedSub = imLogic.joinedGroupAddedSubject.listen((event) {
-      if (event.groupID == groupID) {
-        isInGroup.value = true;
-        _queryGroupInfo();
-      }
-    });
-
-    joinedGroupDeletedSub = imLogic.joinedGroupDeletedSubject.listen((event) {
-      if (event.groupID == groupID) {
-        isInGroup.value = false;
-        inputCtrl.clear();
-      }
-    });
-
-    memberAddSub = imLogic.memberAddedSubject.listen((info) {
-      var groupId = info.groupID;
-      if (groupId == groupID) {
-        _putMemberInfo([info]);
-      }
-    });
-
-    memberDelSub = imLogic.memberDeletedSubject.listen((info) {
-      if (info.groupID == groupID && info.userID == OpenIM.iMManager.userID) {
-        isInGroup.value = false;
-        inputCtrl.clear();
-      }
-    });
-
-    memberInfoChangedSub = imLogic.memberInfoChangedSubject.listen((info) {
-      if (info.groupID == groupID) {
-        if (info.userID == OpenIM.iMManager.userID) {
-          groupMemberRoleLevel.value = info.roleLevel ?? GroupRoleLevel.member;
-          groupMembersInfo = info;
-          _refreshMute();
-          ();
-        }
-        _putMemberInfo([info]);
-
-        final index = ownerAndAdmin
-            .indexWhere((element) => element.userID == info.userID);
-        if (info.roleLevel == GroupRoleLevel.member) {
-          if (index > -1) {
-            ownerAndAdmin.removeAt(index);
-          }
-        } else if (info.roleLevel == GroupRoleLevel.admin ||
-            info.roleLevel == GroupRoleLevel.owner) {
-          if (index == -1) {
-            ownerAndAdmin.add(info);
-          } else {
-            ownerAndAdmin[index] = info;
-          }
-        }
-
-        for (var msg in messageList) {
-          if (msg.sendID == info.userID) {
-            if (msg.isNotificationType) {
-              final map = json.decode(msg.notificationElem!.detail!);
-              final ntf = GroupNotification.fromJson(map);
-              ntf.opUser?.nickname = info.nickname;
-              ntf.opUser?.faceURL = info.faceURL;
-              msg.notificationElem?.detail = jsonEncode(ntf);
-            } else {
-              msg.senderFaceUrl = info.faceURL;
-              msg.senderNickname = info.nickname;
-            }
-          }
-        }
-
-        messageList.refresh();
-      }
-    });
-
-    groupInfoUpdatedSub = imLogic.groupInfoUpdatedSubject.listen((value) {
-      if (groupID == value.groupID) {
-        groupInfo = value;
-        announcement.value = value.notification ?? '';
-        announcementVersion.value =
-            value.notificationUpdateTime?.toString() ?? '';
-        _refreshMute();
-        nickname.value = value.groupName ?? '';
-        faceUrl.value = value.faceURL ?? '';
-        memberCount.value = value.memberCount ?? 0;
-      }
-    });
+    _group.initialize();
 
     friendInfoChangedSub = imLogic.friendInfoChangedSubject.listen((value) {
       if (userID == value.userID) {
@@ -403,977 +782,171 @@ class ChatLogic extends SuperController {
       messageList.refresh();
     });
 
-    inputCtrl.addListener(() {
-      _inputChanged();
-      sendTypingMsg(focus: true);
-      if (_debounce?.isActive ?? false) _debounce?.cancel();
-
-      _debounce = Timer(1.seconds, () {
-        sendTypingMsg(focus: false);
-      });
-    });
-
-    focusNode.addListener(() {
-      focusNodeChanged(focusNode.hasFocus);
-    });
-
-    imLogic.onSignalingMessage = (value) {
-      if (value.userID == userID) {
-        messageList.add(value.message);
-        scrollBottom();
+    _ownedSignalingCallback = (value) {
+      if (!_sessionInactive && value.userID == userID) {
+        _appendLiveMessage(value.message);
       }
     };
+    imLogic.onSignalingMessage = _ownedSignalingCallback;
 
     super.onInit();
   }
 
-  Future chatSetup() => isSingleChat
-      ? AppNavigator.startChatSetup(conversationInfo: conversationInfo)
-      : AppNavigator.startGroupChatSetup(conversationInfo: conversationInfo);
+  Future chatSetup() => isOfficialNotificationChat
+      ? Future<void>.value()
+      : isSingleChat
+          ? AppNavigator.startChatSetup(conversationInfo: conversationInfo)
+          : AppNavigator.startGroupChatSetup(
+              conversationInfo: conversationInfo);
 
-  void _putMemberInfo(List<GroupMembersInfo>? list) {
-    list?.forEach((member) {
-      memberUpdateInfoMap[member.userID!] = member;
-    });
-
-    messageList.refresh();
-  }
-
-  void _restoreDraft(String? draft) {
-    if (draft == null || draft.isEmpty) return;
-    var text = draft;
-    try {
-      final data = jsonDecode(draft);
-      if (data is Map && data['text'] is String) {
-        text = data['text'];
-        if (data['mentions'] is Map) {
-          for (final entry in (data['mentions'] as Map).entries) {
-            if (entry.key is String && entry.value is String) {
-              _mentions[entry.key] = entry.value;
-            }
-          }
-        }
-      }
-    } catch (_) {}
-    inputCtrl.value = TextEditingValue(
-        text: text, selection: TextSelection.collapsed(offset: text.length));
-    _previousInput = text;
-  }
-
-  void _saveDraft() {
-    final text = inputCtrl.text;
-    final draft = text.isEmpty
-        ? ''
-        : jsonEncode({
-            'text': text,
-            'mentions': _mentions,
-          });
-    final id = conversationInfo.conversationID;
-    _draftWrites = _draftWrites.then((_) async {
-      await OpenIM.iMManager.conversationManager
-          .setConversationDraft(conversationID: id, draftText: draft);
-    }).catchError((Object error) {
-      Logger.print('Save conversation draft failed: $error');
-    });
-  }
-
-  void _inputChanged() {
-    final text = inputCtrl.text;
-    if (text == _previousInput) return;
-    final old = _previousInput;
-    _previousInput = text;
-    _mentions.removeWhere((id, name) => !text.contains('@$name '));
-    _draftTimer?.cancel();
-    _draftTimer = Timer(const Duration(milliseconds: 400), _saveDraft);
-    final cursor = inputCtrl.selection.baseOffset;
-    if (isGroupChat &&
-        !_choosingMention &&
-        text.length == old.length + 1 &&
-        cursor > 0 &&
-        text[cursor - 1] == '@') {
-      _selectMentions(cursor - 1);
-    }
-  }
-
-  Future<void> _selectMentions(int start) async {
-    if (groupInfo == null) return;
-    _choosingMention = true;
-    focusNode.unfocus();
-    try {
-      final selected =
-          await AppNavigator.startGroupMemberList<List<GroupMembersInfo>>(
-              groupInfo: groupInfo!, opType: GroupMemberOpType.at);
-      if (isClosed || selected == null || selected.isEmpty) return;
-      final text = inputCtrl.text;
-      if (start >= text.length || text[start] != '@') return;
-      final inserted = selected
-          .where((member) => member.userID != null)
-          .map((member) => '@${member.nickname ?? member.userID} ')
-          .join();
-      inputCtrl.value = TextEditingValue(
-        text: text.replaceRange(start, start + 1, inserted),
-        selection: TextSelection.collapsed(offset: start + inserted.length),
+  Future<void> sendTextMsg() => _composer.sendTextMsg();
+  void mentionMessageSender(Message message) =>
+      _composer.mentionMessageSender(message);
+  Future<void> onLongPressAvatar(BuildContext context, Message message) =>
+      _memberActions.open(
+        message,
+        showMenu: (actions, name) => context.mounted
+            ? showChatMemberActionSheet(context,
+                actions: actions, displayName: name)
+            : Future.value(null),
+        confirm: (action, name) => context.mounted
+            ? confirmChatMemberAction(context,
+                action: action, displayName: name)
+            : Future.value(false),
       );
-      for (final member in selected) {
-        if (member.userID != null) {
-          _mentions[member.userID!] = member.nickname ?? member.userID!;
-        }
-      }
-      _saveDraft();
-    } catch (error) {
-      IMViews.showToast(error.toString());
-    } finally {
-      _choosingMention = false;
-      if (!isClosed) focusNode.requestFocus();
-    }
-  }
-
-  void mentionMessageSender(Message message) {
-    final userID = message.sendID;
-    if (isClosed ||
-        !isGroupChat ||
-        _choosingMention ||
-        userID == null ||
-        userID.isEmpty ||
-        userID == OpenIM.iMManager.userID) {
-      return;
-    }
-    if (sendingMuted) {
-      IMViews.showToast(StrRes.youMuted);
-      return;
-    }
-    final name = message.senderNickname?.trim().isNotEmpty == true
-        ? message.senderNickname!.trim()
-        : userID;
-    final text = inputCtrl.text;
-    final selection = inputCtrl.selection;
-    final valid = selection.isValid && selection.end <= text.length;
-    final start = valid ? selection.start : text.length;
-    final end = valid ? selection.end : text.length;
-    final inserted = '@$name ';
-    _choosingMention = true;
-    try {
-      inputCtrl.value = TextEditingValue(
-        text: text.replaceRange(start, end, inserted),
-        selection: TextSelection.collapsed(offset: start + inserted.length),
-      );
-      _mentions[userID] = name;
-      _saveDraft();
-    } finally {
-      _choosingMention = false;
-    }
-    closeToolbox();
-    focusNode.requestFocus();
-  }
-
-  void sendTextMsg() async {
-    if (sendingMuted) {
-      IMViews.showToast(StrRes.youMuted);
-      return;
-    }
-    var content = IMUtils.safeTrim(inputCtrl.text);
-    if (content.isEmpty) return;
-    final quote = quotedMessage.value;
-    try {
-      final mentions = _mentions.entries
-          .where((entry) => inputCtrl.text.contains('@${entry.value} '))
-          .toList();
-      final message = isGroupChat && mentions.isNotEmpty
-          ? await OpenIM.iMManager.messageManager.createTextAtMessage(
-              text: content,
-              atUserIDList: mentions.map((entry) => entry.key).toList(),
-              atUserInfoList: mentions
-                  .map((entry) => AtUserInfo(
-                      atUserID: entry.key, groupNickname: entry.value))
-                  .toList(),
-              quoteMessage: quote,
-            )
-          : quote == null
-              ? await OpenIM.iMManager.messageManager
-                  .createTextMessage(text: content)
-              : await OpenIM.iMManager.messageManager
-                  .createQuoteMessage(text: content, quoteMsg: quote);
-      quotedMessage.value = null;
-      _sendMessage(message);
-    } catch (error) {
-      IMViews.showToast(error.toString());
-    }
-  }
-
   void replyToMessage(Message message) {
-    quotedMessage.value = message;
-    focusNode.requestFocus();
+    if (!isOfficialNotificationChat) _composer.replyToMessage(message);
   }
 
-  void clearReply() => quotedMessage.value = null;
-
-  bool canRevoke(Message message) {
-    final sentAt = message.sendTime;
-    return message.sendID == OpenIM.iMManager.userID &&
-        message.status == MessageStatus.succeeded &&
-        sentAt != null &&
-        DateTime.now().millisecondsSinceEpoch - sentAt <
-            const Duration(minutes: 2).inMilliseconds;
-  }
-
-  Future<void> revokeMessage(Message message) async {
-    final clientMsgID = message.clientMsgID;
-    if (clientMsgID == null || !canRevoke(message)) return;
-    try {
-      await OpenIM.iMManager.messageManager.revokeMessage(
-        conversationID: conversationInfo.conversationID,
-        clientMsgID: clientMsgID,
-      );
-      _removeMessageByID(clientMsgID);
-    } catch (error) {
-      IMViews.showToast(error.toString());
-    }
-  }
-
+  void clearReply() => _composer.clearReply();
+  bool canRevoke(Message message) =>
+      !isOfficialNotificationChat && _actions.canRevoke(message);
+  Future<void> revokeMessage(Message message) => isOfficialNotificationChat
+      ? Future<void>.value()
+      : _actions.revokeMessage(message);
   bool canForward(Message message) =>
-      message.status == MessageStatus.succeeded &&
-      message.attachedInfoElem?.isPrivateChat != true &&
-      [
-        MessageType.text,
-        MessageType.atText,
-        MessageType.advancedText,
-        MessageType.picture,
-        MessageType.video,
-        MessageType.voice,
-        MessageType.file,
-        MessageType.card,
-        MessageType.location,
-        MessageType.customFace,
-        MessageType.merger,
-        MessageType.quote
-      ].contains(message.contentType);
-
-  Future<void> forwardMessage(Message message) async {
-    final result = await AppNavigator.startSelectContacts(
-      action: SelAction.forward,
-      ex: IMUtils.parseMsg(message, isConversation: true),
-    );
-    if (result == null) return;
-    try {
-      for (final contact in result['checkedList']) {
-        final userId = IMUtils.convertCheckedToUserID(contact);
-        final groupId = IMUtils.convertCheckedToGroupID(contact);
-        final forwarded = await OpenIM.iMManager.messageManager
-            .createForwardMessage(message: message);
-        await _sendMessage(forwarded, userId: userId, groupId: groupId);
-      }
-    } catch (error) {
-      IMViews.showToast(error.toString());
-    }
-  }
-
-  Future sendPicture({required String path, bool sendNow = true}) async {
-    final file = await IMUtils.compressImageAndGetFile(File(path));
-
-    var message =
-        await OpenIM.iMManager.messageManager.createImageMessageFromFullPath(
-      imagePath: file!.path,
-    );
-
-    if (sendNow) {
-      return _sendMessage(message);
-    } else {
-      messageList.add(message);
-      tempMessages.add(message);
-    }
-  }
-
-  sendForwardRemarkMsg(
-    String content, {
-    String? userId,
-    String? groupId,
-  }) async {
-    final message = await OpenIM.iMManager.messageManager.createTextMessage(
-      text: content,
-    );
-    _sendMessage(message, userId: userId, groupId: groupId);
-  }
-
-  sendForwardMsg(
-    Message originalMessage, {
-    String? userId,
-    String? groupId,
-  }) async {
-    var message = await OpenIM.iMManager.messageManager.createForwardMessage(
-      message: originalMessage,
-    );
-    _sendMessage(message, userId: userId, groupId: groupId);
-  }
+      !isOfficialNotificationChat && _actions.canForward(message);
+  bool canFavorite(Message message) =>
+      !isOfficialNotificationChat && _favorites.canFavorite(message);
+  Future<void> favoriteMessage(Message message) =>
+      _favorites.favoriteMessage(message);
+  Future<void> onTapFavorites() => _favorites.onTapFavorites();
+  Future<void> forwardMessage(Message message) =>
+      _forwarding.forwardMessage(message);
+  Future sendPicture({required String path, bool sendNow = true}) =>
+      _media.sendPicture(path: path, sendNow: sendNow);
+  Future<void> sendForwardRemarkMsg(String content,
+          {String? userId, String? groupId}) =>
+      _forwarding.sendForwardRemarkMsg(content,
+          userId: userId, groupId: groupId);
+  Future<void> sendForwardMsg(Message message,
+          {String? userId, String? groupId}) =>
+      _forwarding.sendForwardMsg(message, userId: userId, groupId: groupId);
 
   void sendTypingMsg({bool focus = false}) async {
-    if (isSingleChat) {
+    if (_sameAccount && isSingleChat && !isOfficialNotificationChat) {
       OpenIM.iMManager.conversationManager.changeInputStates(
           conversationID: conversationInfo.conversationID, focus: focus);
     }
   }
 
-  Future<void> onTapFormattedText() async {
-    closeToolbox();
-    final quote = quotedMessage.value;
-    final result =
-        await Get.to<({String text, List<RichMessageInfo> entities})>(
-            () => FormattedMessagePage(initialText: inputCtrl.text));
-    if (result == null || isClosed) return;
-    try {
-      final message = quote == null
-          ? await OpenIM.iMManager.messageManager.createAdvancedTextMessage(
-              text: result.text, list: result.entities)
-          : await OpenIM.iMManager.messageManager.createAdvancedQuoteMessage(
-              text: result.text, list: result.entities, quoteMsg: quote);
-      if (!isClosed) {
-        await _sendMessage(message);
-        inputCtrl.clear();
-        clearReply();
-      }
-    } catch (error) {
-      IMViews.showToast(error.toString());
-    }
-  }
+  Future<void> onTapFormattedText() => _composer.onTapFormattedText();
+  Future<void> onTapLocation() => _media.onTapLocation();
+  Future<void> onTapEmoji() => _stickers.onTapEmoji();
+  Future<void> onTapCard() => _forwarding.onTapCard();
+  Future<void> sendCarte(
+          {required String userID, String? nickname, String? faceURL}) =>
+      _forwarding.sendCarte(
+          userID: userID, nickname: nickname, faceURL: faceURL);
 
-  Future<void> onTapLocation() async {
-    closeToolbox();
-    final point =
-        await Get.to<({double latitude, double longitude, String description})>(
-            () => const ChatLocationPicker());
-    if (point == null || isClosed) return;
-    try {
-      final message = await OpenIM.iMManager.messageManager
-          .createLocationMessage(
-              latitude: point.latitude,
-              longitude: point.longitude,
-              description: point.description.isEmpty
-                  ? StrRes.location
-                  : point.description);
-      if (!isClosed) await _sendMessage(message);
-    } catch (error) {
-      IMViews.showToast(error.toString());
-    }
-  }
+  Future<void> sendCustomMsg(
+          {required String data,
+          required String extension,
+          required String description}) =>
+      _delivery.sendCustomMessage(
+          data: data, extension: extension, description: description);
 
-  Future<void> onTapEmoji() async {
-    closeToolbox();
-    try {
-      final files = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['png', 'gif', 'webp', 'jpg']);
-      final file = files?.files.first;
-      if (file?.path == null || isClosed) return;
-      if (file!.size > 10 * 1024 * 1024) {
-        IMViews.showToast('sdkEmojiTooLarge'.tr);
-        return;
-      }
-      final accepted =
-          await Get.dialog<bool>(CustomDialog(title: 'sdkSendEmojiConfirm'.tr));
-      if (accepted != true || isClosed) return;
-      final result = await LoadingView.singleton.wrap(
-          asyncFunction: () => OpenIM.iMManager.uploadFile(
-              id: DateTime.now().microsecondsSinceEpoch.toString(),
-              filePath: file.path!,
-              fileName: file.name));
-      final data = result is String ? jsonDecode(result) : result;
-      final url = data['url'] as String;
-      final message = await OpenIM.iMManager.messageManager
-          .createFaceMessage(index: -1, data: url);
-      if (!isClosed) await _sendMessage(message);
-    } catch (error) {
-      IMViews.showToast(error.toString());
-    }
-  }
+  /// Prepared SDK attachments use the same delivery and retry state as text.
+  Future sendPreparedMessage(Message message, {bool resetInput = false}) =>
+      _sendMessage(message, resetInput: resetInput);
 
-  Future<void> mergeForward(Message initial) async {
-    final selection = await Get.to<List<Message>>(() => MessageSelectionPage(
-        messages: messageList.where(canForward).toList(),
-        initialID: initial.clientMsgID));
-    if (selection == null || selection.isEmpty || isClosed) return;
-    try {
-      selection.sort((a, b) => (a.sendTime ?? 0).compareTo(b.sendTime ?? 0));
-      final targets = await AppNavigator.startSelectContacts(
-          action: SelAction.forward, ex: 'sdkMergedHistory'.tr);
-      if (targets == null || isClosed) return;
-      for (final contact in targets['checkedList']) {
-        final message = await OpenIM.iMManager.messageManager
-            .createMergerMessage(
-                messageList: selection,
-                title: '${nickname.value} · ${'sdkMergedHistory'.tr}',
-                summaryList: selection
-                    .take(3)
-                    .map((m) =>
-                        '${m.senderNickname ?? ''}: ${IMUtils.parseMsg(m)}')
-                    .toList());
-        await _sendMessage(message,
-            userId: IMUtils.convertCheckedToUserID(contact),
-            groupId: IMUtils.convertCheckedToGroupID(contact));
-      }
-    } catch (error) {
-      IMViews.showToast(error.toString());
-    }
-  }
-
-  Future<void> onTapCard() async {
-    closeToolbox();
-    final selected = await AppNavigator.startSelectContacts(
-      action: SelAction.carte,
-      cardRecipientName: nickname.value,
-      cardRecipientFaceURL: faceUrl.value,
-      cardRecipientIsGroup: isGroupChat,
-    );
-    if (isClosed ||
-        selected is! UserInfo ||
-        selected.userID?.isNotEmpty != true) {
-      return;
-    }
-    try {
-      await sendCarte(
-        userID: selected.userID!,
-        nickname: selected.nickname,
-        faceURL: selected.faceURL,
-      );
-    } catch (error) {
-      Logger.print('Send contact card failed: $error');
-      IMViews.showToast(StrRes.sendFailed);
-    }
-  }
-
-  Future<void> sendCarte({
-    required String userID,
-    String? nickname,
-    String? faceURL,
-  }) async {
-    var message = await OpenIM.iMManager.messageManager.createCardMessage(
-      userID: userID,
-      ex: await createFriendCardExtension(userID),
-      nickname: nickname?.trim().isNotEmpty == true ? nickname! : userID,
-      faceURL: faceURL,
-    );
-    await _sendMessage(message);
-  }
-
-  void sendCustomMsg({
-    required String data,
-    required String extension,
-    required String description,
-  }) async {
-    var message = await OpenIM.iMManager.messageManager.createCustomMessage(
-      data: data,
-      extension: extension,
-      description: description,
-    );
-    _sendMessage(message);
-  }
-
-  Future _sendMessage(
-    Message message, {
-    String? userId,
-    String? groupId,
-    bool addToUI = true,
-  }) {
-    log('send : ${json.encode(message)}');
-    userId = IMUtils.emptyStrToNull(userId);
-    groupId = IMUtils.emptyStrToNull(groupId);
-    if (null == userId && null == groupId ||
-        userId == userID && userId != null ||
-        groupId == groupID && groupId != null) {
-      if (addToUI) {
-        messageList.add(message);
-        scrollBottom();
-      }
-    }
-    Logger.print('uid:$userID userId:$userId gid:$groupID groupId:$groupId');
-    _reset(message);
-    bool useOuterValue = null != userId || null != groupId;
-
-    final recvUserID = useOuterValue ? userId : userID;
-    message.recvID = recvUserID;
-
-    return OpenIM.iMManager.messageManager
-        .sendMessage(
-          message: message,
-          userID: recvUserID,
-          groupID: useOuterValue ? groupId : groupID,
-          offlinePushInfo: Config.offlinePushInfo,
-        )
-        .then((value) => _sendSucceeded(message, value))
-        .catchError(
-            (error, _) => _senFailed(message, groupId, userId, error, _))
-        .whenComplete(() => _completed());
-  }
-
-  void _sendSucceeded(Message oldMsg, Message newMsg) {
-    Logger.print('message send success----');
-    oldMsg.update(newMsg);
-    sendStatusSub.addSafely(MsgStreamEv<bool>(
-      id: oldMsg.clientMsgID!,
-      value: true,
-    ));
-  }
-
-  void _senFailed(
-      Message message, String? groupId, String? userId, error, stack) async {
-    Logger.print(
-        'message send failed userID: $userId groupId:$groupId, catch error :$error  $stack');
-    message.status = MessageStatus.failed;
-    sendStatusSub.addSafely(MsgStreamEv<bool>(
-      id: message.clientMsgID!,
-      value: false,
-    ));
-    if (error is PlatformException) {
-      int code = int.tryParse(error.code) ?? 0;
-      if (isSingleChat) {
-        int? customType;
-        if (code == SDKErrorCode.hasBeenBlocked) {
-          customType = CustomMessageType.blockedByFriend;
-        } else if (code == SDKErrorCode.notFriend) {
-          customType = CustomMessageType.deletedByFriend;
-        }
-        if (null != customType) {
-          final hintMessage = (await OpenIM.iMManager.messageManager
-              .createFailedHintMessage(type: customType))
-            ..status = 2
-            ..isRead = true;
-          if (userId != null) {
-            if (userId == userID) {
-              messageList.add(hintMessage);
-            }
-          } else {
-            messageList.add(hintMessage);
-          }
-          OpenIM.iMManager.messageManager.insertSingleMessageToLocalStorage(
-            message: hintMessage,
-            receiverID: userId ?? userID,
-            senderID: OpenIM.iMManager.userID,
-          );
-        }
-      } else {
-        if ((code == SDKErrorCode.userIsNotInGroup ||
-                code == SDKErrorCode.groupDisbanded) &&
-            null == groupId) {
-          final status = groupInfo?.status;
-          final hintMessage = (await OpenIM.iMManager.messageManager
-              .createFailedHintMessage(
-                  type: status == 2
-                      ? CustomMessageType.groupDisbanded
-                      : CustomMessageType.removedFromGroup))
-            ..status = 2
-            ..isRead = true;
-          messageList.add(hintMessage);
-          OpenIM.iMManager.messageManager.insertGroupMessageToLocalStorage(
-            message: hintMessage,
-            groupID: groupID,
-            senderID: OpenIM.iMManager.userID,
-          );
-        }
-      }
-    }
-  }
-
-  void _reset(Message message) {
-    if (message.contentType == MessageType.text ||
-        message.contentType == MessageType.atText ||
-        message.contentType == MessageType.quote) {
-      inputCtrl.clear();
-      _mentions.clear();
-      _draftTimer?.cancel();
-      _saveDraft();
-    }
-  }
-
-  void _completed() {
-    messageList.refresh();
-  }
-
-  Future<void> markVoicePlayed(Message message) async {
-    Map<String, dynamic> extra = {};
-    try {
-      extra = Map<String, dynamic>.from(jsonDecode(message.localEx ?? '{}'));
-    } catch (_) {}
-    if (extra['voiceHeard'] != true) {
-      extra['voiceHeard'] = true;
-      final encoded = jsonEncode(extra);
-      await OpenIM.iMManager.messageManager.setMessageLocalEx(
-          conversationID: conversationInfo.conversationID,
-          clientMsgID: message.clientMsgID!,
-          localEx: encoded);
-      message.localEx = encoded;
-    }
-    if (!isClosed) await _markMessageAsRead(message);
-  }
-
-  void markMessageAsRead(Message message, bool visible) async {
-    Logger.print('markMessageAsRead: ${message.textElem?.content}, $visible');
-    if (visible &&
-        message.contentType! < 1000 &&
-        message.contentType! != MessageType.voice) {
-      var data = IMUtils.parseCustomMessage(message);
-      if (null != data && data['viewType'] == CustomMessageType.call) {
-        Logger.print('markMessageAsRead: call message $data');
-        return;
-      }
-      _markMessageAsRead(message);
-    }
-  }
-
-  final _readInFlight = <String>{};
-  Future<void> _markMessageAsRead(Message message) async {
-    final id = message.clientMsgID;
-    if (id == null ||
-        message.isRead == true ||
-        message.sendID == OpenIM.iMManager.userID ||
-        !_readInFlight.add(id)) return;
-    try {
-      if (message.attachedInfoElem?.isPrivateChat == true) {
-        await OpenIM.iMManager.messageManager.markMessagesAsReadByMsgID(
-            conversationID: conversationInfo.conversationID,
-            messageIDList: [id]);
-      } else {
-        await OpenIM.iMManager.conversationManager
-            .markConversationMessageAsRead(
-                conversationID: conversationInfo.conversationID);
-      }
-      if (isClosed) return;
-      message.isRead = true;
-      message.hasReadTime = _timestamp;
-      if (message.attachedInfoElem?.isPrivateChat == true)
-        message.attachedInfoElem?.hasReadTime = _timestamp;
-      messageList.refresh();
-    } catch (error) {
-      Logger.print('Mark read failed: $error');
-    } finally {
-      _readInFlight.remove(id);
-    }
-  }
-
-  _clearUnreadCount() {
-    if (conversationInfo.unreadCount > 0) {
-      OpenIM.iMManager.conversationManager.markConversationMessageAsRead(
-          conversationID: conversationInfo.conversationID);
-    }
-  }
+  Future _sendMessage(Message message,
+          {String? userId,
+          String? groupId,
+          bool addToUI = true,
+          bool resetInput = true,
+          void Function(FavoriteSendResult)? favoriteResult}) =>
+      _delivery.send(message,
+          userId: userId,
+          groupId: groupId,
+          addToUI: addToUI,
+          resetInput: resetInput,
+          favoriteResult: favoriteResult);
+  Future<void> markVoicePlayed(Message message) =>
+      _voice.markVoicePlayed(message);
+  bool canTranscribeVoice(Message message) =>
+      _voice.canTranscribeVoice(message);
+  Future<void> transcribeVoice(Message message) =>
+      _voice.transcribeVoice(message);
+  VoiceTranscriptionState? displayedVoiceTranscription(Message message) =>
+      _voice.displayedVoiceTranscription(message);
+  void markMessageAsRead(Message message, bool visible) =>
+      _receipts.markMessageAsRead(message, visible);
+  void _clearUnreadCount({bool leaving = false}) =>
+      _receipts.clearUnreadCount(leaving: leaving);
 
   void closeToolbox() {
     forceCloseToolbox.addSafely(true);
   }
 
-  void onTapAlbum() async {
-    final List<AssetEntity>? assets = await AssetPicker.pickAssets(Get.context!,
-        pickerConfig: AssetPickerConfig(
-            requestType: RequestType.common,
-            sortPathsByModifiedDate: true,
-            filterOptions: PMFilter.defaultValue(containsPathModified: true),
-            selectPredicate: (_, entity, isSelected) async {
-              if (entity.type == AssetType.image) {
-                if (await allowSendImageType(entity)) {
-                  return true;
-                }
+  Future<void> onTapAlbum() => _media.onTapAlbum();
+  Future<void> onTapFile() => _media.onTapFile();
+  Future<void> onTapCamera() => _media.onTapCamera();
+  Future<void> onTapRecord() => _voice.onTapRecord();
+  Future<void> convertRecordedVoice(String path, int seconds) =>
+      _voice.convertRecordedVoice(path, seconds);
+  Future<void> sendRecordedVoice(String path, int seconds) =>
+      _voice.sendRecordedVoice(path, seconds);
+  Future<void> onTapAudio() => _media.onTapAudio();
+  Future<bool> allowSendImageType(AssetEntity entity) =>
+      _media.allowSendImageType(entity);
+  Future<void> addPersonalSticker() => _stickers.addPersonalSticker();
+  bool canAddMessageToStickers(Message message) =>
+      !isOfficialNotificationChat &&
+      ChatStickerController.messageStickerURL(message) != null;
+  Future<void> addMessageToStickers(Message message) =>
+      _stickers.addMessageToStickers(message);
+  Future<void> sendPersonalSticker(PersonalSticker sticker) =>
+      _stickers.sendPersonalSticker(sticker);
 
-                IMViews.showToast(StrRes.supportsTypeHint);
-
-                return false;
-              }
-
-              if (entity.videoDuration > const Duration(seconds: 5 * 60)) {
-                IMViews.showToast(
-                    sprintf(StrRes.selectVideoLimit, [5]) + StrRes.minute);
-                return false;
-              }
-              return true;
-            }));
-    if (null != assets) {
-      for (var asset in assets) {
-        try {
-          await _handleAssets(asset, sendNow: false);
-        } catch (_) {
-          IMViews.showToast(StrRes.sendFailed);
-        }
-      }
-
-      for (var msg in tempMessages) {
-        await _sendMessage(msg, addToUI: false);
-      }
-
-      tempMessages.clear();
-    }
-  }
-
-  bool _pickingAttachment = false;
-  Future<File> _retainAttachment(String path) async {
-    final name = path.split(Platform.pathSeparator).last;
-    final directory = Directory('${Config.cachePath}/outgoing_media');
-    await directory.create(recursive: true);
-    return File(path).copy(
-        '${directory.path}/${DateTime.now().microsecondsSinceEpoch}_$name');
-  }
-
-  Future<void> onTapFile() => _pickAttachment(false);
-  Future<void> onTapCamera() async {
-    if (_pickingAttachment) return;
-    _pickingAttachment = true;
-    try {
-      final asset = await CameraPicker.pickFromCamera(Get.context!,
-          pickerConfig: const CameraPickerConfig(
-              enableRecording: true,
-              enableAudio: true,
-              maximumRecordingDuration: Duration(seconds: 60)));
-      if (asset != null && !isClosed) await _handleAssets(asset);
-    } catch (_) {
-      IMViews.showToast(StrRes.sendFailed);
-    } finally {
-      _pickingAttachment = false;
-    }
-  }
-
-  Future<void> onTapRecord() async {
-    final result = await Get.dialog<Map<String, dynamic>>(
-        const VoiceCaptureDialog(),
-        barrierDismissible: false);
-    if (result == null || isClosed) return;
-    try {
-      final message = await OpenIM.iMManager.messageManager
-          .createSoundMessageFromFullPath(
-              soundPath: result['path'], duration: result['duration']);
-      await _sendMessage(message);
-    } catch (_) {
-      IMViews.showToast(StrRes.sendFailed);
-    }
-  }
-
-  Future<void> addPersonalSticker() async {
-    if (isClosed) return;
-    try {
-      var pending = _pendingSticker;
-      if (pending != null) {
-        final retry = await Get.dialog<bool>(AlertDialog(
-          title: const Text('上次收藏未完成'),
-          content: const Text('重试上次收藏，或选择新的文件？'),
-          actions: [
-            TextButton(
-                onPressed: () => Get.back(result: false),
-                child: const Text('选择新文件')),
-            TextButton(
-                onPressed: () => Get.back(result: true),
-                child: const Text('重试')),
-          ],
-        ));
-        if (retry == null || isClosed) return;
-        if (!retry) {
-          _pendingSticker = null;
-          pending = null;
-        }
-      }
-      if (pending == null) {
-        final picked = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4'],
-        );
-        final file = picked?.files.single;
-        if (file?.path == null || isClosed) return;
-        final maxSize = file!.extension?.toLowerCase() == 'mp4'
-            ? 20 * 1024 * 1024
-            : 10 * 1024 * 1024;
-        if (file.size > maxSize) {
-          IMViews.showToast('文件超过表情收藏上限');
-          return;
-        }
-        final result = await LoadingView.singleton.wrap(
-          asyncFunction: () => OpenIM.iMManager.uploadFile(
-            id: const Uuid().v4(),
-            filePath: file.path!,
-            fileName: file.name,
-          ),
-        );
-        final data = result is String ? jsonDecode(result) : result;
-        final url = data['url'] as String?;
-        if (url == null || url.isEmpty) throw StateError('上传未返回文件地址');
-        pending = (url: url, requestID: const Uuid().v4());
-        _pendingSticker = pending;
-      }
-      await personalStickers.add(pending.url, pending.requestID);
-      _pendingSticker = null;
-    } on StickerApiException catch (error) {
-      if ([1001, 20012, 20021, 20022, 20023].contains(error.code)) {
-        _pendingSticker = null;
-      }
-      IMViews.showToast('收藏失败：$error');
-    } catch (error) {
-      IMViews.showToast('收藏失败：$error');
-    }
-  }
-
-  Future<void> sendPersonalSticker(PersonalSticker sticker) async {
-    if (isClosed || sendingMuted || isInvalidGroup) return;
-    if (!sticker.isVideo) {
-      final message = await OpenIM.iMManager.messageManager
-          .createFaceMessage(index: -1, data: sticker.mediaURL);
-      if (!isClosed) await _sendMessage(message);
-      return;
-    }
-    final directory = Directory('${Config.cachePath}/outgoing_media');
-    await directory.create(recursive: true);
-    final prefix = const Uuid().v4();
-    final video = File('${directory.path}/$prefix.mp4');
-    final cover = File('${directory.path}/$prefix.jpg');
-    await dio.download(sticker.mediaURL, video.path);
-    await dio.download(sticker.thumbnailURL!, cover.path);
-    if (isClosed) return;
-    final message =
-        await OpenIM.iMManager.messageManager.createVideoMessageFromFullPath(
-      videoPath: video.path,
-      videoType: sticker.mimeType,
-      duration: ((sticker.durationMs ?? 1000) / 1000).ceil(),
-      snapshotPath: cover.path,
-    );
-    markStickerVideoMessage(message);
-    await _sendMessage(message);
-  }
-
-  Future<void> sendRecordedVoice(String path, int seconds) async {
-    if (isClosed || sendingMuted || isInvalidGroup) return;
-    try {
-      final message = await OpenIM.iMManager.messageManager
-          .createSoundMessageFromFullPath(soundPath: path, duration: seconds);
-      await _sendMessage(message);
-    } catch (_) {
-      IMViews.showToast(StrRes.sendFailed);
-    }
-  }
-
-  Future<void> onTapAudio() => _pickAttachment(true);
-  Future<void> _pickAttachment(bool isAudio) async {
-    if (_pickingAttachment) return;
-    _pickingAttachment = true;
-    try {
-      final result = await FilePicker.platform
-          .pickFiles(type: isAudio ? FileType.audio : FileType.any);
-      if (result == null || isClosed) return;
-      final selected = result.files.single;
-      if (selected.path == null) throw StateError('File unavailable');
-      final file = await _retainAttachment(selected.path!);
-      Message message;
-      if (isAudio) {
-        final player = audio.AudioPlayer();
-        try {
-          final duration = await player.setFilePath(file.path);
-          if (duration == null || duration.inMilliseconds <= 0)
-            throw StateError('Invalid audio');
-          message = await OpenIM.iMManager.messageManager
-              .createSoundMessageFromFullPath(
-                  soundPath: file.path,
-                  duration: (duration.inMilliseconds / 1000).ceil());
-        } finally {
-          await player.dispose();
-        }
-      } else {
-        message = await OpenIM.iMManager.messageManager
-            .createFileMessageFromFullPath(
-                filePath: file.path, fileName: selected.name);
-      }
-      if (!isClosed) await _sendMessage(message);
-    } catch (_) {
-      IMViews.showToast(StrRes.sendFailed);
-    } finally {
-      _pickingAttachment = false;
-    }
-  }
-
-  Future<bool> allowSendImageType(AssetEntity entity) async {
-    final mimeType = await entity.mimeTypeAsync;
-
-    return IMUtils.allowImageType(mimeType);
-  }
-
-  Future _handleAssets(AssetEntity? asset, {bool sendNow = true}) async {
-    if (null != asset) {
-      Logger.print(
-          '--------assets type-----${asset.type} create time: ${asset.createDateTime}');
-      final originalFile = await asset.file;
-      if (originalFile == null) {
-        IMViews.showToast(StrRes.sendFailed);
-        return;
-      }
-      final originalPath = originalFile.path;
-      var path = originalPath.toLowerCase().endsWith('.gif')
-          ? originalPath
-          : originalFile.path;
-      Logger.print('--------assets path-----$path');
-      switch (asset.type) {
-        case AssetType.image:
-          await sendPicture(path: path, sendNow: sendNow);
-          break;
-        case AssetType.video:
-          final saved = await _retainAttachment(path);
-          final thumbnail =
-              await asset.thumbnailDataWithSize(const ThumbnailSize(640, 640));
-          if (thumbnail == null)
-            throw StateError('Video thumbnail unavailable');
-          final snapshot = File('${saved.path}.jpg');
-          await snapshot.writeAsBytes(thumbnail);
-          final message = await OpenIM.iMManager.messageManager
-              .createVideoMessageFromFullPath(
-                  videoPath: saved.path,
-                  videoType: await asset.mimeTypeAsync ?? 'video/mp4',
-                  duration: asset.videoDuration.inSeconds < 1
-                      ? 1
-                      : asset.videoDuration.inSeconds,
-                  snapshotPath: snapshot.path);
-          if (sendNow) {
-            await _sendMessage(message);
-          } else {
-            messageList.add(message);
-            tempMessages.add(message);
-          }
-          break;
-        default:
-          break;
-      }
-    }
-  }
-
-  void onTapDirectionalMessage() async {
-    if (null != groupInfo) {
-      final list = await AppNavigator.startGroupMemberList(
-        groupInfo: groupInfo!,
-        opType: GroupMemberOpType.call,
-      );
-      if (list is List<GroupMembersInfo>) {
-        directionalUsers.assignAll(list);
-      }
-    }
-  }
-
-  TextSpan? directionalText() {
-    if (directionalUsers.isNotEmpty) {
-      final temp = <TextSpan>[];
-
-      for (var e in directionalUsers) {
-        final r = TextSpan(
-          text: '${e.nickname ?? ''} ${directionalUsers.last == e ? '' : ','} ',
-          style: Styles.ts_0089FF_14sp,
-        );
-
-        temp.add(r);
-      }
-
-      return TextSpan(
-        text: '${StrRes.directedTo}:',
-        style: Styles.ts_8E9AB0_14sp,
-        children: temp,
-      );
-    }
-
-    return null;
-  }
-
-  void onClearDirectional() {
-    directionalUsers.clear();
-  }
+  Future<void> sendBuiltinSticker(ChatBuiltinSticker sticker) =>
+      _stickers.sendBuiltinSticker(sticker);
+  Future<void> sendDice() => _stickers.sendDice();
+  Future<void> onTapDirectionalMessage() => _composer.onTapDirectionalMessage();
+  TextSpan? directionalText() => _composer.directionalText();
+  void onClearDirectional() => _composer.onClearDirectional();
+  FundMessageData? fundMessageData(Message message) =>
+      _funds.messageData(message);
+  bool fundMessageClaimedByMe(FundMessageData message) =>
+      _funds.claimedByMe(message);
+  bool fundMessageStatusResolved(FundMessageData message) =>
+      _funds.statusResolved(message);
+  FundCardRecipient fundCardRecipient(FundMessageData message) =>
+      _funds.cardRecipient(message);
+  int? fundPacketCount(FundMessageData message) => _funds.packetCount(message);
+  void setFundMessageVisible(Message message, bool visible) =>
+      _funds.setVisible(message, visible);
+  Future<void> onTapRedPacket() => _funds.openSend(isRedPacket: true);
+  Future<void> onTapTransfer() => _funds.openSend(isRedPacket: false);
 
   void parseClickEvent(Message msg) async {
-    log('parseClickEvent:${jsonEncode(msg)}');
+    log('parseClickEvent type:${msg.contentType} id:${msg.clientMsgID}');
     if (msg.contentType == MessageType.custom) {
+      final fund = fundMessageData(msg);
+      if (fund != null) {
+        await _funds.openDetail(fund, sourceMessage: msg);
+        return;
+      }
       if (!isSingleChat || isInBlacklist.value) return;
       try {
         final map = json.decode(msg.customElem?.data ?? '');
@@ -1407,320 +980,124 @@ class ChatLogic extends SuperController {
   }
 
   void onTapLeftAvatar(Message message) {
-    viewUserInfo(UserInfo()
-      ..userID = message.sendID
-      ..nickname = message.senderNickname
-      ..faceURL = message.senderFaceUrl);
+    if (!isOfficialNotificationChat) _navigation.onTapLeftAvatar(message);
   }
 
   void onTapRightAvatar() {
-    viewUserInfo(OpenIM.iMManager.userInfo);
+    if (!isOfficialNotificationChat) _navigation.onTapRightAvatar();
   }
 
   void viewUserInfo(UserInfo userInfo,
-      {bool isCard = false, String? inviteCode}) {
-    if (isGroupChat && !isAdminOrOwner && !isCard) {
-      if (groupInfo!.lookMemberInfo != 1) {
-        AppNavigator.startUserProfilePane(
-          userID: userInfo.userID!,
-          nickname: userInfo.nickname,
-          faceURL: userInfo.faceURL,
-          groupID: groupID,
-          offAllWhenDelFriend: isSingleChat,
-        );
-      }
-    } else {
-      AppNavigator.startUserProfilePane(
-        userID: userInfo.userID!,
-        nickname: userInfo.nickname,
-        faceURL: userInfo.faceURL,
-        groupID: groupID,
-        offAllWhenDelFriend: isSingleChat,
-        forceCanAdd: isCard,
-        addSource: isCard ? FriendAddSource.card : null,
-        friendAddFields: isCard ? {'inviteCode': inviteCode ?? ''} : const {},
-      );
-    }
-  }
+          {bool isCard = false, String? inviteCode}) =>
+      isOfficialNotificationChat
+          ? null
+          : _navigation.viewUserInfo(userInfo,
+              isCard: isCard, inviteCode: inviteCode);
+  void clickLinkText(String url, Object? type) =>
+      _navigation.clickLinkText(url, type);
+  Future<void> searchMentionID(String id) => _navigation.searchMentionID(id);
 
-  void clickLinkText(url, type) async {
-    if (await canLaunch(url)) {
-      await launch(url);
-    }
-  }
-
-  Future<void> searchMentionID(String id) async {
-    final candidates = mentionIDCandidates(id.trim());
-    if (candidates.first.isEmpty) return;
-    final results = await LoadingView.singleton.wrap(asyncFunction: () async {
-      final usersFuture = _findMentionUsers(candidates);
-      final groupsFuture = _findMentionGroups(candidates);
-      return (await usersFuture, await groupsFuture);
-    });
-    if (isClosed) return;
-
-    final user =
-        results.$1.firstWhereOrNull((item) => candidates.contains(item.userID));
-    final group = results.$2
-        .firstWhereOrNull((item) => candidates.contains(item.groupID));
-    if (group != null) {
-      AppNavigator.startGroupProfilePanel(
-        groupID: group.groupID,
-        joinGroupMethod: JoinGroupMethod.search,
-      );
-    } else if (user != null) {
-      AppNavigator.startUserProfilePane(
-        userID: user.userID!,
-        nickname: user.nickname,
-        faceURL: user.faceURL,
-      );
-    } else {
-      IMViews.showToast('mentionIdNotFound'.tr);
-    }
-  }
-
-  Future<List<UserFullInfo>> _findMentionUsers(List<String> candidates) async {
-    for (final candidate in candidates) {
-      try {
-        final users = await Apis.searchUserFullInfo(content: candidate);
-        final exact =
-            users?.where((item) => candidates.contains(item.userID)).toList();
-        if (exact != null && exact.isNotEmpty) return exact;
-      } catch (_) {}
-    }
-    return [];
-  }
-
-  Future<List<GroupInfo>> _findMentionGroups(List<String> candidates) async {
-    for (final candidate in candidates) {
-      try {
-        final groups = await OpenIM.iMManager.groupManager
-            .getGroupsInfo(groupIDList: [candidate]);
-        if (groups.any((item) => candidates.contains(item.groupID))) {
-          return groups;
-        }
-      } catch (_) {}
-    }
-    for (final candidate in candidates) {
-      try {
-        final groups = await OpenIM.iMManager.groupManager
-            .searchGroups(keywordList: [candidate], isSearchGroupID: true);
-        if (groups.any((item) => candidates.contains(item.groupID))) {
-          return groups;
-        }
-      } catch (_) {}
-    }
-    return [];
-  }
-
-  exit() async {
+  Future<bool> exit() async {
     Get.back();
 
     return true;
   }
 
-  void focusNodeChanged(bool hasFocus) {
-    if (hasFocus) {
-      Logger.print('focus:$hasFocus');
-      scrollBottom();
-    }
-  }
-
   Message indexOfMessage(int index, {bool calculate = true}) =>
-      IMUtils.calChatTimeInterval(
-        messageList,
-        calculate: calculate,
-      ).reversed.elementAt(index);
+      _timeline.indexOfMessage(index, calculate: calculate);
 
   ValueKey itemKey(Message message) => ValueKey(message.clientMsgID!);
 
   @override
   void onClose() {
-    voicePlayback.dispose();
-    personalStickers.dispose();
+    if (!_sessionInactive) _clearUnreadCount(leaving: true);
+    _chatClosing = true;
+    messageArrivals.dispose();
+    _dateJump.invalidate();
+    _dateWindow.invalidate();
+    _messageFocus.dispose();
+    _messageRoute = null;
+    messagePositionController.dispose();
+    _messageSelectionWorker?.dispose();
+    assistantStreams.dispose();
+    messageSelection.dispose();
+    _favorites.dispose();
+    _latestScroll.close();
+    newMessages.close();
+    _timeline.close();
+    _receipts.close();
+    if (identical(imLogic.onRecvNewMessage, _ownedMessageCallback)) {
+      imLogic.onRecvNewMessage = null;
+    }
+    if (identical(imLogic.onRecvC2CReadReceipt, _ownedReceiptCallback)) {
+      imLogic.onRecvC2CReadReceipt = null;
+    }
+    if (identical(imLogic.onSignalingMessage, _ownedSignalingCallback)) {
+      imLogic.onSignalingMessage = null;
+    }
+    _voice.dispose();
+    _stickers.close();
+    _media.close();
+    _funds.close();
+    _appearance.close();
     _typingExpiry?.cancel();
-    _muteExpiry?.cancel();
+    _memberActions.close();
+    _group.close();
     for (final subscription in _messageSubscriptions) {
       subscription.cancel();
     }
-    _draftTimer?.cancel();
-    _saveDraft();
+    _composer.dispose();
     if (Get.isRegistered<ContactsLogic>()) {
       Get.find<ContactsLogic>().setProfilePresence(this, null);
     }
-    sendTypingMsg();
-    _clearUnreadCount();
-    inputCtrl.dispose();
-    focusNode.dispose();
     forceCloseToolbox.close();
     conversationSub.cancel();
-    sendStatusSub.close();
-    memberAddSub.cancel();
-    memberDelSub.cancel();
-    memberInfoChangedSub.cancel();
-    groupInfoUpdatedSub.cancel();
+    _delivery.close();
     friendInfoChangedSub.cancel();
     userStatusChangedSub?.cancel();
     selfInfoUpdatedSub?.cancel();
-    joinedGroupAddedSub.cancel();
-    joinedGroupDeletedSub.cancel();
     connectionSub.cancel();
+    scrollController.removeListener(_onChatScrolled);
+    scrollController.dispose();
+    refreshController.dispose();
 
-    _debounce?.cancel();
     super.onClose();
   }
 
-  String? getShowTime(Message message) {
-    if (message.exMap['showTime'] == true) {
-      return IMUtils.getChatTimeline(message.sendTime!);
-    }
-    return null;
-  }
+  String? getShowTime(Message message) => _timeline.getShowTime(message);
 
   void clearAllMessage() {
-    messageList.clear();
-  }
-
-  Future<void> deleteMessage(Message message) async {
-    final clientMsgID = message.clientMsgID;
-    if (clientMsgID == null) return;
-    try {
-      await OpenIM.iMManager.messageManager.deleteMessageFromLocalStorage(
-        conversationID: conversationInfo.conversationID,
-        clientMsgID: clientMsgID,
-      );
-      _removeMessageByID(clientMsgID);
-      copyTextMap.remove(clientMsgID);
-    } catch (error) {
-      IMViews.showToast(error.toString());
+    _messageFocus.cancel();
+    _dateJump.invalidate();
+    _dateWindow.invalidate();
+    newMessages.reset();
+    final ids = _timeline.clear();
+    for (final id in ids) {
+      _voice.removeMessage(id);
     }
+    copyTextMap.clear();
+    clearReply();
   }
 
-  void _initChatConfig() {
-    scaleFactor.value = DataSp.getChatFontSizeFactor();
-    unawaited(reloadChatBackground());
-  }
+  Future<void> deleteMessage(Message message) => isOfficialNotificationChat
+      ? Future<void>.value()
+      : _actions.deleteMessage(message);
 
-  Future<void> reloadChatBackground() async {
-    var direct = ChatBackgroundLocalService.direct(otherId);
-    if (direct != null && !ChatBackgroundLocalService.isUsable(direct)) {
-      await ChatBackgroundLocalService.clear(otherId);
-      direct = null;
-    }
-
-    var value = direct ?? ChatBackgroundLocalService.global();
-    if (value != null && !ChatBackgroundLocalService.isUsable(value)) {
-      await ChatBackgroundLocalService.clear(
-        ChatBackgroundLocalService.globalConversationId,
-      );
-      value = null;
-    }
-    if (!isClosed) background.value = value ?? '';
-  }
+  Future<void> reloadChatBackground() => _appearance.reload();
 
   String get otherId => isSingleChat ? userID! : groupID!;
 
   void failedResend(Message message) {
-    Logger.print('failedResend: ${message.clientMsgID}');
-    if (message.status == MessageStatus.sending) {
-      return;
-    }
-    sendStatusSub.addSafely(MsgStreamEv<bool>(
-      id: message.clientMsgID!,
-      value: true,
-    ));
-
-    Logger.print('failedResending: ${message.clientMsgID}');
-    _sendMessage(message..status = MessageStatus.sending, addToUI: false);
+    if (!isOfficialNotificationChat) _favorites.failedResend(message);
   }
 
-  static int get _timestamp => DateTime.now().millisecondsSinceEpoch;
+  bool get havePermissionMute => _group.havePermissionMute;
 
-  void destroyMsg() {
-    for (var message in privateMessageList) {
-      OpenIM.iMManager.messageManager.deleteMessageFromLocalAndSvr(
-        conversationID: conversationInfo.conversationID,
-        clientMsgID: message.clientMsgID!,
-      );
-    }
-  }
+  bool isNotificationType(Message message) =>
+      ChatMessagePresentation.isNotification(message);
 
-  Future _queryMyGroupMemberInfo() async {
-    if (!isGroupChat) {
-      return;
-    }
-    var list = await OpenIM.iMManager.groupManager.getGroupMembersInfo(
-      groupID: groupID!,
-      userIDList: [OpenIM.iMManager.userID],
-    );
-    groupMembersInfo = list.firstOrNull;
-    _refreshMute();
-    groupMemberRoleLevel.value =
-        groupMembersInfo?.roleLevel ?? GroupRoleLevel.member;
-    if (null != groupMembersInfo) {
-      memberUpdateInfoMap[OpenIM.iMManager.userID] = groupMembersInfo!;
-    }
-
-    return;
-  }
-
-  Future _queryOwnerAndAdmin() async {
-    if (isGroupChat) {
-      ownerAndAdmin = await OpenIM.iMManager.groupManager
-          .getGroupMemberList(groupID: groupID!, filter: 5, count: 20);
-    }
-    return;
-  }
-
-  void _isJoinedGroup() async {
-    if (!isGroupChat) {
-      return;
-    }
-    isInGroup.value = await OpenIM.iMManager.groupManager.isJoinedGroup(
-      groupID: groupID!,
-    );
-    if (!isInGroup.value) {
-      return;
-    }
-    _queryGroupInfo();
-    _queryOwnerAndAdmin();
-  }
-
-  void _queryGroupInfo() async {
-    if (!isGroupChat) {
-      return;
-    }
-    var list = await OpenIM.iMManager.groupManager.getGroupsInfo(
-      groupIDList: [groupID!],
-    );
-    groupInfo = list.firstOrNull;
-    announcement.value = groupInfo?.notification ?? '';
-    announcementVersion.value =
-        groupInfo?.notificationUpdateTime?.toString() ?? '';
-    _refreshMute();
-    groupOwnerID = groupInfo?.ownerUserID;
-    if (null != groupInfo?.memberCount) {
-      memberCount.value = groupInfo!.memberCount!;
-    }
-    _queryMyGroupMemberInfo();
-  }
-
-  bool get havePermissionMute =>
-      isGroupChat &&
-      (groupInfo?.ownerUserID ==
-          OpenIM.iMManager
-              .userID /*||
-          groupMembersInfo?.roleLevel == 2*/
-      );
-
-  bool isNotificationType(Message message) => message.contentType! >= 1000;
-
-  Map<String, String> getAtMapping(Message message) {
-    return IMUtils.getAtMapping(message, {
-      for (final entry in memberUpdateInfoMap.entries)
-        if (entry.value.nickname != null) entry.key: entry.value.nickname!,
-    });
-  }
+  Map<String, String> getAtMapping(Message message) =>
+      _group.getAtMapping(message);
 
   void _checkInBlacklist() async {
     if (userID != null) {
@@ -1730,22 +1107,10 @@ class ChatLogic extends SuperController {
     }
   }
 
-  bool isExceed24H(Message message) {
-    int milliseconds = message.sendTime!;
-    return !DateUtil.isToday(milliseconds);
-  }
+  String? getNewestNickname(Message message) => message.senderNickname;
+  String? getNewestFaceURL(Message message) => message.senderFaceUrl;
 
-  String? getNewestNickname(Message message) {
-    if (isSingleChat) null;
-
-    return message.senderNickname;
-  }
-
-  String? getNewestFaceURL(Message message) {
-    return message.senderFaceUrl;
-  }
-
-  bool get isInvalidGroup => !isInGroup.value && isGroupChat;
+  bool get isInvalidGroup => _group.isInvalidGroup;
 
   void _resetGroupAtType() {
     if (conversationInfo.groupAtType != GroupAtType.atNormal) {
@@ -1755,47 +1120,13 @@ class ChatLogic extends SuperController {
     }
   }
 
-  WillPopCallback? willPop() {
-    return null;
-  }
-
-  void call() {
-    if (rtcIsBusy) {
-      IMViews.showToast(StrRes.callingBusy);
-      return;
-    }
-
-    IMViews.openIMCallSheet(nickname.value, (index) {
-      imLogic.call(
-        callObj: CallObj.single,
-        callType: index == 0 ? CallType.audio : CallType.video,
-        inviteeUserIDList: [if (isSingleChat) userID!],
-      );
-    });
-  }
-
-  void callDirectly(CallType type) {
-    if (rtcIsBusy) {
-      IMViews.showToast(StrRes.callingBusy);
-      return;
-    }
-    if (!isSingleChat) return;
-    imLogic.call(
-      callObj: CallObj.single,
-      callType: type,
-      inviteeUserIDList: [userID!],
-    );
-  }
-
-  void callAudio() => callDirectly(CallType.audio);
-
-  void callVideo() => callDirectly(CallType.video);
+  void call() => _calling.call();
+  void callDirectly(CallType type) => _calling.callDirectly(type);
+  void callAudio() => _calling.callAudio();
+  void callVideo() => _calling.callVideo();
 
   void onScrollToTop() {
-    if (scrollingCacheMessageList.isNotEmpty) {
-      messageList.addAll(scrollingCacheMessageList);
-      scrollingCacheMessageList.clear();
-    }
+    if (!_dateWindow.buffering) _timeline.flushBuffered();
   }
 
   String get markText {
@@ -1808,35 +1139,22 @@ class ChatLogic extends SuperController {
     return OpenIM.iMManager.userInfo.nickname ?? '';
   }
 
-  bool isFailedHintMessage(Message message) {
-    if (message.contentType == MessageType.custom) {
-      var data = message.customElem!.data;
-      var map = json.decode(data!);
-      var customType = map['customType'];
-      return customType == CustomMessageType.deletedByFriend ||
-          customType == CustomMessageType.blockedByFriend;
-    }
-    return false;
+  bool isFailedHintMessage(Message message) =>
+      ChatMessagePresentation.isFailedHint(message);
+
+  void sendFriendVerification() {
+    if (_sessionInactive) return;
+    AppNavigator.startAddContactsBySearch(searchType: SearchType.user);
   }
 
-  void sendFriendVerification() =>
-      AppNavigator.startSendVerificationApplication(userID: userID);
-
   void _setSdkSyncDataListener() {
+    final current = imLogic.currentSdkStatus;
+    if (current != null) syncStatus.value = current;
     connectionSub = imLogic.imSdkStatusPublishSubject.listen((value) {
+      if (_sessionInactive) return;
       syncStatus.value = value.status;
-      if (value.status == IMSdkStatus.syncStart) {
-        _isStartSyncing = true;
-      } else if (value.status == IMSdkStatus.syncEnded) {
-        if (/*_isReceivedMessageWhenSyncing &&*/ _isStartSyncing) {
-          _isReceivedMessageWhenSyncing = false;
-          _isStartSyncing = false;
-          _isFirstLoad = true;
-          _loadHistoryForSyncEnd();
-        }
-      } else if (value.status == IMSdkStatus.syncFailed) {
-        _isReceivedMessageWhenSyncing = false;
-        _isStartSyncing = false;
+      if (value.status == IMSdkStatus.syncEnded) {
+        unawaited(_loadHistoryForSyncEnd());
       }
     });
   }
@@ -1855,107 +1173,40 @@ class ChatLogic extends SuperController {
     }
   }
 
-  bool showBubbleBg(Message message) {
-    return !isNotificationType(message) && !isFailedHintMessage(message);
-  }
+  bool showBubbleBg(Message message) =>
+      ChatMessagePresentation.showBubbleBackground(message);
 
-  Future<AdvancedMessage> _fetchHistoryMessages() {
-    Logger.print(
-        '_fetchHistoryMessages: is first load: $_isFirstLoad, last client id: ${_isFirstLoad ? null : messageList.firstOrNull?.clientMsgID}');
-    return OpenIM.iMManager.messageManager.getAdvancedHistoryMessageList(
-      conversationID: conversationInfo.conversationID,
-      count: _pageSize,
-      startMsg: _isFirstLoad ? null : messageList.firstOrNull,
-    );
-  }
+  Future<bool> onScrollToBottomLoad() => _sessionInactive
+      ? Future.value(false)
+      : _dateWindow.seeking.value || _dateWindow.returning.value
+          ? Future.value(historyHasMore.value)
+          : _timeline.loadOlder();
 
-  Future<bool> onScrollToBottomLoad() async {
-    late List<Message> list;
-    final result = await _fetchHistoryMessages();
-    if (result.messageList == null || result.messageList!.isEmpty) {
-      _getGroupInfoAfterLoadMessage();
+  Future<bool> onScrollToTopLoad() => _sessionInactive
+      ? Future.value(false)
+      : _dateWindow.seeking.value || _dateWindow.returning.value
+          ? Future.value(historyNewerHasMore.value)
+          : _timeline.loadNewer();
 
-      return false;
-    }
-    list = result.messageList!;
-    if (_isFirstLoad) {
-      _isFirstLoad = false;
-      // remove the message that has been timed down
-      messageList.assignAll(
-          list.where((m) => !_removedMessageIDs.contains(m.clientMsgID)));
-      scrollBottom();
-
-      _getGroupInfoAfterLoadMessage();
-    } else {
-      messageList.insertAll(
-          0, list.where((m) => !_removedMessageIDs.contains(m.clientMsgID)));
-    }
-
-    return result.isEnd != true;
+  void retryHistory() {
+    if (_sessionInactive) return;
+    unawaited(_dateWindow.retry());
   }
 
   Future<void> _loadHistoryForSyncEnd() async {
-    final result =
-        await OpenIM.iMManager.messageManager.getAdvancedHistoryMessageList(
-      conversationID: conversationInfo.conversationID,
-      count: messageList.length < _pageSize ? _pageSize : messageList.length,
-      startMsg: null,
-    );
-    if (result.messageList == null) return;
-    final list = result.messageList!;
-
-    if (isClosed) return;
-    final offset = scrollController.hasClients ? scrollController.offset : 0.0;
-    messageList.assignAll(
-        list.where((m) => !_removedMessageIDs.contains(m.clientMsgID)));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!isClosed && scrollController.hasClients)
-        scrollController.jumpTo(
-            offset.clamp(0.0, scrollController.position.maxScrollExtent));
-    });
+    if (!_sessionInactive) await _timeline.refresh();
   }
 
   void _getGroupInfoAfterLoadMessage() {
     if (isGroupChat && ownerAndAdmin.isEmpty) {
-      _isJoinedGroup();
+      unawaited(_group.loadAfterHistory());
     } else {
       _checkInBlacklist();
     }
   }
 
-  recommendFriendCarte(UserInfo userInfo) async {
-    final result = await AppNavigator.startSelectContacts(
-      action: SelAction.recommend,
-      ex: '[${StrRes.carte}]${userInfo.nickname}',
-    );
-    if (null != result) {
-      final customEx = result['customEx'];
-      final checkedList = result['checkedList'];
-      for (var info in checkedList) {
-        final userID = IMUtils.convertCheckedToUserID(info);
-        final groupID = IMUtils.convertCheckedToGroupID(info);
-        if (customEx is String && customEx.isNotEmpty) {
-          _sendMessage(
-            await OpenIM.iMManager.messageManager.createTextMessage(
-              text: customEx,
-            ),
-            userId: userID,
-            groupId: groupID,
-          );
-        }
-        _sendMessage(
-          await OpenIM.iMManager.messageManager.createCardMessage(
-            userID: userInfo.userID!,
-            ex: await createFriendCardExtension(userInfo.userID!),
-            nickname: userInfo.nickname!,
-            faceURL: userInfo.faceURL,
-          ),
-          userId: userID,
-          groupId: groupID,
-        );
-      }
-    }
-  }
+  Future<void> recommendFriendCarte(UserInfo userInfo) =>
+      _forwarding.recommendFriendCarte(userInfo);
 
   @override
   void onDetached() {}
@@ -1968,11 +1219,12 @@ class ChatLogic extends SuperController {
 
   @override
   void onPaused() {
-    _saveDraft();
+    unawaited(_composer.saveDraft());
   }
 
   @override
   void onResumed() {
     _loadHistoryForSyncEnd();
+    _funds.refreshVisible();
   }
 }

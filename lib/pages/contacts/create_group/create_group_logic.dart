@@ -9,6 +9,7 @@ import 'package:openim_common/openim_common.dart';
 import '../../../routes/app_navigator.dart';
 import '../../conversation/conversation_logic.dart';
 import '../select_contacts/select_contacts_logic.dart';
+import '../select_contacts/selection/contact_selection_policy.dart';
 
 class CreateGroupLogic extends GetxController {
   final conversationLogic = Get.find<ConversationLogic>();
@@ -24,7 +25,16 @@ class CreateGroupLogic extends GetxController {
     checkedList.addAll(Get.arguments['checkedList']);
     allList.addAll(defaultCheckedList);
     allList.addAll(checkedList);
+    _removeUnavailableMembers();
     super.onInit();
+  }
+
+  void _removeUnavailableMembers() {
+    bool unavailable(UserInfo member) =>
+        !ContactSelectionPolicy.allowsGroupMember(member);
+    defaultCheckedList.removeWhere(unavailable);
+    checkedList.removeWhere(unavailable);
+    allList.removeWhere(unavailable);
   }
 
   String get groupName {
@@ -37,6 +47,7 @@ class CreateGroupLogic extends GetxController {
   }
 
   completeCreation() async {
+    _removeUnavailableMembers();
     if (allList.length > 1) {
       var info = await LoadingView.singleton.wrap(
         asyncFunction: () => OpenIM.iMManager.groupManager.createGroup(
@@ -121,10 +132,10 @@ class CreateGroupLogic extends GetxController {
     if (list is List<UserInfo>) {
       checkedList
         ..clear()
-        ..addAll(list);
+        ..addAll(list.where(ContactSelectionPolicy.allowsGroupMember));
       allList
         ..assignAll(defaultCheckedList)
-        ..addAll(list);
+        ..addAll(checkedList);
     }
   }
 }

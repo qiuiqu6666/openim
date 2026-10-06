@@ -78,7 +78,12 @@ class _GroupQrScannerState extends State<GroupQrScanner>
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => AppSystemBars(
+      background: Theme.of(context).appBarTheme.backgroundColor ??
+          Theme.of(context).colorScheme.surface,
+      navigationBackground: Colors.black,
+      child: Scaffold(
+        backgroundColor: Colors.black,
         appBar: GlassAppBar(
             title: Text(StrRes.scan),
             centerTitle: true,
@@ -107,5 +112,5 @@ class _GroupQrScannerState extends State<GroupQrScanner>
                     onPressed: openAppSettings,
                     child: Text('groupQrCameraPermission'.tr))),
         ]),
-      );
+      ));
 }

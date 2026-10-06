@@ -125,8 +125,8 @@ class StorageMediaRepository {
       message.videoElem?.snapshotUrl,
       message.fileElem?.sourceUrl,
     ];
-    for (final url in remoteURLs) {
-      if (url == null || url.isEmpty) continue;
+    final cacheKeys = remoteURLs.expand(_cacheKeys).toSet();
+    for (final url in cacheKeys) {
       try {
         final info = await _cacheManager.getFileFromCache(url);
         if (info != null && await _isOwnedFile(info.file.path)) {
@@ -172,12 +172,21 @@ class StorageMediaRepository {
     );
   }
 
+  Iterable<String> _cacheKeys(String? url) {
+    if (url == null || url.isEmpty) return const <String>[];
+    return {
+      url,
+      OpenIMMediaUrl.resolve(url, imApiUrl: Config.imApiUrl),
+    };
+  }
+
   Future<String?> _cachedPath(String? url) async {
-    if (url == null || url.isEmpty) return null;
-    try {
-      final file = (await _cacheManager.getFileFromCache(url))?.file;
-      if (file != null && await _isOwnedFile(file.path)) return file.path;
-    } catch (_) {}
+    for (final key in _cacheKeys(url)) {
+      try {
+        final file = (await _cacheManager.getFileFromCache(key))?.file;
+        if (file != null && await _isOwnedFile(file.path)) return file.path;
+      } catch (_) {}
+    }
     return null;
   }
 

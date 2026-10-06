@@ -5,6 +5,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 
 import 'add_by_search_logic.dart';
+import '../../official_account/widgets/official_account_name_label.dart';
 
 class AddContactsBySearchPage extends StatelessWidget {
   final logic = Get.find<AddContactsBySearchLogic>();
@@ -16,6 +17,7 @@ class AddContactsBySearchPage extends StatelessWidget {
     return Scaffold(
       appBar: TitleBar.back(
         title: logic.isSearchUser ? StrRes.addFriend : StrRes.addGroup,
+        backIconColor: Styles.c_0089FF,
       ),
       backgroundColor: Styles.c_FFFFFF,
       body: Column(
@@ -36,11 +38,15 @@ class AddContactsBySearchPage extends StatelessWidget {
           Divider(color: Styles.c_E8EAEF, height: 1.h),
           Obx(() => Expanded(
                 child: logic.isSearchUser
-                    ? (logic.isNotFoundUser ? _buildNotFoundView() : _buildUserListView())
+                    ? (logic.isNotFoundUser
+                        ? _buildNotFoundView()
+                        : _buildUserListView())
                     : (logic.isNotFoundGroup
                         ? _buildNotFoundView()
                         : (Column(
-                            children: logic.groupInfoList.map((e) => _buildItemView(e)).toList(),
+                            children: logic.groupInfoList
+                                .map((e) => _buildItemView(e))
+                                .toList(),
                           ))),
               ))
         ],
@@ -75,14 +81,26 @@ class AddContactsBySearchPage extends StatelessWidget {
           height: 49.h,
           child: Row(
             children: [
-              (logic.isSearchUser ? ImageRes.searchPersonIcon : ImageRes.searchGroupIcon).toImage
+              (logic.isSearchUser
+                      ? ImageRes.searchPersonIcon
+                      : ImageRes.searchGroupIcon)
+                  .toImage
                 ..width = 24.w
                 ..height = 24.h,
               12.horizontalSpace,
-              logic.getShowTitle(info).toText
-                ..style = Styles.ts_0089FF_17sp
-                ..maxLines = 1
-                ..overflow = TextOverflow.ellipsis,
+              Expanded(
+                child: logic.isSearchUser && info is UserFullInfo
+                    ? OfficialAccountNameLabel(
+                        name: logic.getShowTitle(info),
+                        userID: info.userID,
+                        ex: info.ex,
+                        style: Styles.ts_0089FF_17sp,
+                      )
+                    : Text(logic.getShowTitle(info),
+                        style: Styles.ts_0089FF_17sp,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+              ),
             ],
           ),
         ),
@@ -90,6 +108,8 @@ class AddContactsBySearchPage extends StatelessWidget {
 
   Widget _buildNotFoundView() => Container(
         padding: EdgeInsets.symmetric(vertical: 12.h),
-        child: (logic.isSearchUser ? StrRes.noFoundUser : StrRes.noFoundGroup).toText..style = Styles.ts_8E9AB0_17sp,
+        child: (logic.isSearchUser ? StrRes.noFoundUser : StrRes.noFoundGroup)
+            .toText
+          ..style = Styles.ts_8E9AB0_17sp,
       );
 }

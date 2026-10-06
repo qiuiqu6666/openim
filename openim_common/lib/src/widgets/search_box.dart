@@ -4,13 +4,15 @@ import 'package:openim_common/openim_common.dart';
 
 class SearchBox extends StatefulWidget {
   const SearchBox({
-    Key? key,
+    super.key,
     this.controller,
     this.focusNode,
     this.textStyle,
     this.hintStyle,
     this.hintText,
     this.searchIconColor,
+    this.searchIcon,
+    this.clearIcon,
     this.backgroundColor,
     this.searchIconHeight,
     this.searchIconWidth,
@@ -19,16 +21,21 @@ class SearchBox extends StatefulWidget {
     this.enabled = false,
     this.autofocus = false,
     this.height,
+    this.borderRadius,
     this.onSubmitted,
     this.onCleared,
     this.onChanged,
-  }) : super(key: key);
+  });
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final TextStyle? hintStyle;
   final TextStyle? textStyle;
   final String? hintText;
   final Color? searchIconColor;
+
+  /// Override bitmap artwork when a surface needs fully theme-colored icons.
+  final Widget? searchIcon;
+  final Widget? clearIcon;
   final Color? backgroundColor;
   final double? searchIconWidth;
   final double? searchIconHeight;
@@ -37,6 +44,7 @@ class SearchBox extends StatefulWidget {
   final bool enabled;
   final bool autofocus;
   final double? height;
+  final BorderRadiusGeometry? borderRadius;
   final Function(String)? onSubmitted;
   final Function()? onCleared;
   final ValueChanged<String>? onChanged;
@@ -50,12 +58,32 @@ class _SearchBoxState extends State<SearchBox> {
 
   @override
   void initState() {
-    widget.controller?.addListener(() {
-      setState(() {
-        _showClearBtn = widget.controller!.text.isNotEmpty;
-      });
-    });
     super.initState();
+    _showClearBtn = widget.controller?.text.isNotEmpty ?? false;
+    widget.controller?.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant SearchBox oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_handleControllerChanged);
+      widget.controller?.addListener(_handleControllerChanged);
+      _showClearBtn = widget.controller?.text.isNotEmpty ?? false;
+    }
+  }
+
+  void _handleControllerChanged() {
+    final showClear = widget.controller?.text.isNotEmpty ?? false;
+    if (showClear != _showClearBtn) {
+      setState(() => _showClearBtn = showClear);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller?.removeListener(_handleControllerChanged);
+    super.dispose();
   }
 
   @override
@@ -66,14 +94,15 @@ class _SearchBoxState extends State<SearchBox> {
       padding: widget.padding ?? EdgeInsets.symmetric(horizontal: 14.w),
       decoration: BoxDecoration(
         color: widget.backgroundColor ?? Styles.c_8E9AB0_opacity15,
-        borderRadius: BorderRadius.circular(6.r),
+        borderRadius: widget.borderRadius ?? BorderRadius.circular(6.r),
       ),
       child: Row(
         children: [
-          ImageRes.searchGrey.toImage
-            ..color = widget.searchIconColor
-            ..width = widget.searchIconWidth ?? 18.w
-            ..height = widget.searchIconHeight ?? 18.h,
+          widget.searchIcon ??
+              (ImageRes.searchGrey.toImage
+                ..color = widget.searchIconColor
+                ..width = widget.searchIconWidth ?? 18.w
+                ..height = widget.searchIconHeight ?? 18.h),
           8.horizontalSpace,
           Expanded(
             child: TextField(
@@ -108,10 +137,11 @@ class _SearchBoxState extends State<SearchBox> {
             widget.onCleared?.call();
           },
           behavior: HitTestBehavior.translucent,
-          child: ImageRes.clearText.toImage
-            ..width = widget.searchIconWidth ?? 24.w
-            ..height = widget.searchIconHeight ?? 24.h
-            ..color = widget.searchIconColor,
+          child: widget.clearIcon ??
+              (ImageRes.clearText.toImage
+                ..width = widget.searchIconWidth ?? 24.w
+                ..height = widget.searchIconHeight ?? 24.h
+                ..color = widget.searchIconColor),
         ),
       );
 }

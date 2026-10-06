@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
@@ -10,6 +8,10 @@ import '../settings_navigation.dart';
 import '../widgets/settings_widgets.dart';
 import 'storage_media_repository.dart';
 import 'storage_widgets.dart';
+import '../storage/conversation_storage_page.dart';
+import '../storage/widgets/storage_media_thumbnail.dart';
+
+export '../storage/conversation_storage_page.dart';
 
 class ChatStoragePage extends StatefulWidget {
   const ChatStoragePage({
@@ -42,6 +44,8 @@ class _ChatStoragePageState extends State<ChatStoragePage> {
   bool _failed = false;
   bool _partial = false;
   String _query = '';
+  (int, int, int, int, String, DateTime)? _groupsSignature;
+  List<MapEntry<String, List<StorageMediaItem>>> _conversationRows = [];
 
   @override
   void initState() {
@@ -135,6 +139,35 @@ class _ChatStoragePageState extends State<ChatStoragePage> {
       if (threshold != null && !item.time.isBefore(threshold)) return false;
       return true;
     }).toList();
+  }
+
+  List<MapEntry<String, List<StorageMediaItem>>> _groupedRows() {
+    final now = DateTime.now();
+    final signature = (
+      _revision.value,
+      _tab,
+      _minBytes,
+      _olderDays,
+      _query,
+      DateTime(now.year, now.month, now.day),
+    );
+    if (_groupsSignature == signature) return _conversationRows;
+    final query = _query.toLowerCase();
+    final groups = <String, List<StorageMediaItem>>{};
+    final totals = <String, int>{};
+    for (final item in _visibleItems) {
+      if (query.isNotEmpty &&
+          !item.conversationName.toLowerCase().contains(query)) {
+        continue;
+      }
+      groups.putIfAbsent(item.conversationID, () => []).add(item);
+      totals.update(item.conversationID, (value) => value + item.bytes,
+          ifAbsent: () => item.bytes);
+    }
+    _conversationRows = groups.entries.toList()
+      ..sort((a, b) => totals[b.key]!.compareTo(totals[a.key]!));
+    _groupsSignature = signature;
+    return _conversationRows;
   }
 
   Future<void> _showFilter() async {
@@ -314,19 +347,7 @@ class _ChatStoragePageState extends State<ChatStoragePage> {
     final dark = settingsIsDark(context);
     final color = AppTokens.textPrimary(dark: dark);
     final secondary = AppTokens.textSecondary(dark: dark);
-    final visible = _visibleItems;
-    final groups = <String, List<StorageMediaItem>>{};
-    for (final item in visible) {
-      if (_query.isNotEmpty &&
-          !item.conversationName.toLowerCase().contains(_query.toLowerCase())) {
-        continue;
-      }
-      groups.putIfAbsent(item.conversationID, () => []).add(item);
-    }
-    final rows = groups.entries.toList()
-      ..sort((a, b) => b.value
-          .fold<int>(0, (sum, e) => sum + e.bytes)
-          .compareTo(a.value.fold<int>(0, (sum, e) => sum + e.bytes)));
+    final rows = _groupedRows();
 
     return SettingsScaffold(
       title: settingsText(context, zh: '聊天存储空间', en: 'Chat Storage'),
@@ -557,7 +578,7 @@ class _ChatStoragePageState extends State<ChatStoragePage> {
                                               SizedBox(
                                                   width: size,
                                                   height: size,
-                                                  child: _StorageThumbnail(
+                                                  child: StorageMediaThumbnail(
                                                       item: items[i],
                                                       fit: BoxFit.contain)),
                                             ],
@@ -578,515 +599,4 @@ class _ChatStoragePageState extends State<ChatStoragePage> {
       children: const [],
     );
   }
-}
-
-class ConversationStoragePage extends StatefulWidget {
-  const ConversationStoragePage({
-    super.key,
-    required this.name,
-    required this.conversationID,
-    required this.source,
-    required this.revision,
-    required this.repository,
-    required this.onRemoved,
-    this.initialType,
-  });
-
-  final String name;
-  final String conversationID;
-  final List<StorageMediaItem> source;
-  final ValueListenable<int> revision;
-  final StorageMediaRepository repository;
-  final ValueChanged<Set<String>> onRemoved;
-  final StorageMediaType? initialType;
-
-  @override
-  State<ConversationStoragePage> createState() =>
-      _ConversationStoragePageState();
-}
-
-class _ConversationStoragePageState extends State<ConversationStoragePage> {
-  final _selected = <String>{};
-  bool _selecting = false;
-  bool _deleting = false;
-  bool _oldestFirst = false;
-
-  final _scrollController = ScrollController();
-  final _viewportKey = GlobalKey();
-  final _tileKeys = <String, GlobalKey>{};
-  Timer? _dragTimer;
-  Offset? _dragPosition;
-  int? _dragAnchor;
-  List<StorageMediaItem> _dragItems = [];
-  Set<String> _dragBaseline = {};
-  bool _dragAdding = true;
-
-  void _endDrag() {
-    _dragTimer?.cancel();
-    _dragTimer = null;
-    _dragPosition = null;
-    _dragAnchor = null;
-  }
-
-  void _startDrag(StorageMediaItem item, Offset position) {
-    if (_deleting) return;
-    _endDrag();
-    _dragItems = _items;
-    _dragAnchor = _dragItems.indexWhere((entry) => entry.id == item.id);
-    _dragBaseline = Set.of(_selected);
-    _dragAdding = !_selected.contains(item.id);
-    _dragPosition = position;
-    setState(() {
-      _selecting = true;
-      _dragAdding ? _selected.add(item.id) : _selected.remove(item.id);
-    });
-    _dragTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
-      if (!mounted || _dragPosition == null || !_scrollController.hasClients) {
-        return;
-      }
-      final box = _viewportKey.currentContext?.findRenderObject();
-      if (box is! RenderBox) return;
-      final local = box.globalToLocal(_dragPosition!);
-      const edge = AppTokens.listItemHeight;
-      final speed = local.dy < edge
-          ? -(edge - local.dy) / edge
-          : local.dy > box.size.height - edge
-              ? (local.dy - box.size.height + edge) / edge
-              : 0.0;
-      if (speed != 0) {
-        final scroll = _scrollController.position;
-        _scrollController.jumpTo(
-            (scroll.pixels + speed.clamp(-1.0, 1.0) * AppTokens.s4)
-                .clamp(scroll.minScrollExtent, scroll.maxScrollExtent));
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _dragPosition != null) _updateDrag(_dragPosition!);
-        });
-      }
-    });
-  }
-
-  void _updateDrag(Offset position) {
-    if (_dragAnchor == null || _dragAnchor! < 0) return;
-    _dragPosition = position;
-    for (var i = 0; i < _dragItems.length; i++) {
-      final box =
-          _tileKeys[_dragItems[i].id]?.currentContext?.findRenderObject();
-      if (box is! RenderBox || !box.attached) continue;
-      final rect = box.localToGlobal(Offset.zero) & box.size;
-      if (!rect.inflate(AppTokens.s3).contains(position)) continue;
-      final start = i < _dragAnchor! ? i : _dragAnchor!;
-      final end = i > _dragAnchor! ? i : _dragAnchor!;
-      final next = Set<String>.of(_dragBaseline);
-      for (var j = start; j <= end; j++) {
-        _dragAdding
-            ? next.add(_dragItems[j].id)
-            : next.remove(_dragItems[j].id);
-      }
-      if (!setEquals(next, _selected)) {
-        setState(() {
-          _selected
-            ..clear()
-            ..addAll(next);
-        });
-      }
-      break;
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    widget.revision.addListener(_refresh);
-  }
-
-  void _refresh() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    _endDrag();
-    _scrollController.dispose();
-    widget.revision.removeListener(_refresh);
-    super.dispose();
-  }
-
-  List<StorageMediaItem> get _items {
-    final rows = widget.source
-        .where((item) =>
-            item.conversationID == widget.conversationID &&
-            (widget.initialType == null || item.type == widget.initialType))
-        .toList();
-    rows.sort((a, b) =>
-        _oldestFirst ? a.time.compareTo(b.time) : b.time.compareTo(a.time));
-    return rows;
-  }
-
-  Future<void> _removeSelected(List<StorageMediaItem> items) async {
-    if (_selected.isEmpty || _deleting) return;
-    final selected =
-        items.where((item) => _selected.contains(item.id)).toList();
-    final bytes = selected.fold<int>(0, (sum, item) => sum + item.bytes);
-    final confirmed = await showStorageConfirm(
-      context,
-      title: settingsText(context, zh: '删除所选文件？', en: 'Delete selected files?'),
-      description: settingsText(context,
-          zh: '将释放约 ${storageFormatBytes(bytes)} 本机空间。聊天消息不会删除，需要查看时可重新下载。',
-          en: 'This frees about ${storageFormatBytes(bytes)} locally. Chat messages stay and files can be downloaded again.'),
-      action: settingsText(context, zh: '删除', en: 'Delete'),
-      danger: true,
-    );
-    if (!confirmed || !mounted) return;
-    setState(() => _deleting = true);
-    try {
-      await widget.repository.removeLocalFiles(selected);
-      widget.onRemoved(_selected.toSet());
-      if (!mounted) return;
-      setState(() {
-        _selected.clear();
-        _selecting = false;
-      });
-      await showStorageComplete(context, bytes);
-    } catch (_) {
-      if (mounted) {
-        showSettingsMessage(
-            context,
-            settingsText(context,
-                zh: '部分文件未能删除，请重试',
-                en: 'Some files could not be deleted. Retry.'));
-      }
-    } finally {
-      if (mounted) setState(() => _deleting = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = settingsIsDark(context);
-    final items = _items;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final thisWeek = today.subtract(Duration(days: today.weekday - 1));
-    final sections = <String, List<StorageMediaItem>>{};
-    for (final item in items) {
-      final label = item.time.isAfter(today)
-          ? settingsText(context, zh: '今天', en: 'Today')
-          : item.time.isAfter(thisWeek)
-              ? settingsText(context, zh: '本周', en: 'This week')
-              : '${item.time.year}.${item.time.month.toString().padLeft(2, '0')}';
-      sections.putIfAbsent(label, () => []).add(item);
-    }
-    final selectedBytes = items
-        .where((item) => _selected.contains(item.id))
-        .fold<int>(0, (sum, item) => sum + item.bytes);
-
-    return SettingsScaffold(
-      title: _selecting
-          ? settingsText(context,
-              zh: '已选择 ${_selected.length} 项',
-              en: '${_selected.length} selected')
-          : settingsText(context, zh: '聊天文件', en: 'Chat Files'),
-      leading: _selecting
-          ? TextButton(
-              onPressed: () => setState(() {
-                _selecting = false;
-                _selected.clear();
-              }),
-              child: Text(settingsText(context, zh: '取消', en: 'Cancel')),
-            )
-          : null,
-      actions: [
-        TextButton(
-          onPressed: () => setState(() {
-            if (_selecting) {
-              if (_selected.length == items.length) {
-                _selected.clear();
-              } else {
-                _selected.addAll(items.map((item) => item.id));
-              }
-            } else {
-              _selecting = true;
-            }
-          }),
-          child: Text(_selecting
-              ? settingsText(context, zh: '全选', en: 'Select all')
-              : settingsText(context, zh: '选择', en: 'Select')),
-        ),
-      ],
-      body: Column(children: [
-        Container(
-          margin: const EdgeInsets.fromLTRB(
-              AppTokens.s4, AppTokens.s3, AppTokens.s4, AppTokens.s3),
-          padding: const EdgeInsets.fromLTRB(
-              AppTokens.s4, AppTokens.s4, AppTokens.s4, AppTokens.s2),
-          decoration: BoxDecoration(
-              color: AppTokens.surface(dark: dark),
-              borderRadius: BorderRadius.circular(AppTokens.rMd)),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(widget.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: AppTokens.textPrimary(dark: dark),
-                    fontSize: AppTokens.listTitleFontSize,
-                    fontWeight: FontWeight.w600)),
-            Row(children: [
-              Expanded(
-                  child: Text(
-                      settingsText(context,
-                          zh:
-                              '${items.length} 个项目 · ${storageFormatBytes(items.fold<int>(0, (sum, item) => sum + item.bytes))}',
-                          en:
-                              '${items.length} items · ${storageFormatBytes(items.fold<int>(0, (sum, item) => sum + item.bytes))}'),
-                      style: TextStyle(
-                          color: AppTokens.textSecondary(dark: dark),
-                          fontSize: AppTokens.captionFontSize),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis)),
-              if (!_selecting)
-                TextButton.icon(
-                    style: TextButton.styleFrom(
-                        foregroundColor: AppTokens.textSecondary(dark: dark)),
-                    onPressed: () =>
-                        setState(() => _oldestFirst = !_oldestFirst),
-                    icon:
-                        const Icon(Icons.swap_vert_rounded, size: AppTokens.s6),
-                    label: Text(_oldestFirst
-                        ? settingsText(context, zh: '时间升序', en: 'Oldest first')
-                        : settingsText(context,
-                            zh: '时间倒序', en: 'Newest first'))),
-            ]),
-          ]),
-        ),
-        Expanded(
-          child: items.isEmpty
-              ? Center(
-                  child: Text(
-                    settingsText(context, zh: '暂无本机文件', en: 'No local files'),
-                    style:
-                        TextStyle(color: AppTokens.textSecondary(dark: dark)),
-                  ),
-                )
-              : ListView(
-                  key: _viewportKey,
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(
-                      AppTokens.s4, 0, AppTokens.s4, AppTokens.s6),
-                  children: [
-                    for (final section in sections.entries) ...[
-                      Padding(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: AppTokens.s4),
-                        child: Row(children: [
-                          Text(section.key,
-                              style: TextStyle(
-                                color: AppTokens.textPrimary(dark: dark),
-                                fontWeight: FontWeight.w600,
-                                fontSize: AppTokens.secondaryFontSize,
-                              )),
-                          const SizedBox(width: AppTokens.s3),
-                          Text('${section.value.length}',
-                              style: TextStyle(
-                                  color: AppTokens.textSecondary(dark: dark),
-                                  fontSize: AppTokens.captionFontSize)),
-                        ]),
-                      ),
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: section.value.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: AppTokens.s3,
-                          mainAxisSpacing: AppTokens.s4,
-                          childAspectRatio: .84,
-                        ),
-                        itemBuilder: (context, index) {
-                          final item = section.value[index];
-                          final selected = _selected.contains(item.id);
-                          return GestureDetector(
-                            key: _tileKeys.putIfAbsent(
-                                item.id, () => GlobalKey()),
-                            behavior: HitTestBehavior.opaque,
-                            onLongPressStart: (details) =>
-                                _startDrag(item, details.globalPosition),
-                            onLongPressMoveUpdate: (details) =>
-                                _updateDrag(details.globalPosition),
-                            onLongPressEnd: (_) => _endDrag(),
-                            onLongPressCancel: _endDrag,
-                            onTap: () {
-                              if (_selecting) {
-                                setState(() {
-                                  selected
-                                      ? _selected.remove(item.id)
-                                      : _selected.add(item.id);
-                                });
-                              } else if (item.type == StorageMediaType.file) {
-                                IMUtils.previewFile(item.message);
-                              } else {
-                                final gallery = items
-                                    .where((media) => media.type == item.type)
-                                    .toList();
-                                final sources = gallery.map((media) {
-                                  final message = media.message;
-                                  final video =
-                                      media.type == StorageMediaType.video;
-                                  final localPath = video
-                                      ? message.videoElem?.videoPath
-                                      : message.pictureElem?.sourcePath;
-                                  final availablePath = localPath != null &&
-                                          localPath.isNotEmpty &&
-                                          File(localPath).existsSync()
-                                      ? localPath
-                                      : video
-                                          ? null
-                                          : (media.previewPath ??
-                                              (media.localPaths.isNotEmpty
-                                                  ? media.localPaths.first
-                                                  : null));
-                                  return MediaSource(
-                                    url: video
-                                        ? message.videoElem?.videoUrl
-                                        : message
-                                            .pictureElem?.sourcePicture?.url,
-                                    thumbnail: media.previewPath ??
-                                        (video
-                                            ? message.videoElem?.snapshotUrl
-                                            : message.pictureElem
-                                                ?.snapshotPicture?.url) ??
-                                        '',
-                                    file: availablePath == null
-                                        ? null
-                                        : File(availablePath),
-                                    isVideo: video,
-                                    tag: message.clientMsgID,
-                                    senderName:
-                                        message.senderNickname?.isNotEmpty ==
-                                                true
-                                            ? message.senderNickname
-                                            : message.sendID,
-                                    sentAt: media.time,
-                                  );
-                                }).toList();
-                                IMUtils.previewMediaFile(
-                                    context: context,
-                                    message: item.message,
-                                    sources: sources,
-                                    initialIndex: gallery.indexWhere(
-                                        (media) => media.id == item.id),
-                                    showCounter: true);
-                              }
-                            },
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Stack(children: [
-                                    Positioned.fill(
-                                      child: _StorageThumbnail(item: item),
-                                    ),
-                                    if (_selecting)
-                                      Positioned(
-                                        top: AppTokens.s2,
-                                        right: AppTokens.s2,
-                                        child: Icon(
-                                          selected
-                                              ? Icons.check_circle_rounded
-                                              : Icons
-                                                  .radio_button_unchecked_rounded,
-                                          color: selected
-                                              ? AppTokens.accent
-                                              : AppTokens.onAccent,
-                                        ),
-                                      ),
-                                  ]),
-                                ),
-                                const SizedBox(height: AppTokens.s2),
-                                Center(
-                                    child: Text(storageFormatBytes(item.bytes),
-                                        maxLines: 1,
-                                        style: TextStyle(
-                                          color: AppTokens.textSecondary(
-                                              dark: dark),
-                                          fontSize: AppTokens.captionFontSize,
-                                        ))),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ],
-                ),
-        ),
-      ]),
-      bottom: _selecting
-          ? Container(
-              padding: const EdgeInsets.fromLTRB(
-                  AppTokens.s5, AppTokens.s3, AppTokens.s5, AppTokens.s5),
-              color: AppTokens.background(dark: dark),
-              child: SizedBox(
-                width: double.infinity,
-                child: SettingsDestructiveButton(
-                  soft: true,
-                  text: settingsText(context,
-                      zh: '删除（${storageFormatBytes(selectedBytes)}）',
-                      en: 'Delete (${storageFormatBytes(selectedBytes)})'),
-                  loadingText:
-                      settingsText(context, zh: '正在删除…', en: 'Deleting…'),
-                  loading: _deleting,
-                  onPressed: _selected.isEmpty || _deleting
-                      ? null
-                      : () => _removeSelected(items),
-                ),
-              ),
-            )
-          : null,
-      children: const [],
-    );
-  }
-}
-
-class _StorageThumbnail extends StatelessWidget {
-  const _StorageThumbnail({required this.item, this.fit = BoxFit.cover});
-
-  final StorageMediaItem item;
-  final BoxFit fit;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = settingsIsDark(context);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppTokens.rSm),
-      child: ColoredBox(
-        color: AppTokens.surface(dark: dark),
-        child: Stack(fit: StackFit.expand, children: [
-          if (item.previewPath != null)
-            Image.file(File(item.previewPath!),
-                fit: fit,
-                cacheWidth: 280,
-                errorBuilder: (_, __, ___) => _fileIcon(context))
-          else
-            _fileIcon(context),
-          if (item.type == StorageMediaType.video)
-            const Center(
-              child: Icon(Icons.play_circle_fill_rounded,
-                  size: 30, color: AppTokens.onAccent),
-            ),
-        ]),
-      ),
-    );
-  }
-
-  Widget _fileIcon(BuildContext context) => Center(
-        child: Icon(
-          item.type == StorageMediaType.file
-              ? Icons.insert_drive_file_rounded
-              : Icons.image_outlined,
-          size: 30,
-          color: AppTokens.accent,
-        ),
-      );
 }

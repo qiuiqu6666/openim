@@ -104,6 +104,12 @@ class PresenceStore {
 
   void stopWatching(String id) {
     // Ignore late requests, but keep the last snapshot for the next appearance.
+    invalidateRefresh(id);
+  }
+
+  /// A newer status signal invalidates older requests without guessing a label.
+  void invalidateRefresh(String id) {
+    if (_closed) return;
     _versions[id] = (_versions[id] ?? 0) + 1;
   }
 
@@ -161,7 +167,9 @@ class PresenceStore {
                   'operationID': const Uuid().v4(),
                   'Content-Type': 'application/json',
                 }));
-        if (_closed || DataSp.userID != owner) return;
+        if (_closed || DataSp.userID != owner || DataSp.chatToken != token) {
+          return;
+        }
         final body = response.data as Map;
         if (body['errCode'] != 0) continue;
         for (final item in body['data']['users'] as List) {

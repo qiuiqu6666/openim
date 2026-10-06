@@ -4,6 +4,8 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
+enum LoadingIndicatorStyle { dots, ring }
+
 class LoadingView {
   static final LoadingView singleton = LoadingView._();
 
@@ -12,7 +14,16 @@ class LoadingView {
   LoadingView._();
 
   /// Shared animation for overlays and locally owned loading states.
-  static Widget indicator() => SpinKitCircle(color: Styles.c_0089FF);
+  static Widget indicator(
+          {double size = 50,
+          Color? color,
+          LoadingIndicatorStyle style = LoadingIndicatorStyle.dots}) =>
+      style == LoadingIndicatorStyle.ring
+          ? SizedBox.square(
+              dimension: size,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2.4, color: color ?? AppTokens.accent))
+          : SpinKitCircle(color: color ?? Styles.c_0089FF, size: size);
 
   OverlayState? _overlayState;
   OverlayEntry? _overlayEntry;
@@ -55,7 +66,7 @@ class LoadingView {
     _overlayState?.insert(_overlayEntry!);
   }
 
-  dismiss() async {
+  Future<void> dismiss() async {
     if (!_isVisible && !isProgressVisible) return;
     _overlayEntry?.remove();
     _progressOverlayEntry?.remove();
@@ -89,7 +100,8 @@ class LoadingView {
                   ),
                   StreamBuilder(
                       stream: stream,
-                      builder: (BuildContext context, AsyncSnapshot<double> snapshot) {
+                      builder: (BuildContext context,
+                          AsyncSnapshot<double> snapshot) {
                         if (!snapshot.hasData) return Container();
                         final progress = snapshot.data ?? 0.0;
                         return Text('${(progress * 100).toStringAsFixed(1)}%',

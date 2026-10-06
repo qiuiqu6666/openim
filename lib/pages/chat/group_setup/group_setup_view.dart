@@ -7,7 +7,7 @@ import 'package:openim_common/openim_common.dart';
 
 import 'group_setup_logic.dart';
 import 'group_announcement_page.dart';
-import '../group_announcement_banner.dart';
+import '../group/announcements/group_announcement_banner.dart';
 
 class GroupSetupPage extends StatelessWidget {
   final GroupSetupLogic logic;
@@ -18,7 +18,8 @@ class GroupSetupPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlassAppBar(
+        toolbarHeight: kToolbarHeight,
         automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: Styles.c_F8F9FA,
@@ -49,14 +50,14 @@ class GroupSetupPage extends StatelessWidget {
                     _settingRow('groupMuteLabel'.tr,
                         trailing: CupertinoSwitch(
                           value: logic.isNotDisturb,
-                          activeColor: Styles.c_0089FF,
+                          activeTrackColor: Styles.c_0089FF,
                           onChanged:
                               logic.updating.value ? null : logic.setMuted,
                         )),
                     _settingRow('groupPinLabel'.tr,
                         trailing: CupertinoSwitch(
                           value: logic.isPinned,
-                          activeColor: Styles.c_0089FF,
+                          activeTrackColor: Styles.c_0089FF,
                           onChanged:
                               logic.updating.value ? null : logic.setPinned,
                         )),
@@ -239,19 +240,14 @@ class GroupSetupPage extends StatelessWidget {
               onTap: logic.viewGroupMembers),
           4.verticalSpace,
           SizedBox(
+            key: const ValueKey('group-member-preview-row'),
             height: 78.h,
             child: LayoutBuilder(builder: (context, constraints) {
               final memberWidth = constraints.maxWidth / 7;
               return Row(
                 children: [
                   Expanded(
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        for (final member in logic.memberList.take(6))
-                          _memberPreview(member, memberWidth),
-                      ],
-                    ),
+                    child: Obx(() => _memberPreviewContent(memberWidth)),
                   ),
                   if (logic.isJoinedGroup.value || logic.isOwnerOrAdmin)
                     _memberAddButton(memberWidth),
@@ -262,6 +258,64 @@ class GroupSetupPage extends StatelessWidget {
           ),
         ]),
       );
+
+  Widget _memberPreviewContent(double memberWidth) {
+    if (logic.memberList.isNotEmpty) {
+      return ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final member in logic.memberList.take(6))
+            _memberPreview(member, memberWidth),
+        ],
+      );
+    }
+    if (logic.membersLoading.value) {
+      return Semantics(
+        label: '正在加载群成员',
+        child: ExcludeSemantics(
+          child: Row(
+            children: List.generate(
+              6,
+              (index) => Expanded(
+                key: ValueKey('group-member-placeholder-$index'),
+                child: Column(children: [
+                  CircleAvatar(
+                    radius: memberWidth * 0.36,
+                    backgroundColor: Styles.c_E8EAEF,
+                  ),
+                  6.verticalSpace,
+                  Container(
+                    width: memberWidth * 0.72,
+                    height: 6.h,
+                    decoration: BoxDecoration(
+                      color: Styles.c_E8EAEF,
+                      borderRadius: BorderRadius.circular(8.r),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return InkWell(
+      key: const ValueKey('group-member-preview-retry'),
+      onTap: logic.getGroupMembers,
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 6.w),
+          child: Text(
+            logic.membersFailed.value ? '群成员加载失败，点击重试' : '暂未获取到群成员，点击重试',
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: Styles.ts_8E9AB0_12sp,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _memberPreview(GroupMembersInfo member, double memberWidth) {
     final isOwner = member.userID == logic.groupInfo.value.ownerUserID;

@@ -6,6 +6,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:sprintf/sprintf.dart';
 
 import 'group_requests_logic.dart';
+import 'widgets/group_request_handler_label.dart';
 
 class GroupRequestsPage extends StatelessWidget {
   final logic = Get.find<GroupRequestsLogic>();
@@ -15,13 +16,35 @@ class GroupRequestsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: TitleBar.back(title: StrRes.newGroupRequest),
+      appBar: TitleBar.back(
+          title: StrRes.newGroupRequest, backIconColor: Styles.c_0089FF),
       backgroundColor: Styles.c_F8F9FA,
-      body: Obx(() => ListView.builder(
-            padding: EdgeInsets.only(top: 10.h),
-            itemCount: logic.list.length,
-            itemBuilder: (_, index) => _buildItemView(logic.list[index]),
-          )),
+      body: Obx(() {
+        if (logic.list.isEmpty) {
+          if (!logic.applicationsLoaded.value) {
+            return const SizedBox.shrink();
+          }
+          return SafeArea(
+            top: false,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppTokens.s7),
+                child: Text(
+                  StrRes.emptyGroupNotification,
+                  key: const ValueKey('empty-group-notifications'),
+                  textAlign: TextAlign.center,
+                  style: Styles.ts_8E9AB0_15sp,
+                ),
+              ),
+            ),
+          );
+        }
+        return ListView.builder(
+          padding: EdgeInsets.only(top: 10.h),
+          itemCount: logic.list.length,
+          itemBuilder: (_, index) => _buildItemView(logic.list[index]),
+        );
+      }),
     );
   }
 
@@ -102,11 +125,17 @@ class GroupRequestsPage extends StatelessWidget {
                       if (null != IMUtils.emptyStrToNull(info.reqMsg))
                         Padding(
                           padding: EdgeInsets.only(top: 4.h),
-                          child: sprintf(StrRes.applyReason, [info.reqMsg!]).toText
-                            ..style = Styles.ts_8E9AB0_14sp
-                            ..maxLines = 1
-                            ..overflow = TextOverflow.ellipsis,
+                          child:
+                              sprintf(StrRes.applyReason, [info.reqMsg!]).toText
+                                ..style = Styles.ts_8E9AB0_14sp
+                                ..maxLines = 1
+                                ..overflow = TextOverflow.ellipsis,
                         ),
+                      if ((info.handleResult == 1 || info.handleResult == -1) &&
+                          IMUtils.isNotNullEmptyStr(info.handleUserID?.trim()))
+                        Obx(() => GroupRequestHandlerLabel(
+                              nickname: logic.getHandlerNickname(info),
+                            )),
                     ],
                   ),
                 )
@@ -127,8 +156,10 @@ class GroupRequestsPage extends StatelessWidget {
             ),
           if (info.handleResult == 0 && isISendRequest)
             StrRes.waitingForVerification.toText..style = Styles.ts_8E9AB0_14sp,
-          if (info.handleResult == -1) StrRes.rejected.toText..style = Styles.ts_8E9AB0_14sp,
-          if (info.handleResult == 1) StrRes.approved.toText..style = Styles.ts_8E9AB0_14sp,
+          if (info.handleResult == -1)
+            StrRes.rejected.toText..style = Styles.ts_8E9AB0_14sp,
+          if (info.handleResult == 1)
+            StrRes.approved.toText..style = Styles.ts_8E9AB0_14sp,
         ],
       ),
     );

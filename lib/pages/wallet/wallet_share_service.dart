@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 enum WalletCopyResult {
@@ -39,11 +40,18 @@ enum WalletShareTextResult {
 
 enum WalletSystemShareResult {
   success,
+  dismissed,
   unavailable,
   failed,
 }
 
 class WalletShareService {
+  WalletShareService({
+    Future<bool> Function(BuildContext)? requestPhotoPermission,
+  }) : _requestPhotoPermission =
+            requestPhotoPermission ?? PermissionGuard.photosForSave;
+
+  final Future<bool> Function(BuildContext) _requestPhotoPermission;
   static const MethodChannel _shareChannel =
       MethodChannel('wallet_share_channel');
 
@@ -59,28 +67,43 @@ class WalletShareService {
     }
   }
 
-  Future<WalletSaveImgResult> saveQrImg(BuildContext context, GlobalKey key) async {
+  Future<WalletSaveImgResult> saveQrImg(
+    BuildContext context,
+    GlobalKey key, {
+    bool Function()? isCurrent,
+    Color backgroundColor = const Color(0xFFFFFFFF),
+  }) async {
+    bool active() => context.mounted && (isCurrent?.call() ?? true);
     try {
-      final allowed = await PermissionGuard.photosForSave(context);
+      if (!active()) return WalletSaveImgResult.unknown;
+      final allowed = await _requestPhotoPermission(context);
+      if (!active()) return WalletSaveImgResult.unknown;
       if (!allowed) return WalletSaveImgResult.permissionDenied;
 
       await Future<void>.delayed(const Duration(milliseconds: 80));
+      if (!active()) return WalletSaveImgResult.unknown;
 
       final bd = key.currentContext?.findRenderObject();
       if (bd is! RenderRepaintBoundary) return WalletSaveImgResult.renderFailed;
 
-      final img = await bd.toImage(pixelRatio: 3.0);
-      final bytes = await _toBytes(img);
-      if (bytes == null || bytes.isEmpty) return WalletSaveImgResult.renderFailed;
+      final bytes = await _captureBytes(bd, backgroundColor: backgroundColor);
+      if (!active()) return WalletSaveImgResult.unknown;
+      if (bytes == null || bytes.isEmpty) {
+        return WalletSaveImgResult.renderFailed;
+      }
 
       final name = 'wallet_receive_${DateTime.now().millisecondsSinceEpoch}';
+      if (!active()) return WalletSaveImgResult.unknown;
       final ret = await ImageGallerySaverPlus.saveImage(
         bytes,
         quality: 100,
         name: name,
       );
+      if (!active()) return WalletSaveImgResult.unknown;
 
-      return _isSaved(ret) ? WalletSaveImgResult.success : WalletSaveImgResult.saveFailed;
+      return _isSaved(ret)
+          ? WalletSaveImgResult.success
+          : WalletSaveImgResult.saveFailed;
     } catch (_) {
       return WalletSaveImgResult.unknown;
     }
@@ -132,6 +155,103 @@ class WalletShareService {
       return WalletSystemShareResult.unavailable;
     } catch (_) {
       return WalletSystemShareResult.failed;
+    }
+  }
+
+  /// Shares only the rendered deposit card, without a separate address payload.
+  Future<WalletSystemShareResult> shareSystemImage(
+    BuildContext context,
+    GlobalKey key, {
+    required bool Function() isCurrent,
+    Color backgroundColor = const Color(0xFFFFFFFF),
+  }) async {
+    bool active() => context.mounted && isCurrent();
+    if (!active()) return WalletSystemShareResult.dismissed;
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS)) {
+      return WalletSystemShareResult.unavailable;
+    }
+    try {
+      final boundaryContext = key.currentContext;
+      final boundary = boundaryContext?.findRenderObject();
+      if (boundary is! RenderRepaintBoundary ||
+          !boundary.attached ||
+          !boundary.hasSize ||
+          boundary.size.isEmpty) {
+        return WalletSystemShareResult.failed;
+      }
+      if (boundary.debugNeedsPaint) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!active() || boundaryContext?.mounted != true) {
+          return WalletSystemShareResult.dismissed;
+        }
+      }
+      final bytes =
+          await _captureBytes(boundary, backgroundColor: backgroundColor);
+      if (!active() || boundaryContext?.mounted != true) {
+        return WalletSystemShareResult.dismissed;
+      }
+      if (bytes == null || bytes.isEmpty || !boundary.attached) {
+        return WalletSystemShareResult.failed;
+      }
+
+      final viewport = MediaQuery.sizeOf(context);
+      final origin = (boundary.localToGlobal(Offset.zero) & boundary.size)
+          .intersect(Offset.zero & viewport);
+      if (origin.isEmpty || !origin.isFinite) {
+        return WalletSystemShareResult.failed;
+      }
+      final name =
+          '99Chat_deposit_${DateTime.now().microsecondsSinceEpoch}.png';
+      final file = XFile.fromData(bytes, mimeType: 'image/png', name: name);
+      if (!active()) return WalletSystemShareResult.dismissed;
+      final result = await Share.shareXFiles(
+        [file],
+        fileNameOverrides: [name],
+        sharePositionOrigin: origin,
+      );
+      if (!active()) return WalletSystemShareResult.dismissed;
+      return switch (result.status) {
+        ShareResultStatus.success => WalletSystemShareResult.success,
+        ShareResultStatus.dismissed => WalletSystemShareResult.dismissed,
+        ShareResultStatus.unavailable => WalletSystemShareResult.unavailable,
+      };
+    } on MissingPluginException {
+      return WalletSystemShareResult.unavailable;
+    } catch (_) {
+      return WalletSystemShareResult.failed;
+    }
+  }
+
+  Future<Uint8List?> _captureBytes(
+    RenderRepaintBoundary boundary, {
+    required Color backgroundColor,
+  }) async {
+    final image = await boundary.toImage(pixelRatio: 3.0);
+    ui.PictureRecorder? recorder;
+    ui.Picture? picture;
+    ui.Image? flattened;
+    try {
+      // The Android gallery plugin converts PNG to JPEG. Composite transparent
+      // rounded corners first so that conversion keeps the card background.
+      recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        ui.Paint()..color = backgroundColor.withAlpha(255),
+      );
+      canvas.drawImage(image, Offset.zero, ui.Paint());
+      picture = recorder.endRecording();
+      flattened = await picture.toImage(image.width, image.height);
+      return await _toBytes(flattened);
+    } finally {
+      flattened?.dispose();
+      picture?.dispose();
+      if (recorder != null && recorder.isRecording) {
+        recorder.endRecording().dispose();
+      }
+      image.dispose();
     }
   }
 

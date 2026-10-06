@@ -4,16 +4,18 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'group_setup_logic.dart';
+import '../group/announcements/group_announcement_error_message.dart';
 
 class GroupAnnouncementPage extends StatefulWidget {
-  const GroupAnnouncementPage({super.key});
+  const GroupAnnouncementPage({super.key, this.logic});
+  final GroupSetupLogic? logic;
 
   @override
   State<GroupAnnouncementPage> createState() => _GroupAnnouncementPageState();
 }
 
 class _GroupAnnouncementPageState extends State<GroupAnnouncementPage> {
-  final logic = Get.find<GroupSetupLogic>();
+  late final logic = widget.logic ?? Get.find<GroupSetupLogic>();
   late final controller = TextEditingController(
     text: logic.groupInfo.value.notification ?? '',
   );
@@ -29,18 +31,24 @@ class _GroupAnnouncementPageState extends State<GroupAnnouncementPage> {
     if (saving || !logic.isOwnerOrAdmin) return;
     final text = controller.text.trim();
     if (text.characters.length > 600) return;
+    final groupID = logic.groupInfo.value.groupID;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => saving = true);
     try {
       await OpenIM.iMManager.groupManager.setGroupInfo(GroupInfo(
-        groupID: logic.groupInfo.value.groupID,
+        groupID: groupID,
         notification: text,
       ));
+      if (!mounted || logic.groupInfo.value.groupID != groupID) return;
       logic.groupInfo.update((info) => info?.notification = text);
-      if (!mounted) return;
       IMViews.showToast(StrRes.setSuccessfully);
       Navigator.of(context).pop();
     } catch (error) {
-      if (mounted) IMViews.showToast(error.toString());
+      Logger.print('Publish group announcement failed: $error',
+          isError: true, onlyConsole: true);
+      if (mounted && logic.groupInfo.value.groupID == groupID) {
+        IMViews.showToast(groupAnnouncementPublishErrorMessage(error));
+      }
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -54,7 +62,8 @@ class _GroupAnnouncementPageState extends State<GroupAnnouncementPage> {
           canPop: !saving,
           child: Scaffold(
             backgroundColor: Styles.c_FFFFFF,
-            appBar: AppBar(
+            appBar: GlassAppBar(
+              toolbarHeight: kToolbarHeight,
               title: Text('groupAnnouncement'.tr),
               centerTitle: true,
               backgroundColor: Styles.c_FFFFFF,
@@ -80,8 +89,9 @@ class _GroupAnnouncementPageState extends State<GroupAnnouncementPage> {
                         children: [
                           Container(
                               constraints: BoxConstraints(
-                                minHeight: (MediaQuery.sizeOf(context).width * 0.36)
-                                    .clamp(144.0, 240.0),
+                                minHeight:
+                                    (MediaQuery.sizeOf(context).width * 0.36)
+                                        .clamp(144.0, 240.0),
                               ),
                               padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                               decoration: BoxDecoration(

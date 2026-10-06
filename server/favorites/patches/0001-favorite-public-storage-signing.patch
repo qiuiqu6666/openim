@@ -1,0 +1,251 @@
+diff --git a/pkg/common/config/config.go b/pkg/common/config/config.go
+--- a/pkg/common/config/config.go
++++ b/pkg/common/config/config.go
+@@ -152,22 +152,23 @@
+ }
+ 
+ type FavoriteConfig struct {
+-	MaxCount       int          `mapstructure:"maxCount"`
+-	MaxBytes       int64        `mapstructure:"maxBytes"`
+-	ImageMaxBytes  int64        `mapstructure:"imageMaxBytes"`
+-	VideoMaxBytes  int64        `mapstructure:"videoMaxBytes"`
+-	AudioMaxBytes  int64        `mapstructure:"audioMaxBytes"`
+-	FileMaxBytes   int64        `mapstructure:"fileMaxBytes"`
+-	TextMaxBytes   int64        `mapstructure:"textMaxBytes"`
+-	MaxBlocks      int          `mapstructure:"maxBlocks"`
+-	PrepareLeaseMs int64        `mapstructure:"prepareLeaseMs"`
+-	AssetPurgeMs   int64        `mapstructure:"assetPurgeMs"`
+-	UploadExpireMs int64        `mapstructure:"uploadExpireMs"`
+-	ChangeRetainMs int64        `mapstructure:"changeRetainMs"`
+-	IdempotencyMs  int64        `mapstructure:"idempotencyMs"`
+-	WriteLimit     int          `mapstructure:"writeLimit"`
+-	WriteWindowSec int          `mapstructure:"writeWindowSec"`
+-	Minio          StickerMinio `mapstructure:"minio"`
++	PublicStorageURL string       `mapstructure:"publicStorageURL"`
++	MaxCount         int          `mapstructure:"maxCount"`
++	MaxBytes         int64        `mapstructure:"maxBytes"`
++	ImageMaxBytes    int64        `mapstructure:"imageMaxBytes"`
++	VideoMaxBytes    int64        `mapstructure:"videoMaxBytes"`
++	AudioMaxBytes    int64        `mapstructure:"audioMaxBytes"`
++	FileMaxBytes     int64        `mapstructure:"fileMaxBytes"`
++	TextMaxBytes     int64        `mapstructure:"textMaxBytes"`
++	MaxBlocks        int          `mapstructure:"maxBlocks"`
++	PrepareLeaseMs   int64        `mapstructure:"prepareLeaseMs"`
++	AssetPurgeMs     int64        `mapstructure:"assetPurgeMs"`
++	UploadExpireMs   int64        `mapstructure:"uploadExpireMs"`
++	ChangeRetainMs   int64        `mapstructure:"changeRetainMs"`
++	IdempotencyMs    int64        `mapstructure:"idempotencyMs"`
++	WriteLimit       int          `mapstructure:"writeLimit"`
++	WriteWindowSec   int          `mapstructure:"writeWindowSec"`
++	Minio            StickerMinio `mapstructure:"minio"`
+ }
+ 
+ type CaptchaConfig struct {
+diff --git a/internal/rpc/chat/favorite.go b/internal/rpc/chat/favorite.go
+--- a/internal/rpc/chat/favorite.go
++++ b/internal/rpc/chat/favorite.go
+@@ -8,6 +8,7 @@
+ 	"encoding/hex"
+ 	"encoding/json"
+ 	"errors"
++	"fmt"
+ 	"net/url"
+ 	"regexp"
+ 	"strconv"
+@@ -53,6 +54,7 @@
+ 	Hosts        []string
+ 	Bucket       string
+ 	Client       *minio.Client
++	PublicSigner *minio.Client
+ 	limiter      *favoriteLimiter
+ }
+ 
+@@ -121,6 +123,10 @@
+ 		Creds:  credentials.NewStaticV4(cfg.Minio.AccessKeyID, cfg.Minio.SecretAccessKey, cfg.Minio.SessionToken),
+ 		Secure: secure,
+ 	})
++	if err != nil {
++		return favoriteSettings{}, err
++	}
++	publicSigner, err := newFavoritePublicSigner(cfg.PublicStorageURL, cfg.Minio)
+ 	if err != nil {
+ 		return favoriteSettings{}, err
+ 	}
+@@ -136,9 +142,33 @@
+ 		Idempotency:  time.Duration(cfg.IdempotencyMs) * time.Millisecond,
+ 		WriteLimit:   cfg.WriteLimit, WriteWindow: time.Duration(cfg.WriteWindowSec) * time.Second,
+ 		Hosts:  stickermedia.NormalizeHosts(public, sticker.AllowedHosts),
+-		Bucket: cfg.Minio.Bucket, Client: client,
++		Bucket: cfg.Minio.Bucket, Client: client, PublicSigner: publicSigner,
+ 		limiter: &favoriteLimiter{hits: map[string][]int64{}},
+ 	}, nil
++}
++
++// A presigned URL includes its host in the signature. Build it with the public
++// endpoint from the start; server-side object operations keep the internal one.
++func newFavoritePublicSigner(raw string, storage config.StickerMinio) (*minio.Client, error) {
++	if strings.TrimSpace(raw) == "" {
++		return nil, nil
++	}
++	endpoint, err := url.Parse(strings.TrimSpace(raw))
++	if err != nil || endpoint == nil ||
++		(endpoint.Scheme != "http" && endpoint.Scheme != "https") ||
++		endpoint.Host == "" || endpoint.Hostname() == "" || endpoint.User != nil ||
++		(endpoint.Path != "" && endpoint.Path != "/") || endpoint.RawQuery != "" ||
++		endpoint.ForceQuery || endpoint.Fragment != "" {
++		return nil, fmt.Errorf("favorite publicStorageURL must be an HTTP(S) storage endpoint without credentials, path, query or fragment")
++	}
++	signer, err := minio.New(endpoint.Host, &minio.Options{
++		Creds:  credentials.NewStaticV4(storage.AccessKeyID, storage.SecretAccessKey, storage.SessionToken),
++		Secure: endpoint.Scheme == "https",
++	})
++	if err != nil {
++		return nil, fmt.Errorf("favorite publicStorageURL is not a valid storage endpoint")
++	}
++	return signer, nil
+ }
+ 
+ func (l *favoriteLimiter) allow(user string, now time.Time, limit int, window time.Duration) bool {
+diff --git a/internal/rpc/chat/favorite_archive.go b/internal/rpc/chat/favorite_archive.go
+--- a/internal/rpc/chat/favorite_archive.go
++++ b/internal/rpc/chat/favorite_archive.go
+@@ -232,10 +232,14 @@
+ }
+ 
+ func (f favoriteSettings) presignPut(ctx context.Context, key string, expiry time.Duration) (string, error) {
+-	if f.Client == nil || !strings.HasPrefix(key, "favorite/") {
++	signer := f.PublicSigner
++	if signer == nil {
++		signer = f.Client
++	}
++	if signer == nil || !strings.HasPrefix(key, "favorite/") {
+ 		return "", eerrs.ErrFavoriteTemporary
+ 	}
+-	u, err := f.Client.PresignedPutObject(ctx, f.Bucket, key, expiry)
++	u, err := signer.PresignedPutObject(ctx, f.Bucket, key, expiry)
+ 	if err != nil {
+ 		return "", eerrs.ErrFavoriteTemporary.Wrap()
+ 	}
+@@ -243,10 +247,14 @@
+ }
+ 
+ func (f favoriteSettings) presignGet(ctx context.Context, key string, expiry time.Duration) (string, error) {
+-	if f.Client == nil || !strings.HasPrefix(key, "favorite/") {
++	signer := f.PublicSigner
++	if signer == nil {
++		signer = f.Client
++	}
++	if signer == nil || !strings.HasPrefix(key, "favorite/") {
+ 		return "", eerrs.ErrFavoriteTemporary
+ 	}
+-	u, err := f.Client.PresignedGetObject(ctx, f.Bucket, key, expiry, nil)
++	u, err := signer.PresignedGetObject(ctx, f.Bucket, key, expiry, nil)
+ 	if err != nil {
+ 		return "", eerrs.ErrFavoriteTemporary.Wrap()
+ 	}
+diff --git a/internal/rpc/chat/favorite_public_signer_test.go b/internal/rpc/chat/favorite_public_signer_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/rpc/chat/favorite_public_signer_test.go
+@@ -0,0 +1,101 @@
++package chat
++
++import (
++	"context"
++	"net/http"
++	"net/http/httptest"
++	"net/url"
++	"testing"
++	"time"
++
++	"github.com/openimsdk/chat/pkg/common/config"
++)
++
++func favoriteSigningTestStorage(endpoint string) config.StickerMinio {
++	return config.StickerMinio{Bucket: "favorites", InternalAddress: endpoint,
++		AccessKeyID: "test-access", SecretAccessKey: "test-secret"}
++}
++
++func favoriteSigningTestEndpoint(t *testing.T) *httptest.Server {
++	t.Helper()
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		if r.Method != http.MethodGet || !r.URL.Query().Has("location") {
++			t.Errorf("only a read-only bucket-region lookup is expected: %s %s", r.Method, r.URL.Path)
++			w.WriteHeader(http.StatusBadRequest)
++			return
++		}
++		w.Header().Set("Content-Type", "application/xml")
++		_, _ = w.Write([]byte(`<LocationConstraint xmlns="http://s3.amazonaws.com/doc/2006-03-01/">us-east-1</LocationConstraint>`))
++	}))
++	t.Cleanup(server.Close)
++	return server
++}
++
++func TestFavoritePublicSignerPresignsPublicHostAndKeepsInternalClient(t *testing.T) {
++	public := favoriteSigningTestEndpoint(t)
++	internalURL := "http://localhost:10005"
++	settings, err := newFavoriteSettings(config.FavoriteConfig{
++		PublicStorageURL: public.URL, Minio: favoriteSigningTestStorage(internalURL),
++	}, config.StickerConfig{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if settings.Client.EndpointURL().String() != internalURL {
++		t.Fatal("public signing must not change the internal object client")
++	}
++	if settings.PublicSigner == nil || settings.PublicSigner == settings.Client {
++		t.Fatal("a separate public signer is required")
++	}
++	for _, put := range []bool{true, false} {
++		var signed string
++		if put {
++			signed, err = settings.presignPut(context.Background(), "favorite/owner/asset", 10*time.Minute)
++		} else {
++			signed, err = settings.presignGet(context.Background(), "favorite/owner/asset", 10*time.Minute)
++		}
++		if err != nil {
++			t.Fatal(err)
++		}
++		parsed, err := url.Parse(signed)
++		if err != nil {
++			t.Fatal("signed URL did not parse")
++		}
++		endpoint, _ := url.Parse(public.URL)
++		if parsed.Host != endpoint.Host || parsed.Scheme != endpoint.Scheme || parsed.Path != "/favorites/favorite/owner/asset" {
++			t.Fatal("signature must be created for the selected public endpoint and object")
++		}
++		if parsed.Query().Get("X-Amz-Signature") == "" || parsed.Query().Get("X-Amz-Expires") != "600" {
++			t.Fatal("public URL must retain a valid signed lease")
++		}
++	}
++}
++
++func TestFavoritePublicSignerEmptyConfigPreservesInternalFallback(t *testing.T) {
++	internal := favoriteSigningTestEndpoint(t)
++	settings, err := newFavoriteSettings(config.FavoriteConfig{Minio: favoriteSigningTestStorage(internal.URL)}, config.StickerConfig{})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if settings.PublicSigner != nil {
++		t.Fatal("empty configuration must keep the legacy signer")
++	}
++	signed, err := settings.presignGet(context.Background(), "favorite/owner/asset", time.Minute)
++	if err != nil {
++		t.Fatal(err)
++	}
++	parsed, _ := url.Parse(signed)
++	endpoint, _ := url.Parse(internal.URL)
++	if parsed.Host != endpoint.Host {
++		t.Fatal("internal fallback endpoint changed")
++	}
++}
++
++func TestFavoritePublicSignerRejectsInvalidURL(t *testing.T) {
++	for _, raw := range []string{"media.example.com:10005", "ftp://media.example.com", "http:///", "http://user:pass@media.example.com", "https://media.example.com/storage", "https://media.example.com?token=private", "https://media.example.com?", "https://media.example.com#part", "https://media.example.com:bad"} {
++		if _, err := newFavoriteSettings(config.FavoriteConfig{
++			PublicStorageURL: raw, Minio: favoriteSigningTestStorage("localhost:10005"),
++		}, config.StickerConfig{}); err == nil {
++			t.Fatal("invalid public endpoint was accepted")
++		}
++	}
++}

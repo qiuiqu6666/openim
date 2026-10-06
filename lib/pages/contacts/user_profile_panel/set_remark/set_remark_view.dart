@@ -54,7 +54,8 @@ class SetFriendRemarkPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Styles.c_F4F5F7,
-        appBar: AppBar(
+        appBar: GlassAppBar(
+          opaque: true,
           toolbarHeight: NavigationGlassTokens.toolbarHeight,
           backgroundColor: Styles.c_F4F5F7,
           surfaceTintColor: Styles.c_F4F5F7,

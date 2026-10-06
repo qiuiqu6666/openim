@@ -9,20 +9,24 @@ enum BubbleType {
 
 class ChatBubble extends StatelessWidget {
   const ChatBubble({
-    Key? key,
+    super.key,
     this.margin,
     this.compact = false,
     this.constraints,
     this.alignment = Alignment.center,
     this.backgroundColor,
+    this.padding,
+    this.borderRadius,
     this.child,
     required this.bubbleType,
-  }) : super(key: key);
+  });
   final bool compact;
   final EdgeInsetsGeometry? margin;
   final BoxConstraints? constraints;
   final AlignmentGeometry? alignment;
   final Color? backgroundColor;
+  final EdgeInsetsGeometry? padding;
+  final BorderRadius? borderRadius;
   final Widget? child;
   final BubbleType bubbleType;
 
@@ -30,16 +34,34 @@ class ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = backgroundColor ?? (isISend ? Styles.c_CCE7FE : Styles.c_F4F5F7);
+    final color = backgroundColor ??
+        (isISend
+            ? Styles.c_CCE7FE
+            : ChatBubbleTokens.incoming(
+                dark: Theme.of(context).brightness == Brightness.dark));
+    final incomingBorder = !isISend &&
+            ThemeData.estimateBrightnessForColor(color) == Brightness.light
+        ? Border.all(
+            color: ChatBubbleTokens.incomingBorder,
+            width: ChatBubbleTokens.incomingBorderWidth,
+          )
+        : null;
     return Container(
       constraints: constraints,
       margin: margin,
-      padding: compact
-          ? EdgeInsets.fromLTRB(10.w, 8.w, 10.w, 6.w)
-          : EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+      padding: padding ??
+          (compact
+              ? EdgeInsets.fromLTRB(10.w, 8.w, 10.w, 6.w)
+              : EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h)),
       alignment: alignment,
-      decoration: BoxDecoration(color: color, borderRadius: borderRadius(isISend)),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: borderRadius ?? _defaultRadius(isISend),
+        border: incomingBorder,
+      ),
       child: child,
     );
   }
 }
+
+BorderRadius _defaultRadius(bool isISend) => borderRadius(isISend);

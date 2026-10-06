@@ -4,19 +4,35 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
+import '../../../core/notifications/message_notification_preferences.dart';
+import '../../../core/notifications/message_notification_sound.dart';
+import '../../chat/calling/preferences/call_notification_preferences.dart';
+
 /// Settings presentation state for migrated 99chat surfaces.
 ///
 /// Purely local preferences are restored per account through [SpUtil]. Values
 /// that belong to a remote 99chat settings API stay draft-only until that API is
 /// integrated, so the UI never presents an unconfirmed server change as saved.
 class SettingsDraftStore extends ChangeNotifier {
-  SettingsDraftStore() {
+  SettingsDraftStore() : ownerUserId = _currentOwner() {
     _hydrateLocalSettings();
   }
 
-  String _localKey(String name) {
-    final owner = (DataSp.userID ?? 'anonymous').trim();
-    return '99chat_settings_${owner.isEmpty ? 'anonymous' : owner}_$name';
+  final String ownerUserId;
+  bool _disposed = false;
+  bool get isCurrentAccount => !_disposed && ownerUserId == _currentOwner();
+
+  static String _currentOwner() {
+    final owner = DataSp.userID?.trim() ?? '';
+    return owner.isEmpty ? 'anonymous' : owner;
+  }
+
+  String _localKey(String name) => '99chat_settings_${ownerUserId}_$name';
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   void _hydrateLocalSettings() {
@@ -27,8 +43,15 @@ class SettingsDraftStore extends ChangeNotifier {
         sp.getBool(_localKey('read_receipts'), defValue: true) ?? true;
     quickAnswer =
         sp.getBool(_localKey('notify_quick_answer'), defValue: true) ?? true;
+    notificationQuickReply =
+        sp.getBool(_localKey('notify_quick_reply'), defValue: true) ?? true;
     notifyWhenOpen =
         sp.getBool(_localKey('notify_when_open'), defValue: true) ?? true;
+    notifyWhenClosed =
+        sp.getBool(_localKey('notify_when_closed'), defValue: true) ?? true;
+    closedNotificationPreview =
+        sp.getString(_localKey('notify_closed_preview'), defValue: 'detail') ??
+            'detail';
     openedNotificationPreview = sp.getString(
           _localKey('notify_open_preview'),
           defValue: 'detail',
@@ -36,9 +59,9 @@ class SettingsDraftStore extends ChangeNotifier {
         'detail';
     messageSoundEnabled =
         sp.getBool(_localKey('message_sound_enabled'), defValue: true) ?? true;
-    messageSound =
+    messageSound = MessageNotificationSoundIds.normalizedId(
         sp.getString(_localKey('message_sound'), defValue: 'preview000') ??
-            'preview000';
+            'preview000');
     callRingtoneEnabled =
         sp.getBool(_localKey('call_ringtone_enabled'), defValue: true) ?? true;
     vibration = sp.getBool(_localKey('vibration'), defValue: true) ?? true;
@@ -101,6 +124,7 @@ class SettingsDraftStore extends ChangeNotifier {
   bool notifyWhenClosed = true;
   bool callNotifyWhenClosed = true;
   bool quickAnswer = true;
+  bool notificationQuickReply = true;
   String closedNotificationPreview = 'detail';
   bool notifyWhenOpen = true;
   String openedNotificationPreview = 'detail';
@@ -247,6 +271,7 @@ class SettingsDraftStore extends ChangeNotifier {
     bool? closed,
     bool? callClosed,
     bool? quickAnswer,
+    bool? notificationQuickReply,
     String? closedPreview,
     bool? opened,
     String? openedPreview,
@@ -256,13 +281,24 @@ class SettingsDraftStore extends ChangeNotifier {
     String? callRingtone,
     bool? vibration,
   }) {
-    if (closed != null) notifyWhenClosed = closed;
+    if (!isCurrentAccount) return;
+    if (closed != null) {
+      notifyWhenClosed = closed;
+      _putBool('notify_when_closed', closed);
+    }
     if (callClosed != null) callNotifyWhenClosed = callClosed;
     if (quickAnswer != null) {
       this.quickAnswer = quickAnswer;
       _putBool('notify_quick_answer', quickAnswer);
     }
-    if (closedPreview != null) closedNotificationPreview = closedPreview;
+    if (notificationQuickReply != null) {
+      this.notificationQuickReply = notificationQuickReply;
+      _putBool('notify_quick_reply', notificationQuickReply);
+    }
+    if (closedPreview != null) {
+      closedNotificationPreview = closedPreview;
+      _putString('notify_closed_preview', closedPreview);
+    }
     if (opened != null) {
       notifyWhenOpen = opened;
       _putBool('notify_when_open', opened);
@@ -276,8 +312,9 @@ class SettingsDraftStore extends ChangeNotifier {
       _putBool('message_sound_enabled', messageSoundEnabled);
     }
     if (messageSound != null) {
-      this.messageSound = messageSound;
-      _putString('message_sound', messageSound);
+      this.messageSound =
+          MessageNotificationSoundIds.normalizedId(messageSound);
+      _putString('message_sound', this.messageSound);
     }
     if (callRingtoneEnabled != null) {
       this.callRingtoneEnabled = callRingtoneEnabled;
@@ -287,6 +324,19 @@ class SettingsDraftStore extends ChangeNotifier {
     if (vibration != null) {
       this.vibration = vibration;
       _putBool('vibration', vibration);
+    }
+    if (closed != null ||
+        opened != null ||
+        closedPreview != null ||
+        openedPreview != null ||
+        notificationQuickReply != null ||
+        messageSoundEnabled != null ||
+        messageSound != null ||
+        vibration != null) {
+      MessageNotificationPreferences.notifyChanged(ownerUserId);
+    }
+    if (quickAnswer != null || callRingtoneEnabled != null) {
+      CallNotificationPreferences.notifyChanged(ownerUserId);
     }
     notifyListeners();
   }

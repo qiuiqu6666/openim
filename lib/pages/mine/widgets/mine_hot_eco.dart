@@ -26,7 +26,7 @@ class MineHotEcoSection extends StatelessWidget {
     required this.arrowColor,
     required this.dark,
     required this.onFeatureTap,
-    required this.onWalletTap,
+    this.onWalletTap,
     required this.onUnavailableFeatureTap,
   });
 
@@ -35,7 +35,7 @@ class MineHotEcoSection extends StatelessWidget {
   final Color arrowColor;
   final bool dark;
   final ValueChanged<String> onFeatureTap;
-  final VoidCallback onWalletTap;
+  final VoidCallback? onWalletTap;
   final ValueChanged<String> onUnavailableFeatureTap;
 
   @override
@@ -149,8 +149,8 @@ class MineHotEcoSection extends StatelessWidget {
                         item: items[i],
                         onTap: () {
                           final item = items[i];
-                          if (item.opensWallet) {
-                            onWalletTap();
+                          if (item.opensWallet && onWalletTap != null) {
+                            onWalletTap!();
                           } else if (item.enabled) {
                             onFeatureTap(item.title);
                           } else {

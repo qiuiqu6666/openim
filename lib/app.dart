@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -6,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'core/controller/im_controller.dart';
+import 'core/controller/app_controller.dart';
 import 'routes/app_pages.dart';
 import 'theme/app_theme_controller.dart';
 import 'widgets/app_view.dart';
@@ -21,6 +23,13 @@ class ChatApp extends StatelessWidget {
         builder: (context, _) => GetMaterialApp(
           debugShowCheckedModeBanner: false,
           enableLog: true,
+          routingCallback: (_) {
+            if (Get.isRegistered<AppController>()) {
+              final controller = Get.find<AppController>();
+              controller.markDeviceSyncUserActivity();
+              unawaited(controller.onApplicationSessionReady());
+            }
+          },
           builder: builder,
           translations: TranslationService(),
           localizationsDelegates: const [
@@ -53,15 +62,22 @@ class ChatApp extends StatelessWidget {
     final base = ThemeData(
       brightness: brightness,
       colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0089FF), brightness: brightness),
+              seedColor: const Color(0xFF0089FF),
+              brightness: brightness,
+              surface: surface)
+          .copyWith(onSurface: foreground),
     );
     return base.copyWith(
       scaffoldBackgroundColor:
-          dark ? const Color(0xFF141D27) : Colors.grey.shade50,
+          dark ? const Color(0xFF141D27) : const Color(0xFFF8F9FA),
       canvasColor: surface,
       cardColor: surface,
-      appBarTheme:
-          AppBarTheme(backgroundColor: surface, foregroundColor: foreground),
+      appBarTheme: AppBarTheme(
+          backgroundColor: surface,
+          foregroundColor: foreground,
+          surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+          systemOverlayStyle: AppSystemBars.styleFor(surface)),
       textSelectionTheme:
           const TextSelectionThemeData().copyWith(cursorColor: Colors.blue),
       checkboxTheme: const CheckboxThemeData().copyWith(

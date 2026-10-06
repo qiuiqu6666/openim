@@ -20,6 +20,7 @@ class AvatarView extends StatelessWidget {
     this.builder,
     this.text,
     this.textStyle,
+    this.textScaler,
     this.onLongPress,
     this.isCircle,
     this.borderRadius,
@@ -38,12 +39,13 @@ class AvatarView extends StatelessWidget {
   final File? file;
   final CustomAvatarBuilder? builder;
 
-  /// User avatars are circular by default; group avatars keep their square shape.
+  /// User and group avatars are circular by default.
   final bool? isCircle;
   final BorderRadius? borderRadius;
   final bool enabledPreview;
   final String? text;
   final TextStyle? textStyle;
+  final TextScaler? textScaler;
   final bool lowMemory;
 
   /// Whether to show the fallback avatar while a remote image is loading.
@@ -61,7 +63,7 @@ class AvatarView extends StatelessWidget {
   String? get _showName {
     if (isGroup) return null;
     if (text != null && text!.trim().isNotEmpty) {
-      return text!.substring(0, 1);
+      return text!.characters.first;
     }
     return null;
   }
@@ -86,7 +88,7 @@ class AvatarView extends StatelessWidget {
     );
     return Hero(
       tag: tag,
-      child: (isCircle ?? !isGroup)
+      child: (isCircle ?? true)
           ? ClipOval(child: child)
           : ClipRRect(
               borderRadius: borderRadius ?? BorderRadius.circular(6.r),
@@ -115,11 +117,19 @@ class AvatarView extends StatelessWidget {
                     size: _avatarSize / 2,
                   )
                 : null)
-            : Text(_showName!, style: _textStyle),
+            : Text(_showName!, style: _textStyle, textScaler: textScaler),
       );
 
   Widget _networkImageAvatar() => file != null
-      ? ImageUtil.fileImage(file: file!)
+      ? ImageUtil.fileImage(
+          file: file!,
+          width: _avatarSize,
+          height: _avatarSize,
+          fit: BoxFit.cover,
+          lowMemory: lowMemory,
+          loadProgress: false,
+          errorWidget: _textAvatar(),
+        )
       : ImageUtil.networkImage(
           url: url!,
           width: _avatarSize,

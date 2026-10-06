@@ -11,8 +11,8 @@ import 'package:rxdart/rxdart.dart';
 import 'chat_notice_view.dart';
 import 'chat_attachment_view.dart';
 import 'chat_structured_message.dart';
-import 'chat_formatted_text.dart';
-import 'chat_expiring_content.dart';
+import 'contact_card/contact_card_identity_view.dart';
+import 'markdown/chat_message_text_source.dart';
 
 double maxWidth = 247.w;
 double pictureWidth = 120.w;
@@ -69,7 +69,7 @@ typedef ItemVisibilityChange = void Function(
 
 class ChatItemView extends StatefulWidget {
   const ChatItemView({
-    Key? key,
+    super.key,
     this.mediaItemBuilder,
     this.itemViewBuilder,
     this.customTypeBuilder,
@@ -77,8 +77,13 @@ class ChatItemView extends StatefulWidget {
     this.sendStatusSubject,
     this.visibilityChange,
     this.timelineStr,
+    this.onTapTimeline,
+    this.timelineSemanticLabel,
     this.leftNickname,
     this.leftFaceUrl,
+    this.leftAvatar,
+    this.textContentBuilder,
+    this.textBubbleStyle,
     this.rightNickname,
     this.rightFaceUrl,
     required this.message,
@@ -86,6 +91,10 @@ class ChatItemView extends StatefulWidget {
     this.ignorePointer = false,
     this.showLeftNickname = true,
     this.showRightNickname = false,
+    this.isStickerMedia = false,
+    this.itemMargin,
+    this.itemPadding,
+    this.avatarSize,
     this.highlightColor,
     this.allAtMap = const {},
     this.patterns = const [],
@@ -99,9 +108,12 @@ class ChatItemView extends StatefulWidget {
     this.onClickItemView,
     this.onVoicePlayed,
     this.voicePlayback,
+    this.voiceTranscription,
+    this.onToggleVoiceTranscription,
+    this.onRetryVoiceTranscription,
     this.messageMenus = const [],
     required this.onTapUserProfile,
-  }) : super(key: key);
+  });
   final ItemViewBuilder? mediaItemBuilder;
   final ItemViewBuilder? itemViewBuilder;
   final CustomTypeBuilder? customTypeBuilder;
@@ -111,18 +123,34 @@ class ChatItemView extends StatefulWidget {
 
   final ItemVisibilityChange? visibilityChange;
   final String? timelineStr;
+  final VoidCallback? onTapTimeline;
+  final String? timelineSemanticLabel;
   final String? leftNickname;
   final String? leftFaceUrl;
+  final Widget? leftAvatar;
+
+  /// Alternative text content preserves the container's menus and receipts.
+  final ItemViewBuilder? textContentBuilder;
+  final ChatTextBubbleStyle? textBubbleStyle;
   final String? rightNickname;
   final String? rightFaceUrl;
   final Message message;
 
   final Future<void> Function()? onVoicePlayed;
   final VoicePlaybackController? voicePlayback;
+  final VoiceTranscriptionState? voiceTranscription;
+  final VoidCallback? onToggleVoiceTranscription;
+  final VoidCallback? onRetryVoiceTranscription;
   final double textScaleFactor;
   final bool ignorePointer;
   final bool showLeftNickname;
   final bool showRightNickname;
+  final bool isStickerMedia;
+
+  /// Optional compact layout for read-only message surfaces such as previews.
+  final EdgeInsetsGeometry? itemMargin;
+  final EdgeInsetsGeometry? itemPadding;
+  final double? avatarSize;
 
   final Color? highlightColor;
   final Map<String, String> allAtMap;
@@ -157,15 +185,33 @@ class _ChatItemViewState extends State<ChatItemView> {
 
   bool get _isISend => _message.sendID == OpenIM.iMManager.userID;
 
+  ChatTextBubbleStyle? get _textBubbleStyle =>
+      _message.contentType == MessageType.text ? widget.textBubbleStyle : null;
+
   @override
   Widget build(BuildContext context) {
+    final sticker = widget.isStickerMedia ||
+        _message.contentType == MessageType.customFace ||
+        _message.isEmojiType ||
+        _message.isDiceType;
+    final content = Container(
+      color: widget.highlightColor,
+      margin: widget.itemMargin ??
+          _textBubbleStyle?.rowMargin ??
+          EdgeInsets.only(bottom: sticker ? StickerBubbleLayout.rowGap : 20.h),
+      padding: widget.itemPadding ??
+          _textBubbleStyle?.rowPadding(_isISend) ??
+          EdgeInsets.symmetric(
+              horizontal: sticker ? StickerBubbleLayout.rowInset : 10.w),
+      child: Center(child: _child),
+    );
+    // Passive previews have no visibility/read callback. They need neither a
+    // focus observer nor its deferred visibility timer.
+    if (widget.visibilityChange == null) {
+      return content;
+    }
     return FocusDetector(
-      child: Container(
-        color: widget.highlightColor,
-        margin: EdgeInsets.only(bottom: 20.h),
-        padding: EdgeInsets.symmetric(horizontal: 10.w),
-        child: Center(child: _child),
-      ),
+      child: content,
       onVisibilityLost: () {
         widget.visibilityChange?.call(widget.message, false);
       },
@@ -180,9 +226,37 @@ class _ChatItemViewState extends State<ChatItemView> {
 
   Widget _buildChildView() {
     Widget? child;
+    Widget Function(Widget? status)? cardWithStatus;
     String? senderNickname;
     String? senderFaceURL;
     bool isBubbleBg = false;
+    bool markdownContent = false;
+    late final textSource = chatMessageTextSource(_message);
+    Widget textContent({bool useOverride = true}) {
+      final override = useOverride
+          ? widget.textContentBuilder?.call(context, _message)
+          : null;
+      if (override != null) return override;
+      markdownContent = ChatMarkdownText.hasMarkdown(textSource);
+      return ChatText(
+        text: textSource,
+        enableMarkdown: true,
+        textStyle: _textBubbleStyle?.textStyle(_isISend),
+        maximumWidth: _textBubbleStyle == null ? null : double.infinity,
+        textScaler:
+            _textBubbleStyle == null ? null : MediaQuery.textScalerOf(context),
+        matchTextStyle: _textBubbleStyle?.textStyle(_isISend).copyWith(
+            color: ThemeData.estimateBrightnessForColor(
+                        _textBubbleStyle!.background(_isISend)) ==
+                    Brightness.dark
+                ? AppTokens.onAccent
+                : AppTokens.accent),
+        patterns: widget.patterns,
+        textScaleFactor: widget.textScaleFactor,
+        onVisibleTrulyText: widget.onVisibleTrulyText,
+      );
+    }
+
     /* if (_message.isCallType) {
     } else if (_message.isMeetingType) {
     } else if (_message.isDeletedByFriendType) {
@@ -192,29 +266,21 @@ class _ChatItemViewState extends State<ChatItemView> {
     }*/
     if (_message.contentType == MessageType.advancedText) {
       isBubbleBg = true;
-      child = ChatFormattedText(
-          text: _message.advancedTextElem?.text ?? '',
-          entities: _message.advancedTextElem?.messageEntityList ?? []);
+      final entities = _message.advancedTextElem?.messageEntityList ?? [];
+      child = widget.textContentBuilder?.call(context, _message) ??
+          (entities.isEmpty
+              ? textContent(useOverride: false)
+              : ChatFormattedText(text: textSource, entities: entities));
     } else if (_message.isTextType ||
-        _message.contentType == MessageType.atText ||
-        _message.contentType == MessageType.advancedText) {
+        _message.contentType == MessageType.atText) {
       isBubbleBg = true;
-      child = ChatText(
-        text: IMUtils.parseMsg(_message),
-        patterns: widget.patterns,
-        textScaleFactor: widget.textScaleFactor,
-        onVisibleTrulyText: widget.onVisibleTrulyText,
-      );
+      child = textContent();
     } else if (_message.contentType == MessageType.quote) {
       isBubbleBg = true;
       child = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ChatText(
-            text: _message.quoteElem?.text ?? '',
-            patterns: widget.patterns,
-            textScaleFactor: widget.textScaleFactor,
-          ),
+          textContent(),
           const SizedBox(height: 4),
           Text(
             '${_message.quoteElem?.quoteMessage?.senderNickname ?? ''}: ${_message.quoteElem?.quoteMessage == null ? '' : IMUtils.parseMsg(_message.quoteElem!.quoteMessage!)}',
@@ -229,7 +295,8 @@ class _ChatItemViewState extends State<ChatItemView> {
           MessageType.location,
           MessageType.customFace
         ].contains(_message.contentType) ||
-        _message.isEmojiType) {
+        _message.isEmojiType ||
+        _message.isDiceType) {
       child = ChatStructuredMessage(
           message: _message, depth: widget.structuredDepth);
     } else if (_message.isVideoType) {
@@ -238,8 +305,27 @@ class _ChatItemViewState extends State<ChatItemView> {
       child = ChatVoiceMessageView(
           message: _message,
           isOutgoing: _isISend,
+          readOnly: widget.ignorePointer,
           onPlayed: widget.onVoicePlayed,
           playback: widget.voicePlayback);
+      if (widget.voiceTranscription != null) {
+        child = SizedBox(
+          width: maxWidth,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              child,
+              VoiceTranscriptionView(
+                state: widget.voiceTranscription!,
+                selectable: _message.attachedInfoElem?.isPrivateChat != true,
+                onToggle: widget.onToggleVoiceTranscription,
+                onRetry: widget.onRetryVoiceTranscription,
+              ),
+            ],
+          ),
+        );
+      }
     } else if (_message.isFileType && _message.fileElem != null) {
       child = ChatFileMessageView(message: _message);
     } else if (_message.isCustomType) {
@@ -251,16 +337,14 @@ class _ChatItemViewState extends State<ChatItemView> {
       }
     } else if (_message.isCardType && _message.cardElem != null) {
       final card = _message.cardElem!;
-      child = ContactCardView(
-        userID: card.userID ?? '',
-        name: card.nickname?.trim().isNotEmpty == true
-            ? card.nickname!.trim()
-            : card.userID ?? '',
-        faceURL: card.faceURL,
-        isSelf: _isISend,
-        time: DateFormat('HH:mm')
-            .format(DateTime.fromMillisecondsSinceEpoch(_message.sendTime!)),
-      );
+      cardWithStatus = (status) => ContactCardIdentityView(
+            card: card,
+            status: status,
+            isSelf: _isISend,
+            time: DateFormat('HH:mm').format(
+                DateTime.fromMillisecondsSinceEpoch(_message.sendTime!)),
+          );
+      child = cardWithStatus(null);
     } else if (_message.isPictureType) {
       child = widget.mediaItemBuilder?.call(context, _message) ??
           ChatPictureView(
@@ -295,50 +379,98 @@ class _ChatItemViewState extends State<ChatItemView> {
       }
     }
 
-    if (child != null && _message.attachedInfoElem?.isPrivateChat == true) {
-      child = ChatExpiringContent(message: _message, child: child);
-    }
     senderNickname ??= widget.leftNickname ?? _message.senderNickname;
     senderFaceURL ??= widget.leftFaceUrl ?? _message.senderFaceUrl;
-    return child = ChatItemContainer(
+    final isFund = _message.isCustomType &&
+        FundMessageData.tryParse(_message.customElem?.data) != null;
+    Widget interactiveContent(Widget? status) {
+      Widget content = cardWithStatus?.call(status) ??
+          child ??
+          ChatText(text: StrRes.unsupportedMessage);
+      if (_message.attachedInfoElem?.isPrivateChat == true) {
+        content = ChatExpiringContent(message: _message, child: content);
+      }
+      return GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          final deadline = ChatExpiringContent.deadline(_message);
+          if (deadline == null || deadline.isAfter(DateTime.now())) {
+            widget.onClickItemView?.call();
+          }
+        },
+        child: content,
+      );
+    }
+
+    final content = interactiveContent(null);
+    return ChatItemContainer(
       id: _message.clientMsgID!,
       isISend: _isISend,
       leftNickname: senderNickname,
       leftFaceUrl: senderFaceURL,
+      leftAvatar: widget.leftAvatar,
+      textBubbleStyle: _textBubbleStyle,
+      textBubbleText: _textBubbleStyle == null ? null : textSource,
       rightNickname: widget.rightNickname ?? OpenIM.iMManager.userInfo.nickname,
       rightFaceUrl: widget.rightFaceUrl ?? OpenIM.iMManager.userInfo.faceURL,
       showLeftNickname: widget.showLeftNickname,
       showRightNickname: widget.showRightNickname,
       timelineStr: widget.timelineStr,
-      timeStr: _message.isCardType ||
+      onTapTimeline: widget.onTapTimeline,
+      timelineSemanticLabel: widget.timelineSemanticLabel,
+      timeStr: isFund ||
+              _message.isCardType ||
               _message.contentType ==
                   MessageType.groupInfoSetAnnouncementNotification
           ? null
           : DateFormat('HH:mm').format(
               DateTime.fromMillisecondsSinceEpoch(_message.sendTime!),
             ),
-      hasRead: _message.isRead!,
-      showReadStatus: _message.isSingleChat,
-      showStatus: _message.contentType !=
-          MessageType.groupInfoSetAnnouncementNotification,
+      hasRead: _message.isRead ?? false,
+      showReadStatus: !isFund && _message.isSingleChat,
+      showStatus: !isFund &&
+          _message.contentType !=
+              MessageType.groupInfoSetAnnouncementNotification,
       isSending: _message.status == MessageStatus.sending,
       isSendFailed: _message.status == MessageStatus.failed,
       isBubbleBg: isBubbleBg,
+      avatarSize: widget.avatarSize ??
+          _textBubbleStyle?.avatarSize ??
+          (isFund ? FundTokens.chatAvatarSize : 44),
       bareMedia: _message.contentType == MessageType.customFace ||
-          _message.isEmojiType,
-      compactBubble: _message.isVoiceType || _message.isFileType ||
+          _message.isEmojiType ||
+          _message.isDiceType ||
+          widget.isStickerMedia ||
+          (_message.isCustomType &&
+              FundMessageData.tryParse(_message.customElem?.data) != null),
+      compactBubble: _message.isVoiceType ||
+          _message.isFileType ||
           (_message.isCustomType &&
               IMUtils.parseCustomMessage(_message)?['viewType'] ==
                   CustomMessageType.call),
-      metadataBelow: _message.isVoiceType ||
+      metadataBelow: markdownContent ||
+          _message.isVoiceType ||
           _message.isFileType ||
           _message.isCustomType ||
           [MessageType.merger, MessageType.location, MessageType.customFace]
               .contains(_message.contentType),
-      mediaOverlay: _message.isPictureType || _message.isVideoType,
+      mediaOverlay: widget.isStickerMedia ||
+          _message.contentType == MessageType.customFace ||
+          _message.isEmojiType ||
+          _message.isDiceType ||
+          _message.isPictureType ||
+          _message.isVideoType,
+      stickerMedia: widget.isStickerMedia ||
+          _message.contentType == MessageType.customFace ||
+          _message.isEmojiType ||
+          _message.isDiceType,
       standaloneCard: (_message.isCardType && _message.cardElem != null) ||
           _message.contentType ==
               MessageType.groupInfoSetAnnouncementNotification,
+      childWithStatusBuilder:
+          cardWithStatus == null ? null : interactiveContent,
+      embeddedStatusColor:
+          cardWithStatus == null ? null : ContactCardTokens.footerText,
       ignorePointer: widget.ignorePointer,
       sendStatusStream: widget.sendStatusSubject,
       onFailedToResend: widget.onFailedToResend,
@@ -348,15 +480,7 @@ class _ChatItemViewState extends State<ChatItemView> {
       onTapRightAvatar: widget.onTapRightAvatar,
       messageMenus: widget.messageMenus,
       menuController: _menuController,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () {
-          final deadline = ChatExpiringContent.deadline(_message);
-          if (deadline == null || deadline.isAfter(DateTime.now()))
-            widget.onClickItemView?.call();
-        },
-        child: child ?? ChatText(text: StrRes.unsupportedMessage),
-      ),
+      child: content,
     );
   }
 }

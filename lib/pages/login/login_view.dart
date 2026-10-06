@@ -1,251 +1,217 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:openim_common/openim_common.dart';
-import 'package:sprintf/sprintf.dart';
-
+import '../../widgets/auth/auth_copy.dart';
+import '../../widgets/auth/auth_reference.dart';
 import 'login_logic.dart';
+import 'widgets/login_toolbar.dart';
 
 class LoginPage extends StatelessWidget {
+  LoginPage({super.key});
   final logic = Get.find<LoginLogic>();
 
-  LoginPage({super.key});
+  void _submit() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    logic.login();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      child: TouchCloseSoftKeyboard(
-        isGradientBg: true,
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              88.verticalSpace,
-              ImageRes.loginLogo.toImage
-                ..width = 64.w
-                ..height = 64.h,
-              StrRes.welcome.toText..style = Styles.ts_0089FF_17sp_semibold,
-              51.verticalSpace,
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 32.w),
-                child: Column(children: [
-                  _buildInputView(),
-                  46.verticalSpace,
-                  Obx(() => Button(
-                        text: StrRes.login,
-                        enabled: logic.enabled.value,
-                        onTap: logic.login,
-                      )),
-                ]),
-              ),
-              100.verticalSpace,
-              Obx(
-                () => Visibility(
-                  visible: logic.loginType.value != LoginType.account,
-                  child: RichText(
-                    text: TextSpan(
-                      text: StrRes.noAccountYet,
-                      style: Styles.ts_8E9AB0_12sp,
-                      children: [
-                        TextSpan(
-                          text: StrRes.registerNow,
-                          style: Styles.ts_0089FF_12sp,
-                          recognizer: TapGestureRecognizer()..onTap = _showRegisterBottomSheet,
-                        )
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              32.verticalSpace,
-              Obx(() => logic.versionInfo.value.toText..style = Styles.ts_0C1C33_14sp),
-            ],
-          ),
-        ),
-      ),
-    );
+    // Re-render retained local/server failures when the app locale changes.
+    Localizations.localeOf(context);
+    return Obx(() => AuthEntryScaffold(
+          greeting: authText('你好，', 'Hello,'),
+          accent: authText('欢迎使用99Chat', 'Welcome to 99Chat'),
+          tabs: [authText('登录', 'Login'), authText('注册', 'Register')],
+          activeTab: 0,
+          onTabSelected: logic.submitting.value
+              ? null
+              : (index) {
+                  if (index == 1) {
+                    logic.operateType = LoginType.phone;
+                    logic.registerNow();
+                  }
+                },
+          headerAction: const LoginToolbar(),
+          footer: AuthVersionFooter(version: logic.displayVersion.value),
+          child: AutofillGroup(
+              child:
+                  logic.isPasswordLogin.value ? _passwordForm() : _smsForm()),
+        ));
   }
 
-  Widget _buildInputView() {
-    return Container(
-      height: 240.h,
-      width: 300.w,
-      child: Column(
-        children: [
-          TabBar(
-            tabs: LoginType.values.map((e) => Tab(text: e.name)).toList(),
-            controller: logic.tabController,
-            isScrollable: true,
-            indicatorColor: Styles.c_0089FF,
-            labelColor: Styles.c_0089FF,
-            tabAlignment: TabAlignment.start,
-            labelPadding: const EdgeInsets.only(right: 16),
-            overlayColor: WidgetStateProperty.all(Colors.transparent),
-            dividerHeight: 0.1,
-            onTap: (index) {
-              logic.loginType.value = LoginType.fromRawValue(index);
-              logic.operateType = logic.loginType.value;
-              FocusScope.of(Get.context!).unfocus();
-              logic.phoneCtrl.clear();
-              logic.pwdCtrl.clear();
-            },
-          ),
-          Flexible(
-            child: Obx(
-              () => TabBarView(
-                controller: logic.tabController,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildInputView1(LoginType.phone),
-                  _buildInputView1(LoginType.email),
-                  _buildInputView2(LoginType.account),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInputView1(LoginType type) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        InputBox.account(
-          label: '',
-          hintText: type.hintText,
-          code: logic.areaCode.value,
-          onAreaCode: type == LoginType.phone ? logic.openCountryCodePicker : null,
-          controller: logic.phoneCtrl,
-          focusNode: logic.accountFocus,
-          keyBoardType: type == LoginType.phone ? TextInputType.phone : TextInputType.text,
-        ),
-        8.verticalSpace,
-        Offstage(
-          offstage: !logic.isPasswordLogin.value,
-          child: InputBox.password(
-            label: '',
-            hintText: StrRes.plsEnterPassword,
-            controller: logic.pwdCtrl,
-            focusNode: logic.pwdFocus,
-          ),
-        ),
-        Offstage(
-          offstage: logic.isPasswordLogin.value,
-          child: InputBox.verificationCode(
-            label: StrRes.verificationCode,
-            hintText: StrRes.plsEnterVerificationCode,
-            controller: logic.verificationCodeCtrl,
-            onSendVerificationCode: logic.getVerificationCode,
-          ),
-        ),
-        10.verticalSpace,
-        Row(
+  Widget _passwordForm() => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          key: const ValueKey('login-password-form'),
           children: [
-            StrRes.forgetPassword.toText
-              ..style = Styles.ts_8E9AB0_12sp
-              ..onTap = logic.forgetPassword,
-            const Spacer(),
-            (logic.isPasswordLogin.value ? StrRes.verificationCodeLogin : StrRes.passwordLogin).toText
-              ..style = Styles.ts_0089FF_12sp
-              ..onTap = logic.togglePasswordType,
-          ],
-        ),
-      ],
-    );
-  }
+            AuthFieldLabel(authText('账号', 'Account')),
+            AuthTextField(
+                key: const ValueKey('login-account'),
+                controller: logic.phoneCtrl,
+                focusNode: logic.accountFocus,
+                errorText: logic.accountError,
+                reserveErrorSpace: true,
+                onFocusChanged: logic.accountFocusChanged,
+                enabled: !logic.submitting.value,
+                hint: authText('请输入手机号或用户ID', 'Enter phone number or user ID'),
+                autofillHints: const [AutofillHints.username],
+                onFieldSubmitted: (_) => logic.pwdFocus?.requestFocus()),
+            const SizedBox(height: AuthReferenceTokens.feedbackFieldGap),
+            AuthFieldLabel(authText('密码', 'Password')),
+            AuthTextField(
+                key: const ValueKey('login-password'),
+                controller: logic.pwdCtrl,
+                focusNode: logic.pwdFocus,
+                errorText: logic.passwordError,
+                reserveErrorSpace: true,
+                onFocusChanged: logic.passwordFocusChanged,
+                enabled: !logic.submitting.value,
+                hint: authText('请输入密码', 'Enter password'),
+                obscureText: logic.obscureText.value,
+                autofillHints: const [AutofillHints.password],
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _submit(),
+                showClearButton: true,
+                suffix: IconButton(
+                    tooltip: logic.obscureText.value
+                        ? authText('显示密码', 'Show password')
+                        : authText('隐藏密码', 'Hide password'),
+                    onPressed: logic.submitting.value
+                        ? null
+                        : () => logic.obscureText.toggle(),
+                    icon: Icon(
+                        logic.obscureText.value
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 20,
+                        color: AuthReferenceTokens.ink300))),
+            const SizedBox(height: 8),
+            _passwordOptions(),
+            _submission(),
+          ]);
 
-  Widget _buildInputView2(LoginType type) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        InputBox.account(
-          label: '',
-          hintText: type.hintText,
-          code: logic.areaCode.value,
-          onAreaCode: null,
-          controller: logic.phoneCtrl,
-          focusNode: logic.accountFocus,
-          keyBoardType: TextInputType.text,
-        ),
-        8.verticalSpace,
-        InputBox.password(
-          label: '',
-          hintText: StrRes.plsEnterPassword,
-          controller: logic.pwdCtrl,
-          focusNode: logic.pwdFocus,
-        ),
-      ],
-    );
-  }
+  Widget _smsForm() => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          key: const ValueKey('login-sms-form'),
+          children: [
+            AuthFieldLabel(authText('手机号', 'Phone number')),
+            AuthCompoundField(
+                key: const ValueKey('login-account'),
+                controller: logic.phoneCtrl,
+                focusNode: logic.accountFocus,
+                errorText: logic.accountError,
+                reserveErrorSpace: true,
+                onFocusChanged: logic.accountFocusChanged,
+                enabled: !logic.submitting.value,
+                hint: authText('请输入手机号', 'Enter phone number'),
+                keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                maxLength: 15,
+                autofillHints: const [AutofillHints.telephoneNumberNational],
+                leadingWidth: 102,
+                leading: AuthCountryCode(
+                    code: logic.areaCode.value,
+                    onTap: logic.submitting.value
+                        ? null
+                        : logic.openCountryCodePicker)),
+            const SizedBox(height: AuthReferenceTokens.feedbackFieldGap),
+            AuthCompoundField(
+                key: const ValueKey('login-code'),
+                controller: logic.verificationCodeCtrl,
+                errorText: logic.codeError,
+                reserveErrorSpace: true,
+                onFocusChanged: logic.codeFocusChanged,
+                enabled: !logic.submitting.value,
+                hint: authText('6 位短信验证码', '6-digit SMS code'),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                maxLength: 6,
+                autofillHints: const [AutofillHints.oneTimeCode],
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _submit(),
+                trailingWidth: 122,
+                trailing: AuthCodeAction(
+                    onSend: logic.getVerificationCode,
+                    enabled: !logic.submitting.value)),
+            _submission(),
+          ]);
 
-  void _showRegisterBottomSheet() {
-    showCupertinoModalPopup(
-      context: Get.context!,
-      builder: (BuildContext context) {
-        return CupertinoActionSheet(
-          actions: [
-            CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(context);
-                logic.operateType = LoginType.email;
-                logic.registerNow();
-              },
-              child: Text('${StrRes.email} ${StrRes.registerNow}'),
-            ),
-            CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(context);
-                logic.operateType = LoginType.phone;
-                logic.registerNow();
-              },
-              child: Text('${StrRes.phoneNumber} ${StrRes.registerNow}'),
-            ),
-          ],
-          cancelButton: CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: Text(StrRes.cancel),
-          ),
-        );
-      },
-    );
-  }
+  Widget _button() => AuthPrimaryButton(
+      key: const ValueKey('login-submit'),
+      text: authText('登录', 'Login'),
+      loadingText: authText('登录中', 'Logging in'),
+      pill: true,
+      loading: logic.submitting.value,
+      onPressed: logic.enabled.value ? _submit : null);
 
-  void _showForgetPasswordBottomSheet() {
-    showCupertinoModalPopup(
-      context: Get.context!,
-      builder: (BuildContext context) {
-        return CupertinoActionSheet(
-          actions: [
-            CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(context);
-                logic.operateType = LoginType.email;
-                logic.forgetPassword();
-              },
-              child: Text(sprintf(StrRes.through, [StrRes.email])),
-            ),
-            CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(context);
-                logic.operateType = LoginType.phone;
-                logic.forgetPassword();
-              },
-              child: Text(sprintf(StrRes.through, [StrRes.phoneNumber])),
-            ),
-          ],
-          cancelButton: CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: Text(StrRes.cancel),
-          ),
-        );
-      },
-    );
-  }
+  Widget _passwordOptions() => SizedBox(
+      width: double.infinity,
+      child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          children: [
+            InkWell(
+                key: const ValueKey('login-remember-password'),
+                onTap: logic.submitting.value
+                    ? null
+                    : () => logic
+                        .toggleRememberPassword(!logic.rememberPassword.value),
+                child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: Checkbox(
+                              value: logic.rememberPassword.value,
+                              onChanged: logic.submitting.value
+                                  ? null
+                                  : (value) => logic
+                                      .toggleRememberPassword(value ?? false),
+                              activeColor: AuthReferenceTokens.brand500,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact)),
+                      const SizedBox(width: 8),
+                      Flexible(
+                          child: Text(authText('记住密码', 'Remember password'),
+                              style: AuthReferenceTokens.label.copyWith(
+                                  fontWeight: FontWeight.w400,
+                                  color: AuthReferenceTokens.ink400))),
+                    ]))),
+            _action(authText('忘记密码', 'Forgot password'), logic.forgetPassword,
+                key: const ValueKey('login-forgot-password')),
+          ]));
+
+  Widget _submission() => Column(children: [
+        if (logic.formError != null) ...[
+          const SizedBox(height: 8),
+          AuthFormMessage(text: logic.formError),
+        ],
+        const SizedBox(height: AuthReferenceTokens.buttonGap),
+        _button(),
+        const SizedBox(height: 4),
+        Center(
+            child: _action(
+                logic.isPasswordLogin.value
+                    ? authText('验证码登录', 'Use SMS code')
+                    : authText('密码登录', 'Use password'),
+                logic.togglePasswordType,
+                key: const ValueKey('login-mode-switch'))),
+      ]);
+
+  Widget _action(String text, VoidCallback onTap, {Key? key}) => Builder(
+      builder: (context) => TextButton(
+          key: key,
+          style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 48),
+              foregroundColor: AuthReferenceTokens.link,
+              textStyle: AuthReferenceTokens.label.copyWith(
+                  fontWeight: FontWeight.w400,
+                  fontFamily:
+                      Theme.of(context).textTheme.bodyMedium?.fontFamily)),
+          onPressed: logic.submitting.value ? null : onTap,
+          child: Text(text, textAlign: TextAlign.center)));
 }

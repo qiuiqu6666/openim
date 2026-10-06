@@ -77,6 +77,7 @@ class FriendSetupPage extends StatelessWidget {
           ),
           child: InkWell(
             onTap: onTap,
+            borderRadius: borderRadius ?? BorderRadius.circular(6.r),
             child: Container(
               alignment: isDelFriendButton ? Alignment.center : null,
               padding: EdgeInsets.symmetric(horizontal: 16.w),

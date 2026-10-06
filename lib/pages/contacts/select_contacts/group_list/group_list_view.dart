@@ -6,6 +6,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:sprintf/sprintf.dart';
 
 import '../select_contacts_logic.dart';
+import '../widgets/select_contacts_app_bar.dart';
 import 'group_list_logic.dart';
 
 class SelectContactsFromGroupPage extends StatelessWidget {
@@ -17,7 +18,7 @@ class SelectContactsFromGroupPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: TitleBar.back(title: StrRes.myGroup),
+      appBar: SelectContactsAppBar(title: StrRes.myGroup),
       backgroundColor: Styles.c_F8F9FA,
       body: Column(
         children: [
@@ -48,7 +49,8 @@ class SelectContactsFromGroupPage extends StatelessWidget {
           Expanded(
               child: Obx(() => ListView.builder(
                     itemCount: logic.allList.length,
-                    itemBuilder: (_, index) => _buildItemView(logic.allList[index]),
+                    itemBuilder: (_, index) =>
+                        _buildItemView(logic.allList[index]),
                   ))),
           selectContactsLogic.checkedConfirmView,
         ],
@@ -78,6 +80,7 @@ class SelectContactsFromGroupPage extends StatelessWidget {
                     url: info.faceURL,
                     text: info.groupName,
                     isGroup: true,
+                    isCircle: true,
                   ),
                   10.horizontalSpace,
                   Expanded(
@@ -89,7 +92,8 @@ class SelectContactsFromGroupPage extends StatelessWidget {
                           ..style = Styles.ts_0C1C33_17sp
                           ..maxLines = 1
                           ..overflow = TextOverflow.ellipsis,
-                        sprintf(StrRes.nPerson, [info.memberCount]).toText..style = Styles.ts_8E9AB0_14sp,
+                        sprintf(StrRes.nPerson, [info.memberCount]).toText
+                          ..style = Styles.ts_8E9AB0_14sp,
                       ],
                     ),
                   ),

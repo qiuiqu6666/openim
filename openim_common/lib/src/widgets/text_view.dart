@@ -14,6 +14,8 @@ class MatchTextView extends StatelessWidget {
   final TextOverflow overflow;
   final int? maxLines;
   final double textScaleFactor;
+  final double? maximumWidth;
+  final TextScaler? textScaler;
 
   final List<MatchPattern> patterns;
   final TextModel model;
@@ -32,6 +34,8 @@ class MatchTextView extends StatelessWidget {
       this.matchTextStyle,
       this.maxLines,
       this.textScaleFactor = 1.0,
+      this.maximumWidth,
+      this.textScaler,
       this.model = TextModel.match,
       this.onVisibleTrulyText,
       this.isSupportCopy = false,
@@ -58,11 +62,13 @@ class MatchTextView extends StatelessWidget {
       textAlign: textAlign,
       overflow: overflow,
       maxLines: maxLines,
-      textScaler: TextScaler.linear(textScaleFactor),
+      textScaler: textScaler ?? TextScaler.linear(textScaleFactor),
     );
     return Container(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: isSupportCopy ? SelectionArea(focusNode: copyFocusNode, child: text) : text);
+        constraints: BoxConstraints(maxWidth: maximumWidth ?? maxWidth),
+        child: isSupportCopy
+            ? SelectionArea(focusNode: copyFocusNode, child: text)
+            : text);
   }
 
   _normalModel(List<InlineSpan> children) {
@@ -86,7 +92,11 @@ class MatchTextView extends StatelessWidget {
       }
     }
 
-    var regexEmoji = emojiFaces.keys.toList().join('|').replaceAll('[', '\\[').replaceAll(']', '\\]');
+    var regexEmoji = emojiFaces.keys
+        .toList()
+        .join('|')
+        .replaceAll('[', '\\[')
+        .replaceAll(']', '\\]');
 
     mappingMap[regexEmoji] = MatchPattern(type: PatternType.email);
 
@@ -117,7 +127,8 @@ class MatchTextView extends StatelessWidget {
             recognizer: mapping.onTap == null
                 ? null
                 : (TapGestureRecognizer()
-                  ..onTap = () => mapping.onTap!(_getUrl(matchText, mapping.type), mapping.type)),
+                  ..onTap = () => mapping.onTap!(
+                      _getUrl(matchText, mapping.type), mapping.type)),
           );
         } else {
           inlineSpan = TextSpan(text: matchText, style: textStyle);

@@ -1,4 +1,5 @@
 import '../host/wallet_i18n.dart';
+import 'journals/wallet_journal_entry.dart';
 
 enum WalletRecordType {
   all,
@@ -184,6 +185,9 @@ extension WalletRecordStatusX on WalletRecordStatus {
 }
 
 class WalletRecordDto {
+  final WalletJournalEntry? journal;
+  final String counterpartyNickname;
+  final String counterpartyAvatarUrl;
   final String id;
   final WalletRecordType type;
   final WalletRecordStatus status;
@@ -222,6 +226,9 @@ class WalletRecordDto {
   final String expiredAt;
 
   const WalletRecordDto({
+    this.journal,
+    this.counterpartyNickname = '',
+    this.counterpartyAvatarUrl = '',
     required this.id,
     required this.type,
     required this.status,
@@ -259,48 +266,58 @@ class WalletRecordDto {
 }
 
 extension WalletRecordDtoX on WalletRecordDto {
-  bool get isChainDeposit =>
-      type == WalletRecordType.receive &&
-      (network.toUpperCase().contains('TRC20') ||
-          network.toUpperCase().contains('BTC') ||
-          network.toUpperCase().contains('ERC20') ||
-          title.contains('充值'));
+  bool get isChainDeposit => journal != null
+      ? journal!.bizType == 'deposit'
+      : type == WalletRecordType.receive &&
+          (network.toUpperCase().contains('TRC20') ||
+              network.toUpperCase().contains('BTC') ||
+              network.toUpperCase().contains('ERC20') ||
+              title.contains('充值'));
 
-  bool get isChainWithdraw =>
-      type == WalletRecordType.transfer &&
-      (title.contains('提现') ||
-          (addr.trim().isNotEmpty && payee.trim() == '外部地址'));
+  bool get isChainWithdraw => journal != null
+      ? journal!.bizType == 'withdraw'
+      : type == WalletRecordType.transfer &&
+          (title.contains('提现') ||
+              (addr.trim().isNotEmpty && payee.trim() == '外部地址'));
 
-  bool get isInternalReceive =>
-      type == WalletRecordType.receive &&
-      !isChainDeposit &&
-      !title.contains('领取红包');
+  bool get isInternalReceive => journal != null
+      ? journal!.type == 'transfer_received'
+      : type == WalletRecordType.receive &&
+          !isChainDeposit &&
+          !title.contains('领取红包');
 
-  bool get isInternalTransfer =>
-      type == WalletRecordType.transfer &&
-      !isChainWithdraw &&
-      !title.contains('红包');
+  bool get isInternalTransfer => journal != null
+      ? journal!.type == 'transfer_sent'
+      : type == WalletRecordType.transfer &&
+          !isChainWithdraw &&
+          !title.contains('红包');
 
-  bool get isRedPacketReceive =>
-      type == WalletRecordType.redPacket && title.contains('领取');
+  bool get isRedPacketReceive => journal != null
+      ? journal!.type == 'packet_received'
+      : type == WalletRecordType.redPacket && title.contains('领取');
 
-  bool get isRedPacketSend =>
-      type == WalletRecordType.redPacket &&
-      !isRedPacketReceive &&
-      !isRedPacketRefund;
+  bool get isRedPacketSend => journal != null
+      ? const {'packet_sent', 'packet_freeze', 'packet_settlement'}
+          .contains(journal!.type)
+      : type == WalletRecordType.redPacket &&
+          !isRedPacketReceive &&
+          !isRedPacketRefund;
 
-  bool get isRedPacketRefund =>
-      type == WalletRecordType.redPacket &&
-      (title.contains('退回') || rpStatus.contains('退款'));
+  bool get isRedPacketRefund => journal != null
+      ? journal!.type == 'packet_refund'
+      : type == WalletRecordType.redPacket &&
+          (title.contains('退回') || rpStatus.contains('退款'));
 
-  bool get isGroupTransfer =>
-      rpType.trim().toUpperCase() == 'GROUP_TRANSFER' &&
-      (isRedPacketSend || isRedPacketReceive);
+  bool get isGroupTransfer => journal != null
+      ? journal!.bizType == 'group_transfer'
+      : rpType.trim().toUpperCase() == 'GROUP_TRANSFER' &&
+          (isRedPacketSend || isRedPacketReceive);
 
-  bool get isGroupRedPacket =>
-      (rpType.trim().toUpperCase() == 'NORMAL_GROUP' ||
-          rpType.trim().toUpperCase() == 'LUCKY_GROUP') &&
-      (isRedPacketSend || isRedPacketReceive);
+  bool get isGroupRedPacket => journal != null
+      ? const {'packet_normal', 'packet_lucky'}.contains(journal!.bizType)
+      : (rpType.trim().toUpperCase() == 'NORMAL_GROUP' ||
+              rpType.trim().toUpperCase() == 'LUCKY_GROUP') &&
+          (isRedPacketSend || isRedPacketReceive);
 
   bool get isSwap => type == WalletRecordType.swap;
 }

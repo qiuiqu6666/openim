@@ -1,9 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/wallet/wallet_controller.dart';
+import 'package:openim/pages/wallet/wallet_repository.dart';
 
 void main() {
   test('balance visibility toggle matches 99chat semantics', () {
-    final controller = WalletController();
+    final controller = WalletController(repo: const UnavailableWalletRepository());
     expect(controller.showBal, isTrue);
     controller.toggleBal();
     expect(controller.showBal, isFalse);
@@ -13,7 +14,7 @@ void main() {
   });
 
   test('unavailable backend keeps product shell without fake balances', () async {
-    final controller = WalletController();
+    final controller = WalletController(repo: const UnavailableWalletRepository());
     await controller.load();
 
     expect(controller.loadFailed, isTrue);

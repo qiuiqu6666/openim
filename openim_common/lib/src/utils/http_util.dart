@@ -1,10 +1,10 @@
 import 'dart:typed_data';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
 import 'package:dio/dio.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:get/get.dart' hide FormData, MultipartFile;
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -12,40 +12,86 @@ var dio = Dio();
 
 class HttpUtil {
   HttpUtil._();
+  static const _sessionFeedbackOwned = 'openimSessionFeedbackOwned';
 
   static void init() {
-    dio
-      ..interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
-        return handler.next(options); //continue
-      }, onResponse: (response, handler) {
-        return handler.next(response); // continue
-      }, onError: (DioException e, handler) {
-        return handler.next(e); //continue
-      }));
+    dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
+      return handler.next(options); //continue
+    }, onResponse: (response, handler) {
+      _reportSessionError(response.requestOptions, response.data);
+      return handler.next(response); // continue
+    }, onError: (DioException e, handler) {
+      _reportSessionError(e.requestOptions, e.response?.data);
+      return handler.next(e); //continue
+    }));
 
     dio.options.baseUrl = Config.imApiUrl;
     dio.options.connectTimeout = const Duration(seconds: 30); //30s
     dio.options.receiveTimeout = const Duration(seconds: 30);
   }
 
-  static String get operationID => DateTime.now().millisecondsSinceEpoch.toString();
+  static String get operationID =>
+      DateTime.now().millisecondsSinceEpoch.toString();
 
-  static String businessErrorMessage(ApiResp response) {
-    if (response.errCode == 20018) return 'nicknameAlreadyUsed'.tr;
-    if (response.errCode == 20019) return 'nicknameUpdateTooFrequent'.tr;
-    if (response.errCode == 1001 &&
-        response.errDlt == 'nickname can not be empty') {
-      return 'nicknameCannotBeEmpty'.tr;
+  static String businessErrorMessage(ApiResp response, {String? path}) =>
+      ApiErrorMessages.business(response.errCode,
+          path: path, detail: response.errDlt, message: response.errMsg);
+
+  static ApiResp? _readResponse(dynamic body) {
+    try {
+      if (body is String) body = jsonDecode(body);
+      if (body is! Map || !body.containsKey('errCode')) return null;
+      final code = body['errCode'];
+      if (code is! int && (code is! String || int.tryParse(code) == null)) {
+        return null;
+      }
+      return ApiResp.fromJson(Map<String, dynamic>.from(body));
+    } catch (_) {
+      return null;
     }
-    final reason = response.errDlt.isNotEmpty ? response.errDlt : response.errMsg;
-    if (reason.contains('json: cannot unmarshal') ||
-        reason.contains('goroutine') || reason.contains('/tmp/') ||
-        reason.length > 200) {
-      return Get.locale?.languageCode == 'zh'
-          ? '服务器处理失败，请稍后重试（错误码：${response.errCode}）'
-          : 'Server request failed (code: ${response.errCode}). Please try again.';
+  }
+
+  static void _reportSessionError(RequestOptions request, dynamic body) {
+    if (!_isCurrentToken(request.headers['token'])) return;
+    final code = _readResponse(body)?.errCode;
+    if (code != null && ApiErrorMessages.isSessionError(code)) {
+      request.extra[_sessionFeedbackOwned] = Apis.kickoffController.hasListener;
+      Apis.kickoffController.add(code);
     }
-    return reason;
+  }
+
+  static bool _isCurrentToken(Object? token) =>
+      token is String &&
+      token.isNotEmpty &&
+      (token == DataSp.chatToken || token == DataSp.imToken);
+
+  /// Resolve at display time, so a locale switch affects an in-flight request.
+  static String errorMessage(Object error, {String? path, String? fallback}) {
+    if (error is (int, String?)) {
+      return ApiErrorMessages.business(error.$1,
+          path: path, detail: error.$2 ?? '');
+    }
+    if (error is DioException) {
+      final response = _readResponse(error.response?.data);
+      if (response != null && response.errCode != 0) {
+        return businessErrorMessage(response,
+            path: path ?? error.requestOptions.path);
+      }
+      return switch (error.type) {
+        DioExceptionType.connectionTimeout ||
+        DioExceptionType.sendTimeout ||
+        DioExceptionType.receiveTimeout =>
+          ApiErrorMessages.timeout,
+        DioExceptionType.connectionError => ApiErrorMessages.network,
+        DioExceptionType.cancel => ApiErrorMessages.requestCancelled,
+        DioExceptionType.badResponse ||
+        DioExceptionType.badCertificate =>
+          ApiErrorMessages.serviceUnavailable,
+        _ => fallback ?? ApiErrorMessages.requestFailed,
+      };
+    }
+    if (error is FormatException) return ApiErrorMessages.invalidResponse;
+    return fallback ?? ApiErrorMessages.requestFailed;
   }
 
   static Future post(
@@ -54,46 +100,78 @@ class HttpUtil {
     bool showErrorToast = true,
     Map<String, dynamic>? queryParameters,
     Options? options,
+    String? requestOperationID,
+    bool withoutToken = false,
     CancelToken? cancelToken,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async {
+    var sessionOwnsFeedback = false;
     try {
       data ??= {};
       options ??= Options();
       options.headers ??= {};
-      options.headers!['operationID'] = operationID;
+      options.headers!['operationID'] = requestOperationID ?? operationID;
 
-      var result = await dio.post<Map<String, dynamic>>(
-        path,
-        data: data,
-        queryParameters: queryParameters,
-        options: options,
-        cancelToken: cancelToken,
-        onSendProgress: onSendProgress,
-        onReceiveProgress: onReceiveProgress,
-      );
-      var resp = ApiResp.fromJson(result.data!);
+      final Response<dynamic> result;
+      if (withoutToken) {
+        // Remove a token inherited from Dio defaults for an unauthenticated
+        // request without changing authenticated requests or global headers.
+        final request = options.copyWith(method: 'POST').compose(
+              dio.options,
+              path,
+              data: data,
+              queryParameters: queryParameters,
+              cancelToken: cancelToken,
+              onSendProgress: onSendProgress,
+              onReceiveProgress: onReceiveProgress,
+            );
+        request.headers.removeWhere((key, _) => key.toLowerCase() == 'token');
+        result = await dio.fetch<dynamic>(request);
+      } else {
+        result = await dio.post<dynamic>(
+          path,
+          data: data,
+          queryParameters: queryParameters,
+          options: options,
+          cancelToken: cancelToken,
+          onSendProgress: onSendProgress,
+          onReceiveProgress: onReceiveProgress,
+        );
+      }
+      sessionOwnsFeedback =
+          result.requestOptions.extra[_sessionFeedbackOwned] == true;
+      final resp = _readResponse(result.data);
+      if (resp == null) throw const FormatException('Invalid API response');
       if (resp.errCode == 0) {
         return resp.data;
       } else {
-        if (showErrorToast) {
-          IMViews.showToast(businessErrorMessage(resp));
-        }
-
         // Keep the detailed reason available to callers that own their toast.
-        return Future.error((resp.errCode,
-            resp.errDlt.isNotEmpty ? resp.errDlt : resp.errMsg));
+        throw (
+          resp.errCode,
+          resp.errDlt.isNotEmpty ? resp.errDlt : resp.errMsg
+        );
       }
     } catch (error) {
       if (error is DioException) {
-        final errorMsg = '接口：$path  信息：${error.message}';
-        if (showErrorToast) IMViews.showToast(errorMsg);
-        return Future.error(errorMsg);
+        sessionOwnsFeedback =
+            error.requestOptions.extra[_sessionFeedbackOwned] == true;
       }
-      final errorMsg = '接口：$path  信息：${error.toString()}';
-      if (showErrorToast) IMViews.showToast(errorMsg);
-      return Future.error(error);
+      final response =
+          error is DioException ? _readResponse(error.response?.data) : null;
+      final failure = response != null && response.errCode != 0
+          ? (
+              response.errCode,
+              response.errDlt.isNotEmpty ? response.errDlt : response.errMsg
+            )
+          : error;
+      // The session owner displays the expiry prompt while returning to login.
+      if (showErrorToast &&
+          !sessionOwnsFeedback &&
+          !(error is DioException && error.type == DioExceptionType.cancel)) {
+        IMViews.showToast(errorMessage(failure, path: path));
+      }
+      return Future.error(failure);
     }
   }
 
@@ -112,8 +190,11 @@ class HttpUtil {
     final bytes = await File(compressPath ?? path).readAsBytes();
     final mf = MultipartFile.fromBytes(bytes, filename: fileName);
 
-    var formData =
-        FormData.fromMap({'operationID': '${DateTime.now().millisecondsSinceEpoch}', 'fileType': 1, 'file': mf});
+    var formData = FormData.fromMap({
+      'operationID': '${DateTime.now().millisecondsSinceEpoch}',
+      'fileType': 1,
+      'file': mf
+    });
 
     var resp = await dio.post<Map<String, dynamic>>(
       "${Config.imApiUrl}/third/minio_upload",
@@ -147,13 +228,16 @@ class HttpUtil {
     VoidCallback? onCompletion,
   }) async {
     try {
-      final segments = Uri.parse(url).pathSegments;
+      final resolvedURL =
+          OpenIMMediaUrl.resolve(url, imApiUrl: Config.imApiUrl);
+      final segments = Uri.parse(resolvedURL).pathSegments;
       final name = segments.isNotEmpty && segments.last.isNotEmpty
           ? segments.last
           : 'image_${DateTime.now().millisecondsSinceEpoch}.png';
-      final cachePath = await IMUtils.createTempFile(dir: 'picture', name: name);
+      final cachePath =
+          await IMUtils.createTempFile(dir: 'picture', name: name);
       await download(
-        url,
+        resolvedURL,
         cachePath: cachePath,
         cancelToken: cancelToken,
         onProgress: onProgress,
@@ -171,7 +255,8 @@ class HttpUtil {
     var byteData = await image.toByteData(format: ImageByteFormat.png);
     if (byteData != null) {
       Uint8List uint8list = byteData.buffer.asUint8List();
-      var result = await ImageGallerySaverPlus.saveImage(Uint8List.fromList(uint8list));
+      var result =
+          await ImageGallerySaverPlus.saveImage(Uint8List.fromList(uint8list));
       if (result != null) {
         var tips = StrRes.saveSuccessfully;
         if (Platform.isAndroid) {
@@ -219,12 +304,14 @@ class HttpUtil {
     );
   }
 
-  static Future saveFileToGallerySaver(File file, {String? name, bool showTaost = true}) async {
+  static Future saveFileToGallerySaver(File file,
+      {String? name, bool showTaost = true}) async {
     Future<void> save() async {
       try {
         Logger.print('saveFileToGallerySaver: ${file.path}');
         final imageBytes = await file.readAsBytes();
-        final result = await ImageGallerySaverPlus.saveImage(imageBytes, name: name);
+        final result =
+            await ImageGallerySaverPlus.saveImage(imageBytes, name: name);
         if (showTaost) {
           if (result is Map && result['isSuccess'] == true) {
             IMViews.showToast(StrRes.saveSuccessfully);

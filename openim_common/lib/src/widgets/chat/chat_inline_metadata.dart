@@ -1,6 +1,8 @@
 import 'dart:math' as math;
+import 'dart:ui' show BoxHeightStyle;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
+import '../../res/app_tokens.dart';
 
 /// Lay out the message at full width before fitting metadata on its last line.
 class ChatInlineMetadata extends MultiChildRenderObjectWidget {
@@ -34,27 +36,40 @@ class _InlineMetadata extends RenderBox
     final loose = constraints.loosen();
     content.layout(loose, parentUsesSize: true);
     metadata.layout(loose, parentUsesSize: true);
-    RenderParagraph? paragraph;
+    final paragraphs = <RenderParagraph>[];
     void visit(RenderObject node) {
-      if (node is RenderParagraph) paragraph = node;
+      if (node is RenderParagraph) paragraphs.add(node);
       node.visitChildren(visit);
     }
 
     visit(content);
     double width = math.max(content.size.width, metadata.size.width);
-    double y = content.size.height + 4;
-    final text = paragraph;
+    double y = content.size.height + ChatBubbleTokens.metadataVerticalGap;
+    // Multiple paragraphs have independent line metrics; leave their footer
+    // below the whole body rather than treating the last paragraph as all text.
+    final text = paragraphs.length == 1 ? paragraphs.single : null;
     if (text != null && !text.didExceedMaxLines) {
       final plain = text.text.toPlainText();
+      // Tight boxes follow individual font metrics. A CJK fallback glyph may
+      // descend below adjacent digits on the same line, so grouping tight
+      // boxes by bottom would omit those digits from the trailing width.
+      // Line-height boxes give every run on one line the same vertical bounds.
       final boxes = text.getBoxesForSelection(
-          TextSelection(baseOffset: 0, extentOffset: plain.length));
-      if (boxes.isNotEmpty && !plain.endsWith('\n')) {
+        TextSelection(baseOffset: 0, extentOffset: plain.length),
+        boxHeightStyle: BoxHeightStyle.max,
+      );
+      if (boxes.isNotEmpty &&
+          !plain.endsWith('\n') &&
+          boxes.every((box) => box.direction == TextDirection.ltr)) {
         final bottom = boxes.map((b) => b.bottom).reduce(math.max);
         final last = boxes.where((b) => (b.bottom - bottom).abs() < 1);
         final right = last.map((b) => b.right).reduce(math.max);
         final top = last.map((b) => b.top).reduce(math.min);
         final offset = text.localToGlobal(Offset.zero, ancestor: content);
-        final needed = offset.dx + right + 6 + metadata.size.width;
+        final needed = offset.dx +
+            right +
+            ChatBubbleTokens.metadataHorizontalGap +
+            metadata.size.width;
         if (needed <= constraints.maxWidth) {
           width = math.max(width, needed);
           y = offset.dy + top;

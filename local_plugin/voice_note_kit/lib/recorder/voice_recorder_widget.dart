@@ -14,9 +14,18 @@ import 'package:voice_note_kit/recorder/utils/utils_for_web.dart';
 import 'audio_recorder.dart';
 import 'sound_player.dart';
 import 'voice_enums/voice_enums.dart';
+import 'voice_recorder_controller.dart';
 
 // Main widget for voice recording functionality
 class VoiceRecorderWidget extends StatefulWidget {
+  /// Optional controller for a custom recorder surface using this widget's
+  /// existing permissions, native recorder and temporary-file lifecycle.
+  final VoiceRecorderController? controller;
+
+  /// Replaces the default UI and gesture detector. Custom surfaces decide
+  /// when to call start, stop or cancel on the supplied controller.
+  final Widget Function(BuildContext, VoiceRecorderController)? builder;
+
   // Callbacks and customizable widgets for the voice recorder widget
   final Function(File file)? onRecorded;
   final Function(String url)? onRecordedWeb;
@@ -67,6 +76,8 @@ class VoiceRecorderWidget extends StatefulWidget {
 
   const VoiceRecorderWidget({
     super.key,
+    this.controller,
+    this.builder,
     this.onRecorded,
     this.idleText,
     this.onRecordedWeb,
@@ -107,216 +118,437 @@ class VoiceRecorderWidget extends StatefulWidget {
 }
 
 class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
-  final _recorder = AudioRecorderClass(); // Audio recorder instance
-  bool _isRecording = false; // Whether the recorder is currently recording
-  bool _isCancelled = false; // Whether the recording was cancelled
-  String? _filePath; // File path for saving the recording
-  double dragDistance = 0.0; // Distance the user drags to cancel
-  Offset? _startOffset; // Start position of the drag gesture
-  Timer? _timer; // Timer to track recording duration
-  int _seconds = 0; // Recording duration in seconds
-  Color _backgroundColor =
-      Colors.blueAccent; // Background color during recording
-  bool _showCancelHint = false; // Flag to show hint for cancelling recording
-
+  final _recorder = AudioRecorderClass();
+  late VoiceRecorderController _controller;
+  bool _ownsController = false;
+  bool _isRecording = false;
+  bool _isCancelled = false;
+  String? _filePath;
+  double dragDistance = 0.0;
+  Offset? _startOffset;
+  Timer? _timer;
+  Timer? _preparingTimer;
+  StreamSubscription<Amplitude>? _amplitudeSubscription;
+  int _seconds = 0;
+  double _amplitude = 0;
+  Color _backgroundColor = Colors.blueAccent;
+  bool _showCancelHint = false;
   bool _pressed = false;
   bool _starting = false;
   bool _stopping = false;
+  bool _disposing = false;
+  int _sessionSequence = 0;
+  Future<void>? _startOperation;
+  Future<void>? _stopOperation;
+  Future<void>? _lateStartCleanup;
 
-  // Dispose resources when the widget is destroyed
+  @override
+  void initState() {
+    super.initState();
+    _attachController();
+  }
+
+  void _attachController() {
+    _ownsController = widget.controller == null;
+    _controller = widget.controller ?? VoiceRecorderController();
+    _controller.attach(
+      owner: this,
+      start: _startControlled,
+      stop: _stopControlled,
+      cancel: _cancelRecording,
+    );
+    _publishSnapshot();
+  }
+
+  @override
+  void didUpdateWidget(covariant VoiceRecorderWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller)) {
+      _controller.detach(this);
+      if (_ownsController) _controller.dispose();
+      _attachController();
+    }
+  }
+
+  void _publishSnapshot() {
+    if (_disposing || !mounted) return;
+    _controller.updateSnapshot(
+      this,
+      VoiceRecorderSnapshot(
+        isStarting: _starting,
+        isRecording: _isRecording,
+        isStopping: _stopping,
+        seconds: _seconds,
+        amplitude: _amplitude,
+      ),
+    );
+  }
+
+  void _refresh() {
+    if (_disposing || !mounted) return;
+    setState(() {});
+    _publishSnapshot();
+  }
+
+  void _reportError(Object error) {
+    if (!_disposing && mounted) widget.onError?.call(error.toString());
+  }
+
+  bool _canStart(int sequence) =>
+      !_disposing && mounted && _pressed && sequence == _sessionSequence;
+
+  Future<void> _startControlled() async {
+    if (_disposing ||
+        _starting ||
+        _stopping ||
+        _isRecording ||
+        _lateStartCleanup != null) {
+      return;
+    }
+    _pressed = true;
+    await _startRecording();
+  }
+
+  Future<void> _stopControlled() async {
+    _pressed = false;
+    await _stopRecording();
+  }
+
   @override
   void dispose() {
+    _controller.detach(this);
+    if (_ownsController) _controller.dispose();
+    _disposing = true;
     _pressed = false;
-    _recorder.dispose(); // Dispose recorder
-    _timer?.cancel(); // Cancel timer
+    _isCancelled = true;
+    _sessionSequence++;
+    _timer?.cancel();
+    _preparingTimer?.cancel();
+    unawaited(_disposeRecorder());
     super.dispose();
   }
 
-  // Start recording logic
+  Future<void> _disposeRecorder() async {
+    await _cancelAmplitude();
+    // A native start can complete after the widget has left the tree. Wait
+    // for its cancellation cleanup before disposing that same recorder.
+    await _startOperation;
+    await _lateStartCleanup;
+    // Once a recording was delivered, the callback owns its file and can be
+    // waiting for a review dialog. The native recorder is already stopped.
+    if (_filePath != null) await _stopOperation;
+    if (_filePath != null) await _discardTemporaryRecording();
+    try {
+      await _recorder.dispose();
+    } catch (_) {
+      // Disposal cannot deliver errors or recording callbacks to a dead UI.
+    }
+  }
+
+  Future<void> _cancelAmplitude() async {
+    final subscription = _amplitudeSubscription;
+    _amplitudeSubscription = null;
+    if (subscription != null) {
+      try {
+        await subscription.cancel();
+      } catch (_) {}
+    }
+    _amplitude = 0;
+  }
+
+  Future<void> _discardTemporaryRecording({
+    bool stopNative = true,
+    bool reportError = true,
+  }) async {
+    Object? cleanupError;
+    // After delivery the application owns the file. Native cancel can delete
+    // it, so discard must be restricted to our still-unclaimed temporary path.
+    if (stopNative && _filePath != null) {
+      cleanupError = await _recorder.discard();
+    }
+    final path = _filePath;
+    _filePath = null;
+    if (!kIsWeb && path != null) {
+      try {
+        final file = File(path);
+        if (await file.exists()) await file.delete();
+      } catch (error) {
+        cleanupError ??= error;
+      }
+    }
+    if (reportError && cleanupError != null) _reportError(cleanupError);
+  }
+
   Future<void> _startRecording() async {
-    if (_starting || _stopping || _isRecording) return;
+    if (_disposing ||
+        _starting ||
+        _stopping ||
+        _isRecording ||
+        _lateStartCleanup != null) {
+      return;
+    }
+    final completion = Completer<void>();
+    _startOperation = completion.future;
     _starting = true;
     _isCancelled = false;
+    _seconds = 0;
+    _amplitude = 0;
+    final sequence = ++_sessionSequence;
+    final preparingWatch = Stopwatch()..start();
+    _refresh();
+    _preparingTimer = Timer(const Duration(seconds: 15), () {
+      if (!_starting || !_canStart(sequence)) return;
+      _pressed = false;
+      _isCancelled = true;
+      _sessionSequence++;
+      _reportError(TimeoutException('Recording preparation timed out'));
+      _refresh();
+    });
     try {
       final hasPermission =
-          await _checkPermissions(); // Check microphone permission
+          await _checkPermissions().timeout(const Duration(seconds: 15));
       if (!hasPermission) {
-        widget.onError?.call(widget
-            .permissionNotGrantedMessage); // Show error if permission not granted
-        return;
-      }
-
-      if (!mounted || !_pressed) return;
-      widget.onStartRecording?.call(); // Trigger callback for start recording
-
-      if (widget.enableHapticFeedback) {
-        HapticFeedback
-            .mediumImpact(); // Trigger haptic feedback when recording starts
-      }
-
-      if (kIsWeb) {
-        // Web-specific behavior: start recording without specifying path
-        _filePath = getTempFileForWeb();
-        await _recorder.start(const RecordConfig(), path: _filePath!);
-      } else {
-        // Mobile: save to file using path_provider
-
-        _filePath = await getTempFilePath();
-        await _recorder.start(const RecordConfig(), path: _filePath!);
-      }
-
-      // Play sound if provided when recording starts
-      if (widget.startSoundAsset != null) {
-        _playAssetSound(widget.startSoundAsset!);
-      }
-
-      if (!mounted || !_pressed) {
-        await _recorder.stop();
-        if (!kIsWeb && _filePath != null) {
-          final file = File(_filePath!);
-          if (await file.exists()) await file.delete();
+        if (_canStart(sequence)) {
+          _reportError(widget.permissionNotGrantedMessage);
         }
         return;
       }
-
-      _startTimer(); // Start the recording timer
-
-      setState(() {
-        _isRecording = true; // Update UI to show recording state
-        _isCancelled = false;
-        dragDistance = 0;
-        _backgroundColor =
-            widget.cancelHintColor; // Change background color when recording
-        _showCancelHint = true; // Show cancel hint
-      });
-    } catch (e) {
-      if (mounted) widget.onError?.call(e.toString());
-    } finally {
+      if (!_canStart(sequence)) return;
+      widget.onStartRecording?.call();
+      if (widget.enableHapticFeedback) {
+        unawaited(HapticFeedback.mediumImpact());
+      }
+      if (kIsWeb) {
+        _filePath = getTempFileForWeb();
+      } else {
+        _filePath = await getTempFilePath().timeout(const Duration(seconds: 5));
+      }
+      if (!_canStart(sequence)) {
+        await _discardTemporaryRecording(stopNative: false);
+        return;
+      }
+      final nativeStart =
+          _recorder.start(const RecordConfig(), path: _filePath!);
+      final remaining = const Duration(seconds: 15) - preparingWatch.elapsed;
+      try {
+        await nativeStart
+            .timeout(remaining.isNegative ? Duration.zero : remaining);
+      } on TimeoutException catch (error) {
+        if (_canStart(sequence)) _reportError(error);
+        _pressed = false;
+        _isCancelled = true;
+        _sessionSequence++;
+        // Native calls cannot be interrupted safely. Return the UI to idle,
+        // while preventing a new start until the late result has been stopped.
+        final cleanup = _cleanUpLateStart(nativeStart);
+        _lateStartCleanup = cleanup;
+        unawaited(cleanup.whenComplete(() {
+          _lateStartCleanup = null;
+          _refresh();
+        }));
+        return;
+      }
+      if (!_canStart(sequence)) {
+        await _discardTemporaryRecording();
+        return;
+      }
+      _isRecording = true;
       _starting = false;
-    }
-  }
-
-  // Stop recording logic
-  Future<void> _stopRecording() async {
-    if (!_isRecording || _stopping) return;
-    _stopping = true;
-    try {
-      _timer?.cancel(); // Stop the timer when recording is stopped
-
-      // Play sound if provided when recording stops
-      if (widget.stopSoundAsset != null) {
-        _playAssetSound(widget.stopSoundAsset!);
-      }
-
-      // Stop the recorder
-      String filePath = await _recorder.stop();
-      if (filePath.isEmpty) throw StateError("No recording file");
-
-      if (!mounted) return;
-      setState(() {
-        _isRecording = false; // Update UI to show recording stopped
+      _preparingTimer?.cancel();
+      dragDistance = 0;
+      _backgroundColor = widget.cancelHintColor;
+      _showCancelHint = true;
+      _amplitudeSubscription = _recorder.amplitude.listen((level) {
+        if (_disposing || !mounted || !_isRecording) return;
+        _amplitude = ((level.current + 60) / 60).clamp(0.0, 1.0).toDouble();
+        _refresh();
+      }, onError: (Object _) {
+        // Metering failure must not discard an otherwise valid recording.
+        _amplitude = 0;
+        _refresh();
       });
-
-      // Trigger onRecorded callback with the saved file if recording is successful
-      if (!_isCancelled &&
-          _filePath != null &&
-          widget.onRecorded != null &&
-          kIsWeb) {
-        widget.onRecordedWeb!(filePath);
-      } else if (!_isCancelled &&
-          _filePath != null &&
-          widget.onRecorded != null) {
-        widget.onRecorded!(File(_filePath!));
+      _startTimer();
+      if (widget.startSoundAsset != null) {
+        unawaited(_playAssetSound(widget.startSoundAsset!));
       }
+      _refresh();
     } catch (e) {
-      if (mounted) widget.onError?.call(e.toString());
+      await _cancelAmplitude();
+      await _discardTemporaryRecording(reportError: false);
+      if (sequence == _sessionSequence && _pressed) _reportError(e);
+      _isRecording = false;
     } finally {
-      _stopping = false;
+      _preparingTimer?.cancel();
+      _starting = false;
+      if (!_isRecording) {
+        _pressed = false;
+        _showCancelHint = false;
+        _backgroundColor = widget.backgroundColor;
+        _seconds = 0;
+        _amplitude = 0;
+      }
+      _startOperation = null;
+      completion.complete();
+      _refresh();
     }
   }
 
-  // Cancel the recording logic
+  Future<void> _cleanUpLateStart(Future<void> nativeStart) async {
+    try {
+      await nativeStart;
+    } catch (_) {}
+    await _discardTemporaryRecording();
+  }
+
+  Future<void> _stopRecording() async {
+    _pressed = false;
+    if (_starting) {
+      _isCancelled = true;
+      _sessionSequence++;
+      await _startOperation;
+      return;
+    }
+    if (_stopping) {
+      await _stopOperation;
+      return;
+    }
+    if (_disposing || !_isRecording) return;
+    final completion = Completer<void>();
+    _stopOperation = completion.future;
+    _stopping = true;
+    _timer?.cancel();
+    _refresh();
+    try {
+      await _cancelAmplitude();
+      if (widget.stopSoundAsset != null) {
+        unawaited(_playAssetSound(widget.stopSoundAsset!));
+      }
+      final filePath = await _recorder.stop();
+      if (filePath.isEmpty) throw StateError('No recording file');
+      _isRecording = false;
+      _refresh();
+      if (_disposing || !mounted || _isCancelled) {
+        await _discardTemporaryRecording(stopNative: false);
+        return;
+      }
+      final callback = kIsWeb ? widget.onRecordedWeb : widget.onRecorded;
+      if (callback == null) {
+        await _discardTemporaryRecording(stopNative: false);
+        return;
+      }
+      // The application callback now owns the file. Disposal must not delete
+      // it while its asynchronous duration check/copy/send is still running.
+      _filePath = null;
+      final dynamic result = kIsWeb
+          ? widget.onRecordedWeb!(filePath)
+          : widget.onRecorded!(File(filePath));
+      if (result is Future) await result;
+    } catch (e) {
+      await _discardTemporaryRecording(reportError: false);
+      _reportError(e);
+    } finally {
+      _isRecording = false;
+      _stopping = false;
+      _showCancelHint = false;
+      _backgroundColor = widget.backgroundColor;
+      _seconds = 0;
+      _amplitude = 0;
+      _stopOperation = null;
+      completion.complete();
+      _refresh();
+    }
+  }
+
   Future<void> _cancelRecording() async {
     _pressed = false;
-    if (_starting || !_isRecording || _stopping) return;
+    _isCancelled = true;
+    _sessionSequence++;
+    if (_starting) {
+      await _startOperation;
+      return;
+    }
+    if (_stopping) {
+      await _stopOperation;
+      return;
+    }
+    if (_disposing || !_isRecording) return;
+    final completion = Completer<void>();
+    _stopOperation = completion.future;
     _stopping = true;
+    _timer?.cancel();
+    _refresh();
     try {
-      _isCancelled = true; // Mark the recording as cancelled
-      _timer?.cancel(); // Stop the timer
-      await _recorder.stop();
-      if (!kIsWeb && _filePath != null) {
-        final file = File(_filePath!);
-        if (await file.exists()) await file.delete();
-      }
-      if (!mounted) return;
+      await _cancelAmplitude();
+      await _discardTemporaryRecording();
+      if (_disposing || !mounted) return;
       if (widget.enableHapticFeedback) {
-        HapticFeedback.mediumImpact(); // Trigger haptic feedback on cancel
+        unawaited(HapticFeedback.mediumImpact());
       }
-      setState(() {
-        _isRecording = false; // Update UI to show recording is cancelled
-        _backgroundColor = widget.backgroundColor; // Reset background color
-        _showCancelHint = false; // Hide cancel hint
-      });
       if (widget.actionWhenCancel != null) {
-        widget
-            .actionWhenCancel!(); // Trigger custom action when recording is cancelled
+        widget.actionWhenCancel!();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  widget.recordCancelledMessage)), // Show cancellation message
+          SnackBar(content: Text(widget.recordCancelledMessage)),
         );
       }
     } catch (e) {
-      if (mounted) widget.onError?.call(e.toString());
+      _reportError(e);
     } finally {
+      _isRecording = false;
       _stopping = false;
+      _showCancelHint = false;
+      _backgroundColor = widget.backgroundColor;
+      _seconds = 0;
+      _amplitude = 0;
+      _stopOperation = null;
+      completion.complete();
+      _refresh();
     }
   }
 
-  // Start the timer for the recording duration
   void _startTimer() {
-    _seconds = 0; // Reset timer to 0
+    _seconds = 0;
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() => _seconds++); // Increment timer every second
-      // Stop recording if max duration is reached
+      if (_disposing || !mounted || !_isRecording) {
+        timer.cancel();
+        return;
+      }
+      _seconds++;
+      _refresh();
       if (widget.maxRecordDuration != null &&
           _seconds >= widget.maxRecordDuration!.inSeconds) {
-        _stopRecording();
-        widget.onMaxDurationReached
-            ?.call(); // Trigger callback when max duration is reached
+        unawaited(_stopRecording());
+        widget.onMaxDurationReached?.call();
       }
     });
   }
 
-  // Check for microphone permission
   Future<bool> _checkPermissions() async {
-    if (Platform.isMacOS) {
-      return true;
-    }
+    if (Platform.isMacOS) return true;
     final mic = await Permission.microphone.request();
-    return mic ==
-        PermissionStatus.granted; // Return true if permission is granted
+    return mic == PermissionStatus.granted;
   }
 
-  // Play the sound asset (e.g., when starting or stopping recording)
   Future<void> _playAssetSound(String assetPath) async {
     try {
-      await playSound(assetPath); // Play the sound
+      await playSound(assetPath);
     } catch (e) {
-      widget.onError?.call(e.toString()); // Handle errors
+      _reportError(e);
     }
   }
 
   // Build the UI for the voice recorder widget
   @override
   Widget build(BuildContext context) {
+    if (widget.builder != null) {
+      return widget.builder!(context, _controller);
+    }
     return GestureDetector(
       // Start recording when long press starts
       onLongPressStart: (details) {
-        _pressed = true;
         _startOffset = details.globalPosition;
-        _startRecording();
+        unawaited(_startControlled());
         setState(() {
           _showCancelHint = true; // Show the cancel hint
         });
@@ -349,8 +581,8 @@ class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
       onLongPressCancel: _cancelRecording,
       onLongPressEnd: (_) {
         _pressed = false;
-        if (!_isCancelled && _isRecording) {
-          _stopRecording();
+        if (!_isCancelled) {
+          unawaited(_stopControlled());
         }
         setState(() {
           _showCancelHint = false; // Hide the cancel hint

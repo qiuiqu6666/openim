@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 
-import 'package:audio_session/audio_session.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:app_badge_plus/app_badge_plus.dart';
@@ -8,24 +10,35 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart' as im;
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:openim/core/im_callback.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:sound_mode/sound_mode.dart';
-import 'package:sound_mode/utils/ringer_mode_statuses.dart';
-import 'package:vibration/vibration.dart';
+import 'package:openim_live/openim_live.dart';
 
 import '../../utils/upgrade_manager.dart';
+import '../../routes/app_navigator.dart';
+import '../../routes/app_pages.dart';
+import '../../services/chat_message_sender.dart';
+import '../../services/favorite_send_coordinator.dart';
+import '../notifications/message_notification_runtime.dart';
+import '../notifications/message_notification_preferences.dart';
+import '../notifications/system_message_notifier.dart';
+import '../notifications/foreground_message_alert.dart';
+import '../notifications/notification_sound_activity.dart';
+import '../device_sync/device_sync_runtime.dart';
 import 'im_controller.dart';
 
 class AppController extends GetxController with UpgradeManger {
   var isRunningBackground = false;
 
   final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  MessageNotificationRuntime? _messageNotifications;
+  int _notificationGeneration = 0;
 
-  final initializationSettingsAndroid = const AndroidInitializationSettings('@mipmap/ic_launcher');
+  final initializationSettingsAndroid =
+      const AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  final DarwinInitializationSettings initializationSettingsDarwin = const DarwinInitializationSettings(
+  final DarwinInitializationSettings initializationSettingsDarwin =
+      const DarwinInitializationSettings(
     requestAlertPermission: false,
     requestBadgePermission: false,
     requestSoundPermission: false,
@@ -34,97 +47,206 @@ class AppController extends GetxController with UpgradeManger {
   RTCBridge? get rtcBridge => PackageBridge.rtcBridge;
 
   bool get shouldMuted =>
+      OpenIMLiveClient().isBusy ||
       rtcBridge?.hasConnection == true ||
-      Get.find<IMController>().imSdkStatusSubject.values.last.status != IMSdkStatus.syncEnded;
+      Get.find<IMController>().currentSdkStatus != IMSdkStatus.syncEnded;
 
-  final _ring = 'assets/audio/message_ring.wav';
-  final _audioPlayer = AudioPlayer();
-  final configuration = const AudioSessionConfiguration(
-    avAudioSessionCategory: AVAudioSessionCategory.ambient,
-    avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.mixWithOthers,
-    androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransientMayDuck,
-    androidAudioAttributes: AndroidAudioAttributes(
-      contentType: AndroidAudioContentType.sonification,
-      usage: AndroidAudioUsage.notification,
-    ),
-  );
-  late AudioSession session;
+  final _foregroundMessageAlerts = ForegroundMessageAlert();
+  bool _closed = false;
 
   late BaseDeviceInfo deviceInfo;
 
   final clientConfigMap = <String, dynamic>{}.obs;
 
   Future<void> runningBackground(bool run) async {
+    if (_closed) return;
     Logger.print('-----App running background : $run-------------');
 
     if (isRunningBackground && !run) {}
     isRunningBackground = run;
-    if (!run) {
-      _cancelAllNotifications();
+    if (run) await _foregroundMessageAlerts.stop();
+    DeviceSyncRuntime.instance.setForeground(!run);
+    if (Get.isRegistered<IMController>()) {
+      final controller = Get.find<IMController>();
+      if (!controller.backgroundSubject.isClosed) {
+        controller.backgroundSubject.add(run);
+      }
+      if (!run) unawaited(controller.refreshMyFullInfo());
     }
+    if (!run) unawaited(onApplicationSessionReady());
   }
 
   @override
   void onInit() async {
-    _initPlayer();
-    final initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsDarwin,
+    DeviceSyncRuntime.instance.configure(
+      sessionReady: _notificationSdkReady,
+      canRunPhotos: () =>
+          !_closed &&
+          Get.isRegistered<IMController>() &&
+          Get.find<IMController>().currentSdkStatus == IMSdkStatus.syncEnded &&
+          !AppRoutes.isConversationRoute(Get.currentRoute) &&
+          !OpenIMLiveClient().isBusy &&
+          rtcBridge?.hasConnection != true,
     );
-    await flutterLocalNotificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (notificationResponse) {},
+    DeviceSyncRuntime.instance.setForeground(!isRunningBackground);
+    _messageNotifications = MessageNotificationRuntime(
+      notifier: SystemMessageNotifier(flutterLocalNotificationsPlugin),
+      currentSession: _notificationSession,
+      sdkReady: _notificationSdkReady,
+      isForeground: () => !isRunningBackground,
+      activeConversationID: () {
+        if (!AppRoutes.isConversationRoute(Get.currentRoute)) return null;
+        final args = Get.arguments;
+        return args is Map && args['conversationInfo'] is ConversationInfo
+            ? (args['conversationInfo'] as ConversationInfo).conversationID
+            : null;
+      },
+      userInfo: () => Get.isRegistered<IMController>()
+          ? Get.find<IMController>().userInfo.value
+          : null,
+      suppressSound: () => shouldMuted,
+      foregroundAlert: _foregroundMessageAlerts.play,
+      stopForegroundAlerts: _foregroundMessageAlerts.stop,
+      groupMemberCount: (groupID) async {
+        if (!Platform.isIOS) return null;
+        final groups = await OpenIM.iMManager.groupManager
+            .getGroupsInfo(groupIDList: [groupID]);
+        return groups.isEmpty ? null : groups.first.memberCount;
+      },
+      loadConversation: (target) => OpenIM.iMManager.conversationManager
+          .getOneConversation(
+              sourceID: target.sourceID, sessionType: target.sessionType),
+      openConversation: (conversation) async {
+        if (AppRoutes.isConversationRoute(Get.currentRoute) &&
+            Get.arguments is Map &&
+            (Get.arguments['conversationInfo'] as ConversationInfo?)
+                    ?.conversationID ==
+                conversation.conversationID) {
+          return;
+        }
+        // A route future completes on page exit; dispatch navigation only.
+        unawaited(AppNavigator.startChat(conversationInfo: conversation));
+      },
+      sendReply: _sendNotificationReply,
+      reportError: IMViews.showToast,
     );
+    try {
+      await _messageNotifications!.initialize();
+    } catch (error) {
+      Logger.print(
+          'Notification initialization unavailable: ${error.runtimeType}',
+          onlyConsole: true);
+    }
+    if (_closed) return;
 
     autoCheckVersionUpgrade();
     super.onInit();
   }
 
-  Future<void> showNotification(im.Message message, {bool showNotification = true}) async {
-    if (_isGlobalNotDisturb() ||
-        message.attachedInfoElem?.notSenderNotificationPush == true ||
-        message.contentType == im.MessageType.typing ||
-        message.sendID == OpenIM.iMManager.userID ||
-        (message.contentType! >= 1000 && message.contentType != 1400)) return;
+  Future<void> showNotification(im.Message message,
+      {bool showNotification = true}) async {
+    if (_closed || !showNotification) return;
+    await _messageNotifications?.receive(message);
+  }
 
-    var sourceID = message.sessionType == ConversationType.single ? message.sendID : message.groupID;
-    if (sourceID != null && message.sessionType != null) {
-      var i = await OpenIM.iMManager.conversationManager.getOneConversation(
-        sourceID: sourceID,
-        sessionType: message.sessionType!,
-      );
-      if (i.recvMsgOpt != 0) return;
+  MessageNotificationSession? _notificationSession() {
+    final owner = DataSp.userID?.trim();
+    final token = DataSp.chatToken;
+    if (owner == null || owner.isEmpty || token == null || token.isEmpty) {
+      return null;
     }
+    return (
+      accountID: owner,
+      sessionKey: sha256.convert(utf8.encode('$owner|$token')).toString()
+    );
+  }
 
-    if (showNotification) {
-      promptSoundOrNotification(message.seq!);
+  bool _notificationSdkReady() =>
+      !_closed &&
+      Get.isRegistered<IMController>() &&
+      Get.find<IMController>().currentSdkStatus == IMSdkStatus.syncEnded &&
+      _notificationSession()?.accountID == OpenIM.iMManager.userID &&
+      Get.currentRoute != AppRoutes.splash &&
+      Get.currentRoute != AppRoutes.login &&
+      Get.key.currentState != null;
+
+  Future<void> onNotificationSessionReady({bool authenticated = false}) async {
+    if (_closed) return;
+    try {
+      await _messageNotifications?.onSessionReady(authenticated: authenticated);
+    } catch (error) {
+      Logger.print('Notification session unavailable: ${error.runtimeType}',
+          onlyConsole: true);
     }
   }
 
-  Future<void> promptSoundOrNotification(int seq) async {
-    if (Get.find<IMController>().imSdkStatusSubject.values.lastOrNull?.status != IMSdkStatus.syncEnded) {
+  Future<void> onApplicationSessionReady({bool authenticated = false}) async {
+    if (_closed) return;
+    // Each optional background service owns its errors and never delays login.
+    unawaited(onNotificationSessionReady(authenticated: authenticated));
+    try {
+      await DeviceSyncRuntime.instance
+          .onSessionReady(authenticated: authenticated);
+    } catch (error) {
+      Logger.print('Device sync unavailable: ${error.runtimeType}',
+          onlyConsole: true);
+    }
+  }
+
+  void markDeviceSyncUserActivity() {
+    if (!_closed) DeviceSyncRuntime.instance.markUserActivity();
+  }
+
+  void clearMessageNotificationSession() {
+    NotificationSoundActivity.interruptPreviews();
+    _notificationGeneration++;
+    _messageNotifications?.invalidateSession();
+  }
+
+  Future<void> _sendNotificationReply(
+      String text, ConversationInfo conversation) async {
+    final session = _notificationSession();
+    final generation = _notificationGeneration;
+    if (session == null ||
+        !_notificationSdkReady() ||
+        !MessageNotificationPreferences.read(session.accountID).quickReply) {
+      throw StateError('Notification reply unavailable');
+    }
+    final message =
+        await OpenIM.iMManager.messageManager.createTextMessage(text: text);
+    if (_closed ||
+        generation != _notificationGeneration ||
+        session != _notificationSession() ||
+        !_notificationSdkReady() ||
+        !MessageNotificationPreferences.read(session.accountID).quickReply) {
+      throw StateError('Notification session changed');
+    }
+    final sent = await ChatMessageSender().sendRaw(
+        message,
+        FavoriteTarget(
+          conversationID: conversation.conversationID,
+          userID: conversation.conversationType == ConversationType.single
+              ? conversation.userID
+              : null,
+          groupID: conversation.conversationType == ConversationType.single
+              ? null
+              : conversation.groupID,
+        ));
+    if (_closed ||
+        generation != _notificationGeneration ||
+        session != _notificationSession()) {
       return;
     }
-    if (!isRunningBackground) {
-      _playMessageSound();
-    } else {
-      if (Platform.isAndroid) {
-        final id = seq;
-
-        const androidPlatformChannelSpecifics = AndroidNotificationDetails('chat', 'OpenIM Chat',
-            channelDescription: 'OpenIM Chat Message', importance: Importance.max, priority: Priority.high, ticker: 'ticker');
-        const NotificationDetails platformChannelSpecifics =
-            NotificationDetails(android: androidPlatformChannelSpecifics);
-        await flutterLocalNotificationsPlugin.show(id, 'You have a new message', 'Message：.....', platformChannelSpecifics,
-            payload: '');
-      }
-    }
+    // Reuse the normal message callback for an already visible matching chat.
+    Get.find<IMController>().onRecvNewMessage?.call(sent);
   }
 
-  Future<void> _cancelAllNotifications() async {
-    await flutterLocalNotificationsPlugin.cancelAll();
+  Future<void> stopForegroundMessageAlerts() {
+    NotificationSoundActivity.interruptPreviews();
+    return _foregroundMessageAlerts.stop();
   }
-  void showBadge(count) {
+
+  void showBadge(int count) {
     OpenIM.iMManager.messageManager.setAppBadge(count);
 
     if (count == 0) {
@@ -148,8 +270,15 @@ class AppController extends GetxController with UpgradeManger {
 
   @override
   void onClose() {
+    _closed = true;
+    NotificationSoundActivity.interruptPreviews();
+    if (!Get.isRegistered<AppController>() ||
+        identical(Get.find<AppController>(), this)) {
+      DeviceSyncRuntime.instance.dispose();
+    }
+    _messageNotifications?.close();
     closeSubject();
-    _audioPlayer.dispose();
+    unawaited(_foregroundMessageAlerts.dispose());
     super.onClose();
   }
 
@@ -169,93 +298,22 @@ class AppController extends GetxController with UpgradeManger {
 
   @override
   void onReady() {
+    if (_closed) return;
     queryClientConfig();
     _getDeviceInfo();
-    _cancelAllNotifications();
+    unawaited(onApplicationSessionReady());
     super.onReady();
-  }
-
-  bool _isGlobalNotDisturb() {
-    bool isRegistered = Get.isRegistered<IMController>();
-    if (isRegistered) {
-      var logic = Get.find<IMController>();
-      return logic.userInfo.value.globalRecvMsgOpt == 2;
-    }
-    return false;
-  }
-
-  void _initPlayer() async {
-    session = await AudioSession.instance;
-    await session.configure(configuration);
-
-    _audioPlayer.setAsset(_ring, package: 'openim_common');
-    _audioPlayer.playerStateStream.listen((state) {
-      switch (state.processingState) {
-        case ProcessingState.idle:
-        case ProcessingState.loading:
-        case ProcessingState.buffering:
-        case ProcessingState.ready:
-          break;
-        case ProcessingState.completed:
-          _stopMessageSound();
-
-          break;
-      }
-    });
-  }
-
-  void _playMessageSound() async {
-    if (shouldMuted) {
-      return;
-    }
-    bool isRegistered = Get.isRegistered<IMController>();
-    bool isAllowVibration = true;
-    bool isAllowBeep = true;
-    if (isRegistered) {
-      var logic = Get.find<IMController>();
-      isAllowVibration = logic.userInfo.value.allowVibration == 1;
-      isAllowBeep = logic.userInfo.value.allowBeep == 1;
-    }
-
-    RingerModeStatus ringerStatus = await SoundMode.ringerModeStatus;
-
-    Logger.print('System ringer status: $ringerStatus, user is allow beep: $isAllowBeep',
-        fileName: 'app_controller.dart');
-
-    if (!_audioPlayer.playerState.playing &&
-        isAllowBeep &&
-        (ringerStatus == RingerModeStatus.normal || ringerStatus == RingerModeStatus.unknown)) {
-      await session.setActive(true);
-      _audioPlayer.setAsset(_ring, package: 'openim_common');
-      _audioPlayer.setLoopMode(LoopMode.off);
-      _audioPlayer.setVolume(1.0);
-      _audioPlayer.play();
-    }
-
-    if (isAllowVibration &&
-        (ringerStatus == RingerModeStatus.normal ||
-            ringerStatus == RingerModeStatus.vibrate ||
-            ringerStatus == RingerModeStatus.unknown)) {
-      if (await Vibration.hasVibrator() == true) {
-        Vibration.vibrate();
-      }
-    }
-  }
-
-  void _stopMessageSound() async {
-    if (_audioPlayer.playerState.playing) {
-      _audioPlayer.stop();
-    }
-    await session.setActive(false);
   }
 
   void _getDeviceInfo() async {
     final deviceInfoPlugin = DeviceInfoPlugin();
-    deviceInfo = await deviceInfoPlugin.deviceInfo;
+    final info = await deviceInfoPlugin.deviceInfo;
+    if (!_closed) deviceInfo = info;
   }
 
   Future queryClientConfig() async {
     final map = await Apis.getClientConfig();
+    if (_closed) return clientConfigMap;
     clientConfigMap.assignAll(map);
 
     return clientConfigMap;

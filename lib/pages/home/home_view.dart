@@ -9,6 +9,7 @@ import '../conversation/conversation_logic.dart';
 import '../mine/mine_view.dart';
 import '../mine/widgets/mine_hot_eco.dart';
 import '../wallet/wallet_tab_shell.dart';
+import '../wallet/entry/wallet_entry_coordinator.dart';
 import 'home_logic.dart';
 import 'glass_bottom_nav_bar.dart';
 import '../../widgets/theme_aware_page.dart';
@@ -18,7 +19,10 @@ import 'package:persistent_bottom_nav_bar_v2/persistent_bottom_nav_bar_v2.dart';
 enum _MainTab { messages, groups, contacts, wallet, me }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.walletEntry});
+
+  /// The home route owns and disposes its wallet entry coordinator.
+  final WalletEntryCoordinator? walletEntry;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -29,10 +33,20 @@ class _HomePageState extends State<HomePage> {
   final PersistentTabController _tabController =
       PersistentTabController(initialIndex: 0);
   final ValueNotifier<int> _activeTabIndex = ValueNotifier<int>(0);
+  late final WalletEntryCoordinator _walletEntry =
+      widget.walletEntry ?? WalletEntryCoordinator();
   final conversationLogic = Get.find<ConversationLogic>();
   bool _profileImagesWarmed = false;
   Worker? _avatarWorker;
   String? _warmedAvatarUrl;
+  final _conversationEditBars = <bool, Widget?>{};
+  final _editBarRevision = ValueNotifier<int>(0);
+
+  void _setConversationEditBar(bool groupChats, Widget? bar) {
+    if (!mounted) return;
+    _conversationEditBars[groupChats] = bar;
+    _editBarRevision.value++;
+  }
 
   void _warmAvatar(String? url) {
     if (!mounted || url == _warmedAvatarUrl || !IMUtils.isUrlValid(url)) return;
@@ -45,8 +59,10 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    _walletEntry.dispose();
     _avatarWorker?.dispose();
     _activeTabIndex.dispose();
+    _editBarRevision.dispose();
     super.dispose();
   }
 
@@ -65,12 +81,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<PersistentTabConfig> _tabs(BuildContext context) {
+    final routeCurrent = ModalRoute.of(context)?.isCurrent != false;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final selectedColor = AppTokens.accent;
     final inactiveColor = AppTokens.textSecondary(dark: dark);
     return [
       PersistentTabConfig(
-        screen: ThemeAwarePage(builder: (_) => ConversationPage()),
+        screen: ThemeAwarePage(
+            builder: (_) => ValueListenableBuilder<int>(
+                valueListenable: _activeTabIndex,
+                builder: (_, index, __) => ConversationPage(
+                    liveUpdatesActive: routeCurrent && index == 0,
+                    onEditActionBarChanged: (bar) =>
+                        _setConversationEditBar(false, bar)))),
         item: ItemConfig(
           icon: _setupIcon(
               _navIcon('nav_chat_active_99chat.png', selectedColor),
@@ -83,8 +106,14 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
       PersistentTabConfig(
-        screen:
-            ThemeAwarePage(builder: (_) => ConversationPage(groupChats: true)),
+        screen: ThemeAwarePage(
+            builder: (_) => ValueListenableBuilder<int>(
+                valueListenable: _activeTabIndex,
+                builder: (_, index, __) => ConversationPage(
+                    groupChats: true,
+                    liveUpdatesActive: routeCurrent && index == 1,
+                    onEditActionBarChanged: (bar) =>
+                        _setConversationEditBar(true, bar)))),
         item: ItemConfig(
           icon: _setupIcon(_navIcon('nav_group_conv_99chat.png', selectedColor),
               () => _unreadCount(groupChats: true)),
@@ -133,9 +162,27 @@ class _HomePageState extends State<HomePage> {
     ];
   }
 
-  void _jumpToWallet() {
-    _activeTabIndex.value = 3;
-    _tabController.jumpToTab(3);
+  Future<void> _jumpToWallet() => _enterWallet(() {
+        _activeTabIndex.value = 3;
+        _tabController.jumpToTab(3);
+      });
+
+  void _selectMainTab(int index, ValueChanged<int> select) {
+    if (index == 3) {
+      _enterWallet(() => select(index));
+      return;
+    }
+    _walletEntry.cancel();
+    select(index);
+  }
+
+  Future<void> _enterWallet(VoidCallback select) async {
+    final origin = _activeTabIndex.value;
+    await _walletEntry.enter(
+      context,
+      isActive: () => mounted && _activeTabIndex.value == origin,
+      onAllowed: select,
+    );
   }
 
   int _unreadCount({required bool groupChats}) => conversationLogic.list
@@ -234,13 +281,23 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Styles.c_FFFFFF,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: PersistentTabView(
         controller: _tabController,
         tabs: _tabs(context),
         onTabChanged: (index) => _activeTabIndex.value = index,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        navBarBuilder: (config) => GlassBottomNavBar(config: config),
+        navBarBuilder: (config) => ValueListenableBuilder<int>(
+            valueListenable: _editBarRevision,
+            builder: (_, __, ___) =>
+                (config.selectedIndex < 2
+                    ? _conversationEditBars[config.selectedIndex == 1]
+                    : null) ??
+                GlassBottomNavBar(
+                  config: config,
+                  onItemSelected: (index) =>
+                      _selectMainTab(index, config.onItemSelected),
+                )),
         navBarOverlap: const NavBarOverlap.full(),
         screenTransitionAnimation: const ScreenTransitionAnimation.none(),
       ),

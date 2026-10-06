@@ -112,7 +112,8 @@ class _MomentsFriendPickerPageState extends State<MomentsFriendPickerPage> {
 
     return Scaffold(
       backgroundColor: AppTokens.surface(dark: dark),
-      appBar: AppBar(
+      appBar: GlassAppBar(
+        toolbarHeight: kToolbarHeight,
         elevation: 0,
         scrolledUnderElevation: 0,
         backgroundColor: AppTokens.surface(dark: dark),

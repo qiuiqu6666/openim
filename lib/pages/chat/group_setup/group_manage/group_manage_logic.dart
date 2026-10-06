@@ -14,6 +14,7 @@ class GroupManageLogic extends GetxController {
   Rx<GroupInfo> get groupInfo => groupSetupLogic.groupInfo;
 
   final busy = false.obs;
+  bool _closed = false;
   late final friendProtection =
       GroupFriendProtectionStore(groupInfo.value.groupID);
 
@@ -25,16 +26,22 @@ class GroupManageLogic extends GetxController {
 
   @override
   void onClose() {
+    _closed = true;
     friendProtection.dispose();
     super.onClose();
   }
 
   Future<void> saveRules(
       {bool? muted, int? verification, int? look, int? addFriend}) async {
-    if (busy.value || !groupSetupLogic.isOwner) return;
+    final context = groupSetupLogic.capturePermissionContext();
+    bool isCurrent() =>
+        !_closed &&
+        !isClosed &&
+        groupSetupLogic.isPermissionContextCurrent(context);
+    if (busy.value || !isCurrent() || !groupSetupLogic.isOwner) return;
     busy.value = true;
     try {
-      final id = groupInfo.value.groupID;
+      final id = context.groupID;
       if (muted != null) {
         await OpenIM.iMManager.groupManager
             .changeGroupMute(groupID: id, mute: muted);
@@ -45,13 +52,19 @@ class GroupManageLogic extends GetxController {
             lookMemberInfo: look,
             applyMemberFriend: addFriend));
       }
+      if (!isCurrent()) return;
       final groups =
           await OpenIM.iMManager.groupManager.getGroupsInfo(groupIDList: [id]);
-      if (!isClosed && groups.isNotEmpty) groupInfo.value = groups.first;
+      if (!isCurrent()) return;
+      final group = groups.firstWhereOrNull((info) => info.groupID == id);
+      if (group != null) {
+        groupSetupLogic.applyGroupInfo(group);
+        groupSetupLogic.imLogic.groupInfoUpdatedSubject.add(group);
+      }
     } catch (error) {
-      IMViews.showToast(error.toString());
+      if (isCurrent()) IMViews.showToast(error.toString());
     } finally {
-      if (!isClosed) busy.value = false;
+      if (!_closed && !isClosed) busy.value = false;
     }
   }
 

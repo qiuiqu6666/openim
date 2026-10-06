@@ -1,0 +1,11 @@
+diff --git a/internal/rpc/chat/friend_grant.go b/internal/rpc/chat/friend_grant.go
+--- a/internal/rpc/chat/friend_grant.go
++++ b/internal/rpc/chat/friend_grant.go
+@@ -246,5 +246,7 @@ func (o *chatSvr) sendFriendApply(ctx context.Context, row *chatdb.FriendGrant, message string) (*chat.ApplyFriendResp, error) {
+ 	ex, err := json.Marshal(map[string]any{
++		"addSource": row.Source,
++
+ 		"v":   keyID,
+ 		"op":  row.OpID,
+ 		"mac": friendgrant.Sign(secret, strconv.Itoa(keyID), row.OpID, row.ApplicantIMID, row.TargetIMID),
+ 	})

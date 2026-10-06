@@ -67,11 +67,16 @@ class ChatBackgroundLocalService {
     return path.isEmpty ? null : path;
   }
 
-  static bool isUsable(String? value) {
+  static Future<bool> isUsable(String? value) async {
     final normalized = normalize(value);
     if (normalized == null) return false;
     final file = fileOf(normalized);
-    return file == null || File(file).existsSync();
+    if (file == null) return true;
+    try {
+      return await File(file).exists();
+    } on FileSystemException {
+      return false;
+    }
   }
 
   static Future<void> saveValue(String conversationId, String value) async {

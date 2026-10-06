@@ -1,13 +1,17 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
+import '../pages/register/profile/registration_profile_draft.dart';
 import 'package:openim_common/openim_common.dart';
 
+import '../pages/ai_assistant/navigation/official_account_resolver.dart';
 import '../pages/chat/group_setup/edit_name/edit_name_logic.dart';
 import '../pages/chat/group_setup/group_member_list/group_member_list_logic.dart';
+import '../pages/chat/history/chat_history_prefetcher.dart';
 import '../pages/contacts/add_by_search/add_by_search_logic.dart';
 import '../pages/contacts/group_profile_panel/group_profile_panel_logic.dart';
 import '../pages/contacts/select_contacts/select_contacts_logic.dart';
 import '../pages/mine/edit_my_info/edit_my_info_logic.dart';
+import '../pages/official_account/models/official_account.dart';
 import 'app_pages.dart';
 
 class AppNavigator {
@@ -46,26 +50,96 @@ class AppNavigator {
     bool offUntilHome = true,
     String? draftText,
     Message? searchMessage,
+    bool Function()? isCurrent,
   }) async {
+    if (isCurrent?.call() == false) return null;
+    final owner = (OpenIM.iMManager.userID, DataSp.imToken);
+    final resolution = await OfficialAccountResolver.shared
+        .resolveConversation(conversationInfo);
+    if (owner != (OpenIM.iMManager.userID, DataSp.imToken) ||
+        isCurrent?.call() == false) {
+      return null;
+    }
+    return _startResolvedChat<T>(
+      conversationInfo: conversationInfo,
+      resolution: resolution,
+      offUntilHome: offUntilHome,
+      draftText: draftText,
+      searchMessage: searchMessage,
+    );
+  }
+
+  static Future<T?>? _startResolvedChat<T>({
+    required ConversationInfo conversationInfo,
+    required OfficialConversationResolution resolution,
+    bool offUntilHome = true,
+    bool replaceCurrent = false,
+    String? draftText,
+    Message? searchMessage,
+  }) {
+    ChatHistoryPrefetcher.shared.prepare(conversationInfo);
     GetTags.createChatTag();
+    final route = switch (resolution.target) {
+      OfficialConversationTarget.notification => AppRoutes.officialAccountChat,
+      OfficialConversationTarget.assistant => AppRoutes.aiAssistantChat,
+      OfficialConversationTarget.chat => AppRoutes.chat,
+    };
 
     final arguments = {
       'draftText': draftText,
       'conversationInfo': conversationInfo,
       'searchMessage': searchMessage,
+      if (resolution.account != null) 'officialAccount': resolution.account,
     };
+
+    if (replaceCurrent) {
+      return Get.offAndToNamed(route, arguments: arguments);
+    }
 
     return offUntilHome
         ? Get.offNamedUntil(
-            AppRoutes.chat,
+            route,
             (route) => route.settings.name == AppRoutes.home,
             arguments: arguments,
           )
         : Get.toNamed(
-            AppRoutes.chat,
+            route,
             arguments: arguments,
             preventDuplicates: false,
           );
+  }
+
+  static Future<T?>? startAiAssistant<T>({bool offUntilHome = false}) async {
+    final owner = (OpenIM.iMManager.userID, DataSp.imToken);
+    if (owner.$1.isEmpty || owner.$2?.isNotEmpty != true) {
+      IMViews.showToast('请先登录后使用 AI 助理');
+      return null;
+    }
+    ConversationInfo conversation;
+    try {
+      conversation = await OpenIM.iMManager.conversationManager
+          .getOneConversation(
+              sourceID: OfficialAccountResolver.assistantUserID,
+              sessionType: ConversationType.single);
+    } catch (_) {
+      if (owner == (OpenIM.iMManager.userID, DataSp.imToken)) {
+        IMViews.showToast('无法打开 AI 助理，请稍后再试');
+      }
+      return null;
+    }
+    if (owner != (OpenIM.iMManager.userID, DataSp.imToken)) return null;
+    if (conversation.userID != OfficialAccountResolver.assistantUserID ||
+        conversation.conversationType != ConversationType.single) {
+      IMViews.showToast('无法打开 AI 助理，请稍后再试');
+      return null;
+    }
+    if (conversation.showName?.trim().isNotEmpty != true) {
+      conversation.showName = 'AI助理';
+    }
+    return startChat<T>(
+        conversationInfo: conversation,
+        draftText: conversation.draftText,
+        offUntilHome: offUntilHome);
   }
 
   static startAddContactsMethod() => Get.toNamed(AppRoutes.addContactsMethod);
@@ -76,17 +150,25 @@ class AppNavigator {
         arguments: {"searchType": searchType},
       );
 
-  static startUserProfilePane({
+  static Future<dynamic> startUserProfilePane({
     required String userID,
     FriendAddSource? addSource,
     Map<String, String> friendAddFields = const {},
     String? groupID,
     String? nickname,
     String? faceURL,
+    String? ex,
     bool offAllWhenDelFriend = false,
     bool offAndToNamed = false,
     bool forceCanAdd = false,
-  }) {
+  }) async {
+    final owner = (OpenIM.iMManager.userID, DataSp.imToken);
+    final resolution = await _resolveProfileTarget(userID, ex: ex);
+    if (owner != (OpenIM.iMManager.userID, DataSp.imToken)) return null;
+    if (resolution.target != OfficialConversationTarget.chat) {
+      return _startOfficialConversation(userID, resolution, owner,
+          replaceCurrent: offAndToNamed);
+    }
     GetTags.createUserProfileTag();
 
     final arguments = {
@@ -109,25 +191,85 @@ class AppNavigator {
           );
   }
 
-  static startPersonalInfo({
+  static Future<dynamic> startPersonalInfo({
     required String userID,
   }) =>
-      Get.toNamed(AppRoutes.personalInfo, arguments: {
-        'userID': userID,
-      });
+      _startUserDetailsRoute(AppRoutes.personalInfo, userID);
 
-  static startFriendSetup({
+  static Future<dynamic> startFriendSetup({
     required String userID,
   }) =>
-      Get.toNamed(AppRoutes.friendSetup, arguments: {
-        'userID': userID,
-      });
+      _startUserDetailsRoute(AppRoutes.friendSetup, userID);
+
+  static Future<OfficialConversationResolution> _resolveProfileTarget(
+    String userID, {
+    String? ex,
+  }) {
+    // Looking at one's own profile must retain the existing immediate entry.
+    if (userID == OpenIM.iMManager.userID) {
+      return Future.value(const OfficialConversationResolution(
+          OfficialConversationTarget.chat));
+    }
+    return OfficialAccountResolver.shared
+        .resolveUser(userID: userID, ex: ex, lookupProfile: ex == null);
+  }
+
+  static Future<dynamic> _startUserDetailsRoute(
+      String route, String userID) async {
+    final owner = (OpenIM.iMManager.userID, DataSp.imToken);
+    final resolution = await _resolveProfileTarget(userID);
+    if (owner != (OpenIM.iMManager.userID, DataSp.imToken)) return null;
+    if (resolution.target != OfficialConversationTarget.chat) {
+      return _startOfficialConversation(userID, resolution, owner);
+    }
+    return Get.toNamed(route, arguments: {'userID': userID});
+  }
+
+  static Future<dynamic> _startOfficialConversation(
+    String userID,
+    OfficialConversationResolution resolution,
+    (String, String?) owner, {
+    bool replaceCurrent = false,
+  }) async {
+    ConversationInfo conversation;
+    try {
+      conversation = await OpenIM.iMManager.conversationManager
+          .getOneConversation(
+              sourceID: userID, sessionType: ConversationType.single);
+    } catch (_) {
+      if (owner == (OpenIM.iMManager.userID, DataSp.imToken)) {
+        IMViews.showToast('无法打开官方账号，请稍后再试');
+      }
+      return null;
+    }
+    if (owner != (OpenIM.iMManager.userID, DataSp.imToken)) return null;
+    if (conversation.userID != userID ||
+        conversation.conversationType != ConversationType.single) {
+      IMViews.showToast('无法打开官方账号，请稍后再试');
+      return null;
+    }
+    if (conversation.showName?.trim().isNotEmpty != true &&
+        resolution.account != null) {
+      conversation.showName = resolution.account!.displayName;
+    }
+    return _startResolvedChat(
+      conversationInfo: conversation,
+      resolution: resolution,
+      draftText: conversation.draftText,
+      offUntilHome: false,
+      replaceCurrent: replaceCurrent,
+    );
+  }
 
   static startSetFriendRemark() =>
       Get.toNamed(AppRoutes.setFriendRemark, arguments: {});
 
   static startSendVerificationApplication({
     String? userID,
+    String? targetName,
+    String? targetAvatarURL,
+    String? targetAccount,
+    String? selfNickname,
     FriendAddSource? addSource,
     Map<String, String> friendAddFields = const {},
     String? friendGroupID,
@@ -140,6 +282,10 @@ class AppNavigator {
         'friendGroupID': friendGroupID,
         'friendAddFields': friendAddFields,
         'userID': userID,
+        'targetName': targetName,
+        'targetAvatarURL': targetAvatarURL,
+        'targetAccount': targetAccount,
+        'selfNickname': selfNickname,
         'groupID': groupID,
       });
 
@@ -172,12 +318,19 @@ class AppNavigator {
 
   static startAboutUs() => Get.toNamed(AppRoutes.aboutUs);
 
-  static startChatSetup({
+  static Future<dynamic>? startChatSetup({
     required ConversationInfo conversationInfo,
-  }) =>
-      Get.toNamed(AppRoutes.chatSetup, arguments: {
-        'conversationInfo': conversationInfo,
-      });
+  }) {
+    if (conversationInfo.conversationType == ConversationType.single &&
+        OfficialAccount.from(
+                userID: conversationInfo.userID, ex: conversationInfo.ex) !=
+            null) {
+      return null;
+    }
+    return Get.toNamed(AppRoutes.chatSetup, arguments: {
+      'conversationInfo': conversationInfo,
+    });
+  }
 
   static startGroupChatSetup({
     required ConversationInfo conversationInfo,
@@ -249,6 +402,7 @@ class AppNavigator {
 
   static startSelectContacts({
     required SelAction action,
+    UserInfo? sharedContact,
     String? cardRecipientName,
     String? cardRecipientFaceURL,
     bool cardRecipientIsGroup = false,
@@ -261,6 +415,7 @@ class AppNavigator {
   }) =>
       Get.toNamed(AppRoutes.selectContacts, arguments: {
         'action': action,
+        'sharedContact': sharedContact,
         'cardRecipientName': cardRecipientName,
         'cardRecipientFaceURL': cardRecipientFaceURL,
         'cardRecipientIsGroup': cardRecipientIsGroup,
@@ -330,20 +485,24 @@ class AppNavigator {
       });
 
   static void startSetPassword({
+    RegistrationProfileDraft? profileDraft,
     String? phoneNumber,
     String? email,
     required String areaCode,
     required int usedFor,
     required String verificationCode,
     String? invitationCode,
+    String? password,
   }) =>
       Get.toNamed(AppRoutes.setPassword, arguments: {
+        'profileDraft': profileDraft,
         'phoneNumber': phoneNumber,
         'email': email,
         'areaCode': areaCode,
         'usedFor': usedFor,
         'verificationCode': verificationCode,
-        'invitationCode': invitationCode
+        'invitationCode': invitationCode,
+        'password': password,
       });
 
   static void startSetSelfInfo({

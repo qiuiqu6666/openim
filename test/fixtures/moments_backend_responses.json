@@ -1,0 +1,69 @@
+{
+  "feed": {
+    "errCode": 0,
+    "errMsg": "",
+    "errDlt": "",
+    "data": {
+      "items": [{
+        "momentID": "moment-example",
+        "author": {
+          "userID": "im_example_author",
+          "nickname": "示例昵称",
+          "avatarURL": "http://8.217.191.236:10002/object/example/avatar",
+          "remark": "示例备注"
+        },
+        "text": "今天的记录",
+        "status": "PUBLISHED",
+        "visibility": "FRIENDS",
+        "publishedAt": 1790985600000,
+        "version": 1,
+        "viewerContextVersion": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "authorSettingsVersion": 0,
+        "mediaList": [{
+          "mediaID": "media-example", "type": "IMAGE", "width": 1080, "height": 1440,
+          "contentPath": "/moments/media/media-example/content",
+          "thumbPath": "/moments/media/media-example/content?variant=thumb"
+        }],
+        "likedByMe": false,
+        "likeCount": 1,
+        "commentCount": 1,
+        "likesPreview": [{
+          "userID": "im_example_friend",
+          "actor": {"userID": "im_example_friend", "nickname": "示例好友", "avatarURL": "", "remark": ""},
+          "createdAt": 1790985660000
+        }],
+        "commentsPreview": [{
+          "commentID": "comment-example",
+          "actor": {"userID": "im_example_friend", "nickname": "示例好友", "avatarURL": "", "remark": ""},
+          "text": "示例评论", "rootCommentID": "", "replyToCommentID": "",
+          "replyTo": null, "replyToDeleted": false, "createdAt": 1790985720000, "canDelete": false
+        }],
+        "canLike": true, "canComment": true, "canDelete": false, "canEditVisibility": false,
+        "audienceUserIds": null
+      }],
+      "nextCursor": "", "hasMore": false,
+      "viewerContextVersion": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+  },
+  "settings": {
+    "errCode": 0, "errMsg": "", "errDlt": "",
+    "data": {
+      "visibleRangeDays": 0, "coverMediaID": "", "coverPath": "", "version": 0,
+      "viewerContextVersion": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+  },
+  "notifications": {
+    "errCode": 0, "errMsg": "", "errDlt": "",
+    "data": {
+      "items": [{
+        "notificationID": "notification-example", "type": "like", "seq": 1,
+        "createdAt": 1790985660000, "unread": true, "unavailable": false,
+        "momentID": "moment-example", "commentID": "",
+        "actor": {"userID": "im_example_friend", "nickname": "示例好友", "avatarURL": "", "remark": ""}
+      }],
+      "nextCursor": "", "hasMore": false,
+      "viewerContextVersion": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "unreadCount": 1, "seenWatermark": "example-watermark", "lastSeq": 1
+    }
+  }
+}

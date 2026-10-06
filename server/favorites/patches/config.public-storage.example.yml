@@ -1,0 +1,4 @@
+# Only merge this key into the existing favorite section after deployment approval.
+# Keep all existing internal storage settings and credentials in their original file.
+favorite:
+  publicStorageURL: http://8.217.191.236:10005

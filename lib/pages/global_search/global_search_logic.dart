@@ -6,6 +6,21 @@ import 'package:openim_common/openim_common.dart';
 import '../conversation/conversation_logic.dart';
 
 class GlobalSearchSource {
+  /// Reuses the home owner's projection without another SDK listener.
+  Stream<List<ConversationInfo>>? get conversationUpdates =>
+      Get.isRegistered<ConversationLogic>()
+          ? Get.find<ConversationLogic>().list.stream
+          : null;
+
+  static List<ConversationInfo> matchConversations(
+      Iterable<ConversationInfo> items, String query) {
+    final key = query.toLowerCase();
+    return items
+        .where((item) => [item.showName, item.userID, item.groupID]
+            .any((value) => value?.toLowerCase().contains(key) == true))
+        .toList();
+  }
+
   Future<List<FriendInfo>> friends(String query) async =>
       OpenIM.iMManager.friendshipManager.searchFriends(
           keywordList: [query],
@@ -16,12 +31,7 @@ class GlobalSearchSource {
       OpenIM.iMManager.groupManager.searchGroups(
           keywordList: [query], isSearchGroupName: true, isSearchGroupID: true);
   Future<List<ConversationInfo>> conversations(String query) async {
-    final key = query.toLowerCase();
-    return Get.find<ConversationLogic>()
-        .list
-        .where((item) => [item.showName, item.userID, item.groupID]
-            .any((value) => value?.toLowerCase().contains(key) == true))
-        .toList();
+    return matchConversations(Get.find<ConversationLogic>().list, query);
   }
 
   Future<List<SearchResultItems>> messages(String query, bool files) async {
@@ -50,6 +60,8 @@ class GlobalSearchLogic extends GetxController {
   final query = ''.obs;
   final index = 0.obs;
   Timer? _debounce;
+  StreamSubscription<List<ConversationInfo>>? _conversationSubscription;
+  int _conversationRevision = 0;
   int _generation = 0;
   bool _closed = false;
 
@@ -57,6 +69,17 @@ class GlobalSearchLogic extends GetxController {
   void onInit() {
     super.onInit();
     searchCtrl.addListener(_inputChanged);
+    _conversationSubscription =
+        source.conversationUpdates?.listen(_conversationsChanged);
+  }
+
+  void _conversationsChanged(List<ConversationInfo> items) {
+    if (_closed) return;
+    ++_conversationRevision;
+    if (query.value.isEmpty) return;
+    conversations
+        .assignAll(GlobalSearchSource.matchConversations(items, query.value));
+    failures.remove(3);
   }
 
   void _inputChanged() {
@@ -67,8 +90,9 @@ class GlobalSearchLogic extends GetxController {
     query.value = value;
     clearList();
     loading.value = value.isNotEmpty;
-    if (value.isNotEmpty)
+    if (value.isNotEmpty) {
       _debounce = Timer(const Duration(milliseconds: 300), search);
+    }
   }
 
   void clearList() {
@@ -84,6 +108,7 @@ class GlobalSearchLogic extends GetxController {
     _debounce?.cancel();
     final key = searchCtrl.text.trim();
     final version = ++_generation;
+    final conversationRevision = _conversationRevision;
     query.value = key;
     clearList();
     loading.value = key.isNotEmpty;
@@ -91,11 +116,14 @@ class GlobalSearchLogic extends GetxController {
     bool active() => !_closed && version == _generation;
     Future<void> section<T>(
         int id, Future<List<T>> Function() fetch, RxList<T> output) async {
+      bool applicable() =>
+          active() &&
+          (id != 3 || conversationRevision == _conversationRevision);
       try {
         final results = await fetch();
-        if (active()) output.assignAll(results);
+        if (applicable()) output.assignAll(results);
       } catch (_) {
-        if (active()) failures.add(id);
+        if (applicable()) failures.add(id);
       }
     }
 
@@ -114,6 +142,9 @@ class GlobalSearchLogic extends GetxController {
     _closed = true;
     ++_generation;
     _debounce?.cancel();
+    final subscription = _conversationSubscription;
+    _conversationSubscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
     searchCtrl.removeListener(_inputChanged);
     searchCtrl.dispose();
     focusNode.dispose();
@@ -140,7 +171,7 @@ abstract class CommonSearchLogic extends GetxController {
     super.onClose();
   }
 
-  _clearInput() {
+  void _clearInput() {
     if (searchKey.isEmpty) {
       clearList();
     }
@@ -180,7 +211,7 @@ abstract class CommonSearchLogic extends GetxController {
         count: count,
       );
 
-  String? parseID(e) {
+  String? parseID(Object? e) {
     if (e is ConversationInfo) {
       return e.isSingleChat ? e.userID : e.groupID;
     } else if (e is GroupInfo) {
@@ -194,7 +225,7 @@ abstract class CommonSearchLogic extends GetxController {
     }
   }
 
-  String? parseNickname(e) {
+  String? parseNickname(Object? e) {
     if (e is ConversationInfo) {
       return e.showName;
     } else if (e is GroupInfo) {
@@ -208,7 +239,7 @@ abstract class CommonSearchLogic extends GetxController {
     }
   }
 
-  String? parseFaceURL(e) {
+  String? parseFaceURL(Object? e) {
     if (e is ConversationInfo) {
       return e.faceURL;
     } else if (e is GroupInfo) {

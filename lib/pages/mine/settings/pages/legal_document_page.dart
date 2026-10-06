@@ -79,7 +79,8 @@ class LegalDocumentPage extends StatelessWidget {
     final appBarColor = AppTokens.surface(dark: dark);
     return Scaffold(
       backgroundColor: pageColor,
-      appBar: AppBar(
+      appBar: GlassAppBar(
+        toolbarHeight: kToolbarHeight,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,

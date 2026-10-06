@@ -4,6 +4,15 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
 extension MessageManagerExt on MessageManager {
+  Future<Message> createDiceMessage({required int value}) {
+    final data = DiceMessageData(value: value);
+    return createCustomMessage(
+      data: data.encode(),
+      extension: '',
+      description: '[${StrRes.diceLabel}] ${StrRes.dicePoint(value)}',
+    );
+  }
+
   Future<Message> createCustomEmojiMessage({
     required String url,
     int? width,
@@ -41,8 +50,9 @@ extension MessageExt on Message {
     final read =
         attachedRead != null && attachedRead > 0 ? attachedRead : hasReadTime;
     final duration = attached?.burnDuration;
-    if (read == null || read <= 0 || duration == null || duration <= 0)
+    if (read == null || read <= 0 || duration == null || duration <= 0) {
       return null;
+    }
     return DateTime.fromMillisecondsSinceEpoch(
             read < 100000000000 ? read * 1000 : read)
         .add(Duration(seconds: duration));
@@ -89,6 +99,18 @@ extension MessageExt on Message {
     return false;
   }
 
+  bool get isDiceType {
+    if (!isCustomType || customElem?.data == null) return false;
+    try {
+      final envelope = jsonDecode(customElem!.data!);
+      return envelope is Map &&
+          envelope['customType'] is int &&
+          envelope['customType'] == CustomMessageType.dice;
+    } on FormatException {
+      return false;
+    }
+  }
+
   bool get isTextType => contentType == MessageType.text;
 
   bool get isPictureType => contentType == MessageType.picture;
@@ -124,6 +146,7 @@ class CustomMessageType {
   static const tag = 903;
   static const moments = 904;
   static const meeting = 905;
+  static const dice = DiceMessageData.customType;
   static const blockedByFriend = 910;
   static const deletedByFriend = 911;
   static const removedFromGroup = 912;

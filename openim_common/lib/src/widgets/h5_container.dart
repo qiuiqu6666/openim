@@ -38,7 +38,8 @@ class _H5ContainerState extends State<H5Container> {
       params = const PlatformWebViewControllerCreationParams();
     }
 
-    final WebViewController controller = WebViewController.fromPlatformCreationParams(params);
+    final WebViewController controller =
+        WebViewController.fromPlatformCreationParams(params);
 
     controller
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -98,7 +99,8 @@ Page resource error:
 
     if (controller.platform is AndroidWebViewController) {
       AndroidWebViewController.enableDebugging(true);
-      (controller.platform as AndroidWebViewController).setMediaPlaybackRequiresUserGesture(false);
+      (controller.platform as AndroidWebViewController)
+          .setMediaPlaybackRequiresUserGesture(false);
     }
 
     _controller = controller;
@@ -114,17 +116,19 @@ Page resource error:
     Logger.print('H5Container: ${widget.url}');
     return Scaffold(
       appBar: widget.title != null ? TitleBar.back(title: widget.title) : null,
-      body: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-          progress < 1.0
-              ? LinearProgressIndicator(
-                  value: progress,
-                  color: Colors.blue,
-                )
-              : const SizedBox(),
-        ],
-      ),
+      body: SafeArea(
+          top: widget.title == null,
+          child: Stack(
+            children: [
+              WebViewWidget(controller: _controller),
+              progress < 1.0
+                  ? LinearProgressIndicator(
+                      value: progress,
+                      color: Colors.blue,
+                    )
+                  : const SizedBox(),
+            ],
+          )),
     );
   }
 }

@@ -1,0 +1,2576 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-06",
+  "repository": "E:/openim/openim-flutter-demo",
+  "endpointCount": 60,
+  "mappingNotes": [
+    "Source inventory of current E:/openim checkout; deployment, current-group lookup and write contracts were provided by the user. Source review and local tests do not establish live backend deployment or real traffic.",
+    "Two destinations are intentional: business endpoints retain /api/v1 contract paths and use SangongApiConfig; current-group GET/POST/PUT use the current Chat base plus literal /sangong/api/v1 paths, bypassing Sangong business base/prefix/tenant overrides.",
+    "SangongGameHttp uses https://sangong.invalid only as an intercepted Dio placeholder, not a production destination.",
+    "All Sangong-specific requests require current account Sangong privilege. Current-group existence lookup does not require canConfigure/canManage, so all-false capabilities do not imply an absent tenant. Current-group creation additionally requires native group owner/admin and a matching current game group; existing-tenant update is controlled by current canConfigure in the page and server authorization, not inferred from SDK admin.",
+    "Business admin/settings routes still require enabled/manageEntry/canManage and a verified logical binding. agent/me routes require enabled/agentEntry/canOpenAgent; member-daily and transfers additionally require rebateHistoryEntry/canViewRebateHistory. Current game-group management also requires a configured point-lookup result.",
+    "Ordinary business HTTP/SSE X-Tenant-Id prefers the verified logical tenantId over SANGONG_TENANT_ID. The default deployment fallback is @z8hFfDvVQP0x; it grants neither group capability nor verified binding.",
+    "Legacy business extraSkipTenant routes (default my-config, default members, tenant list and agent entry-context) bypass only the logical-binding prerequisite: with a nonempty configured fallback they send that fallback even if a logical tenant exists; with empty SANGONG_TENANT_ID they omit X-Tenant-Id. Current-group Chat GET/POST/PUT always omit the tenant header.",
+    "Every Sangong-specific request and SSE connection uses the current Chat chatToken as Authorization: Bearer, JSON content type and fresh operationID. The three shared privilege/capability/identity dependencies retain their original Chat token-header behavior. SSE also sends Accept: text/event-stream.",
+    "Only HTTP 404 plus exact serverCode TENANT_NOT_FOUND means current-group notFound. Only HTTP 403 plus exact TENANT_ACCESS_DENIED means accessDenied and contact-the-configurer guidance. active:false is disabled; 401, other privilege/permission 403, generic 404, 503, network and format errors do not become absent tenants.",
+    "Current-group successful DTO parsing requires a native boolean active and matching explicit tenant IDs; current-game explicit imGroupGameId must match the current group. Successful point queries may fill omitted IDs with the requested ID. Explicit agent tenant lookup may retain a different betting group. Missing role/permission fields stay empty/false, and no query result grants capabilities.",
+    "Current-group POST201 confirms only explicit ok:true, active:true and a complete matching game/bot configuration. PUT200 uses complete matching configuration and boolean active, without requiring configured/canEditConfig. Incomplete or rejected successful-status write bodies report UNKNOWN_RESULT; known HTTP/backend errors remain errors, and stale account/API/group/privilege results are discarded.",
+    "GET my-config reads the account default tenant; PUT my-config changes that default. Neither determines current-chat-group registration. The default configuration page and strict configured parser remain, but current-group pages use the point lookup/write adapter and do not expose default my-config/members.",
+    "Privileged gameType=1 chats query current-game registration independently of management capabilities. Ordinary groups and nonprivileged accounts do not add this lookup. Agent-only groups retain their capability/entry-context aggregate tenantID instead of treating the agent groupID as a missing game tenant.",
+    "callStatus active means a current application method is referenced, not captured traffic. Conditional current/legacy branches retain their reasons; reserved means no application caller found, not that the backend lacks the endpoint.",
+    "60 distinct method+path templates: 49 active (including three current-group tenant methods and two betting fallback paths), 11 reserved. There are 59 ordinary HTTP routes and one SSE GET route. Three shared dependencies and seven reference-only methods are counted separately.",
+    "SSE bypasses the SangongGameHttp Dio adapter but shares requestPath/requestHeaders, verified-tenant preference and Bearer authentication. Current-group point methods independently guard the captured Chat session/API/base and account privilege revision.",
+    "Ordinary business responses preserve the proxy envelope and reject business errors or ok=false before endpoint parsing. Point-lookup states preserve the complete success raw envelope; GroupFeatureException preserves actual HTTP statusCode and backend serverCode while generic shared 404/501 SERVICE_UNAVAILABLE behavior remains.",
+    "Parameter types and required fields describe current serialization, UI guards and the explicit user contract. Optional response properties still require a complete server schema where not supplied.",
+    "Settings save/updateMaxBet share PUT settings; assignBanker/setDoorCount share POST banker/setup. Wrapper methods do not introduce additional routes.",
+    "GitNexus registry has no index for this E:/openim checkout; source inventory was checked locally rather than using another checkout graph."
+  ],
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/session",
+      "category": "session",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongAdminSession: status, session, round, message. Parser requires top-level round key.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 87
+      },
+      "clientMethods": [
+        "SangongAdminApi.fetchSession"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/auth/setup",
+      "category": "admin-auth",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "username",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "password",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "void; response body is not parsed.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 93
+      },
+      "clientMethods": [
+        "SangongAdminApi.setupAdminAccount"
+      ],
+      "callStatus": "reserved",
+      "callStatusReason": "No application call site found in lib outside API class; test uses were not counted. Backend availability is not verified.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/session/start",
+      "category": "session",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongSessionMutationResult: status, session, round, message; requires running status.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 100
+      },
+      "clientMethods": [
+        "SangongAdminApi.startSession"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/session/stop",
+      "category": "session",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongSessionMutationResult: status, session, round, message; requires idle/stopped/ended status.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 109
+      },
+      "clientMethods": [
+        "SangongAdminApi.stopSession"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/events/snapshot",
+      "category": "realtime",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongAdminRealtimeState (state nested or top-level): version, at, status, round, lastSettledRound, settings, draw, pending, placed; version and settings required.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 117
+      },
+      "clientMethods": [
+        "SangongAdminApi.fetchEventsSnapshot"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/reports/users",
+      "category": "reports",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [
+          {
+            "name": "groupId",
+            "type": "int",
+            "required": false
+          },
+          {
+            "name": "page",
+            "type": "int",
+            "required": false,
+            "default": 1,
+            "notes": "Clamped to at least 1."
+          },
+          {
+            "name": "pageSize",
+            "type": "int",
+            "required": false,
+            "default": 50,
+            "notes": "Clamped to 1..200."
+          }
+        ],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongAdminUserReportPage: users, page, pageSize, total, totalPages. User fields: userId, imUserId, balance, group, nickname, faceUrl, childrenCount, rebatePer10000, maxNegative.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 145
+      },
+      "clientMethods": [
+        "SangongAdminApi.fetchUserReports"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/reports/user-detail",
+      "category": "reports",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": true,
+            "notes": "Trimmed."
+          }
+        ],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "Map<String,dynamic>; API class unwraps the payload but does not enforce a complete field schema.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 203
+      },
+      "clientMethods": [
+        "SangongAdminApi.fetchUserDetail"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/reports/user-hierarchy",
+      "category": "reports",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "userId",
+            "type": "int",
+            "required": false
+          },
+          {
+            "name": "sessionId",
+            "type": "int",
+            "required": false,
+            "notes": "When supplied, date is omitted."
+          },
+          {
+            "name": "date",
+            "type": "string",
+            "required": false,
+            "notes": "Sent only if sessionId is null and date is nonempty."
+          }
+        ],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "List<Map>: accepts members/users/team/items/reports list keys; full item schema is not validated by API class.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 226
+      },
+      "clientMethods": [
+        "SangongAdminApi.fetchUserHierarchyReport"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/sessions",
+      "category": "reports",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [
+          {
+            "name": "limit",
+            "type": "int",
+            "required": true,
+            "default": 30,
+            "notes": "Fixed by client at 30."
+          }
+        ],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "List<Map> from sessions; no typed session item validation.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 243
+      },
+      "clientMethods": [
+        "SangongAdminApi.fetchReportSessions"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/tenants",
+      "category": "configuration",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "List<SangongTenantInfo>: tenantId, name, imGroupGameId, imGroupAdminStatsId, imGroupLedgerId, imGroupWaterId, imBotUserId, myRole, isDefault, unclaimed.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 253
+      },
+      "clientMethods": [
+        "SangongAdminApi.fetchTenants"
+      ],
+      "callStatus": "reserved",
+      "callStatusReason": "No application call site found in lib outside API class; test uses were not counted. Backend availability is not verified.",
+      "logicalTenantBindingRequired": false,
+      "tenantHeaderWhenConfiguredTenantEmpty": "omitted",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Configured SANGONG_TENANT_ID fallback for extraSkipTenant discovery/default routes; omitted when that configuration is empty."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/my-config",
+      "category": "configuration",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongMyConfig default tenant. configured must be explicitly parseable: bool, number (zero false/nonzero true), or trimmed case-insensitive true/false/1/0/yes/no. Null, missing, structured and unknown statuses are format errors.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 290
+      },
+      "clientMethods": [
+        "SangongAdminApi.fetchMyConfig"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": false,
+      "tenantHeaderWhenConfiguredTenantEmpty": "omitted",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Configured SANGONG_TENANT_ID fallback for extraSkipTenant discovery/default routes; omitted when that configuration is empty.",
+      "scope": "Account default tenant only; not current game-group registration. PUT changes the account default."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/my-config",
+      "category": "configuration",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "name",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "imGroupGameId",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "imGroupAdminStatsId",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "imGroupLedgerId",
+            "type": "string",
+            "required": false,
+            "default": "",
+            "notes": "Always emitted, including empty default."
+          },
+          {
+            "name": "imBotUserId",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "imGroupWaterId",
+            "type": "string",
+            "required": false,
+            "default": "",
+            "notes": "Emitted only when nonempty."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongMyConfig default tenant. configured must be explicitly parseable: bool, number (zero false/nonzero true), or trimmed case-insensitive true/false/1/0/yes/no. Null, missing, structured and unknown statuses are format errors.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 301
+      },
+      "clientMethods": [
+        "SangongAdminApi.saveMyConfig"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": false,
+      "tenantHeaderWhenConfiguredTenantEmpty": "omitted",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Configured SANGONG_TENANT_ID fallback for extraSkipTenant discovery/default routes; omitted when that configuration is empty.",
+      "scope": "Account default tenant only; not current game-group registration. PUT changes the account default."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/my-config/members",
+      "category": "configuration",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "List<SangongTenantAccessMember>: imUserId, role (owner/admin), isDefault.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 333
+      },
+      "clientMethods": [
+        "SangongAdminApi.fetchMyConfigMembers"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": false,
+      "tenantHeaderWhenConfiguredTenantEmpty": "omitted",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Configured SANGONG_TENANT_ID fallback for extraSkipTenant discovery/default routes; omitted when that configuration is empty.",
+      "scope": "Default tenant members only. Retained default mode page; current-group configuration does not expose or auto-open this route."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/my-config/members",
+      "category": "configuration",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": true,
+            "notes": "Trimmed, nonempty."
+          },
+          {
+            "name": "role",
+            "type": "string",
+            "required": false,
+            "default": "admin",
+            "notes": "Trimmed and lowercased; empty becomes admin."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "void; response body is not parsed.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 358
+      },
+      "clientMethods": [
+        "SangongAdminApi.upsertMyConfigMember"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": false,
+      "tenantHeaderWhenConfiguredTenantEmpty": "omitted",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Configured SANGONG_TENANT_ID fallback for extraSkipTenant discovery/default routes; omitted when that configuration is empty.",
+      "scope": "Default tenant members only. Retained default mode page; current-group configuration does not expose or auto-open this route."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/my-config/members/{imUserId}",
+      "category": "configuration",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": [
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": true,
+            "notes": "Trimmed then Uri.encodeComponent; must not be empty."
+          }
+        ]
+      },
+      "responseSummary": "void; response body is not parsed.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 382
+      },
+      "clientMethods": [
+        "SangongAdminApi.removeMyConfigMember"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": false,
+      "tenantHeaderWhenConfiguredTenantEmpty": "omitted",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Configured SANGONG_TENANT_ID fallback for extraSkipTenant discovery/default routes; omitted when that configuration is empty.",
+      "scope": "Default tenant members only. Retained default mode page; current-group configuration does not expose or auto-open this route."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/reports/user-flow",
+      "category": "reports",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": false,
+            "notes": "Preferred over userId when nonempty."
+          },
+          {
+            "name": "userId",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when imUserId is empty and userId > 0."
+          },
+          {
+            "name": "sessionId",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when > 0."
+          }
+        ],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongUserFlowResult: report, returnedLedgerCount. Report supports entries, betFlow, bankerFlow, coBankFlow, score/ledger flow, counts, identity and session metadata. Confirmed contract exposes newest 500 details, not a date query.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 440
+      },
+      "clientMethods": [
+        "SangongAdminApi.fetchUserFlowResult",
+        "SangongAdminApi.fetchUserFlow"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/users/credit",
+      "category": "accounts",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "type": "int",
+            "required": true
+          },
+          {
+            "name": "operator",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "note",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongBalanceMutationResult: balance, group, optional ledger. Numeric balance is required in user nested object or top-level payload.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 455
+      },
+      "clientMethods": [
+        "SangongAdminApi.credit"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/users/debit",
+      "category": "accounts",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "type": "int",
+            "required": true
+          },
+          {
+            "name": "operator",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "note",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongBalanceMutationResult: balance, group, optional ledger. Numeric balance is required in user nested object or top-level payload.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 474
+      },
+      "clientMethods": [
+        "SangongAdminApi.debit"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/users/{userId}/max-negative",
+      "category": "accounts",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "maxNegative",
+            "type": "int",
+            "required": true,
+            "notes": "Must be >= 0."
+          }
+        ],
+        "path": [
+          {
+            "name": "userId",
+            "type": "int",
+            "required": true,
+            "notes": "Must be > 0; Sangong internal numeric user ID, not IM ID."
+          }
+        ]
+      },
+      "responseSummary": "Map with confirmed user: matching userId and maxNegative. If legacy ack is unconfirmed and client has imUserId, performs fetchUserDetail once; never retries the write.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 503
+      },
+      "clientMethods": [
+        "SangongAdminApi.setUserMaxNegative"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/users/group",
+      "category": "accounts",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "group",
+            "type": "string",
+            "required": true,
+            "notes": "Group code, e.g. 1/A; 0 or empty clears grouping."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongBalanceMutationResult: balance, group, optional ledger; balance required.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 550
+      },
+      "clientMethods": [
+        "SangongAdminApi.setUserGroup"
+      ],
+      "callStatus": "reserved",
+      "callStatusReason": "No application call site found in lib outside API class; test uses were not counted. Backend availability is not verified.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/banker/setup",
+      "category": "banker",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "door",
+            "type": "int",
+            "required": true,
+            "notes": "setDoorCount sends only door; assignBanker additionally sends imUserId and optional limit/nickname."
+          },
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": false,
+            "notes": "Required by assignBanker client method, omitted by setDoorCount."
+          },
+          {
+            "name": "limit",
+            "type": "int",
+            "required": false
+          },
+          {
+            "name": "nickname",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "assignBanker: SangongAdminSession; setDoorCount: SangongGameSettings. Limit writes round.bankerLimit and does not add a co-bank contribution.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 576
+      },
+      "clientMethods": [
+        "SangongAdminApi.assignBanker",
+        "SangongAdminApi.setDoorCount"
+      ],
+      "callStatus": "active",
+      "callStatusReason": "assignBanker has an application caller; setDoorCount has none. Both use the same method+path.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/banker/send",
+      "category": "banker",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "void; sends banker notification.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 589
+      },
+      "clientMethods": [
+        "SangongAdminApi.sendBankerNotification"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/banker/quick-setup",
+      "category": "banker",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "messageId",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when > 0."
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "nickname",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "door",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when > 0."
+          },
+          {
+            "name": "limit",
+            "type": "int",
+            "required": false
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongQuickSetupBankerResult: ok, action, messageId, newRound, replaced, sent, restarted, parsed, round.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 612
+      },
+      "clientMethods": [
+        "SangongAdminApi.quickSetupBanker"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/rounds/{roundId}/co-bank",
+      "category": "co-bank",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "userId",
+            "type": "int",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "type": "int",
+            "required": true
+          }
+        ],
+        "path": [
+          {
+            "name": "roundId",
+            "type": "int",
+            "required": true,
+            "notes": "Sangong internal round ID. For conditional paths, branch requires roundId > 0."
+          }
+        ]
+      },
+      "responseSummary": "SangongAdminSession: status, session, round, message.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 624
+      },
+      "clientMethods": [
+        "SangongAdminApi.addCoBank"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/rounds/current/co-bank",
+      "category": "co-bank",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "userId",
+            "type": "int",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "type": "int",
+            "required": true
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongAdminSession: status, session, round, message; addCoBank fallback when roundId omitted or <= 0.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 625
+      },
+      "clientMethods": [
+        "SangongAdminApi.addCoBank"
+      ],
+      "callStatus": "reserved",
+      "callStatusReason": "Reserved fallback branch of an active method: sole application addCoBank caller supplies a positive validated roundId.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/co-bank/send",
+      "category": "co-bank",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "void; sends co-bank notification.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 637
+      },
+      "clientMethods": [
+        "SangongAdminApi.sendCoBankNotification"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/rounds/current/co-bank/remove",
+      "category": "co-bank",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "userId",
+            "type": "int",
+            "required": true
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongAdminSession: status, session, round, message.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 643
+      },
+      "clientMethods": [
+        "SangongAdminApi.removeCoBank"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/rounds/{roundId}/co-bank/close",
+      "category": "co-bank",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": [
+          {
+            "name": "roundId",
+            "type": "int",
+            "required": true,
+            "notes": "Sangong internal round ID. For conditional paths, branch requires roundId > 0."
+          }
+        ]
+      },
+      "responseSummary": "SangongAdminSession: closes co-bank window; empty JSON body.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 652
+      },
+      "clientMethods": [
+        "SangongAdminApi.closeCoBank"
+      ],
+      "callStatus": "reserved",
+      "callStatusReason": "No application call site found in lib outside API class; test uses were not counted. Backend availability is not verified.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/rounds/current/co-bank/close",
+      "category": "co-bank",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongAdminSession: closes co-bank window; empty JSON body; fallback when roundId omitted or <= 0.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 653
+      },
+      "clientMethods": [
+        "SangongAdminApi.closeCoBank"
+      ],
+      "callStatus": "reserved",
+      "callStatusReason": "No application call site found in lib outside API class; test uses were not counted. Backend availability is not verified.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/rounds/{roundId}/betting/submit",
+      "category": "betting",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "untilMessageId",
+            "type": "int",
+            "required": false,
+            "notes": "Takes precedence over untilMsgSeq; omitted cutoff uses latest round IM message."
+          },
+          {
+            "name": "untilMsgSeq",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when untilMessageId is null."
+          },
+          {
+            "name": "excludeMessageId",
+            "type": "int",
+            "required": false,
+            "notes": "Emitted when exactly one positive excluded ID remains."
+          },
+          {
+            "name": "excludeMessageIds",
+            "type": "array<int>",
+            "required": false,
+            "notes": "Emitted when more than one positive ID remains; deduplicated and sorted."
+          }
+        ],
+        "path": [
+          {
+            "name": "roundId",
+            "type": "int",
+            "required": true,
+            "notes": "Sangong internal round ID. For conditional paths, branch requires roundId > 0."
+          }
+        ]
+      },
+      "responseSummary": "SangongBetSubmitResult: submit, round. Validated placedCount/failedCount >= 0, positive round ID and closed bet window; recutoff/recall details supported.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 669
+      },
+      "clientMethods": [
+        "SangongAdminApi.submitBets"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/betting/submit",
+      "category": "betting",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "untilMessageId",
+            "type": "int",
+            "required": false,
+            "notes": "Takes precedence over untilMsgSeq; omitted cutoff uses latest round IM message."
+          },
+          {
+            "name": "untilMsgSeq",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when untilMessageId is null."
+          },
+          {
+            "name": "excludeMessageId",
+            "type": "int",
+            "required": false,
+            "notes": "Emitted when exactly one positive excluded ID remains."
+          },
+          {
+            "name": "excludeMessageIds",
+            "type": "array<int>",
+            "required": false,
+            "notes": "Emitted when more than one positive ID remains; deduplicated and sorted."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongBetSubmitResult; submitBets fallback when roundId omitted or <= 0.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 670
+      },
+      "clientMethods": [
+        "SangongAdminApi.submitBets"
+      ],
+      "callStatus": "active",
+      "callStatusReason": "Referenced client method has application call sites; this path is its fallback for missing/nonpositive roundId. Actual runtime traffic was not captured.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/rounds/{roundId}/betting/preview",
+      "category": "betting",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "untilMessageId",
+            "type": "int",
+            "required": false,
+            "notes": "Takes precedence over untilMsgSeq; omitted cutoff uses latest round IM message."
+          },
+          {
+            "name": "untilMsgSeq",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when untilMessageId is null."
+          },
+          {
+            "name": "excludeMessageId",
+            "type": "int",
+            "required": false,
+            "notes": "Emitted when exactly one positive excluded ID remains."
+          },
+          {
+            "name": "excludeMessageIds",
+            "type": "array<int>",
+            "required": false,
+            "notes": "Emitted when more than one positive ID remains; deduplicated and sorted."
+          }
+        ],
+        "path": [
+          {
+            "name": "roundId",
+            "type": "int",
+            "required": true,
+            "notes": "Sangong internal round ID. For conditional paths, branch requires roundId > 0."
+          }
+        ]
+      },
+      "responseSummary": "SangongBetPreviewResult.preview: report totals/users/entries, pendingMessageCount, cutoff/excluded metadata. Does not place bets, debit balance or close window.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 702
+      },
+      "clientMethods": [
+        "SangongAdminApi.previewBets"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/betting/preview",
+      "category": "betting",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "untilMessageId",
+            "type": "int",
+            "required": false,
+            "notes": "Takes precedence over untilMsgSeq; omitted cutoff uses latest round IM message."
+          },
+          {
+            "name": "untilMsgSeq",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when untilMessageId is null."
+          },
+          {
+            "name": "excludeMessageId",
+            "type": "int",
+            "required": false,
+            "notes": "Emitted when exactly one positive excluded ID remains."
+          },
+          {
+            "name": "excludeMessageIds",
+            "type": "array<int>",
+            "required": false,
+            "notes": "Emitted when more than one positive ID remains; deduplicated and sorted."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongBetPreviewResult; previewBets fallback when roundId omitted or <= 0.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 703
+      },
+      "clientMethods": [
+        "SangongAdminApi.previewBets"
+      ],
+      "callStatus": "active",
+      "callStatusReason": "Referenced client method has application call sites; this path is its fallback for missing/nonpositive roundId. Actual runtime traffic was not captured.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/reports/bet-image",
+      "category": "report-images",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "untilMessageId",
+            "type": "int",
+            "required": false,
+            "notes": "Takes precedence over untilMsgSeq; omitted cutoff uses latest round IM message."
+          },
+          {
+            "name": "untilMsgSeq",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when untilMessageId is null."
+          },
+          {
+            "name": "excludeMessageId",
+            "type": "int",
+            "required": false,
+            "notes": "Emitted when exactly one positive excluded ID remains."
+          },
+          {
+            "name": "excludeMessageIds",
+            "type": "array<int>",
+            "required": false,
+            "notes": "Emitted when more than one positive ID remains; deduplicated and sorted."
+          },
+          {
+            "name": "roundId",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when > 0."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongReportImageResult: ok, sent, type, mode, periodNo, roundId, cutoff fields, betCount, grandTotal, pendingMessageCount, excludedAfterCutoff, rowCount, doorCount, message.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 720
+      },
+      "clientMethods": [
+        "SangongAdminApi.sendBetReportImage"
+      ],
+      "callStatus": "reserved",
+      "callStatusReason": "No application call site found in lib outside API class; test uses were not counted. Backend availability is not verified.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/reports/settle-image",
+      "category": "report-images",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "roundId",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when > 0; omitted uses last settled round of current session."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongReportImageResult; sends settlement detail image to game group.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 736
+      },
+      "clientMethods": [
+        "SangongAdminApi.sendSettleReportImage"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/reports/settle-bill",
+      "category": "report-images",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "roundId",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when > 0."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongReportImageResult; sends turnover/rake bill to admin statistics group.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 751
+      },
+      "clientMethods": [
+        "SangongAdminApi.sendSettleBillImage"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/reports/users/points-image",
+      "category": "report-images",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "imGroupId",
+            "type": "string",
+            "required": false,
+            "notes": "Nonempty override; defaults to current game group."
+          },
+          {
+            "name": "groupId",
+            "type": "int",
+            "required": false,
+            "notes": "0 means ungrouped."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongReportImageResult; sends current user points PNG.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 775
+      },
+      "clientMethods": [
+        "SangongAdminApi.sendPointsReportImage"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/reports/trend-image",
+      "category": "report-images",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongReportImageResult; sends banker-door history trend JPEG to game group; empty JSON body.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 785
+      },
+      "clientMethods": [
+        "SangongAdminApi.sendTrendReportImage"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/reports/preview-images/send",
+      "category": "report-images",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongReportImageResult; attempts bet, settlement, points and trend images; empty JSON body.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 795
+      },
+      "clientMethods": [
+        "SangongAdminApi.sendPreviewImages"
+      ],
+      "callStatus": "reserved",
+      "callStatusReason": "No application call site found in lib outside API class; test uses were not counted. Backend availability is not verified.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/rounds/current/draws",
+      "category": "draw-settlement",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongDrawFetchResult: draw, round; draw includes input/remaining door state and completion.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 804
+      },
+      "clientMethods": [
+        "SangongAdminApi.fetchCurrentDraws"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/draws",
+      "category": "draw-settlement",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "draws",
+            "type": "array<object>",
+            "required": true,
+            "notes": "Each item: door (int), amount (string). Resettle methods reject an empty list; submitDraws has no equivalent client check."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongDrawMutationResult: draw, round.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 813
+      },
+      "clientMethods": [
+        "SangongAdminApi.submitDraws"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/rounds/{roundId}/settle",
+      "category": "draw-settlement",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": [
+          {
+            "name": "roundId",
+            "type": "int",
+            "required": true,
+            "notes": "Sangong internal round ID. For conditional paths, branch requires roundId > 0."
+          }
+        ]
+      },
+      "responseSummary": "SangongAdminRound from required round payload; settlement requires draw.complete === true according to client comment.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 823
+      },
+      "clientMethods": [
+        "SangongAdminApi.settleRound"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/rounds/{roundId}/void-settlement",
+      "category": "draw-settlement",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": [
+          {
+            "name": "roundId",
+            "type": "int",
+            "required": true,
+            "notes": "Sangong internal round ID. For conditional paths, branch requires roundId > 0."
+          }
+        ]
+      },
+      "responseSummary": "SangongVoidSettlementResult: ok, voided (roundId, periodNo, balance entries), round; undoes allocation and clears draws while retaining bets/co-bank.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 840
+      },
+      "clientMethods": [
+        "SangongAdminApi.voidSettlement"
+      ],
+      "callStatus": "reserved",
+      "callStatusReason": "No application call site found in lib outside API class; test uses were not counted. Backend availability is not verified.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/rounds/last-settled/resettle",
+      "category": "draw-settlement",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "draws",
+            "type": "array<object>",
+            "required": true,
+            "notes": "Each item: door (int), amount (string). Resettle methods reject an empty list; submitDraws has no equivalent client check."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongResettleResult: ok, voided, settlement, round; settings action corrects last settled round without roundId.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 846
+      },
+      "clientMethods": [
+        "SangongAdminApi.resettleLastSettled"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/rounds/{roundId}/resettle",
+      "category": "draw-settlement",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "draws",
+            "type": "array<object>",
+            "required": true,
+            "notes": "Each item: door (int), amount (string). Resettle methods reject an empty list; submitDraws has no equivalent client check."
+          }
+        ],
+        "path": [
+          {
+            "name": "roundId",
+            "type": "int",
+            "required": true,
+            "notes": "Sangong internal round ID. For conditional paths, branch requires roundId > 0."
+          }
+        ]
+      },
+      "responseSummary": "SangongResettleResult: ok, voided, settlement, round; corrects explicitly selected historical round.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "line": 883
+      },
+      "clientMethods": [
+        "SangongAdminApi.resettleRound"
+      ],
+      "callStatus": "reserved",
+      "callStatusReason": "No application call site found in lib outside API class; test uses were not counted. Backend availability is not verified.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/settings",
+      "category": "game-rules",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "doorCount",
+            "type": "int",
+            "required": true,
+            "notes": "Emitted by SangongSettingsApi.save."
+          },
+          {
+            "name": "minBet",
+            "type": "int",
+            "required": true
+          },
+          {
+            "name": "maxBet",
+            "type": "int",
+            "required": true,
+            "notes": "0 means unlimited; max supported value comment is 99999999. updateMaxBet sends only maxBet."
+          },
+          {
+            "name": "points",
+            "type": "array<object>",
+            "required": true,
+            "notes": "Items: point, optional label, odds, bankerRakePoints, playerRakePoints."
+          },
+          {
+            "name": "pair",
+            "type": "object",
+            "required": true,
+            "notes": "Optional label, odds, bankerRakePoints, playerRakePoints."
+          },
+          {
+            "name": "maxHand",
+            "type": "object",
+            "required": true,
+            "notes": "Optional label, odds, bankerRakePoints, playerRakePoints."
+          },
+          {
+            "name": "imGroupGameId",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "imGroupAdminStatsId",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "imBotUserId",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "SangongGameSettings: doorCount, minBet, maxBet, points, pair, maxHand, imGroupGameId, imGroupAdminStatsId, imBotUserId. Each hand rule has odds, bankerRakePoints, playerRakePoints and optional label; each point also has point.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_settings_api.dart",
+        "line": 77
+      },
+      "clientMethods": [
+        "SangongSettingsApi.save",
+        "SangongAdminApi.updateMaxBet"
+      ],
+      "callStatus": "active",
+      "callStatusReason": "SangongSettingsApi.save has an application caller; SangongAdminApi.updateMaxBet has none. Both use the same method+path.",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings",
+      "category": "game-rules",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongGameSettings: doorCount, minBet, maxBet, points, pair, maxHand, imGroupGameId, imGroupAdminStatsId, imBotUserId. Each hand rule has odds, bankerRakePoints, playerRakePoints and optional label; each point also has point.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_settings_api.dart",
+        "line": 50
+      },
+      "clientMethods": [
+        "SangongSettingsApi.fetch",
+        "SangongSettingsApi.loadForUi"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/agent/entry-context",
+      "category": "agent",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [
+          {
+            "name": "imGroupId",
+            "type": "string",
+            "required": true,
+            "notes": "Trimmed, must not be empty."
+          }
+        ],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "AgentEntryContextDto: showAgentEntry, tenantId, agentImUserId, agentImGroupId, userId, rebatePct, balance, playerCount, directPlayerCount, pendingAgentRebate, nickname.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_agent_api.dart",
+        "line": 26
+      },
+      "clientMethods": [
+        "AgentRebateApi.fetchEntryContext"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": false,
+      "tenantHeaderWhenConfiguredTenantEmpty": "omitted",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Configured SANGONG_TENANT_ID fallback for extraSkipTenant discovery/default routes; omitted when that configuration is empty."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/team/members",
+      "category": "agent",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [
+          {
+            "name": "direct",
+            "type": "bool",
+            "required": false,
+            "default": false,
+            "notes": "Always emitted."
+          },
+          {
+            "name": "agentImUserId",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "batchNo",
+            "type": "string",
+            "required": false,
+            "notes": "If nonempty, sessionId is omitted."
+          },
+          {
+            "name": "sessionId",
+            "type": "int",
+            "required": false,
+            "notes": "Only emitted when batchNo is empty and sessionId > 0."
+          }
+        ],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SangongTeamMembersDto: tenantId, userId, direct, aggregation, sessionId, batchNo, businessDate, sessionStatus, agent, members; members include identity, hierarchy, balance, rebate, turnover, today/batch totals.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_agent_api.dart",
+        "line": 45
+      },
+      "clientMethods": [
+        "AgentRebateApi.fetchSangongTeamMembers"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/team/dashboard",
+      "category": "agent",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [
+          {
+            "name": "direct",
+            "type": "bool",
+            "required": false,
+            "default": false,
+            "notes": "Always emitted."
+          },
+          {
+            "name": "batchNo",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "Map requiring summary and members; optional batch. Summary reads balance/turnover/member counts/up/down/profitLoss/rebate/pendingRebate numeric fields.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_agent_api.dart",
+        "line": 67
+      },
+      "clientMethods": [
+        "AgentRebateApi.fetchSangongTeamDashboard"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/team/member-dashboard",
+      "category": "agent",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": true,
+            "notes": "Trimmed, must not be empty."
+          }
+        ],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "Map requiring member with imUserId matching request; optional batch and numeric account/turnover/rebate fields.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_agent_api.dart",
+        "line": 84
+      },
+      "clientMethods": [
+        "AgentRebateApi.fetchSangongMemberDashboard"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/member-daily",
+      "category": "agent-history",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [
+          {
+            "name": "imUserId",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "batchNo",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "from",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "to",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "Map requiring days array; each day requires businessDate and validates optional balance/profitLoss/turnover/up/down/rebate numeric fields.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_agent_api.dart",
+        "line": 101
+      },
+      "clientMethods": [
+        "AgentRebateApi.fetchSangongMemberDaily"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/me/transfer-to-child",
+      "category": "agent",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "toImUserId",
+            "type": "string",
+            "required": true,
+            "notes": "Trimmed, nonempty."
+          },
+          {
+            "name": "amount",
+            "type": "number",
+            "required": true,
+            "notes": "Finite and > 0."
+          },
+          {
+            "name": "note",
+            "type": "string",
+            "required": false,
+            "default": "团队划转",
+            "notes": "Empty becomes 团队划转."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "Map requiring nonempty referenceId and numeric fromBalance; other fields are not enforced by API class.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_agent_api.dart",
+        "line": 124
+      },
+      "clientMethods": [
+        "AgentRebateApi.transferToChild"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/me/rebate/claim",
+      "category": "agent",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "Map requiring numeric amount >= 0; other fields are not enforced by API class.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_agent_api.dart",
+        "line": 143
+      },
+      "clientMethods": [
+        "AgentRebateApi.claimSangongRebate"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/transfers",
+      "category": "agent-history",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [
+          {
+            "name": "direction",
+            "type": "string",
+            "required": false,
+            "default": "all",
+            "notes": "Allowed: all/out/in."
+          },
+          {
+            "name": "limit",
+            "type": "int",
+            "required": false,
+            "default": 100,
+            "notes": "1..500."
+          },
+          {
+            "name": "sessionId",
+            "type": "int",
+            "required": false,
+            "notes": "Must be > 0 when supplied."
+          }
+        ],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "Payload requires transfers array. List<SangongTransfer>: id, referenceId, sessionId, amount, direction, counterpartImUserId, counterpartNickname, counterpartAvatarUrl, createdAt; sorted by descending id.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_transfers_api.dart",
+        "line": 26
+      },
+      "clientMethods": [
+        "SangongTransfersApi.fetch"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/events/stream",
+      "category": "realtime",
+      "tenantHeader": "required",
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "SSE text stream, events state/message; state nested or top-level SangongAdminRealtimeState; version and settings required.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/services/sangong_realtime.dart",
+        "line": 75
+      },
+      "clientMethods": [
+        "SangongRealtime._connect"
+      ],
+      "callStatus": "active",
+      "logicalTenantBindingRequired": true,
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/reports/overview",
+      "category": "reports",
+      "tenantHeader": "required",
+      "logicalTenantBindingRequired": true,
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": []
+      },
+      "responseSummary": "Raw dynamic response after unwrapApiPayload; no overview field schema has been supplied or inferred. Independent from the existing team dashboard model.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/sangong_reports_api.dart",
+        "line": 12
+      },
+      "clientMethods": [
+        "SangongReportsApi.fetchOverview"
+      ],
+      "callStatus": "reserved",
+      "callStatusReason": "Adapter added for the supplied overview contract; no current page or application call site. Server response schema and runtime deployment were not verified.",
+      "tenantHeaderWhenConfiguredTenantEmpty": "required",
+      "baseUrlSource": "SangongApiConfig.baseUrl, or current Chat base only when the business base is explicitly empty",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeaderValue": "Verified logical tenantId first; configured SANGONG_TENANT_ID fallback. A fallback does not satisfy the verified-binding operation guard."
+    },
+    {
+      "method": "GET",
+      "path": "/sangong/api/v1/admin/tenants/{groupID}",
+      "category": "current-group-binding",
+      "baseUrlSource": "context.api.baseUrl (current Chat), plus existing shared pathPrefix",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeader": "omitted",
+      "tenantHeaderValue": "No X-Tenant-Id, regardless of Sangong tenant/build configuration",
+      "headers": {
+        "Authorization": "Bearer <current Chat chatToken>",
+        "Content-Type": "application/json",
+        "operationID": "fresh per-request UUID",
+        "X-Tenant-Id": "omitted"
+      },
+      "parameters": {
+        "query": [],
+        "body": [],
+        "path": [
+          {
+            "name": "groupID",
+            "type": "string",
+            "required": true,
+            "notes": "Default current context.groupID, trimmed then Uri.encodeComponent. Explicit fetch tenantId may use a verified agent aggregate tenantID instead."
+          }
+        ]
+      },
+      "responseSummary": "SangongGroupTenantState: configured (200 active:true), disabled (200 active:false), notFound (HTTP404 + exact TENANT_NOT_FOUND), accessDenied (HTTP403 + exact TENANT_ACCESS_DENIED). Native boolean active required; explicit IDs must match; config uses configured:true without invented roles/permissions; raw success envelope is preserved. Other failures throw.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/binding/sangong_group_tenant_api.dart",
+        "line": 18
+      },
+      "clientMethods": [
+        "SangongGroupTenantApi.fetch"
+      ],
+      "callStatus": "active",
+      "callStatusReason": "Current game-group host/manage/config flow invokes the group tenant store; no default my-config read is used for current-group presence.",
+      "logicalTenantBindingRequired": false,
+      "tenantHeaderWhenConfiguredTenantEmpty": "omitted",
+      "authorization": "Current account privilege and session/API/base/privilege-revision guards only; canConfigure/canManage are not existence prerequisites."
+    },
+    {
+      "method": "POST",
+      "path": "/sangong/api/v1/admin/tenants",
+      "category": "current-group-binding",
+      "baseUrlSource": "context.api.baseUrl (current Chat), plus existing shared pathPrefix",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeader": "omitted",
+      "tenantHeaderValue": "No X-Tenant-Id, regardless of Sangong tenant/build configuration",
+      "headers": {
+        "Authorization": "Bearer <current Chat chatToken>",
+        "Content-Type": "application/json",
+        "operationID": "fresh per-request UUID",
+        "X-Tenant-Id": "omitted"
+      },
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "imGroupGameId",
+            "type": "string",
+            "required": true,
+            "notes": "Must exactly equal the current game groupID; original body is forwarded."
+          },
+          {
+            "name": "imBotUserId",
+            "type": "string",
+            "required": true,
+            "notes": "Nonempty robot userID; public account is resolved before the page submits."
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "required": false,
+            "notes": "Optional for current-group creation."
+          },
+          {
+            "name": "imGroupAdminStatsId",
+            "type": "string",
+            "required": false,
+            "notes": "May be empty."
+          },
+          {
+            "name": "imGroupLedgerId",
+            "type": "string",
+            "required": false,
+            "notes": "May be empty."
+          },
+          {
+            "name": "imGroupWaterId",
+            "type": "string",
+            "required": false,
+            "notes": "May be empty."
+          }
+        ],
+        "path": []
+      },
+      "responseSummary": "POST201 explicit ok:true + active:true + complete matching game-group/bot configuration confirms a configured state. configured/canEditConfig are not required. Incomplete, mismatched or rejected successful-status responses are UNKNOWN_RESULT; original raw envelope is preserved.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/binding/sangong_group_tenant_api.dart",
+        "line": 64
+      },
+      "clientMethods": [
+        "SangongGroupTenantApi.create"
+      ],
+      "callStatus": "active",
+      "callStatusReason": "Current-group configuration page initializes only after exact current-group notFound and native group owner/admin plus account privilege.",
+      "logicalTenantBindingRequired": false,
+      "tenantHeaderWhenConfiguredTenantEmpty": "omitted",
+      "authorization": "Account privilege and native current group admin before dispatch; session/API/base/privilege checks before and after; no client-granted business capability."
+    },
+    {
+      "method": "PUT",
+      "path": "/sangong/api/v1/admin/tenants/{tenantId}",
+      "category": "current-group-binding",
+      "baseUrlSource": "context.api.baseUrl (current Chat), plus existing shared pathPrefix",
+      "authentication": "Authorization: Bearer <current Chat chatToken>",
+      "tenantHeader": "omitted",
+      "tenantHeaderValue": "No X-Tenant-Id, regardless of Sangong tenant/build configuration",
+      "headers": {
+        "Authorization": "Bearer <current Chat chatToken>",
+        "Content-Type": "application/json",
+        "operationID": "fresh per-request UUID",
+        "X-Tenant-Id": "omitted"
+      },
+      "parameters": {
+        "query": [],
+        "body": [
+          {
+            "name": "name",
+            "type": "string",
+            "required": false,
+            "notes": "Current form sends its trimmed value, including empty."
+          },
+          {
+            "name": "imBotUserId",
+            "type": "string",
+            "required": true,
+            "notes": "Current form requires and submits the robot userID; adapter forwards the body unchanged."
+          },
+          {
+            "name": "imGroupAdminStatsId",
+            "type": "string",
+            "required": false,
+            "notes": "May be empty."
+          },
+          {
+            "name": "imGroupLedgerId",
+            "type": "string",
+            "required": false,
+            "notes": "May be empty."
+          },
+          {
+            "name": "imGroupWaterId",
+            "type": "string",
+            "required": false,
+            "notes": "May be empty."
+          },
+          {
+            "name": "imGroupGameId",
+            "type": "string",
+            "required": false,
+            "notes": "Current form omits it for update; if supplied it must equal the current game group and cannot move the binding."
+          }
+        ],
+        "path": [
+          {
+            "name": "tenantId",
+            "type": "string",
+            "required": true,
+            "notes": "Use the preceding point-query returned tenantId; trimmed then Uri.encodeComponent and required to match the current game groupID."
+          }
+        ]
+      },
+      "responseSummary": "PUT200 complete matching configuration plus native boolean active confirms configured/disabled state without relying on configured/canEditConfig. Mismatch, ok:false, invalid active or incomplete game-group/bot configuration yields UNKNOWN_RESULT. HTTP/backend errors remain errors.",
+      "source": {
+        "file": "lib/pages/group_features/sangong/api/binding/sangong_group_tenant_api.dart",
+        "line": 97
+      },
+      "clientMethods": [
+        "SangongGroupTenantApi.update"
+      ],
+      "callStatus": "active",
+      "callStatusReason": "Current-group configuration page updates the looked-up tenant directly and refreshes capabilities/binding afterwards; it does not PUT account-default my-config.",
+      "logicalTenantBindingRequired": false,
+      "tenantHeaderWhenConfiguredTenantEmpty": "omitted",
+      "authorization": "Current page requires canConfigure for an existing tenant; server authorizes update. Adapter guards account privilege/session/API/base and group match; SDK admin alone grants no existing-tenant authority."
+    }
+  ],
+  "configuration": {
+    "source": "lib/pages/group_features/sangong/api/sangong_api_config.dart",
+    "baseUrlDefine": "SANGONG_API_BASE_URL",
+    "baseUrlDefault": "http://129.226.192.93:10008/sangong/api/v1",
+    "canonicalBaseUrl": "http://129.226.192.93:10008/sangong/api/v1",
+    "pathPrefixDefine": "SANGONG_API_PATH_PREFIX",
+    "pathPrefixDefault": "/sangong",
+    "tenantIdDefine": "SANGONG_TENANT_ID",
+    "tenantIdDefault": "@z8hFfDvVQP0x",
+    "appliesTo": [
+      "admin",
+      "settings",
+      "agent",
+      "transfers",
+      "reports",
+      "SSE"
+    ],
+    "headers": {
+      "Authorization": "Bearer <current Chat chatToken captured for each request>",
+      "X-Tenant-Id": "Ordinary business requests/SSE: verified logical tenantId first, configured SANGONG_TENANT_ID fallback (@z8hFfDvVQP0x by default). Legacy extraSkipTenant routes use configured fallback; current-group Chat point methods omit the header.",
+      "Content-Type": "application/json",
+      "operationID": "fresh per-request UUID"
+    },
+    "sseAdditionalHeaders": {
+      "Accept": "text/event-stream"
+    },
+    "credentials": [
+      "Authorization: Bearer <current Chat chatToken>; no independent credential store",
+      "operationID: per-request UUID",
+      "Business X-Tenant-Id: verified logical tenant first, configured fallback only; no capability/binding grant",
+      "Current-group Chat GET/POST/PUT: no X-Tenant-Id"
+    ],
+    "fullVersionBaseRule": "For bases ending /api/v1, ignore SANGONG_API_PATH_PREFIX and strip exactly one leading /api/v1 from endpoint paths.",
+    "rootBaseRule": "For bases not ending /api/v1, append normalized SANGONG_API_PATH_PREFIX and the complete endpoint /api/v1 path.",
+    "emptyBaseBehavior": "Explicit empty SANGONG_API_BASE_URL uses current Config.appAuthUrl.",
+    "emptyTenantBehavior": "Ordinary business requests use the verified logical tenant; legacy extraSkipTenant discovery/default routes omit the header. Current-group Chat methods always omit it.",
+    "emptyPrefixAllowed": true,
+    "requiresRebuild": true,
+    "exampleBaseUrl": "http://129.226.192.93:10008/sangong/api/v1",
+    "examplePathPrefix": "/sangong",
+    "exampleRequest": "http://129.226.192.93:10008/sangong/api/v1/admin/my-config",
+    "exampleOverviewRequest": "http://129.226.192.93:10008/sangong/api/v1/me/reports/overview",
+    "exampleStreamRequest": "http://129.226.192.93:10008/sangong/api/v1/admin/events/stream",
+    "rootBaseExample": {
+      "baseUrl": "http://129.226.192.93:10008",
+      "pathPrefix": "/sangong",
+      "endpointPath": "/api/v1/admin/my-config",
+      "requestUrl": "http://129.226.192.93:10008/sangong/api/v1/admin/my-config"
+    },
+    "sharedDependenciesBehavior": "The three shared Chat dependencies keep the current Chat base and token header. Sangong-specific current-group tenant methods also use Chat but explicitly opt into Bearer and omit X-Tenant-Id.",
+    "currentGroupTenant": {
+      "source": "lib/pages/group_features/sangong/api/binding/sangong_group_tenant_api.dart",
+      "baseUrlSource": "context.api.baseUrl, usually Config.appAuthUrl, plus existing shared pathPrefix",
+      "businessBuildConfigApplied": false,
+      "headers": {
+        "Authorization": "Bearer <current Chat chatToken>",
+        "Content-Type": "application/json",
+        "operationID": "fresh per-request UUID",
+        "X-Tenant-Id": "omitted"
+      },
+      "queryPath": "/sangong/api/v1/admin/tenants/{URLencoded groupID}",
+      "createPath": "/sangong/api/v1/admin/tenants",
+      "updatePath": "/sangong/api/v1/admin/tenants/{URLencoded returned tenantId}",
+      "activeRequirement": "Native boolean true/false only; absent, numeric/string or structured active is INVALID_RESPONSE.",
+      "notFoundRequirement": "HTTP404 and exact serverCode TENANT_NOT_FOUND only",
+      "accessDeniedRequirement": "HTTP403 and exact serverCode TENANT_ACCESS_DENIED only",
+      "accessDeniedMessage": "当前群已配置三公，请联系配置者授权",
+      "disabledMessage": "当前群的三公已停用",
+      "failureDoesNotMeanAbsent": [
+        "active:false",
+        "401",
+        "other privilege/permission 403",
+        "generic 404",
+        "503",
+        "network error",
+        "invalid response"
+      ],
+      "automaticLookupScope": "Privileged gameType=1 current game groups; ordinary/nonprivileged groups do not add a lookup. Agent-only groups use verified aggregate tenantID.",
+      "defaultConfigSeparation": "GET my-config reads the account default; PUT changes it. Current-group pages do not use default reads/writes or default members routes."
+    }
+  },
+  "sharedDependencies": [
+    {
+      "baseUrl": "Config.appAuthUrl",
+      "sangongPrefixApplied": false,
+      "purpose": "Group-scoped private capabilities and confirmed tenant",
+      "path": "/chat/groups/{groupID}/feature-capabilities",
+      "source": {
+        "line": 311,
+        "file": "lib/pages/group_features/data/group_feature_store.dart"
+      },
+      "method": "GET",
+      "parameters": {
+        "path": [
+          "URL-encoded groupID"
+        ]
+      },
+      "authentication": "Original Chat token header; not Sangong Bearer opt-in",
+      "tenantHeader": "omitted"
+    },
+    {
+      "baseUrl": "Config.appAuthUrl",
+      "sangongPrefixApplied": false,
+      "purpose": "Current account isPrivileged gate",
+      "path": "/user/find/full",
+      "source": {
+        "line": 13,
+        "file": "lib/core/session/current_user_profile_source.dart"
+      },
+      "method": "POST",
+      "parameters": {
+        "body": [
+          "pagination: {pageNumber:0,showNumber:10}",
+          "userIDs: [currentUserID]",
+          "platform"
+        ]
+      },
+      "authentication": "Original Chat token header; not Sangong Bearer opt-in",
+      "tenantHeader": "omitted"
+    },
+    {
+      "baseUrl": "Config.appAuthUrl",
+      "sangongPrefixApplied": false,
+      "purpose": "Resolve bot, helper and report user public accounts to real userIDs",
+      "path": "/user/search/full",
+      "source": {
+        "line": 18,
+        "file": "lib/pages/contacts/search/contact_search_source.dart"
+      },
+      "method": "POST",
+      "parameters": {
+        "body": [
+          "pagination: {pageNumber:1,showNumber:20}",
+          "keyword: @publicAccount"
+        ]
+      },
+      "authentication": "Original Chat token header; not Sangong Bearer opt-in",
+      "tenantHeader": "omitted"
+    }
+  ],
+  "sharedDependencyCount": 3,
+  "referenceOnlyEndpoints": [
+    {
+      "path": "/api/v1/me/children/{encodedUserID}/rebate",
+      "callStatus": "not-implemented-in-current-client",
+      "purpose": "设置下级返水",
+      "source": {
+        "line": 380,
+        "file": "lib/src/api/agent_rebate_api.dart",
+        "repository": "E:/openim/reference-99chat"
+      },
+      "method": "PUT"
+    },
+    {
+      "path": "/api/v1/me/children/{encodedUserID}/rebate",
+      "callStatus": "not-implemented-in-current-client",
+      "purpose": "查询下级返水",
+      "source": {
+        "line": 428,
+        "file": "lib/src/api/agent_rebate_api.dart",
+        "repository": "E:/openim/reference-99chat"
+      },
+      "method": "GET"
+    },
+    {
+      "path": "/api/v1/admin/agent/chat-binding",
+      "callStatus": "not-implemented-in-current-client",
+      "purpose": "绑定代理群",
+      "source": {
+        "line": 398,
+        "file": "lib/src/api/agent_rebate_api.dart",
+        "repository": "E:/openim/reference-99chat"
+      },
+      "method": "PUT"
+    },
+    {
+      "path": "/api/v1/admin/agent/chat-binding",
+      "callStatus": "not-implemented-in-current-client",
+      "purpose": "解除代理群",
+      "source": {
+        "line": 414,
+        "file": "lib/src/api/agent_rebate_api.dart",
+        "repository": "E:/openim/reference-99chat"
+      },
+      "method": "DELETE"
+    },
+    {
+      "path": "/api/v1/me/users/{encodedUserID}/parent",
+      "callStatus": "not-implemented-in-current-client",
+      "purpose": "查询上级",
+      "source": {
+        "line": 445,
+        "file": "lib/src/api/agent_rebate_api.dart",
+        "repository": "E:/openim/reference-99chat"
+      },
+      "method": "GET"
+    },
+    {
+      "path": "/api/v1/me/hierarchy/{encodedChildID}/parent",
+      "callStatus": "not-implemented-in-current-client",
+      "purpose": "设置上级",
+      "source": {
+        "line": 465,
+        "file": "lib/src/api/agent_rebate_api.dart",
+        "repository": "E:/openim/reference-99chat"
+      },
+      "method": "PUT"
+    },
+    {
+      "path": "/api/v1/me/hierarchy/{encodedChildID}",
+      "callStatus": "not-implemented-in-current-client",
+      "purpose": "解除上级",
+      "source": {
+        "line": 481,
+        "file": "lib/src/api/agent_rebate_api.dart",
+        "repository": "E:/openim/reference-99chat"
+      },
+      "method": "DELETE"
+    }
+  ],
+  "referenceOnlyEndpointCount": 7
+}

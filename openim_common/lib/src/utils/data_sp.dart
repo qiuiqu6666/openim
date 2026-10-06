@@ -47,7 +47,8 @@ class DataSp {
   }
 
   static LoginCertificate? getLoginCertificate() {
-    return SpUtil().getObj(_loginCertificate, (v) => LoginCertificate.fromJson(v.cast()));
+    return SpUtil()
+        .getObj(_loginCertificate, (v) => LoginCertificate.fromJson(v.cast()));
   }
 
   static Future<bool>? removeLoginCertificate() {
@@ -83,6 +84,34 @@ class DataSp {
     return id;
   }
 
+  static Future<String>? _loginDeviceIDRepair;
+
+  /// Login requires a durable UUID. Repair legacy values before freezing an
+  /// attempt, then reuse the same identity for its password and SMS requests.
+  static Future<String> ensureLoginDeviceID() async {
+    final pending = _loginDeviceIDRepair;
+    if (pending != null) return pending;
+    final value = SpUtil().getDynamic(_deviceID);
+    if (value is String &&
+        RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$')
+            .hasMatch(value)) {
+      return value;
+    }
+    final repair = () async {
+      final id = const Uuid().v4();
+      if (await SpUtil().putString(_deviceID, id) != true) {
+        throw StateError('Device identity could not be stored');
+      }
+      return id;
+    }();
+    _loginDeviceIDRepair = repair;
+    try {
+      return await repair;
+    } finally {
+      if (identical(_loginDeviceIDRepair, repair)) _loginDeviceIDRepair = null;
+    }
+  }
+
   static Future<bool>? putIgnoreVersion(String version) {
     return SpUtil().putString(_ignoreUpdate, version);
   }
@@ -107,11 +136,13 @@ class DataSp {
     return index != null && index >= 0 && index <= 2 ? index : 0;
   }
 
-  static Future<bool>? putHaveReadUnHandleGroupApplication(List<String> idList) {
+  static Future<bool>? putHaveReadUnHandleGroupApplication(
+      List<String> idList) {
     return SpUtil().putStringList(getKey(_groupApplication), idList);
   }
 
-  static Future<bool>? putHaveReadUnHandleFriendApplication(List<String> idList) {
+  static Future<bool>? putHaveReadUnHandleFriendApplication(
+      List<String> idList) {
     return SpUtil().putStringList(getKey(_friendApplication), idList);
   }
 
@@ -146,7 +177,8 @@ class DataSp {
   static bool isEnabledBiometricPay({String? accountID}) =>
       SpUtil().getBool(
           sprintf(_enabledBiometricPay, [accountID ?? OpenIM.iMManager.userID]),
-          defValue: false) ?? false;
+          defValue: false) ??
+      false;
 
   static Future<bool>? setBiometricPay(bool enabled, {String? accountID}) =>
       SpUtil().putBool(

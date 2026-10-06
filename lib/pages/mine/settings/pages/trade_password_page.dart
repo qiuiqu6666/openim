@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../settings_service.dart';
 import '../widgets/settings_widgets.dart';
+import '../widgets/trade_password_pin_cells.dart';
+import '../widgets/trade_password_keypad.dart';
 
 class TradePasswordPage extends StatefulWidget {
   const TradePasswordPage({
@@ -136,7 +137,7 @@ class _TradePasswordPageState extends State<TradePasswordPage> {
     final secondary = AppTokens.textSecondary(dark: dark);
     final size = MediaQuery.sizeOf(context);
     final landscape = size.width > size.height;
-    final keypad = _TradePasswordKeyPad(
+    final keypad = TradePasswordKeyPad(
       key: const ValueKey('trade-password-keypad'),
       enabled: !_submitting,
       onDigit: _onDigit,
@@ -205,7 +206,7 @@ class _TradePasswordPageState extends State<TradePasswordPage> {
                               ),
                             ),
                             const SizedBox(height: AppTokens.s7),
-                            _TradePasswordPinCells(
+                            TradePasswordPinCells(
                               key: const ValueKey('trade-password-pin-dots'),
                               length: _input.length,
                               hasError: _error.isNotEmpty,
@@ -324,197 +325,4 @@ class _PlatformLogo extends StatelessWidget {
           excludeFromSemantics: true,
         ),
       );
-}
-
-class _TradePasswordPinCells extends StatelessWidget {
-  const _TradePasswordPinCells({
-    super.key,
-    required this.length,
-    required this.hasError,
-  });
-
-  final int length;
-  final bool hasError;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = settingsIsDark(context);
-    final border =
-        hasError ? settingsDanger(dark) : AppTokens.border(dark: dark);
-    return Semantics(
-      label: settingsText(context, zh: '六位交易密码', en: 'Six-digit password'),
-      value: settingsText(
-        context,
-        zh: '已输入 $length 位，共 6 位',
-        en: '$length of 6 digits entered',
-      ),
-      liveRegion: true,
-      excludeSemantics: true,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final cellSize =
-              ((constraints.maxWidth - TradePasswordTokens.cellGap * 5) / 6)
-                  .clamp(0.0, TradePasswordTokens.cellMaxSize);
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var i = 0; i < 6; i++) ...[
-                if (i > 0) const SizedBox(width: TradePasswordTokens.cellGap),
-                AnimatedContainer(
-                  key: ValueKey('trade-password-cell-$i'),
-                  duration: MediaQuery.disableAnimationsOf(context)
-                      ? Duration.zero
-                      : TradePasswordTokens.inputAnimation,
-                  width: cellSize,
-                  height: cellSize,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppTokens.rSm),
-                    border: Border.all(color: border),
-                  ),
-                  child: Container(
-                    key: ValueKey('trade-password-dot-$i'),
-                    width: TradePasswordTokens.dotSize,
-                    height: TradePasswordTokens.dotSize,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: length > i
-                          ? AppTokens.textPrimary(dark: dark)
-                          : AppTokens.border(dark: dark),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _TradePasswordKeyPad extends StatelessWidget {
-  const _TradePasswordKeyPad({
-    super.key,
-    required this.enabled,
-    required this.onDigit,
-    required this.onDelete,
-  });
-
-  final bool enabled;
-  final ValueChanged<String> onDigit;
-  final VoidCallback onDelete;
-
-  static const keys = [
-    '1',
-    '2',
-    '3',
-    '4',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9',
-    '',
-    '0',
-    'del'
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = settingsIsDark(context);
-    final keyHeight = (MediaQuery.sizeOf(context).height *
-            TradePasswordTokens.keyHeightScreenRatio)
-        .clamp(
-      TradePasswordTokens.keyMinHeight,
-      TradePasswordTokens.keyMaxHeight,
-    );
-    return ColoredBox(
-      color: AppTokens.surfaceAlt(dark: dark),
-      child: Center(
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: TradePasswordTokens.contentMaxWidth,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(AppTokens.s3),
-            child: GridView.builder(
-              padding: EdgeInsets.zero,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: keys.length,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisExtent: keyHeight,
-                mainAxisSpacing: AppTokens.s3,
-                crossAxisSpacing: AppTokens.s3,
-              ),
-              itemBuilder: (_, i) {
-                final key = keys[i];
-                final isDelete = key == 'del';
-                final keyBackground = isDelete || key.isEmpty
-                    ? AppTokens.border(dark: dark)
-                    : AppTokens.surface(dark: dark);
-                if (key.isEmpty) {
-                  return ExcludeSemantics(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: keyBackground,
-                        borderRadius: BorderRadius.circular(AppTokens.rSm),
-                      ),
-                    ),
-                  );
-                }
-                final label = isDelete
-                    ? settingsText(context, zh: '删除一位', en: 'Delete digit')
-                    : key;
-                final color = enabled
-                    ? AppTokens.textPrimary(dark: dark)
-                    : AppTokens.textSecondary(dark: dark);
-                void activate() {
-                  HapticFeedback.selectionClick();
-                  isDelete ? onDelete() : onDigit(key);
-                }
-
-                return Semantics(
-                  button: true,
-                  enabled: enabled,
-                  label: label,
-                  onTap: enabled ? activate : null,
-                  excludeSemantics: true,
-                  child: Material(
-                    key: ValueKey('trade-password-key-$key'),
-                    color: keyBackground,
-                    borderRadius: BorderRadius.circular(AppTokens.rSm),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: enabled ? activate : null,
-                      child: Center(
-                        child: isDelete
-                            ? Icon(
-                                Icons.backspace_outlined,
-                                size: TradePasswordTokens.deleteIconSize,
-                                color: color,
-                              )
-                            : Text(
-                                key,
-                                style: TextStyle(
-                                  fontSize: TradePasswordTokens.digitFontSize,
-                                  fontWeight: FontWeight.w400,
-                                  color: color,
-                                  height: 1,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

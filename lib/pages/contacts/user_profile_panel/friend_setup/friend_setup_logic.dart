@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../../routes/app_navigator.dart';
+import '../../../../services/chat_history_cache.dart';
 import '../../../chat/chat_logic.dart';
 import '../../../conversation/conversation_logic.dart';
 import '../../select_contacts/select_contacts_logic.dart';
@@ -70,9 +71,19 @@ class FriendSetupLogic extends GetxController {
         ];
         userIDList.sort();
         final conversationID = 'si_${userIDList.join('_')}';
+        final accountID = OpenIM.iMManager.userID;
 
         await OpenIM.iMManager.conversationManager
             .deleteConversationAndDeleteAllMsg(conversationID: conversationID);
+
+        if (Get.isRegistered<ChatLogic>(tag: GetTags.chat)) {
+          final chat = Get.find<ChatLogic>(tag: GetTags.chat);
+          if (!chat.isClosed &&
+              chat.conversationInfo.conversationID == conversationID) {
+            chat.clearAllMessage();
+          }
+        }
+        ChatHistoryCache.removeConversation(accountID, conversationID);
 
         conversationLogic.list
             .removeWhere((e) => e.conversationID == conversationID);
@@ -96,6 +107,7 @@ class FriendSetupLogic extends GetxController {
     }
     final result = await AppNavigator.startSelectContacts(
       action: SelAction.recommend,
+      sharedContact: UserInfo.fromJson(userProfilesLogic.userInfo.value.toJson()),
       ex: '[${StrRes.carte}]${userProfilesLogic.userInfo.value.nickname}',
     );
     if (null != result) {

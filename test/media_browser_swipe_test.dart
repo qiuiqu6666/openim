@@ -8,6 +8,15 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim_common/openim_common.dart';
 
+Future<void> _settleMedia(WidgetTester tester) async {
+  // Local availability now uses real asynchronous filesystem work.
+  await tester.pump();
+  await tester.runAsync(() async {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  });
+  await tester.pumpAndSettle();
+}
+
 void main() {
   for (final exit in ['button', 'system', 'slide']) {
     testWidgets('preview restores system bars on $exit exit', (tester) async {
@@ -47,18 +56,19 @@ void main() {
                 ],
                 initialIndex: 0,
               )));
-      await tester.pumpAndSettle();
+      await _settleMedia(tester);
       calls.clear();
       if (exit == 'button') {
         await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
       } else if (exit == 'system') {
         await tester.binding.handlePopRoute();
       } else {
-        // Exercise the slide component's route dismissal callback directly.
-        tester
-            .state<ExtendedImageSlidePageState>(
-                find.byType(ExtendedImageSlidePage))
-            .popPage();
+        // Complete the slide gesture. popPage only changes the package's
+        // animation state; endSlide dismisses the route and runs its cleanup.
+        final slide = tester.state<ExtendedImageSlidePageState>(
+            find.byType(ExtendedImageSlidePage));
+        slide.slide(Offset(0, slide.pageSize.height / 2));
+        slide.endSlide(ScaleEndDetails());
       }
       await tester.pumpAndSettle();
       expect(find.byType(MediaBrowser), findsNothing);
@@ -123,7 +133,7 @@ void main() {
     ));
 
     await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
+    await _settleMedia(tester);
     expect(find.textContaining('1/2'), findsOneWidget);
     final back = tester.getRect(find.byIcon(Icons.arrow_back_ios_new));
     expect(back.top, greaterThanOrEqualTo(44));
@@ -146,7 +156,7 @@ void main() {
       if (i > 0) expect(actions[i].left, greaterThan(actions[i - 1].right));
     }
     await tester.drag(find.byType(MediaBrowser), const Offset(-550, 0));
-    await tester.pumpAndSettle();
+    await _settleMedia(tester);
 
     expect(pages, contains(1));
     expect(find.textContaining('2/2'), findsOneWidget);

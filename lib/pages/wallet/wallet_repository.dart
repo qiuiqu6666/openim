@@ -8,7 +8,8 @@ abstract class WalletRepository {
   Future<WalletDto> getWallet();
   Future<List<WalletPayMethodDto>> getPayMethods();
   Future<WalletExchangeOrderDto> exchange(WalletExchangeReq req);
-  Future<List<WalletExchangeOrderDto>> getExchangeRecords({int page = 0, int size = 20});
+  Future<List<WalletExchangeOrderDto>> getExchangeRecords(
+      {int page = 0, int size = 20});
   Future<List<WalletRecordDto>> getDepositRecords();
   Future<List<WalletRecordDto>> getWithdrawRecords();
 }
@@ -43,7 +44,9 @@ class UnavailableWalletRepository implements WalletRepository {
       );
 
   @override
-  Future<List<WalletExchangeOrderDto>> getExchangeRecords({int page = 0, int size = 20}) async => const [];
+  Future<List<WalletExchangeOrderDto>> getExchangeRecords(
+          {int page = 0, int size = 20}) async =>
+      const [];
 
   @override
   Future<List<WalletRecordDto>> getDepositRecords() async => const [];
@@ -85,6 +88,9 @@ const List<CoinDto> walletUnavailableProductCoins = <CoinDto>[
 
 class WalletDto {
   final String totalBal;
+  final String dailyAmountCny;
+  final String dailyPercentage;
+
   /// 总资产折合 USD（不含 `$` 前缀）；汇率不可用时为空。
   final String totalBalUsd;
   final String trxAddr;
@@ -92,6 +98,8 @@ class WalletDto {
 
   const WalletDto({
     required this.totalBal,
+    this.dailyAmountCny = "--",
+    this.dailyPercentage = "--",
     this.totalBalUsd = '',
     required this.trxAddr,
     required this.coins,
@@ -111,6 +119,15 @@ class CoinDto {
   final bool withdrawEnabled;
   final int balMinor;
   final int scale;
+
+  /// Exact available balance for API operations, separate from rounded UI text.
+  final String availableRaw;
+
+  /// Frozen balance is informational and never added to spendable units.
+  final String frozen;
+  final String? changeAmountCny;
+  final String? changePercent;
+
   /// 24h 涨跌幅（百分比数值，如 `0.12` 表示 +0.12%）；未知时为 null。
   final double? priceChangePercent;
 
@@ -127,6 +144,10 @@ class CoinDto {
     this.withdrawEnabled = true,
     this.balMinor = 0,
     this.scale = 6,
+    this.availableRaw = '',
+    this.frozen = '',
+    this.changeAmountCny,
+    this.changePercent,
     this.priceChangePercent,
   });
 
@@ -224,8 +245,6 @@ class WalletPayMethodDto {
     enabled: false,
   );
 }
-
-
 
 enum WalletExchangeDirection {
   usdtToPlatform,

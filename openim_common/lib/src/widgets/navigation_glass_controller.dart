@@ -56,8 +56,11 @@ class NavigationGlassController extends ChangeNotifier {
     return true;
   }
 
-  Future<void> initializeRenderer() async {
-    if (_needsRenderer(_mode)) await _ensureRenderer();
+  Future<void> initializeRenderer({bool preferLiquid = false}) async {
+    if (_needsRenderer(_mode) ||
+        (preferLiquid && _mode == NavigationGlassMode.automatic)) {
+      await _ensureRenderer();
+    }
   }
 
   bool _needsRenderer(NavigationGlassMode mode) =>
@@ -93,11 +96,12 @@ class NavigationGlassController extends ChangeNotifier {
     }
   }
 
-  bool usesTranslucent(BuildContext context) =>
+  bool usesTranslucent(BuildContext context, {bool preferLiquid = false}) =>
       !_rendererAvailable ||
       MediaQuery.highContrastOf(context) ||
       MediaQuery.disableAnimationsOf(context) ||
       _mode == NavigationGlassMode.translucent ||
       (_mode == NavigationGlassMode.automatic &&
+          !preferLiquid &&
           Theme.of(context).platform == TargetPlatform.android);
 }

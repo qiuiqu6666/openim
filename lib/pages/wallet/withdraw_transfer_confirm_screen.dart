@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'data/currency_rules/wallet_withdrawal_policy.dart';
+import 'data/wallet_fund_api.dart';
+import 'withdrawal/amount_entry/wallet_withdrawal_amount_rule_details.dart';
+import 'withdrawal/amount_entry/wallet_withdrawal_rules_controller.dart';
+import 'widgets/wallet_coin_logo.dart';
 import 'host/wallet_i18n.dart';
 import 'host/wallet_navigation.dart';
 import 'order/wallet_order.dart';
@@ -18,6 +23,8 @@ class WithdrawTransferConfirmScreen extends StatefulWidget {
   final String targetValue;
   final String? targetName;
   final String? targetAvatar;
+  final WalletFundApi? api;
+  final String Function()? accountProvider;
 
   const WithdrawTransferConfirmScreen({
     super.key,
@@ -27,6 +34,8 @@ class WithdrawTransferConfirmScreen extends StatefulWidget {
     required this.targetValue,
     this.targetName,
     this.targetAvatar,
+    this.api,
+    this.accountProvider,
   });
 
   @override
@@ -35,11 +44,61 @@ class WithdrawTransferConfirmScreen extends StatefulWidget {
 }
 
 class _WithdrawTransferConfirmScreenState
-    extends State<WithdrawTransferConfirmScreen> {
+    extends State<WithdrawTransferConfirmScreen> with WidgetsBindingObserver {
   final TextEditingController _amountController = TextEditingController();
+  WalletWithdrawalRulesController? _rules;
+  bool _routeVisible = false;
+  bool _foreground = true;
+  bool _openingReview = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.mode == WithdrawTransferMode.chain && _supportsChainWithdraw) {
+      _rules = WalletWithdrawalRulesController(
+        currency: FundCurrency.parse(widget.payMethod.coin.toUpperCase()),
+        api: widget.api,
+        accountProvider: widget.accountProvider,
+      )..addListener(_rulesChanged);
+    }
+    WidgetsBinding.instance.addObserver(this);
+    final state = WidgetsBinding.instance.lifecycleState;
+    _foreground = state == null || state == AppLifecycleState.resumed;
+  }
+
+  void _rulesChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _routeVisible = (ModalRoute.isCurrentOf(context) ?? true) &&
+        TickerMode.valuesOf(context).enabled;
+    _updateRulesActivity();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _updateRulesActivity();
+  }
+
+  void _updateRulesActivity() {
+    if (!_routeVisible || !_foreground) {
+      _rules?.setActive(false);
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _routeVisible && _foreground) _rules?.setActive(true);
+    });
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _rules?.removeListener(_rulesChanged);
+    _rules?.dispose();
     _amountController.dispose();
     super.dispose();
   }
@@ -55,11 +114,43 @@ class _WithdrawTransferConfirmScreenState
   String get _displayAmountText => _amount?.text ?? '0';
 
   bool get _supportsChainWithdraw =>
-      widget.payMethod.coin.toUpperCase() == 'USDT';
+      const ['USDT', 'TRX'].contains(widget.payMethod.coin.toUpperCase());
 
+  FundAmount? get _fundAmount {
+    final amount = _amount;
+    if (amount == null ||
+        _rules == null ||
+        widget.payMethod.scale != _rules!.currency.decimals) {
+      return null;
+    }
+    return FundAmount.parse(amount.text, _rules!.currency);
+  }
+
+  WalletWithdrawalPolicyIssue? get _policyIssue {
+    final amount = _fundAmount;
+    final rule = _rules?.rule;
+    if (amount == null || !amount.isPositive) return null;
+    if (rule == null) return WalletWithdrawalPolicyIssue.incomplete;
+    return WalletWithdrawalPolicy(rule: rule).validate(
+      amount: amount,
+      available: FundBalance.fromJson({
+        'currency': rule.currency.code,
+        'available': WalletAmount.formatMinor(
+            widget.payMethod.balMinor, widget.payMethod.scale),
+        'frozen': '0',
+      }, allowNegativeAvailable: true)
+          .available,
+    );
+  }
+
+  // Review restores unresolved orders before validating any new submission.
   bool get _canContinue =>
       _amount?.isPositive == true &&
-      (widget.mode != WithdrawTransferMode.chain || _supportsChainWithdraw);
+      !_openingReview &&
+      (widget.mode != WithdrawTransferMode.chain ||
+          (_supportsChainWithdraw &&
+              _rules?.isActive == true &&
+              _fundAmount != null));
 
   String get _friendName {
     final value = widget.targetName?.trim() ?? '';
@@ -99,10 +190,22 @@ class _WithdrawTransferConfirmScreenState
   }
 
   void _applyPercent(int percent) {
-    final balMinor = widget.payMethod.balMinor;
+    var balMinor = widget.payMethod.balMinor;
+    final rule = _rules?.rule;
+    if (widget.mode == WithdrawTransferMode.chain) {
+      if (rule?.isWithdrawalComplete != true || balMinor <= 0) return;
+      final spendable = WalletWithdrawalPolicy(rule: rule!).spendable(
+          FundAmount.parse(
+              WalletAmount.formatMinor(balMinor, widget.payMethod.scale),
+              rule.currency));
+      balMinor = spendable.units.toInt();
+    }
     if (balMinor <= 0) return;
-    var amountMinor = (balMinor * percent) ~/ 100;
-    if (widget.payMethod.scale > 2) {
+    var amountMinor =
+        (BigInt.from(balMinor) * BigInt.from(percent) ~/ BigInt.from(100))
+            .toInt();
+    if (widget.payMethod.scale > 2 &&
+        !(widget.mode == WithdrawTransferMode.chain && percent == 100)) {
       var factor = 1;
       for (var i = 0; i < widget.payMethod.scale - 2; i++) {
         factor *= 10;
@@ -128,14 +231,6 @@ class _WithdrawTransferConfirmScreenState
         ko: '최소 출금 수량 --',
       );
 
-  String _feeText(AppI18n i18n) => i18n.t(
-        zhHans: '手续费 --',
-        zhHant: '手續費 --',
-        en: 'Fee --',
-        ja: '手数料 --',
-        ko: '수수료 --',
-      );
-
   Future<String?> _submitUnavailable(String _) async {
     try {
       throw const WalletBackendUnavailableException();
@@ -145,19 +240,25 @@ class _WithdrawTransferConfirmScreenState
   }
 
   Future<void> _continue() async {
+    if (!_canContinue) return;
     final amount = _amount;
     if (amount == null || !amount.isPositive) return;
     if (widget.mode == WithdrawTransferMode.chain) {
       if (!_supportsChainWithdraw) return;
-      await openWalletPage<void>(
-        context,
-        WithdrawChainReviewScreen(
-          coin: widget.coin,
-          payMethod: widget.payMethod,
-          toAddress: widget.targetValue,
-          amountMinor: amount.minor,
-        ),
-      );
+      setState(() => _openingReview = true);
+      try {
+        await openWalletPage<void>(
+            context,
+            WithdrawChainReviewScreen(
+              coin: widget.coin,
+              payMethod: widget.payMethod,
+              toAddress: widget.targetValue,
+              amountMinor: amount.minor,
+              api: widget.api,
+            ));
+      } finally {
+        if (mounted) setState(() => _openingReview = false);
+      }
       return;
     }
 
@@ -272,13 +373,17 @@ class _WithdrawTransferConfirmScreenState
   Widget _buildPercentRow() {
     return Row(
       children: [
-        Expanded(child: _PercentKey(label: '25%', onTap: () => _applyPercent(25))),
+        Expanded(
+            child: _PercentKey(label: '25%', onTap: () => _applyPercent(25))),
         const SizedBox(width: 10),
-        Expanded(child: _PercentKey(label: '50%', onTap: () => _applyPercent(50))),
+        Expanded(
+            child: _PercentKey(label: '50%', onTap: () => _applyPercent(50))),
         const SizedBox(width: 10),
-        Expanded(child: _PercentKey(label: '75%', onTap: () => _applyPercent(75))),
+        Expanded(
+            child: _PercentKey(label: '75%', onTap: () => _applyPercent(75))),
         const SizedBox(width: 10),
-        Expanded(child: _PercentKey(label: '100%', onTap: () => _applyPercent(100))),
+        Expanded(
+            child: _PercentKey(label: '100%', onTap: () => _applyPercent(100))),
       ],
     );
   }
@@ -311,7 +416,8 @@ class _WithdrawTransferConfirmScreenState
                 const SizedBox(height: 32),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.of(context, rootNavigator: true).maybePop(),
+                  onTap: () =>
+                      Navigator.of(context, rootNavigator: true).maybePop(),
                   child: _FriendRecipientCard(
                     targetName: _friendName,
                     targetValue: widget.targetValue,
@@ -369,35 +475,17 @@ class _WithdrawTransferConfirmScreenState
                 const SizedBox(height: 32),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.of(context, rootNavigator: true).maybePop(),
+                  onTap: () =>
+                      Navigator.of(context, rootNavigator: true).maybePop(),
                   child: _ChainAddressCard(address: _shortAddress),
                 ),
                 const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    _minWithdrawText(i18n),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF8F95A3),
-                      height: 1.1,
-                    ),
+                if (_rules != null)
+                  WalletWithdrawalAmountRuleDetails(
+                    controller: _rules!,
+                    amount: _fundAmount,
+                    issue: _policyIssue,
                   ),
-                ),
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    _feeText(i18n),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF8F95A3),
-                      height: 1.1,
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 14),
                 _buildPercentRow(),
                 if (!_supportsChainWithdraw) ...[
@@ -406,11 +494,11 @@ class _WithdrawTransferConfirmScreenState
                     alignment: Alignment.centerLeft,
                     child: Text(
                       i18n.t(
-                        zhHans: '当前仅支持 USDT 链上提现',
-                        zhHant: '目前僅支援 USDT 鏈上提現',
-                        en: 'Only USDT on-chain withdrawals are supported.',
-                        ja: '現在はUSDTのオンチェーン出金のみサポートしています。',
-                        ko: '현재 USDT 온체인 출금만 지원합니다.',
+                        zhHans: '当前仅支持 USDT/TRX 链上提现',
+                        zhHant: '目前僅支援 USDT/TRX 鏈上提現',
+                        en: 'Only USDT and TRX on-chain withdrawals are supported.',
+                        ja: 'USDT/TRXのオンチェーン出金に対応しています。',
+                        ko: 'USDT/TRX 온체인 출금을 지원합니다.',
                       ),
                       style: TextStyle(
                         fontSize: 13,
@@ -506,13 +594,15 @@ class _FriendBalancePill extends StatelessWidget {
         children: [
           _TokenMark(payItem: payItem, size: 26),
           const SizedBox(width: 7),
-          Text(
-            '${payItem.coin}: $balance',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: cs.text,
-              height: 1,
+          Flexible(
+            child: Text(
+              '${payItem.coin}: $balance',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: cs.text,
+                height: 1,
+              ),
             ),
           ),
         ],
@@ -542,6 +632,7 @@ class _FriendAmountDisplay extends StatelessWidget {
         RichText(
           textAlign: TextAlign.center,
           text: TextSpan(
+            style: DefaultTextStyle.of(context).style,
             children: [
               TextSpan(
                 text: amountText,
@@ -600,6 +691,7 @@ class _ChainAmountDisplay extends StatelessWidget {
         RichText(
           textAlign: TextAlign.center,
           text: TextSpan(
+            style: DefaultTextStyle.of(context).style,
             children: [
               TextSpan(
                 text: amountText,
@@ -684,7 +776,8 @@ class _FriendRecipientCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
                       color: cs.inputFill,
                       borderRadius: BorderRadius.circular(9),
@@ -875,18 +968,22 @@ class _PercentKey extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: Container(
         height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: cs.inputFill,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: cs.line),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: cs.text,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: cs.text,
+            ),
           ),
         ),
       ),
@@ -907,7 +1004,20 @@ class _FriendNumberPad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final keys = <String>['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0'];
+    final cs = WalletPageColors.of(context);
+    final keys = <String>[
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '.',
+      '0'
+    ];
     final keyFontSize =
         (height / _WithdrawAmountEntryLayout._maxKeypadHeight * 26)
             .clamp(20.0, 26.0);
@@ -935,7 +1045,7 @@ class _FriendNumberPad extends StatelessWidget {
                 child: Icon(
                   Icons.backspace_outlined,
                   size: deleteIconSize,
-                  color: const Color(0xFF111111),
+                  color: cs.text,
                 ),
               );
             }
@@ -946,7 +1056,7 @@ class _FriendNumberPad extends StatelessWidget {
                 style: TextStyle(
                   fontSize: keyFontSize,
                   fontWeight: FontWeight.w500,
-                  color: const Color(0xFF2B2B2B),
+                  color: cs.text,
                 ),
               ),
             );
@@ -981,8 +1091,12 @@ class _TokenMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isUsdt = payItem.coin.toUpperCase() == 'USDT';
-    final isTrx = payItem.coin.toUpperCase() == 'TRX';
+    final coin = payItem.coin.trim().toUpperCase();
+    final fixedType = coin == 'USDT'
+        ? CoinType.usdt
+        : coin == 'TRX'
+            ? CoinType.trx
+            : null;
     final isPlatform = payItem.badge == '99' || payItem.coin == '99';
 
     return SizedBox(
@@ -991,50 +1105,39 @@ class _TokenMark extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              color: isUsdt
-                  ? const Color(0xFF26A17B)
-                  : (isTrx ? const Color(0xFFFF001F) : payItem.color),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: isPlatform
-                  ? ClipOval(
-                      child: Image.asset(
-                        'assets/img/platform_99.webp',
-                        width: size,
-                        height: size,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  : isTrx
-                      ? Image.asset(
-                          'assets/img/TRX.png',
-                          width: size * 0.72,
-                          height: size * 0.72,
-                          fit: BoxFit.contain,
+          if (fixedType != null)
+            WalletCoinLogo(type: fixedType, size: size)
+          else
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: payItem.color,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: isPlatform
+                    ? ClipOval(
+                        child: Image.asset(
+                          'assets/img/platform_99.webp',
+                          width: size,
+                          height: size,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Text(
+                        payItem.coin.isEmpty
+                            ? '?'
+                            : payItem.coin.substring(0, 1),
+                        style: TextStyle(
+                          fontSize: size * 0.54,
+                          fontWeight: FontWeight.w800,
                           color: Colors.white,
-                          colorBlendMode: BlendMode.srcIn,
-                        )
-                      : isUsdt
-                          ? CustomPaint(
-                              size: Size(size * 0.72, size * 0.72),
-                              painter: _UsdtPainter(),
-                            )
-                          : Text(
-                              payItem.coin.isEmpty ? '?' : payItem.coin.substring(0, 1),
-                              style: TextStyle(
-                                fontSize: size * 0.54,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                height: 1,
-                              ),
-                            ),
+                          height: 1,
+                        ),
+                      ),
+              ),
             ),
-          ),
           Positioned(
             right: -1,
             bottom: -1,
@@ -1065,47 +1168,4 @@ class _TokenMark extends StatelessWidget {
       ),
     );
   }
-}
-
-class _UsdtPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final fill = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    final stroke = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.08
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(w * 0.08, h * 0.12, w * 0.84, h * 0.16),
-        Radius.circular(w * 0.02),
-      ),
-      fill,
-    );
-    final stem = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.41, h * 0.12, w * 0.18, h * 0.76),
-      Radius.circular(w * 0.02),
-    );
-    canvas.drawRRect(stem, fill);
-    final oval = Rect.fromCenter(
-      center: Offset(w / 2, h * 0.53),
-      width: w * 0.92,
-      height: h * 0.28,
-    );
-    canvas.drawArc(oval, 0.06, 6.16, false, stroke);
-    final cover = Paint()
-      ..color = const Color(0xFF26A17B)
-      ..style = PaintingStyle.fill;
-    canvas.drawRect(Rect.fromLTWH(w * 0.35, h * 0.43, w * 0.30, h * 0.13), cover);
-    canvas.drawRRect(stem, fill);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

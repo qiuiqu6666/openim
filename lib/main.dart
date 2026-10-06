@@ -15,6 +15,7 @@ void main() {
     };
 
     Config.init(() async {
+      await AppSystemBars.initialize();
       AppThemeController.instance.load();
       NavigationGlassController.instance.load();
       await NavigationGlassController.instance.initializeRenderer();

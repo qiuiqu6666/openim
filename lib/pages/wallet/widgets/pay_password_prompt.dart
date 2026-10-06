@@ -3,7 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'wallet_coin_logo.dart';
+import 'platform_coin_icon.dart';
 import '../host/wallet_i18n.dart';
+import '../wallet_repository.dart';
 import 'wallet_99chat_scale.dart';
 import 'wallet_page_colors.dart';
 
@@ -102,6 +105,7 @@ class _PayPasswordPromptState extends State<PayPasswordPrompt> {
   String pwd = '';
   String err = '';
   bool sending = false;
+  bool succeeded = false;
   bool changingPay = false;
 
   late String _amountText = widget.amountText;
@@ -145,6 +149,9 @@ class _PayPasswordPromptState extends State<PayPasswordPrompt> {
     final msg = await widget.onSubmit(pwd);
     if (!mounted) return;
     if (msg == null || msg.isEmpty) {
+      setState(() => succeeded = true);
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
       Navigator.of(context).pop(true);
       return;
     }
@@ -266,15 +273,17 @@ class _PayPasswordPromptState extends State<PayPasswordPrompt> {
         .clamp(480.0, MediaQuery.sizeOf(context).height * 0.96)
         .toDouble();
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final statusText = sending
-        ? i18n.t(
-            zhHans: '正在验证...',
-            zhHant: '驗證中...',
-            en: 'Verifying...',
-            ja: '確認中...',
-            ko: '확인 중...',
-          )
-        : (err.isEmpty ? '' : err);
+    final statusText = succeeded
+        ? ''
+        : sending
+            ? i18n.t(
+                zhHans: '正在验证...',
+                zhHant: '驗證中...',
+                en: 'Verifying...',
+                ja: '確認中...',
+                ko: '확인 중...',
+              )
+            : (err.isEmpty ? '' : err);
     final statusColor = err.isEmpty ? cs.subText : cs.red;
 
     return ConstrainedBox(
@@ -458,12 +467,30 @@ class _PayPasswordPromptState extends State<PayPasswordPrompt> {
               Container(
                 color: cs.surfaceAlt,
                 padding: EdgeInsets.only(bottom: bottomInset),
-                child: _KeyPad(
-                  cs: cs,
-                  enabled: !sending,
-                  onTap: _tap,
-                  onDel: _delete,
-                ),
+                child: succeeded
+                    ? SizedBox(
+                        width: double.infinity,
+                        height: 432.h99,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.check_rounded, size: 32, color: cs.blue),
+                            const SizedBox(height: 12),
+                            Text(i18n.t(
+                                zhHans: '支付成功',
+                                zhHant: '支付成功',
+                                en: 'Payment successful',
+                                ja: '支払い成功',
+                                ko: '결제 성공')),
+                          ],
+                        ),
+                      )
+                    : _KeyPad(
+                        cs: cs,
+                        enabled: !sending,
+                        onTap: _tap,
+                        onDel: _delete,
+                      ),
               ),
             ],
           ),
@@ -730,10 +757,16 @@ class _PayCoinIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final upper = coinCode.toUpperCase();
+    final upper = coinCode.trim().toUpperCase();
     final url = logoUrl?.trim() ?? '';
-    final isUsdt = upper == 'USDT';
-    final isPlatform = upper == '99';
+    if (upper == 'USDT' || upper == 'TRX') {
+      return WalletCoinLogo(
+        type: upper == 'USDT' ? CoinType.usdt : CoinType.trx,
+        size: size,
+      );
+    }
+    final isPlatform = const {'99', '99BI', 'BI99', '99币'}.contains(upper);
+    if (isPlatform) return PlatformCoinIcon(size: size);
     if (url.isNotEmpty && !isPlatform) {
       return ClipOval(
         child: Image.network(
@@ -741,92 +774,42 @@ class _PayCoinIcon extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _fallback(upper, isUsdt, isPlatform),
+          errorBuilder: (_, __, ___) => _fallback(upper, isPlatform),
         ),
       );
     }
-    return _fallback(upper, isUsdt, isPlatform);
+    return _fallback(upper, isPlatform);
   }
 
-  Widget _fallback(String upper, bool isUsdt, bool isPlatform) {
+  Widget _fallback(String upper, bool isPlatform) {
     return SizedBox(
       width: size,
       height: size,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: isUsdt ? const Color(0xFF26A17B) : const Color(0xFF20B282),
+          color: const Color(0xFF20B282),
           shape: BoxShape.circle,
         ),
         child: Center(
-          child: isUsdt
-              ? CustomPaint(
-                  size: Size(size * 0.72, size * 0.72),
-                  painter: _UsdtPainter(),
+          child: isPlatform
+              ? ClipOval(
+                  child: Image.asset(
+                    'assets/img/platform_99.webp',
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                  ),
                 )
-              : isPlatform
-                  ? ClipOval(
-                      child: Image.asset(
-                        'assets/img/platform_99.webp',
-                        width: size,
-                        height: size,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  : Text(
-                      upper.isEmpty ? '?' : upper.substring(0, 1),
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 30.sp99,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+              : Text(
+                  upper.isEmpty ? '?' : upper.substring(0, 1),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 30.sp99,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
         ),
       ),
     );
   }
-}
-
-class _UsdtPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final fill = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    final stroke = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.08
-      ..strokeCap = StrokeCap.round;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(w * 0.08, h * 0.12, w * 0.84, h * 0.16),
-        Radius.circular(w * 0.02),
-      ),
-      fill,
-    );
-    final stem = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.41, h * 0.12, w * 0.18, h * 0.76),
-      Radius.circular(w * 0.02),
-    );
-    canvas.drawRRect(stem, fill);
-    final oval = Rect.fromCenter(
-      center: Offset(w / 2, h * 0.53),
-      width: w * 0.92,
-      height: h * 0.28,
-    );
-    canvas.drawArc(oval, 0.06, 6.16, false, stroke);
-    final cover = Paint()
-      ..color = const Color(0xFF26A17B)
-      ..style = PaintingStyle.fill;
-    canvas.drawRect(
-      Rect.fromLTWH(w * 0.35, h * 0.43, w * 0.30, h * 0.13),
-      cover,
-    );
-    canvas.drawRRect(stem, fill);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

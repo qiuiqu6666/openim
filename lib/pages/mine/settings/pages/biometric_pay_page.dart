@@ -332,20 +332,14 @@ class _BiometricPayPageState extends State<BiometricPayPage>
     final text = AppTokens.textPrimary(dark: dark);
     final subText = AppTokens.textSecondary(dark: dark);
     final line = AppTokens.border(dark: dark);
-    final overlay = SystemUiOverlayStyle(
-      statusBarColor: bg,
-      statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
-      statusBarBrightness: dark ? Brightness.dark : Brightness.light,
-      systemNavigationBarColor: bg,
-      systemNavigationBarIconBrightness:
-          dark ? Brightness.light : Brightness.dark,
-    );
+    final overlay = AppSystemBars.styleFor(bg);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: overlay,
       child: Scaffold(
         backgroundColor: bg,
-        appBar: AppBar(
+        appBar: GlassAppBar(
+          toolbarHeight: kToolbarHeight,
           elevation: 0,
           scrolledUnderElevation: 0,
           backgroundColor: bg,

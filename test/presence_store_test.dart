@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart' hide Response;
@@ -5,6 +7,53 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:openim/pages/contacts/presence_store.dart';
+
+/// Hold a real Dio request at its interceptor boundary until the test replies.
+/// The store still builds its own URL, headers, payload and response handling.
+class _PresenceReplyGate {
+  _PresenceReplyGate() {
+    client.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) {
+      _request = request;
+      _handler = handler;
+      started.complete(request);
+    }));
+  }
+
+  final client = Dio();
+  final started = Completer<RequestOptions>();
+  RequestOptions? _request;
+  RequestInterceptorHandler? _handler;
+  bool _replied = false;
+
+  void reply({bool online = true, int? lastSeenAt, bool showLastSeen = true}) {
+    if (_replied || _handler == null) return;
+    _replied = true;
+    _handler!.resolve(Response(requestOptions: _request!, data: {
+      'errCode': 0,
+      'data': {
+        'users': [
+          {
+            'userID': 'friend',
+            'online': online,
+            'showLastSeen': showLastSeen,
+            'lastSeenAt': lastSeenAt,
+          }
+        ]
+      }
+    }));
+  }
+
+  void close() {
+    reply();
+    client.close(force: true);
+  }
+}
+
+Future<void> _presenceCredentials(
+    {String owner = 'me', String token = 'chat'}) async {
+  await DataSp.putLoginCertificate(
+      LoginCertificate.fromJson({'userID': owner, 'chatToken': token}));
+}
 
 void main() {
   setUpAll(() {
@@ -149,5 +198,95 @@ void main() {
     store.markOffline('friend');
     expect(store.users['friend']!.label, '刚刚在线');
     store.dispose();
+  });
+
+  group('presence request timing', () {
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await SpUtil().init();
+      await _presenceCredentials();
+    });
+
+    for (final changeOwner in [false, true]) {
+      test(
+          'late response is ignored after ${changeOwner ? 'owner replacement' : 'same owner token rotation'}',
+          () async {
+        final gate = _PresenceReplyGate();
+        final store = PresenceStore(client: gate.client);
+        addTearDown(gate.close);
+        addTearDown(store.dispose);
+        final snapshot = UserPresence(false, 1790849179579);
+        store.users['friend'] = snapshot;
+        final refresh = store.refresh(['friend']);
+        final request = await gate.started.future;
+        expect(request.headers['token'], 'chat');
+        expect(request.data['userIDs'], ['friend']);
+        expect(store.users['friend'], same(snapshot));
+        await _presenceCredentials(
+            owner: changeOwner ? 'next-user' : 'me', token: 'next-chat');
+        gate.reply();
+        await refresh;
+        expect(store.users['friend'], same(snapshot));
+        expect(store.users['friend']!.online, isFalse);
+        expect(store.users['friend']!.lastSeenAt, 1790849179579);
+      });
+    }
+
+    for (final closeStore in [false, true]) {
+      test(
+          'late response is ignored after ${closeStore ? 'disposal' : 'stopWatching'}',
+          () async {
+        final gate = _PresenceReplyGate();
+        final store = PresenceStore(client: gate.client);
+        addTearDown(gate.close);
+        addTearDown(store.dispose);
+        final snapshot = UserPresence(false, 1790849179579);
+        store.users['friend'] = snapshot;
+        final refresh = store.refresh(['friend']);
+        await gate.started.future;
+        if (closeStore) {
+          store.dispose();
+          expect(store.users, isEmpty);
+        } else {
+          store.stopWatching('friend');
+          expect(store.users['friend'], same(snapshot));
+        }
+        gate.reply();
+        await refresh;
+        if (closeStore) {
+          expect(store.users, isEmpty);
+        } else {
+          expect(store.users['friend'], same(snapshot));
+          expect(store.users['friend']!.lastSeenAt, 1790849179579);
+        }
+      });
+    }
+
+    test('refresh keeps the snapshot and identical fields do not notify again',
+        () async {
+      final gate = _PresenceReplyGate();
+      final store = PresenceStore(client: gate.client);
+      addTearDown(gate.close);
+      addTearDown(store.dispose);
+      final snapshot = UserPresence(false, 1790849179579);
+      store.users['friend'] = snapshot;
+      var changes = 0;
+      final subscription = store.users.listen((_) => changes++);
+      addTearDown(subscription.cancel);
+      await Future<void>.delayed(Duration.zero);
+      changes = 0;
+
+      final refresh = store.refresh(['friend']);
+      await gate.started.future;
+      expect(store.users['friend'], same(snapshot));
+      expect(store.users.keys, ['friend']);
+      expect(changes, 0);
+      gate.reply(online: false, lastSeenAt: snapshot.lastSeenAt);
+      await refresh;
+      await Future<void>.delayed(Duration.zero);
+      expect(store.users['friend'], same(snapshot));
+      expect(changes, 0,
+          reason: 'An unchanged result must not rebuild presence consumers.');
+    });
   });
 }

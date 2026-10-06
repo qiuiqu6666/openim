@@ -15,8 +15,14 @@ void main() {
     );
 
     expect(store.items, hasLength(2));
-    expect(store.items.first.text, 'Remember this');
-    final id = store.items.last.id;
+    expect(
+        store.items
+            .singleWhere((item) => item.type == FavoriteDraftType.note)
+            .text,
+        'Remember this');
+    final id = store.items
+        .singleWhere((item) => item.type == FavoriteDraftType.image)
+        .id;
 
     store.remove(id);
     expect(store.items, hasLength(1));

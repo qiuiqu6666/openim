@@ -14,36 +14,87 @@ class NewMessageIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
+    final label = newMessageCount > 0
+        ? sprintf(StrRes.nMessage, [newMessageCount])
+        : StrRes.backToBottom;
+    final radius = BorderRadius.only(
+      topLeft: Radius.circular(ChatScrollHintTokens.radius.r),
+      bottomLeft: Radius.circular(ChatScrollHintTokens.radius.r),
+    );
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: label,
+      hint: newMessageCount > 0 ? StrRes.backToBottom : null,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
         onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 13.w, vertical: 7.h),
-          constraints: BoxConstraints(minHeight: 31.h),
-          decoration: BoxDecoration(
-            color: Styles.c_FFFFFF,
-            borderRadius: BorderRadius.circular(16.r),
-            border: Border.all(color: Styles.c_E8EAEF, width: 1),
-            boxShadow: [
-              BoxShadow(
-                offset: Offset(0, 6.h),
-                blurRadius: 16.r,
-                spreadRadius: 1.r,
-                color: Styles.c_8E9AB0_opacity16,
-              ),
-            ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: kMinInteractiveDimension,
+            minHeight: kMinInteractiveDimension,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ImageRes.scrollDown.toImage
-                ..width = 16.w
-                ..height = 16.h,
-              4.horizontalSpace,
-              sprintf(StrRes.nMessage, [newMessageCount]).toText
-                ..style = Styles.ts_0089FF_12sp,
-            ],
+          child: Center(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints:
+                  BoxConstraints(minHeight: ChatScrollHintTokens.minHeight.h),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  boxShadow: [
+                    BoxShadow(
+                      offset: Offset(0, ChatScrollHintTokens.shadowOffset.h),
+                      blurRadius: ChatScrollHintTokens.shadowBlur.r,
+                      color: ChatScrollHintTokens.shadow,
+                    ),
+                  ],
+                ),
+                child: Material(
+                  type: MaterialType.transparency,
+                  borderRadius: radius,
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    borderRadius: radius,
+                    excludeFromSemantics: true,
+                    onTap: onTap,
+                    child: Ink(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: ChatScrollHintTokens.horizontalPadding.w,
+                        vertical: ChatScrollHintTokens.verticalPadding.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: ChatScrollHintTokens.background,
+                        borderRadius: radius,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.keyboard_double_arrow_down,
+                            color: ChatScrollHintTokens.foreground,
+                            size: ChatScrollHintTokens.iconSize.r,
+                          ),
+                          AppTokens.s2.horizontalSpace,
+                          Flexible(
+                            child: Text(label,
+                                style: Styles.ts_FFFFFF_14sp_medium.copyWith(
+                                  color: ChatScrollHintTokens.foreground,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1,
+                                )),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),

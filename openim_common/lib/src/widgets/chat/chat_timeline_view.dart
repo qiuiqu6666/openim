@@ -4,23 +4,48 @@ import 'package:openim_common/openim_common.dart';
 
 class ChatTimelineView extends StatelessWidget {
   const ChatTimelineView({
-    Key? key,
+    super.key,
     required this.timeStr,
     this.margin,
-  }) : super(key: key);
+    this.onTap,
+    this.semanticLabel,
+  });
   final String timeStr;
   final EdgeInsetsGeometry? margin;
+  final VoidCallback? onTap;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: margin,
+    final tip = Container(
       padding: EdgeInsets.symmetric(vertical: 2.h, horizontal: 6.w),
       decoration: BoxDecoration(
-        color: Styles.c_F4F5F7,
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(4.r),
       ),
-      child: timeStr.toText..style = Styles.ts_8E9AB0_12sp,
+      child: Text(timeStr,
+          style: Styles.ts_8E9AB0_12sp
+              .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+    );
+    return Padding(
+      padding: margin ?? EdgeInsets.zero,
+      child: onTap == null
+          ? tip
+          : TextButton(
+              onPressed: onTap,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(
+                    kMinInteractiveDimension, kMinInteractiveDimension),
+                padding: EdgeInsets.zero,
+                foregroundColor: Theme.of(context).colorScheme.primary,
+              ),
+              child: Semantics(
+                label:
+                    semanticLabel == null ? null : '$timeStr, $semanticLabel',
+                excludeSemantics: semanticLabel != null,
+                child: tip,
+              ),
+            ),
     );
   }
 }

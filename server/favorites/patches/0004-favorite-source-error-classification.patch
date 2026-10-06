@@ -1,0 +1,409 @@
+diff --git a/internal/rpc/chat/favorite_source.go b/internal/rpc/chat/favorite_source.go
+--- a/internal/rpc/chat/favorite_source.go
++++ b/internal/rpc/chat/favorite_source.go
+@@ -2,6 +2,8 @@
+ 
+ import (
+ 	"context"
++	"encoding/xml"
++	"errors"
+ 	"io"
+ 	"net/http"
+ 	"net/url"
+@@ -10,17 +12,18 @@
+ 
+ 	"github.com/minio/minio-go/v7"
+ 	"github.com/openimsdk/chat/pkg/eerrs"
++	"github.com/openimsdk/tools/log"
+ )
+ 
+ // Called only with a snapshot captured after PullMsgsBySeq and message eligibility
+ // checks. Resolve the logical name using OpenIM's metadata, without guessing a key.
+ func (o *chatSvr) readFavoriteSource(ctx context.Context, name string, limit int64) ([]byte, error) {
+ 	if o.IM == nil || name == "" || limit <= 0 {
+-		return nil, eerrs.ErrSourceNotAccessible
++		return nil, eerrs.ErrFavoriteTemporary
+ 	}
+ 	raw, err := o.IM.ResolveObjectURL(ctx, name)
+ 	if err != nil {
+-		return nil, eerrs.ErrSourceNotAccessible
++		return nil, favoriteResolutionFailure(ctx, err)
+ 	}
+ 	return o.Favorite.readResolvedSource(ctx, raw, limit)
+ }
+@@ -29,15 +32,15 @@
+ // one-byte GET range avoids signing a HEAD method with a GET-only signature.
+ func (o *chatSvr) probeFavoriteSource(ctx context.Context, name string) error {
+ 	if o.IM == nil || name == "" {
+-		return eerrs.ErrAssetMissing
++		return eerrs.ErrFavoriteTemporary
+ 	}
+ 	raw, err := o.IM.ResolveObjectURL(ctx, name)
+ 	if err != nil {
+-		return eerrs.ErrAssetMissing
++		return favoriteResolutionFailure(ctx, err)
+ 	}
+ 	resp, err := o.Favorite.openResolvedSource(ctx, raw, "bytes=0-0")
+ 	if err != nil {
+-		return eerrs.ErrAssetMissing
++		return err
+ 	}
+ 	resp.Body.Close()
+ 	return nil
+@@ -47,7 +50,7 @@
+ 	parsed, err := url.Parse(raw)
+ 	if err != nil || parsed == nil || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" ||
+ 		(parsed.Scheme != "http" && parsed.Scheme != "https") || f.Bucket == "" {
+-		return nil, eerrs.ErrSourceNotAccessible
++		return nil, eerrs.ErrFavoriteTemporary
+ 	}
+ 	allowed := false
+ 	for _, client := range []*minio.Client{f.Client, f.PublicSigner} {
+@@ -58,11 +61,11 @@
+ 	}
+ 	prefix := "/" + f.Bucket + "/"
+ 	if !allowed || !strings.HasPrefix(parsed.Path, prefix) || len(parsed.Path) == len(prefix) {
+-		return nil, eerrs.ErrSourceNotAccessible
++		return nil, eerrs.ErrFavoriteTemporary
+ 	}
+ 	for _, segment := range strings.Split(parsed.Path, "/") {
+ 		if segment == "." || segment == ".." || strings.ContainsRune(segment, '\\') {
+-			return nil, eerrs.ErrSourceNotAccessible
++			return nil, eerrs.ErrFavoriteTemporary
+ 		}
+ 	}
+ 	return parsed, nil
+@@ -87,11 +90,11 @@
+ func (f favoriteSettings) openResolvedSource(ctx context.Context, raw, byteRange string) (*http.Response, error) {
+ 	parsed, err := f.trustedSourceURL(raw)
+ 	if err != nil {
+-		return nil, err
++		return nil, favoriteSourceUnavailable(ctx, "policy", "origin_or_path_rejected", 0, false)
+ 	}
+ 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
+ 	if err != nil {
+-		return nil, eerrs.ErrSourceNotAccessible
++		return nil, eerrs.ErrFavoriteTemporary
+ 	}
+ 	if byteRange != "" {
+ 		request.Header.Set("Range", byteRange)
+@@ -104,11 +107,25 @@
+ 	resp, err := client.Do(request)
+ 	if err != nil {
+ 		// net/http errors include the request URL; never expose the private lease.
+-		return nil, eerrs.ErrSourceNotAccessible
++		return nil, favoriteSourceUnavailable(ctx, "storage", "network_error", 0, false)
+ 	}
+ 	if resp.StatusCode != http.StatusOK && !(byteRange != "" && resp.StatusCode == http.StatusPartialContent) {
++		missing := false
++		if resp.StatusCode == http.StatusNotFound {
++			// Plain/proxy 404 and NoSuchBucket are not proof of missing bytes.
++			var storageError struct {
++				Code string `xml:"Code"`
++			}
++			if xml.NewDecoder(io.LimitReader(resp.Body, 8192)).Decode(&storageError) == nil {
++				missing = storageError.Code == "NoSuchKey"
++			}
++		}
+ 		resp.Body.Close()
+-		return nil, eerrs.ErrSourceNotAccessible
++		category := "http_unavailable"
++		if missing {
++			category = "object_not_found"
++		}
++		return nil, favoriteSourceUnavailable(ctx, "storage", category, resp.StatusCode, missing)
+ 	}
+ 	return resp, nil
+ }
+@@ -127,10 +144,28 @@
+ 	}
+ 	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+ 	if err != nil {
+-		return nil, eerrs.ErrSourceNotAccessible
++		return nil, favoriteSourceUnavailable(ctx, "storage_body", "read_error", 0, false)
+ 	}
+ 	if int64(len(body)) > limit {
+ 		return nil, eerrs.ErrMediaTooLarge
+ 	}
+ 	return body, nil
+ }
++
++// Log only fixed categories and numeric status, never object names, URL, headers,
++// upstream detail, error bodies or transport errors containing a signed query.
++func favoriteSourceUnavailable(ctx context.Context, stage, category string, status int, missing bool) error {
++	err := eerrs.ErrFavoriteTemporary
++	if missing {
++		err = eerrs.ErrAssetMissing
++	}
++	log.ZWarn(ctx, "favorite source unavailable", err, "stage", stage, "category", category, "httpStatus", status)
++	return err
++}
++
++func favoriteResolutionFailure(ctx context.Context, err error) error {
++	if errors.Is(err, eerrs.ErrAssetMissing) {
++		return eerrs.ErrAssetMissing
++	}
++	return favoriteSourceUnavailable(ctx, "metadata", "resolution_unavailable", 0, false)
++}
+diff --git a/internal/rpc/chat/favorite_write.go b/internal/rpc/chat/favorite_write.go
+--- a/internal/rpc/chat/favorite_write.go
++++ b/internal/rpc/chat/favorite_write.go
+@@ -1100,7 +1100,7 @@
+ 		return nil, eerrs.ErrArchiveFailed
+ 	}
+ 	if err := o.probeFavoriteSource(ctx, snap.ObjectName); err != nil {
+-		return nil, eerrs.ErrAssetMissing
++		return nil, err
+ 	}
+ 	if err := store.ReserveQuota(ctx, owner, 1, snap.SizeBytes, o.Favorite.MaxCount, o.Favorite.MaxBytes); err != nil {
+ 		if quotaExceeded(err) {
+diff --git a/internal/rpc/chat/favorite_source_test.go b/internal/rpc/chat/favorite_source_test.go
+--- a/internal/rpc/chat/favorite_source_test.go
++++ b/internal/rpc/chat/favorite_source_test.go
+@@ -211,6 +211,7 @@
+ 		}
+ 		if missing {
+ 			w.WriteHeader(http.StatusNotFound)
++			_, _ = w.Write([]byte(`<Error><Code>NoSuchKey</Code></Error>`))
+ 			return
+ 		}
+ 		w.WriteHeader(http.StatusPartialContent)
+diff --git a/internal/rpc/chat/favorite_source_diagnostics_test.go b/internal/rpc/chat/favorite_source_diagnostics_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/rpc/chat/favorite_source_diagnostics_test.go
+@@ -0,0 +1,89 @@
++package chat
++
++import (
++	"context"
++	"errors"
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++
++	chatconstant "github.com/openimsdk/chat/pkg/common/constant"
++	chatdb "github.com/openimsdk/chat/pkg/common/db/table/chat"
++	"github.com/openimsdk/chat/pkg/common/imapi"
++	"github.com/openimsdk/chat/pkg/common/mctx"
++	"github.com/openimsdk/chat/pkg/eerrs"
++	chatpb "github.com/openimsdk/chat/pkg/protocol/chat"
++)
++
++type favoriteFailingResolver struct {
++	imapi.CallerInterface
++	err error
++}
++
++func (r favoriteFailingResolver) ResolveObjectURL(context.Context, string) (string, error) {
++	return "", r.err
++}
++
++func TestFavoriteSourceDiagnosticsRetryPreservesMissingVersusUnavailable(t *testing.T) {
++	for _, test := range []struct {
++		name     string
++		status   int
++		body     string
++		expected error
++	}{
++		{"object_missing", 404, `<Error><Code>NoSuchKey</Code><Message>private-lease</Message></Error>`, eerrs.ErrAssetMissing},
++		{"bucket_missing", 404, `<Error><Code>NoSuchBucket</Code></Error>`, eerrs.ErrFavoriteTemporary},
++		{"proxy_404", 404, `not found private-lease`, eerrs.ErrFavoriteTemporary},
++		{"gone_unknown", 410, ``, eerrs.ErrFavoriteTemporary},
++		{"auth", 401, ``, eerrs.ErrFavoriteTemporary},
++		{"signature", 403, `<Error><Code>SignatureDoesNotMatch</Code></Error>`, eerrs.ErrFavoriteTemporary},
++		{"server", 503, ``, eerrs.ErrFavoriteTemporary},
++		{"redirect", 302, ``, eerrs.ErrFavoriteTemporary},
++	} {
++		t.Run(test.name, func(t *testing.T) {
++			storage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
++				w.WriteHeader(test.status)
++				_, _ = w.Write([]byte(test.body))
++			}))
++			defer storage.Close()
++			resolver := &favoriteSourceTestResolver{url: storage.URL + "/favorites/key?X-Amz-Signature=private-lease"}
++			store := &favoriteSourceTestStore{item: &chatdb.FavoriteItem{ID: "favorite", OwnerIMID: "owner", Status: chatdb.FavoriteArchiveFailed}, job: &chatdb.FavoriteArchiveJob{JobID: "job", SnapshotJSON: `{"objectName":"logical-message.png","sizeBytes":100}`}}
++			server := &chatSvr{Favorite: favoriteSourceTestSettings(t, storage.URL, ""), IM: resolver, Database: &favoriteSourceTestDatabase{store: store}}
++			ctx := mctx.WithOpUserID(context.Background(), "owner", chatconstant.NormalUser)
++			_, err := server.RetryChatFavoriteArchive(ctx, &chatpb.RetryChatFavoriteArchiveReq{Id: "favorite", ClientRequestID: "12345678-1234-4234-8234-123456789abc"})
++			if err != test.expected || store.reserved != 0 || store.requeued || store.reopened {
++				t.Fatal("retry must preserve source classification without changing archive/quota state")
++			}
++			if strings.Contains(err.Error(), "private-lease") || strings.Contains(err.Error(), storage.URL) {
++				t.Fatal("source detail must remain private")
++			}
++		})
++	}
++}
++
++func TestFavoriteSourceDiagnosticsNetworkPolicyAndResolverErrorsAreTemporary(t *testing.T) {
++	storage := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
++	f := favoriteSourceTestSettings(t, storage.URL, "")
++	storage.Close()
++	for _, raw := range []string{storage.URL + "/favorites/key?X-Amz-Signature=private-lease", storage.URL + "/other/key", "http://untrusted.test/favorites/key"} {
++		server := &chatSvr{Favorite: f, IM: &favoriteSourceTestResolver{url: raw}}
++		if err := server.probeFavoriteSource(context.Background(), "logical-message.png"); err != eerrs.ErrFavoriteTemporary {
++			t.Fatal("network and trust-policy errors must not become AssetMissing")
++		}
++	}
++	for _, cause := range []error{eerrs.ErrAssetMissing, eerrs.ErrFavoriteTemporary, errors.New("network http://storage/key?X-Amz-Signature=private-lease")} {
++		server := &chatSvr{Favorite: f, IM: favoriteFailingResolver{err: cause}}
++		err := server.probeFavoriteSource(context.Background(), "logical-message.png")
++		if cause == eerrs.ErrAssetMissing {
++			if err != eerrs.ErrAssetMissing {
++				t.Fatal("confirmed metadata absence must be preserved")
++			}
++		} else if err != eerrs.ErrFavoriteTemporary {
++			t.Fatal("unconfirmed resolver failures must remain temporary")
++		}
++		if strings.Contains(err.Error(), "private-lease") {
++			t.Fatal("resolver causes must not leak a signed query")
++		}
++	}
++}
+diff --git a/pkg/common/imapi/call.go b/pkg/common/imapi/call.go
+--- a/pkg/common/imapi/call.go
++++ b/pkg/common/imapi/call.go
+@@ -61,8 +61,21 @@
+ 	if a.api == "/object/access_url" {
+ 		// Neither upstream error details nor response bodies may log a signed URL.
+ 		if err != nil {
+-			safeErr := errors.New("object URL resolution failed")
+-			log.ZError(ctx, "api caller failed", safeErr, "api", a.api, "duration", time.Since(start))
++			upstreamCode := 0
++			var coded errs.CodeError
++			if errors.As(err, &coded) {
++				upstreamCode = coded.Code()
++			}
++			upstreamHTTP := 0
++			var httpFailure *objectURLHTTPError
++			if errors.As(err, &httpFailure) {
++				upstreamHTTP = httpFailure.status
++			}
++			safeErr := errs.NewCodeError(20066, "ObjectURLResolutionFailed")
++			if upstreamCode != 0 {
++				safeErr = errs.NewCodeError(upstreamCode, "ObjectURLResolutionFailed")
++			}
++			log.ZError(ctx, "api caller failed", safeErr, "api", a.api, "duration", time.Since(start), "stage", "metadata", "upstreamCode", upstreamCode, "httpStatus", upstreamHTTP)
+ 			return nil, safeErr
+ 		}
+ 		log.ZInfo(ctx, "api caller success", "api", a.api, "duration", time.Since(start))
+@@ -104,6 +117,9 @@
+ 		return nil, err
+ 	}
+ 	defer response.Body.Close()
++	if a.api == "/object/access_url" && response.StatusCode != http.StatusOK {
++		return nil, &objectURLHTTPError{status: response.StatusCode}
++	}
+ 	data, err := io.ReadAll(response.Body)
+ 	if err != nil {
+ 		return nil, errs.WrapMsg(err, "read http response body", "url", url, "code", response.StatusCode)
+diff --git a/pkg/common/imapi/caller.go b/pkg/common/imapi/caller.go
+--- a/pkg/common/imapi/caller.go
++++ b/pkg/common/imapi/caller.go
+@@ -2,9 +2,11 @@
+ 
+ import (
+ 	"context"
++	"errors"
+ 	"sync"
+ 	"time"
+ 
++	"github.com/openimsdk/tools/errs"
+ 	"github.com/openimsdk/tools/log"
+ 
+ 	"github.com/openimsdk/chat/pkg/common/mctx"
+@@ -527,15 +529,26 @@
+ // The response contains a private signed URL and must not enter ordinary logs.
+ func (c *Caller) ResolveObjectURL(ctx context.Context, name string) (string, error) {
+ 	if name == "" {
+-		return "", eerrs.ErrSourceNotAccessible
++		return "", eerrs.ErrFavoriteTemporary
+ 	}
+ 	apiCtx, err := c.adminCtx(ctx)
+ 	if err != nil {
+-		return "", eerrs.ErrSourceNotAccessible
++		log.ZWarn(ctx, "favorite source unavailable", eerrs.ErrFavoriteTemporary, "stage", "metadata", "category", "admin_auth")
++		return "", eerrs.ErrFavoriteTemporary
+ 	}
+ 	resp, err := resolveObjectURL.Call(apiCtx, c.imApi, &third.AccessURLReq{Name: name})
+-	if err != nil || resp == nil || resp.Url == "" || resp.ExpireTime <= time.Now().UnixMilli() {
+-		return "", eerrs.ErrSourceNotAccessible
++	if err != nil {
++		var coded errs.CodeError
++		if errors.As(err, &coded) && coded.Code() == errs.RecordNotFoundError {
++			// This proves only engine/name metadata is absent, not physical deletion.
++			log.ZWarn(ctx, "favorite source unavailable", eerrs.ErrAssetMissing, "stage", "metadata", "category", "metadata_not_found", "upstreamCode", coded.Code())
++			return "", eerrs.ErrAssetMissing
++		}
++		return "", eerrs.ErrFavoriteTemporary
++	}
++	if resp == nil || resp.Url == "" || resp.ExpireTime <= time.Now().UnixMilli() {
++		log.ZWarn(ctx, "favorite source unavailable", eerrs.ErrFavoriteTemporary, "stage", "metadata", "category", "invalid_or_expired_lease")
++		return "", eerrs.ErrFavoriteTemporary
+ 	}
+ 	return resp.Url, nil
+ }
+diff --git a/pkg/common/imapi/object_url_http_error.go b/pkg/common/imapi/object_url_http_error.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/common/imapi/object_url_http_error.go
+@@ -0,0 +1,6 @@
++package imapi
++
++// Only the numeric HTTP status survives the metadata boundary; no URL or body.
++type objectURLHTTPError struct{ status int }
++
++func (*objectURLHTTPError) Error() string { return "ObjectURLHTTPUnavailable" }
+diff --git a/pkg/common/imapi/favorite_object_diagnostics_test.go b/pkg/common/imapi/favorite_object_diagnostics_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/common/imapi/favorite_object_diagnostics_test.go
+@@ -0,0 +1,46 @@
++package imapi
++
++import (
++	"context"
++	"fmt"
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++
++	"github.com/openimsdk/chat/pkg/eerrs"
++)
++
++func TestFavoriteObjectDiagnosticsPreserveMetadataNotFoundAndSanitizeOtherCodes(t *testing.T) {
++	for _, code := range []int{1004, 1002, 1501, 1502, 1503} {
++		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
++			_, _ = fmt.Fprintf(w, `{"errCode":%d,"errMsg":"private-lease","errDlt":"http://storage/key?X-Amz-Signature=private-lease"}`, code)
++		}))
++		_, err := favoriteObjectTestCaller(server).ResolveObjectURL(context.Background(), "logical-message.png")
++		server.Close()
++		if code == 1004 {
++			if err != eerrs.ErrAssetMissing {
++				t.Fatal("metadata record-not-found must retain its classification")
++			}
++		} else if err != eerrs.ErrFavoriteTemporary {
++			t.Fatal("auth and internal errors must remain service unavailable")
++		}
++		if strings.Contains(err.Error(), "private-lease") || strings.Contains(err.Error(), "storage/key") {
++			t.Fatal("numeric classification must not preserve upstream detail")
++		}
++	}
++}
++
++func TestFavoriteObjectDiagnosticsHTTPErrorCannotMasqueradeAsSuccessfulLease(t *testing.T) {
++	for _, status := range []int{401, 403, 503} {
++		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
++			w.WriteHeader(status)
++			_, _ = w.Write([]byte(`{"errCode":0,"data":{"url":"http://storage/key?X-Amz-Signature=private-lease","expireTime":9999999999999}}`))
++		}))
++		_, err := favoriteObjectTestCaller(server).ResolveObjectURL(context.Background(), "logical-message.png")
++		server.Close()
++		if err != eerrs.ErrFavoriteTemporary {
++			t.Fatal("HTTP failure must not produce a usable signed lease")
++		}
++	}
++}

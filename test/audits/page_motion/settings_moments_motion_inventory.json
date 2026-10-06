@@ -1,0 +1,920 @@
+{
+  "generated_at": "2026-10-06",
+  "scope": "mine/moments/favorites/group_features/fund; production read-only",
+  "classification_note": "Source inventory and motion-hotspot scan cover all listed Dart files; core_layout_reads records deeper source inspection. Public widget classes include shared views/sheets and legacy wrappers, not a count of distinct routes. Functional or private picker/preview entry helpers remain in filename candidates.",
+  "total_dart_file_count": 306,
+  "total_public_widget_entry_class_count": 85,
+  "core_layout_read_count": 37,
+  "core_layout_reads": [
+    "E:/openim/openim-flutter-demo/lib/pages/mine/settings/widgets/settings_widgets.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/widgets/mine_profile_header.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/widgets/mine_profile_view.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/settings/settings_home_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/account_security_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/friend_permission_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/storage_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/chat_storage_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/settings/storage/conversation_storage_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/login_devices_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/profile_info_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/favorites_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/favorite_detail_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/calls/recent_calls_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/favorites/widgets/favorite_capability_gate.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/favorites/media/favorite_asset_preview.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/moments/moments_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/moments/moments_detail_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/moments/moments_compose_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_cover_header.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/moments/media/moments_media_grid.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/moments/media/moments_media_image.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/moments/media/moments_single_media_frame.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_all_users_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_agent_team_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_user_detail_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_current_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_history_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/data/agent_query_controller.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/data/agent_rebate_controller.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_entry_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_room_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/group_features/live/playback/live_player_view.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/group_features/live/playback/live_fullscreen_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/fund/fund_detail_page.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_transfer_detail.dart",
+    "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_send_form.dart"
+  ],
+  "areas": [
+    {
+      "area": "lib/pages/mine",
+      "dart_file_count": 99,
+      "public_widget_entry_class_count": 45,
+      "dart_files": [
+        "E:/openim/openim-flutter-demo/lib/pages/mine/about_us/about_us_binding.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/about_us/about_us_logic.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/about_us/about_us_view.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/account_setup/account_setup_binding.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/account_setup/account_setup_logic.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/account_setup/account_setup_view.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/account_setup/presence_visibility_store.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/blacklist/blacklist_binding.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/blacklist/blacklist_logic.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/blacklist/blacklist_view.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/edit_my_info/edit_my_info_binding.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/edit_my_info/edit_my_info_logic.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/edit_my_info/edit_my_info_view.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/language_setup/language_setup_binding.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/language_setup/language_setup_logic.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/language_setup/language_setup_view.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/mine_binding.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/mine_logic.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/mine_view.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/my_info/my_avatar_editor.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/my_info/my_info_binding.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/my_info/my_info_logic.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/my_info/my_info_view.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/calls/data/call_record_sync_binding.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/calls/data/call_records_api.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/calls/data/call_records_repository.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/calls/data/call_records_runtime.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/calls/recent_call_tile.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/calls/recent_call_tokens.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/calls/recent_calls_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/favorite_detail_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/favorite_note_edit_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/favorites_draft_store.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/favorites_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/recent_calls_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/share_app_sheet.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/chat_background_local_service.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/device_sync/device_sync_consent.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/device_sync/device_sync_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/notifications/message_notification_sound_picker_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/notifications/message_notification_sound_preview.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/notifications/notification_permission_gateway.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/notifications/notification_settings_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/notifications/widgets/notification_permission_banner.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/openim_profile_service.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/about_us_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/account_security_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/add_friend_privacy_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/biometric_pay_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/change_password_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/change_phone_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/change_trade_password_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/chat_background_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/chat_storage_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/country_code_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/display_theme_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/edit_nickname_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/edit_signature_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/feedback_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/font_size_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/friend_permission_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/legal_document_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/login_devices_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/message_notification_sound_picker_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/moments_friend_picker_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/moments_permission_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/moments_privacy_friend_list_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/node_switch_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/notification_settings_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/profile_info_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/qr_profile_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/storage_media_repository.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/storage_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/storage_widgets.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/trade_password_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/security_feedback.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/settings_draft_store.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/settings_home_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/settings_navigation.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/settings_service.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/storage/conversation_storage_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/storage/storage_media_catalog.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/storage/widgets/storage_media_thumbnail.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/storage/widgets/storage_media_tile.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/verification_code_result.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/widgets/account_code_request.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/widgets/aliyun_captcha_dialog.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/widgets/aliyun_captcha_html.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/widgets/platform_update.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/widgets/settings_widgets.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/widgets/trade_password_keypad.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/widgets/trade_password_pin_cells.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/settings/widgets/verification_code_flow.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/widgets/mine_decorative_background.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/widgets/mine_hot_eco.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/widgets/mine_menu_section.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/widgets/mine_profile_header.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/widgets/mine_profile_localization.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/mine/widgets/mine_profile_view.dart"
+      ],
+      "filename_entry_candidates": [
+        "lib/pages/mine\\about_us\\about_us_view.dart",
+        "lib/pages/mine\\account_setup\\account_setup_view.dart",
+        "lib/pages/mine\\blacklist\\blacklist_view.dart",
+        "lib/pages/mine\\edit_my_info\\edit_my_info_view.dart",
+        "lib/pages/mine\\language_setup\\language_setup_view.dart",
+        "lib/pages/mine\\mine_view.dart",
+        "lib/pages/mine\\my_info\\my_info_view.dart",
+        "lib/pages/mine\\secondary\\calls\\recent_calls_page.dart",
+        "lib/pages/mine\\secondary\\favorite_detail_page.dart",
+        "lib/pages/mine\\secondary\\favorite_note_edit_page.dart",
+        "lib/pages/mine\\secondary\\favorites_page.dart",
+        "lib/pages/mine\\secondary\\recent_calls_page.dart",
+        "lib/pages/mine\\secondary\\share_app_sheet.dart",
+        "lib/pages/mine\\settings\\device_sync\\device_sync_page.dart",
+        "lib/pages/mine\\settings\\notifications\\message_notification_sound_picker_page.dart",
+        "lib/pages/mine\\settings\\notifications\\notification_settings_page.dart",
+        "lib/pages/mine\\settings\\pages\\about_us_page.dart",
+        "lib/pages/mine\\settings\\pages\\account_security_page.dart",
+        "lib/pages/mine\\settings\\pages\\add_friend_privacy_page.dart",
+        "lib/pages/mine\\settings\\pages\\biometric_pay_page.dart",
+        "lib/pages/mine\\settings\\pages\\change_password_page.dart",
+        "lib/pages/mine\\settings\\pages\\change_phone_page.dart",
+        "lib/pages/mine\\settings\\pages\\change_trade_password_page.dart",
+        "lib/pages/mine\\settings\\pages\\chat_background_page.dart",
+        "lib/pages/mine\\settings\\pages\\chat_storage_page.dart",
+        "lib/pages/mine\\settings\\pages\\country_code_page.dart",
+        "lib/pages/mine\\settings\\pages\\display_theme_page.dart",
+        "lib/pages/mine\\settings\\pages\\edit_nickname_page.dart",
+        "lib/pages/mine\\settings\\pages\\edit_signature_page.dart",
+        "lib/pages/mine\\settings\\pages\\feedback_page.dart",
+        "lib/pages/mine\\settings\\pages\\font_size_page.dart",
+        "lib/pages/mine\\settings\\pages\\friend_permission_page.dart",
+        "lib/pages/mine\\settings\\pages\\legal_document_page.dart",
+        "lib/pages/mine\\settings\\pages\\login_devices_page.dart",
+        "lib/pages/mine\\settings\\pages\\message_notification_sound_picker_page.dart",
+        "lib/pages/mine\\settings\\pages\\moments_friend_picker_page.dart",
+        "lib/pages/mine\\settings\\pages\\moments_permission_page.dart",
+        "lib/pages/mine\\settings\\pages\\moments_privacy_friend_list_page.dart",
+        "lib/pages/mine\\settings\\pages\\node_switch_page.dart",
+        "lib/pages/mine\\settings\\pages\\notification_settings_page.dart",
+        "lib/pages/mine\\settings\\pages\\profile_info_page.dart",
+        "lib/pages/mine\\settings\\pages\\qr_profile_page.dart",
+        "lib/pages/mine\\settings\\pages\\storage_page.dart",
+        "lib/pages/mine\\settings\\pages\\trade_password_page.dart",
+        "lib/pages/mine\\settings\\settings_home_page.dart",
+        "lib/pages/mine\\settings\\storage\\conversation_storage_page.dart",
+        "lib/pages/mine\\widgets\\mine_profile_view.dart"
+      ],
+      "public_widget_entries": [
+        {
+          "name": "MineProfileView",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/widgets/mine_profile_view.dart",
+          "line": 14
+        },
+        {
+          "name": "DeviceSyncPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/device_sync/device_sync_page.dart",
+          "line": 9
+        },
+        {
+          "name": "AboutUsPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/about_us/about_us_view.dart",
+          "line": 9
+        },
+        {
+          "name": "EditMyInfoPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/edit_my_info/edit_my_info_view.dart",
+          "line": 10
+        },
+        {
+          "name": "AccountSetupPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/account_setup/account_setup_view.dart",
+          "line": 9
+        },
+        {
+          "name": "LanguageSetupPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/language_setup/language_setup_view.dart",
+          "line": 8
+        },
+        {
+          "name": "MinePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/mine_view.dart",
+          "line": 8
+        },
+        {
+          "name": "ShareAppSheet",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/share_app_sheet.dart",
+          "line": 13
+        },
+        {
+          "name": "SettingsHomePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/settings_home_page.dart",
+          "line": 21
+        },
+        {
+          "name": "BlacklistPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/blacklist/blacklist_view.dart",
+          "line": 8
+        },
+        {
+          "name": "MyInfoPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/my_info/my_info_view.dart",
+          "line": 10
+        },
+        {
+          "name": "FavoriteNoteEditPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/favorite_note_edit_page.dart",
+          "line": 10
+        },
+        {
+          "name": "FavoriteDetailPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/favorite_detail_page.dart",
+          "line": 25
+        },
+        {
+          "name": "FavoritesPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/favorites_page.dart",
+          "line": 34
+        },
+        {
+          "name": "FavoriteCollectionView",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/favorites_page.dart",
+          "line": 1360
+        },
+        {
+          "name": "ConversationStoragePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/storage/conversation_storage_page.dart",
+          "line": 14
+        },
+        {
+          "name": "RecentCallsPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/secondary/calls/recent_calls_page.dart",
+          "line": 18
+        },
+        {
+          "name": "AccountSecurityPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/account_security_page.dart",
+          "line": 24
+        },
+        {
+          "name": "AboutUsPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/about_us_page.dart",
+          "line": 11
+        },
+        {
+          "name": "AddFriendPrivacyPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/add_friend_privacy_page.dart",
+          "line": 8
+        },
+        {
+          "name": "NotificationSettingsPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/notifications/notification_settings_page.dart",
+          "line": 12
+        },
+        {
+          "name": "BiometricPayPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/biometric_pay_page.dart",
+          "line": 13
+        },
+        {
+          "name": "ChangePasswordPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/change_password_page.dart",
+          "line": 9
+        },
+        {
+          "name": "MessageNotificationSoundPickerPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/notifications/message_notification_sound_picker_page.dart",
+          "line": 11
+        },
+        {
+          "name": "ChangeTradePasswordPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/change_trade_password_page.dart",
+          "line": 9
+        },
+        {
+          "name": "ChatBackgroundPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/chat_background_page.dart",
+          "line": 12
+        },
+        {
+          "name": "ChangePhonePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/change_phone_page.dart",
+          "line": 10
+        },
+        {
+          "name": "ChatStoragePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/chat_storage_page.dart",
+          "line": 16
+        },
+        {
+          "name": "CountryCodePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/country_code_page.dart",
+          "line": 8
+        },
+        {
+          "name": "DisplayThemePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/display_theme_page.dart",
+          "line": 14
+        },
+        {
+          "name": "EditNicknamePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/edit_nickname_page.dart",
+          "line": 11
+        },
+        {
+          "name": "EditSignaturePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/edit_signature_page.dart",
+          "line": 9
+        },
+        {
+          "name": "FontSizePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/font_size_page.dart",
+          "line": 11
+        },
+        {
+          "name": "FeedbackPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/feedback_page.dart",
+          "line": 11
+        },
+        {
+          "name": "FriendPermissionPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/friend_permission_page.dart",
+          "line": 14
+        },
+        {
+          "name": "LegalDocumentPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/legal_document_page.dart",
+          "line": 8
+        },
+        {
+          "name": "LoginDevicesPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/login_devices_page.dart",
+          "line": 6
+        },
+        {
+          "name": "MomentsFriendPickerPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/moments_friend_picker_page.dart",
+          "line": 10
+        },
+        {
+          "name": "MomentsPermissionPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/moments_permission_page.dart",
+          "line": 9
+        },
+        {
+          "name": "MomentsPrivacyFriendListPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/moments_privacy_friend_list_page.dart",
+          "line": 11
+        },
+        {
+          "name": "NodeSwitchPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/node_switch_page.dart",
+          "line": 8
+        },
+        {
+          "name": "ProfileInfoPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/profile_info_page.dart",
+          "line": 20
+        },
+        {
+          "name": "QrProfilePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/qr_profile_page.dart",
+          "line": 17
+        },
+        {
+          "name": "TradePasswordPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/trade_password_page.dart",
+          "line": 9
+        },
+        {
+          "name": "StoragePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/mine/settings/pages/storage_page.dart",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "area": "lib/pages/moments",
+      "dart_file_count": 39,
+      "public_widget_entry_class_count": 9,
+      "dart_files": [
+        "E:/openim/openim-flutter-demo/lib/pages/moments/interactions/moments_comment_editor.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/interactions/moments_post_actions.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/media/moments_media_grid.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/media/moments_media_image.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/media/moments_single_media_frame.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_actions.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_compose_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_cover_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_detail_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_draft_store.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_likes_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_media_preview.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_notifications_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_privacy_friend_picker.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_privacy_list_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_settings_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_visibility_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/moments_widgets.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_comment_text.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_composer_layout.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_composer_media_grid.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_composer_media_tile.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_cover_header.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_detail_comment_row.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_engagement_panel.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_friend_picker_list.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_post_card.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_profile_range_hint.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_profile_timeline.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_scaffold.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_secondary_layout.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_state_panel.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_text.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/presentation/moments_theme.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/privacy/data/moments_privacy_selection_controller.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/privacy/data/moments_privacy_selection_store.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/privacy/data/moments_privacy_selections.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/moments/privacy/widgets/moments_peer_privacy_controls.dart"
+      ],
+      "filename_entry_candidates": [
+        "lib/pages/moments\\moments_compose_page.dart",
+        "lib/pages/moments\\moments_cover_page.dart",
+        "lib/pages/moments\\moments_detail_page.dart",
+        "lib/pages/moments\\moments_likes_page.dart",
+        "lib/pages/moments\\moments_notifications_page.dart",
+        "lib/pages/moments\\moments_page.dart",
+        "lib/pages/moments\\moments_privacy_list_page.dart",
+        "lib/pages/moments\\moments_settings_page.dart",
+        "lib/pages/moments\\moments_visibility_page.dart"
+      ],
+      "public_widget_entries": [
+        {
+          "name": "MomentsLikesPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/moments/moments_likes_page.dart",
+          "line": 10
+        },
+        {
+          "name": "MomentsPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/moments/moments_page.dart",
+          "line": 22
+        },
+        {
+          "name": "MomentsSettingsPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/moments/moments_settings_page.dart",
+          "line": 12
+        },
+        {
+          "name": "MomentsCoverPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/moments/moments_cover_page.dart",
+          "line": 17
+        },
+        {
+          "name": "MomentsPrivacyListPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/moments/moments_privacy_list_page.dart",
+          "line": 16
+        },
+        {
+          "name": "MomentsVisibilityPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/moments/moments_visibility_page.dart",
+          "line": 10
+        },
+        {
+          "name": "MomentsNotificationsPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/moments/moments_notifications_page.dart",
+          "line": 12
+        },
+        {
+          "name": "MomentsDetailPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/moments/moments_detail_page.dart",
+          "line": 12
+        },
+        {
+          "name": "MomentsComposePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/moments/moments_compose_page.dart",
+          "line": 21
+        }
+      ]
+    },
+    {
+      "area": "lib/pages/favorites",
+      "dart_file_count": 27,
+      "public_widget_entry_class_count": 0,
+      "dart_files": [
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/data/favorite_archive_retry_recovery.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/data/favorite_change_synchronizer.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/data/favorite_media_upload.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/data/favorite_mutation_outbox.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/data/favorite_mutation_replayer.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/data/favorite_sync_binding.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/data/favorite_sync_state.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/detail/favorite_detail_footer.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/detail/favorite_detail_metadata.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/detail/favorite_detail_tokens.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/favorite_p0.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/media/favorite_asset_preview.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/media/favorite_audio_preview.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/media/favorite_audio_tokens.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/media/favorite_item_thumbnail.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/media/favorite_picked_media.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/media/favorite_preview_loader.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/models/favorite_archive_retry.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/models/favorite_batch_delete.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/models/favorite_quota.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/navigation/favorites_app_bar.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/sending/favorite_prepare_lease.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/widgets/favorite_capability_gate.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/widgets/favorite_conflict_review_dialog.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/widgets/favorite_note_byte_formatter.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/widgets/favorite_recovery_banner.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/favorites/widgets/favorite_search_formatter.dart"
+      ],
+      "filename_entry_candidates": [],
+      "public_widget_entries": []
+    },
+    {
+      "area": "lib/pages/group_features",
+      "dart_file_count": 123,
+      "public_widget_entry_class_count": 27,
+      "dart_files": [
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/data/group_feature_api.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/data/group_feature_runtime.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/data/group_feature_store.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/casting/live_cast_button.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/casting/live_cast_service.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/data/live_api.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/data/live_list_sync.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/data/live_permission_state.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/group_live_module.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/models/live_errors.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/models/live_models.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/models/live_summary_events.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/models/live_tip_currency.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_entry_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_manage_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_member_picker.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_push_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_room_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_tip_sheet.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/playback/live_credential_renewal.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/playback/live_fullscreen_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/playback/live_playback_controller.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/playback/live_player_view.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/playback/live_watch_state.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/widgets/live_banner.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/widgets/live_list_scope.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/widgets/live_obs_guide.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/widgets/live_style.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/widgets/live_waiting_view.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/widgets/live_watch_surface.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/live/widgets/live_watching_bottom_bar.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/data/agent_descendants_controller.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/data/agent_history_export.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/data/agent_query_controller.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/data/agent_rebate_controller.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/models/agent_date_range.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_current_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_descendant_detail_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_descendant_history_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_descendants_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_history_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/widgets/agent_date_range_picker.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/widgets/agent_descendant_tile.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/widgets/agent_summary_card.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/data/mark_six_controller.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/data/mark_six_repository.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/mark_six_module.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/mark_six.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/models/mark_six_draw.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/models/mark_six_json.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/pages/mark_six_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/widgets/mark_six_app_bar.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/widgets/mark_six_drawer.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/widgets/mark_six_feature_host.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/widgets/mark_six_history_table.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/widgets/mark_six_latest_card.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/widgets/mark_six_opened_statistics.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/widgets/mark_six_predictions.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/widgets/mark_six_style.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/models/group_feature_capabilities.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/models/group_feature_context.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/models/group_features.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/api/sangong_admin_api.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/api/sangong_agent_api.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/api/sangong_game_http.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/api/sangong_settings_api.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/api/sangong_transfers_api.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/models/agent_rebate_models.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/models/group_game_round_status.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/models/sangong_account_flow_entry.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/models/sangong_admin_models.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/models/sangong_admin_realtime_state.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/models/sangong_co_bank_flow_entry.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/models/sangong_game_settings.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/models/sangong_my_config.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/models/sangong_transfer.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_agent_dashboard_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_agent_member_detail_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_agent_personal_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_agent_team_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_agent_transfers_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_all_users_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_game_rules_settings_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_manage_home_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_members_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_my_config_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_user_detail_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/profile/sangong_authorized_view.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/profile/sangong_profile_ledger.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/profile/sangong_profile_panel.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/profile/sangong_profile_surface.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/sangong_module.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/sangong_scope.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/services/agent_rebate_float_prefs.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/services/group_game_prefs.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/services/sangong_realtime.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/support/sangong_ui.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/support/settings_exports.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/utils/api_response_util.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/utils/group_game_float_geometry.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/utils/keypad_feedback.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/utils/sangong_admin_error_message.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/utils/sangong_bet_cutoff_labels.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/utils/sangong_bet_submit_cutoff.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/utils/sangong_bet_submit_messages.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/utils/sangong_draw_input_format.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/utils/sangong_operator_names.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/utils/sangong_report_image_messages.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/utils/sangong_sse_parser.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/widgets/agent_rebate_floating_entry.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/widgets/app_back_button.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/widgets/group_game_floating_entry.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/widgets/group_game_status_banner.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/widgets/sangong_account_flow_list.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/widgets/sangong_agent_floating_entry.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/widgets/sangong_bet_preview_sheet.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/widgets/sangong_message_actions.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/widgets/sangong_round_settle_dialog.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/widgets/sangong_round_settle_flow.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/widgets/group_chat_feature_surface.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/widgets/group_feature_actions.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/widgets/group_feature_tokens.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/group_features/widgets/group_live_avatar.dart"
+      ],
+      "filename_entry_candidates": [
+        "lib/pages/group_features\\live\\pages\\live_entry_page.dart",
+        "lib/pages/group_features\\live\\pages\\live_manage_page.dart",
+        "lib/pages/group_features\\live\\pages\\live_push_page.dart",
+        "lib/pages/group_features\\live\\pages\\live_room_page.dart",
+        "lib/pages/group_features\\live\\pages\\live_tip_sheet.dart",
+        "lib/pages/group_features\\live\\playback\\live_fullscreen_page.dart",
+        "lib/pages/group_features\\live\\playback\\live_player_view.dart",
+        "lib/pages/group_features\\live\\widgets\\live_waiting_view.dart",
+        "lib/pages/group_features\\mark_six\\agent\\pages\\agent_current_page.dart",
+        "lib/pages/group_features\\mark_six\\agent\\pages\\agent_descendant_detail_page.dart",
+        "lib/pages/group_features\\mark_six\\agent\\pages\\agent_descendant_history_page.dart",
+        "lib/pages/group_features\\mark_six\\agent\\pages\\agent_descendants_page.dart",
+        "lib/pages/group_features\\mark_six\\agent\\pages\\agent_history_page.dart",
+        "lib/pages/group_features\\mark_six\\pages\\mark_six_page.dart",
+        "lib/pages/group_features\\sangong\\pages\\sangong_agent_dashboard_page.dart",
+        "lib/pages/group_features\\sangong\\pages\\sangong_agent_member_detail_page.dart",
+        "lib/pages/group_features\\sangong\\pages\\sangong_agent_personal_page.dart",
+        "lib/pages/group_features\\sangong\\pages\\sangong_agent_team_page.dart",
+        "lib/pages/group_features\\sangong\\pages\\sangong_agent_transfers_page.dart",
+        "lib/pages/group_features\\sangong\\pages\\sangong_all_users_page.dart",
+        "lib/pages/group_features\\sangong\\pages\\sangong_game_rules_settings_page.dart",
+        "lib/pages/group_features\\sangong\\pages\\sangong_manage_home_page.dart",
+        "lib/pages/group_features\\sangong\\pages\\sangong_members_page.dart",
+        "lib/pages/group_features\\sangong\\pages\\sangong_my_config_page.dart",
+        "lib/pages/group_features\\sangong\\pages\\sangong_user_detail_page.dart",
+        "lib/pages/group_features\\sangong\\profile\\sangong_authorized_view.dart",
+        "lib/pages/group_features\\sangong\\widgets\\sangong_bet_preview_sheet.dart"
+      ],
+      "public_widget_entries": [
+        {
+          "name": "SangongBetPreviewSheet",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/widgets/sangong_bet_preview_sheet.dart",
+          "line": 14
+        },
+        {
+          "name": "SangongAgentPersonalPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_agent_personal_page.dart",
+          "line": 9
+        },
+        {
+          "name": "SangongAgentTeamPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_agent_team_page.dart",
+          "line": 10
+        },
+        {
+          "name": "SangongAgentTransfersPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_agent_transfers_page.dart",
+          "line": 11
+        },
+        {
+          "name": "SangongAgentMemberDetailPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_agent_member_detail_page.dart",
+          "line": 9
+        },
+        {
+          "name": "SangongManageHomePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_manage_home_page.dart",
+          "line": 16
+        },
+        {
+          "name": "SangongMembersPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_members_page.dart",
+          "line": 12
+        },
+        {
+          "name": "SangongAgentDashboardPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_agent_dashboard_page.dart",
+          "line": 9
+        },
+        {
+          "name": "SangongMyConfigPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_my_config_page.dart",
+          "line": 12
+        },
+        {
+          "name": "SangongGameRulesSettingsPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_game_rules_settings_page.dart",
+          "line": 14
+        },
+        {
+          "name": "SangongAllUsersPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_all_users_page.dart",
+          "line": 8
+        },
+        {
+          "name": "SangongAuthorizedView",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/profile/sangong_authorized_view.dart",
+          "line": 5
+        },
+        {
+          "name": "SangongUserDetailPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/sangong/pages/sangong_user_detail_page.dart",
+          "line": 33
+        },
+        {
+          "name": "LiveEntryPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_entry_page.dart",
+          "line": 15
+        },
+        {
+          "name": "LivePlayerView",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/live/playback/live_player_view.dart",
+          "line": 11
+        },
+        {
+          "name": "LivePushPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_push_page.dart",
+          "line": 16
+        },
+        {
+          "name": "LiveFullscreenPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/live/playback/live_fullscreen_page.dart",
+          "line": 8
+        },
+        {
+          "name": "LiveObsGuideSheet",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/live/widgets/live_obs_guide.dart",
+          "line": 41
+        },
+        {
+          "name": "LiveRoomPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_room_page.dart",
+          "line": 14
+        },
+        {
+          "name": "LiveManagePage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/live/pages/live_manage_page.dart",
+          "line": 19
+        },
+        {
+          "name": "LiveWaitingView",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/live/widgets/live_waiting_view.dart",
+          "line": 8
+        },
+        {
+          "name": "AgentCurrentPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_current_page.dart",
+          "line": 12
+        },
+        {
+          "name": "AgentDescendantsPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_descendants_page.dart",
+          "line": 13
+        },
+        {
+          "name": "MarkSixPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/pages/mark_six_page.dart",
+          "line": 17
+        },
+        {
+          "name": "AgentHistoryPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_history_page.dart",
+          "line": 15
+        },
+        {
+          "name": "AgentDescendantHistoryPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_descendant_history_page.dart",
+          "line": 13
+        },
+        {
+          "name": "AgentDescendantDetailPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/group_features/mark_six/agent/pages/agent_descendant_detail_page.dart",
+          "line": 13
+        }
+      ]
+    },
+    {
+      "area": "lib/pages/fund",
+      "dart_file_count": 18,
+      "public_widget_entry_class_count": 4,
+      "dart_files": [
+        "E:/openim/openim-flutter-demo/lib/pages/fund/fund_detail_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/fund_recipient_picker.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/fund_send_page.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/notifications/fund_claim_notice.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/payment/fund_payment_draft.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/payment/fund_payment_preferences.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_coin_icon.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_detail_message_sender.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_packet_cover.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_packet_detail.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_page_colors.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_pay_method_sheet.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_pay_sheet.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_recipient_user_id.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_send_form.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_send_tokens.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_transfer_detail.dart",
+        "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_transfer_send_form.dart"
+      ],
+      "filename_entry_candidates": [
+        "lib/pages/fund\\fund_detail_page.dart",
+        "lib/pages/fund\\fund_send_page.dart",
+        "lib/pages/fund\\widgets\\fund_pay_method_sheet.dart",
+        "lib/pages/fund\\widgets\\fund_pay_sheet.dart"
+      ],
+      "public_widget_entries": [
+        {
+          "name": "FundPaySheet",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_pay_sheet.dart",
+          "line": 22
+        },
+        {
+          "name": "FundPayMethodSheet",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/fund/widgets/fund_pay_method_sheet.dart",
+          "line": 13
+        },
+        {
+          "name": "FundDetailPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/fund/fund_detail_page.dart",
+          "line": 89
+        },
+        {
+          "name": "FundSendPage",
+          "path": "E:/openim/openim-flutter-demo/lib/pages/fund/fund_send_page.dart",
+          "line": 22
+        }
+      ]
+    }
+  ]
+}

@@ -9,6 +9,13 @@ class ChatTextField extends StatelessWidget {
 
   final TextStyle? style;
   final TextStyle? atStyle;
+  final TextStyle? hintStyle;
+  final EdgeInsetsGeometry? contentPadding;
+  final InputDecoration? decoration;
+  final TextInputType keyboardType;
+  final TextInputAction? textInputAction;
+  final VoidCallback? onEditingComplete;
+  final bool autocorrect;
   final bool enabled;
   final TextAlign textAlign;
 
@@ -19,6 +26,13 @@ class ChatTextField extends StatelessWidget {
     this.hintText,
     this.style,
     this.atStyle,
+    this.hintStyle,
+    this.contentPadding,
+    this.decoration,
+    this.keyboardType = TextInputType.multiline,
+    this.textInputAction,
+    this.onEditingComplete,
+    this.autocorrect = true,
     this.enabled = true,
     this.textAlign = TextAlign.start,
   });
@@ -29,25 +43,36 @@ class ChatTextField extends StatelessWidget {
       style: style,
       focusNode: focusNode,
       controller: controller,
-      keyboardType: TextInputType.multiline,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      onEditingComplete: onEditingComplete,
+      autocorrect: autocorrect,
       enabled: enabled,
       autofocus: false,
       minLines: 1,
       maxLines: 4,
       textAlign: textAlign,
-      decoration: InputDecoration(
-        border: InputBorder.none,
-        isDense: true,
-        hintText: hintText,
-        hintStyle: TextStyle(
-          fontSize: 16.sp,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: 10.w,
-          vertical: 8.h,
-        ),
-      ),
+      textAlignVertical: TextAlignVertical.center,
+      decoration: decoration ??
+          InputDecoration(
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            filled: false,
+            isDense: true,
+            hintText: hintText,
+            hintStyle: hintStyle ??
+                TextStyle(
+                  fontSize: 16.sp,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+            contentPadding: contentPadding ??
+                EdgeInsets.symmetric(
+                  horizontal: 10.w,
+                  vertical: 8.h,
+                ),
+          ),
     );
   }
 }

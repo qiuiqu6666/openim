@@ -43,7 +43,8 @@ void main() {
     expect(controller.text, isEmpty);
     await tester.tap(find.text('😂').first);
     await tester.pump();
-    await tester.tap(find.text('发送'));
+    await tester.tap(find.descendant(
+        of: find.byType(ChatEmojiPanel), matching: find.text('发送')));
     expect(sent, '😂');
     await tester.longPress(find.text('😂').first);
     await tester.tap(find.byTooltip('收藏表情'));

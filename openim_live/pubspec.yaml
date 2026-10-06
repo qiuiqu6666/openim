@@ -21,8 +21,12 @@ dependencies:
   sprintf: ^7.0.0
   animate_do: ^4.2.0
   uuid: ^4.2.1
+  dio: ^5.7.0
   just_audio: ^0.10.5
   audio_session: ^0.1.25
+  collection: ^1.19.0
+  permission_handler: ^11.0.1
+  flutter_webrtc: 1.1.0
   flutter_openim_sdk: ^3.8.3+hotfix.12
 
   openim_common:
@@ -36,6 +40,8 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 
 flutter:
+  assets:
+    - assets/audio/ringtone/outgoing_ringback.wav
   # To add assets to your package, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

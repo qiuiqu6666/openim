@@ -4,12 +4,15 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:openim_common/openim_common.dart';
 
 class PopMenuInfo {
+  /// Optional semantic action ID for message menus; generic callers keep labels.
+  final String? id;
   final String? icon;
   final Widget? iconWidget;
   final String text;
   final Function()? onTap;
 
   PopMenuInfo({
+    this.id,
     this.icon,
     this.iconWidget,
     required this.text,

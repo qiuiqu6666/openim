@@ -11,6 +11,7 @@ import 'package:openim_common/src/widgets/chat/chat_formatted_text.dart';
 import 'package:openim_common/src/widgets/chat/chat_structured_message.dart';
 import 'package:openim/pages/chat/group_setup/group_manage/group_member_permissions_page.dart';
 import 'package:openim/pages/chat/chat_setup/message_retention_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -282,21 +283,25 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
   testWidgets('retention changes go through setConversation', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await DataSp.init();
     final calls = <MethodCall>[];
     const channel = MethodChannel('flutter_openim_sdk');
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel,
         (call) async {
       calls.add(call);
-      if (call.method == 'getMultipleConversation')
+      if (call.method == 'getMultipleConversation') {
         return jsonEncode([
           {
             'conversationID': 'c',
             'conversationType': 1,
             'unreadCount': 0,
-            'isPrivateChat': true,
+            'isPrivateChat':
+                calls.any((call) => call.method == 'setConversation'),
             'burnDuration': 30
           }
         ]);
+      }
       return null;
     });
     addTearDown(() => tester.binding.defaultBinaryMessenger
@@ -305,7 +310,7 @@ void main() {
         conversation:
             ConversationInfo(conversationID: 'c', conversationType: 1))));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(DropdownButton<int>).first);
+    await tester.tap(find.byKey(const ValueKey('retention-burn-row')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('30 秒').last);
     await tester.pumpAndSettle();

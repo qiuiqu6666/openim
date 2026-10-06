@@ -20,9 +20,8 @@ class PayAuthResult {
   static const cancelled = PayAuthResult(success: false);
 }
 
-/// Wallet backend is intentionally unavailable, but the complete 99chat
-/// manual payment-confirmation UI remains reachable.  The caller owns the
-/// final submit callback and returns the unavailable error there.
+/// The caller submits through the fund API; this helper owns only the manual
+/// password-confirmation UI and returns success after that callback confirms.
 class PayAuthHelper {
   PayAuthHelper._();
 

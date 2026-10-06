@@ -59,6 +59,67 @@ void main() {
     client.close();
   });
 
+  for (final entry in [
+    (keyword: 'abcdefgh12', account: '@abcdefgh12'),
+    (keyword: '@abcdefgh12', account: 'abcdefgh12'),
+    (keyword: '0012345678', account: '@0012345678'),
+    (keyword: '@0012345678', account: '0012345678'),
+    (keyword: ' @0012345678 ', account: ' @0012345678 '),
+  ]) {
+    test('public account ${entry.keyword} takes priority over phone', () {
+      expect(
+          friendSearchSource(
+              entry.keyword,
+              UserFullInfo(
+                  userID: 'im_target',
+                  account: entry.account,
+                  phoneNumber: entry.keyword.trim())),
+          FriendAddSource.account);
+    });
+  }
+
+  test('public account-shaped input cannot be reclassified as a phone', () {
+    expect(
+        friendSearchSource(
+            '0012345678',
+            UserFullInfo(
+                userID: 'im_target',
+                account: '@abcdefgh12',
+                phoneNumber: '0012345678')),
+        FriendAddSource.search);
+  });
+
+  for (final keyword in ['Alice', 'im_target', 'm00000001', 'notmatched1']) {
+    test('nickname or internal ID $keyword cannot exchange a friend grant',
+        () async {
+      final source = friendSearchSource(
+          keyword,
+          UserFullInfo(
+              userID: keyword, nickname: keyword, account: '@abcdefgh12'));
+      expect(source, FriendAddSource.search);
+      await expectLater(
+          FriendAddRequest.send(
+              userID: keyword,
+              reason: 'hello',
+              source: source,
+              fields: {'account': '@abcdefgh12'}),
+          throwsA(isA<PlatformException>()));
+      expect(requests, isEmpty);
+    });
+  }
+
+  test('email and phone queries retain their friend grant source', () {
+    final profile = UserFullInfo(
+        userID: 'im_target',
+        account: '@abcdefgh12',
+        email: 'alice@example.com',
+        phoneNumber: '18828838848');
+    expect(friendSearchSource('alice@example.com', profile),
+        FriendAddSource.email);
+    expect(friendSearchSource('18828838848', profile), FriendAddSource.phone);
+    expect(friendSearchSource('+886912345678', profile), FriendAddSource.phone);
+  });
+
   final fields = <FriendAddSource, Map<String, String>>{
     FriendAddSource.account: {'account': '@abcdefgh12'},
     FriendAddSource.phone: {'areaCode': '+86', 'phoneNumber': '18828838848'},
@@ -70,19 +131,107 @@ void main() {
     FriendAddSource.manage: {},
   };
   for (final entry in fields.entries) {
+    final groupEntry = entry.key == FriendAddSource.group ||
+        entry.key == FriendAddSource.manage;
+    final expected = {
+      'source': entry.key.name,
+      ...entry.value,
+      if (groupEntry) 'groupID': 'g',
+      if (groupEntry) 'targetUserID': 'im_original_target',
+    };
+    test('complete ${entry.key} entry exposes the same request input', () {
+      final supplied = {
+        ...entry.value,
+        'source': 'account',
+        'userID': 'forged',
+        'nickname': 'fake',
+        'groupID': 'forged-group',
+        'targetUserID': '@forged-account',
+      };
+      expect(
+          FriendAddRequest.canSend(
+            userID: 'im_original_target',
+            source: entry.key,
+            groupID: 'g',
+            fields: supplied,
+          ),
+          isTrue);
+      expect(
+          FriendAddRequest.input(
+            userID: 'im_original_target',
+            source: entry.key,
+            groupID: 'g',
+            fields: supplied,
+          ),
+          expected);
+      expect(supplied['targetUserID'], '@forged-account');
+      expect(requests, isEmpty);
+    });
+
+    final requiredKeys =
+        groupEntry ? ['groupID', 'targetUserID'] : entry.value.keys.toList();
+    for (final key in requiredKeys) {
+      test('${entry.key} without $key cannot send or issue a grant', () async {
+        final supplied = {...entry.value}..remove(key);
+        // Explicit group context must also defeat forged values in fields.
+        if (groupEntry) {
+          supplied.addAll({
+            'groupID': 'forged-group',
+            'targetUserID': 'forged-target',
+          });
+        }
+        final target = key == 'targetUserID' ? ' ' : 'im_original_target';
+        final groupID = key == 'groupID' ? null : 'g';
+        expect(
+            FriendAddRequest.canSend(
+              userID: target,
+              source: entry.key,
+              groupID: groupID,
+              fields: supplied,
+            ),
+            isFalse);
+        expect(
+            FriendAddRequest.input(
+              userID: target,
+              source: entry.key,
+              groupID: groupID,
+              fields: supplied,
+            ),
+            isNull);
+        await expectLater(
+            FriendAddRequest.send(
+              userID: target,
+              reason: '',
+              source: entry.key,
+              groupID: groupID,
+              fields: supplied,
+            ),
+            throwsA(isA<PlatformException>()
+                .having((error) => error.code, 'code', 'FriendGrantRequired')));
+        expect(requests, isEmpty);
+      });
+    }
+
     test('grant exchange and apply for ${entry.key}', () async {
       await FriendAddRequest.send(
-          userID: 'target',
+          userID: 'im_original_target',
           reason: 'hello',
           source: entry.key,
           groupID: 'g',
-          fields: {...entry.value, 'userID': 'forged', 'nickname': 'fake'});
+          fields: {
+            ...entry.value,
+            'userID': 'forged',
+            'nickname': 'fake',
+            'groupID': 'forged-group',
+            'targetUserID': '@forged-account',
+          });
       expect(requests, hasLength(2));
       expect(requests[0].path, endsWith('/chat/friend-grants'));
       expect(requests[0].headers['token'], 'test-chat-token');
       expect(requests[0].contentType, Headers.jsonContentType);
       expect(requests[0].headers['operationID'], isNotEmpty);
       expect(requests[0].data['source'], entry.key.name);
+      expect(requests[0].data, expected);
       expect(requests[0].data.containsKey('userID'), false);
       expect(requests[0].data.containsKey('nickname'), false);
       expect(
@@ -93,6 +242,113 @@ void main() {
       expect(requests[1].data, {'friendGrant': 'fg_test', 'message': 'hello'});
     });
   }
+  test('entry validation trims only and introduces no format requirements', () {
+    for (final entry in {
+      FriendAddSource.account: {'account': ' arbitrary account '},
+      FriendAddSource.phone: {'areaCode': ' area ', 'phoneNumber': ' phone '},
+      FriendAddSource.email: {'email': ' arbitrary email '},
+      FriendAddSource.qrcode: {'inviteCode': ' arbitrary invite '},
+      FriendAddSource.link: {'inviteCode': ' arbitrary invite '},
+      FriendAddSource.card: {'inviteCode': ' arbitrary invite '},
+    }.entries) {
+      expect(
+          FriendAddRequest.input(
+            userID: 'im_target',
+            source: entry.key,
+            fields: entry.value,
+          ),
+          {
+            'source': entry.key.name,
+            for (final field in entry.value.entries)
+              field.key: field.value.trim(),
+          });
+    }
+    expect(requests, isEmpty);
+  });
+  test('blank required entry fields are incomplete', () {
+    for (final source in [
+      FriendAddSource.account,
+      FriendAddSource.phone,
+      FriendAddSource.email,
+      FriendAddSource.qrcode,
+      FriendAddSource.link,
+      FriendAddSource.card,
+      FriendAddSource.group,
+      FriendAddSource.manage,
+    ]) {
+      expect(
+          FriendAddRequest.canSend(
+            userID: ' ',
+            groupID: ' ',
+            source: source,
+            fields: {
+              for (final key in fields[source]!.keys) key: ' ',
+            },
+          ),
+          isFalse);
+    }
+    expect(requests, isEmpty);
+  });
+  for (final source in [
+    FriendAddSource.chat,
+    FriendAddSource.search,
+    FriendAddSource.uid,
+  ]) {
+    test('$source remains unsupported even with complete other entry fields',
+        () async {
+      const supplied = {
+        'account': '@abcdefgh12',
+        'areaCode': '+86',
+        'phoneNumber': '18828838848',
+        'email': 'a@example.com',
+        'inviteCode': 'fi_test',
+        'groupID': 'g',
+        'targetUserID': 'im_target',
+      };
+      expect(
+          FriendAddRequest.canSend(
+            userID: 'im_target',
+            source: source,
+            groupID: 'g',
+            fields: supplied,
+          ),
+          isFalse);
+      expect(
+          FriendAddRequest.input(
+            userID: 'im_target',
+            source: source,
+            groupID: 'g',
+            fields: supplied,
+          ),
+          isNull);
+      await expectLater(
+          FriendAddRequest.send(
+            userID: 'im_target',
+            reason: '',
+            source: source,
+            groupID: 'g',
+            fields: supplied,
+          ),
+          throwsA(isA<PlatformException>()
+              .having((error) => error.code, 'code', 'FriendGrantRequired')));
+      expect(requests, isEmpty);
+    });
+  }
+  test('friend add errors explain actionable entry and invitation recovery',
+      () {
+    expect(
+        friendAddErrorMessage(PlatformException(code: 'FriendGrantRequired'),
+            chinese: true),
+        '请通过对方的聊天号、二维码或名片添加好友');
+    expect(
+        friendAddErrorMessage(PlatformException(code: 'FriendGrantRequired'),
+            chinese: false),
+        'Please add this person using their chat number, QR code or contact card.');
+    expect(friendAddErrorMessage((20013, ''), chinese: true),
+        '添加邀请无效或已过期，请重新进入添加入口');
+    expect(friendAddErrorMessage((20013, ''), chinese: false),
+        'The friend invitation is invalid or expired. Reopen the entry.');
+  });
   test('rejection never submits an application and is translated', () async {
     reject = true;
     await expectLater(

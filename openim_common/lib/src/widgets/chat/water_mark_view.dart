@@ -11,6 +11,7 @@ class WaterMarkBgView extends StatelessWidget {
     this.path,
     this.text = '',
     this.newMessageCount = 0,
+    this.showBackToBottom = false,
     this.textStyle,
     this.backgroundColor,
     required this.child,
@@ -22,6 +23,7 @@ class WaterMarkBgView extends StatelessWidget {
   final String? path;
   final String text;
   final int newMessageCount;
+  final bool showBackToBottom;
   final TextStyle? textStyle;
   final Color? backgroundColor;
   final Widget child;
@@ -48,12 +50,17 @@ class WaterMarkBgView extends StatelessWidget {
                   alignment: Alignment.center,
                   children: [
                     child,
-                    if (newMessageCount > 0)
+                    if (newMessageCount > 0 || showBackToBottom)
                       Positioned(
-                        bottom: 10.h,
-                        child: NewMessageIndicator(
-                          newMessageCount: newMessageCount,
-                          onTap: onSeeNewMessage,
+                        bottom: ChatScrollHintTokens.bottomGap.h,
+                        left: AppTokens.s4.w,
+                        right: 0,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: NewMessageIndicator(
+                            newMessageCount: newMessageCount,
+                            onTap: onSeeNewMessage,
+                          ),
                         ),
                       ),
                   ],
@@ -84,9 +91,8 @@ class WaterMarkBgView extends StatelessWidget {
         errorBuilder: (_, __, ___) => const SizedBox.shrink(),
       );
     }
-    final filePath = value.startsWith('file:')
-        ? value.substring('file:'.length)
-        : value;
+    final filePath =
+        value.startsWith('file:') ? value.substring('file:'.length) : value;
     if (filePath.isEmpty) return const SizedBox.shrink();
     return Image.file(
       File(filePath),
@@ -139,9 +145,11 @@ class WaterMarkBgView extends StatelessWidget {
   }
 
   Size _textSize(String text, TextStyle style) {
-    final TextPainter textPainter =
-        TextPainter(text: TextSpan(text: text, style: style), maxLines: 1, textDirection: TextDirection.ltr)
-          ..layout(minWidth: 0, maxWidth: double.infinity);
+    final TextPainter textPainter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        maxLines: 1,
+        textDirection: TextDirection.ltr)
+      ..layout(minWidth: 0, maxWidth: double.infinity);
     return textPainter.size;
   }
 }

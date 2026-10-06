@@ -148,6 +148,12 @@ class AccountSetupPage extends StatelessWidget {
           ),
           child: InkWell(
             onTap: onTap,
+            borderRadius: BorderRadius.only(
+              topRight: Radius.circular(isTopRadius ? 6.r : 0),
+              topLeft: Radius.circular(isTopRadius ? 6.r : 0),
+              bottomLeft: Radius.circular(isBottomRadius ? 6.r : 0),
+              bottomRight: Radius.circular(isBottomRadius ? 6.r : 0),
+            ),
             child: Container(
               height: 46.h,
               padding: EdgeInsets.symmetric(horizontal: 16.w),

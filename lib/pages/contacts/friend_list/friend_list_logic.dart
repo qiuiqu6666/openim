@@ -103,5 +103,6 @@ class FriendListLogic extends GetxController {
         userID: info.userID!,
         nickname: info.nickname,
         faceURL: info.faceURL,
+        ex: info.ex ?? '',
       );
 }

@@ -3,13 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
-import '../../../../core/controller/im_controller.dart';
+import '../../../core/controller/im_controller.dart';
 
 class MessageContextPage extends StatefulWidget {
   const MessageContextPage(
-      {super.key, required this.conversationID, required this.target});
+      {super.key,
+      required this.conversationID,
+      required this.target,
+      this.date});
   final String conversationID;
   final Message target;
+  final DateTime? date;
   @override
   State<MessageContextPage> createState() => _MessageContextPageState();
 }
@@ -56,7 +60,7 @@ class _MessageContextPageState extends State<MessageContextPage> {
               clientMsgIDList: [widget.target.clientMsgID!])
         ]);
         if (!mounted) return;
-        messages.addAll(found.searchResultItems
+        messages.addAll((found.findResultItems ?? found.searchResultItems)
                 ?.expand((e) => e.messageList ?? <Message>[]) ??
             <Message>[]);
         messages.removeWhere((m) => removed.contains(m.clientMsgID));
@@ -116,7 +120,11 @@ class _MessageContextPageState extends State<MessageContextPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-      appBar: GlassAppBar(title: Text('sdkSearchContext'.tr)),
+      appBar: GlassAppBar(
+          title: Text(widget.date == null
+              ? 'sdkSearchContext'.tr
+              : MaterialLocalizations.of(context)
+                  .formatFullDate(widget.date!))),
       body: Column(children: [
         if (busy) const LinearProgressIndicator(),
         if (failed)
@@ -143,7 +151,10 @@ class _MessageContextPageState extends State<MessageContextPage> {
                   message: message,
                   highlightColor:
                       message.clientMsgID == widget.target.clientMsgID
-                          ? Styles.c_0089FF.withValues(alpha: .10)
+                          ? Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: .10)
                           : null,
                   onTapUserProfile: (_) {},
                   customTypeBuilder: (_, m) {

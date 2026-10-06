@@ -1,6 +1,7 @@
 import UIKit
 import Flutter
 import FirebaseCore
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -10,11 +11,15 @@ import FirebaseCore
     var inviteChannel: FlutterMethodChannel?
     var pendingInvite: String?
     var hasEmittedFirstSample = false;
+    var chatNotifications: ChatCommunicationNotificationBridge?
+    var callPictureInPicture: CallPictureInPictureBridge?
+    var deviceSyncOriginals: DeviceSyncOriginalsBridge?
     
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
         guard let controller = window?.rootViewController as? FlutterViewController else {
             return super.application(application, didFinishLaunchingWithOptions: launchOptions)
         }
@@ -37,6 +42,16 @@ import FirebaseCore
         })
         
         GeneratedPluginRegistrant.register(with: self)
+        controller.registrar(forPlugin: "NativeChatLocationMap")?.register(
+            NativeChatLocationMapFactory(messenger: controller.binaryMessenger),
+            withId: "openim/chat-location-map")
+        deviceSyncOriginals = DeviceSyncOriginalsBridge(messenger: controller.binaryMessenger)
+        callPictureInPicture = CallPictureInPictureBridge(controller: controller)
+        controller.registrar(forPlugin: "GroupLiveCast")?.register(
+            LiveAirPlayViewFactory(),
+            withId: "openim_group_live_airplay_picker")
+        chatNotifications = ChatCommunicationNotificationBridge(
+            messenger: controller.binaryMessenger)
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
     

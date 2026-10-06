@@ -1,0 +1,11 @@
+# 群名称与群内昵称编辑
+
+`EditGroupNameLogic` 负责名称草稿和 SDK 保存，`EditGroupNamePage` 复用现有 `SetFriendRemarkPage.editor`。头像仍由 `GroupSetupLogic.modifyGroupAvatar` 裁剪、上传并单独更新 `faceURL`。
+
+进入页面时记录原始名称，比较去除两侧空白后的草稿；名称未修改（包括只修改头像）时直接返回，不发送 `groupName`，避免产生多余的改名通知。真正改名仅提交 `groupID` 和新名称；群内昵称使用 SDK 的 `setGroupMemberInfo`，只设置当前成员昵称。
+
+保存状态在异步操作前同步锁定，成功后持续到页面关闭，防止连续点确定重复提交或连续返回。失败提示保存失败，保留草稿并允许重试；控制器关闭后的请求结果不再操作页面。
+
+回归测试位于 `test/pages/chat/group_setup/edit_name/`，原有共享编辑器测试保留在 `test/set_friend_remark_page_test.dart`。测试使用 SDK 通道替身，不修改真实群资料。
+
+2026-10-06 验证：11 项保存回归与 7 项既有群资料/共享编辑器测试通过，相关静态检查无问题。覆盖仅改头像的亮暗主题、未编辑/还原名称、其他成员更新群名、真实改名及群内昵称 SDK 参数、重复点击、失败重试和关闭后的异步返回。

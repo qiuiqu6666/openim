@@ -2,8 +2,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-/// Live backdrop for media overlays. Navigation surfaces intentionally use an
-/// opaque tint, so they must not be reused over pictures or video textures.
+/// Live backdrop for media overlays, with a dark tint for white controls over
+/// pictures and video textures. Navigation surfaces follow the app theme.
 class MediaPreviewGlass extends StatefulWidget {
   const MediaPreviewGlass({
     super.key,

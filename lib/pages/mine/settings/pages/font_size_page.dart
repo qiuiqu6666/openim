@@ -46,19 +46,12 @@ class FontSizePage extends StatelessWidget {
           final secondary = AppTokens.textSecondary(dark: dark);
           final divider = AppTokens.border(dark: dark);
           final scale = presets[store.fontSizeIndex.clamp(0, 3).toInt()];
-          final overlay = SystemUiOverlayStyle(
-            statusBarColor: surface,
-            statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
-            statusBarBrightness: dark ? Brightness.dark : Brightness.light,
-            systemNavigationBarColor: surface,
-            systemNavigationBarIconBrightness:
-                dark ? Brightness.light : Brightness.dark,
-          );
+          final overlay = AppSystemBars.styleFor(surface);
 
           return AnnotatedRegion<SystemUiOverlayStyle>(
             value: overlay,
             child: Scaffold(
-              backgroundColor: background,
+              backgroundColor: surface,
               body: SafeArea(
                 child: Column(
                   children: [

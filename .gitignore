@@ -1,9 +1,18 @@
 .dart_tool/
 .flutter-plugins-dependencies
 build/
+/.temp/
+/.codex-previews/
+/artifacts/
+/*.apk
+*.log
+*.class
 android/.gradle/
 android/.kotlin/
 android/local.properties
+android/amap.properties
+android/key.properties
+android/upload-keystore.jks
 android/gradle/wrapper/gradle-wrapper.jar
 ios/Flutter/Generated.xcconfig
 ios/Flutter/ephemeral/
@@ -15,3 +24,6 @@ ios/Pods/
 ios/.symlinks/
 ios/Flutter/Flutter.podspec
 **/xcuserdata/
+
+# Server-only speech recognition credentials; examples remain tracked.
+**/config/asr.env

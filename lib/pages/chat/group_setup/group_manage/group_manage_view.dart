@@ -13,7 +13,8 @@ class GroupManagePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Styles.c_F8F9FA,
-        appBar: AppBar(
+        appBar: GlassAppBar(
+            toolbarHeight: kToolbarHeight,
             centerTitle: true,
             backgroundColor: Styles.c_F8F9FA,
             surfaceTintColor: Colors.transparent,

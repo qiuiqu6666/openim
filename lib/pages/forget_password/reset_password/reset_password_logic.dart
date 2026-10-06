@@ -3,10 +3,14 @@ import 'package:get/get.dart';
 import 'package:openim/routes/app_navigator.dart';
 import 'package:openim_common/openim_common.dart';
 
+import '../../../widgets/auth/auth_form_rules.dart';
+
 class ResetPasswordLogic extends GetxController {
   final pwdCtrl = TextEditingController();
   final pwdAgainCtrl = TextEditingController();
   final enabled = false.obs;
+  final submitting = false.obs;
+  bool _closed = false;
   String? phoneNumber;
   String? email;
   late String areaCode;
@@ -16,6 +20,7 @@ class ResetPasswordLogic extends GetxController {
 
   @override
   void onClose() {
+    _closed = true;
     pwdCtrl.dispose();
     pwdAgainCtrl.dispose();
     super.onClose();
@@ -32,35 +37,48 @@ class ResetPasswordLogic extends GetxController {
     super.onInit();
   }
 
-  _onChanged() {
-    enabled.value = pwdCtrl.text.trim().isNotEmpty && pwdAgainCtrl.text.trim().isNotEmpty;
+  void _onChanged() {
+    enabled.value =
+        pwdCtrl.text.trim().isNotEmpty && pwdAgainCtrl.text.trim().isNotEmpty;
   }
 
   bool _checkingInput() {
-    if (!IMUtils.isValidPassword(pwdCtrl.text)) {
-      IMViews.showToast(StrRes.wrongPasswordFormat);
-      return false;
-    } else if (pwdCtrl.text != pwdAgainCtrl.text) {
-      IMViews.showToast(StrRes.twicePwdNoSame);
-      return false;
-    }
-    return true;
+    final error = (email != null
+            ? AuthFormRules.email(email)
+            : AuthFormRules.phone(phoneNumber, areaCode)) ??
+        AuthFormRules.password(pwdCtrl.text) ??
+        AuthFormRules.confirmPassword(pwdAgainCtrl.text, pwdCtrl.text) ??
+        AuthFormRules.verificationCode(verificationCode);
+    if (error == null) return true;
+    IMViews.showToast(error);
+    return false;
   }
 
-  resetPassword() => LoadingView.singleton.wrap(
-      asyncFunction: () => Apis.resetPassword(
-            areaCode: areaCode,
-            phoneNumber: phoneNumber,
-            email: email,
-            password: pwdCtrl.text,
-            verificationCode: verificationCode,
-          ));
+  Future<void> resetPassword() async {
+    if (_closed || isClosed || !_checkingInput()) return;
+    final requestedPassword = pwdCtrl.text;
+    await LoadingView.singleton.wrap(
+        asyncFunction: () => Apis.resetPassword(
+              areaCode: areaCode,
+              phoneNumber: phoneNumber,
+              email: email,
+              password: requestedPassword,
+              verificationCode: verificationCode,
+            ));
+  }
 
-  confirmTheChanges() async {
-    if (_checkingInput()) {
+  Future<void> confirmTheChanges() async {
+    if (_closed || isClosed || submitting.value || !_checkingInput()) return;
+    submitting.value = true;
+    try {
       await resetPassword();
+      if (_closed || isClosed) return;
       IMViews.showToast(StrRes.changedSuccessfully);
       AppNavigator.startBackLogin();
+    } catch (_) {
+      // The API displays request errors; keep both passwords for retry.
+    } finally {
+      if (!_closed && !isClosed) submitting.value = false;
     }
   }
 }

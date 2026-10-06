@@ -7,14 +7,17 @@ import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 import 'package:sprintf/sprintf.dart';
 
 import 'group_member_list_logic.dart';
+import '../../../contacts/presence/contact_presence_policy.dart';
 import '../../../contacts/presence_label.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 class GroupMemberListPage extends StatelessWidget {
-  final logic = Get.find<GroupMemberListLogic>(
-      tag: (Get.arguments['opType'] as GroupMemberOpType).name);
+  final GroupMemberListLogic logic;
 
-  GroupMemberListPage({super.key});
+  GroupMemberListPage({super.key, GroupMemberListLogic? logic})
+      : logic = logic ??
+            Get.find<GroupMemberListLogic>(
+                tag: (Get.arguments['opType'] as GroupMemberOpType).name);
 
   @override
   Widget build(BuildContext context) {
@@ -34,18 +37,37 @@ class GroupMemberListPage extends StatelessWidget {
             children: [
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 12.h),
-                child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10.r),
-                    child: SearchBox(
-                      height: 40.h,
-                      hintText: 'groupMemberSearchHint'.tr,
-                      backgroundColor: Styles.c_F0F2F6,
-                      enabled: true,
-                      controller: logic.searchController,
-                      onChanged: logic.searchChanged,
-                      onCleared: () => logic.searchChanged(''),
-                      onSubmitted: (_) => logic.searchMembers(),
-                    )),
+                child: Row(children: [
+                  Expanded(
+                      child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10.r),
+                          child: SearchBox(
+                            height: 40.h,
+                            hintText: 'groupMemberSearchHint'.tr,
+                            backgroundColor: Styles.c_F0F2F6,
+                            enabled: true,
+                            controller: logic.searchController,
+                            onChanged: logic.searchChanged,
+                            onCleared: () => logic.searchChanged(''),
+                            onSubmitted: (_) => logic.searchMembers(),
+                          ))),
+                  if (logic.isDelMember)
+                    TextButton(
+                      onPressed:
+                          logic.visibleMembers.isEmpty || logic.searching.value
+                              ? null
+                              : logic.toggleSelectAllVisible,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Styles.c_0089FF,
+                        minimumSize: Size(64.w, 48.h),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        ChatRadio(checked: logic.isAllVisibleSelected),
+                        6.horizontalSpace,
+                        Text(StrRes.selectAll),
+                      ]),
+                    ),
+                ]),
               ),
               if (logic.searching.value) const LinearProgressIndicator(),
               if (logic.searchFailed.value)
@@ -160,7 +182,18 @@ class GroupMemberListPage extends StatelessWidget {
                             style: Styles.ts_0C1C33_17sp,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis),
-                        if (logic.presence.users[membersInfo.userID]
+                        if (logic.displayedAccount(membersInfo).isNotEmpty) ...[
+                          4.verticalSpace,
+                          Text(logic.displayedAccount(membersInfo),
+                              style: Styles.ts_8E9AB0_14sp,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                        ],
+                        if (ContactPresencePolicy.resolve(
+                          userID: membersInfo.userID,
+                          ex: membersInfo.ex,
+                          presence: logic.presence.users[membersInfo.userID],
+                        )
                             case final presence?) ...[
                           4.verticalSpace,
                           PresenceLabel(presence: presence),

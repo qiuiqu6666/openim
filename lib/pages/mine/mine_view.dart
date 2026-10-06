@@ -27,7 +27,7 @@ class MinePage extends StatelessWidget {
             nickname: logic.settingsStore.profileNickname.isEmpty
                 ? (user.nickname ?? '')
                 : logic.settingsStore.profileNickname,
-            userId: user.userID ?? '',
+            userId: user.account?.trim() ?? '',
             avatarUrl: user.faceURL ?? '',
             avatarBytes: logic.settingsStore.profileAvatarPreviewBytes,
             signature: logic.settingsStore.profileSignature,
@@ -38,7 +38,7 @@ class MinePage extends StatelessWidget {
             onNotificationsTap: () => logic.openNotifications(context),
             onShareAppTap: () => logic.openShareApp(context),
             onSettingsTap: () => logic.openSettings(context),
-            onFeatureTap: logic.showReservedFeature,
+            onFeatureTap: (feature) => logic.openFeature(context, feature),
             onWalletTap: onWalletTap,
             onUnavailableFeatureTap: logic.showUnavailableFeature,
           ),

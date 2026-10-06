@@ -18,27 +18,11 @@ import 'photo_browser_hero.dart';
 import 'native_media_video.dart';
 import 'video_media_cache.dart';
 import 'media_preview_glass.dart';
+import 'media_browser/local_media_availability.dart';
+import 'media_browser/media_action_sheet.dart';
 
-class MediaSource {
-  final String? url;
-  final String thumbnail;
-  final File? file;
-  final Uint8List? bytes;
-  final bool isVideo;
-  final String? tag;
-  final String? senderName;
-  final DateTime? sentAt;
-
-  MediaSource(
-      {required this.thumbnail,
-      this.url,
-      this.file,
-      this.bytes,
-      this.isVideo = false,
-      this.tag,
-      this.senderName,
-      this.sentAt});
-}
+export 'media_browser/media_source.dart';
+import 'media_browser/media_grid_thumbnail.dart';
 
 class MediaBrowser extends StatefulWidget {
   const MediaBrowser({
@@ -48,24 +32,32 @@ class MediaBrowser extends StatefulWidget {
     this.muted = false,
     this.showGallery = true,
     this.showCounter = true,
+    this.closeOnly = false,
     this.onAutoPlay,
     this.onSave,
     this.onLongPress,
     this.onPageChanged,
     this.onForward,
     this.onDelete,
+    this.onViewInChat,
   });
   final int initialIndex;
   final List<MediaSource> sources;
   final bool muted;
   final bool showGallery;
   final bool showCounter;
+
+  /// Presents a single sticker without gallery or media actions.
+  final bool closeOnly;
   final bool Function(int index)? onAutoPlay;
   final ValueChanged<int>? onSave;
   final ValueChanged<int>? onLongPress;
   final ValueChanged<int>? onPageChanged;
   final ValueChanged<int>? onForward;
   final ValueChanged<int>? onDelete;
+
+  /// Called after closing the preview to locate its selected chat message.
+  final ValueChanged<int>? onViewInChat;
   @override
   State<MediaBrowser> createState() => _MediaBrowserState();
 }
@@ -75,10 +67,12 @@ class _MediaBrowserState extends State<MediaBrowser>
   GlobalKey<ExtendedImageSlidePageState> slidePagekey =
       GlobalKey<ExtendedImageSlidePageState>();
 
-  final List<int> _cachedIndexes = <int>[];
+  final Set<int> _cachedIndexes = {};
   int currentIndex = 0;
   bool _showControls = true;
   bool _showGrid = false;
+  final _localFiles = LocalMediaAvailability();
+  late final ExtendedPageController _pageController;
   SystemUiOverlayStyle? _previousSystemUiStyle;
 
   List<double> doubleTapScales = <double>[1.0, 2.0];
@@ -92,6 +86,11 @@ class _MediaBrowserState extends State<MediaBrowser>
     // does not change SystemUiMode, so preserve the caller's mode as-is.
     _previousSystemUiStyle = SystemChrome.latestStyle;
     currentIndex = widget.initialIndex;
+    _pageController = ExtendedPageController(
+      initialPage: currentIndex,
+      pageSpacing: 8,
+      shouldIgnorePointerWhenScrolling: true,
+    );
     _doubleClickAnimationController = AnimationController(
         duration: const Duration(milliseconds: 150), vsync: this);
     super.initState();
@@ -101,6 +100,8 @@ class _MediaBrowserState extends State<MediaBrowser>
   void dispose() {
     Logger.print('[MediaBrowser] dispose', fileName: 'media_browser.dart');
     _doubleClickAnimationController.dispose();
+    _pageController.dispose();
+    _localFiles.clear();
 
     final previousStyle = _previousSystemUiStyle;
     if (previousStyle != null) {
@@ -116,22 +117,59 @@ class _MediaBrowserState extends State<MediaBrowser>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _preloadImage(currentIndex - 1 < 0 ? 0 : currentIndex - 1);
-    _preloadImage(currentIndex + 1);
+    unawaited(_preloadImage(currentIndex - 1 < 0 ? 0 : currentIndex - 1));
+    unawaited(_preloadImage(currentIndex + 1));
   }
 
-  void _preloadImage(int index) {
+  @override
+  void didUpdateWidget(covariant MediaBrowser oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    var unchanged = widget.sources.length == oldWidget.sources.length;
+    for (var index = 0; unchanged && index < widget.sources.length; index++) {
+      unchanged = identical(widget.sources[index], oldWidget.sources[index]);
+    }
+    if (unchanged) return;
+    _localFiles.invalidateMissing();
+    for (var index = 0; index < widget.sources.length; index++) {
+      final source = widget.sources[index];
+      final old =
+          index < oldWidget.sources.length ? oldWidget.sources[index] : null;
+      if (old?.file != source.file) {
+        final oldFile = old?.file;
+        if (oldFile != null) _localFiles.invalidate(oldFile.path);
+        final file = source.file;
+        if (file != null) _localFiles.invalidate(file.path);
+      }
+      if (old?.file != source.file ||
+          old?.url != source.url ||
+          old?.thumbnail != source.thumbnail) {
+        _cachedIndexes.remove(index);
+      }
+    }
+    _cachedIndexes.removeWhere((index) => index >= widget.sources.length);
+    // Source bytes and thumbnails upgrade in place; keep the current page.
+  }
+
+  Future<void> _preloadImage(int index) async {
     if (_cachedIndexes.contains(index)) {
       return;
     }
     if (0 <= index && index < widget.sources.length) {
       final s = widget.sources[index];
+      _cachedIndexes.add(index);
+      if (s.bytes != null ||
+          !s.isVideo && s.file != null && await _localFiles.exists(s.file!)) {
+        return;
+      }
+      if (!mounted ||
+          index >= widget.sources.length ||
+          !identical(s, widget.sources[index])) {
+        return;
+      }
       final url = s.isVideo ? s.thumbnail : s.url;
       if (url != null && url.isNotEmpty) {
         precacheImage(ExtendedNetworkImageProvider(url, cache: true), context);
       }
-
-      _cachedIndexes.add(index);
     }
   }
 
@@ -142,11 +180,11 @@ class _MediaBrowserState extends State<MediaBrowser>
     const background = Colors.black;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.black,
+        statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
-        systemNavigationBarColor: Colors.black,
-        systemNavigationBarDividerColor: Colors.black,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
         systemStatusBarContrastEnforced: false,
         systemNavigationBarContrastEnforced: false,
@@ -167,20 +205,23 @@ class _MediaBrowserState extends State<MediaBrowser>
               return background.withValues(alpha: rate);
             },
             child: GestureDetector(
-              onTap: () => setState(() => _showControls = !_showControls),
-              onLongPress: () => widget.onLongPress?.call(currentIndex),
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.closeOnly
+                  ? () => Navigator.of(context).pop()
+                  : () => setState(() => _showControls = !_showControls),
+              onLongPress: widget.closeOnly
+                  ? () {}
+                  : widget.onLongPress == null
+                      ? null
+                      : () => widget.onLongPress!(currentIndex),
               child: ExtendedImageGesturePageView.builder(
-                controller: ExtendedPageController(
-                  initialPage: currentIndex,
-                  pageSpacing: 8,
-                  shouldIgnorePointerWhenScrolling: true,
-                ),
+                controller: _pageController,
                 itemCount: widget.sources.length,
                 onPageChanged: (int page) {
                   setState(() => currentIndex = page);
                   widget.onPageChanged?.call(page);
-                  _preloadImage(page - 1);
-                  _preloadImage(page + 1);
+                  unawaited(_preloadImage(page - 1));
+                  unawaited(_preloadImage(page + 1));
                 },
                 itemBuilder: (BuildContext context, int index) {
                   final s = widget.sources[index];
@@ -197,9 +238,13 @@ class _MediaBrowserState extends State<MediaBrowser>
                             file: s.file,
                             heroTag: s.tag,
                             autoPlay: widget.onAutoPlay?.call(index) ?? false,
-                            muted: widget.muted,
-                            onDownload: (url, file) =>
-                                widget.onSave?.call(currentIndex),
+                            muted: widget.closeOnly || widget.muted,
+                            showControls: !widget.closeOnly,
+                            looping: widget.closeOnly,
+                            onDownload: widget.closeOnly
+                                ? null
+                                : (url, file) =>
+                                    widget.onSave?.call(currentIndex),
                           ),
                           heroBuilderForSlidingPage: (Widget result) {
                             return Hero(
@@ -224,108 +269,26 @@ class _MediaBrowserState extends State<MediaBrowser>
                           tag: s.tag ?? s.thumbnail,
                           slideType: SlideType.onlyImage,
                           slidePagekey: slidePagekey,
-                          child: s.bytes != null
-                              ? ExtendedImage.memory(
-                                  s.bytes!,
-                                  enableSlideOutPage: true,
-                                  fit: BoxFit.contain,
-                                  mode: ExtendedImageMode.gesture,
-                                )
-                              : s.file != null && s.file!.existsSync()
-                                  ? ExtendedImage.file(
-                                      s.file!,
-                                      enableSlideOutPage: true,
-                                      fit: BoxFit.contain,
-                                      mode: ExtendedImageMode.gesture,
-                                    )
-                                  : ExtendedImage.network(
-                                      s.url ?? s.thumbnail,
-                                      enableSlideOutPage: true,
-                                      fit: BoxFit.contain,
-                                      mode: ExtendedImageMode.gesture,
-                                      initGestureConfigHandler:
-                                          (ExtendedImageState state) {
-                                        return GestureConfig(
-                                          minScale: 0.9,
-                                          animationMinScale: 0.7,
-                                          maxScale: 3.0,
-                                          animationMaxScale: 3.5,
-                                          speed: 1.0,
-                                          inPageView: true,
-                                          initialAlignment:
-                                              InitialAlignment.center,
-                                        );
-                                      },
-                                      onDoubleTap: (state) {
-                                        final Offset? pointerDownPosition =
-                                            state.pointerDownPosition;
-                                        final double? begin =
-                                            state.gestureDetails!.totalScale;
-                                        double end;
-
-                                        _doubleClickAnimation?.removeListener(
-                                            _doubleClickAnimationListener);
-
-                                        _doubleClickAnimationController.stop();
-
-                                        _doubleClickAnimationController.reset();
-
-                                        if (begin == doubleTapScales[0]) {
-                                          end = doubleTapScales[1];
-                                        } else {
-                                          end = doubleTapScales[0];
-                                        }
-
-                                        _doubleClickAnimationListener = () {
-                                          state.handleDoubleTap(
-                                              scale:
-                                                  _doubleClickAnimation!.value,
-                                              doubleTapPosition:
-                                                  pointerDownPosition);
-                                        };
-                                        _doubleClickAnimation =
-                                            _doubleClickAnimationController
-                                                .drive(Tween<double>(
-                                                    begin: begin, end: end));
-
-                                        _doubleClickAnimation!.addListener(
-                                            _doubleClickAnimationListener);
-
-                                        _doubleClickAnimationController
-                                            .forward();
-                                      },
-                                      loadStateChanged: (state) {
-                                        if (state.extendedImageLoadState ==
-                                            LoadState.loading) {
-                                          return Stack(
-                                            alignment:
-                                                AlignmentDirectional.center,
-                                            children: [
-                                              ExtendedImage.network(
-                                                s.thumbnail,
-                                                enableLoadState: false,
-                                              ),
-                                              const CupertinoActivityIndicator(
-                                                radius: 15,
-                                              ),
-                                            ],
-                                          );
-                                        } else if (state
-                                                .extendedImageLoadState ==
-                                            LoadState.failed) {
-                                          state.imageProvider.evict();
-
-                                          return ImageRes.pictureError.toImage;
-                                        }
-                                        return null;
-                                      },
-                                    ),
+                          child: _buildFullImage(s),
                         );
                 },
               ),
             ),
           ),
-          if (_showControls)
+          if (widget.closeOnly)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: SafeArea(
+                minimum: const EdgeInsets.all(12),
+                child: _roundAction(context,
+                    icon: Icons.close_rounded,
+                    tooltip:
+                        MaterialLocalizations.of(context).closeButtonTooltip,
+                    onPressed: () => Navigator.of(context).pop()),
+              ),
+            ),
+          if (_showControls && !widget.closeOnly)
             Positioned(
               top: 0,
               left: 0,
@@ -399,7 +362,7 @@ class _MediaBrowserState extends State<MediaBrowser>
                 ),
               ),
             ),
-          if (_showControls && source.isVideo)
+          if (_showControls && !widget.closeOnly && source.isVideo)
             Positioned(
               left: 0,
               right: 0,
@@ -420,7 +383,7 @@ class _MediaBrowserState extends State<MediaBrowser>
                 ),
               ),
             ),
-          if (_showControls)
+          if (_showControls && !widget.closeOnly)
             Positioned(
               bottom: 0,
               left: 0,
@@ -452,7 +415,8 @@ class _MediaBrowserState extends State<MediaBrowser>
                               tooltip: '图片和视频',
                               onPressed: () =>
                                   setState(() => _showGrid = true)),
-                        if (widget.onDelete != null)
+                        if (widget.onDelete != null ||
+                            widget.onViewInChat != null)
                           _roundAction(context,
                               icon: Icons.more_horiz,
                               tooltip: 'mediaMore'.tr,
@@ -463,11 +427,140 @@ class _MediaBrowserState extends State<MediaBrowser>
                 ),
               ),
             ),
-          if (_showGrid) Positioned.fill(child: _buildGrid(context)),
+          if (_showGrid && !widget.closeOnly)
+            Positioned.fill(child: _buildGrid(context)),
         ]),
       ),
     );
   }
+
+  Widget _buildNetworkImage(MediaSource s) => ExtendedImage.network(
+        s.url ?? s.thumbnail,
+        enableSlideOutPage: true,
+        fit: BoxFit.contain,
+        mode: ExtendedImageMode.gesture,
+        initGestureConfigHandler: (ExtendedImageState state) {
+          return GestureConfig(
+            minScale: 0.9,
+            animationMinScale: 0.7,
+            maxScale: 3.0,
+            animationMaxScale: 3.5,
+            speed: 1.0,
+            inPageView: true,
+            initialAlignment: InitialAlignment.center,
+          );
+        },
+        onDoubleTap: (state) {
+          final Offset? pointerDownPosition = state.pointerDownPosition;
+          final double? begin = state.gestureDetails!.totalScale;
+          double end;
+
+          _doubleClickAnimation?.removeListener(_doubleClickAnimationListener);
+
+          _doubleClickAnimationController.stop();
+
+          _doubleClickAnimationController.reset();
+
+          if (begin == doubleTapScales[0]) {
+            end = doubleTapScales[1];
+          } else {
+            end = doubleTapScales[0];
+          }
+
+          _doubleClickAnimationListener = () {
+            state.handleDoubleTap(
+                scale: _doubleClickAnimation!.value,
+                doubleTapPosition: pointerDownPosition);
+          };
+          _doubleClickAnimation = _doubleClickAnimationController
+              .drive(Tween<double>(begin: begin, end: end));
+
+          _doubleClickAnimation!.addListener(_doubleClickAnimationListener);
+
+          _doubleClickAnimationController.forward();
+        },
+        loadStateChanged: (state) {
+          if (state.extendedImageLoadState == LoadState.loading) {
+            return Stack(
+              alignment: AlignmentDirectional.center,
+              children: [
+                ExtendedImage.network(
+                  s.thumbnail,
+                  enableLoadState: false,
+                ),
+                const CupertinoActivityIndicator(
+                  radius: 15,
+                ),
+              ],
+            );
+          } else if (state.extendedImageLoadState == LoadState.failed) {
+            state.imageProvider.evict();
+
+            return ImageRes.pictureError.toImage;
+          }
+          return null;
+        },
+      );
+  void _selectGridPage(int index) {
+    setState(() {
+      currentIndex = index;
+      _showGrid = false;
+    });
+    if (_pageController.hasClients) _pageController.jumpToPage(index);
+  }
+
+  Widget _buildFullImage(MediaSource source) {
+    if (source.loading) {
+      return const Center(child: CupertinoActivityIndicator(radius: 15));
+    }
+    if (source.bytes != null) {
+      final image = ExtendedImage.memory(source.bytes!,
+          enableSlideOutPage: true,
+          fit: BoxFit.contain,
+          mode: ExtendedImageMode.gesture);
+      if (widget.closeOnly || source.onRetry == null) return image;
+      return Stack(fit: StackFit.expand, children: [
+        image,
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 96),
+            child: _mediaRetry(source.onRetry!),
+          ),
+        ),
+      ]);
+    }
+    if (!widget.closeOnly &&
+        source.onRetry != null &&
+        source.file == null &&
+        source.url == null) {
+      return Center(
+        child: _mediaRetry(source.onRetry!),
+      );
+    }
+    final file = source.file;
+    if (file == null) return _buildNetworkImage(source);
+    return FutureBuilder<bool>(
+      future: _localFiles.exists(file),
+      builder: (_, snapshot) => !snapshot.hasData
+          ? const Center(child: CupertinoActivityIndicator(radius: 15))
+          : snapshot.data!
+              ? ExtendedImage.file(file,
+                  enableSlideOutPage: true,
+                  fit: BoxFit.contain,
+                  mode: ExtendedImageMode.gesture)
+              : _buildNetworkImage(source),
+    );
+  }
+
+  Widget _mediaRetry(VoidCallback retry) => IconButton(
+        onPressed: retry,
+        icon:
+            const Icon(Icons.image_not_supported_outlined, color: Colors.white),
+        tooltip: Localizations.localeOf(context).languageCode == 'zh'
+            ? '重试'
+            : 'Retry',
+      );
 
   String _previewTime(DateTime? time) {
     if (time == null) return '${currentIndex + 1}/${widget.sources.length}';
@@ -507,46 +600,41 @@ class _MediaBrowserState extends State<MediaBrowser>
     );
   }
 
-  void _showMoreMenu(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          if (widget.onSave != null)
-            ListTile(
-              leading: const Icon(Icons.download),
-              title: Text(StrRes.saveToAlbum),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                widget.onSave!(currentIndex);
-              },
-            ),
-          if (widget.onForward != null)
-            ListTile(
-              leading: const Icon(Icons.ios_share),
-              title: const Text('转发'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                widget.onForward!(currentIndex);
-              },
-            ),
-          if (widget.onDelete != null)
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('删除'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _deleteCurrent(context);
-              },
-            ),
-        ]),
-      ),
-    );
+  Future<void> _showMoreMenu(BuildContext context) async {
+    final index = currentIndex;
+    final source = widget.sources[index];
+    final action = await showMediaActionSheet(context,
+        canSave: widget.onSave != null,
+        canForward: widget.onForward != null,
+        canViewInChat: widget.onViewInChat != null,
+        canDelete: widget.onDelete != null);
+    // A menu always acts on the item it was opened for. Source replacements or
+    // closing this route must not apply the choice to a different attachment.
+    if (!mounted ||
+        !context.mounted ||
+        ModalRoute.of(context)?.isCurrent == false ||
+        index >= widget.sources.length ||
+        !identical(widget.sources[index], source)) {
+      return;
+    }
+    switch (action) {
+      case MediaAction.save:
+        widget.onSave?.call(index);
+      case MediaAction.forward:
+        widget.onForward?.call(index);
+      case MediaAction.viewInChat:
+        final locate = widget.onViewInChat;
+        if (locate == null) return;
+        Navigator.of(context).pop();
+        locate(index);
+      case MediaAction.delete:
+        _deleteCurrent(context, index);
+      case null:
+        break;
+    }
   }
 
-  void _deleteCurrent(BuildContext context) {
-    final index = currentIndex;
+  void _deleteCurrent(BuildContext context, int index) {
     Navigator.of(context).pop();
     widget.onDelete?.call(index);
   }
@@ -554,24 +642,6 @@ class _MediaBrowserState extends State<MediaBrowser>
   Widget _buildGrid(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final zh = Localizations.localeOf(context).languageCode == 'zh';
-    Widget placeholder({bool failed = false}) => ColoredBox(
-          color: AppTokens.surface(dark: dark),
-          child: Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(failed ? Icons.broken_image_outlined : Icons.image_outlined,
-                  color: AppTokens.textSecondary(dark: dark), size: 28),
-              if (failed) ...[
-                const SizedBox(height: 6),
-                Text(zh ? '缩略图不可用' : 'Preview unavailable',
-                    style: TextStyle(
-                        color: AppTokens.textSecondary(dark: dark),
-                        fontSize: 11)),
-              ],
-            ]),
-          ),
-        );
-    Widget failed(BuildContext _, Object __, StackTrace? ___) =>
-        placeholder(failed: true);
     return Material(
       color: AppTokens.background(dark: dark),
       child: SafeArea(
@@ -621,42 +691,15 @@ class _MediaBrowserState extends State<MediaBrowser>
               itemCount: widget.sources.length,
               itemBuilder: (context, index) {
                 final item = widget.sources[index];
-                final file = item.file;
-                final uri =
-                    item.thumbnail.isNotEmpty ? item.thumbnail : item.url ?? '';
-                final localThumbnail = uri.isNotEmpty && !uri.startsWith('http')
-                    ? File(uri.startsWith('file://')
-                        ? Uri.parse(uri).toFilePath()
-                        : uri)
-                    : null;
-                final thumb = !item.isVideo && item.bytes != null
-                    ? Image.memory(item.bytes!,
-                        fit: BoxFit.cover, errorBuilder: failed)
-                    : !item.isVideo && file != null && file.existsSync()
-                        ? Image.file(file,
-                            fit: BoxFit.cover, errorBuilder: failed)
-                        : localThumbnail != null && localThumbnail.existsSync()
-                            ? Image.file(localThumbnail,
-                                fit: BoxFit.cover, errorBuilder: failed)
-                            : uri.startsWith('http')
-                                ? Image.network(uri,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: failed,
-                                    loadingBuilder: (_, child, progress) =>
-                                        progress == null
-                                            ? child
-                                            : placeholder())
-                                : placeholder(failed: true);
+                final thumb =
+                    MediaGridThumbnail(source: item, availability: _localFiles);
                 return Semantics(
                   button: true,
                   selected: currentIndex == index,
                   label:
                       '${item.isVideo ? (zh ? '视频' : 'Video') : (zh ? '图片' : 'Photo')} ${index + 1}',
                   child: InkWell(
-                    onTap: () => setState(() {
-                      currentIndex = index;
-                      _showGrid = false;
-                    }),
+                    onTap: () => _selectGridPage(index),
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
                       decoration: BoxDecoration(
@@ -700,6 +743,8 @@ class VideoPlayerView extends StatefulWidget {
     this.onDownload,
     this.autoPlay = true,
     this.muted = false,
+    this.showControls = true,
+    this.looping = false,
   });
   final String? path;
   final String? url;
@@ -708,6 +753,8 @@ class VideoPlayerView extends StatefulWidget {
   final String? heroTag;
   final bool autoPlay;
   final bool muted;
+  final bool showControls;
+  final bool looping;
   final Function(String? url, File? file)? onDownload;
   @override
   State<VideoPlayerView> createState() => Platform.isAndroid || Platform.isIOS
@@ -724,6 +771,8 @@ class _MobileVideoPlayerViewState extends State<VideoPlayerView> {
         coverUrl: widget.coverUrl,
         autoPlay: widget.autoPlay,
         muted: widget.muted,
+        showControls: widget.showControls,
+        looping: widget.looping,
       );
 }
 
@@ -762,6 +811,10 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
       if (_disposed || source == null) return;
       await player.setVolume(widget.muted ? 0 : 100);
       if (_disposed) return;
+      if (widget.looping) {
+        await player.setPlaylistMode(PlaylistMode.single);
+        if (_disposed) return;
+      }
       await player.open(Media(source), play: widget.autoPlay);
       if (source == url && url != null && url.isNotEmpty) {
         unawaited(Future<void>.delayed(
@@ -814,9 +867,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
           child: Video(
             controller: controller,
             fit: BoxFit.contain,
-            controls: (state) {
-              return CustomMKMaterialVideoControls(state);
-            },
+            controls: widget.showControls
+                ? (state) => CustomMKMaterialVideoControls(state)
+                : null,
           ),
         ),
         if (_showCover) _buildCoverView(context)

@@ -24,6 +24,7 @@ class ProfileInfoPage extends StatefulWidget {
     required this.userId,
     required this.avatarUrl,
     required this.store,
+    this.account = '',
     this.phoneNumber = '',
     this.gender = 0,
     this.birth = 0,
@@ -32,7 +33,10 @@ class ProfileInfoPage extends StatefulWidget {
   });
 
   final String nickname;
+  /// SDK identity used in QR invitation links.
   final String userId;
+  /// Public 99Chat account displayed and copied by the profile.
+  final String account;
   final String avatarUrl;
   final String phoneNumber;
   final int gender;
@@ -332,13 +336,13 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
   }
 
   Future<void> _copyId() async {
-    final id = widget.userId.trim();
+    final id = widget.account.trim();
     if (id.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: id));
     if (!mounted) return;
     showSettingsMessage(
       context,
-      settingsText(context, zh: '用户ID已复制', en: 'User ID copied'),
+      settingsText(context, zh: '99号ID已复制', en: '99 ID copied'),
     );
   }
 
@@ -436,9 +440,9 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
                   ),
                   SettingsCell(
                     title: settingsText(context, zh: '99号ID', en: '99 ID'),
-                    value: widget.userId.trim().isEmpty
+                    value: widget.account.trim().isEmpty
                         ? '--'
-                        : widget.userId.trim(),
+                        : widget.account.trim(),
                     onTap: _copyId,
                   ),
                   SettingsCell(
@@ -453,6 +457,7 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
                       QrProfilePage(
                         nickname: widget.store.profileNickname,
                         userId: widget.userId,
+                        account: widget.account,
                         avatarUrl: widget.avatarUrl,
                         avatarBytes: widget.store.profileAvatarPreviewBytes,
                       ),

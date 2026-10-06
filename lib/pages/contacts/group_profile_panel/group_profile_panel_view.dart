@@ -9,14 +9,14 @@ class GroupProfilePanelPage extends StatelessWidget {
 
   GroupProfilePanelPage({super.key});
 
-  static const _muted = Color(0xFF8993A7);
-  static const _card = Color(0xFFF7F8FA);
+  static Color get _muted => Styles.c_8E9AB0;
+  static Color get _card => Styles.c_F4F5F7;
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Styles.c_FFFFFF,
         appBar: GlassAppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: Styles.c_FFFFFF,
           leading: IconButton(
             tooltip: MaterialLocalizations.of(context).backButtonTooltip,
             onPressed: () => Get.back(),
@@ -51,17 +51,17 @@ class GroupProfilePanelPage extends StatelessWidget {
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 23,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF11151D),
+                          color: Styles.c_0C1C33,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         '共${group.memberCount ?? logic.members.length}人',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 16, color: _muted),
+                        style: TextStyle(fontSize: 16, color: _muted),
                       ),
                       const SizedBox(height: 32),
                       Container(
@@ -85,8 +85,8 @@ class GroupProfilePanelPage extends StatelessWidget {
                                     group.groupID,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        fontSize: 15, color: _muted),
+                                    style:
+                                        TextStyle(fontSize: 15, color: _muted),
                                   ),
                                 ],
                               ),
@@ -95,8 +95,7 @@ class GroupProfilePanelPage extends StatelessWidget {
                               tooltip: StrRes.copySuccessfully,
                               onPressed: () =>
                                   IMUtils.copy(text: group.groupID),
-                              icon: const Icon(Icons.copy_outlined,
-                                  color: _muted),
+                              icon: Icon(Icons.copy_outlined, color: _muted),
                             ),
                           ],
                         ),
@@ -117,7 +116,7 @@ class GroupProfilePanelPage extends StatelessWidget {
                           group.notification?.isNotEmpty == true
                               ? group.notification!
                               : 'groupNoAnnouncement'.tr,
-                          style: const TextStyle(fontSize: 15, color: _muted),
+                          style: TextStyle(fontSize: 15, color: _muted),
                         ),
                       ),
                     ],

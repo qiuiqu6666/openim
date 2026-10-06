@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
@@ -7,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:openim/pages/contacts/scanning/friend_qr_scanner.dart';
 import 'package:openim/routes/app_navigator.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -22,12 +20,16 @@ class QrProfilePage extends StatefulWidget {
     required this.nickname,
     required this.userId,
     required this.avatarUrl,
+    this.account = '',
     this.avatarBytes,
     this.inviteFactory,
   });
 
   final String nickname;
+  /// SDK identity used in the invitation protocol.
   final String userId;
+  /// Public 99Chat account displayed on the QR card.
+  final String account;
   final String avatarUrl;
   final Uint8List? avatarBytes;
   final Future<String> Function(FriendAddSource)? inviteFactory;
@@ -88,12 +90,12 @@ class _QrProfilePageState extends State<QrProfilePage> {
   String get _displayName {
     final nickname = widget.nickname.trim();
     if (nickname.isNotEmpty) return nickname;
-    final userId = widget.userId.trim();
-    return userId.isEmpty ? '99Chat' : userId;
+    final account = widget.account.trim();
+    return account.isEmpty ? '99Chat' : account;
   }
 
   String get _displayId =>
-      widget.userId.trim().isEmpty ? '--' : widget.userId.trim();
+      widget.account.trim().isEmpty ? '--' : widget.account.trim();
 
   String get _qrData =>
       _qrInvite == null ? '' : _inviteUrl(_qrInvite!, 'qrcode');
@@ -194,10 +196,17 @@ class _QrProfilePageState extends State<QrProfilePage> {
   }
 
   Future<void> _openScanner() async {
-    final invite = await Navigator.of(context).push<Map<String, String>>(
-      MaterialPageRoute(builder: (_) => const _QrScannerPage()),
-    );
-    if (!mounted || invite == null) return;
+    final accountID = DataSp.userID;
+    final sessionToken = DataSp.chatToken;
+    final invite = await scanFriendQrCode(context, onMyQrTap: () async {
+      if (mounted) Navigator.of(context).pop();
+    });
+    if (!mounted ||
+        invite == null ||
+        DataSp.userID != accountID ||
+        DataSp.chatToken != sessionToken) {
+      return;
+    }
     AppNavigator.startUserProfilePane(
       userID: invite['userID']!,
       addSource: invite['source'] == 'link'
@@ -684,12 +693,15 @@ class _QrProfilePageState extends State<QrProfilePage> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: palette.top,
-      appBar: AppBar(
+      appBar: GlassAppBar(
+        toolbarHeight: kToolbarHeight,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        systemOverlayStyle: AppSystemBars.styleFor(palette.top,
+            navigationBackground: palette.bottom),
         leading: Navigator.of(context).canPop()
             ? IconButton(
                 icon: const Icon(Icons.arrow_back_ios_new_rounded),
@@ -791,65 +803,6 @@ class _QrProfilePageState extends State<QrProfilePage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _QrScannerPage extends StatefulWidget {
-  const _QrScannerPage();
-
-  @override
-  State<_QrScannerPage> createState() => _QrScannerPageState();
-}
-
-class _QrScannerPageState extends State<_QrScannerPage> {
-  final GlobalKey _qrKey = GlobalKey(debugLabel: 'qr-reader');
-  QRViewController? _controller;
-  StreamSubscription<Barcode>? _subscription;
-  bool _handled = false;
-
-  void _onCreated(QRViewController controller) {
-    _controller = controller;
-    _subscription = controller.scannedDataStream.listen((barcode) {
-      if (_handled) return;
-      final code = barcode.code?.trim() ?? '';
-      if (code.isEmpty) return;
-      final invite = parseFriendInvite(code);
-      if (invite == null) return;
-      _handled = true;
-      _controller?.pauseCamera();
-      if (mounted) Navigator.of(context).pop(invite);
-    });
-  }
-
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-        title: Text(settingsText(context, zh: '扫一扫', en: 'Scan')),
-      ),
-      body: QRView(
-        key: _qrKey,
-        onQRViewCreated: _onCreated,
-        overlay: QrScannerOverlayShape(
-          borderColor: AppTokens.accent,
-          borderRadius: 18,
-          borderLength: 34,
-          borderWidth: 6,
-          cutOutSize: MediaQuery.sizeOf(context).width * .68,
-        ),
       ),
     );
   }

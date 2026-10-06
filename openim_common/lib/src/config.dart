@@ -55,7 +55,7 @@ class Config {
   static const friendScheme = "io.openim.app/addFriend/";
   static const groupScheme = "https://99chat.vip?group=";
 
-  static const _host = "8.217.191.236";
+  static const _host = "129.226.192.93";
 
   static const _ipRegex = '((2[0-4]\\d|25[0-5]|[01]?\\d\\d?)\\.){3}(2[0-4]\\d|25[0-5]|[01]?\\d\\d?)';
 

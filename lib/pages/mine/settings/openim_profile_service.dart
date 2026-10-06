@@ -10,6 +10,8 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:path/path.dart' as p;
 import '../../../core/controller/im_controller.dart';
+import '../../../core/session/local_session_exit.dart';
+import '../../group_features/data/group_feature_runtime.dart';
 import 'settings_service.dart';
 import 'verification_code_result.dart';
 
@@ -221,23 +223,34 @@ class OpenIMProfileService extends StubSettingsService {
   }
 
   Future<void> _changeLoginPassword(Map<String, dynamic> data) async {
+    final account = OpenIM.iMManager.userID;
+    final token = DataSp.chatToken;
     await _security('/account/password/change', data: {
-      'userID': OpenIM.iMManager.userID,
+      'userID': account,
       ...data,
     });
+    if (controller.isClosed ||
+        account != OpenIM.iMManager.userID ||
+        token != DataSp.chatToken) {
+      return;
+    }
     IMViews.showToast(
       (Get.locale ?? Get.deviceLocale)?.languageCode == 'zh'
           ? '登录密码修改成功，请重新登录'
           : 'Login password changed successfully. Please sign in again.',
       duration: const Duration(seconds: 2),
     );
-    await DataSp.removeLoginCertificate();
-    PushController.logout();
-    try {
-      await controller.logout();
-    } finally {
-      AppNavigator.startLogin();
-    }
+    await exitLocalSession(
+      logoutSdk: controller.logout,
+      clearLocal: () async {
+        GroupFeatureRuntime.reset();
+        await DataSp.removeLoginCertificate();
+        PushController.logout();
+      },
+      navigate: AppNavigator.startLogin,
+      onCleanupError: (error, _) =>
+          Logger.print('SDK logout cleanup failed: $error'),
+    );
   }
 
   @override
@@ -345,9 +358,15 @@ class OpenIMProfileService extends StubSettingsService {
   }
 
   @override
-  Future<bool> hasTradePassword() async =>
-      (await _security('/chat/fund/pay-password', method: 'GET'))['set'] ==
-      true;
+  Future<bool> hasTradePassword() async {
+    final data = await _security('/chat/fund/pay-password', method: 'GET');
+    final set = data['set'];
+    if (set is! bool) {
+      throw const FormatException('Invalid payment password status');
+    }
+    return set;
+  }
+
   @override
   Future<void> setTradePassword(String password) async {
     await _security('/chat/fund/pay-password',
@@ -393,6 +412,7 @@ class OpenIMProfileService extends StubSettingsService {
     final sdkInfo = await OpenIM.iMManager.userManager.getSelfUserInfo();
     if (info == null || controller.isClosed) return;
     controller.userInfo.update((user) {
+      user?.account = info.account;
       user?.nickname = info.nickname;
       user?.faceURL = info.faceURL;
       user?.gender = info.gender;

@@ -2,24 +2,26 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../home/widgets/main_tab_title.dart';
 import '../mine/mine_logic.dart';
 import 'host/wallet_i18n.dart';
 import 'host/wallet_navigation.dart';
 import 'host/wallet_qr_scanner.dart';
 import 'host/wallet_toast.dart';
 import 'wallet_screen.dart';
-import 'widgets/wallet_system_ui.dart';
+import 'wallet_repository.dart';
+import 'widgets/wallet_page_colors.dart';
 
 class WalletTabShell extends StatelessWidget {
   const WalletTabShell({
     super.key,
     required this.activeTabIndexListenable,
     this.mainTabIndex = 3,
+    this.repository,
   });
 
   final ValueListenable<int> activeTabIndexListenable;
   final int mainTabIndex;
+  final WalletRepository? repository;
 
   Future<void> _openScanner(BuildContext context) async {
     final code = await openWalletPage<String>(
@@ -41,34 +43,31 @@ class WalletTabShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: dark ? Alignment.topLeft : Alignment.topCenter,
-          end: dark ? Alignment.bottomRight : Alignment.bottomCenter,
-          colors: dark
-              ? kDecorativePageGradientColorsDark
-              : kDecorativePageGradientColorsLight,
-          stops: dark ? kDecorativePageGradientStopsDark : null,
-        ),
+    final colors = WalletPageColors.of(context);
+    final title = AppI18n.of(context).t(
+      zhHans: '钱包',
+      zhHant: '錢包',
+      en: 'Wallet',
+      ja: 'ウォレット',
+      ko: '지갑',
+    );
+    // PersistentTabView exposes the occupied bottom-tab area through the
+    // inherited MediaQuery. SafeArea consumes that inset exactly once.
+    return Scaffold(
+      backgroundColor: colors.bg,
+      appBar: _WalletMainTabHeader(
+        onScan: () => _openScanner(context),
+        title: title,
       ),
-      // PersistentTabView exposes the occupied bottom-tab area through the
-      // inherited MediaQuery. SafeArea consumes that inset exactly once.
-      // Adding another kBottomNavigationBarHeight here lifts the fixed invite
-      // card by a full nav-bar height, which diverges from 99chat.
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: _WalletMainTabHeader(onScan: () => _openScanner(context)),
-        body: SafeArea(
-          top: false,
-          bottom: true,
-          child: WalletScreen(
-            key: const ValueKey('wallet-main-tab'),
-            embeddedInMainTab: true,
-            activeTabIndexListenable: activeTabIndexListenable,
-            mainTabIndex: mainTabIndex,
-          ),
+      body: SafeArea(
+        top: false,
+        bottom: true,
+        child: WalletScreen(
+          key: const ValueKey('wallet-main-tab'),
+          embeddedInMainTab: true,
+          activeTabIndexListenable: activeTabIndexListenable,
+          mainTabIndex: mainTabIndex,
+          repository: repository,
         ),
       ),
     );
@@ -77,19 +76,19 @@ class WalletTabShell extends StatelessWidget {
 
 class _WalletMainTabHeader extends StatelessWidget
     implements PreferredSizeWidget {
-  const _WalletMainTabHeader({required this.onScan});
+  const _WalletMainTabHeader({required this.onScan, required this.title});
 
   final VoidCallback onScan;
+  final String title;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final colors = WalletPageColors.of(context);
     final theme = Theme.of(context);
-    final titleColor = theme.appBarTheme.foregroundColor ??
-        theme.colorScheme.onSurface;
+    final titleColor = colors.text;
     final screenWidth = MediaQuery.sizeOf(context).width;
 
     return AppBar(
@@ -98,36 +97,41 @@ class _WalletMainTabHeader extends StatelessWidget
       scrolledUnderElevation: 0,
       shadowColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
-      backgroundColor: Colors.transparent,
+      backgroundColor: colors.bg,
       foregroundColor: titleColor,
-      systemOverlayStyle: decorativeMainTabOverlayStyle(
-        dark: dark,
-        navigationBarBackground: theme.scaffoldBackgroundColor,
-      ),
+      systemOverlayStyle: walletPageOverlayStyle(context),
       titleSpacing: 16,
-      flexibleSpace: _WalletHeaderSparkles(isDark: dark),
-      title: MainTabTitle(
-        title: AppI18n.of(context).t(
-          zhHans: '钱包',
-          zhHant: '錢包',
-          en: 'Wallet',
-          ja: 'ウォレット',
-          ko: '지갑',
+      title: Text(
+        title,
+        key: const ValueKey('wallet-title-text'),
+        style: theme.textTheme.titleLarge?.copyWith(
+          color: titleColor,
+          fontWeight: FontWeight.w600,
         ),
-        color: titleColor,
-        titleKey: const ValueKey('wallet-title-text'),
-        indicatorLineKey: const ValueKey('wallet-title-indicator-line'),
-        indicatorDotKey: const ValueKey('wallet-title-indicator-dot'),
       ),
       actions: [
         _WalletHeaderIconButton(
+          tooltip: AppI18n.of(context).t(
+            zhHans: '扫一扫',
+            zhHant: '掃一掃',
+            en: 'Scan QR code',
+            ja: 'QRコードをスキャン',
+            ko: 'QR 코드 스캔',
+          ),
           onPressed: onScan,
           child: _WalletScanIcon(
-            size: screenWidth * 0.058,
+            size: 24,
             color: titleColor,
           ),
         ),
         _WalletHeaderIconButton(
+          tooltip: AppI18n.of(context).t(
+            zhHans: '消息通知',
+            zhHant: '消息通知',
+            en: 'Notifications',
+            ja: '通知',
+            ko: '알림',
+          ),
           onPressed: () => Get.find<MineLogic>().openNotifications(context),
           child: CustomPaint(
             size: const Size.square(24),
@@ -141,116 +145,21 @@ class _WalletMainTabHeader extends StatelessWidget
 }
 
 class _WalletHeaderIconButton extends StatelessWidget {
-  const _WalletHeaderIconButton({required this.onPressed, required this.child});
+  const _WalletHeaderIconButton(
+      {required this.onPressed, required this.child, required this.tooltip});
 
   final VoidCallback onPressed;
   final Widget child;
+  final String tooltip;
 
   @override
   Widget build(BuildContext context) {
     return IconButton(
+      tooltip: tooltip,
       onPressed: onPressed,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
       icon: child,
-    );
-  }
-}
-
-class _WalletHeaderSparkles extends StatelessWidget {
-  const _WalletHeaderSparkles({required this.isDark});
-
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          final height = constraints.maxHeight;
-          return Stack(
-            children: [
-              Positioned(
-                left: width * 0.19,
-                top: height * 0.30,
-                child: _DecorativeSparkle(
-                  size: width * 0.022,
-                  opacity: isDark ? 0.42 : 0.58,
-                  isDark: isDark,
-                ),
-              ),
-              Positioned(
-                left: width * 0.33,
-                top: height * 0.52,
-                child: _DecorativeSparkle(
-                  size: width * 0.034,
-                  opacity: isDark ? 0.48 : 0.62,
-                  isDark: isDark,
-                ),
-              ),
-              Positioned(
-                right: width * 0.18,
-                top: height * 0.36,
-                child: _DecorativeSparkle(
-                  size: width * 0.024,
-                  opacity: isDark ? 0.38 : 0.52,
-                  isDark: isDark,
-                ),
-              ),
-              Positioned(
-                right: width * 0.34,
-                top: height * 0.70,
-                child: _DecorativeSparkle(
-                  size: width * 0.014,
-                  opacity: isDark ? 0.32 : 0.42,
-                  isDark: isDark,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _DecorativeSparkle extends StatelessWidget {
-  const _DecorativeSparkle({
-    required this.size,
-    required this.opacity,
-    required this.isDark,
-  });
-
-  final double size;
-  final double opacity;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: opacity,
-      child: Transform.rotate(
-        angle: 0.78,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: isDark
-                ? const Color(0xFF8EBBFF).withValues(alpha: 0.55)
-                : Colors.white,
-            borderRadius: BorderRadius.circular(size * 0.18),
-            boxShadow: defaultTargetPlatform == TargetPlatform.android
-                ? const <BoxShadow>[]
-                : [
-                    BoxShadow(
-                      color: const Color(0xFF8EBBFF)
-                          .withValues(alpha: isDark ? 0.28 : 0.20),
-                      blurRadius: size,
-                    ),
-                  ],
-          ),
-          child: SizedBox(width: size, height: size),
-        ),
-      ),
     );
   }
 }

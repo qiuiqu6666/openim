@@ -72,6 +72,12 @@ class LanguageSetupPage extends StatelessWidget {
           ),
           child: InkWell(
             onTap: onTap,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(isTopRadius ? 6.r : 0),
+              topRight: Radius.circular(isTopRadius ? 6.r : 0),
+              bottomRight: Radius.circular(isBottomRadius ? 6.r : 0),
+              bottomLeft: Radius.circular(isBottomRadius ? 6.r : 0),
+            ),
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.w),
               child: Row(

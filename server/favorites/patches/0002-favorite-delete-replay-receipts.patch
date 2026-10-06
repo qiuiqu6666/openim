@@ -1,0 +1,278 @@
+diff --git a/internal/rpc/chat/favorite.go b/internal/rpc/chat/favorite.go
+--- a/internal/rpc/chat/favorite.go
++++ b/internal/rpc/chat/favorite.go
+@@ -272,7 +272,7 @@
+ 	if err := decideIdempotency(existing, hash, false); err != nil && !errors.Is(err, eerrs.ErrFavoriteRequestDoneDeleted) {
+ 		return nil, false, err
+ 	}
+-	if existing.ResultRef != "" {
++	if existing.ResultRef != "" && favoriteReplayChecksDeletedResult(operation) {
+ 		item, err := store.TakeItem(ctx, owner, existing.ResultRef)
+ 		if err == nil && item.DeletedAt > 0 {
+ 			return nil, false, decideIdempotency(existing, hash, true)
+@@ -282,6 +282,10 @@
+ 		return nil, false, eerrs.ErrFavoriteTemporary
+ 	}
+ 	return existing, true, nil
++}
++
++func favoriteReplayChecksDeletedResult(operation string) bool {
++	return operation != "delete" && operation != "batch-delete"
+ }
+ 
+ func (o *chatSvr) finishFavoriteRequest(ctx context.Context, store chatdb.FavoriteStore, owner, operation, requestID, hash, resultRef string, version int64) {
+diff --git a/internal/rpc/chat/favorite_write.go b/internal/rpc/chat/favorite_write.go
+--- a/internal/rpc/chat/favorite_write.go
++++ b/internal/rpc/chat/favorite_write.go
+@@ -600,10 +600,10 @@
+ 		parts = append(parts, item.Id+":"+itoa(item.ExpectedVersion))
+ 	}
+ 	hash := favoriteHash(parts...)
+-	if _, hit, err := o.replayFavorite(ctx, store, owner, "batch-delete", req.ClientRequestID, hash); err != nil {
++	if existing, hit, err := o.replayFavorite(ctx, store, owner, "batch-delete", req.ClientRequestID, hash); err != nil {
+ 		return nil, err
+ 	} else if hit {
+-		return &chatpb.BatchDeleteChatFavoritesResp{}, nil
++		return o.replayFavoriteBatchResponse(ctx, store, owner, req, existing)
+ 	}
+ 	owned, err := store.OwnsAll(ctx, owner, ids)
+ 	if err != nil {
+@@ -628,7 +628,88 @@
+ 		}
+ 		resp.Items = append(resp.Items, &chatpb.BatchDeleteChatFavoriteResult{Id: item.Id, Result: result, Version: version})
+ 	}
+-	o.finishFavoriteRequest(ctx, store, owner, "batch-delete", req.ClientRequestID, hash, "", 0)
++	if err := o.saveFavoriteBatchResponse(ctx, store, owner, req.ClientRequestID, hash, resp); err != nil {
++		return nil, err
++	}
++	return resp, nil
++}
++
++const favoriteBatchResponsePrefix = "batch-delete-json:"
++
++func favoriteBatchResponseRef(resp *chatpb.BatchDeleteChatFavoritesResp) (string, error) {
++	body, err := json.Marshal(resp)
++	if err != nil {
++		return "", eerrs.ErrFavoriteTemporary
++	}
++	return favoriteBatchResponsePrefix + string(body), nil
++}
++
++func (o *chatSvr) saveFavoriteBatchResponse(ctx context.Context, store chatdb.FavoriteStore, owner, requestID, hash string, resp *chatpb.BatchDeleteChatFavoritesResp) error {
++	ref, err := favoriteBatchResponseRef(resp)
++	if err != nil {
++		return err
++	}
++	if err := store.SaveRequest(ctx, &chatdb.FavoriteRequest{
++		OwnerIMID: owner, Operation: "batch-delete", ClientRequestID: requestID,
++		RequestHash: hash, ResultRef: ref, State: "done",
++		ExpiresAt: time.Now().Add(o.Favorite.Idempotency).UnixMilli(),
++	}); err != nil {
++		return eerrs.ErrFavoriteTemporary
++	}
++	return nil
++}
++
++func (o *chatSvr) replayFavoriteBatchResponse(ctx context.Context, store chatdb.FavoriteStore, owner string, req *chatpb.BatchDeleteChatFavoritesReq, existing *chatdb.FavoriteRequest) (*chatpb.BatchDeleteChatFavoritesResp, error) {
++	if existing.ResultRef != "" {
++		if !strings.HasPrefix(existing.ResultRef, favoriteBatchResponsePrefix) {
++			return nil, eerrs.ErrFavoriteTemporary
++		}
++		var resp chatpb.BatchDeleteChatFavoritesResp
++		if err := json.Unmarshal([]byte(strings.TrimPrefix(existing.ResultRef, favoriteBatchResponsePrefix)), &resp); err != nil {
++			return nil, eerrs.ErrFavoriteTemporary
++		}
++		if len(resp.Items) != len(req.Items) {
++			return nil, eerrs.ErrFavoriteTemporary
++		}
++		seen := make(map[string]bool, len(req.Items))
++		for _, item := range req.Items {
++			seen[item.Id] = false
++		}
++		for _, result := range resp.Items {
++			already, exists := seen[result.GetId()]
++			if !exists || already || result.GetVersion() < 1 ||
++				(result.GetResult() != chatdb.FavoriteDeleteDeleted && result.GetResult() != chatdb.FavoriteDeleteAlready && result.GetResult() != chatdb.FavoriteDeleteVersionConflict) {
++				return nil, eerrs.ErrFavoriteTemporary
++			}
++			seen[result.Id] = true
++		}
++		return &resp, nil
++	}
++
++	// Older releases stored an empty batch receipt. Reconstruct only current
++	// read-only outcomes: every still-live item remains a version conflict even
++	// when its version equals the old expectation. Never repeat SoftDelete here.
++	resp := &chatpb.BatchDeleteChatFavoritesResp{Items: make([]*chatpb.BatchDeleteChatFavoriteResult, 0, len(req.Items))}
++	for _, input := range req.Items {
++		current, err := store.TakeItem(ctx, owner, input.Id)
++		if err != nil || current == nil || current.ID != input.Id || current.OwnerIMID != owner || current.Version < 1 {
++			return nil, eerrs.ErrFavoriteTemporary
++		}
++		result := chatdb.FavoriteDeleteVersionConflict
++		if current.DeletedAt > 0 {
++			result = chatdb.FavoriteDeleteAlready
++		}
++		resp.Items = append(resp.Items, &chatpb.BatchDeleteChatFavoriteResult{Id: current.ID, Result: result, Version: current.Version})
++	}
++	ref, err := favoriteBatchResponseRef(resp)
++	if err != nil {
++		return nil, err
++	}
++	confirmed := *existing
++	confirmed.ResultRef = ref
++	if err := store.SaveRequest(ctx, &confirmed); err != nil {
++		return nil, eerrs.ErrFavoriteTemporary
++	}
+ 	return resp, nil
+ }
+ 
+diff --git a/internal/rpc/chat/favorite_delete_replay_test.go b/internal/rpc/chat/favorite_delete_replay_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/rpc/chat/favorite_delete_replay_test.go
+@@ -0,0 +1,144 @@
++package chat
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"testing"
++	"time"
++
++	chatdb "github.com/openimsdk/chat/pkg/common/db/table/chat"
++	"github.com/openimsdk/chat/pkg/eerrs"
++	chatpb "github.com/openimsdk/chat/pkg/protocol/chat"
++)
++
++type favoriteReplayTestStore struct {
++	chatdb.FavoriteStore
++	request   *chatdb.FavoriteRequest
++	items     map[string]*chatdb.FavoriteItem
++	takes     int
++	deletes   int
++	saveError bool
++}
++
++func (s *favoriteReplayTestStore) TakeRequest(context.Context, string, string, string) (*chatdb.FavoriteRequest, error) {
++	return s.request, nil
++}
++func (s *favoriteReplayTestStore) TakeItem(_ context.Context, owner, id string) (*chatdb.FavoriteItem, error) {
++	s.takes++
++	item := s.items[id]
++	if item == nil || item.OwnerIMID != owner {
++		return nil, errors.New("missing item")
++	}
++	return item, nil
++}
++func (s *favoriteReplayTestStore) SaveRequest(_ context.Context, request *chatdb.FavoriteRequest) error {
++	if s.saveError {
++		return errors.New("storage unavailable")
++	}
++	copy := *request
++	s.request = &copy
++	return nil
++}
++func (s *favoriteReplayTestStore) SoftDelete(context.Context, string, string, int64, int64) (string, int64, error) {
++	s.deletes++
++	return chatdb.FavoriteDeleteDeleted, 99, nil
++}
++
++func TestFavoriteDeleteReplayDoesNotRejectItsOwnDeletedResult(t *testing.T) {
++	store := &favoriteReplayTestStore{
++		request: &chatdb.FavoriteRequest{RequestHash: "same-body", ResultRef: "favorite", State: "done"},
++		items:   map[string]*chatdb.FavoriteItem{"favorite": {ID: "favorite", OwnerIMID: "owner", Version: 2, DeletedAt: 1}},
++	}
++	server := &chatSvr{}
++	if _, hit, err := server.replayFavorite(context.Background(), store, "owner", "delete", "same-id", "same-body"); err != nil || !hit {
++		t.Fatalf("confirmed delete must replay successfully: %v", err)
++	}
++	for _, operation := range []string{"create-user", "update"} {
++		if _, _, err := server.replayFavorite(context.Background(), store, "owner", operation, "same-id", "same-body"); err != eerrs.ErrFavoriteRequestDoneDeleted {
++			t.Fatal("create/update replay must still reject an already-deleted result")
++		}
++	}
++	if _, _, err := server.replayFavorite(context.Background(), store, "owner", "delete", "same-id", "changed-body"); err != eerrs.ErrIdempotencyConflict {
++		t.Fatal("delete exception must not relax body identity")
++	}
++}
++
++func TestFavoriteBatchReplayKeepsCompletePartialReceiptAndVersions(t *testing.T) {
++	server := &chatSvr{Favorite: favoriteSettings{Idempotency: time.Hour}}
++	store := &favoriteReplayTestStore{}
++	first := &chatpb.BatchDeleteChatFavoritesResp{Items: []*chatpb.BatchDeleteChatFavoriteResult{
++		{Id: "conflict", Result: chatdb.FavoriteDeleteVersionConflict, Version: 5},
++		{Id: "deleted", Result: chatdb.FavoriteDeleteDeleted, Version: 2},
++	}}
++	if err := server.saveFavoriteBatchResponse(context.Background(), store, "owner", "same-id", "same-body", first); err != nil {
++		t.Fatal(err)
++	}
++	req := &chatpb.BatchDeleteChatFavoritesReq{ClientRequestID: "same-id", Items: []*chatpb.BatchDeleteChatFavoriteItem{
++		{Id: "conflict", ExpectedVersion: 3}, {Id: "deleted", ExpectedVersion: 1},
++	}}
++	existing, hit, err := server.replayFavorite(context.Background(), store, "owner", "batch-delete", "same-id", "same-body")
++	if err != nil || !hit {
++		t.Fatal("batch receipt must bypass single-item deletion checks")
++	}
++	replayed, err := server.replayFavoriteBatchResponse(context.Background(), store, "owner", req, existing)
++	if err != nil {
++		t.Fatal(err)
++	}
++	a, _ := json.Marshal(first)
++	b, _ := json.Marshal(replayed)
++	if string(a) != string(b) {
++		t.Fatal("same request must return every original status and version")
++	}
++	if store.takes != 0 || store.deletes != 0 {
++		t.Fatal("recorded replay must not reread or delete items")
++	}
++}
++
++func TestFavoriteBatchLegacyReplayNeverDeletesLiveStaleSelections(t *testing.T) {
++	store := &favoriteReplayTestStore{
++		request: &chatdb.FavoriteRequest{OwnerIMID: "owner", Operation: "batch-delete", ClientRequestID: "same-id", RequestHash: "same-body", State: "done"},
++		items: map[string]*chatdb.FavoriteItem{
++			"same-version":  {ID: "same-version", OwnerIMID: "owner", Version: 3},
++			"newer-version": {ID: "newer-version", OwnerIMID: "owner", Version: 5},
++			"already-gone":  {ID: "already-gone", OwnerIMID: "owner", Version: 2, DeletedAt: 1},
++		},
++	}
++	req := &chatpb.BatchDeleteChatFavoritesReq{Items: []*chatpb.BatchDeleteChatFavoriteItem{
++		{Id: "same-version", ExpectedVersion: 3}, {Id: "newer-version", ExpectedVersion: 3}, {Id: "already-gone", ExpectedVersion: 1},
++	}}
++	server := &chatSvr{}
++	resp, err := server.replayFavoriteBatchResponse(context.Background(), store, "owner", req, store.request)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(resp.Items) != 3 || resp.Items[0].Result != chatdb.FavoriteDeleteVersionConflict || resp.Items[1].Result != chatdb.FavoriteDeleteVersionConflict || resp.Items[2].Result != chatdb.FavoriteDeleteAlready {
++		t.Fatal("legacy recovery must report current states without treating live items as deletable")
++	}
++	if store.deletes != 0 {
++		t.Fatal("legacy replay must never call SoftDelete")
++	}
++	firstRef := store.request.ResultRef
++	store.items["newer-version"].Version = 9
++	second, err := server.replayFavoriteBatchResponse(context.Background(), store, "owner", req, store.request)
++	if err != nil || second.Items[1].Version != 5 || store.request.ResultRef != firstRef {
++		t.Fatal("reconstructed legacy receipt must become stable for future retries")
++	}
++}
++
++func TestFavoriteBatchLegacyReplayRefusesUnknownOrUnpersistedOutcomes(t *testing.T) {
++	server := &chatSvr{}
++	req := &chatpb.BatchDeleteChatFavoritesReq{Items: []*chatpb.BatchDeleteChatFavoriteItem{{Id: "live", ExpectedVersion: 1}}}
++	store := &favoriteReplayTestStore{request: &chatdb.FavoriteRequest{State: "done"}}
++	if _, err := server.replayFavoriteBatchResponse(context.Background(), store, "owner", req, store.request); err == nil {
++		t.Fatal("missing legacy outcome must not become empty successful receipt")
++	}
++	store.items = map[string]*chatdb.FavoriteItem{"live": {ID: "live", OwnerIMID: "owner", Version: 1}}
++	store.saveError = true
++	if _, err := server.replayFavoriteBatchResponse(context.Background(), store, "owner", req, store.request); err == nil {
++		t.Fatal("a reconstructed receipt must be durable before confirming it")
++	}
++	if store.deletes != 0 || store.request.ResultRef != "" {
++		t.Fatal("uncertain legacy recovery must not mutate live records")
++	}
++}

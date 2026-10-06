@@ -6,6 +6,7 @@ import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
 import '../settings_service.dart';
 import '../widgets/settings_widgets.dart';
+import '../../../customer_service/customer_service.dart';
 
 class FeedbackPage extends StatefulWidget {
   const FeedbackPage({
@@ -237,7 +238,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
       backgroundColor: background,
       appBar: widget.embedded
           ? null
-          : AppBar(
+          : GlassAppBar(
+              toolbarHeight: kToolbarHeight,
               elevation: 0,
               scrolledUnderElevation: 0,
               centerTitle: true,
@@ -269,14 +271,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                     zh: '在线客服',
                     en: 'Customer service',
                   ),
-                  onPressed: () => showUnavailableSettingsAction(
-                    context,
-                    settingsText(
-                      context,
-                      zh: '在线客服',
-                      en: 'Customer service',
-                    ),
-                  ),
+                  onPressed: () => showCustomerServiceSheet(context),
                   icon: SvgPicture.string(
                     _customerServiceIconSvg,
                     width: 26,

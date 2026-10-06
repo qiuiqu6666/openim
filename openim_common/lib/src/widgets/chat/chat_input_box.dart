@@ -1,17 +1,20 @@
 import 'dart:async';
-import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'chat_emoji_panel.dart';
 import 'chat_composer_palette.dart';
+import 'chat_composer_context_preview.dart';
+import 'toolbox/chat_composer_toolbox_slot.dart';
+import '../../res/chat_voice_tokens.dart';
 
-double kInputBoxMinHeight = 52.h;
+const double kInputBoxMinHeight =
+    ChatComposerTokens.inputHeight + ChatComposerTokens.verticalPadding * 2;
 
 class ChatInputBox extends StatefulWidget {
   const ChatInputBox({
-    Key? key,
+    super.key,
     required this.toolbox,
     required this.voiceRecordBar,
     this.controller,
@@ -29,7 +32,9 @@ class ChatInputBox extends StatefulWidget {
     this.directionalText,
     this.onCloseDirectional,
     this.stickerPanel,
-  }) : super(key: key);
+    this.builtinStickerPanel,
+    this.builtinStickerIcon,
+  });
   final FocusNode? focusNode;
   final TextEditingController? controller;
   final TextStyle? style;
@@ -47,6 +52,8 @@ class ChatInputBox extends StatefulWidget {
   final TextSpan? directionalText;
   final VoidCallback? onCloseDirectional;
   final Widget? stickerPanel;
+  final Widget? builtinStickerPanel;
+  final Widget? builtinStickerIcon;
 
   @override
   State<ChatInputBox> createState() => _ChatInputBoxState();
@@ -70,13 +77,15 @@ class _ChatInputBoxState
   bool _leftKeyboardButton = false;
   bool _sendButtonVisible = false;
 
+  bool get _inputBlocked => !widget.enabled || widget.isNotInGroup;
+
   bool get _showQuoteView => IMUtils.isNotNullEmptyStr(widget.quoteContent);
 
   bool get _showDirectionalView => widget.directionalText != null;
 
   @override
   void initState() {
-    _sendButtonVisible = widget.controller?.text.trim().isNotEmpty ?? false;
+    _sendButtonVisible = widget.controller?.text.isNotEmpty ?? false;
     widget.focusNode?.addListener(_focusChanged);
 
     _toolSubscription = widget.forceCloseToolboxSub?.listen((value) {
@@ -84,6 +93,7 @@ class _ChatInputBoxState
       setState(() {
         _toolsVisible = false;
         _emojiVisible = false;
+        _leftKeyboardButton = false;
       });
     });
 
@@ -95,6 +105,12 @@ class _ChatInputBoxState
   @override
   void didUpdateWidget(covariant ChatInputBox oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_inputBlocked) {
+      _toolsVisible = false;
+      _emojiVisible = false;
+      _leftKeyboardButton = false;
+      widget.focusNode?.unfocus();
+    }
     if (oldWidget.focusNode != widget.focusNode) {
       oldWidget.focusNode?.removeListener(_focusChanged);
       widget.focusNode?.addListener(_focusChanged);
@@ -102,12 +118,12 @@ class _ChatInputBoxState
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_syncSendButton);
       widget.controller?.addListener(_syncSendButton);
-      _sendButtonVisible = widget.controller?.text.trim().isNotEmpty ?? false;
+      _sendButtonVisible = widget.controller?.text.isNotEmpty ?? false;
     }
   }
 
   void _syncSendButton() {
-    final visible = widget.controller?.text.trim().isNotEmpty ?? false;
+    final visible = widget.controller?.text.isNotEmpty ?? false;
     if (mounted && visible != _sendButtonVisible) {
       setState(() => _sendButtonVisible = visible);
     }
@@ -123,19 +139,29 @@ class _ChatInputBoxState
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return widget.isNotInGroup
-        ? const ChatDisableInputBox()
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    final alternatePanelVisible = _emojiVisible || _leftKeyboardButton;
+    final content = _inputBlocked
+        ? ChatDisableInputBox(
+            message: widget.isNotInGroup
+                ? StrRes.notSendMessageNotInGroup
+                : widget.hintText ?? StrRes.youMuted,
+          )
         : Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                constraints: BoxConstraints(minHeight: kInputBoxMinHeight),
-                padding: EdgeInsets.symmetric(horizontal: 4.w),
-                color: chatComposerSurface(context),
+                key: const ValueKey('chat-composer-bar'),
+                constraints: const BoxConstraints(
+                    minHeight: ChatComposerTokens.inputHeight),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: ChatComposerTokens.horizontalPadding,
+                  vertical: ChatComposerTokens.verticalPadding,
+                ),
                 child: Row(
                   children: [
                     if (widget.onTapVoice != null)
-                      IconButton(
+                      _buildIconAction(
                         tooltip: StrRes.voiceCapture,
                         onPressed: widget.enabled
                             ? () {
@@ -151,15 +177,10 @@ class _ChatInputBoxState
                                 }
                               }
                             : null,
-                        icon: Icon(
-                            _leftKeyboardButton
-                                ? Icons.keyboard_alt_outlined
-                                : Icons.mic_none_rounded,
-                            color: colors.onSurface,
-                            size: 24.w),
-                      )
-                    else
-                      8.horizontalSpace,
+                        asset: _leftKeyboardButton ? 'keyboard' : 'voice',
+                      ),
+                    if (widget.onTapVoice != null)
+                      const SizedBox(width: ChatComposerTokens.actionGap),
                     Expanded(
                       child: Stack(
                         children: [
@@ -169,66 +190,165 @@ class _ChatInputBoxState
                           ),
                           Offstage(
                             offstage: !_leftKeyboardButton,
-                            child: widget.voiceRecordBar,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: widget.enabled
+                                  ? () {
+                                      setState(
+                                          () => _leftKeyboardButton = false);
+                                      focus();
+                                    }
+                                  : null,
+                              child: Container(
+                                key: const ValueKey(
+                                    'chat-voice-input-placeholder'),
+                                height: ChatComposerTokens.inputHeight,
+                                decoration: BoxDecoration(
+                                  color: chatComposerInputFill(context),
+                                  borderRadius: BorderRadius.circular(
+                                      ChatComposerTokens.radius),
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    IconButton(
+                    const SizedBox(width: ChatComposerTokens.actionGap),
+                    _buildIconAction(
                       tooltip: _emojiVisible
                           ? 'sdkSwitchKeyboard'.tr
                           : 'sdkEmojiPanel'.tr,
                       onPressed: widget.enabled ? toggleEmojiPanel : null,
-                      icon: Icon(
-                          _emojiVisible
-                              ? Icons.keyboard_alt_outlined
-                              : Icons.sentiment_satisfied_alt_outlined,
-                          color: colors.onSurface,
-                          size: 24.w),
+                      asset: _emojiVisible ? 'keyboard' : 'face',
                     ),
-                    IconButton(
-                      tooltip: _sendButtonVisible && !_leftKeyboardButton
-                          ? StrRes.send
-                          : StrRes.add,
-                      onPressed: widget.enabled
-                          ? (_sendButtonVisible && !_leftKeyboardButton
-                              ? send
-                              : toggleToolbox)
-                          : null,
-                      icon: Icon(
-                        _sendButtonVisible && !_leftKeyboardButton
-                            ? Icons.send_rounded
-                            : Icons.add_circle_outline_rounded,
-                        size: 28.w,
-                        color: _sendButtonVisible && !_leftKeyboardButton
-                            ? colors.primary
-                            : colors.onSurface,
+                    const SizedBox(width: ChatComposerTokens.actionGap),
+                    if (_sendButtonVisible)
+                      SizedBox(
+                        height: ChatComposerTokens.inputHeight,
+                        child: SizedBox(
+                          height: ChatComposerTokens.sendHeight,
+                          child: ElevatedButton(
+                            onPressed: widget.enabled ? send : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTokens.accent,
+                              foregroundColor: AppTokens.onAccent,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal:
+                                      ChatComposerTokens.sendHorizontalPadding),
+                              minimumSize:
+                                  const Size(0, ChatComposerTokens.sendHeight),
+                              shape: const StadiumBorder(),
+                            ),
+                            child: Text(StrRes.send,
+                                style: const TextStyle(
+                                  color: AppTokens.onAccent,
+                                  fontSize: ChatComposerTokens.sendFontSize,
+                                )),
+                          ),
+                        ),
+                      )
+                    else
+                      _buildIconAction(
+                        tooltip: StrRes.add,
+                        onPressed: widget.enabled ? toggleToolbox : null,
+                        asset: 'add',
                       ),
-                    ),
                   ],
                 ),
               ),
               if (_showQuoteView)
-                _SubView(
+                ChatComposerContextPreview(
                     content: widget.quoteContent, onClose: widget.onClearQuote),
               if (_showDirectionalView)
-                _SubView(
+                ChatComposerContextPreview(
                   textSpan: widget.directionalText,
                   onClose: () {
                     widget.onCloseDirectional?.call();
                   },
                 ),
-              Visibility(
+              ChatComposerToolboxSlot(
                 visible: _toolsVisible,
-                child: FadeInUp(
-                  duration: const Duration(milliseconds: 200),
-                  child: widget.toolbox,
-                ),
+                safeBottom: safeBottom,
+                collapsedHeight: alternatePanelVisible ? 0 : safeBottom,
+                animate: !alternatePanelVisible,
+                child: widget.toolbox,
               ),
-              if (_emojiVisible) _emojiPanel,
+              if (_emojiVisible)
+                Padding(
+                  padding: EdgeInsets.only(bottom: safeBottom),
+                  child: _emojiPanel,
+                ),
+              if (_leftKeyboardButton)
+                AnimatedContainer(
+                  key: const ValueKey('chat-voice-panel-slot'),
+                  duration: ChatVoiceTokens.panelAnimationDuration,
+                  curve: Curves.easeOutCubic,
+                  height: ChatVoiceTokens.panelHeight +
+                      MediaQuery.paddingOf(context).bottom,
+                  alignment: Alignment.topCenter,
+                  child: widget.voiceRecordBar,
+                ),
             ],
           );
+    final bottomColor = _inputBlocked
+        ? chatComposerSurface(context)
+        : _toolsVisible
+            ? ChatToolboxTokens.panelBackground(context)
+            : !_leftKeyboardButton &&
+                    !_emojiVisible &&
+                    (_showQuoteView || _showDirectionalView)
+                ? Styles.c_F0F2F6
+                : chatComposerSurface(context);
+    return AppSystemBars(
+      background: bottomColor,
+      child: ColoredBox(
+        color: bottomColor,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+                top: BorderSide(
+              color: chatComposerDivider(context),
+              width: ChatComposerTokens.dividerWidth,
+            )),
+          ),
+          child: SafeArea(
+              top: false,
+              left: false,
+              right: false,
+              bottom: _inputBlocked,
+              child: content),
+        ),
+      ),
+    );
   }
+
+  Widget _buildIconAction({
+    required String tooltip,
+    required String asset,
+    required VoidCallback? onPressed,
+  }) =>
+      SizedBox(
+        height: ChatComposerTokens.inputHeight,
+        child: Center(
+            child: Tooltip(
+          message: tooltip,
+          child: InkWell(
+            onTap: onPressed,
+            child: SvgPicture.asset(
+              'assets/chat/composer/$asset.svg',
+              package: 'openim_common',
+              width: ChatComposerTokens.iconSize,
+              height: ChatComposerTokens.iconSize,
+              colorFilter: ColorFilter.mode(
+                  chatComposerForeground(context)
+                      .withValues(alpha: widget.enabled ? 1 : .38),
+                  BlendMode.srcIn),
+            ),
+          ),
+        )),
+      );
 
   Widget get _emojiPanel => ChatEmojiPanel(
         onEmojiSelected: _insertEmoji,
@@ -236,9 +356,12 @@ class _ChatInputBoxState
         onSend: send,
         canSend: _sendButtonVisible && widget.enabled,
         stickerPanel: widget.stickerPanel,
+        builtinStickerPanel: widget.builtinStickerPanel,
+        builtinStickerIcon: widget.builtinStickerIcon,
       );
 
   void _insertEmoji(String emoji) {
+    if (_inputBlocked) return;
     final controller = widget.controller;
     if (controller == null) return;
     final text = controller.text;
@@ -252,6 +375,7 @@ class _ChatInputBoxState
   }
 
   void _deleteEmoji() {
+    if (_inputBlocked) return;
     final controller = widget.controller;
     if (controller == null || controller.text.isEmpty) return;
     final text = controller.text;
@@ -274,26 +398,52 @@ class _ChatInputBoxState
     );
   }
 
-  Widget get _textFiled => Container(
-        constraints: BoxConstraints(minHeight: 40.h),
-        margin: EdgeInsets.only(top: 6.h, bottom: _showQuoteView ? 4.h : 6.h),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(10.r),
-          border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant, width: 0.5),
+  Widget get _textFiled => TextSelectionTheme(
+        data: TextSelectionThemeData(
+          cursorColor: ChatComposerTokens.cursor(
+              dark: Theme.of(context).brightness == Brightness.dark),
+          selectionColor: AppTokens.accent
+              .withValues(alpha: ChatComposerTokens.selectionOpacity),
+          selectionHandleColor: ChatComposerTokens.cursor(
+              dark: Theme.of(context).brightness == Brightness.dark),
         ),
         child: ChatTextField(
+          key: const ValueKey('chat-composer-input-fill'),
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(ChatComposerTokens.radius),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(ChatComposerTokens.radius),
+              borderSide: BorderSide.none,
+            ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(ChatComposerTokens.radius),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: chatComposerInputFill(context),
+            isDense: true,
+            hintText: widget.hintText ?? '',
+            hintStyle: chatComposerTextStyle(context, hint: true),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: ChatComposerTokens.textHorizontalPadding,
+              vertical: ChatComposerTokens.textVerticalPadding,
+            ),
+          ),
+          keyboardType: TextInputType.text,
+          textInputAction: TextInputAction.send,
+          onEditingComplete: send,
+          autocorrect: false,
           controller: widget.controller,
           focusNode: widget.focusNode,
-          style: widget.style ??
-              TextStyle(
-                  fontSize: 16.sp,
-                  color: Theme.of(context).colorScheme.onSurface),
+          style: widget.style ?? chatComposerTextStyle(context),
           atStyle: widget.atStyle ??
               TextStyle(
-                  fontSize: 16.sp,
-                  color: Theme.of(context).colorScheme.primary),
+                  fontSize: ChatComposerTokens.fontSize,
+                  color: AppTokens.accent),
           enabled: widget.enabled,
           hintText: widget.hintText,
           textAlign: widget.enabled ? TextAlign.start : TextAlign.center,
@@ -301,14 +451,15 @@ class _ChatInputBoxState
       );
 
   void send() {
-    if (!widget.enabled) return;
+    if (_inputBlocked) return;
     if (null != widget.onSend && null != widget.controller) {
-      widget.onSend!(widget.controller!.text.toString().trim());
+      final text = widget.controller!.text.trim();
+      if (text.isNotEmpty) widget.onSend!(text);
     }
   }
 
   void toggleToolbox() {
-    if (!widget.enabled) return;
+    if (_inputBlocked) return;
     setState(() {
       _toolsVisible = !_toolsVisible;
       _emojiVisible = false;
@@ -322,7 +473,7 @@ class _ChatInputBoxState
   }
 
   void toggleEmojiPanel() {
-    if (!widget.enabled) return;
+    if (_inputBlocked) return;
     if (_emojiVisible) {
       setState(() => _emojiVisible = false);
       focus();
@@ -337,7 +488,7 @@ class _ChatInputBoxState
   }
 
   void onTapLeftKeyboard() {
-    if (!widget.enabled) return;
+    if (_inputBlocked) return;
     setState(() {
       _leftKeyboardButton = false;
       _toolsVisible = false;
@@ -346,75 +497,16 @@ class _ChatInputBoxState
   }
 
   void onTapRightKeyboard() {
-    if (!widget.enabled) return;
+    if (_inputBlocked) return;
     setState(() {
       _toolsVisible = false;
       focus();
     });
   }
 
-  focus() => FocusScope.of(context).requestFocus(widget.focusNode);
-
-  unfocus() => FocusScope.of(context).unfocus();
-}
-
-class _SubView extends StatelessWidget {
-  const _SubView({
-    this.onClose,
-    this.content,
-    this.textSpan,
-  }) : assert(content != null || textSpan != null,
-            'Either content or textSpan must be provided.');
-  final VoidCallback? onClose;
-  final String? content;
-  final InlineSpan? textSpan;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
-      color: Styles.c_F0F2F6,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: onClose,
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: 1.h, horizontal: 4.w),
-          decoration: BoxDecoration(
-            color: Styles.c_FFFFFF,
-            borderRadius: BorderRadius.circular(4.r),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Row(
-                  children: [
-                    if (content != null)
-                      Expanded(
-                          child: Text(
-                        content!,
-                        style: Styles.ts_8E9AB0_14sp,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      )),
-                    if (textSpan != null)
-                      Expanded(
-                        child: RichText(
-                          text: textSpan!,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              ImageRes.delQuote.toImage
-                ..width = 14.w
-                ..height = 14.h,
-            ],
-          ),
-        ),
-      ),
-    );
+  void focus() {
+    if (!_inputBlocked) FocusScope.of(context).requestFocus(widget.focusNode);
   }
+
+  void unfocus() => FocusScope.of(context).unfocus();
 }

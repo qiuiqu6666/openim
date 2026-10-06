@@ -24,8 +24,10 @@ class EditGroupNamePage extends StatelessWidget {
           isGroupAvatar: isGroupName,
           maxLength: 30,
           onSave: logic.save,
-          onAvatarTap:
-              isGroupName ? logic.groupSetupLogic.modifyGroupAvatar : null,
+          saving: logic.saving.value,
+          onAvatarTap: isGroupName && !logic.saving.value
+              ? logic.groupSetupLogic.modifyGroupAvatar
+              : null,
         ));
   }
 }

@@ -4,8 +4,13 @@ abstract class AppRoutes {
   static const notFound = '/not-found';
   static const splash = '/splash';
   static const login = '/login';
+  static const deviceVerification = '/device_verification';
   static const home = '/home';
   static const chat = '/chat';
+  static const aiAssistantChat = '/ai_assistant_chat';
+  static const officialAccountChat = '/official_account_chat';
+  static bool isConversationRoute(String route) =>
+      route == chat || route == aiAssistantChat || route == officialAccountChat;
   static const chatSetup = '/chat_setup';
   static const addContactsMethod = '/add_contacts_method';
   static const addContactsBySearch = '/add_contacts_by_search';

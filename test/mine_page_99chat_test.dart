@@ -92,6 +92,10 @@ void main() {
     await tester.tap(find.text('生活缴费'));
     await tester.pump();
     expect(tappedFeature, 'closed:生活缴费');
+
+    await tester.tap(find.text('AI助手'));
+    await tester.pump();
+    expect(tappedFeature, 'AI助手');
   });
 
   testWidgets('mine profile uses 99chat mobile width formulas without a 430px cap',

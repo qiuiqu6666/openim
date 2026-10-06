@@ -33,7 +33,7 @@ class TouchCloseSoftKeyboard extends StatelessWidget {
                   end: Alignment.bottomCenter,
                 ),
               ),
-              child: child,
+              child: SafeArea(child: child),
             )
           : child,
     );

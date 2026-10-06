@@ -1,82 +1,100 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:pin_code_fields/pin_code_fields.dart';
-import 'package:sprintf/sprintf.dart';
 
+import '../../../widgets/auth/auth_copy.dart';
+import '../../../widgets/auth/auth_input.dart';
+import '../../../widgets/auth/auth_flow_footer.dart';
+import '../../../widgets/auth/auth_submit_button.dart';
+import '../../../widgets/auth/auth_tokens.dart';
 import '../../../widgets/register_page_bg.dart';
+import '../../../routes/app_navigator.dart';
+import '../../login/widgets/login_toolbar.dart';
 import 'verify_phone_logic.dart';
 
 class VerifyPhonePage extends StatelessWidget {
-  final logic = Get.find<VerifyPhoneLogic>();
-
   VerifyPhonePage({super.key});
+  final logic = Get.find<VerifyPhoneLogic>();
 
   @override
   Widget build(BuildContext context) => RegisterBgView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            sprintf(StrRes.enterVerificationCode, [logic.email?.isNotEmpty == true ? StrRes.email : StrRes.phoneNumber])
-                .toText
-              ..style = Styles.ts_0089FF_22sp_semibold,
-            10.verticalSpace,
-            '${logic.account} ${sprintf(StrRes.defaultVerificationCode, ['666666'])}'.toText
-              ..style = Styles.ts_8E9AB0_12sp,
-            35.verticalSpace,
-            PinCodeTextField(
-              appContext: context,
-              controller: logic.codeEditCtrl,
-              autoFocus: true,
-              textStyle: Styles.ts_0C1C33_20sp_semibold,
-              length: 6,
-              obscureText: false,
-              blinkWhenObscuring: true,
-              animationType: AnimationType.fade,
-              validator: (v) {
-                return null;
-              },
-              pinTheme: PinTheme(
-                shape: PinCodeFieldShape.box,
-                activeColor: Styles.c_0089FF,
-                selectedColor: Styles.c_0089FF,
-                inactiveColor: Styles.c_E8EAEF,
-                disabledColor: Styles.c_E8EAEF,
-                activeFillColor: Styles.c_E8EAEF,
-                selectedFillColor: Styles.c_E8EAEF,
-                inactiveFillColor: Styles.c_E8EAEF,
-                borderRadius: BorderRadius.circular(8.r),
-                borderWidth: 1,
-                fieldHeight: 42.w,
-                fieldWidth: 42.h,
-              ),
-              cursorColor: Colors.black,
-              animationDuration: 300.milliseconds,
-              errorAnimationController: logic.codeErrorCtrl,
-              keyboardType: TextInputType.number,
-              onCompleted: (v) {
-                logic.completed(v);
-              },
-              onSubmitted: (v) {
-                logic.completed(v);
-              },
-              onChanged: (v) {},
-              beforeTextPaste: (text) {
-                return true;
-              },
-            ),
-            VerifyCodeSendButton(
-              sec: 300,
-              onTapCallback: () => logic.requestVerificationCode(),
-            ),
-            170.verticalSpace,
-            Obx(() => Button(
-                  text: StrRes.nextStep,
-                  enabled: logic.enabled.value,
-                  onTap: () => logic.completed(logic.codeEditCtrl.text),
-                )),
-          ],
+        centeredHeader: true,
+        showWaves: true,
+        toolbar: const LoginToolbar(),
+        title: authText('验证你的账号', 'Verify your account'),
+        subtitle:
+            authText('输入发送至以下账号的验证码', 'Enter the code sent to this account.'),
+        step: 2,
+        totalSteps: 3,
+        child: AutofillGroup(
+          child: Obx(() => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(logic.account,
+                      textAlign: TextAlign.center,
+                      style: AuthTokens.body(context).copyWith(
+                          color: Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: AuthTokens.welcomeFieldGap),
+                  AuthInput(
+                    leadingIcon: CupertinoIcons.number,
+                    enabled: !logic.submitting.value,
+                    label: StrRes.verificationCode,
+                    hintText: StrRes.plsEnterVerificationCode,
+                    controller: logic.codeEditCtrl,
+                    keyBoardType: TextInputType.number,
+                    autofillHints: const [AutofillHints.oneTimeCode],
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(6)
+                    ],
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) {
+                      if (logic.enabled.value) {
+                        logic.completed(logic.codeEditCtrl.text);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: AppTokens.s3),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppTokens.s3,
+                    children: [
+                      Text(authText('没收到验证码？', 'Did not receive a code?'),
+                          style: AuthTokens.body(context)),
+                      VerifyCodedButton(
+                        themed: true,
+                        autoStart: true,
+                        seconds: 300,
+                        enabled: !logic.submitting.value,
+                        onTapCallback: logic.requestVerificationCode,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AuthTokens.sectionGap),
+                  AuthSubmitButton(
+                    key: const ValueKey('verify-submit'),
+                    text: StrRes.nextStep,
+                    gradient: AuthTokens.welcomeGradient(context),
+                    trailingIcon: Icons.arrow_forward_rounded,
+                    enabled: logic.enabled.value,
+                    loading: logic.submitting.value,
+                    onTap: () {
+                      FocusScope.of(context).unfocus();
+                      logic.completed(logic.codeEditCtrl.text);
+                    },
+                  ),
+                  const SizedBox(height: AuthTokens.sectionGap),
+                  AuthFlowFooter(
+                    prompt: authText('已有账号？', 'Already have an account?'),
+                    action: authText('返回登录', 'Sign in'),
+                    onTap: AppNavigator.startBackLogin,
+                  ),
+                ],
+              )),
         ),
       );
 }

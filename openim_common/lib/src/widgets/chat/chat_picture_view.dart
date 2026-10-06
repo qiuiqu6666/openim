@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -8,127 +9,142 @@ import 'package:path_provider/path_provider.dart';
 
 class ChatPictureView extends StatefulWidget {
   const ChatPictureView({
-    Key? key,
+    super.key,
     required this.message,
     required this.isISend,
-  }) : super(key: key);
+    this.maxDisplayWidth,
+    this.maxDisplayHeight,
+  });
   final bool isISend;
   final Message message;
+  final double? maxDisplayWidth;
+  final double? maxDisplayHeight;
 
   @override
   State<ChatPictureView> createState() => _ChatPictureViewState();
 }
 
 class _ChatPictureViewState extends State<ChatPictureView> {
+  String? _inputPath;
   String? _sourcePath;
   String? _sourceUrl;
-
   String? _snapshotUrl;
-  late double _trulyWidth;
-  late double _trulyHeight;
-
-  Message get _message => widget.message;
-
-  Widget? _child;
+  String? _messageID;
+  bool _localPathValid = false;
+  bool _resolvingLocalPath = false;
+  int _pathGeneration = 0;
 
   @override
   void initState() {
-    final picture = _message.pictureElem;
-    _sourcePath = picture?.sourcePath;
-
-    _sourceUrl = picture?.bigPicture?.url;
-    final snap = picture?.snapshotPicture?.url;
-    _snapshotUrl = snap?.adjustThumbnailAbsoluteString(960);
-
-    var w = picture?.sourcePicture?.width?.toDouble() ?? 1.0;
-    var h = picture?.sourcePicture?.height?.toDouble() ?? 1.0;
-
-    if (pictureWidth > w) {
-      _trulyWidth = w;
-      _trulyHeight = h;
-    } else {
-      _trulyWidth = pictureWidth;
-      _trulyHeight = _trulyWidth * h / w;
-    }
-
-    final height = pictureWidth * 1.sh / 1.sw;
-
-    if (_trulyHeight > 2 * height) {
-      _trulyHeight = _trulyWidth;
-    }
-
-    if (Platform.isIOS) {
-      if (_sourcePath?.contains('/Library/Caches/') == true) {
-        getApplicationCacheDirectory().then((value) {
-          final path = _sourcePath!.split('/Library/Caches').last;
-          _sourcePath = value.path + path;
-          _createChildView();
-        });
-      } else {
-        _createChildView();
-      }
-    } else {
-      _createChildView();
-    }
     super.initState();
+    _updateSources();
   }
 
-  Future<bool> _checkingPath() async {
-    var valid = IMUtils.isNotNullEmptyStr(_sourcePath);
-    if (!valid) {
-      return false;
-    }
-    if (Platform.isIOS) {
-      final exist = await File(_sourcePath!).exists();
-      valid = valid && exist;
-    } else {
-      valid = valid && File(_sourcePath!).existsSync();
-    }
-    _message.exMap['validPath_$_sourcePath'] = valid;
-
-    return valid;
+  @override
+  void didUpdateWidget(covariant ChatPictureView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _updateSources(force: oldWidget.isISend != widget.isISend);
   }
 
-  bool? get isValidPath => _message.exMap['validPath_$_sourcePath'];
-
-  _createChildView() async {
-    if (widget.isISend && (isValidPath == true || isValidPath == null && await _checkingPath())) {
-      _child = _buildPathPicture(path: _sourcePath!);
-    } else if (IMUtils.isNotNullEmptyStr(_snapshotUrl)) {
-      _child = _buildUrlPicture(url: _snapshotUrl!);
-    } else if (IMUtils.isNotNullEmptyStr(_sourceUrl)) {
-      _child = _buildUrlPicture(url: _sourceUrl!);
-    }
-    if (null != _child) {
-      if (!mounted) return;
-      setState(() {});
+  void _updateSources({bool force = false}) {
+    final picture = widget.message.pictureElem;
+    _sourceUrl = picture?.bigPicture?.url;
+    _snapshotUrl =
+        picture?.snapshotPicture?.url?.adjustThumbnailAbsoluteString(960);
+    final path = picture?.sourcePath;
+    final messageID = widget.message.clientMsgID;
+    if (!force && path == _inputPath && messageID == _messageID) return;
+    _inputPath = path;
+    _messageID = messageID;
+    _sourcePath = path;
+    _localPathValid = false;
+    _resolvingLocalPath = widget.isISend && path != null && path.isNotEmpty;
+    final generation = ++_pathGeneration;
+    if (widget.isISend && path != null && path.isNotEmpty) {
+      unawaited(_resolveLocalPath(path, generation));
     }
   }
 
-  Widget _buildUrlPicture({required String url}) => ImageUtil.networkImage(
-        url: url,
-        height: _trulyHeight,
-        width: _trulyWidth,
-        fit: BoxFit.fitWidth,
-      );
-
-  Widget _buildPathPicture({required String path}) => Stack(
-        children: [
-          ImageUtil.fileImage(
-            file: File(path),
-            height: _trulyHeight,
-            width: _trulyWidth,
-            fit: BoxFit.fitWidth,
-          ),
-        ],
-      );
+  Future<void> _resolveLocalPath(String path, int generation) async {
+    var resolved = path;
+    var exists = false;
+    try {
+      if (Platform.isIOS && path.contains('/Library/Caches/')) {
+        final directory = await getApplicationCacheDirectory();
+        resolved = directory.path + path.split('/Library/Caches').last;
+      }
+      exists = await File(resolved).exists();
+    } catch (_) {
+      // A missing local attachment can still use the remote thumbnail.
+    }
+    if (!mounted || generation != _pathGeneration) return;
+    setState(() {
+      _sourcePath = resolved;
+      _localPathValid = exists;
+      _resolvingLocalPath = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final child = ClipRRect(
+    final picture = widget.message.pictureElem;
+    final sourceWidth = picture?.sourcePicture?.width ?? 1;
+    final sourceHeight = picture?.sourcePicture?.height ?? 1;
+    final width = sourceWidth > 0 ? sourceWidth.toDouble() : 1.0;
+    final height = sourceHeight > 0 ? sourceHeight.toDouble() : 1.0;
+    final limit = widget.maxDisplayWidth ?? pictureWidth;
+    var displayWidth = width < limit ? width : limit;
+    var displayHeight = displayWidth * height / width;
+    final heightLimit = widget.maxDisplayHeight;
+    if (heightLimit != null && displayHeight > heightLimit) {
+      displayWidth *= heightLimit / displayHeight;
+      displayHeight = heightLimit;
+    }
+    final maxHeight = pictureWidth * 1.sh / 1.sw;
+    if (heightLimit == null && displayHeight > 2 * maxHeight) {
+      displayHeight = displayWidth;
+    }
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth = ImageUtil.decodeDimension(displayWidth, pixelRatio);
+    final cacheHeight = ImageUtil.decodeDimension(displayHeight, pixelRatio);
+    final remoteURL =
+        IMUtils.isNotNullEmptyStr(_snapshotUrl) ? _snapshotUrl : _sourceUrl;
+
+    Widget? remote() => IMUtils.isNotNullEmptyStr(remoteURL)
+        ? ImageUtil.networkImage(
+            url: remoteURL!,
+            width: displayWidth,
+            height: displayHeight,
+            cacheWidth: cacheWidth,
+            cacheHeight: cacheHeight,
+            resizePolicy: ResizeImagePolicy.fit,
+            cacheRawData: false,
+            fit: BoxFit.fitWidth,
+          )
+        : null;
+
+    final child = widget.isISend && _localPathValid
+        ? ImageUtil.fileImage(
+            file: File(_sourcePath!),
+            width: displayWidth,
+            height: displayHeight,
+            cacheWidth: cacheWidth,
+            cacheHeight: cacheHeight,
+            resizePolicy: ResizeImagePolicy.fit,
+            cacheRawData: false,
+            fit: BoxFit.fitWidth,
+            errorWidget: remote(),
+          )
+        : _resolvingLocalPath
+            ? null
+            : remote();
+    return ClipRRect(
       borderRadius: borderRadius(widget.isISend),
-      child: SizedBox(width: _trulyWidth, height: _trulyHeight, child: _child),
+      child: SizedBox(
+        width: displayWidth,
+        height: displayHeight,
+        child: child,
+      ),
     );
-    return child;
   }
 }

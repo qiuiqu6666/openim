@@ -19,6 +19,9 @@ void main() {
         MediaSource(thumbnail: '', isVideo: true),
       ]),
     ));
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('图片和视频'));
     await tester.pumpAndSettle();

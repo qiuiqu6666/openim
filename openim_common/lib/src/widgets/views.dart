@@ -23,7 +23,12 @@ class IMViews {
 
   static Future showToast(String msg, {Duration? duration}) {
     if (msg.trim().isNotEmpty) {
-      return EasyLoading.showToast(msg, duration: duration);
+      return EasyLoading.showToast(
+        msg,
+        duration: duration,
+        maskType: EasyLoadingMaskType.none,
+        dismissOnTap: false,
+      );
     } else {
       return Future.value();
     }
@@ -61,22 +66,19 @@ class IMViews {
   ) {
     return Get.bottomSheet(
       BottomSheetView(
-        mainAxisAlignment: MainAxisAlignment.start,
         items: [
           SheetItem(
             label: StrRes.callVoice,
-            icon: ImageRes.callVoice,
-            alignment: MainAxisAlignment.start,
             onTap: () => onTapSheetItem.call(0),
           ),
           SheetItem(
             label: StrRes.callVideo,
-            icon: ImageRes.callVideo,
-            alignment: MainAxisAlignment.start,
             onTap: () => onTapSheetItem.call(1),
           ),
         ],
       ),
+      backgroundColor: Colors.transparent,
+      useRootNavigator: true,
     );
   }
 

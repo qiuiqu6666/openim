@@ -10,6 +10,8 @@ abstract final class ContactCardTokens {
   static const title = Color(0xFFF7FAFF);
   static const subtitle = Color(0xFFDCE8FF);
   static const footerText = Color(0xFFC8DAFF);
+  static const statusGap = 5.0;
+  static const identityLineHeight = 1.25;
 }
 
 class ContactCardView extends StatelessWidget {
@@ -18,11 +20,15 @@ class ContactCardView extends StatelessWidget {
       required this.userID,
       required this.name,
       this.faceURL,
+      this.status,
+      this.reserveUserIDLine = false,
       required this.isSelf,
       required this.time});
   final String userID;
   final String name;
   final String? faceURL;
+  final Widget? status;
+  final bool reserveUserIDLine;
   final bool isSelf;
   final String time;
 
@@ -63,20 +69,27 @@ class ContactCardView extends StatelessWidget {
                             fontSize: 14.sp,
                             fontWeight: FontWeight.w500,
                             height: 1.25)),
-                    if (userID.isNotEmpty && userID != name) ...[
+                    if (reserveUserIDLine ||
+                        (userID.isNotEmpty && userID != name)) ...[
                       SizedBox(height: 4.w),
                       Text(userID,
+                          strutStyle: StrutStyle(
+                              fontSize: 11.sp,
+                              height: ContactCardTokens.identityLineHeight,
+                              forceStrutHeight: true),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               color: ContactCardTokens.subtitle,
-                              fontSize: 11.sp)),
+                              fontSize: 11.sp,
+                              height: ContactCardTokens.identityLineHeight)),
                     ],
                   ],
                 )),
               ]),
             ),
             Container(
+              key: const ValueKey('contact-card-footer'),
               color: dark
                   ? Color.alphaBlend(Colors.black26, ContactCardTokens.footer)
                   : ContactCardTokens.footer,
@@ -96,6 +109,10 @@ class ContactCardView extends StatelessWidget {
                 Text(time,
                     style: TextStyle(
                         color: ContactCardTokens.footerText, fontSize: 10.sp)),
+                if (status != null) ...[
+                  SizedBox(width: ContactCardTokens.statusGap.w),
+                  status!,
+                ],
               ]),
             ),
           ]),
@@ -112,12 +129,14 @@ class ContactCardSendDialog extends StatelessWidget {
       this.faceURL,
       required this.recipientName,
       this.recipientFaceURL,
-      this.recipientIsGroup = false});
+      this.recipientIsGroup = false,
+      this.recipients = const []});
   final String name;
   final String? faceURL;
   final String recipientName;
   final String? recipientFaceURL;
   final bool recipientIsGroup;
+  final List<({String name, String? faceURL, bool isGroup})> recipients;
 
   @override
   Widget build(BuildContext context) {
@@ -159,13 +178,26 @@ class ContactCardSendDialog extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Icon(Icons.arrow_forward_rounded,
                       size: 23, color: colors.onSurface)),
-              AvatarView(
-                  width: 46,
-                  height: 46,
-                  url: recipientFaceURL,
-                  text: recipientName,
-                  isGroup: recipientIsGroup,
-                  isCircle: !recipientIsGroup),
+              if (recipients.length > 1)
+                Flexible(
+                    child: Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final recipient in recipients)
+                    AvatarView(
+                        width: 46,
+                        height: 46,
+                        url: recipient.faceURL,
+                        text: recipient.name,
+                        isGroup: recipient.isGroup,
+                        isCircle: true),
+                ]))
+              else
+                AvatarView(
+                    width: 46,
+                    height: 46,
+                    url: recipientFaceURL,
+                    text: recipientName,
+                    isGroup: recipientIsGroup,
+                    isCircle: true),
             ]),
             const SizedBox(height: 16),
             Row(children: [

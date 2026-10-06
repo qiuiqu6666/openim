@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="56px" height="57px" viewBox="0 0 56 57" version="1.1">
+  <title>Add</title>
+  <g id="root" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+    <g transform="translate(-662.000000, -1046.000000)">
+      <g transform="translate(0.000000, 1025.000000)">
+        <g transform="translate(33.000000, 16.000000)">
+          <g transform="translate(629.000000, 5.853448)">
+            <circle id="circle-add" stroke="#26282A" stroke-width="4" cx="28" cy="28" r="26"></circle>
+            <rect id="rect-h" fill="#26282A" x="15" y="27" width="26" height="4" rx="1"></rect>
+            <rect id="rect-v" fill="#26282A" transform="translate(28.000000, 29.000000) rotate(-90.000000) translate(-28.000000, -29.000000) " x="15" y="27" width="26" height="4" rx="1"></rect>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

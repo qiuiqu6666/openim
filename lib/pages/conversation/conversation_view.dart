@@ -4,35 +4,94 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:sprintf/sprintf.dart';
 
 import 'conversation_logic.dart';
+import 'archive/archived_conversation_page.dart';
 import 'conversation_organizer.dart';
-import 'folder_name_dialog.dart';
+import 'folders/conversation_folder_bar.dart';
+import 'folders/conversation_folder_controller.dart';
+import 'folders/conversation_folder_swipe_region.dart';
+import '../home/home_quick_actions.dart';
+import '../customer_service/customer_service.dart';
+import '../group_features/live/widgets/live_list_scope.dart';
+import 'widgets/conversation_feed_style.dart';
+import 'widgets/conversation_feed_row.dart';
+import 'widgets/conversation_header_actions.dart';
+import 'widgets/conversation_slide_scope.dart';
+import 'editing/conversation_edit_controller.dart';
+import 'editing/conversation_edit_action_bar.dart';
+import 'editing/conversation_edit_actions.dart';
+import 'peek/conversation_peek_entry.dart';
+import 'empty/conversation_empty_state.dart';
 
 class ConversationPage extends StatefulWidget {
   const ConversationPage(
-      {super.key, this.groupChats = false, this.archivedOnly = false});
+      {super.key,
+      this.groupChats = false,
+      this.archivedOnly = false,
+      this.liveUpdatesActive = true,
+      this.onEditActionBarChanged});
 
   final bool groupChats;
   final bool archivedOnly;
+  final bool liveUpdatesActive;
+  final ValueChanged<Widget?>? onEditActionBarChanged;
 
   @override
   State<ConversationPage> createState() => _ConversationPageState();
 }
 
-class _ConversationPageState extends State<ConversationPage>
-    with TickerProviderStateMixin {
+class _ConversationPageState extends State<ConversationPage> {
   static const _orangeAction = Color(0xFFF5A623);
   static const _folderAction = Color(0xFF32ADE6);
   static const _muteAction = Color(0xFF006EFF);
   static const _deleteAction = Color(0xFFFF584C);
+  double _plusTurns = 0;
+  final _plusActionKey = GlobalKey();
+  bool _quickMenuOpen = false;
+  bool _switchingEditing = false;
+  final _editor = ConversationEditController();
+  final _feedScrollController = ScrollController();
+  bool _publishedEditBar = false;
+  int _editBarPublication = 0;
   final logic = Get.find<ConversationLogic>();
-  final selectedFolderID = RxnString();
+  late final _editActions = ConversationEditActions(
+      logic: logic, editor: _editor, isMounted: () => mounted);
+  late final _folders = ConversationFolderController(logic: logic);
   final Map<String, SlidableController> _slideControllers = {};
 
-  SlidableController _controllerFor(String id) =>
-      _slideControllers.putIfAbsent(id, () => SlidableController(this));
+  Future<void> _showQuickActions() async {
+    if (_quickMenuOpen) return;
+    _quickMenuOpen = true;
+    setState(() => _plusTurns += .125);
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    try {
+      await showHomeQuickActions(
+          context: context,
+          anchor: _plusActionKey,
+          actions: [
+            HomeQuickAction(
+                id: 'addFriend',
+                title: StrRes.addFriend,
+                subtitle:
+                    zh ? '通过账号/手机号搜索好友' : 'Find friends by account or phone',
+                onTap: logic.addFriend),
+            HomeQuickAction(
+                id: 'addGroup',
+                title: StrRes.addGroup,
+                subtitle: zh ? '通过群号搜索群聊' : 'Find a group by its ID',
+                onTap: logic.addGroup),
+            HomeQuickAction(
+                id: 'createGroup',
+                title: StrRes.createGroup,
+                subtitle: zh ? '发起多人聊天' : 'Start a group conversation',
+                onTap: logic.createGroup),
+          ]);
+    } finally {
+      _quickMenuOpen = false;
+      if (mounted) setState(() => _plusTurns += .125);
+    }
+  }
 
   void _closeOpenItems() {
     for (final controller in _slideControllers.values) {
@@ -42,106 +101,81 @@ class _ConversationPageState extends State<ConversationPage>
     }
   }
 
+  Future<void> _showPeek(ConversationInfo info) async {
+    if (_editor.editing || _editor.busy || _folders.busy) return;
+    _closeOpenItems();
+    await showFeedConversationPeek(
+      context: context,
+      conversation: info,
+      logic: logic,
+      folders: _folders,
+      isActive: () => mounted && !_editor.editing && !_editor.busy,
+      onDelete: (item) => _confirmDeleteConversation(context, item),
+    );
+  }
+
+  void _onFolderSwipe(int direction) {
+    final target = conversationFolderAfterSwipe(
+      folderIds: _folders.displayFolders.map((folder) => folder.id).toList(),
+      selectedFolderId: _folders.selectedFolderID,
+      direction: direction,
+    );
+    if (!target.changed) return;
+    _closeOpenItems();
+    _folders.selectFolder(target.folderId);
+  }
+
+  Future<void> _toggleEditing() async {
+    if (_switchingEditing || _folders.busy || !logic.isSessionActive) return;
+    _switchingEditing = true;
+    try {
+      _closeOpenItems();
+      if (_folders.reorderEditing) await _folders.finishReordering();
+      if (mounted && logic.isSessionActive) _editor.toggleEditing();
+    } finally {
+      _switchingEditing = false;
+    }
+  }
+
+  void _showCustomerService() => showCustomerServiceSheet(context);
+
+  void _scrollToTop() {
+    if (_feedScrollController.hasClients) {
+      _feedScrollController.animateTo(0,
+          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    }
+  }
+
+  void _publishEditBar(Widget? bar) {
+    final publish = widget.onEditActionBarChanged;
+    if (publish == null || (bar == null && !_publishedEditBar)) return;
+    _publishedEditBar = bar != null;
+    final revision = ++_editBarPublication;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && revision == _editBarPublication) publish(bar);
+    });
+  }
+
+  Widget _buildEditActionBar(List<ConversationInfo> conversations) =>
+      ConversationEditActionBar(
+          hasSelection: conversations
+              .any((info) => _editor.selectedIds.contains(info.conversationID)),
+          busy: _editor.busy,
+          onMarkRead: () => _editActions.markRead(conversations),
+          onArchive: () => _editActions.archive(conversations),
+          onDelete: () => _editActions.delete(context, conversations));
+
   @override
   void dispose() {
-    for (final controller in _slideControllers.values) {
-      controller.dispose();
+    final publish = widget.onEditActionBarChanged;
+    if (_publishedEditBar && publish != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => publish(null));
     }
-    selectedFolderID.close();
+    _slideControllers.clear();
+    _folders.dispose();
+    _editor.dispose();
+    _feedScrollController.dispose();
     super.dispose();
-  }
-
-  Future<void> _editFolder(BuildContext context, [ChatFolder? folder]) async {
-    final name = await showDialog<String>(
-      context: context,
-      builder: (_) => FolderNameDialog(initialName: folder?.name),
-    );
-    if (name == null || name.isEmpty) return;
-    if (folder == null) {
-      await logic.createFolder(name);
-    } else {
-      await logic.renameFolder(folder, name);
-    }
-  }
-
-  Future<void> _manageFolder(BuildContext context, ChatFolder folder) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(
-              title: const Text('重命名分组'),
-              onTap: () => Navigator.pop(sheetContext, 'rename')),
-          ListTile(
-              title: const Text('删除分组'),
-              onTap: () => Navigator.pop(sheetContext, 'delete')),
-        ]),
-      ),
-    );
-    if (action == 'rename' && context.mounted) {
-      await _editFolder(context, folder);
-    } else if (action == 'delete') {
-      if (await logic.deleteFolder(folder) &&
-          selectedFolderID.value == folder.id) {
-        selectedFolderID.value = null;
-      }
-    }
-  }
-
-  Future<void> _organizeConversation(
-      BuildContext context, ConversationInfo info) async {
-    final state = logic.states[info.conversationID];
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(
-            leading: Icon(state?.archived == true
-                ? Icons.unarchive_outlined
-                : Icons.archive_outlined),
-            title: Text(state?.archived == true ? '取消归档' : '归档'),
-            onTap: () => Navigator.pop(sheetContext, 'archive'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.folder_outlined),
-            title: const Text('移入分组'),
-            onTap: () => Navigator.pop(sheetContext, 'folder'),
-          ),
-        ]),
-      ),
-    );
-    if (action == 'archive') {
-      await logic.updateOrganizer(info,
-          folderID: state?.folderID, archived: !(state?.archived ?? false));
-    } else if (action == 'folder' && context.mounted) {
-      await _chooseFolder(context, info);
-    }
-  }
-
-  Future<void> _chooseFolder(
-      BuildContext context, ConversationInfo info) async {
-    final folderID = await showModalBottomSheet<String>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            ListTile(
-                title: const Text('未分组'),
-                onTap: () => Navigator.pop(sheetContext, '')),
-            for (final folder in logic.folders)
-              ListTile(
-                  title: Text(folder.name),
-                  onTap: () => Navigator.pop(sheetContext, folder.id)),
-          ],
-        ),
-      ),
-    );
-    if (folderID != null) {
-      await logic.updateOrganizer(info,
-          folderID: folderID.isEmpty ? null : folderID,
-          archived: logic.states[info.conversationID]?.archived ?? false);
-    }
   }
 
   Future<void> _confirmDeleteConversation(
@@ -164,8 +198,8 @@ class _ConversationPageState extends State<ConversationPage>
         ],
       ),
     );
-    if (confirmed == true) {
-      logic.deleteConversation(info);
+    if (confirmed == true && mounted && logic.isSessionActive) {
+      await logic.deleteConversation(info);
     }
   }
 
@@ -192,7 +226,7 @@ class _ConversationPageState extends State<ConversationPage>
                 label,
                 maxLines: 1,
                 softWrap: false,
-                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w500),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               ),
             ),
           ),
@@ -200,10 +234,18 @@ class _ConversationPageState extends State<ConversationPage>
       );
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-        listenable: FriendDisplayPreferences.changes,
-        builder: (context, _) => _build(context),
-      );
+  Widget build(BuildContext context) => widget.archivedOnly
+      ? ArchivedConversationPage(groupChats: widget.groupChats)
+      : GroupLiveListScope(
+          store: logic.groupFeatures,
+          userID: OpenIM.iMManager.userID,
+          sessionCurrent: () => logic.isSessionActive,
+          active: widget.liveUpdatesActive,
+          child: ListenableBuilder(
+            listenable: Listenable.merge(
+                [FriendDisplayPreferences.changes, _editor, _folders]),
+            builder: (context, _) => _build(context),
+          ));
 
   Widget _build(BuildContext context) {
     return Obx(() {
@@ -214,257 +256,226 @@ class _ConversationPageState extends State<ConversationPage>
           .toList();
       final conversations = logic.list
           .where((info) =>
-              (widget.groupChats ? info.isGroupChat : info.isSingleChat) &&
-              (widget.archivedOnly
-                  ? logic.isArchived(info)
-                  : selectedFolderID.value != null
-                      ? logic.folderID(info) == selectedFolderID.value
-                      : !logic.isArchived(info)))
+              !logic.isArchived(info) &&
+              (_folders.selectedFolderID != null
+                  ? logic.folderID(info) == _folders.selectedFolderID
+                  : (widget.groupChats ? info.isGroupChat : info.isSingleChat)))
           .toList();
+      _publishEditBar(
+          _editor.editing ? _buildEditActionBar(conversations) : null);
       return Scaffold(
-        backgroundColor: Styles.c_F8F9FA,
-        appBar: widget.archivedOnly
-            ? GlassAppBar(title: const Text('归档'))
-            : TitleBar.conversation(
-                statusStr: logic.imSdkStatus,
-                isFailed: logic.isFailedSdkStatus,
-                popCtrl: logic.popCtrl,
-                onAddFriend: logic.addFriend,
-                onAddGroup: logic.addGroup,
-                onCreateGroup: logic.createGroup,
-                left: Expanded(
-                  flex: 2,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      Text('消息',
-                          style: TextStyle(
-                              fontSize: 22.sp,
-                              fontWeight: FontWeight.w700,
-                              color: Styles.c_0C1C33)),
-                      10.horizontalSpace,
-                      if (null != logic.imSdkStatus &&
-                          (!logic.reInstall || logic.isFailedSdkStatus))
-                        Flexible(
-                            child: SyncStatusView(
-                          isFailed: logic.isFailedSdkStatus,
-                          statusStr: logic.imSdkStatus!,
-                        )),
-                    ],
-                  ),
-                )),
+        backgroundColor: ConversationFeedStyle.background(context),
+        appBar: GlassAppBar(
+          toolbarHeight: kToolbarHeight,
+          backgroundColor: ConversationFeedStyle.background(context),
+          foregroundColor: AppTokens.textPrimary(
+              dark: Theme.of(context).brightness == Brightness.dark),
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          automaticallyImplyLeading: false,
+          centerTitle: false,
+          titleSpacing: 16,
+          systemOverlayStyle: AppSystemBars.styleFor(
+              Theme.of(context).brightness == Brightness.dark
+                  ? AppTokens.backgroundDark
+                  : AppTokens.surfaceLight),
+          title: GestureDetector(
+            onDoubleTap: _scrollToTop,
+            child: MainTabTitle(
+              title: widget.groupChats
+                  ? StrRes.groupChat
+                  : (Localizations.localeOf(context).languageCode == 'zh'
+                      ? '消息'
+                      : 'Messages'),
+              busy: logic.imSdkStatus != null && !logic.isFailedSdkStatus,
+              failed: logic.isFailedSdkStatus,
+            ),
+          ),
+          actions: [
+            ConversationHeaderActions(
+                editing: _editor.editing,
+                onSupport: _showCustomerService,
+                onToggleEditing: _toggleEditing,
+                plusKey: _plusActionKey,
+                plusTurns: _plusTurns,
+                onPlus: _showQuickActions),
+          ],
+        ),
         body: Column(
           children: [
-            if (!widget.archivedOnly)
-              Padding(
-                padding: EdgeInsets.fromLTRB(12.w, 8.w, 12.w, 10.w),
-                child: Material(
-                  color: Styles.c_F0F2F6,
-                  borderRadius: BorderRadius.circular(10.w),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10.w),
-                    onTap: logic.globalSearch,
-                    child: SizedBox(
-                      height: 36.w,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppTokens.backgroundDark
+                    : AppTokens.surfaceLight,
+                border: Border(
+                    bottom: BorderSide(
+                        color: ConversationFeedStyle.divider(context),
+                        width: ConversationFeedStyle.dividerHeight)),
+              ),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: Material(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppTokens.surfaceDark
+                    : AppTokens.surfaceAltLight,
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: logic.globalSearch,
+                  child: SizedBox(
+                    height: 40,
+                    child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Row(children: [
                           Icon(Icons.search,
-                              size: 18.w, color: Styles.c_8E9AB0),
-                          SizedBox(width: 6.w),
-                          Text('搜索',
+                              size: 19,
+                              color: AppTokens.textPrimary(
+                                      dark: Theme.of(context).brightness ==
+                                          Brightness.dark)
+                                  .withValues(alpha: .7)),
+                          const SizedBox(width: 8),
+                          Text(StrRes.search,
                               style: TextStyle(
-                                  fontSize: 14.sp, color: Styles.c_8E9AB0)),
-                        ],
-                      ),
-                    ),
+                                  fontSize: 15,
+                                  color: AppTokens.textPrimary(
+                                          dark: Theme.of(context).brightness ==
+                                              Brightness.dark)
+                                      .withValues(alpha: .7))),
+                        ])),
                   ),
                 ),
               ),
-            if (!widget.archivedOnly && logic.folders.isNotEmpty)
-              SizedBox(
-                height: 48.w,
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(12.w, 0, 12.w, 9.w),
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Styles.c_FFFFFF,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Padding(
-                              padding: EdgeInsets.all(2.w),
-                              child: SizedBox(
-                                height: 32.w,
-                                child: ListView(
-                                  shrinkWrap: true,
-                                  scrollDirection: Axis.horizontal,
-                                  children: [
-                                    _folderTab('全部', null),
-                                    for (final folder in logic.folders)
-                                      _folderTab(folder.name, folder.id,
-                                          onLongPress: () =>
-                                              _manageFolder(context, folder)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 8.w),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(999),
-                        onTap: () => _editFolder(context),
-                        child: Container(
-                          width: 32.w,
-                          height: 32.w,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: Styles.c_FFFFFF,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.add_rounded,
-                              size: 21.w, color: const Color(0xFF8E8E93)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            ),
+            ConversationFolderBar(
+              folders: _folders.displayFolders,
+              selectedFolderID: _folders.selectedFolderID,
+              unreadForFolder: _unreadForFolder,
+              hasNotifiableUnreadForFolder: _hasNotifiableUnreadForFolder,
+              onSelectAll: () => _folders.selectFolder(null),
+              onSelectFolder: _folders.selectFolder,
+              onCreateFolder: () => _folders.createFolder(context),
+              onFolderLongPress: (folder) =>
+                  _folders.manageFolder(context, folder),
+              reorderEditing: _folders.reorderEditing,
+              onExitReorderEditing: _folders.finishReordering,
+              onReorderFolders: _folders.busy ? null : _folders.previewReorder,
+              onDeleteFolder: _folders.busy
+                  ? null
+                  : (folder) => _folders.deleteFolder(context, folder),
+            ),
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: logic.refreshOrganizer,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _closeOpenItems,
-                  child: SlidableAutoCloseBehavior(
-                    child: ListView.builder(
-                      padding: EdgeInsets.only(
-                          bottom: MediaQuery.paddingOf(context).bottom),
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      itemBuilder: (_, index) {
-                        if (!widget.archivedOnly &&
-                            selectedFolderID.value == null &&
-                            archivedConversations.isNotEmpty) {
-                          if (index == 0) {
-                            return _buildArchiveEntry(
-                                context, archivedConversations);
-                          }
-                          index--;
-                        }
-                        return _buildItemView(context, conversations[index]);
-                      },
-                      itemCount: conversations.length +
-                          (!widget.archivedOnly &&
-                                  selectedFolderID.value == null &&
-                                  archivedConversations.isNotEmpty
-                              ? 1
-                              : 0),
+              child: ConversationFolderSwipeRegion(
+                enabled: logic.folders.isNotEmpty &&
+                    !_editor.editing &&
+                    !_folders.reorderEditing &&
+                    !_folders.busy,
+                onSwipe: _onFolderSwipe,
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    GroupLiveListScope.maybeOf(context)?.refreshVisible();
+                    await Future.wait([
+                      logic.onRefresh(),
+                      logic.refreshOrganizer(),
+                    ]);
+                  },
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _closeOpenItems,
+                    child: SlidableAutoCloseBehavior(
+                      child: conversations.isEmpty &&
+                              logic.imSdkStatus == null &&
+                              logic.canShowEmptyFeed &&
+                              (_folders.selectedFolderID != null ||
+                                  archivedConversations.isEmpty)
+                          ? ConversationEmptyState(
+                              groupChats: widget.groupChats,
+                              folderSelected: _folders.selectedFolderID != null,
+                            )
+                          : ListView.builder(
+                              controller: _feedScrollController,
+                              padding: EdgeInsets.only(
+                                  bottom: MediaQuery.paddingOf(context).bottom),
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              itemBuilder: (_, index) {
+                                if (_folders.selectedFolderID == null &&
+                                    archivedConversations.isNotEmpty) {
+                                  if (index == 0) {
+                                    return _buildArchiveEntry(
+                                        context, archivedConversations);
+                                  }
+                                  index--;
+                                }
+                                return _buildItemView(
+                                    context, conversations[index],
+                                    showDivider:
+                                        index < conversations.length - 1);
+                              },
+                              itemCount: conversations.length +
+                                  (_folders.selectedFolderID == null &&
+                                          archivedConversations.isNotEmpty
+                                      ? 1
+                                      : 0),
+                            ),
                     ),
                   ),
                 ),
               ),
             ),
+            if (_editor.editing && widget.onEditActionBarChanged == null)
+              _buildEditActionBar(conversations),
           ],
         ),
       );
     });
   }
 
-  Widget _folderTab(String title, String? folderID,
-      {VoidCallback? onLongPress}) {
-    final selected = selectedFolderID.value == folderID;
-    final folderConversations = folderID == null
-        ? <ConversationInfo>[]
-        : logic.list.where((info) => logic.folderID(info) == folderID).toList();
-    final unread = folderConversations.fold<int>(
-        0, (sum, info) => sum + logic.getUnreadCount(info));
-    final hasNotifiableUnread = folderConversations.any(
-        (info) => logic.getUnreadCount(info) > 0 && !logic.isNotDisturb(info));
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 1.w),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: () => selectedFolderID.value = folderID,
-        onLongPress: onLongPress,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: EdgeInsets.symmetric(horizontal: 13.w, vertical: 5.w),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFFECECEC) : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(title,
-                style: TextStyle(
-                    fontSize: 14.sp,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    height: 1.1,
-                    color: const Color(0xFF1C1C1E))),
-            if (unread > 0) ...[
-              SizedBox(width: 4.w),
-              Container(
-                constraints: BoxConstraints(minWidth: 16.w, minHeight: 16.w),
-                height: 16.w,
-                padding: EdgeInsets.symmetric(horizontal: unread > 9 ? 4.w : 0),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                    color: hasNotifiableUnread
-                        ? const Color(0xFFFF524B)
-                        : const Color(0xFFA8A8AE),
-                    borderRadius: BorderRadius.circular(999)),
-                child: Text(unread > 99 ? '99+' : '$unread',
-                    style: TextStyle(
-                        fontSize: 10.sp,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                        height: 1)),
-              ),
-            ],
-          ]),
-        ),
-      ),
-    );
-  }
+  Iterable<ConversationInfo> _folderConversations(ChatFolder folder) =>
+      logic.list.where((info) =>
+          !logic.isArchived(info) && logic.folderID(info) == folder.id);
+
+  int _unreadForFolder(ChatFolder folder) => _folderConversations(folder)
+      .fold(0, (sum, info) => sum + logic.getUnreadCount(info));
+
+  bool _hasNotifiableUnreadForFolder(ChatFolder folder) =>
+      _folderConversations(folder).any((info) =>
+          logic.getUnreadCount(info) > 0 && !logic.isNotDisturb(info));
 
   Widget _buildArchiveEntry(
       BuildContext context, List<ConversationInfo> archivedConversations) {
     final unread = archivedConversations.fold<int>(
         0, (sum, info) => sum + logic.getUnreadCount(info));
     return Ink(
-      color: Styles.isDark ? Styles.c_F8F9FA : Styles.c_FFFFFF,
+      color: ConversationFeedStyle.background(context),
       child: InkWell(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => ConversationPage(
-              groupChats: widget.groupChats, archivedOnly: true),
+        onTap: () => Navigator.of(context, rootNavigator: true)
+            .push(MaterialPageRoute<void>(
+          builder: (_) =>
+              ArchivedConversationPage(groupChats: widget.groupChats),
         )),
         child: SizedBox(
-          height: 72.w,
+          height: ConversationFeedStyle.rowHeight(context),
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.w),
             child: Row(children: [
               SizedBox(
-                width: 54.w,
-                height: 54.w,
+                width: 54,
+                height: 54,
                 child: ClipOval(
                   child: Transform.scale(
                     scale: 1.5,
                     child: Image.asset(
                       'assets/images/ic_archive_99chat.png',
                       package: 'openim_common',
-                      width: 54.w,
-                      height: 54.w,
+                      width: 54,
+                      height: 54,
                       fit: BoxFit.cover,
                     ),
                   ),
                 ),
               ),
-              SizedBox(width: 12.w),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -472,9 +483,12 @@ class _ConversationPageState extends State<ConversationPage>
                   children: [
                     Text('归档',
                         style: TextStyle(
-                            fontSize: 16.sp,
+                            fontSize: 16,
+                            height: ConversationFeedStyle.lineHeight,
                             fontWeight: FontWeight.w600,
-                            color: Styles.c_0C1C33)),
+                            color: AppTokens.textPrimary(
+                                dark: Theme.of(context).brightness ==
+                                    Brightness.dark))),
                     SizedBox(height: 4.w),
                     Row(
                       children: [
@@ -486,7 +500,11 @@ class _ConversationPageState extends State<ConversationPage>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                                fontSize: 14.sp, color: Styles.c_8E9AB0),
+                                fontSize: 14,
+                                height: ConversationFeedStyle.lineHeight,
+                                color: AppTokens.textSecondary(
+                                    dark: Theme.of(context).brightness ==
+                                        Brightness.dark)),
                           ),
                         ),
                         if (unread > 0) ...[
@@ -505,254 +523,93 @@ class _ConversationPageState extends State<ConversationPage>
     );
   }
 
-  Widget _buildItemView(BuildContext context, ConversationInfo info) =>
-      Slidable(
-        key: ValueKey(info.conversationID),
-        controller: _controllerFor(info.conversationID),
-        startActionPane: ActionPane(
-          motion: const BehindMotion(),
-          extentRatio: 0.42,
-          openThreshold: 0.12,
-          closeThreshold: 0.38,
-          children: [
-            _swipeAction(
-              onPressed: (_) => logic.updateOrganizer(info,
-                  folderID: logic.folderID(info),
-                  archived: !logic.isArchived(info)),
-              color: logic.isArchived(info) ? _muteAction : _orangeAction,
-              label: logic.isArchived(info) ? '取消归档' : '归档',
-            ),
-            _swipeAction(
-              onPressed: (_) => _chooseFolder(context, info),
-              color: _folderAction,
-              label: '分组',
-            ),
-          ],
-        ),
-        endActionPane: ActionPane(
-          motion: const BehindMotion(),
-          extentRatio: 0.5,
-          openThreshold: 0.12,
-          closeThreshold: 0.38,
-          children: [
-            _swipeAction(
-              onPressed: (_) =>
-                  logic.setNotDisturb(info, !logic.isNotDisturb(info)),
-              color: _muteAction,
-              label: logic.isNotDisturb(info)
-                  ? StrRes.disableConversationMute
-                  : StrRes.enableConversationMute,
-            ),
-            _swipeAction(
-              onPressed: (_) => logic.setPinned(info, info.isPinned != true),
-              color: _orangeAction,
-              label: info.isPinned == true ? StrRes.cancelTop : StrRes.topChat,
-            ),
-            _swipeAction(
-              onPressed: (context) => _confirmDeleteConversation(context, info),
-              color: _deleteAction,
-              label: StrRes.delete,
-            ),
-          ],
-        ),
-        // Keep the ink surface inside the sliding transform. An Ink decoration
-        // on the page's Material can retain its offset after the slide closes.
-        child: Material(
-          color: info.isPinned == true
-              ? const Color(0xFFF3F4F6)
-              : Styles.isDark
-                  ? Styles.c_F8F9FA
-                  : Styles.c_FFFFFF,
-          child: InkWell(
+  Widget _buildItemView(BuildContext context, ConversationInfo info,
+          {required bool showDivider}) =>
+      ConversationSlideScope(
+        key: ValueKey('slide-scope-${info.conversationID}'),
+        onCreated: (controller) =>
+            _slideControllers[info.conversationID] = controller,
+        onDisposed: (controller) {
+          if (identical(_slideControllers[info.conversationID], controller)) {
+            _slideControllers.remove(info.conversationID);
+          }
+        },
+        builder: (context, controller) => Slidable(
+          key: ValueKey(info.conversationID),
+          enabled: !_editor.editing,
+          controller: controller,
+          startActionPane: ActionPane(
+            motion: const BehindMotion(),
+            extentRatio: 0.42,
+            openThreshold: 0.12,
+            closeThreshold: 0.38,
+            children: [
+              _swipeAction(
+                onPressed: (_) => logic.updateOrganizer(info,
+                    folderID: logic.folderID(info),
+                    archived: !logic.isArchived(info)),
+                color: logic.isArchived(info) ? _muteAction : _orangeAction,
+                label: logic.isArchived(info) ? '取消归档' : '归档',
+              ),
+              _swipeAction(
+                onPressed: (_) => _folders.selectedFolderID != null
+                    ? _folders.removeFromFolder(info)
+                    : _folders.chooseFolder(context, info),
+                color: _folders.selectedFolderID != null
+                    ? const Color(0xFF8E8E93)
+                    : _folderAction,
+                label: _folders.selectedFolderID != null ? '移出分组' : '分组',
+              ),
+            ],
+          ),
+          endActionPane: ActionPane(
+            motion: const BehindMotion(),
+            extentRatio: 0.5,
+            openThreshold: 0.12,
+            closeThreshold: 0.38,
+            children: [
+              _swipeAction(
+                onPressed: (_) =>
+                    logic.setNotDisturb(info, !logic.isNotDisturb(info)),
+                color: _muteAction,
+                label: logic.isNotDisturb(info)
+                    ? StrRes.disableConversationMute
+                    : StrRes.enableConversationMute,
+              ),
+              _swipeAction(
+                onPressed: (_) => logic.setPinned(info, info.isPinned != true),
+                color: _orangeAction,
+                label:
+                    info.isPinned == true ? StrRes.cancelTop : StrRes.topChat,
+              ),
+              _swipeAction(
+                onPressed: (context) =>
+                    _confirmDeleteConversation(context, info),
+                color: _deleteAction,
+                label: StrRes.delete,
+              ),
+            ],
+          ),
+          // Keep the ink surface inside the sliding transform. An Ink decoration
+          // on the page's Material can retain its offset after the slide closes.
+          child: ConversationFeedRow(
+            logic: logic,
+            info: info,
+            showDivider: showDivider,
+            editing: _editor.editing,
+            selected: _editor.selectedIds.contains(info.conversationID),
             onTap: () {
-              final controller = _controllerFor(info.conversationID);
+              if (_editor.editing) {
+                _editor.toggleSelection(info.conversationID);
+                return;
+              }
               if (controller.ratio != 0) {
                 controller.close();
               } else {
                 logic.toChat(conversationInfo: info);
               }
             },
-            onLongPress: () => _organizeConversation(context, info),
-            child: Stack(
-              children: [
-                SizedBox(
-                  height: 72.w,
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(16.w, 8.w, 16.w, 0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 54.w,
-                          height: 54.w,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              AvatarView(
-                                width: 54.w,
-                                height: 54.w,
-                                isCircle: true,
-                                text: logic.getShowName(info),
-                                url: info.faceURL,
-                                isGroup: logic.isGroupChat(info),
-                                textStyle: Styles.ts_FFFFFF_14sp_medium,
-                              ),
-                              if (logic.getUnreadCount(info) > 0)
-                                Positioned(
-                                  top: -4.5.w,
-                                  right: -4.5.w,
-                                  child: logic.isNotDisturb(info)
-                                      ? Container(
-                                          width: 10.w,
-                                          height: 10.w,
-                                          decoration: BoxDecoration(
-                                            color: Styles.c_FF381F,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        )
-                                      : UnreadCountView(
-                                          count: logic.getUnreadCount(info),
-                                          size: 18.w,
-                                          fontSize: 10,
-                                        ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(width: 12.w),
-                        Expanded(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            logic.getShowName(info),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 16.sp,
-                                              fontWeight: FontWeight.w500,
-                                              color: Styles.c_0C1C33,
-                                            ),
-                                          ),
-                                        ),
-                                        if (logic.isNotDisturb(info)) ...[
-                                          SizedBox(width: 6.w),
-                                          Icon(Icons.notifications_off,
-                                              size: 16.w,
-                                              color: Styles.c_8E9AB0),
-                                        ],
-                                      ],
-                                    ),
-                                    SizedBox(height: 6.w),
-                                    MatchTextView(
-                                      text: logic.getContent(info),
-                                      textStyle: TextStyle(
-                                        fontSize: 14.sp,
-                                        color: Styles.c_8E9AB0,
-                                      ),
-                                      prefixSpan: TextSpan(
-                                        children: [
-                                          if (logic.getUnreadCount(info) > 0)
-                                            TextSpan(
-                                              text:
-                                                  '[${sprintf(StrRes.nPieces, [
-                                                    logic.getUnreadCount(info)
-                                                  ])}] ',
-                                              style: TextStyle(
-                                                  fontSize: 14.sp,
-                                                  color: Styles.c_8E9AB0),
-                                            ),
-                                          TextSpan(
-                                            text: logic.getPrefixTag(info),
-                                            style:
-                                                Styles.ts_0089FF_14sp.copyWith(
-                                              color:
-                                                  info.draftText?.isNotEmpty ==
-                                                          true
-                                                      ? Styles.c_FF381F
-                                                      : Styles.c_0089FF,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(width: 8.w),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (info.isSingleChat &&
-                                          info.latestMsg?.sendID ==
-                                              OpenIM.iMManager.userID &&
-                                          info.latestMsg?.status ==
-                                              MessageStatus.succeeded) ...[
-                                        ChatReadReceiptIcon(
-                                          semanticLabel:
-                                              FriendDisplayPreferences
-                                                      .showReadReceipts
-                                                  ? null
-                                                  : StrRes.sentSuccessfully,
-                                          isRead: FriendDisplayPreferences
-                                                  .showReadReceipts &&
-                                              info.latestMsg?.isRead == true,
-                                          color: FriendDisplayPreferences
-                                                      .showReadReceipts &&
-                                                  info.latestMsg?.isRead == true
-                                              ? Styles.c_0089FF
-                                              : Styles.c_8E9AB0,
-                                        ),
-                                        SizedBox(width: 4.w),
-                                      ],
-                                      Text(
-                                        logic.getTime(info),
-                                        style: TextStyle(
-                                            fontSize: 12.sp,
-                                            color: Styles.c_8E9AB0),
-                                      ),
-                                    ],
-                                  ),
-                                  if (info.isPinned == true) ...[
-                                    SizedBox(height: 4.w),
-                                    Transform.rotate(
-                                      angle: 0.785398,
-                                      child: Icon(Icons.push_pin,
-                                          size: 16.w, color: Styles.c_8E9AB0),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 82.w,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    height: 0.5,
-                    color: const Color(0xFFE5E6E9),
-                  ),
-                ),
-              ],
-            ),
+            onLongPress: _editor.editing ? null : () => _showPeek(info),
           ),
         ),
       );

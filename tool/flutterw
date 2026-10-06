@@ -2,14 +2,16 @@
 set -euo pipefail
 
 # Use the project's supported SDK without changing the global Flutter installation.
-project_flutter_sdk="${OPENIM_FLUTTER_SDK:-$HOME/development/sdk/flutter-3.32.8}"
+project_root="$(cd "$(dirname "$0")/.." && pwd)"
+project_flutter_version="$(tr -d '\r\n' < "$project_root/.flutter-version")"
+project_flutter_sdk="${OPENIM_FLUTTER_SDK:-$HOME/development/sdk/flutter-$project_flutter_version}"
 if [[ ! -x "$project_flutter_sdk/bin/flutter" ]]; then
-  echo "Flutter 3.32.8 not found at $project_flutter_sdk. Set OPENIM_FLUTTER_SDK to its SDK directory." >&2
+  echo "Flutter $project_flutter_version not found at $project_flutter_sdk. Set OPENIM_FLUTTER_SDK to its SDK directory." >&2
   exit 1
 fi
 sdk_version="$("$project_flutter_sdk/bin/flutter" --version --machine)"
-if [[ "$sdk_version" != *'"frameworkVersion": "3.32.8"'* ]]; then
-  echo "This project requires Flutter 3.32.8. Check OPENIM_FLUTTER_SDK." >&2
+if [[ "$sdk_version" != *"\"frameworkVersion\": \"$project_flutter_version\""* ]]; then
+  echo "This project requires Flutter $project_flutter_version. Check OPENIM_FLUTTER_SDK." >&2
   exit 1
 fi
 export PATH="$project_flutter_sdk/bin:$PATH"

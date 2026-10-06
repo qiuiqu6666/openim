@@ -127,7 +127,13 @@ class SignalingCertificate {
   SignalingCertificate.fromJson(Map<String, dynamic> json) {
     token = json['token'];
     roomID = json['roomID'];
-    liveURL = json['liveURL'];
+    final String? legacyLiveURL = json['liveURL'];
+    // The current Chat RTC endpoint returns serverUrl; keep legacy liveURL
+    // as the canonical field used by callers and serialized certificates.
+    liveURL = legacyLiveURL?.trim();
+    if (liveURL?.isNotEmpty != true) {
+      liveURL = (json['serverUrl'] as String?)?.trim();
+    }
     busyLineUserIDList = json['busyLineUserIDList']?.cast<String>();
   }
 

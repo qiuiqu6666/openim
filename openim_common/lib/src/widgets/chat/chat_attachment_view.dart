@@ -12,9 +12,33 @@ import 'package:just_waveform/just_waveform.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:openim_common/openim_common.dart';
 
+typedef ChatFileMessageBuilder = Widget Function(
+  BuildContext context, {
+  required bool downloaded,
+  required bool busy,
+  required bool failed,
+  required double? progress,
+  required VoidCallback onOpen,
+});
+
+typedef ChatFileOpener = Future<OpenResult> Function(String path,
+    {String? type});
+
 class ChatFileMessageView extends StatefulWidget {
-  const ChatFileMessageView({super.key, required this.message});
+  const ChatFileMessageView({
+    super.key,
+    required this.message,
+    this.builder,
+    this.cacheManager,
+    this.openFile,
+  });
   final Message message;
+  final ChatFileMessageBuilder? builder;
+
+  /// Optional I/O dependencies allow callers/tests to reuse this flow without
+  /// replacing its cache, retry, extension or session-safety behavior.
+  final BaseCacheManager? cacheManager;
+  final ChatFileOpener? openFile;
   @override
   State<ChatFileMessageView> createState() => _ChatFileMessageViewState();
 }
@@ -25,27 +49,87 @@ class _ChatFileMessageViewState extends State<ChatFileMessageView> {
   bool _downloaded = false;
   double? _progress;
   File? _cachedFile;
+  int _generation = 0;
+  late (String?, String?, String?, String?) _identity;
+  late final String? _ownerID;
+  late final String? _ownerToken;
+
+  (String?, String?, String?, String?) _messageIdentity(Message message) => (
+        message.clientMsgID,
+        message.fileElem?.filePath,
+        message.fileElem?.sourceUrl,
+        message.fileElem?.fileName,
+      );
+
+  String? _sessionUserID() {
+    try {
+      return OpenIM.iMManager.userID;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isCurrent(int generation) =>
+      mounted &&
+      generation == _generation &&
+      _identity == _messageIdentity(widget.message) &&
+      _ownerID?.isNotEmpty == true &&
+      _sessionUserID() == _ownerID &&
+      OpenIM.iMManager.token == _ownerToken &&
+      !widget.message.hasExpired;
 
   @override
   void initState() {
     super.initState();
-    _checkLocalFile();
+    _identity = _messageIdentity(widget.message);
+    _ownerID = _sessionUserID();
+    _ownerToken = OpenIM.iMManager.token;
+    unawaited(_checkLocalFile());
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatFileMessageView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final identity = _messageIdentity(widget.message);
+    if (_identity != identity) {
+      ++_generation;
+      _identity = identity;
+      _cachedFile = null;
+      _downloaded = false;
+      _busy = false;
+      _failed = false;
+      _progress = null;
+      unawaited(_checkLocalFile());
+    }
+  }
+
+  @override
+  void dispose() {
+    ++_generation;
+    super.dispose();
   }
 
   Future<void> _checkLocalFile() async {
+    final generation = _generation;
+    if (!_isCurrent(generation)) return;
     final path = widget.message.fileElem?.filePath;
     if (path == null || path.isEmpty) return;
-    final file = File(path);
-    if (await file.exists() && mounted) {
-      setState(() {
-        _cachedFile = file;
-        _downloaded = true;
-      });
+    try {
+      final file = File(path);
+      if (await file.exists() && _isCurrent(generation)) {
+        setState(() {
+          _cachedFile = file;
+          _downloaded = true;
+        });
+      }
+    } catch (_) {
+      // An inaccessible local attachment can still use its download URL.
     }
   }
 
   Future<void> _open() async {
-    if (_busy) return;
+    final generation = _generation;
+    if (_busy || !_isCurrent(generation)) return;
     setState(() {
       _busy = true;
       _failed = false;
@@ -56,22 +140,25 @@ class _ChatFileMessageViewState extends State<ChatFileMessageView> {
       File? file;
       bool fromCache = false;
       final path = _cachedFile?.path ?? element.filePath;
-      if (path != null && path.isNotEmpty && await File(path).exists()) {
+      final localExists =
+          path != null && path.isNotEmpty && await File(path).exists();
+      if (!_isCurrent(generation)) return;
+      if (localExists) {
         file = File(path);
       } else {
         fromCache = true;
         final url = element.sourceUrl;
         if (url == null || url.isEmpty) throw StateError('Missing file URL');
-        await for (final event
-            in DefaultCacheManager().getFileStream(url, withProgress: true)) {
-          if (!mounted) return;
+        await for (final event in (widget.cacheManager ?? DefaultCacheManager())
+            .getFileStream(url, withProgress: true)) {
+          if (!_isCurrent(generation)) return;
           if (event is DownloadProgress) {
             setState(() => _progress = event.progress);
           }
           if (event is FileInfo) file = event.file;
         }
       }
-      if (!mounted) return;
+      if (!_isCurrent(generation)) return;
       if (file == null) throw StateError('Missing downloaded file');
       final name = element.fileName ?? '';
       // Cache URLs may have no extension; retain the platform file association.
@@ -80,23 +167,33 @@ class _ChatFileMessageViewState extends State<ChatFileMessageView> {
       if (fromCache && extension != null && !file.path.endsWith(extension)) {
         file = await file.copy('${file.path}$extension');
       }
-      if (!mounted) return;
+      if (!_isCurrent(generation)) return;
       setState(() {
         _cachedFile = file;
         _downloaded = true;
       });
-      final result = await OpenFilex.open(file.path,
+      final result = await (widget.openFile ?? OpenFilex.open)(file.path,
           type: extension == null ? null : IMUtils.getMediaType(name));
+      if (!_isCurrent(generation)) return;
       if (result.type != ResultType.done) throw StateError(result.message);
     } catch (_) {
-      if (mounted) setState(() => _failed = true);
+      if (_isCurrent(generation)) setState(() => _failed = true);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (_isCurrent(generation)) setState(() => _busy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final builder = widget.builder;
+    if (builder != null) {
+      return builder(context,
+          downloaded: _downloaded,
+          busy: _busy,
+          failed: _failed,
+          progress: _progress,
+          onOpen: _open);
+    }
     final file = widget.message.fileElem!;
     final bytes = file.fileSize ?? 0;
     final size = bytes < 1024
@@ -120,13 +217,15 @@ class _ChatFileMessageViewState extends State<ChatFileMessageView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                   Text(file.fileName ?? 'attachmentFile'.tr,
-                      maxLines: 2,
+                      maxLines: 1,
+                      softWrap: false,
                       overflow: TextOverflow.ellipsis,
                       style: Styles.ts_0C1C33_17sp.copyWith(
                           fontSize: 14.sp, fontWeight: FontWeight.w500)),
                   3.verticalSpace,
                   Wrap(spacing: 8.w, runSpacing: 2.h, children: [
-                    Text(size, style: Styles.ts_8E9AB0_12sp.copyWith(fontSize: 11.sp)),
+                    Text(size,
+                        style: Styles.ts_8E9AB0_12sp.copyWith(fontSize: 11.sp)),
                     Text(
                         _busy
                             ? (_progress == null
@@ -153,10 +252,14 @@ class ChatVoiceMessageView extends StatefulWidget {
       {super.key,
       required this.message,
       required this.isOutgoing,
+      this.readOnly = false,
       this.onPlayed,
       this.playback});
   final Message message;
   final bool isOutgoing;
+
+  /// Avoid audio downloads/waveform extraction on passive message previews.
+  final bool readOnly;
   final Future<void> Function()? onPlayed;
   final VoicePlaybackController? playback;
   @override
@@ -257,7 +360,7 @@ class _ChatVoiceMessageViewState extends State<ChatVoiceMessageView> {
     try {
       _heard = jsonDecode(widget.message.localEx ?? '{}')['voiceHeard'] == true;
     } catch (_) {}
-    unawaited(_prepareWaveform());
+    if (!widget.readOnly) unawaited(_prepareWaveform());
   }
 
   @override
@@ -274,9 +377,9 @@ class _ChatVoiceMessageViewState extends State<ChatVoiceMessageView> {
     final bubbleContentWidth = 128.w;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _playback.toggle(widget.message),
+      onTap: widget.readOnly ? null : () => _playback.toggle(widget.message),
       child: Semantics(
-        button: true,
+        button: !widget.readOnly,
         label: _playing ? 'attachmentPause'.tr : 'attachmentPlay'.tr,
         child: SizedBox(
             width: bubbleContentWidth,
@@ -322,7 +425,8 @@ class _ChatVoiceMessageViewState extends State<ChatVoiceMessageView> {
               )),
               6.horizontalSpace,
               Text('$duration″',
-                  style: Styles.ts_0C1C33_17sp.copyWith(fontSize: 12.sp, fontWeight: FontWeight.w500)),
+                  style: Styles.ts_0C1C33_17sp
+                      .copyWith(fontSize: 12.sp, fontWeight: FontWeight.w500)),
               if (!widget.isOutgoing && !_heard) ...[
                 const SizedBox(width: 6),
                 Icon(Icons.circle, size: 6, color: Styles.c_0089FF),

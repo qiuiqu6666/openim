@@ -23,67 +23,71 @@ class MapView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: TitleBar.back(title: StrRes.location),
-      body: Column(
-        children: [
-          Expanded(
-            child: FlutterMap(
-              options: MapOptions(
-                initialCenter: LatLng(latitude, longitude),
-                initialZoom: 15.0,
-                maxZoom: 18.0,
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-                  userAgentPackageName: '',
+      body: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Expanded(
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: LatLng(latitude, longitude),
+                    initialZoom: 15.0,
+                    maxZoom: 18.0,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+                      userAgentPackageName: '',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(latitude, longitude),
+                          child: Icon(
+                            Icons.location_on_sharp,
+                            color: Styles.c_FF381F,
+                            size: 30,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: LatLng(latitude, longitude),
-                      child: Icon(
-                        Icons.location_on_sharp,
-                        color: Styles.c_FF381F,
-                        size: 30,
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 22.w, vertical: 10.h),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          address1.toText
+                            ..style = Styles.ts_0C1C33_17sp_semibold,
+                          8.verticalSpace,
+                          address2.toText..style = Styles.ts_8E9AB0_14sp,
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: _openMapSheet,
+                      child: Container(
+                        width: 35.w,
+                        height: 35.w,
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.map, color: Colors.white),
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 22.w, vertical: 10.h),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      address1.toText..style = Styles.ts_0C1C33_17sp_semibold,
-                      8.verticalSpace,
-                      address2.toText..style = Styles.ts_8E9AB0_14sp,
-                    ],
-                  ),
-                ),
-                GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: _openMapSheet,
-                  child: Container(
-                    width: 35.w,
-                    height: 35.w,
-                    decoration: const BoxDecoration(
-                      color: Colors.green,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.map, color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-          )
-        ],
-      ),
+              )
+            ],
+          )),
     );
   }
 

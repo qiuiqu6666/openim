@@ -1,0 +1,2 @@
+# Patches target Linux Go source. Preserve their LF context across Windows checkout.
+*.patch text eol=lf

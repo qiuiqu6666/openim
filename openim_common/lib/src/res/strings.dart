@@ -17,6 +17,21 @@ class TranslationService extends Translations {
 }
 
 class StrRes {
+  static String get diceLabel => 'diceLabel'.tr;
+  static String dicePoint(int value) =>
+      'dicePoint'.trParams({'value': '$value'});
+  static String get fundPacket => 'fundPacket'.tr;
+  static String get fundExclusivePacket => 'fundExclusivePacket'.tr;
+  static String get fundLuckyPacket => 'fundLuckyPacket'.tr;
+  static String get fundTransfer => 'fundTransfer'.tr;
+  static String get fundGroupTransfer => 'fundGroupTransfer'.tr;
+  static String get fundClaimable => 'fundClaimable'.tr;
+  static String get fundClaimed => 'fundClaimed'.tr;
+  static String get fundCredited => 'fundCredited'.tr;
+  static String get fundFullyClaimed => 'fundFullyClaimed'.tr;
+  static String get fundRefunded => 'fundRefunded'.tr;
+  static String get fundOpenDetails => 'fundOpenDetails'.tr;
+  static String get fundGoodLuck => 'fundGoodLuck'.tr;
   static String get voiceCapture => 'voiceCapture'.tr;
   static String get voiceStart => 'voiceStart'.tr;
   static String get voiceStop => 'voiceStop'.tr;
@@ -124,6 +139,8 @@ class StrRes {
   static String get you => 'you'.tr;
 
   static String get someoneMentionYou => 'someoneMentionYou'.tr;
+
+  static String get someoneMentionMe => 'someoneMentionMe'.tr;
 
   static String get groupAc => 'groupAc'.tr;
 
@@ -340,6 +357,8 @@ class StrRes {
 
   static String get nMessage => 'nMessage'.tr;
 
+  static String get backToBottom => 'backToBottom'.tr;
+
   static String get plsSelectLocation => 'plsSelectLocation'.tr;
 
   static String get groupAudioCallHint => 'groupAudioCallHint'.tr;
@@ -385,6 +404,8 @@ class StrRes {
   static String get qrcodeHint => 'qrcodeHint'.tr;
 
   static String get favoriteFace => 'favoriteFace'.tr;
+  static String get favoriteCollection => 'favoriteCollection'.tr;
+  static String get addToStickers => 'addToStickers'.tr;
 
   static String get favoriteManage => 'favoriteManage'.tr;
 
@@ -753,6 +774,8 @@ class StrRes {
 
   static String get applyReason => 'applyReason'.tr;
 
+  static String get groupRequestHandledBy => 'groupRequestHandledBy'.tr;
+
   static String get invite => 'invite'.tr;
 
   static String get sourceFrom => 'sourceFrom'.tr;
@@ -1081,6 +1104,8 @@ class StrRes {
   static String get receiveMember => 'receiveMember'.tr;
 
   static String get emptyNotification => 'emptyNotification'.tr;
+
+  static String get emptyGroupNotification => 'emptyGroupNotification'.tr;
 
   static String get notificationReceiver => 'notificationReceiver'.tr;
 

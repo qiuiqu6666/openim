@@ -6,6 +6,8 @@ import 'package:openim/routes/app_navigator.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 import 'package:sprintf/sprintf.dart';
+import '../../../core/session/session_request_errors.dart';
+import '../search/contact_search_source.dart';
 
 enum SearchType {
   user,
@@ -13,6 +15,9 @@ enum SearchType {
 }
 
 class AddContactsBySearchLogic extends GetxController {
+  AddContactsBySearchLogic({ContactSearchSource? source})
+      : source = source ?? ContactSearchSource();
+  final ContactSearchSource source;
   final refreshCtrl = RefreshController();
   final searchCtrl = TextEditingController();
   final focusNode = FocusNode();
@@ -22,9 +27,16 @@ class AddContactsBySearchLogic extends GetxController {
   int pageNo = 0;
   final _entryFields = <String, Map<String, String>>{};
   final _addSources = <String, FriendAddSource>{};
+  int _generation = 0;
+  bool _closed = false;
+  bool _loadingMore = false;
 
   @override
   void onClose() {
+    _closed = true;
+    ++_generation;
+    searchCtrl.removeListener(_queryChanged);
+    refreshCtrl.dispose();
     searchCtrl.dispose();
     focusNode.dispose();
     super.onClose();
@@ -33,15 +45,31 @@ class AddContactsBySearchLogic extends GetxController {
   @override
   void onInit() {
     searchType = Get.arguments['searchType'] ?? SearchType.user;
-    searchCtrl.addListener(() {
-      if (searchKey.isEmpty) {
-        focusNode.requestFocus();
-        userInfoList.clear();
-        groupInfoList.clear();
-      }
-    });
+    searchCtrl.addListener(_queryChanged);
     super.onInit();
   }
+
+  String _inputKey = '';
+  void _queryChanged() {
+    final key = searchKey;
+    if (key == _inputKey) return;
+    _inputKey = key;
+    ++_generation;
+    pageNo = 0;
+    _loadingMore = false;
+    userInfoList.clear();
+    groupInfoList.clear();
+    _entryFields.clear();
+    _addSources.clear();
+    if (key.isEmpty) focusNode.requestFocus();
+  }
+
+  bool _active(int generation, String keyword, String account, String? token) =>
+      !_closed &&
+      generation == _generation &&
+      keyword == searchKey &&
+      account == OpenIM.iMManager.userID &&
+      token == DataSp.chatToken;
 
   bool get isSearchUser => searchType == SearchType.user;
 
@@ -52,7 +80,7 @@ class AddContactsBySearchLogic extends GetxController {
   bool get isNotFoundGroup => groupInfoList.isEmpty && searchKey.isNotEmpty;
 
   void search() {
-    if (searchKey.isEmpty) return;
+    if (_closed || searchKey.isEmpty) return;
     final invite = parseFriendInvite(searchKey);
     if (isSearchUser && invite != null) {
       AppNavigator.startUserProfilePane(
@@ -70,22 +98,64 @@ class AddContactsBySearchLogic extends GetxController {
     }
   }
 
-  void searchUser() async {
+  Future<void> searchUser() => _queryUsers(false);
+  Future<void> loadMoreUser() => _queryUsers(true);
+
+  Future<void> _queryUsers(bool append) async {
+    if (_closed ||
+        searchKey.isEmpty ||
+        append && (_loadingMore || pageNo == 0)) {
+      return;
+    }
     final keyword = searchKey;
-    var list = await LoadingView.singleton.wrap(
-      asyncFunction: () => Apis.searchUserFullInfo(
-        content: keyword,
-        way: keyword.contains('@') && !keyword.startsWith('@')
-            ? 3
-            : RegExp(r'^\+?\d+$').hasMatch(keyword)
-                ? 2
-                : null,
-        pageNumber: pageNo = 1,
-        showNumber: 20,
-      ),
-    );
-    _addSources.clear();
-    for (final user in list ?? <UserFullInfo>[]) {
+    final generation = append ? _generation : ++_generation;
+    final account = OpenIM.iMManager.userID;
+    final token = DataSp.chatToken;
+    final page = append ? pageNo + 1 : 1;
+    if (append) {
+      _loadingMore = true;
+    } else {
+      pageNo = 0;
+    }
+    try {
+      final list = await LoadingView.singleton.wrap(
+          asyncFunction: () => _active(generation, keyword, account, token)
+              ? source.users(keyword, page)
+              : Future.value(<UserFullInfo>[]));
+      if (!_active(generation, keyword, account, token)) return;
+      if (!append) {
+        _entryFields.clear();
+        _addSources.clear();
+      }
+      _rememberSources(keyword, list ?? []);
+      if (append) {
+        final known = userInfoList.map((user) => user.userID).toSet();
+        userInfoList
+            .addAll((list ?? []).where((user) => known.add(user.userID)));
+      } else {
+        userInfoList.value = list ?? [];
+      }
+      pageNo = page;
+      refreshCtrl.refreshCompleted();
+      if (list == null || list.length < 20) {
+        refreshCtrl.loadNoData();
+      } else {
+        refreshCtrl.loadComplete();
+      }
+    } catch (error) {
+      if (_active(generation, keyword, account, token)) {
+        refreshCtrl.loadFailed();
+        if (!handleSessionAuthFailure(error, account: account, token: token)) {
+          IMViews.showToast(error.toString());
+        }
+      }
+    } finally {
+      if (generation == _generation) _loadingMore = false;
+    }
+  }
+
+  void _rememberSources(String keyword, List<UserFullInfo> list) {
+    for (final user in list) {
       if (user.userID != null) {
         final source = friendSearchSource(keyword, user);
         _addSources[user.userID!] = source;
@@ -99,57 +169,23 @@ class AddContactsBySearchLogic extends GetxController {
         };
       }
     }
-    userInfoList.assignAll(list ?? []);
-    refreshCtrl.refreshCompleted();
-    if (null == list || list.isEmpty || list.length < 20) {
-      refreshCtrl.loadNoData();
-    } else {
-      refreshCtrl.loadComplete();
-    }
   }
 
-  void loadMoreUser() async {
+  Future<void> searchGroup() async {
+    if (_closed || searchKey.isEmpty) return;
     final keyword = searchKey;
-    var list = await LoadingView.singleton.wrap(
-      asyncFunction: () => Apis.searchUserFullInfo(
-        content: keyword,
-        way: keyword.contains('@') && !keyword.startsWith('@')
-            ? 3
-            : RegExp(r'^\+?\d+$').hasMatch(keyword)
-                ? 2
-                : null,
-        pageNumber: ++pageNo,
-        showNumber: 20,
-      ),
-    );
-    for (final user in list ?? <UserFullInfo>[]) {
-      if (user.userID != null) {
-        final source = friendSearchSource(keyword, user);
-        _addSources[user.userID!] = source;
-        _entryFields[user.userID!] = {
-          if (source == FriendAddSource.account) 'account': user.account ?? '',
-          if (source == FriendAddSource.phone) ...{
-            'phoneNumber': user.phoneNumber ?? keyword,
-            'areaCode': user.areaCode ?? '',
-          },
-          if (source == FriendAddSource.email) 'email': user.email ?? keyword,
-        };
+    final generation = ++_generation;
+    final account = OpenIM.iMManager.userID;
+    final token = DataSp.chatToken;
+    try {
+      final list = await source.groups(keyword);
+      if (_active(generation, keyword, account, token))
+        groupInfoList.value = list;
+    } catch (error) {
+      if (_active(generation, keyword, account, token)) {
+        IMViews.showToast(error.toString());
       }
     }
-    userInfoList.addAll(list ?? []);
-    refreshCtrl.refreshCompleted();
-    if (null == list || list.isEmpty || list.length < 20) {
-      refreshCtrl.loadNoData();
-    } else {
-      refreshCtrl.loadComplete();
-    }
-  }
-
-  void searchGroup() async {
-    var list = await OpenIM.iMManager.groupManager.getGroupsInfo(
-      groupIDList: [searchKey],
-    );
-    groupInfoList.assignAll(list);
   }
 
   String getMatchContent(UserFullInfo userInfo) {

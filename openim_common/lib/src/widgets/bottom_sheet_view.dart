@@ -12,6 +12,9 @@ class BottomSheetView extends StatelessWidget {
     this.mainAxisAlignment,
     this.isOverlaySheet = false,
     this.onCancel,
+    this.header,
+    this.cancelLabel,
+    this.useThemeColors = false,
   }) : super(key: key);
   final List<SheetItem> items;
   final double? itemHeight;
@@ -19,6 +22,9 @@ class BottomSheetView extends StatelessWidget {
   final MainAxisAlignment? mainAxisAlignment;
   final bool isOverlaySheet;
   final Function()? onCancel;
+  final Widget? header;
+  final String? cancelLabel;
+  final bool useThemeColors;
 
   @override
   Widget build(BuildContext context) {
@@ -35,12 +41,16 @@ class BottomSheetView extends StatelessWidget {
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: items.map(_parseItem).toList(),
+                children: [
+                  if (header != null) header!,
+                  ...items.map((item) => _parseItem(context, item)),
+                ],
               ),
             ),
             10.verticalSpace,
             _itemBgView(
-              label: StrRes.cancel,
+              context: context,
+              label: cancelLabel ?? StrRes.cancel,
               onTap: isOverlaySheet ? onCancel : () => Get.back(),
               borderRadius: BorderRadius.circular(6.r),
               alignment: MainAxisAlignment.center,
@@ -52,11 +62,11 @@ class BottomSheetView extends StatelessWidget {
     );
   }
 
-  Widget _parseItem(SheetItem item) {
+  Widget _parseItem(BuildContext context, SheetItem item) {
     BorderRadius? borderRadius;
     int length = items.length;
     bool isLast = items.indexOf(item) == items.length - 1;
-    bool isFirst = items.indexOf(item) == 0;
+    bool isFirst = items.indexOf(item) == 0 && header == null;
     if (length == 1) {
       borderRadius = item.borderRadius ?? BorderRadius.circular(6.r);
     } else {
@@ -69,6 +79,7 @@ class BottomSheetView extends StatelessWidget {
           );
     }
     return _itemBgView(
+        context: context,
         label: item.label,
         textStyle: item.textStyle,
         icon: item.icon,
@@ -82,6 +93,7 @@ class BottomSheetView extends StatelessWidget {
   }
 
   Widget _itemBgView({
+    required BuildContext context,
     required String label,
     String? icon,
     Function()? onTap,
@@ -92,16 +104,23 @@ class BottomSheetView extends StatelessWidget {
   }) =>
       Ink(
         decoration: BoxDecoration(
-          color: Styles.c_FFFFFF,
+          color: useThemeColors
+              ? Theme.of(context).colorScheme.surface
+              : Styles.c_FFFFFF,
           borderRadius: borderRadius,
         ),
         child: InkWell(
           onTap: onTap,
+          borderRadius: borderRadius,
           child: Container(
             decoration: line
                 ? BoxDecoration(
                     border: BorderDirectional(
-                      bottom: BorderSide(color: Styles.c_E8EAEF, width: 0.5),
+                      bottom: BorderSide(
+                          color: useThemeColors
+                              ? Theme.of(context).colorScheme.outlineVariant
+                              : Styles.c_E8EAEF,
+                          width: 0.5),
                     ),
                   )
                 : null,
@@ -113,15 +132,20 @@ class BottomSheetView extends StatelessWidget {
                 if (null != icon) 10.horizontalSpace,
                 if (null != icon) _image(icon),
                 if (null != icon) 5.horizontalSpace,
-                _text(label, textStyle),
+                _text(context, label, textStyle),
               ],
             ),
           ),
         ),
       );
 
-  _text(String label, TextStyle? style) =>
-      label.toText..style = (style ?? textStyle ?? Styles.ts_0C1C33_17sp);
+  _text(BuildContext context, String label, TextStyle? style) => label.toText
+    ..style = (style ??
+        textStyle ??
+        (useThemeColors
+            ? Theme.of(context).textTheme.bodyLarge
+                ?.copyWith(color: Theme.of(context).colorScheme.onSurface)
+            : Styles.ts_0C1C33_17sp));
 
   _image(String icon) => icon.toImage
     ..width = 24.w

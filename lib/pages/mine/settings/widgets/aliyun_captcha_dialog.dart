@@ -9,17 +9,24 @@ import 'aliyun_captcha_html.dart';
 import 'settings_widgets.dart';
 
 Future<VerificationCodeResult?> showAliyunCaptcha(BuildContext context,
-    Future<VerificationCodeResult> Function(String) request) {
-  return showDialog<VerificationCodeResult>(
+    Future<VerificationCodeResult> Function(String) request,
+    {bool finishOnSendFailure = false,
+    ValueChanged<Route<VerificationCodeResult>>? onRouteCreated}) {
+  final route = DialogRoute<VerificationCodeResult>(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.transparent,
-      builder: (_) => _CaptchaDialog(request: request));
+      builder: (_) => _CaptchaDialog(
+          request: request, finishOnSendFailure: finishOnSendFailure));
+  onRouteCreated?.call(route);
+  return Navigator.of(context, rootNavigator: true).push(route);
 }
 
 class _CaptchaDialog extends StatefulWidget {
-  const _CaptchaDialog({required this.request});
+  const _CaptchaDialog(
+      {required this.request, this.finishOnSendFailure = false});
   final Future<VerificationCodeResult> Function(String) request;
+  final bool finishOnSendFailure;
   @override
   State<_CaptchaDialog> createState() => _CaptchaDialogState();
 }
@@ -132,6 +139,7 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
         }
         return;
       case 'verify':
+        if (ModalRoute.of(context)?.isCurrent != true) return;
         final id = message['id'], param = message['captchaVerifyParam'];
         if (!_ready ||
             _checking ||
@@ -155,11 +163,16 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
         try {
           final result = await widget.request(param);
           if (!mounted || generation != _generation) return;
+          _result = result;
+          if (ModalRoute.of(context)?.isCurrent != true) {
+            _checking = false;
+            _finish();
+            return;
+          }
           if (kDebugMode) {
             debugPrint(
                 '[Captcha] backend captchaVerified=${result.captchaVerified}, sent=${result.sent}, retryAfter=${result.retryAfter}');
           }
-          _result = result;
           sdkResult = result.sdkResult;
           reload = result.captchaVerified && !result.sent;
           if (!result.sent) {
@@ -168,7 +181,9 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
                     'SMS could not be sent. Verify again to retry.')
                 : text('验证未通过或服务超时，请重新验证',
                     'Verification failed or timed out. Please retry.');
-            if (result.captchaVerified) showSettingsMessage(context, error);
+            if (result.captchaVerified && !widget.finishOnSendFailure) {
+              showSettingsMessage(context, error);
+            }
           }
         } catch (error) {
           if (kDebugMode) {
@@ -178,7 +193,13 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
           }
           reload = true;
           if (!mounted || generation != _generation) return;
-          final errorText = settingsErrorMessage(context, error,
+          if (ModalRoute.of(context)?.isCurrent != true) {
+            _checking = false;
+            _finish();
+            return;
+          }
+          final errorText = HttpUtil.errorMessage(error,
+              path: Urls.getVerificationCode,
               fallback: text('发送失败，请重新验证后重试',
                   'Could not send the code. Verify again to retry.'));
           showSettingsMessage(context, errorText);
@@ -200,7 +221,10 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
         if (mounted) {
           setState(() {
             _checking = false;
-            if (reload && !_cancelRequested) {
+            if (reload &&
+                !_cancelRequested &&
+                !(widget.finishOnSendFailure &&
+                    _result?.captchaVerified == true)) {
               final error = _error;
               _load();
               _error = error;
@@ -208,7 +232,11 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
           });
         }
         // A sent code must not become resendable if the SDK completion callback is lost.
-        if (mounted && (_result?.sent == true || _cancelRequested)) {
+        if (mounted &&
+            (_result?.sent == true ||
+                _cancelRequested ||
+                (widget.finishOnSendFailure &&
+                    _result?.captchaVerified == true))) {
           _finish();
         }
     }
@@ -216,8 +244,15 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
 
   void _finish() {
     if (!mounted || _closing) return;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isActive) return;
     _closing = true;
-    Navigator.of(context).pop(_result);
+    final navigator = Navigator.of(context);
+    if (route.isCurrent) {
+      navigator.pop(_result);
+    } else {
+      navigator.removeRoute(route, _result);
+    }
   }
 
   @override

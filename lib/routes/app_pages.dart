@@ -1,6 +1,8 @@
 import 'package:get/get.dart';
 
 import '../widgets/theme_aware_page.dart';
+import '../pages/ai_assistant/ai_assistant_chat_page.dart';
+import '../pages/official_account/official_account_page.dart';
 import '../pages/mine/edit_my_info/edit_my_info_binding.dart';
 import '../pages/mine/edit_my_info/edit_my_info_view.dart';
 
@@ -55,7 +57,7 @@ import '../pages/contacts/user_profile_panel/personal_info/personal_info_view.da
 import '../pages/contacts/user_profile_panel/set_remark/set_remark_binding.dart';
 import '../pages/contacts/user_profile_panel/set_remark/set_remark_view.dart';
 import '../pages/contacts/user_profile_panel/user_profile _panel_binding.dart';
-import '../pages/contacts/user_profile_panel/user_profile _panel_view.dart';
+import '../pages/contacts/user_profile_panel/user_profile_panel_view.dart';
 import '../pages/forget_password/forget_password_binding.dart';
 import '../pages/forget_password/forget_password_view.dart';
 import '../pages/forget_password/reset_password/reset_password_binding.dart';
@@ -125,6 +127,18 @@ class AppPages {
     _pageBuilder(
       name: AppRoutes.chat,
       page: () => ChatPage(),
+      binding: ChatBinding(),
+      preventDuplicates: false,
+    ),
+    _pageBuilder(
+      name: AppRoutes.aiAssistantChat,
+      page: () => const AiAssistantChatPage(),
+      binding: ChatBinding(),
+      preventDuplicates: false,
+    ),
+    _pageBuilder(
+      name: AppRoutes.officialAccountChat,
+      page: () => const OfficialAccountPage(),
       binding: ChatBinding(),
       preventDuplicates: false,
     ),
