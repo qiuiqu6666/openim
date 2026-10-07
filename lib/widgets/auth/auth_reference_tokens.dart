@@ -28,6 +28,11 @@ abstract final class AuthReferenceTokens {
   static const feedbackFieldGap = 4.0;
   static const buttonGap = 24.0;
   static const fieldHeight = 52.0;
+  static const fieldBorderWidth = 1.5;
+  static const focusedFieldBorderWidth = 2.0;
+  static const fieldContentPadding =
+      EdgeInsets.symmetric(horizontal: 18, vertical: 14);
+  static const compoundFieldContentPadding = EdgeInsets.fromLTRB(12, 14, 8, 14);
   static const inputFontSize = 16.0;
   static const labelGap = 8.0;
   static const messageGap = 4.0;

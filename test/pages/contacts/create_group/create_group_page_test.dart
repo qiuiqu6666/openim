@@ -166,6 +166,48 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  _pageTest('empty group name hints the latest members without becoming text',
+      (tester) async {
+    final logic = CreateGroupTestLogic(members: createGroupTestMembers(2));
+    await _mount(tester, logic);
+    TextField input() => tester.widget<TextField>(find.byKey(_nameInput));
+    expect(input().controller!.text, isEmpty);
+    expect(input().decoration!.hintText, '成员01、成员02');
+    expect(find.text('0/30'), findsOneWidget);
+    logic.allList.addAll(createGroupTestMembers(4).skip(2));
+    await tester.pump();
+    expect(input().decoration!.hintText, '成员01、成员02等4人');
+    await tester.enterText(find.byKey(_nameInput), '原群名称');
+    logic.allList.removeLast();
+    await tester.pump();
+    expect(input().controller!.text, '原群名称');
+    await tester.enterText(find.byKey(_nameInput), '');
+    await tester.pump();
+    expect(input().decoration!.hintText, '成员01、成员02等3人');
+  });
+
+  _pageTest('existing group draft supports appending and editing in the middle',
+      (tester) async {
+    final logic =
+        CreateGroupTestLogic(members: createGroupTestMembers(2), name: '原群名称');
+    await _mount(tester, logic);
+    expect(logic.nameCtrl.text, '原群名称');
+    await tester.tap(find.byKey(_nameInput));
+    await tester.pump();
+    logic.nameCtrl.selection = const TextSelection.collapsed(offset: 4);
+    tester.testTextInput.enterText('原群名称追加');
+    await tester.pump();
+    expect(logic.nameCtrl.text, '原群名称追加');
+    logic.nameCtrl.selection = const TextSelection.collapsed(offset: 2);
+    tester.testTextInput.updateEditingValue(const TextEditingValue(
+        text: '原群新名称追加', selection: TextSelection.collapsed(offset: 3)));
+    await tester.pump();
+    expect(logic.nameCtrl.text, '原群新名称追加');
+    await tester.tap(find.byKey(_create));
+    await tester.pumpAndSettle();
+    expect(logic.submittedNames, ['原群新名称追加']);
+  });
+
   _pageTest(
       'terms opens the existing legal document and preserves the group name',
       (tester) async {

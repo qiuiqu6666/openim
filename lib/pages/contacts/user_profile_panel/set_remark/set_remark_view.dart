@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'set_remark_logic.dart';
+import 'widgets/name_editor_input.dart';
 
 class SetFriendRemarkPage extends StatelessWidget {
   factory SetFriendRemarkPage({Key? key, SetFriendRemarkLogic? logic}) {
@@ -17,6 +18,8 @@ class SetFriendRemarkPage extends StatelessWidget {
       avatarName: editor.avatarName,
       maxLength: SetFriendRemarkLogic.maxRemarkLength,
       onSave: editor.save,
+      hintText: editor.avatarName,
+      showClearButton: true,
     );
   }
 
@@ -35,6 +38,8 @@ class SetFriendRemarkPage extends StatelessWidget {
     this.footer,
     this.saveEnabled = true,
     this.inputStatus,
+    this.hintText,
+    this.showClearButton = false,
   });
 
   final TextEditingController controller;
@@ -50,6 +55,8 @@ class SetFriendRemarkPage extends StatelessWidget {
   final Widget? footer;
   final bool saveEnabled;
   final Widget? inputStatus;
+  final String? hintText;
+  final bool showClearButton;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -122,57 +129,20 @@ class SetFriendRemarkPage extends StatelessWidget {
                       ),
               ),
               30.verticalSpace,
-              TextField(
+              NameEditorInput(
                 controller: controller,
-                enabled: !saving,
                 maxLength: maxLength,
                 keyboardType: keyboardType,
-                maxLines: 1,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) {
-                  if (!saving && saveEnabled) onSave();
-                },
-                style: TextStyle(color: Styles.c_0C1C33, fontSize: 16.sp),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Styles.c_FFFFFF,
-                  border: _border(),
-                  enabledBorder: _border(),
-                  focusedBorder: _border(),
-                  counterText: '',
-                  suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: controller,
-                    builder: (_, value, __) => Padding(
-                      padding: EdgeInsets.only(left: 8.w, right: 18.w),
-                      child: Center(
-                        widthFactor: 1,
-                        heightFactor: 1,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (inputStatus != null) ...[
-                              inputStatus!,
-                              const SizedBox(width: AppTokens.s3),
-                            ],
-                            Text('${value.text.characters.length}/$maxLength',
-                                style: Styles.ts_8E9AB0_13sp),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 18.w, vertical: 13.h),
-                ),
+                onSave: onSave,
+                hintText: hintText,
+                showClearButton: showClearButton,
+                saving: saving,
+                saveEnabled: saveEnabled,
+                inputStatus: inputStatus,
               ),
               if (footer != null) footer!,
             ]),
           ),
         ),
-      );
-
-  OutlineInputBorder _border() => OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10.r),
-        borderSide: BorderSide.none,
       );
 }

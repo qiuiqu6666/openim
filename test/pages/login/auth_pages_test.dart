@@ -685,6 +685,17 @@ void main() {
             await _export(
                 tester, key, '$name-scrolled-${dark ? 'app-dark' : 'light'}');
           }
+          if (name == 'login-password' ||
+              name == 'login-sms' ||
+              name == 'register' ||
+              name == 'recovery') {
+            final field = find.byType(EditableText).first;
+            await tester.ensureVisible(field);
+            tester.widget<EditableText>(field).focusNode.requestFocus();
+            await tester.pumpAndSettle();
+            await _export(
+                tester, key, '$name-focused-${dark ? 'app-dark' : 'light'}');
+          }
           expect(tester.takeException(), isNull);
         }
       }

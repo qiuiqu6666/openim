@@ -206,35 +206,57 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
                     BorderRadius.circular(CreateGroupTokens.insetRadius)),
             child: Row(children: [
               Expanded(
-                child: TextField(
-                  key: const ValueKey('create-group-name-input'),
-                  controller: logic.nameCtrl,
-                  enabled: !_saving,
-                  maxLength: CreateGroupTokens.maxNameLength,
-                  textInputAction: TextInputAction.done,
-                  style: TextStyle(
-                      color: tokens.title,
-                      fontSize: CreateGroupTokens.nameInputSize),
-                  decoration: InputDecoration(
-                    hintText: strings.nameHint,
-                    hintStyle: TextStyle(color: tokens.secondary),
-                    counterText: '',
-                    filled: false,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                  ),
-                ),
+                child: Obx(() => TextField(
+                      key: const ValueKey('create-group-name-input'),
+                      controller: logic.nameCtrl,
+                      enabled: !_saving,
+                      maxLength: CreateGroupTokens.maxNameLength,
+                      textInputAction: TextInputAction.done,
+                      style: TextStyle(
+                          color: tokens.title,
+                          fontSize: CreateGroupTokens.nameInputSize),
+                      decoration: InputDecoration(
+                        hintText: logic.defaultGroupName.isEmpty
+                            ? strings.nameHint
+                            : logic.defaultGroupName,
+                        hintStyle: TextStyle(color: tokens.secondary),
+                        counterText: '',
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                      ),
+                    )),
               ),
               const SizedBox(width: AppTokens.s3),
               ValueListenableBuilder<TextEditingValue>(
                 valueListenable: logic.nameCtrl,
-                builder: (_, value, __) => Text(
-                  '${value.text.characters.length}/${CreateGroupTokens.maxNameLength}',
-                  key: const ValueKey('create-group-name-count'),
-                  style: TextStyle(
-                      color: tokens.secondary,
-                      fontSize: CreateGroupTokens.nameCountSize),
+                builder: (_, value, __) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (value.text.isNotEmpty)
+                      TextFieldTapRegion(
+                        child: IconButton(
+                          key: const ValueKey('create-group-name-clear'),
+                          onPressed: _saving ? null : logic.nameCtrl.clear,
+                          tooltip: StrRes.clearAll,
+                          constraints: const BoxConstraints(
+                            minWidth: CreateGroupTokens.actionTarget,
+                            minHeight: CreateGroupTokens.actionTarget,
+                          ),
+                          visualDensity: VisualDensity.standard,
+                          color: tokens.secondary,
+                          icon: const Icon(Icons.cancel, size: AppTokens.s5),
+                        ),
+                      ),
+                    Text(
+                      '${value.text.characters.length}/${CreateGroupTokens.maxNameLength}',
+                      key: const ValueKey('create-group-name-count'),
+                      style: TextStyle(
+                          color: tokens.secondary,
+                          fontSize: CreateGroupTokens.nameCountSize),
+                    ),
+                  ],
                 ),
               ),
             ]),

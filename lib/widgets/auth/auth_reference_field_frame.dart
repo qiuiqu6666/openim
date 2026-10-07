@@ -14,6 +14,7 @@ class AuthFieldFrame extends StatelessWidget {
     this.reserveErrorSpace = false,
     this.showErrorMessage = true,
     this.showBorder = true,
+    this.showFill = true,
     this.inputFontSize = AuthReferenceTokens.inputFontSize,
   });
 
@@ -24,6 +25,7 @@ class AuthFieldFrame extends StatelessWidget {
   final bool reserveErrorSpace;
   final bool showErrorMessage;
   final bool showBorder;
+  final bool showFill;
   final double inputFontSize;
 
   @override
@@ -45,7 +47,7 @@ class AuthFieldFrame extends StatelessWidget {
             : const Duration(milliseconds: 150),
         height: height,
         decoration: BoxDecoration(
-          color: AuthReferenceTokens.fieldFill,
+          color: showFill ? AuthReferenceTokens.fieldFill : null,
           borderRadius: BorderRadius.circular(AuthReferenceTokens.rLg),
         ),
         foregroundDecoration: !showBorder

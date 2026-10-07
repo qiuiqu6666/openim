@@ -11,29 +11,41 @@ class SetFriendRemarkLogic extends GetxController {
   final userProfilesLogic =
       Get.find<UserProfilePanelLogic>(tag: GetTags.userProfile);
   late TextEditingController inputCtrl;
+  late String _originalRemark;
 
   String? get avatarURL => userProfilesLogic.userInfo.value.faceURL;
   String? get avatarName => userProfilesLogic.userInfo.value.nickname;
 
   void save() async {
+    if (isClosed) return;
+    final remark = inputCtrl.text.trim();
+    // Showing a nickname as a hint must not create a friend remark.
+    if (remark == _originalRemark) {
+      Get.back();
+      return;
+    }
     try {
       await LoadingView.singleton.wrap(
-        asyncFunction: () => OpenIM.iMManager.friendshipManager.setFriendRemark(
-          userID: userProfilesLogic.userInfo.value.userID!,
-          remark: inputCtrl.text.trim(),
+        asyncFunction: () => OpenIM.iMManager.friendshipManager.updateFriends(
+          UpdateFriendsReq(
+            friendUserIDs: [userProfilesLogic.userInfo.value.userID!],
+            remark: remark,
+          ),
         ),
       );
+      if (isClosed) return;
       IMViews.showToast(StrRes.saveSuccessfully);
-      Get.back(result: inputCtrl.text.trim());
+      Get.back(result: remark);
     } catch (_) {
-      IMViews.showToast(StrRes.saveFailed);
+      if (!isClosed) IMViews.showToast(StrRes.saveFailed);
     }
   }
 
   @override
   void onInit() {
-    inputCtrl =
-        TextEditingController(text: userProfilesLogic.userInfo.value.remark);
+    final user = userProfilesLogic.userInfo.value;
+    inputCtrl = TextEditingController(text: user.remark);
+    _originalRemark = inputCtrl.text.trim();
     super.onInit();
   }
 

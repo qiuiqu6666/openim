@@ -23,6 +23,10 @@ class EditGroupNamePage extends StatelessWidget {
               : logic.groupSetupLogic.imLogic.userInfo.value.nickname,
           isGroupAvatar: isGroupName,
           maxLength: 30,
+          showClearButton: !isGroupName,
+          hintText: isGroupName
+              ? null
+              : logic.groupSetupLogic.imLogic.userInfo.value.nickname,
           onSave: logic.save,
           saving: logic.saving.value,
           onAvatarTap: isGroupName && !logic.saving.value
