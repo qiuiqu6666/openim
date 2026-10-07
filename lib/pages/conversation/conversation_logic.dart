@@ -1,3 +1,4 @@
+import 'updates/conversation_update_buffer.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -66,7 +67,27 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final imStatus = IMSdkStatus.connectionSucceeded.obs;
   bool reInstall = false;
 
-  final onChangeConversations = <ConversationInfo>[];
+  final onChangeConversations = <String, ConversationInfo>{};
+  late final _updates = ConversationUpdateBuffer(
+    publish: onChanged,
+    delay: () => Duration(
+        milliseconds: imStatus.value == IMSdkStatus.syncStart ||
+                imStatus.value == IMSdkStatus.syncProgress
+            ? 80
+            : 16),
+  );
+
+  void queueChanges(List<ConversationInfo> changes) {
+    if (!_sessionActive) return;
+    if (_readingList) {
+      for (final info in changes) {
+        if (_deletions.allows(info)) {
+          _changesDuringRead[info.conversationID] = info;
+        }
+      }
+    }
+    _updates.add(changes);
+  }
 
   @override
   void onInit() {
@@ -75,8 +96,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     _businessSubscription = imLogic.customBusinessMessageSubject
         .listen(_handleBusinessNotification);
     refreshOrganizer();
-    _subscriptions.add(imLogic.conversationAddedSubject.listen(onChanged));
-    _subscriptions.add(imLogic.conversationChangedSubject.listen(onChanged));
+    _subscriptions.add(imLogic.conversationAddedSubject.listen(queueChanges));
+    _subscriptions.add(imLogic.conversationChangedSubject.listen(queueChanges));
     _subscriptions.add(imLogic.conversationReadRequestSubject
         .listen(onConversationReadRequested));
     _subscriptions.add(imLogic.imSdkStatusSubject.listen((value) {
@@ -92,7 +113,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
       if (status == IMSdkStatus.syncStart ||
           status == IMSdkStatus.syncProgress) {
-        reInstall = appReInstall;
+        if (status == IMSdkStatus.syncStart) reInstall = appReInstall;
         if (status == IMSdkStatus.syncStart && reInstall) {
           EasyLoading.showProgress(0, status: StrRes.synchronizing);
         }
@@ -108,6 +129,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
             status: '${StrRes.synchronizing}(${(p * 100.0).truncate()}%)');
       } else if (status == IMSdkStatus.syncEnded ||
           status == IMSdkStatus.syncFailed) {
+        _updates.flush();
         EasyLoading.dismiss();
         if (reInstall) {
           onRefresh();
@@ -121,6 +143,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   @override
   void onClose() {
     _closed = true;
+    _updates.close();
     ++_listGeneration;
     ++_clearGeneration;
     _changesDuringRead.clear();
@@ -223,17 +246,18 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       }
     }
     if (reInstall) {
-      onChangeConversations.addAll(accepted);
+      for (final info in accepted) {
+        onChangeConversations[info.conversationID] = info;
+      }
     }
-    final byID = {
-      for (final info in list) info.conversationID: info,
-      for (final info in accepted) info.conversationID: info,
-    };
-    final merged = byID.values.toList();
+    for (final info in accepted) {
+      currentByID[info.conversationID] = info;
+    }
+    final merged = currentByID.values.toList();
     OpenIM.iMManager.conversationManager.simpleSort(merged);
     list.value = merged;
     groupFeatures.hydrate(
-        merged.where((info) => info.isGroupChat).map((info) => info.groupID));
+        accepted.where((info) => info.isGroupChat).map((info) => info.groupID));
   }
 
   String getConversationID(ConversationInfo info) {
@@ -326,6 +350,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         ConversationReq(isPinned: pinned),
       );
       if (!_sessionActive) return;
+      _updates.flush();
       info.isPinned = pinned;
       for (final conversation in list) {
         if (conversation.conversationID == info.conversationID) {
@@ -341,6 +366,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> setNotDisturb(ConversationInfo info, bool enabled) async {
+    if (!_sessionActive) return;
     try {
       await OpenIM.iMManager.conversationManager.setConversation(
         info.conversationID,
@@ -348,6 +374,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
             recvMsgOpt:
                 enabled ? _receiveWithoutNotification : _receiveMessages),
       );
+      if (!_sessionActive) return;
+      _updates.flush();
       info.recvMsgOpt =
           enabled ? _receiveWithoutNotification : _receiveMessages;
       for (final conversation in list) {
@@ -358,12 +386,14 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       }
       list.refresh();
     } catch (error) {
-      IMViews.showToast(error.toString());
+      if (_sessionActive) IMViews.showToast(error.toString());
     }
   }
 
   Future<void> deleteConversation(ConversationInfo info) async {
     if (!_sessionActive || !_deletions.begin(info)) return;
+    _updates.remove(info.conversationID);
+    onChangeConversations.remove(info.conversationID);
     final clearing = _clearGeneration;
     if (_readingList) _changesDuringRead[info.conversationID] = null;
     try {
@@ -503,6 +533,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   }
 
   void clearConversations() {
+    _updates.clear();
+    onChangeConversations.clear();
     ChatHistoryCache.clear();
     ++_listGeneration;
     ++_clearGeneration;
@@ -708,12 +740,9 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       );
       if (!_sessionActive || generation != _listGeneration) return temp;
       if (onChangeConversations.isNotEmpty) {
-        final changedByID = {
-          for (final info in onChangeConversations) info.conversationID: info,
-        };
         for (int i = 0; i < result.length; i++) {
           final info = result[i];
-          result[i] = changedByID[info.conversationID] ?? info;
+          result[i] = onChangeConversations[info.conversationID] ?? info;
         }
       }
       temp.addAll(result);

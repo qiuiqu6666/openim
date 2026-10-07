@@ -8,6 +8,7 @@ import 'package:sprintf/sprintf.dart';
 import '../select_contacts_logic.dart';
 import '../widgets/select_contacts_app_bar.dart';
 import 'group_list_logic.dart';
+import '../../empty/contact_list_placeholder.dart';
 
 class SelectContactsFromGroupPage extends StatelessWidget {
   final logic = Get.find<SelectContactsFromGroupLogic>();
@@ -47,11 +48,22 @@ class SelectContactsFromGroupPage extends StatelessWidget {
               ),
             ),
           Expanded(
-              child: Obx(() => ListView.builder(
-                    itemCount: logic.allList.length,
-                    itemBuilder: (_, index) =>
-                        _buildItemView(logic.allList[index]),
-                  ))),
+              child: Obx(() => logic.allList.isEmpty
+                  ? contactListPlaceholder(
+                      context,
+                      title:
+                          Localizations.localeOf(context).languageCode == 'zh'
+                              ? '暂无群聊'
+                              : 'No groups yet',
+                      loading: logic.loading.value,
+                      failed: logic.loadFailed.value,
+                      onRetry: logic.loadGroups,
+                    )
+                  : ListView.builder(
+                      itemCount: logic.allList.length,
+                      itemBuilder: (_, index) =>
+                          _buildItemView(logic.allList[index]),
+                    ))),
           selectContactsLogic.checkedConfirmView,
         ],
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'announcement_mention_link.dart';
+import 'group_announcement_marquee.dart';
 
 class GroupAnnouncementBanner extends StatefulWidget {
   const GroupAnnouncementBanner(
@@ -22,13 +23,7 @@ class GroupAnnouncementBanner extends StatefulWidget {
       _GroupAnnouncementBannerState();
 }
 
-class _GroupAnnouncementBannerState extends State<GroupAnnouncementBanner>
-    with SingleTickerProviderStateMixin {
-  AnimationController? _controller;
-  AnimationController get controller => _controller ??= AnimationController(
-        vsync: this,
-        duration: const Duration(seconds: 36),
-      )..repeat();
+class _GroupAnnouncementBannerState extends State<GroupAnnouncementBanner> {
   bool _showing = false;
   bool _dismissed = false;
   bool _loaded = false;
@@ -129,14 +124,6 @@ class _GroupAnnouncementBannerState extends State<GroupAnnouncementBanner>
   }
 
   @override
-  void dispose() {
-    // Do not invoke the lazy getter during disposal: hidden/short banners
-    // may never have needed an animation controller.
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     if (!_loaded || _dismissed) return const SizedBox.shrink();
     final style = Theme.of(context)
@@ -187,36 +174,24 @@ class _GroupAnnouncementBannerState extends State<GroupAnnouncementBanner>
                             final width = painter.width;
                             final height = painter.height;
                             painter.dispose();
-                            if (width <= constraints.maxWidth ||
+                            if (constraints.maxWidth <= 0 ||
+                                width <= constraints.maxWidth ||
                                 MediaQuery.disableAnimationsOf(context)) {
                               return Text(text,
                                   style: style,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis);
                             }
-                            final distance = width + 48;
                             return Semantics(
                               label: widget.text,
                               child: ExcludeSemantics(
-                                  child: ClipRect(
-                                child: SizedBox(
-                                    height: height,
-                                    child: AnimatedBuilder(
-                                      animation: controller,
-                                      builder: (context, _) => Stack(children: [
-                                        for (var i = 0; i < 2; i++)
-                                          Positioned(
-                                            left: distance *
-                                                (i - controller.value),
-                                            width: width + 1,
-                                            child: Text(text,
-                                                style: style,
-                                                maxLines: 1,
-                                                softWrap: false),
-                                          ),
-                                      ]),
-                                    )),
-                              )),
+                                child: GroupAnnouncementMarquee(
+                                  text: text,
+                                  style: style,
+                                  textWidth: width,
+                                  height: height,
+                                ),
+                              ),
                             );
                           })),
                   SizedBox(width: closeGap),

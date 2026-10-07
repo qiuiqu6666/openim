@@ -47,6 +47,7 @@ class ChatListViewport extends StatefulWidget {
 class _ChatListViewportState extends State<ChatListViewport>
     with WidgetsBindingObserver {
   final _viewportKey = GlobalKey();
+  final _rowStateKeys = <String, GlobalKey>{};
   Key _historyKey = UniqueKey();
   Key _newerKey = UniqueKey();
   final _ownedController = ScrollController();
@@ -111,6 +112,8 @@ class _ChatListViewportState extends State<ChatListViewport>
       }
     }
     _updatePartition();
+    final retained = _ids.toSet();
+    _rowStateKeys.removeWhere((id, _) => !retained.contains(id));
     _schedule();
   }
 
@@ -418,7 +421,10 @@ class _ChatListViewportState extends State<ChatListViewport>
       onAttach: _rowAttached,
       onDetach: _rowDetached,
       onLayout: _rowLayout,
-      child: child,
+      child: KeyedSubtree(
+        key: _rowStateKeys.putIfAbsent(id, GlobalKey.new),
+        child: child,
+      ),
     );
   }
 

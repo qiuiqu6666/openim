@@ -23,6 +23,7 @@ class ChatTimelineController {
     required this.restoreOffset,
     required this.onFirstLoaded,
     this.timelineTimeMarker,
+    this.preserveReading,
     this.pageSize = 40,
     String Function()? currentAccountID,
     bool Function()? isSessionCurrent,
@@ -41,6 +42,7 @@ class ChatTimelineController {
   final void Function(double) restoreOffset;
   final VoidCallback onFirstLoaded;
   final void Function(List<Message> messages)? timelineTimeMarker;
+  final bool Function()? preserveReading;
   final int pageSize;
   final String Function() _currentAccountID;
   final bool Function() _isSessionCurrent;
@@ -73,6 +75,7 @@ class ChatTimelineController {
     pageSize: pageSize,
     fetch: fetch,
     fetchNewer: fetchNewer,
+    preserveReading: preserveReading,
     messages: () => messageList,
     removedIDs: removedIDs,
     onStateChanged: _syncHistoryState,
@@ -137,9 +140,23 @@ class ChatTimelineController {
     final offset = captureOffset();
     messageList.value = messages;
     final visibleIDs = messages.map((m) => m.clientMsgID).toSet();
+    final latest = messages
+        .where((m) =>
+            m.status != MessageStatus.sending &&
+            m.status != MessageStatus.failed)
+        .lastOrNull;
     scrollingCacheMessageList.removeWhere((m) =>
         visibleIDs.contains(m.clientMsgID) ||
-        removedIDs.contains(m.clientMsgID));
+        removedIDs.contains(m.clientMsgID) ||
+        (firstPage &&
+            !_history.viewingHistory &&
+            latest != null &&
+            ((m.sendTime ?? m.createTime ?? 0) <
+                    (latest.sendTime ?? latest.createTime ?? 0) ||
+                ((m.sendTime ?? m.createTime ?? 0) ==
+                        (latest.sendTime ?? latest.createTime ?? 0) &&
+                    (m.seq ?? 0) > 0 &&
+                    (m.seq ?? 0) <= (latest.seq ?? 0)))));
     if (firstPage && !_history.viewingHistory) {
       onFirstPage();
     } else if (refresh) {
@@ -151,6 +168,43 @@ class ChatTimelineController {
       _closed ? Future.value(false) : _history.loadOlder();
 
   Future<bool> refresh() => _closed ? Future.value(false) : _history.refresh();
+
+  static const automaticWindowLimit = 600;
+  static const bufferedWindowLimit = 100;
+
+  bool holdForIncoming({required bool awayFromLatest}) {
+    if (awayFromLatest && messageList.length >= automaticWindowLimit) {
+      _history.holdCurrentWindow();
+    }
+    return _history.viewingHistory;
+  }
+
+  void bufferIncoming(Message message) {
+    scrollingCacheMessageList.add(message);
+    if (scrollingCacheMessageList.length > bufferedWindowLimit) {
+      scrollingCacheMessageList.removeAt(0);
+    }
+    // These are presentation snapshots; the SDK owns every persisted message.
+  }
+
+  void trimLatestWindow() {
+    if (_history.viewingHistory || messageList.length <= automaticWindowLimit) {
+      return;
+    }
+    var excess = messageList.length - automaticWindowLimit;
+    final retained = messageList.where((m) {
+      if (excess > 0 &&
+          m.status != MessageStatus.sending &&
+          m.status != MessageStatus.failed) {
+        excess--;
+        return false;
+      }
+      return true;
+    }).toList();
+    if (retained.length == messageList.length) return;
+    messageList.value = retained;
+    _history.didTrimLatest();
+  }
 
   Future<bool> retry() => _closed ? Future.value(false) : _history.retry();
 

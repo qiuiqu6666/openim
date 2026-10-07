@@ -14,6 +14,7 @@ class GroupRequestsLogic extends GetxController {
   final list = <GroupApplicationInfo>[].obs;
   // An empty list is conclusive only after the latest SDK read succeeds.
   final applicationsLoaded = false.obs;
+  final applicationsLoadFailed = false.obs;
   final groupList = <String, GroupInfo>{}.obs;
   final memberList = <GroupMembersInfo>[].obs;
   final userInfoList = <UserInfo>[].obs;
@@ -29,7 +30,7 @@ class GroupRequestsLogic extends GetxController {
 
   @override
   void onReady() {
-    getApplicationList();
+    reloadApplications();
     getJoinedGroup();
     super.onReady();
   }
@@ -38,7 +39,7 @@ class GroupRequestsLogic extends GetxController {
   void onInit() {
     _applicationSubscription =
         imLogic.groupApplicationChangedSubject.listen((info) {
-      getApplicationList();
+      reloadApplications();
     });
     super.onInit();
   }
@@ -58,10 +59,20 @@ class GroupRequestsLogic extends GetxController {
     return false;
   }
 
+  /// Page/event entry point; direct callers still receive SDK read failures.
+  Future<void> reloadApplications() async {
+    try {
+      await getApplicationList();
+    } catch (error) {
+      Logger.print('Group application lookup failed: ${error.runtimeType}');
+    }
+  }
+
   Future<void> getApplicationList() async {
     if (!isSessionActive) return;
     final generation = ++_loadGeneration;
     applicationsLoaded.value = false;
+    applicationsLoadFailed.value = false;
     final account = OpenIM.iMManager.userID;
     final token = DataSp.chatToken;
     var profileLookup = 'not_needed';
@@ -70,82 +81,92 @@ class GroupRequestsLogic extends GetxController {
         generation == _loadGeneration &&
         account == OpenIM.iMManager.userID &&
         token == DataSp.chatToken;
-    final list = await LoadingView.singleton.wrap(asyncFunction: () async {
-      if (!isCurrent()) return <GroupApplicationInfo>[];
-      final list = await Future.wait([
-        OpenIM.iMManager.groupManager.getGroupApplicationListAsRecipient(),
-        OpenIM.iMManager.groupManager.getGroupApplicationListAsApplicant(),
-      ]);
+    late final List<GroupApplicationInfo> list;
+    try {
+      list = await LoadingView.singleton.wrap(
+          showing: this.list.isNotEmpty,
+          asyncFunction: () async {
+            if (!isCurrent()) return <GroupApplicationInfo>[];
+            final list = await Future.wait([
+              OpenIM.iMManager.groupManager
+                  .getGroupApplicationListAsRecipient(),
+              OpenIM.iMManager.groupManager
+                  .getGroupApplicationListAsApplicant(),
+            ]);
 
-      final allList = <GroupApplicationInfo>[];
-      allList
-        ..addAll(list[0])
-        ..addAll(list[1]);
+            final allList = <GroupApplicationInfo>[];
+            allList
+              ..addAll(list[0])
+              ..addAll(list[1]);
 
-      if (!isCurrent()) return allList;
-      allList.sort((a, b) => (b.reqTime ?? 0).compareTo(a.reqTime ?? 0));
+            if (!isCurrent()) return allList;
+            allList.sort((a, b) => (b.reqTime ?? 0).compareTo(a.reqTime ?? 0));
 
-      var map = <String, List<String>>{};
-      final profileIDs = <String>{};
+            var map = <String, List<String>>{};
+            final profileIDs = <String>{};
 
-      var haveReadList = DataSp.getHaveReadUnHandleGroupApplication();
-      haveReadList ??= <String>[];
-      for (var a in list[0]) {
-        var id = IMUtils.buildGroupApplicationID(a);
-        if (!haveReadList.contains(id)) {
-          haveReadList.add(id);
-        }
-      }
-      DataSp.putHaveReadUnHandleGroupApplication(haveReadList);
-
-      for (var a in allList) {
-        final handlerID = _handlerUserID(a);
-        if (handlerID != null) profileIDs.add(handlerID);
-        if (isInvite(a) && IMUtils.isNotNullEmptyStr(a.groupID)) {
-          if (!map.containsKey(a.groupID)) {
-            map[a.groupID!] = [a.inviterUserID!];
-          } else {
-            if (!map[a.groupID!]!.contains(a.inviterUserID!)) {
-              map[a.groupID!]!.add(a.inviterUserID!);
+            var haveReadList = DataSp.getHaveReadUnHandleGroupApplication();
+            haveReadList ??= <String>[];
+            for (var a in list[0]) {
+              var id = IMUtils.buildGroupApplicationID(a);
+              if (!haveReadList.contains(id)) {
+                haveReadList.add(id);
+              }
             }
-          }
-          profileIDs.add(a.inviterUserID!);
-        }
-      }
+            DataSp.putHaveReadUnHandleGroupApplication(haveReadList);
 
-      if (map.isNotEmpty) {
-        try {
-          final members = await Future.wait(map.entries.map((e) => OpenIM
-              .iMManager.groupManager
-              .getGroupMembersInfo(groupID: e.key, userIDList: e.value)));
-          if (isCurrent()) {
-            memberList.assignAll(members.expand((group) => group));
-          }
-        } catch (error) {
-          Logger.print(
-              'Group application member lookup failed: ${error.runtimeType}');
-        }
-      }
+            for (var a in allList) {
+              final handlerID = _handlerUserID(a);
+              if (handlerID != null) profileIDs.add(handlerID);
+              if (isInvite(a) && IMUtils.isNotNullEmptyStr(a.groupID)) {
+                if (!map.containsKey(a.groupID)) {
+                  map[a.groupID!] = [a.inviterUserID!];
+                } else {
+                  if (!map[a.groupID!]!.contains(a.inviterUserID!)) {
+                    map[a.groupID!]!.add(a.inviterUserID!);
+                  }
+                }
+                profileIDs.add(a.inviterUserID!);
+              }
+            }
 
-      if (!isCurrent()) return allList;
-      if (profileIDs.isNotEmpty) {
-        try {
-          final profiles = await OpenIM.iMManager.userManager
-              .getUsersInfo(userIDList: profileIDs.toList());
-          profileLookup = 'succeeded';
-          if (isCurrent()) {
-            userInfoList.assignAll(profiles.map((e) => e.simpleUserInfo));
-          }
-        } catch (error) {
-          profileLookup = 'failed';
-          // Profile availability must not hide the application's actual result.
-          Logger.print(
-              'Group application user lookup failed: ${error.runtimeType}');
-        }
-      }
+            if (map.isNotEmpty) {
+              try {
+                final members = await Future.wait(map.entries.map((e) => OpenIM
+                    .iMManager.groupManager
+                    .getGroupMembersInfo(groupID: e.key, userIDList: e.value)));
+                if (isCurrent()) {
+                  memberList.assignAll(members.expand((group) => group));
+                }
+              } catch (error) {
+                Logger.print(
+                    'Group application member lookup failed: ${error.runtimeType}');
+              }
+            }
 
-      return allList;
-    });
+            if (!isCurrent()) return allList;
+            if (profileIDs.isNotEmpty) {
+              try {
+                final profiles = await OpenIM.iMManager.userManager
+                    .getUsersInfo(userIDList: profileIDs.toList());
+                profileLookup = 'succeeded';
+                if (isCurrent()) {
+                  userInfoList.assignAll(profiles.map((e) => e.simpleUserInfo));
+                }
+              } catch (error) {
+                profileLookup = 'failed';
+                // Profile availability must not hide the application's actual result.
+                Logger.print(
+                    'Group application user lookup failed: ${error.runtimeType}');
+              }
+            }
+
+            return allList;
+          });
+    } catch (_) {
+      if (isCurrent()) applicationsLoadFailed.value = true;
+      rethrow;
+    }
 
     if (isCurrent()) {
       this.list.assignAll(list);

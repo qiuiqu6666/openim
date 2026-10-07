@@ -6,5 +6,5 @@ abstract final class ChatMessageArrivalTokens {
   static const curve = Curves.easeOutCubic;
   static const extentCurve = Curves.easeInOutCubic;
   static const outsideGap = AppTokens.s2;
-  static const maxConcurrent = 16;
+  static const maxConcurrent = 4;
 }

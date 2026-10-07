@@ -57,6 +57,8 @@ class _Conversations extends GetxController
   @override
   final folders = <ChatFolder>[].obs;
   @override
+  final states = <String, ChatConversationState>{}.obs;
+  @override
   final organizerLoading = false.obs;
   @override
   final organizerError = RxnString();

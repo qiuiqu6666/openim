@@ -1,3 +1,4 @@
+import 'package:openim/pages/contacts/presence/presence_snapshot_cache.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -60,6 +61,7 @@ void main() {
     Get.addTranslations(TranslationService().keys);
     Get.locale = const Locale('zh', 'CN');
   });
+  setUp(() => _cacheData.clear());
   tearDownAll(Get.reset);
   test('visible last seen uses elapsed time and handles future timestamps', () {
     final now = DateTime(2026, 10, 1, 12);
@@ -141,7 +143,7 @@ void main() {
         }
       }));
     }));
-    final store = PresenceStore(client: client);
+    final store = _store(client: client);
     await store.refresh([...List.generate(201, (i) => 'u$i'), 'u0']);
     expect(sizes, [200, 1]);
     expect(store.users['u0']!.online, true);
@@ -154,8 +156,10 @@ void main() {
     expect(sizes, [200, 1]);
     store.stopWatching('u2');
     expect(store.users['u2']!.lastSeenAt, 1790849179579);
+    await store.flushCache();
     store.dispose();
-    final restored = PresenceStore(client: client);
+    final restored = _store(client: client);
+    await restored.ready;
     expect(restored.users['u2']!.lastSeenAt, 1790849179579);
     expect(restored.users['u3']!.hidden, true);
     expect(restored.users['u3']!.lastSeenAt, 1790849179579);
@@ -184,7 +188,7 @@ void main() {
         }
       }));
     }));
-    final store = PresenceStore(client: client);
+    final store = _store(client: client);
     final known = DateTime.now()
         .subtract(const Duration(minutes: 5))
         .millisecondsSinceEpoch;
@@ -212,7 +216,7 @@ void main() {
           'late response is ignored after ${changeOwner ? 'owner replacement' : 'same owner token rotation'}',
           () async {
         final gate = _PresenceReplyGate();
-        final store = PresenceStore(client: gate.client);
+        final store = _store(client: gate.client);
         addTearDown(gate.close);
         addTearDown(store.dispose);
         final snapshot = UserPresence(false, 1790849179579);
@@ -237,7 +241,7 @@ void main() {
           'late response is ignored after ${closeStore ? 'disposal' : 'stopWatching'}',
           () async {
         final gate = _PresenceReplyGate();
-        final store = PresenceStore(client: gate.client);
+        final store = _store(client: gate.client);
         addTearDown(gate.close);
         addTearDown(store.dispose);
         final snapshot = UserPresence(false, 1790849179579);
@@ -265,7 +269,7 @@ void main() {
     test('refresh keeps the snapshot and identical fields do not notify again',
         () async {
       final gate = _PresenceReplyGate();
-      final store = PresenceStore(client: gate.client);
+      final store = _store(client: gate.client);
       addTearDown(gate.close);
       addTearDown(store.dispose);
       final snapshot = UserPresence(false, 1790849179579);
@@ -289,4 +293,30 @@ void main() {
           reason: 'An unchanged result must not rebuild presence consumers.');
     });
   });
+}
+
+final _cacheData = <String, Map<String, Map<String, dynamic>>>{};
+PresenceStore _store({Dio? client}) => PresenceStore(
+      client: client,
+      cache: _MemoryPresenceCache(DataSp.userID ?? ''),
+    );
+
+class _MemoryPresenceCache extends PresenceSnapshotCache {
+  _MemoryPresenceCache(this.owner) : super(owner);
+  final String owner;
+  Map<String, Map<String, dynamic>> get data =>
+      _cacheData.putIfAbsent(owner, () => {});
+  @override
+  Future<Map<String, Map<String, dynamic>>> read() async => Map.of(data);
+  @override
+  void put(String id, Map<String, dynamic>? value) {
+    if (value == null) {
+      data.remove(id);
+    } else {
+      data[id] = value;
+    }
+  }
+
+  @override
+  Future<void> flush() async {}
 }

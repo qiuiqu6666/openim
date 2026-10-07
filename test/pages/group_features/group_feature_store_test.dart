@@ -47,6 +47,29 @@ Map<String, dynamic> _summary(int version,
       }
     };
 void main() {
+  test(
+      '10000 ordinary groups publish once per batch and unchanged refresh stays quiet',
+      () async {
+    var calls = 0, notifications = 0;
+    final store = GroupFeatureStore(
+        api: GroupFeatureApi(),
+        sessionCurrent: () => true,
+        fetchGroups: (ids) async {
+          calls++;
+          return [for (final id in ids) GroupInfo(groupID: id, ex: '')];
+        });
+    store.addListener(() => notifications++);
+    store.hydrate(List.generate(10000, (i) => 'g$i'));
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, 100);
+    expect(notifications, 100);
+    calls = notifications = 0;
+    store.refreshKnownGroups();
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, 100);
+    expect(notifications, 0);
+    store.dispose();
+  });
   late _HTTP http;
   late GroupFeatureApi api;
   late GroupFeatureStore store;

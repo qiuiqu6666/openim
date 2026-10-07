@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:extended_image/extended_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -18,6 +20,51 @@ import 'package:openim_common/openim_common.dart';
 
 final _enabled = Platform.environment['EXPORT_PEEK_PREVIEW'] == '1' ||
     const String.fromEnvironment('EXPORT_PEEK_PREVIEW') == '1';
+const _mediaPreview = bool.fromEnvironment('PEEK_MEDIA_PREVIEW');
+
+Future<File> _createLongPhoto() async {
+  final directory = await Directory.systemTemp.createTemp('peek-long-photo-');
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  canvas.drawColor(const Color(0xFFF6F8FB), BlendMode.src);
+  for (var row = 0; row < 120; row++) {
+    final y = row * 60.0;
+    canvas.drawRect(
+        Rect.fromLTWH(0, y, 600, 60),
+        Paint()
+          ..color = row == 0
+              ? const Color(0xFFCCE7FE)
+              : row.isEven
+                  ? const Color(0xFFF0F3F7)
+                  : const Color(0xFFFFFFFF));
+    final text = TextPainter(
+        textDirection: TextDirection.ltr,
+        text: TextSpan(
+            text: row == 0
+                ? '长图头部 · 数据明细'
+                : '第 $row 行       项目 ${row + 100}       已完成',
+            style: TextStyle(
+                color: const Color(0xFF18324C),
+                fontSize: row == 0 ? 36 : 28,
+                fontFamily: 'PeekPreviewFont')))
+      ..layout(maxWidth: 570);
+    text.paint(canvas, Offset(15, y + 10));
+    text.dispose();
+  }
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(600, 7200);
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  final photo = await File('${directory.path}/long.png')
+      .writeAsBytes(data!.buffer.asUint8List());
+  image.dispose();
+  picture.dispose();
+  addTearDown(() async {
+    PaintingBinding.instance.imageCache.clear();
+    await photo.delete();
+    await directory.delete();
+  });
+  return photo;
+}
 
 Future<void> _loadFonts() async {
   final bytes = ByteData.sublistView(
@@ -79,11 +126,41 @@ Message _text(int index, String content, {bool outgoing = false}) =>
       'seq': index,
       'status': MessageStatus.succeeded,
       'isRead': outgoing,
+      'attachedInfo': 'null',
+      'attachedInfoElem': {'isPrivateChat': false, 'burnDuration': 0},
       'textElem': {'content': content},
     });
 
-List<Message> _messages() {
+List<Message> _messages({File? photo}) {
+  if (photo != null) {
+    final picture = _text(1, '', outgoing: true)
+      ..contentType = MessageType.picture
+      ..pictureElem = PictureElem(
+          sourcePath: photo.path,
+          sourcePicture: PictureInfo(width: 600, height: 7200));
+    final reply = _text(2, '', outgoing: true)
+      ..contentType = MessageType.atText
+      ..atTextElem = AtTextElem(
+          text: '@preview-peer 请核对这张长图。',
+          atUsersInfo: [
+            AtUserInfo(atUserID: 'preview-peer', groupNickname: '小林')
+          ],
+          quoteMessage: picture);
+    return [picture, reply];
+  }
   final first = _text(1, '周末一起去喝咖啡吗？');
+  final custom = _text(3, '', outgoing: true)
+    ..contentType = MessageType.custom
+    ..customElem = CustomElem(
+      data: jsonEncode({
+        'customType': 2300,
+        'data': {
+          'markdown':
+              '**三公结果**\n\n| 门 | 结果 |\n| --- | --- |\n| 3 | 三公 |\n\n完整正文保留换行'
+        },
+      }),
+      description: '不应替代正文的摘要',
+    );
   final quote = _text(4, '', outgoing: true)
     ..contentType = MessageType.quote
     ..quoteElem = QuoteElem(text: '好，那就明天下午三点见。', quoteMessage: first);
@@ -93,7 +170,7 @@ List<Message> _messages() {
   return [
     first,
     _text(2, '我发现了一家很不错的新店。'),
-    _text(3, '可以呀，位置发我一下。', outgoing: true),
+    custom,
     quote,
     private,
   ];
@@ -104,6 +181,8 @@ void main() {
     testWidgets('export actual conversation peek light and dark ($platform)',
         (tester) async {
       await tester.runAsync(_loadFonts);
+      final photo =
+          _mediaPreview ? await tester.runAsync(_createLongPhoto) : null;
       Get.testMode = true;
       OpenIM.iMManager.userID = 'preview-self';
       tester.view.physicalSize = const Size(375, 812);
@@ -162,8 +241,25 @@ void main() {
           currentAccountID: () => 'preview-self',
           currentToken: () => 'preview-only-token',
           fetch: ({required count, startMsg}) async => AdvancedMessage(
-              messageList: _messages(), isEnd: true, errCode: 0),
+              messageList: _messages(photo: photo), isEnd: true, errCode: 0),
         );
+        if (photo != null) {
+          // Start file I/O outside the fake widget clock before mounting the
+          // images, so the preview captures decoded pixels instead of a spinner.
+          await tester.runAsync(() async {
+            for (final size in [const Size(156, 1872), const Size(40, 480)]) {
+              final image = ImageUtil.fileImage(
+                file: photo,
+                cacheWidth: size.width.toInt(),
+                cacheHeight: size.height.toInt(),
+                resizePolicy: ResizeImagePolicy.fit,
+                cacheRawData: size.width == 40,
+              ) as ExtendedImage;
+              await precacheImage(image.image, hostContext)
+                  .timeout(const Duration(seconds: 10));
+            }
+          });
+        }
         final completion = showConversationPeek(
           context: hostContext,
           conversation: conversation,
@@ -174,14 +270,31 @@ void main() {
             onOpenChat: () {},
             onArchive: () async {},
             onAddToFolder: () async {},
-            onRemoveFromFolder: () async {},
             onTogglePin: () async {},
             onToggleMute: () async {},
             onDelete: () async {},
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('私密消息请进入会话查看'), findsOneWidget);
+        if (photo != null) {
+          await tester.runAsync(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+            await tester.pump();
+          });
+          await tester.pumpAndSettle();
+          expect(tester.getSize(find.byType(ChatPictureView)),
+              const Size(156, 260));
+          final images = tester
+              .stateList(find.byType(ExtendedImage))
+              .cast<ExtendedImageState>();
+          expect(images, hasLength(2));
+          expect(images.map((image) => image.extendedImageLoadState),
+              everyElement(LoadState.completed));
+          expect(find.text(StrRes.picture), findsOneWidget);
+          expect(find.text('@小林 请核对这张长图。', findRichText: true), findsOneWidget);
+        } else {
+          expect(find.text('私密消息请进入会话查看'), findsOneWidget);
+        }
         expect(find.text('此私密内容不应显示在预览中'), findsNothing);
         expect(conversation.unreadCount, 3);
         expect(tester.takeException(), isNull);
@@ -192,7 +305,7 @@ void main() {
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
           final platformSuffix = platform == TargetPlatform.iOS ? '-ios' : '';
           final file = File(
-              'docs/previews/peek$platformSuffix-${dark ? 'dark' : 'light'}.png');
+              'docs/previews/peek${photo == null ? '' : '-reply-media'}$platformSuffix-${dark ? 'dark' : 'light'}.png');
           await file.parent.create(recursive: true);
           await file.writeAsBytes(bytes!.buffer.asUint8List());
           image.dispose();

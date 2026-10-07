@@ -70,6 +70,17 @@ class GroupFeatureStore extends ChangeNotifier {
   final _groupEvents = <String, Stream<Map<String, dynamic>>>{};
   final _subscriptions = <StreamSubscription>[];
   bool _closed = false, _scheduled = false, _invalidated = false;
+  bool _flushing = false, _batching = false, _batchChanged = false;
+
+  @override
+  void notifyListeners() {
+    if (_batching) {
+      _batchChanged = true;
+    } else {
+      super.notifyListeners();
+    }
+  }
+
   bool get active => !_closed && !_invalidated && sessionCurrent();
   GroupFeatures features(String id) => _features[id] ?? const GroupFeatures();
   GroupLiveFeature liveFeature(String id) =>
@@ -128,6 +139,16 @@ class GroupFeatureStore extends ChangeNotifier {
   void seed(GroupInfo info) {
     if (!active || _left.contains(info.groupID)) return;
     final id = info.groupID;
+    final previous = _groups[id];
+    if (previous != null &&
+        _samePermissionValue(previous.toJson(), info.toJson()) &&
+        !features(id).valid &&
+        _sdkSummaryMissing(info.ex) &&
+        !_pendingMirrors.containsKey(id)) {
+      _requested.add(id);
+      _queued.remove(id);
+      return;
+    }
     final gameTypeChanged =
         GroupGameType.fromEx(_groups[id]?.ex) != GroupGameType.fromEx(info.ex);
     _groups[id] = GroupInfo.fromJson(info.toJson());
@@ -250,23 +271,37 @@ class GroupFeatureStore extends ChangeNotifier {
 
   Future<void> _flush() async {
     _scheduled = false;
-    if (!active) return;
-    final ids = _queued.toList();
-    _queued.clear();
-    _requested.addAll(ids);
-    for (var start = 0; start < ids.length; start += 100) {
-      if (!active) return;
-      final batch = ids.sublist(start, (start + 100).clamp(0, ids.length));
-      try {
-        final groups = await fetchGroups(batch);
-        if (!active) return;
-        for (final group in groups) {
-          // A push newer than this request always wins by server revision.
-          seed(group);
+    if (!active || _flushing) return;
+    _flushing = true;
+    try {
+      while (active && _queued.isNotEmpty) {
+        final batch = _queued.take(100).toList();
+        _queued.removeAll(batch);
+        _requested.addAll(batch);
+        try {
+          final groups = await fetchGroups(batch);
+          if (!active) return;
+          // A sync event during the request requires a subsequent fresh read.
+          final retry = batch.where(_queued.contains).toSet();
+          _batching = true;
+          try {
+            for (final group in groups) {
+              seed(group);
+            }
+          } finally {
+            _batching = false;
+            _queued.addAll(retry);
+            if (_batchChanged && active) {
+              _batchChanged = false;
+              notifyListeners();
+            }
+          }
+        } catch (_) {
+          // Explicit resume/sync refresh retries; no per-row retry storm.
         }
-      } catch (_) {
-        /* No per-row retries. Explicit resume/sync refresh retries once. */
       }
+    } finally {
+      _flushing = false;
     }
   }
 

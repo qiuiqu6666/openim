@@ -1,65 +1,62 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
+
+import 'chat_composer_palette.dart';
+import 'quote/chat_quote_content.dart';
+import 'quote/chat_quote_tokens.dart';
 
 class ChatComposerContextPreview extends StatelessWidget {
   const ChatComposerContextPreview({
     super.key,
     this.onClose,
+    this.message,
     this.content,
     this.textSpan,
-  }) : assert(content != null || textSpan != null,
-            'Either content or textSpan must be provided.');
+  }) : assert(message != null || content != null || textSpan != null,
+            'A message, content or textSpan must be provided.');
   final VoidCallback? onClose;
+  final Message? message;
   final String? content;
   final InlineSpan? textSpan;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
-      color: Styles.c_F0F2F6,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: onClose,
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: 1.h, horizontal: 4.w),
-          decoration: BoxDecoration(
-            color: Styles.c_FFFFFF,
-            borderRadius: BorderRadius.circular(4.r),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Row(
-                  children: [
-                    if (content != null)
-                      Expanded(
-                          child: Text(
-                        content!,
-                        style: Styles.ts_8E9AB0_14sp,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      )),
-                    if (textSpan != null)
-                      Expanded(
-                        child: RichText(
-                          text: textSpan!,
+  Widget build(BuildContext context) => TextFieldTapRegion(
+        child: Material(
+          color: chatComposerSurface(context),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(
+                AppTokens.s3, AppTokens.s2, 0, AppTokens.s2),
+            child: Row(children: [
+              Expanded(
+                  child: message != null
+                      ? ChatQuoteContent(
+                          message: message,
+                          replyLabel: true,
+                          titleColor: AppTokens.accent,
+                          summaryColor: chatComposerHint(context))
+                      : Text.rich(textSpan ?? TextSpan(text: content),
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                ),
+                          style: chatComposerTextStyle(context).copyWith(
+                              color: chatComposerHint(context),
+                              fontSize: ChatQuoteTokens.summarySize))),
+              IconButton(
+                key: const ValueKey('chat-context-preview-close'),
+                onPressed: onClose,
+                tooltip: message == null
+                    ? StrRes.cancel
+                    : '${StrRes.cancel} ${StrRes.reply}',
+                color: chatComposerHint(context),
+                constraints: const BoxConstraints(
+                    minWidth: kMinInteractiveDimension,
+                    minHeight: kMinInteractiveDimension),
+                visualDensity: VisualDensity.standard,
+                icon: const Icon(Icons.cancel,
+                    size: ChatQuoteTokens.closeIconSize),
               ),
-              ImageRes.delQuote.toImage
-                ..width = 14.w
-                ..height = 14.h,
-            ],
+            ]),
           ),
         ),
-      ),
-    );
-  }
+      );
 }

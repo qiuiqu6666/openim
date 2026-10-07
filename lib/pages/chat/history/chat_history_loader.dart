@@ -16,6 +16,7 @@ class ChatHistoryLoader {
     required this.removedIDs,
     required this.onStateChanged,
     this.onLoaded,
+    this.preserveReading,
     this.pageSize = 40,
   });
 
@@ -26,6 +27,7 @@ class ChatHistoryLoader {
   final Set<String> removedIDs;
   final void Function() onStateChanged;
   final void Function()? onLoaded;
+  final bool Function()? preserveReading;
   final int pageSize;
 
   bool loading = false;
@@ -49,6 +51,29 @@ class ChatHistoryLoader {
   Future<bool> Function()? _retry;
 
   Future<bool> retry() => _retry?.call() ?? loadOlder();
+
+  bool holdCurrentWindow() {
+    if (_closed || fetchNewer == null || viewingHistory) return viewingHistory;
+    final persisted =
+        messages().where((m) => !_isPendingSend(m.status)).toList();
+    if (persisted.isEmpty) return false;
+    _historicalIDs
+      ..clear()
+      ..addAll(persisted.map((m) => m.clientMsgID));
+    _cursor ??= persisted.first;
+    _newerCursor = persisted.last;
+    viewingHistory = _windowViewingHistory = hasNewer = true;
+    onStateChanged();
+    return true;
+  }
+
+  /// Automatic latest-window eviction only changes the paging boundary.
+  void didTrimLatest() {
+    if (_closed || viewingHistory) return;
+    _cursor = messages().where((m) => !_isPendingSend(m.status)).firstOrNull;
+    hasMore = true;
+    onStateChanged();
+  }
 
   Future<bool> loadOlder() {
     if (_closed) return Future.value(false);
@@ -291,6 +316,15 @@ class ChatHistoryLoader {
           result.isEnd != true &&
           _latestAnchor != null &&
           _compare(page.first, _latestAnchor!) > 0;
+      if (discontinuous &&
+          !latest &&
+          preserveReading?.call() == true &&
+          fetchNewer != null &&
+          holdCurrentWindow()) {
+        // Keep the painted range. The user can page toward the new messages
+        // or explicitly return to latest without joining two disjoint ranges.
+        return hasMore;
+      }
       Iterable<Message> retained;
       if (firstPage) {
         retained = const <Message>[];

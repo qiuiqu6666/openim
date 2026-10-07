@@ -8,6 +8,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 
 import 'group_list_logic.dart';
+import '../empty/contact_list_placeholder.dart';
 
 class GroupListPage extends StatelessWidget {
   final logic = Get.find<GroupListLogic>();
@@ -58,19 +59,30 @@ class GroupListPage extends StatelessWidget {
         controller: logic.iCreateRefreshController,
         header: IMViews.buildHeader(30),
         footer: IMViews.buildFooter(),
-        enablePullUp: true,
+        enablePullUp: logic.canLoadMore(true),
         enablePullDown: true,
         onRefresh: () {
           GroupLiveListScope.maybeOf(context)?.refreshVisible();
           logic.iCreatedInitial();
         },
         onLoading: logic.iCreatedLoadMore,
-        child: ListView.builder(
-          physics: const BouncingScrollPhysics(),
-          itemCount: logic.iCreatedList.length,
-          itemBuilder: (_, index) => _buildItemView(logic.iCreatedList[index],
-              showDivider: index < logic.iCreatedList.length - 1),
-        ),
+        child: logic.iCreatedList.isEmpty
+            ? contactListPlaceholder(
+                context,
+                title: Localizations.localeOf(context).languageCode == 'zh'
+                    ? '暂无创建的群聊'
+                    : 'No groups created yet',
+                loading: logic.loading[true]!,
+                failed: logic.loadFailed[true]!,
+                onRetry: logic.iCreatedInitial,
+              )
+            : ListView.builder(
+                physics: const BouncingScrollPhysics(),
+                itemCount: logic.iCreatedList.length,
+                itemBuilder: (_, index) => _buildItemView(
+                    logic.iCreatedList[index],
+                    showDivider: index < logic.iCreatedList.length - 1),
+              ),
       );
 
   Widget _buildIJoinedListView(BuildContext context) => SmartRefresher(
@@ -78,19 +90,30 @@ class GroupListPage extends StatelessWidget {
         controller: logic.iJoinRefreshController,
         header: IMViews.buildHeader(30),
         footer: IMViews.buildFooter(),
-        enablePullUp: true,
+        enablePullUp: logic.canLoadMore(false),
         enablePullDown: true,
         onRefresh: () {
           GroupLiveListScope.maybeOf(context)?.refreshVisible();
           logic.iJoinedInitial();
         },
         onLoading: logic.iJoinedLoadMore,
-        child: ListView.builder(
-          physics: const BouncingScrollPhysics(),
-          itemCount: logic.iJoinedList.length,
-          itemBuilder: (_, index) => _buildItemView(logic.iJoinedList[index],
-              showDivider: index < logic.iJoinedList.length - 1),
-        ),
+        child: logic.iJoinedList.isEmpty
+            ? contactListPlaceholder(
+                context,
+                title: Localizations.localeOf(context).languageCode == 'zh'
+                    ? '暂无加入的群聊'
+                    : 'No groups joined yet',
+                loading: logic.loading[false]!,
+                failed: logic.loadFailed[false]!,
+                onRetry: logic.iJoinedInitial,
+              )
+            : ListView.builder(
+                physics: const BouncingScrollPhysics(),
+                itemCount: logic.iJoinedList.length,
+                itemBuilder: (_, index) => _buildItemView(
+                    logic.iJoinedList[index],
+                    showDivider: index < logic.iJoinedList.length - 1),
+              ),
       );
 
   Widget _buildItemView(GroupInfo info, {required bool showDivider}) =>

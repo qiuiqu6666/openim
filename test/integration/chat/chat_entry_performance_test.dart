@@ -136,6 +136,76 @@ void main() {
         .setMockMethodCallHandler(sdkChannel, null);
   });
 
+  testWidgets('large offline gap preserves the reader and exposes newer paging',
+      (tester) async {
+    final logic = await mountHistoryChat(tester, commonList: true);
+    await scrollAway(tester, logic);
+    final oldIDs = logic.messageList.map((m) => m.clientMsgID).toSet();
+    expect(logic.newMessages.awayFromLatest.value, isTrue);
+    im.imSdkStatus(IMSdkStatus.syncStart);
+    im.imSdkStatus(IMSdkStatus.syncEnded);
+    await tester.idle();
+    calls.last.complete(
+        List.generate(40, (i) => _entryMessage('recovered-$i', time: 1000 + i)),
+        isEnd: false);
+    await tester.pump();
+    await tester.pump();
+    final retainedOld =
+        logic.messageList.where((m) => oldIDs.contains(m.clientMsgID)).length;
+    print(
+        'RECOVERY_AUDIT scrolled-away=true old_rows_retained=$retainedOld rows=${logic.messageList.length} pending_arrival_count=${logic.newMessages.unseenCount.value} has_older=${logic.historyHasMore.value}');
+    expect(retainedOld, 30);
+    expect(logic.messageList.length, 30);
+    expect(logic.newMessages.unseenCount.value, 0);
+    expect(logic.historyNewerHasMore.value, isTrue);
+    expect(logic.viewingHistory.value, isTrue);
+    expect(tester.takeException(), isNull);
+    logic.onDelete();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('10000 arrivals retain only the latest automatic window',
+      (tester) async {
+    final logic = open();
+    await tester.idle();
+    calls.last.complete([_entryMessage('initial')]);
+    await tester.pump();
+    final watch = Stopwatch()..start();
+    for (var i = 0; i < 10000; i++) {
+      im.recvNewMessage(_entryMessage('burst-$i', time: i + 2));
+    }
+    print(
+        'UX_AUDIT live route: ${logic.messageList.length} retained rows after 10000 arrivals; callback-only elapsed ${watch.elapsedMilliseconds} ms (no per-arrival frames)');
+    expect(logic.messageList.length, 600);
+    expect(logic.messageList.last.clientMsgID, 'burst-9999');
+    expect(logic.historyHasMore.value, isTrue);
+    logic.onDelete();
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+  testWidgets(
+      '10000 arrivals while reading retain the anchor and bound the buffer',
+      (tester) async {
+    final logic = await mountHistoryChat(tester, commonList: true);
+    await scrollAway(tester, logic);
+    final oldIDs = logic.messageList.map((m) => m.clientMsgID).toSet();
+    for (var i = 0; i < 10000; i++) {
+      im.recvNewMessage(_entryMessage('away-$i', time: 1000 + i));
+    }
+    expect(logic.messageList.length, 600);
+    expect(logic.scrollingCacheMessageList.length, 100);
+    expect(logic.scrollingCacheMessageList.last.clientMsgID, 'away-9999');
+    expect(
+        logic.messageList.where((m) => oldIDs.contains(m.clientMsgID)).length,
+        30);
+    expect(logic.viewingHistory.value, isTrue);
+    expect(logic.newMessages.unseenCount.value, 10000);
+    await tester.pump();
+    await tester.pump();
+    expect(logic.newMessages.awayFromLatest.value, isTrue);
+    expect(logic.newMessages.unseenCount.value, 10000);
+    expect(tester.takeException(), isNull);
+    logic.onDelete();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   testWidgets('entry starts one history query before the first route frame',
       (tester) async {
     final logic = open();

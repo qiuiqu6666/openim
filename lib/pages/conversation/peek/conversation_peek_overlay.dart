@@ -10,6 +10,7 @@ import 'package:openim_common/openim_common.dart';
 
 import '../../official_account/widgets/official_account_name_label.dart';
 import 'conversation_peek_layout.dart';
+import 'conversation_peek_actions.dart';
 
 typedef ConversationPeekMenuBuilder = Widget Function(
     BuildContext context, double itemVerticalPadding, VoidCallback dismiss);
@@ -32,6 +33,7 @@ class ConversationPeekOverlay {
     required ConversationPeekMenuBuilder menuBuilder,
     required int menuItemCount,
     int menuDividerCount = 1,
+    ValueListenable<ConversationPeekActions>? liveActions,
     bool Function()? canOpenChat,
     required VoidCallback onOpenChat,
     VoidCallback? onDismiss,
@@ -58,25 +60,35 @@ class ConversationPeekOverlay {
         transitionDuration: MediaQuery.disableAnimationsOf(context)
             ? Duration.zero
             : _PeekStyle.transitionDuration,
-        pageBuilder: (context, animation, secondaryAnimation) => _PeekDialog(
-          displayName: displayName,
-          userID: userID,
-          ex: ex,
-          isSingleChat: isSingleChat,
-          headerSubtitle: headerSubtitle,
-          messageContent: messageContent,
-          menuBuilder: menuBuilder,
-          menuItemCount: menuItemCount,
-          menuDividerCount: menuDividerCount,
-          onDismiss: dismiss,
-          onOpenChat: () {
-            if (closing || !route.isCurrent || !(canOpenChat?.call() ?? true)) {
-              return;
-            }
-            dismiss();
-            onOpenChat();
-          },
-        ),
+        pageBuilder: (context, animation, secondaryAnimation) {
+          Widget dialog(ConversationPeekActions? actions) => _PeekDialog(
+                displayName: displayName,
+                userID: userID,
+                ex: ex,
+                isSingleChat: isSingleChat,
+                headerSubtitle: headerSubtitle,
+                messageContent: messageContent,
+                menuBuilder: menuBuilder,
+                menuItemCount: actions?.itemCount ?? menuItemCount,
+                menuDividerCount: actions?.dividerCount ?? menuDividerCount,
+                onDismiss: dismiss,
+                onOpenChat: () {
+                  if (closing ||
+                      !route.isCurrent ||
+                      !(canOpenChat?.call() ?? true)) {
+                    return;
+                  }
+                  dismiss();
+                  onOpenChat();
+                },
+              );
+          return liveActions == null
+              ? dialog(null)
+              : ValueListenableBuilder<ConversationPeekActions>(
+                  valueListenable: liveActions,
+                  builder: (_, actions, __) => dialog(actions),
+                );
+        },
         transitionBuilder: (context, animation, secondaryAnimation, child) =>
             FadeTransition(
           opacity: CurvedAnimation(

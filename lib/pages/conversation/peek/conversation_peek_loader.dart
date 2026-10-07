@@ -185,24 +185,34 @@ class ConversationPeekLoader extends ChangeNotifier {
         (message.attachedInfoElem?.burnDuration ?? 0) > 0) {
       return true;
     }
-    final serialized = message.attachedInfo;
-    if (serialized == null || serialized.trim().isEmpty) return false;
     try {
-      final info = AttachedInfoElem.fromJson(
-          jsonDecode(serialized) as Map<String, dynamic>);
-      return info.isPrivateChat == true || (info.burnDuration ?? 0) > 0;
+      final info = _decodeAttachedInfo(message.attachedInfo);
+      return info?.isPrivateChat == true || (info?.burnDuration ?? 0) > 0;
     } catch (_) {
       // Quoted/merged messages can carry only serialized retention metadata.
       return true;
     }
   }
 
+  static AttachedInfoElem? _decodeAttachedInfo(String? serialized) {
+    if (serialized == null || serialized.trim().isEmpty) return null;
+    final value = jsonDecode(serialized);
+    // SDK history can encode absent attachedInfo as the literal JSON "null".
+    // It carries no retention metadata; it is not a malformed/private message.
+    if (value == null) return null;
+    return AttachedInfoElem.fromJson(value as Map<String, dynamic>);
+  }
+
   /// Referenced private content also stays out of shared safe-history seeds.
   static bool containsPrivateContent(Message message, [int depth = 0]) {
     if (isPrivateMessage(message) || depth >= 8) return true;
-    final quoted = message.quoteElem?.quoteMessage;
-    if (quoted != null && containsPrivateContent(quoted, depth + 1)) {
-      return true;
+    for (final quoted in [
+      message.quoteElem?.quoteMessage,
+      message.atTextElem?.quoteMessage,
+    ]) {
+      if (quoted != null && containsPrivateContent(quoted, depth + 1)) {
+        return true;
+      }
     }
     return message.mergeElem?.multiMessage
             ?.any((item) => containsPrivateContent(item, depth + 1)) ==
@@ -215,11 +225,9 @@ class ConversationPeekLoader extends ChangeNotifier {
       final copy = Message.fromJson(
           jsonDecode(jsonEncode(message.toJson())) as Map<String, dynamic>);
       // Some SDK snapshots only have the serialized attachedInfo metadata.
-      final serialized = copy.attachedInfo;
-      if (serialized != null && serialized.trim().isNotEmpty) {
-        try {
-          final info = AttachedInfoElem.fromJson(
-              jsonDecode(serialized) as Map<String, dynamic>);
+      try {
+        final info = _decodeAttachedInfo(copy.attachedInfo);
+        if (info != null) {
           if (copy.attachedInfoElem == null) {
             copy.attachedInfoElem = info;
           } else if (info.isPrivateChat == true) {
@@ -227,10 +235,10 @@ class ConversationPeekLoader extends ChangeNotifier {
             copy.attachedInfoElem!.burnDuration ??= info.burnDuration;
             copy.attachedInfoElem!.hasReadTime ??= info.hasReadTime;
           }
-        } catch (_) {
-          // Unknown retention metadata cannot safely expose cached content.
-          continue;
         }
+      } catch (_) {
+        // Unknown retention metadata cannot safely expose cached content.
+        continue;
       }
       if (_visible(copy) && (!cached || !containsPrivateContent(copy))) {
         copies.add(copy);

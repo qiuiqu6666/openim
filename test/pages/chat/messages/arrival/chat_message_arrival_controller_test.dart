@@ -103,16 +103,15 @@ void main() {
     expect(changes, 1);
   });
 
-  test('a burst has at most sixteen entrances including already claimed rows',
-      () {
+  test('a burst has at most four entrances including already claimed rows', () {
     final burst = List.generate(24, (index) => 'burst-$index');
     for (final id in burst) {
       arrivals.register(_incoming(id), enabled: true);
     }
 
     final claimed = arrivals.takePending(burst.toSet());
-    expect(claimed, hasLength(16));
-    for (final id in burst.skip(16)) {
+    expect(claimed, hasLength(4));
+    for (final id in burst.skip(4)) {
       expect(arrivals.isEntering(id), isFalse, reason: id);
     }
     arrivals.register(_incoming('while-full'), enabled: true);
@@ -174,7 +173,7 @@ void main() {
   });
 
   test('deleted pending rows do not prevent later live entrances', () {
-    for (var index = 0; index < 16; index++) {
+    for (var index = 0; index < 4; index++) {
       arrivals.register(_incoming('deleted-$index'), enabled: true);
     }
     arrivals.retain({});

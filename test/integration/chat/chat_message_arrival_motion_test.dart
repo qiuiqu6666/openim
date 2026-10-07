@@ -751,7 +751,7 @@ void main() {
       }
       await tester.pump();
       expect(logic.messageList.last.clientMsgID, ids.last);
-      expect(ids.where(logic.messageArrivals.isEntering), hasLength(16));
+      expect(ids.where(logic.messageArrivals.isEntering), hasLength(4));
       expect(_arrival(ids.last), findsNothing);
       expect(_rowRect(tester, ids.last).height, greaterThan(0));
       expect(nativeReads, isEmpty,

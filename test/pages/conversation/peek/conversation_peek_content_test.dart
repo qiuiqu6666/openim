@@ -9,6 +9,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
+import 'package:openim/pages/chat/fund/fund_message_card.dart';
 import 'package:openim/pages/chat/media/widgets/chat_video_thumbnail.dart';
 import 'package:openim/pages/conversation/peek/conversation_peek_content.dart';
 import 'package:openim/pages/conversation/peek/conversation_peek_loader.dart';
@@ -16,7 +17,6 @@ import 'package:openim/pages/conversation/peek/conversation_peek_message.dart';
 import 'package:openim/services/chat_history_cache.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:openim_common/src/widgets/chat/chat_attachment_view.dart';
-import 'package:openim_common/src/widgets/chat/chat_expiring_content.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
@@ -492,6 +492,132 @@ void main() {
     expect(find.byType(VideoPlayer), findsNothing);
     expect(Get.isRegistered<ChatLogic>(), isFalse);
     await _close(tester, null);
+  });
+
+  for (final dark in [false, true]) {
+    testWidgets('custom Markdown shows the original body and table ($dark)',
+        (tester) async {
+      const body =
+          '# 三公结果\n\n| 门 | 结果 |\n| --- | --- |\n| 3 | **三公** |\n\n尾部正文';
+      final message = _message('custom-markdown', 1)
+        ..contentType = MessageType.custom
+        ..customElem = CustomElem(
+          description: '列表里的简短摘要',
+          data: jsonEncode({
+            'customType': 2300,
+            'data': jsonEncode({'markdown': body}),
+          }),
+        );
+      await _mount(
+          tester,
+          SingleChildScrollView(
+              child: ConversationPeekMessage(
+            message: message,
+            isGroupChat: true,
+          )),
+          dark: dark,
+          preview: const Size(260, 420),
+          textScale: 1.3);
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatMarkdownText), findsOneWidget);
+      expect(
+          tester.widget<ChatMarkdownText>(find.byType(ChatMarkdownText)).text,
+          body);
+      expect(find.byType(Table), findsOneWidget);
+      expect(find.text('尾部正文', findRichText: true), findsOneWidget);
+      expect(find.text('列表里的简短摘要', findRichText: true), findsNothing);
+      expect(message.isRead, isFalse);
+      expect(Get.isRegistered<ChatLogic>(), isFalse);
+      await _close(tester, null);
+    });
+
+    testWidgets(
+        'custom cards and relationship notices reuse chat views ($dark)',
+        (tester) async {
+      final cases = <(Map<String, dynamic>, Type)>[
+        (
+          {
+            'customType': CustomMessageType.call,
+            'data': {'type': 'audio', 'state': 'hangup', 'duration': 65}
+          },
+          ChatCallItemView
+        ),
+        (
+          {'customType': CustomMessageType.deletedByFriend, 'data': {}},
+          ChatFriendRelationshipAbnormalHintView
+        ),
+        (
+          {
+            'orderID': 'snapshot-order',
+            'biz': 'transfer',
+            'currency': 'USDT',
+            'amount': '10',
+            'status': 'done'
+          },
+          FundMessageCard
+        ),
+      ];
+      for (final (payload, type) in cases) {
+        final message = _message('known-custom', 1)
+          ..contentType = MessageType.custom
+          ..customElem =
+              CustomElem(data: jsonEncode(payload), description: '摘要');
+        await _mount(
+            tester,
+            ConversationPeekMessage(
+              message: message,
+              isGroupChat: false,
+              peerName: '小林',
+            ),
+            dark: dark,
+            preview: const Size(340, 420));
+        await tester.pumpAndSettle();
+        expect(find.byType(type), findsOneWidget);
+        if (type == FundMessageCard) {
+          expect(
+              tester.widget<FundMessageCard>(find.byType(type)).statusResolved,
+              isFalse);
+        }
+        if (type == ChatFriendRelationshipAbnormalHintView) {
+          final view = tester.widget<ChatFriendRelationshipAbnormalHintView>(
+              find.byType(type));
+          expect(view.name, '小林');
+          expect(view.onTap, isNull);
+        }
+        expect(find.text('摘要', findRichText: true), findsNothing);
+        expect(message.isRead, isFalse);
+        await _close(tester, null);
+      }
+    });
+  }
+
+  testWidgets(
+      'unknown custom formats retain payload and assistant cards show details',
+      (tester) async {
+    for (final (data, description, visible) in [
+      ('未知正文\n第二行', '摘要', '未知正文\n第二行'),
+      ('{"customType":999999,"result":[1,2]}', '摘要', '"result"'),
+      ('{broken payload', '摘要', '{broken payload'),
+      ('{"prompt":"绘制一座山"}', 'image', '绘制一座山'),
+      ('{"groupName":"项目讨论"}', 'groupCard', '项目讨论'),
+    ]) {
+      final message = _message('fallback', 1)
+        ..contentType = MessageType.custom
+        ..customElem = CustomElem(data: data, description: description);
+      await _mount(
+          tester,
+          SingleChildScrollView(
+              child: ConversationPeekMessage(
+            message: message,
+            isGroupChat: false,
+          )),
+          preview: const Size(340, 420));
+      await tester.pumpAndSettle();
+      expect(find.textContaining(visible, findRichText: true), findsWidgets);
+      expect(find.text(StrRes.unsupportedMessage, findRichText: true),
+          findsNothing);
+      await _close(tester, null);
+    }
   });
 
   for (final dark in [false, true]) {

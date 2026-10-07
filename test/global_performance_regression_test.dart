@@ -17,6 +17,8 @@ import 'package:openim_common/openim_common.dart';
 
 class _FakeApp extends GetxController implements AppController {
   int notifications = 0;
+  @override
+  Future<void> onApplicationSessionReady({bool authenticated = false}) async {}
 
   @override
   Future<void> onNotificationSessionReady({bool authenticated = false}) async {}
@@ -75,12 +77,6 @@ class _CountingHome extends HomeLogic {
   void getUnhandledFriendApplicationCount() => friendRequests++;
   @override
   void getUnhandledGroupApplicationCount() => groupRequests++;
-}
-
-class _NotificationApp extends AppController {
-  int prompts = 0;
-  @override
-  Future<void> promptSoundOrNotification(int seq) async => prompts++;
 }
 
 ConversationInfo _conversation(String id, int time, {bool pinned = false}) =>
@@ -236,7 +232,7 @@ void main() {
     expect(delivered, ['offline']);
     im.imSdkStatus(IMSdkStatus.syncEnded);
     im.recvOfflineMessage(_message('live'));
-    expect(app.notifications, 1);
+    expect(app.notifications, 0);
     expect(delivered, ['offline', 'live']);
   });
 
@@ -256,40 +252,8 @@ void main() {
     expect(ChatHistoryCache.read('other', 'chat'), [otherAccount]);
   });
 
-  test(
-      'notification query is skipped until sync ends and preserves mute filtering',
-      () async {
-    var lookups = 0;
-    var muted = true;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(sdkChannel, (call) async {
-      if (call.method == 'getOneConversation') {
-        lookups++;
-        return jsonEncode({
-          'conversationID': 'chat',
-          'unreadCount': 0,
-          'recvMsgOpt': muted ? 2 : 0,
-        });
-      }
-      return null;
-    });
-    final notifications = _NotificationApp();
-    im.imSdkStatus(IMSdkStatus.syncStart);
-    await notifications.showNotification(_message('sync'));
-    expect(lookups, 0);
-    im.imSdkStatus(IMSdkStatus.syncEnded);
-    await notifications.showNotification(_message('disabled'),
-        showNotification: false);
-    expect(lookups, 0);
-    await notifications.showNotification(_message('muted'));
-    expect(lookups, 1);
-    expect(notifications.prompts, 0);
-    muted = false;
-    await notifications.showNotification(_message('allowed'));
-    expect(lookups, 2);
-    expect(notifications.prompts, 1);
-    notifications.onDelete();
-  });
+  // Notification runtime coverage lives in core/notifications/; the old
+  // AppController prompt override no longer initialized the real runtime.
 
   test('friend refreshes share work and stop obsolete pagination', () async {
     final requests = <Completer<List<FriendInfo>>>[];

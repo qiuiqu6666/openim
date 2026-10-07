@@ -49,6 +49,8 @@ class _ConversationLogic extends GetxController
   @override
   bool isArchived(ConversationInfo info) => false;
   @override
+  String? folderID(ConversationInfo info) => null;
+  @override
   bool isGroupChat(ConversationInfo info) => info.isGroupChat;
   @override
   bool isNotDisturb(ConversationInfo info) => false;

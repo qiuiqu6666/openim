@@ -4,6 +4,8 @@
 
 `ChatComposerController` 拥有输入和焦点控制器、草稿写入队列、提及映射、引用消息、定向收件人以及输入与停止输入计时器。`ChatLogic` 负责创建模块，在会话参数就绪后调用 `initialize(draft)`，暂停时调用 `saveDraft()`，退出时调用一次 `dispose()`。
 
+输入栏上方的引用预览复用公共 `ChatComposerContextPreview`，对齐用户截图及 99chat 的 `TIMUIKitInputReplyPreview`：平面底色、蓝色「回复 + 发送者」、灰色单行摘要、图片/视频缩略图及圆形关闭按钮。长内容省略并可长按查看完整摘要。仅右侧关闭按钮取消引用，点击预览内容不会误清除引用；关闭不改输入草稿，`TextFieldTapRegion` 保持输入焦点。摘要和缩略图与气泡引用共用公共 `chat/quote/` 模块。预览只读取真实 SDK 消息，引用发送协议和状态所有权不变。
+
 会话信息、成员选择、消息发送、草稿持久化、工具栏关闭和滚动由明确的 getter 与回调传入。默认消息构造使用 OpenIM SDK；格式化编辑页属于本模块。模块不依赖 `ChatLogic`，不注册全局 SDK 订阅。
 
 输入框获得焦点时调用注入的滚动回调；页面将其接到 `scrolling/ChatLatestScrollController` 的平滑回底入口。焦点和键盘在动画期间保留，不能在通用滚动监听里收起键盘；只有用户拖动消息列表才取消回底并收起键盘。

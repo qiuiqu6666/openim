@@ -213,6 +213,11 @@ class ContactsLogic extends GetxController
     loadFriends();
   }
 
+  /// A picker joins the initial load without requesting another full reload.
+  Future<void> ensureFriendsLoaded() => _inactive
+      ? Future.value()
+      : _friendsLoad ?? (friendsLoading.value ? loadFriends() : Future.value());
+
   Future<void> loadFriends() {
     if (_inactive) return Future.value();
     final pending = _friendsLoad;

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import '../security_feedback.dart';
+import '../../../../widgets/empty_state/illustrated_empty_state.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -671,84 +672,8 @@ class SettingsPrimaryButton extends StatelessWidget {
       );
 }
 
-class SettingsEmptyState extends StatelessWidget {
-  const SettingsEmptyState({
-    super.key,
-    required this.icon,
-    required this.title,
-    this.description = '',
-    this.actionLabel,
-    this.onAction,
-    this.imageWidth = 160,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-  final double imageWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = settingsIsDark(context);
-    final secondary = AppTokens.textSecondary(dark: dark);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              'assets/images/empty_99chat.webp',
-              package: 'openim_common',
-              width: imageWidth,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => Icon(
-                icon,
-                size: imageWidth * 0.45,
-                color: secondary.withValues(alpha: 0.45),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: secondary,
-                fontSize: 15,
-                fontWeight: FontWeight.w400,
-                height: 1.4,
-              ),
-            ),
-            if (description.trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                description,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: secondary, fontSize: 13, height: 1.45),
-              ),
-            ],
-            if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: onAction,
-                child: Text(
-                  actionLabel!,
-                  style: const TextStyle(
-                    color: AppTokens.accent,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
+/// Compatibility name for existing settings and call-record screens.
+typedef SettingsEmptyState = IllustratedEmptyState;
 
 /// Compatibility name for existing settings and application callers.
 typedef SettingsAction<T> = AppAction<T>;

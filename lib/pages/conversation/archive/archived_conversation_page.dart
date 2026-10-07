@@ -11,6 +11,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../conversation_logic.dart';
+import '../folders/conversation_folder_controller.dart';
 import '../editing/conversation_edit_action_bar.dart';
 import '../editing/conversation_edit_actions.dart';
 import '../editing/conversation_edit_controller.dart';
@@ -34,6 +35,7 @@ class ArchivedConversationPage extends StatefulWidget {
 
 class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
   final _logic = Get.find<ConversationLogic>();
+  late final _folders = ConversationFolderController(logic: _logic);
   final _editor = ConversationEditController();
   final _scrollController = ScrollController();
   final _slides = <String, SlidableController>{};
@@ -101,6 +103,7 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
       isActive: () => mounted && !_editor.editing && !_editor.busy,
       onDelete: _confirmDelete,
       perform: _perform,
+      folders: _folders,
     );
   }
 
@@ -349,6 +352,7 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
 
   @override
   void dispose() {
+    _folders.dispose();
     _editor.dispose();
     _scrollController.dispose();
     _slides.clear();

@@ -7,6 +7,7 @@ import 'package:sprintf/sprintf.dart';
 
 import 'group_requests_logic.dart';
 import 'widgets/group_request_handler_label.dart';
+import '../empty/contact_list_placeholder.dart';
 
 class GroupRequestsPage extends StatelessWidget {
   final logic = Get.find<GroupRequestsLogic>();
@@ -21,21 +22,15 @@ class GroupRequestsPage extends StatelessWidget {
       backgroundColor: Styles.c_F8F9FA,
       body: Obx(() {
         if (logic.list.isEmpty) {
-          if (!logic.applicationsLoaded.value) {
-            return const SizedBox.shrink();
-          }
           return SafeArea(
             top: false,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(AppTokens.s7),
-                child: Text(
-                  StrRes.emptyGroupNotification,
-                  key: const ValueKey('empty-group-notifications'),
-                  textAlign: TextAlign.center,
-                  style: Styles.ts_8E9AB0_15sp,
-                ),
-              ),
+            child: contactListPlaceholder(
+              context,
+              title: StrRes.emptyGroupNotification,
+              loading: !logic.applicationsLoaded.value &&
+                  !logic.applicationsLoadFailed.value,
+              failed: logic.applicationsLoadFailed.value,
+              onRetry: logic.reloadApplications,
             ),
           );
         }

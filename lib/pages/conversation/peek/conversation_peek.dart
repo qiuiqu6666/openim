@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -21,12 +22,14 @@ Future<void> showConversationPeek({
   required String displayName,
   required ConversationPeekActions actions,
   required bool Function() isActive,
+  ValueListenable<ConversationPeekActions>? liveActions,
   ConversationPeekLoader? historyLoader,
 }) async {
   if (!context.mounted || !isActive()) return;
   final loader =
       historyLoader ?? ConversationPeekLoader(conversation: conversation);
   ConversationPeekAction? selection;
+  ConversationPeekActions? selectedActions;
   Widget? subtitle;
   if (conversation.isGroupChat) {
     subtitle = ConversationPeekSubtitle(
@@ -68,19 +71,25 @@ Future<void> showConversationPeek({
           ConversationPeekContent(loader: loader, conversation: conversation),
       menuItemCount: actions.itemCount,
       menuDividerCount: actions.dividerCount,
+      liveActions: liveActions,
       canOpenChat: () =>
           isActive() &&
           loader.isCurrent &&
           (loader.loaded || loader.messages.isNotEmpty) &&
           (loader.error == null || loader.messages.isNotEmpty),
-      onOpenChat: () => selection = ConversationPeekAction.openChat,
+      onOpenChat: () {
+        selectedActions = liveActions?.value ?? actions;
+        selection = ConversationPeekAction.openChat;
+      },
       menuBuilder: (menuContext, padding, dismiss) => ConversationPeekMenu(
-        actions: actions,
+        actions: liveActions?.value ?? actions,
         menuWidth: MediaQuery.sizeOf(menuContext).width *
             ConversationPeekLayout.menuWidthFactor,
         itemVerticalPadding: padding,
         onSelected: (action) {
-          if (selection != null || !isActive()) return;
+          final current = liveActions?.value ?? actions;
+          if (selection != null || !isActive() || !current.isAvailable) return;
+          selectedActions = current;
           selection = action;
           dismiss();
         },
@@ -91,7 +100,7 @@ Future<void> showConversationPeek({
   }
   if (!context.mounted || !isActive() || selection == null) return;
   try {
-    await actions.invoke(selection!);
+    await (selectedActions ?? actions).invoke(selection!);
   } catch (error) {
     if (context.mounted && isActive()) {
       IMViews.showToast(Localizations.localeOf(context).languageCode == 'zh'

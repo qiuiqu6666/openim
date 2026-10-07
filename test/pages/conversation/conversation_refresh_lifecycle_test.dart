@@ -48,6 +48,8 @@ void main() {
   const sdk = MethodChannel('flutter_openim_sdk');
   late List<Completer<String>> replies;
   Completer<void>? deletion;
+  Completer<void>? conversationWrite;
+  late List<MethodCall> writes;
   setUp(() {
     Get.testMode = true;
     OpenIM.iMManager.userID = 'self';
@@ -56,10 +58,17 @@ void main() {
     Get.put<HomeLogic>(_Home());
     replies = [];
     deletion = null;
+    conversationWrite = null;
+    writes = [];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdk, (call) {
-      if (call.method == 'deleteConversationAndDeleteAllMsg')
+      if (call.method == 'setConversation') {
+        writes.add(call);
+        return conversationWrite?.future ?? Future.value();
+      }
+      if (call.method == 'deleteConversationAndDeleteAllMsg') {
         return deletion?.future ?? Future.value();
+      }
       expect(call.method, 'getConversationListSplit');
       final reply = Completer<String>();
       replies.add(reply);
@@ -72,6 +81,33 @@ void main() {
     Get.reset();
   });
 
+  for (final pin in [false, true]) {
+    test('queued metadata cannot undo a completed user setting ($pin)',
+        () async {
+      final logic = ConversationLogic();
+      final info = _conversation('chat', 1)
+        ..isPinned = false
+        ..recvMsgOpt = 0;
+      logic.list.add(info);
+      conversationWrite = Completer<void>();
+      final pending =
+          pin ? logic.setPinned(info, true) : logic.setNotDisturb(info, true);
+      await _flush();
+      logic.queueChanges([
+        _conversation('chat', 2)
+          ..isPinned = false
+          ..recvMsgOpt = 0
+      ]);
+      conversationWrite!.complete();
+      await pending;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(logic.list.single.latestMsgSendTime, 2);
+      expect(
+          pin ? logic.list.single.isPinned : logic.list.single.recvMsgOpt == 2,
+          isTrue);
+      logic.onClose();
+    });
+  }
   test('a normal refresh merges SDK callbacks newer than its snapshot',
       () async {
     final logic = ConversationLogic();
@@ -85,6 +121,30 @@ void main() {
     expect(logic.list.last.latestMsgSendTime, 2);
     logic.onClose();
   });
+
+  for (final failure in [false, true]) {
+    test('late mute result cannot update a different account ($failure)',
+        () async {
+      final logic = ConversationLogic();
+      final info = _conversation('chat', 1)..recvMsgOpt = 0;
+      logic.list.add(info);
+      conversationWrite = Completer<void>();
+      final pending = logic.setNotDisturb(info, true);
+      await _flush();
+      expect(writes, hasLength(1));
+      OpenIM.iMManager.userID = 'other';
+      if (failure) {
+        conversationWrite!.completeError(PlatformException(code: '500'));
+      } else {
+        conversationWrite!.complete();
+      }
+      await pending;
+      expect(info.recvMsgOpt, 0);
+      await logic.setNotDisturb(info, true);
+      expect(writes, hasLength(1));
+      logic.onClose();
+    });
+  }
 
   test('an earlier refresh cannot replace the latest completed refresh',
       () async {

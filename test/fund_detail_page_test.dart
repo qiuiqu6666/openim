@@ -1482,9 +1482,11 @@ void main() {
     expect(api.claims, ['packet-1']);
     expect(find.byKey(const ValueKey('fund-packet-cover')), findsOneWidget);
     await tester.pump(FundTokens.openingDuration ~/ 4);
-    final transform = tester.widget<Transform>(
+    final transform = tester.renderObject<RenderBox>(
         find.byKey(const ValueKey('fund-detail-open-animation')));
-    expect(transform.transform, isNot(Matrix4.identity()));
+    final coin = tester.renderObject<RenderBox>(
+        find.byKey(const ValueKey('fund-detail-open')));
+    expect(coin.getTransformTo(transform), isNot(Matrix4.identity()));
     await tester.tap(find.byKey(const ValueKey('fund-detail-open')));
     expect(api.claims, ['packet-1']);
     claim.complete(const FundClaimResult(orderID: 'packet-1', amount: '2.5'));

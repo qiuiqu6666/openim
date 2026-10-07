@@ -169,9 +169,8 @@ mixin IMCallback {
       onRecvNewMessage?.call(msg);
       return;
     }
-    if (currentSdkStatus == IMSdkStatus.syncEnded) {
-      initLogic.showNotification(msg);
-    }
+    // Offline deliveries update persisted state without replaying old alerts,
+    // even when the native completion callback precedes the final deliveries.
     onRecvOfflineMessage?.call(msg);
   }
 

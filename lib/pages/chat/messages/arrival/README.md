@@ -5,7 +5,7 @@
 ## 入口与职责
 
 - `ChatLogic._appendLiveMessage` 完成会话过滤、去重和历史窗口缓冲判断后，调用 `messageArrivals.register`。只在当前路由、前台、历史已加载、位于最新位置、列表没有滚动或多选时登记；本人投递、typing 和系统通知直接展示。
-- `ChatMessageArrivalController` 持有待领取、入场中及取消的消息 ID，不持有 SDK 订阅或 ticker。最多同时登记 16 条，超过上限的消息正常插入并直接显示。`retain` 清理插入后又被删除的消息。
+- `ChatMessageArrivalController` 持有待领取、入场中及取消的消息 ID，不持有 SDK 订阅或 ticker。最多同时登记 4 条，超过上限的消息正常插入并直接显示。`retain` 清理插入后又被删除的消息。
 - `ChatMessageList` 持有 `ChatMessageArrivalAnimations` 和 ticker，将动画放在原有最外层消息 key 内，保留 SDK ID、反向索引和 `findChildIndexCallback`。
 - `ChatMessageArrivalAnimations` 按消息 ID 持有动画进度。公共 viewport 在新消息插入时可以更换 sliver center，因此动画不能由消息行自身重新创建；重叠到达、回执刷新和行重建均复用已有进度。
 
@@ -19,7 +19,7 @@
 
 已经入场的行在完成后保留同类型包装，避免结束瞬间重建媒体气泡子树；完成时即释放 ticker，只保留仍在当前 SDK 列表里的行 ID。
 
-多个入场气泡按 SDK 列表的上下顺序约束绘制位置，后到的行保持在上方入场行的完整高度之后。邻接数据只持有仍在入场且已挂载的渲染行，最多 16 条；只影响平移位置，不修改消息数据、滚动位置或布局约束。
+多个入场气泡按 SDK 列表的上下顺序约束绘制位置，后到的行保持在上方入场行的完整高度之后。邻接数据只持有仍在入场且已挂载的渲染行，最多 4 条；只影响平移位置，不修改消息数据、滚动位置或布局约束。
 
 ## 验证入口
 
