@@ -2,7 +2,7 @@
 
 本文对应 `/www/wwwroot/openimservice/sangong` 和当前 Flutter 实现。Go 模块编译进 OpenIM Chat API/RPC；三公账务继续使用独立的 MySQL 表，OpenIM 的消息库与 Chat MongoDB 不承担余额记账。可以共用数据库服务器，不能把三公余额存进 OpenIM 自定义字段。
 
-当前处于切换前验证阶段，不能据此认定线上已启用。新版不再沿用 Java 的账号默认配置、v1 游戏接口或三公 SSE。旧版接口文档仅供迁移对照。
+2026-10-07 22:23（UTC+8）已在当前部署切换到 Go：Chat API/RPC 同步启用，原 Java 三公服务已停止并禁用开机启动。新版不再沿用 Java 的账号默认配置、v1 游戏接口或三公 SSE。旧版接口文档仅供迁移对照。客户端源码已同步，Android/iOS 安装包构建不属于本次服务端发布结果。
 
 ## 1 请求约定
 
@@ -316,6 +316,6 @@ Flutter 接受事件前核对群、sendID=可信 snapshot.botUserId、非空 ser
 | 网络超时 / 502 / 回执不完整 | 结果未知；保留原 requestId，核实或显式重试 |
 | REPORT_GROUP_MISSING | 配置管理账单接收群后再提交 |
 
-切换前须完成：独立数据库集成测试、Java 报表样本核对、Flutter 权限/切群/重连/幂等/小屏回归、客户端构建、真实 OpenIM 群消息与报表送达/撤回验证，以及数据库备份与 Java 未完成任务排空。应用 MySQL 026–032 迁移后显式转移执行权；Chat API/RPC 同步启用 Go。通过验收后才停止 Java，不能让两个执行器同时处理同一租户。
+本次服务端切换已完成：独立数据库集成测试、Java 报表样本核对、475 项 Flutter 回归、真实 OpenIM 群下注/撤回/截止/结算/报表链路，以及数据库备份恢复演练。维护窗口中先停止 Java 和旧入口，确认任务排空，再应用 MySQL 026–032 迁移并显式转移执行权，随后启动 Go Chat API/RPC。两个实际群的配置、状态、用户、批次、能力接口已用现有登录会话验证；无效 Token 返回 401，旧游戏接口返回 410。不能让两个执行器同时处理同一租户。Android/iOS 安装包仍需各自的构建与设备验收。
 
 实现入口：`api/service.go`、`api/query.go`、`engine/service.go`、`storage/mysql/game_queries.go`；Flutter 对应 `lib/pages/group_features/sangong/api/` 与 `services/realtime/`。该契约的金额和路由以这些实现及集成测试共同校验。
