@@ -19,20 +19,32 @@ class HeroWidget extends StatefulWidget {
 
 class _HeroWidgetState extends State<HeroWidget> {
   RectTween? _rectTween;
+  final _contentKey = GlobalKey();
   @override
   Widget build(BuildContext context) {
     return Hero(
       tag: widget.tag,
+      // Flutter normally unmounts the destination while the shuttle is flying.
+      // Keep its file check, decoded image and gesture state alive so landing
+      // cannot briefly replace the picture with its loading placeholder.
+      placeholderBuilder: (context, size, child) => SizedBox(
+        width: size.width,
+        height: size.height,
+        child: Offstage(
+          child: TickerMode(enabled: false, child: child),
+        ),
+      ),
       createRectTween: (Rect? begin, Rect? end) {
         _rectTween = RectTween(begin: begin, end: end);
         return _rectTween!;
       },
-      flightShuttleBuilder: (BuildContext flightContext, Animation<double> animation,
-          HeroFlightDirection flightDirection, BuildContext fromHeroContext, BuildContext toHeroContext) {
-        final Hero hero =
-            (flightDirection == HeroFlightDirection.pop ? fromHeroContext.widget : toHeroContext.widget) as Hero;
+      flightShuttleBuilder: (BuildContext flightContext,
+          Animation<double> animation,
+          HeroFlightDirection flightDirection,
+          BuildContext fromHeroContext,
+          BuildContext toHeroContext) {
         if (_rectTween == null) {
-          return hero;
+          return widget.child;
         }
 
         if (flightDirection == HeroFlightDirection.pop) {
@@ -44,7 +56,7 @@ class _HeroWidgetState extends State<HeroWidget> {
           return AnimatedBuilder(
             animation: animation,
             builder: (BuildContext buildContext, Widget? child) {
-              Widget animatedBuilderChild = hero.child;
+              Widget animatedBuilderChild = widget.child;
 
               animatedBuilderChild = Stack(
                 clipBehavior: Clip.antiAlias,
@@ -68,11 +80,12 @@ class _HeroWidgetState extends State<HeroWidget> {
               );
 
               if (fixTransform) {
-                final Tween<Offset> offsetTween =
-                    Tween<Offset>(begin: Offset.zero, end: widget.slidePagekey.currentState!.offset);
+                final Tween<Offset> offsetTween = Tween<Offset>(
+                    begin: Offset.zero,
+                    end: widget.slidePagekey.currentState!.offset);
 
-                final Tween<double> scaleTween =
-                    Tween<double>(begin: 1.0, end: widget.slidePagekey.currentState!.scale);
+                final Tween<double> scaleTween = Tween<double>(
+                    begin: 1.0, end: widget.slidePagekey.currentState!.scale);
                 animatedBuilderChild = Transform.translate(
                   offset: offsetTween.evaluate(animation),
                   child: Transform.scale(
@@ -86,9 +99,10 @@ class _HeroWidgetState extends State<HeroWidget> {
             },
           );
         }
-        return hero.child;
+        // The shuttle has its own subtree; never duplicate _contentKey here.
+        return widget.child;
       },
-      child: widget.child,
+      child: KeyedSubtree(key: _contentKey, child: widget.child),
     );
   }
 }

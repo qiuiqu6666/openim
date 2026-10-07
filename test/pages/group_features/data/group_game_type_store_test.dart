@@ -138,10 +138,10 @@ void main() {
     final subscription = store.events('g').listen(events.add);
     addTearDown(subscription.cancel);
 
-    store.seed(_group('g', 2, revision: 5, enabled: false));
+    store.seed(_group('g', 3, revision: 5, enabled: false));
     expect(notifications, 1);
     expect(context('g').gameType, GroupGameType.markSix);
-    store.seed(_group('g', 2, revision: 5, enabled: false));
+    store.seed(_group('g', 3, revision: 5, enabled: false));
     expect(notifications, 1);
     store.seed(_group('g', 0, revision: 4, enabled: false));
     expect(notifications, 2);
@@ -171,7 +171,7 @@ void main() {
     store.seed(_group('g', 1, revision: 3, enabled: false));
     expect(notifications, 1);
     expect(context('g').gameType, GroupGameType.sangong);
-    store.seed(_group('g', 2));
+    store.seed(_group('g', 3));
     expect(notifications, 2);
     expect(context('g').gameType, GroupGameType.markSix);
     store.seed(GroupInfo(groupID: 'g', ex: 'not-json'));
@@ -190,8 +190,16 @@ void main() {
       () {
     store.seed(_group('g', 1, revision: 1));
     store.seed(_group('h', 2, revision: 1));
+    expect(context('h').gameType, GroupGameType.markSixAgent);
+    expect(context('h').showMarkSixDrawHistory, isFalse);
+    store.seed(_group('h', 4, revision: 1));
+    expect(context('h').gameType, GroupGameType.sangongAgent);
+    expect(context('h').showMarkSixDrawHistory, isFalse);
+    expect(context('h').capabilities.sangong.canOpenAgent, isFalse);
+    store.seed(_group('h', 3, revision: 1));
     expect(context('g').gameType, GroupGameType.sangong);
     expect(context('h').gameType, GroupGameType.markSix);
+    expect(context('h').showMarkSixDrawHistory, isTrue);
     store.seed(_group('g', 0, revision: 1));
     expect(context('g').gameType, GroupGameType.ordinary);
     expect(context('h').gameType, GroupGameType.markSix);
@@ -220,7 +228,7 @@ void main() {
     expect(context('g').features.valid, isFalse);
     expect(context('g').capabilities.sangong.canManage, isFalse);
     expect(context('g').capabilities.sangong.tenantID, isEmpty);
-    store.seed(_group('g', 2));
+    store.seed(_group('g', 3));
     expect(context('g').gameType, GroupGameType.markSix);
     expect(context('g').capabilities.sangong.canManage, isFalse);
     expect(api.calls, hasLength(1));
@@ -233,7 +241,7 @@ void main() {
     expect(sdkGroup.ex, ex);
     expect(store.cachedGroupInfo('g')?.ex, ex);
     expect(context('g').gameType, GroupGameType.sangong);
-    sdkGroup.ex = '{"gameType":2}';
+    sdkGroup.ex = '{"gameType":3}';
     expect(context('g').gameType, GroupGameType.sangong);
     expect(store.cachedGroupInfo('g')?.ex, ex);
     expect(api.calls, isEmpty);

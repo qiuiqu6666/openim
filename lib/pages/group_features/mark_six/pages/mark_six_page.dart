@@ -27,9 +27,7 @@ class _MarkSixPageState extends State<MarkSixPage> {
       MarkSixController(MarkSixRepository(widget.featureContext));
   int _tab = 0;
   bool _closing = false;
-  bool get _allowed =>
-      widget.featureContext.sessionCurrent() &&
-      widget.featureContext.features.markSix.enabled;
+  bool get _allowed => widget.featureContext.showMarkSixDrawHistory;
   @override
   void initState() {
     super.initState();

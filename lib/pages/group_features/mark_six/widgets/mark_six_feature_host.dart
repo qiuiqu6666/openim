@@ -34,6 +34,7 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
   String _contextKey(GroupFeatureContext c) => jsonEncode([
         c.groupID,
         c.currentUserID,
+        c.gameType.name,
         c.features.revision,
         c.capabilities.version,
         c.features.markSix.raw,
@@ -90,9 +91,9 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
     final feature = c.features.markSix;
     final cap = c.capabilities.markSix;
     final enabled = c.sessionCurrent() && feature.enabled;
-    final draw = enabled &&
-        feature.drawHistoryEntry &&
-        _controller.repository.machineCode.isNotEmpty;
+    final draw = c.showMarkSixDrawHistory &&
+        (c.gameType == GroupGameType.markSix ||
+            _controller.repository.machineCode.isNotEmpty);
     final agent = enabled &&
         c.capabilitiesCurrent() &&
         feature.agentEntry &&

@@ -122,12 +122,10 @@ class _FavoriteAssetPreviewState extends State<FavoriteAssetPreview>
                 child: Stack(children: [
                   Positioned.fill(
                       child: _current
-                          ? InteractiveViewer(
-                              minScale: 1,
-                              maxScale: 5,
-                              child: Center(
-                                  child:
-                                      Image.memory(bytes, fit: BoxFit.contain)))
+                          ? AdaptiveMediaImage(
+                              image: MemoryImage(bytes),
+                              enableSlideOutPage: false,
+                            )
                           : const Center(
                               child: Icon(Icons.lock_outline,
                                   color: AppTokens.textPrimaryDark))),

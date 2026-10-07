@@ -2,6 +2,8 @@
 
 公开入口：`mark_six.dart` 导出 `MarkSixFeatureHost`、`MarkSixModule`。Host 的 builder 参数为 `(BuildContext, Widget entry, Widget overlay)`；entry 当前为空，overlay 放入有界聊天 body Stack。Module 的 `openDrawHistory / openAgent / openCurrentRebate / openRebateHistory` 都接收 `(BuildContext, GroupFeatureContext)`，使用当前应用导航与认证传输。
 
+群类型按 `ex.gameType` 数字区分：0 普通群、1 三公游戏、2六合彩代理、3六合彩开奖、4 三公代理。类型为 3 时，右侧开奖把手与工具箱「开奖记录」直接显示，不要求 `enabled`、`drawHistoryEntry` 或机器码先配置。缺少机器码时允许进入页面并显示配置缺失，不发送无绑定请求；绑定存在时仍使用该群真实机器码。其他类型保留既有显式开奖开关，代理与反水权限仍由原权限链判断。群类型更新会重建 Host 上下文并关闭旧预览，回归见 `mark_six_entry_visibility_test.dart`。
+
 ## 参考与视觉
 
 布局、交互和独有图片来源：`qiuiqu6666/99chat`，Apache-2.0。此模块保留 OpenIM 会话与 root 提供的 `GroupFeatureApi`，不引入参考项目的 Tencent SDK、JWT、全局 client 或独立 WebSocket。

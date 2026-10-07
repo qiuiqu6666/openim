@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/group_features/data/group_feature_store.dart';
@@ -39,7 +40,8 @@ GroupFeatureStore _store(SangongTestApi api, AccountPrivilegeAccess privilege,
         api: api,
         accountPrivilege: privilege,
         sessionCurrent: current ?? () => true,
-        fetchGroups: (_) async => []);
+        fetchGroups: (_) async => [])
+      ..seed(GroupInfo(groupID: 'g', ex: '{"gameType":4}'));
 
 Widget _app(GroupFeatureStore store,
         {String groupID = 'g',

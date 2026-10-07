@@ -113,6 +113,7 @@ export 'src/widgets/verify_code_send_button.dart';
 export 'src/widgets/views.dart';
 export 'src/widgets/overlay_widget.dart';
 export 'src/widgets/photo_browser.dart';
+export 'src/widgets/media_browser/adaptive_media_image.dart';
 export 'src/widgets/native_media_video.dart';
 export 'src/widgets/chat/stickers/sticker_preview.dart';
 export 'src/widgets/chat/stickers/chat_image_sticker.dart';

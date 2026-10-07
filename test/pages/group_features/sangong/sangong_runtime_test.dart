@@ -253,7 +253,7 @@ void main() {
     runtime.realtime.release();
   });
   testWidgets(
-      'missing or zero SSE version calibrates and does not freeze future state',
+      'missing or negative SSE version calibrates and does not freeze future state',
       (tester) async {
     final api = SangongTestApi();
     var snapshotVersion = 1;
@@ -268,7 +268,7 @@ void main() {
     expect(api.count('/events/snapshot'), 2);
     expect(runtime.realtime.latestState!.version, 2);
     api.streams.last
-        .add('event: state\ndata: ${jsonEncode(sangongState(0))}\n\n');
+        .add('event: state\ndata: ${jsonEncode(sangongState(-1))}\n\n');
     await flushSangong(tester);
     expect(api.count('/events/snapshot'), 3);
     expect(runtime.realtime.latestState!.version, 3);

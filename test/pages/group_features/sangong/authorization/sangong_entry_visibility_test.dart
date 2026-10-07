@@ -20,7 +20,7 @@ const _chatKey = ValueKey('ordinary-group-chat');
 /// Uses the real account/group cache and authorization epochs. Only transport
 /// responses and the independently verified account flag are replaced.
 class _EntryFixture {
-  _EntryFixture({bool privileged = true}) {
+  _EntryFixture({bool privileged = true, int gameType = 1}) {
     api.privilege.setAllowed(privileged);
     api.respond = (call) {
       if (call.path.contains('/admin/tenants/')) {
@@ -62,7 +62,7 @@ class _EntryFixture {
       'groupID': _groupID,
       'groupName': '三公群聊',
       // A marked Sangong group may still have no legacy groupFeatures summary.
-      'ex': '{"gameType":1}',
+      'ex': '{"gameType":$gameType}',
     }));
   }
 
@@ -163,9 +163,9 @@ void main() {
 
   for (final dark in [false, true]) {
     testWidgets(
-        'privileged ordinary member keeps public entries but no operation float without group permission, dark=$dark',
+        'privileged agent-group member keeps agent entries without operation permission, dark=$dark',
         (tester) async {
-      final fixture = _EntryFixture();
+      final fixture = _EntryFixture(gameType: 4);
       addTearDown(fixture.dispose);
       addTearDown(() => unmountSangong(tester));
       await _pumpChat(tester, fixture, dark: dark);
@@ -209,7 +209,7 @@ void main() {
   testWidgets(
       'account grant reveals public entries but still needs group permission',
       (tester) async {
-    final fixture = _EntryFixture(privileged: false);
+    final fixture = _EntryFixture(privileged: false, gameType: 4);
     addTearDown(fixture.dispose);
     addTearDown(() => unmountSangong(tester));
     await _pumpChat(tester, fixture);

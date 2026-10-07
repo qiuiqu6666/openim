@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:openim/pages/group_features/models/group_game_type.dart';
 import 'package:openim/pages/group_features/sangong/sangong_module.dart';
 import 'sangong_test_support.dart';
 
@@ -17,6 +18,7 @@ void main() {
         final api = SangongTestApi();
         final feature = sangongTestContext(api,
             groupID: 'agent-route-${entry.endpoint}-$dark',
+            gameType: GroupGameType.sangongAgent,
             canConfigure: false,
             canManage: false);
         final runtime = SangongRuntime(feature);

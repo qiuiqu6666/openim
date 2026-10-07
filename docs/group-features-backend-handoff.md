@@ -34,7 +34,7 @@ flowchart LR
 
 下例是 `GroupInfo.ex` 字符串解码后的对象。写入 OpenIM 时必须序列化成字符串，并保留根对象中原有其他字段。
 
-管理后台「群组 → 资料 → 群游戏」另外维护顶层数字 `gameType`：0 普通群、1 三公、2六合彩。例如 `{"gameType":1}` 不需要同时存在 `groupFeatures`。客户端只读该类型，三公运营浮窗另外要求类型为 1；缺失、非法 JSON、非对象、非数字及未知值按普通群。后台先通过 `POST /group/get_groups_info` 读最新资料，再合并其他扩展字段，通过 `POST /group/set_group_info` 写 `groupInfoForSet.ex`；非 JSON 对象的历史资料应先整理。类型与游戏启停、个人权限及业务摘要版本独立。
+管理后台「群组 → 资料 → 群游戏」另外维护顶层数字 `gameType`：0 普通群、1 三公游戏、2六合彩代理、3六合彩开奖、4 三公代理。例如 `{"gameType":1}` 不需要同时存在 `groupFeatures`。客户端只读该类型，三公运营浮窗另外要求类型为 1；类型为 3 时直接显示开奖把手和工具箱入口，缺少机器码在页面内提示，其他群保留既有显式开奖开关。缺失、非法 JSON、非对象、非数字及未知值按普通群。后台先通过 `POST /group/get_groups_info` 读最新资料，再合并其他扩展字段，通过 `POST /group/set_group_info` 写 `groupInfoForSet.ex`；非 JSON 对象的历史资料应先整理。类型不授予个人业务权限或改写业务摘要版本。
 
 ```json
 {
@@ -98,7 +98,7 @@ flowchart LR
 | 群列表／会话直播角标 | `live.status` 为 `scheduled/ready/live` | 最新完整直播摘要；活动状态必须有场次 ID |
 | 群内直播横条 | 上述活动状态 + 非空 `sessionID` | 标题、描述、主播 OpenIM 用户 ID、预约时间 |
 | 工具箱“群直播” | SDK 群管理员，或 `canConfigure/canManage/canPush` 任一成立 | 当前用户的直播能力；每次操作再鉴权 |
-| 三公运营／代理菜单及浮窗 | 当前完整用户资料 `isPrivileged === true`；运营浮窗另需顶层数字 `ex.gameType=1` 并尊重保存的隐藏设置 | 类型为 1 的运营入口不要求旧群摘要、绑定或业务能力；点击后仍校验实际业务权限 |
+| 三公运营／代理菜单及浮窗 | 当前完整用户资料 `isPrivileged === true`；运营浮窗另需顶层数字 `ex.gameType=1` 并尊重保存的隐藏设置；三公代理工具箱及浮窗另需 `ex.gameType=4` | 类型为 1 的运营入口不要求旧群摘要、绑定或业务能力；点击后仍校验实际业务权限 |
 | 三公首次配置页面 | 账号特权之外要求 `sangong.canConfigure` | 点击运营入口后读取当前权限；未启用／未绑定时，获准配置者可进入 |
 | 三公运营业务、状态条与 SSE | 账号特权 + `enabled && manageEntry && canManage` + 有效私人权限 + 已确认租户 | 私有 `tenantID` 可省一次绑定查询；失败时入口页展示原因与重试 |
 | 三公代理业务页面 | 账号特权 + `enabled && agentEntry && canOpenAgent` + 确认租户 | 当前用户在该群的代理能力及绑定；不据特权字段补造权限 |

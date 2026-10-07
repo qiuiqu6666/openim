@@ -13,6 +13,7 @@ import 'package:openim/pages/group_features/models/group_feature_context.dart';
 import 'package:openim/pages/group_features/sangong/sangong_module.dart';
 import 'package:openim/pages/group_features/sangong/widgets/group_game_floating_entry.dart';
 import 'package:openim/pages/group_features/sangong/widgets/sangong_agent_floating_entry.dart';
+import 'package:openim/pages/group_features/widgets/group_feature_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../sangong_test_support.dart';
@@ -29,6 +30,9 @@ class _Fixture {
     this.canConfigure = true,
     this.canManage = true,
     this.agentOnly = false,
+    this.enabled = true,
+    this.manageEntry = true,
+    this.includeSummary = true,
     bool privileged = true,
   }) {
     api.privilege.setAllowed(privileged);
@@ -45,7 +49,7 @@ class _Fixture {
   late final GroupFeatureStore store;
   final String groupID;
   final int gameType;
-  final bool admin, agentOnly;
+  final bool admin, agentOnly, enabled, manageEntry, includeSummary;
   bool canConfigure, canManage;
   bool active = true;
   String? shownGroupID;
@@ -119,6 +123,9 @@ class _Fixture {
           tenant: '@default-betting-tenant',
           name: '错误的默认厅');
     }
+    if (call.path.endsWith('/admin/reports/settle-image')) {
+      return {'ok': true, 'sent': true, 'type': 'settle_report'};
+    }
     return sangongFixtureResponse(call);
   }
 
@@ -127,17 +134,18 @@ class _Fixture {
       groupName: '当前群查询测试',
       ex: jsonEncode({
         'gameType': gameType,
-        'groupFeatures': {
-          'schemaVersion': 1,
-          'revision': 1,
-          'games': {
-            'sangong': {
-              'enabled': true,
-              'manageEntry': true,
-              'agentEntry': agentOnly,
-            }
+        if (includeSummary)
+          'groupFeatures': {
+            'schemaVersion': 1,
+            'revision': 1,
+            'games': {
+              'sangong': {
+                'enabled': enabled,
+                'manageEntry': manageEntry,
+                'agentEntry': agentOnly,
+              }
+            },
           },
-        },
       })));
 
   Future<void> dispose() async {
@@ -360,6 +368,157 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final (label, enabled, manageEntry, includeSummary) in [
+    ('disabled public switch', false, true, true),
+    ('closed management entry', true, false, true),
+    ('gameType without groupFeatures', false, false, false),
+  ]) {
+    testWidgets('configured tenant with $label still enables operator controls',
+        (tester) async {
+      final fixture = _Fixture(
+          enabled: enabled,
+          manageEntry: manageEntry,
+          includeSummary: includeSummary);
+      await _pumpChat(tester, fixture);
+      final runtime = fixture.runtime!;
+      expect(runtime.groupTenant.state!.status.name, 'configured');
+      expect(runtime.groupTenantReady, isTrue);
+      expect(fixture.context.capabilities.sangong.canManage, isTrue);
+      expect(runtime.canManage, isTrue);
+      expect(runtime.manageUnavailableReason, isNull);
+      expect(runtime.canInitialize, isFalse);
+      final entry = tester
+          .widget<GroupGameFloatingEntry>(find.byType(GroupGameFloatingEntry));
+      expect(entry.setupOnly, isFalse);
+      expect(fixture.api.streamStarts, 1);
+      expect(fixture.api.count('/events/snapshot'), greaterThanOrEqualTo(1));
+      expect(fixture.businessCalls, isEmpty);
+      if (!includeSummary) {
+        expect(fixture.context.features.valid, isFalse);
+        entry.onSendSettleImage();
+        await _flush(tester);
+        final report = fixture.businessCalls.single;
+        expect(report.path, endsWith('/admin/reports/settle-image'));
+        expect(report.method, 'POST');
+        expect(report.useBearerAuth, isTrue);
+        expect(report.body, isEmpty);
+        expect(find.byType(SangongManageHomePage), findsNothing);
+        expect(find.text('结算明细已发送到游戏群'), findsOneWidget);
+      }
+
+      final actions = GroupFeatureActions.items(
+          tester.element(find.byKey(_chatKey)), fixture.context);
+      expect(
+          actions.firstWhere((item) => item.text == '三公运营').onTap, isNotNull);
+      expect(find.byType(SangongMyConfigPage), findsNothing);
+      expect(runtime.groupTenant.state!.status.name, 'configured');
+      expect(runtime.groupTenant.state!.config!.name, '当前群的厅名');
+      expect(
+          tester
+              .widget<GroupGameFloatingEntry>(
+                  find.byType(GroupGameFloatingEntry))
+              .setupOnly,
+          isFalse);
+      expect(fixture.api.streamStarts, 1);
+      _expectNoDefaultConfigRead(fixture);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets(
+      'forced discovery hides old setup and a disabled response cannot initialize',
+      (tester) async {
+    final fixture = _Fixture(canConfigure: false, canManage: false)
+      ..tenantResponse = (_) => throw const GroupFeatureException('当前群没有三公配置',
+          code: 'SERVICE_UNAVAILABLE',
+          statusCode: 404,
+          serverCode: 'TENANT_NOT_FOUND');
+    await _pumpChat(tester, fixture);
+    final runtime = fixture.runtime!;
+    expect(runtime.groupTenant.state!.status.name, 'notFound');
+    expect(runtime.canInitialize, isTrue);
+    expect(
+        tester
+            .widget<GroupGameFloatingEntry>(find.byType(GroupGameFloatingEntry))
+            .setupOnly,
+        isTrue);
+    final previousLookups = fixture.lookups.length;
+    final reply = Completer<dynamic>();
+    fixture.tenantResponse = (_) => reply.future;
+    final pending = runtime.groupTenant.refresh(force: true);
+    await _flush(tester);
+    expect(runtime.groupTenant.loading, isTrue);
+    expect(runtime.groupTenant.state!.status.name, 'notFound');
+    expect(runtime.canInitialize, isFalse);
+    expect(runtime.canConfigure, isFalse);
+    expect(runtime.canManage, isFalse);
+    expect(find.byType(GroupGameFloatingEntry), findsNothing);
+    expect(find.text('正在确认当前群的三公配置'), findsOneWidget);
+    expect(fixture.lookups.length, previousLookups + 1);
+
+    reply.complete(fixture.currentConfig(fixture.groupID, enabled: false));
+    await completeSangongRequest(tester, pending);
+    await _flush(tester);
+    expect(runtime.groupTenant.loading, isFalse);
+    expect(runtime.groupTenant.state!.status.name, 'disabled');
+    expect(runtime.canInitialize, isFalse);
+    expect(runtime.canConfigure, isFalse);
+    expect(runtime.canManage, isFalse);
+    expect(find.textContaining('停用'), findsWidgets);
+    expect(fixture.api.streamStarts, 0);
+    expect(fixture.api.count('/events/snapshot'), 0);
+    _expectNoSetup(tester, fixture);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'forced discovery hides an old configured operator until a specific missing response',
+      (tester) async {
+    final fixture = _Fixture();
+    await _pumpChat(tester, fixture);
+    final runtime = fixture.runtime!;
+    expect(
+        tester
+            .widget<GroupGameFloatingEntry>(find.byType(GroupGameFloatingEntry))
+            .setupOnly,
+        isFalse);
+    final previousStreams = fixture.api.streamStarts;
+    expect(previousStreams, 1);
+    final previousLookups = fixture.lookups.length;
+    final reply = Completer<dynamic>();
+    fixture.tenantResponse = (_) => reply.future;
+    final pending = runtime.groupTenant.refresh(force: true);
+    await _flush(tester);
+    expect(runtime.groupTenant.loading, isTrue);
+    expect(runtime.groupTenant.state!.status.name, 'configured');
+    expect(runtime.groupTenantReady, isFalse);
+    expect(runtime.canManage, isFalse);
+    expect(find.byType(GroupGameFloatingEntry), findsNothing);
+    expect(find.text('正在确认当前群的三公配置'), findsOneWidget);
+    expect(fixture.lookups.length, previousLookups + 1);
+    expect(fixture.api.streamStarts, previousStreams);
+    expect(fixture.api.streamStops, greaterThanOrEqualTo(1));
+
+    reply.completeError(const GroupFeatureException('当前群未配置三公',
+        code: 'SERVICE_UNAVAILABLE',
+        statusCode: 404,
+        serverCode: 'TENANT_NOT_FOUND'));
+    await completeSangongRequest(tester, pending);
+    await _flush(tester);
+    expect(runtime.groupTenant.loading, isFalse);
+    expect(runtime.groupTenant.state!.status.name, 'notFound');
+    expect(runtime.canManage, isFalse);
+    expect(
+        tester
+            .widget<GroupGameFloatingEntry>(find.byType(GroupGameFloatingEntry))
+            .setupOnly,
+        isTrue);
+    expect(fixture.api.streamStarts, previousStreams);
+    expect(fixture.businessCalls, isEmpty);
+    _expectNoDefaultConfigRead(fixture);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a tenant response for another game group is an error, not setup',
       (tester) async {
     final fixture = _Fixture();
@@ -489,7 +648,8 @@ void main() {
     ('ordinary', 0, true, false),
     ('mark six', 2, true, false),
     ('unprivileged', 1, false, false),
-    ('agent-only SDK group', 1, true, true),
+    ('legacy agent-only SDK group', 1, true, true),
+    ('sangong agent SDK group', 4, true, true),
   ]) {
     testWidgets('$name does not query the current group as a game tenant',
         (tester) async {
@@ -504,7 +664,8 @@ void main() {
       expect(find.byType(GroupGameFloatingEntry), findsNothing);
       if (agentOnly) {
         expect(fixture.runtime!.requiresGroupTenantCheck, isFalse);
-        expect(find.byType(SangongAgentFloatingEntry), findsOneWidget);
+        expect(find.byType(SangongAgentFloatingEntry),
+            type == 4 ? findsOneWidget : findsNothing);
       }
       _expectNoDefaultConfigRead(fixture);
       expect(tester.takeException(), isNull);

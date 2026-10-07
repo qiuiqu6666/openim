@@ -74,6 +74,8 @@ class SangongRuntime extends ChangeNotifier {
       isPrivileged &&
       requiresGroupTenantCheck &&
       featureContext.isGroupAdmin &&
+      !groupTenant.loading &&
+      groupTenant.error == null &&
       groupTenant.state?.status == SangongGroupTenantStatus.notFound;
 
   bool get groupTenantReady =>
@@ -88,8 +90,9 @@ class SangongRuntime extends ChangeNotifier {
       isCurrent &&
       isPrivileged &&
       groupTenantReady &&
-      featureContext.features.sangong.enabled &&
-      featureContext.features.sangong.manageEntry &&
+      (requiresGroupTenantCheck ||
+          (featureContext.features.sangong.enabled &&
+              featureContext.features.sangong.manageEntry)) &&
       http.hasTenant &&
       featureContext.capabilities.sangong.canManage;
 
@@ -118,8 +121,12 @@ class SangongRuntime extends ChangeNotifier {
       return '当前群不是三公配置中绑定的下注群';
     }
     final feature = featureContext.features.sangong;
-    if (!feature.enabled) return '当前群尚未启用三公运营';
-    if (!feature.manageEntry) return '当前群未开放三公运营入口';
+    // Current game tenants use active from the point lookup and the aggregate
+    // capability. Older SDK ex summaries may be absent or out of date.
+    if (!requiresGroupTenantCheck) {
+      if (!feature.enabled) return '当前群尚未启用三公运营';
+      if (!feature.manageEntry) return '当前群未开放三公运营入口';
+    }
     if (!featureContext.capabilities.sangong.canManage) {
       return '当前账号没有该群的三公运营权限';
     }

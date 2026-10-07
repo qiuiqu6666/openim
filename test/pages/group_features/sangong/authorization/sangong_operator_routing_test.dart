@@ -231,7 +231,7 @@ void main() {
     OpenIM.iMManager.userID = 'owner';
   });
 
-  for (final (enabled, canManage) in [(true, false), (false, true)]) {
+  for (final (enabled, canManage) in [(true, false), (false, false)]) {
     testWidgets(
         'configured owner sees a reason and explicit config link when enabled=$enabled canManage=$canManage',
         (tester) async {
@@ -240,11 +240,7 @@ void main() {
       expect(fixture.runtime!.canConfigure, isTrue);
       expect(fixture.runtime!.groupTenant.state!.config!.configured, isTrue);
       expect(fixture.runtime!.canManage, isFalse);
-      if (canManage) {
-        expect(_operator(tester).setupOnly, isFalse);
-      } else {
-        expect(find.byType(GroupGameFloatingEntry), findsNothing);
-      }
+      expect(find.byType(GroupGameFloatingEntry), findsNothing);
 
       _openManage(tester, fixture);
       await _flush(tester);
@@ -281,11 +277,17 @@ void main() {
   });
 
   testWidgets(
-      'all blocked operator actions stay in chat without business reads',
+      'retained operator callbacks reject revoked management capabilities',
       (tester) async {
-    final fixture = _Fixture(enabled: false, canManage: true);
+    final fixture = _Fixture(canManage: true);
     await _pumpChat(tester, fixture);
     final entry = _operator(tester);
+    fixture.canManage = false;
+    fixture.capabilityVersion++;
+    await completeSangongRequest(
+        tester, fixture.store.loadCapabilities(fixture.groupID, force: true));
+    await _flush(tester);
+    expect(find.byType(GroupGameFloatingEntry), findsNothing);
     for (final action in [
       entry.onOpenCutoff,
       entry.onOpenSettle,
@@ -325,14 +327,14 @@ void main() {
     expect(
         fixture.runtime!.groupTenant.state!.config!.imGroupGameId, statsGroup);
     expect(fixture.runtime!.groupTenant.state!.config!.name, '亚多里测试');
-    expect(fixture.runtime!.canManage, isFalse);
+    expect(fixture.runtime!.canManage, isTrue);
+    expect(_operator(tester).setupOnly, isFalse);
 
     _openManage(tester, fixture);
     await _flush(tester);
-    expect(
-        find.text(fixture.runtime!.manageUnavailableReason!), findsOneWidget);
-    expect(find.text('查看我的配置'), findsOneWidget);
-    _expectNoConfigOrManagementPage();
+    expect(find.byType(SangongManageHomePage), findsOneWidget);
+    expect(find.byType(SangongMyConfigPage), findsNothing);
+    expect(find.text('查看我的配置'), findsNothing);
     expect(fixture.operations, isEmpty);
     for (final call
         in fixture.api.calls.where((c) => c.path.contains('/admin/tenants/'))) {
@@ -420,19 +422,22 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('settings opens game rules directly for a ready operator',
-      (tester) async {
-    final fixture = _Fixture(canManage: true);
-    await _pumpChat(tester, fixture);
-    _operator(tester).onOpenRulesSettings();
-    await _flush(tester);
-    expect(find.byType(SangongGameRulesSettingsPage), findsOneWidget);
-    _expectNoConfigOrManagementPage();
-    expect(fixture.api.count('/settings'), 1);
-    expect(fixture.api.count('/session'), 1);
-    expect(fixture.api.count('/my-config'), 0);
-    expect(tester.takeException(), isNull);
-  });
+  for (final enabled in [true, false]) {
+    testWidgets(
+        'settings uses current tenant capabilities with public enabled=$enabled',
+        (tester) async {
+      final fixture = _Fixture(enabled: enabled, canManage: true);
+      await _pumpChat(tester, fixture);
+      _operator(tester).onOpenRulesSettings();
+      await _flush(tester);
+      expect(find.byType(SangongGameRulesSettingsPage), findsOneWidget);
+      _expectNoConfigOrManagementPage();
+      expect(fixture.api.count('/settings'), 1);
+      expect(fixture.api.count('/session'), 1);
+      expect(fixture.api.count('/my-config'), 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   for (final action in ['settle', 'settings']) {
     for (final invalidation in ['group', 'session']) {

@@ -6,6 +6,7 @@ import 'package:extended_image/extended_image.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../services/moments_repository.dart';
+import 'media/moments_media_gallery.dart';
 import 'moments_actions.dart';
 import 'moments_widgets.dart';
 
@@ -31,12 +32,13 @@ class _MomentsMediaPreviewState extends State<MomentsMediaPreview> {
   int _currentIndex = 0;
   final Map<int, Uint8List> _bytes = {};
   final Set<int> _full = {};
-  final Set<int> _loading = {};
+  final Map<int, Future<void>> _loading = {};
   final Set<int> _thumbnailLoading = {};
   final Map<int, Object> _mediaErrors = {};
   Object? _error;
   bool _ready = false;
   bool _invalid = false;
+  Object? _saveRequest;
   bool get _current =>
       widget.repository.isSessionCurrent(_scope) &&
       widget.repository.authorizationScope == _authorizationScope &&
@@ -56,6 +58,7 @@ class _MomentsMediaPreviewState extends State<MomentsMediaPreview> {
     _generation++;
     _evict();
     _loading.clear();
+    _saveRequest = null;
     _thumbnailLoading.clear();
     _scope = widget.repository.sessionScope;
     _authorizationScope = widget.repository.authorizationScope;
@@ -165,8 +168,12 @@ class _MomentsMediaPreviewState extends State<MomentsMediaPreview> {
     }
   }
 
-  Future<void> _upgrade(int index) async {
-    if (!_current || _full.contains(index) || !_loading.add(index)) return;
+  Future<void> _upgrade(int index) {
+    if (!_current || _full.contains(index)) return Future.value();
+    return _loading[index] ??= _loadOriginal(index);
+  }
+
+  Future<void> _loadOriginal(int index) async {
     final generation = _generation;
     setState(() => _mediaErrors.remove(index));
     try {
@@ -198,6 +205,60 @@ class _MomentsMediaPreviewState extends State<MomentsMediaPreview> {
         _loading.remove(index);
         setState(() {});
       }
+    }
+  }
+
+  bool _canSave(int generation) =>
+      _requestCurrent(generation) && ModalRoute.of(context)?.isCurrent != false;
+
+  Future<void> _showSaveMenu(int index) async {
+    final generation = _generation;
+    if (!_canSave(generation)) return;
+    final selected = await showAppActionSheet<bool>(context,
+        title: '', actions: [AppAction(StrRes.saveToAlbum, true)]);
+    if (selected == true && _canSave(generation)) await _saveImage(index);
+  }
+
+  Future<void> _saveImage(int index) async {
+    final generation = _generation;
+    if (_saveRequest != null ||
+        !_canSave(generation) ||
+        index < 0 ||
+        index >= widget.post.mediaList.length) {
+      return;
+    }
+    final request = Object();
+    _saveRequest = request;
+    try {
+      // Share the ongoing original request; never export a prefetched thumbnail.
+      await _upgrade(index);
+      if (!mounted || !_canSave(generation)) return;
+      final bytes = _bytes[index];
+      if (!_full.contains(index) || bytes == null || bytes.isEmpty) {
+        IMViews.showToast(momentsText(context,
+            zh: '图片加载失败，请重试后保存',
+            en: 'Could not load the photo. Retry before saving.'));
+        return;
+      }
+      final result = await saveMomentImageToGallery(bytes,
+          isCurrent: () => _canSave(generation));
+      if (!mounted ||
+          !_canSave(generation) ||
+          result == MomentsMediaSaveResult.canceled) {
+        return;
+      }
+      IMViews.showToast(switch (result) {
+        MomentsMediaSaveResult.success => StrRes.saveSuccessfully,
+        MomentsMediaSaveResult.permissionDenied => momentsText(context,
+            zh: '保存失败，请允许添加照片到相册',
+            en: 'Allow photo access to save this photo.'),
+        MomentsMediaSaveResult.unsupported => momentsText(context,
+            zh: '当前平台暂不支持保存图片',
+            en: 'Saving photos is not supported on this platform.'),
+        _ => StrRes.saveFailed,
+      });
+    } finally {
+      if (identical(_saveRequest, request)) _saveRequest = null;
     }
   }
 
@@ -256,7 +317,7 @@ class _MomentsMediaPreviewState extends State<MomentsMediaPreview> {
                 thumbnail: '',
                 bytes: _bytes[i],
                 loading: _bytes[i] == null &&
-                    (_loading.contains(i) || _thumbnailLoading.contains(i)),
+                    (_loading.containsKey(i) || _thumbnailLoading.contains(i)),
                 onRetry: _mediaErrors.containsKey(i) ? () => _upgrade(i) : null,
                 tag:
                     'moments:$_scope:${widget.post.momentId}:${widget.post.mediaList[i].mediaId}',
@@ -266,6 +327,8 @@ class _MomentsMediaPreviewState extends State<MomentsMediaPreview> {
         ],
         initialIndex: widget.initialIndex,
         showGallery: false,
+        onSave: (index) => unawaited(_saveImage(index)),
+        onLongPress: (index) => unawaited(_showSaveMenu(index)),
         onPageChanged: _pageChanged);
   }
 

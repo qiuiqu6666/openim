@@ -7,6 +7,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'picture/chat_picture_quality.dart';
+
 class ChatPictureView extends StatefulWidget {
   const ChatPictureView({
     super.key,
@@ -25,6 +27,8 @@ class ChatPictureView extends StatefulWidget {
 }
 
 class _ChatPictureViewState extends State<ChatPictureView> {
+  static const _longImageAspectRatio = 3 / 5;
+
   String? _inputPath;
   String? _sourcePath;
   String? _sourceUrl;
@@ -48,7 +52,9 @@ class _ChatPictureViewState extends State<ChatPictureView> {
 
   void _updateSources({bool force = false}) {
     final picture = widget.message.pictureElem;
-    _sourceUrl = picture?.bigPicture?.url;
+    _sourceUrl = IMUtils.isNotNullEmptyStr(picture?.bigPicture?.url)
+        ? picture?.bigPicture?.url
+        : picture?.sourcePicture?.url;
     _snapshotUrl =
         picture?.snapshotPicture?.url?.adjustThumbnailAbsoluteString(960);
     final path = picture?.sourcePath;
@@ -88,10 +94,9 @@ class _ChatPictureViewState extends State<ChatPictureView> {
   @override
   Widget build(BuildContext context) {
     final picture = widget.message.pictureElem;
-    final sourceWidth = picture?.sourcePicture?.width ?? 1;
-    final sourceHeight = picture?.sourcePicture?.height ?? 1;
-    final width = sourceWidth > 0 ? sourceWidth.toDouble() : 1.0;
-    final height = sourceHeight > 0 ? sourceHeight.toDouble() : 1.0;
+    final sourceSize = ChatPictureQuality.sourceSize(picture);
+    final width = sourceSize.width;
+    final height = sourceSize.height;
     final limit = widget.maxDisplayWidth ?? pictureWidth;
     var displayWidth = width < limit ? width : limit;
     var displayHeight = displayWidth * height / width;
@@ -102,13 +107,37 @@ class _ChatPictureViewState extends State<ChatPictureView> {
     }
     final maxHeight = pictureWidth * 1.sh / 1.sw;
     if (heightLimit == null && displayHeight > 2 * maxHeight) {
-      displayHeight = displayWidth;
+      displayHeight = displayWidth / _longImageAspectRatio;
     }
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
-    final cacheWidth = ImageUtil.decodeDimension(displayWidth, pixelRatio);
-    final cacheHeight = ImageUtil.decodeDimension(displayHeight, pixelRatio);
-    final remoteURL =
+    final decodeSize = ChatPictureQuality.decodeSize(
+        source: sourceSize,
+        displayWidth: displayWidth,
+        devicePixelRatio: pixelRatio);
+    final cacheWidth = decodeSize.width.toInt();
+    final cacheHeight = decodeSize.height.toInt();
+    final cropped = displayWidth * height / width > displayHeight + 1;
+    final alignment = cropped ? Alignment.topCenter : Alignment.center;
+    final thumbnailURL =
         IMUtils.isNotNullEmptyStr(_snapshotUrl) ? _snapshotUrl : _sourceUrl;
+    final remoteURL = cropped
+        ? ChatPictureQuality.croppedSource(picture, decodeSize) ?? thumbnailURL
+        : thumbnailURL;
+
+    Widget? fallback() =>
+        IMUtils.isNotNullEmptyStr(thumbnailURL) && thumbnailURL != remoteURL
+            ? ImageUtil.networkImage(
+                url: thumbnailURL!,
+                width: displayWidth,
+                height: displayHeight,
+                cacheWidth: cacheWidth,
+                cacheHeight: cacheHeight,
+                resizePolicy: ResizeImagePolicy.fit,
+                cacheRawData: false,
+                fit: BoxFit.fitWidth,
+                alignment: alignment,
+              )
+            : null;
 
     Widget? remote() => IMUtils.isNotNullEmptyStr(remoteURL)
         ? ImageUtil.networkImage(
@@ -120,6 +149,9 @@ class _ChatPictureViewState extends State<ChatPictureView> {
             resizePolicy: ResizeImagePolicy.fit,
             cacheRawData: false,
             fit: BoxFit.fitWidth,
+            alignment: alignment,
+            loadingWidget: fallback(),
+            errorWidget: fallback(),
           )
         : null;
 
@@ -133,6 +165,7 @@ class _ChatPictureViewState extends State<ChatPictureView> {
             resizePolicy: ResizeImagePolicy.fit,
             cacheRawData: false,
             fit: BoxFit.fitWidth,
+            alignment: alignment,
             errorWidget: remote(),
           )
         : _resolvingLocalPath

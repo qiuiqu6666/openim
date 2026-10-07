@@ -62,8 +62,7 @@ class MediaBrowser extends StatefulWidget {
   State<MediaBrowser> createState() => _MediaBrowserState();
 }
 
-class _MediaBrowserState extends State<MediaBrowser>
-    with TickerProviderStateMixin {
+class _MediaBrowserState extends State<MediaBrowser> {
   GlobalKey<ExtendedImageSlidePageState> slidePagekey =
       GlobalKey<ExtendedImageSlidePageState>();
 
@@ -74,11 +73,6 @@ class _MediaBrowserState extends State<MediaBrowser>
   final _localFiles = LocalMediaAvailability();
   late final ExtendedPageController _pageController;
   SystemUiOverlayStyle? _previousSystemUiStyle;
-
-  List<double> doubleTapScales = <double>[1.0, 2.0];
-  late AnimationController _doubleClickAnimationController;
-  Animation<double>? _doubleClickAnimation;
-  late VoidCallback _doubleClickAnimationListener;
 
   @override
   void initState() {
@@ -91,15 +85,12 @@ class _MediaBrowserState extends State<MediaBrowser>
       pageSpacing: 8,
       shouldIgnorePointerWhenScrolling: true,
     );
-    _doubleClickAnimationController = AnimationController(
-        duration: const Duration(milliseconds: 150), vsync: this);
     super.initState();
   }
 
   @override
   void dispose() {
     Logger.print('[MediaBrowser] dispose', fileName: 'media_browser.dart');
-    _doubleClickAnimationController.dispose();
     _pageController.dispose();
     _localFiles.clear();
 
@@ -434,59 +425,16 @@ class _MediaBrowserState extends State<MediaBrowser>
     );
   }
 
-  Widget _buildNetworkImage(MediaSource s) => ExtendedImage.network(
-        s.url ?? s.thumbnail,
-        enableSlideOutPage: true,
-        fit: BoxFit.contain,
-        mode: ExtendedImageMode.gesture,
-        initGestureConfigHandler: (ExtendedImageState state) {
-          return GestureConfig(
-            minScale: 0.9,
-            animationMinScale: 0.7,
-            maxScale: 3.0,
-            animationMaxScale: 3.5,
-            speed: 1.0,
-            inPageView: true,
-            initialAlignment: InitialAlignment.center,
-          );
-        },
-        onDoubleTap: (state) {
-          final Offset? pointerDownPosition = state.pointerDownPosition;
-          final double? begin = state.gestureDetails!.totalScale;
-          double end;
-
-          _doubleClickAnimation?.removeListener(_doubleClickAnimationListener);
-
-          _doubleClickAnimationController.stop();
-
-          _doubleClickAnimationController.reset();
-
-          if (begin == doubleTapScales[0]) {
-            end = doubleTapScales[1];
-          } else {
-            end = doubleTapScales[0];
-          }
-
-          _doubleClickAnimationListener = () {
-            state.handleDoubleTap(
-                scale: _doubleClickAnimation!.value,
-                doubleTapPosition: pointerDownPosition);
-          };
-          _doubleClickAnimation = _doubleClickAnimationController
-              .drive(Tween<double>(begin: begin, end: end));
-
-          _doubleClickAnimation!.addListener(_doubleClickAnimationListener);
-
-          _doubleClickAnimationController.forward();
-        },
+  Widget _buildNetworkImage(MediaSource s) => AdaptiveMediaImage(
+        image: ExtendedNetworkImageProvider(s.url ?? s.thumbnail, cache: true),
         loadStateChanged: (state) {
           if (state.extendedImageLoadState == LoadState.loading) {
             return Stack(
               alignment: AlignmentDirectional.center,
               children: [
-                ExtendedImage.network(
-                  s.thumbnail,
-                  enableLoadState: false,
+                AdaptiveMediaImage(
+                  image:
+                      ExtendedNetworkImageProvider(s.thumbnail, cache: true),
                 ),
                 const CupertinoActivityIndicator(
                   radius: 15,
@@ -514,10 +462,8 @@ class _MediaBrowserState extends State<MediaBrowser>
       return const Center(child: CupertinoActivityIndicator(radius: 15));
     }
     if (source.bytes != null) {
-      final image = ExtendedImage.memory(source.bytes!,
-          enableSlideOutPage: true,
-          fit: BoxFit.contain,
-          mode: ExtendedImageMode.gesture);
+      final image =
+          AdaptiveMediaImage(image: ExtendedMemoryImageProvider(source.bytes!));
       if (widget.closeOnly || source.onRetry == null) return image;
       return Stack(fit: StackFit.expand, children: [
         image,
@@ -545,10 +491,7 @@ class _MediaBrowserState extends State<MediaBrowser>
       builder: (_, snapshot) => !snapshot.hasData
           ? const Center(child: CupertinoActivityIndicator(radius: 15))
           : snapshot.data!
-              ? ExtendedImage.file(file,
-                  enableSlideOutPage: true,
-                  fit: BoxFit.contain,
-                  mode: ExtendedImageMode.gesture)
+              ? AdaptiveMediaImage(image: ExtendedFileImageProvider(file))
               : _buildNetworkImage(source),
     );
   }

@@ -101,9 +101,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
       _loadGeneration++;
       _error = null;
     }
-    final shouldSubscribe = _runtime.canManage &&
-        _runtime.groupTenantReady &&
-        widget.featureContext.features.sangong.enabled;
+    final shouldSubscribe = _runtime.canManage;
     if (shouldSubscribe && !_subscribed) {
       _subscribed = true;
       _runtime.realtime.acquire();
@@ -426,7 +424,6 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
   Widget build(BuildContext context) => SangongScope(
       runtime: _runtime,
       child: Builder(builder: (scopeContext) {
-        final feature = widget.featureContext.features.sangong;
         final state = _runtime.realtime.latestState;
         final registration = _runtime.groupTenant.state;
         final bindingStatus = _runtime.requiresGroupTenantCheck
@@ -441,7 +438,14 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
             : null;
         final status = _error ?? bindingStatus ?? _runtime.realtime.error;
         Widget banner = const SizedBox.shrink();
-        if (_runtime.isPrivileged &&
+        if (_floatVisible && state != null && _runtime.canManage) {
+          // Match 99chat: keep the last valid game banner during reconnects.
+          banner = GroupGameStatusBanner(
+              key: const ValueKey('sangong-status-banner'),
+              doorCount: state.doorCount,
+              roundStatus: state.toGroupGameRoundStatus());
+        } else if (_floatVisible &&
+            _runtime.isPrivileged &&
             status != null &&
             (_runtime.requiresGroupTenantCheck ||
                 _runtime.canConfigure ||
@@ -463,13 +467,10 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
                         onPressed: _retry,
                         child: const Text('重试'))
                   ])));
-        } else if (feature.enabled && state != null && _runtime.canManage) {
-          banner = GroupGameStatusBanner(
-              key: const ValueKey('sangong-status-banner'),
-              doorCount: state.doorCount,
-              roundStatus: state.toGroupGameRoundStatus());
         }
-        final setupOnly =
+        final setupOnly = _runtime.requiresGroupTenantCheck &&
+            !_runtime.groupTenant.loading &&
+            _runtime.groupTenant.error == null &&
             registration?.status == SangongGroupTenantStatus.notFound;
         final overlay = LayoutBuilder(
             builder: (context, constraints) => MediaQuery(
@@ -480,12 +481,9 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
                 child: Stack(fit: StackFit.expand, children: [
                   if (widget.featureContext.gameType == GroupGameType.sangong &&
                       _floatVisible &&
-                      _runtime.isSessionCurrent &&
+                      _runtime.isCurrent &&
                       _runtime.isPrivileged &&
-                      (setupOnly ||
-                          (_runtime.groupTenantReady &&
-                              widget.featureContext.capabilities.sangong
-                                  .canManage)))
+                      (setupOnly || _runtime.canManage))
                     GroupGameFloatingEntry(
                         key: ValueKey(
                             'sangong-operator-${widget.featureContext.groupID}'),
@@ -505,10 +503,14 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
                             scopeContext, (api) => api.sendSettleBillImage())),
                         onSendPointsImage: () => unawaited(_report(scopeContext,
                             (api) => api.sendPointsReportImage())),
-                        onSendTrendImage: () => unawaited(
-                            _report(scopeContext, (api) => api.sendTrendReportImage())),
-                        onOpenRulesSettings: () => unawaited(_openRules(scopeContext))),
-                  if (_runtime.isSessionCurrent && _runtime.isPrivileged)
+                        onSendTrendImage: () => unawaited(_report(
+                            scopeContext, (api) => api.sendTrendReportImage())),
+                        onOpenRulesSettings: () =>
+                            unawaited(_openRules(scopeContext))),
+                  if (widget.featureContext.gameType ==
+                          GroupGameType.sangongAgent &&
+                      _runtime.isSessionCurrent &&
+                      _runtime.isPrivileged)
                     SangongAgentFloatingEntry(
                         key: ValueKey(
                             'sangong-agent-${widget.featureContext.groupID}'),

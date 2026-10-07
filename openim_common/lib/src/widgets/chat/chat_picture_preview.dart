@@ -11,7 +11,9 @@ class ChatPicturePreview extends StatelessWidget {
     this.heroTag,
     this.onTap,
     this.onLongPress,
-  })  : controller = images.length > 1 ? ExtendedPageController(initialPage: currentIndex, pageSpacing: 50) : null,
+  })  : controller = images.length > 1
+            ? ExtendedPageController(initialPage: currentIndex, pageSpacing: 50)
+            : null,
         super(key: key);
   final int currentIndex;
   final List<MediaSource> images;
@@ -19,13 +21,15 @@ class ChatPicturePreview extends StatelessWidget {
   final Function()? onTap;
   final Function(String url)? onLongPress;
   final ExtendedPageController? controller;
-  final GlobalKey<ExtendedImageSlidePageState> slidePagekey = GlobalKey<ExtendedImageSlidePageState>();
+  final GlobalKey<ExtendedImageSlidePageState> slidePagekey =
+      GlobalKey<ExtendedImageSlidePageState>();
   @override
   Widget build(BuildContext context) {
     return ExtendedImageSlidePage(
       key: slidePagekey,
       slideAxis: SlideAxis.vertical,
-      slidePageBackgroundHandler: (offset, pageSize) => defaultSlidePageBackgroundHandler(
+      slidePageBackgroundHandler: (offset, pageSize) =>
+          defaultSlidePageBackgroundHandler(
         color: Colors.black,
         offset: offset,
         pageSize: pageSize,
@@ -56,23 +60,9 @@ class ChatPicturePreview extends StatelessWidget {
         },
       );
 
-  Widget _networkGestureImage(MediaSource source) => ExtendedImage.network(
-        source.thumbnail,
-        fit: BoxFit.contain,
-        mode: ExtendedImageMode.gesture,
+  Widget _networkGestureImage(MediaSource source) => AdaptiveMediaImage(
+        image: ExtendedNetworkImageProvider(source.url ?? source.thumbnail),
         clearMemoryCacheWhenDispose: true,
-        clearMemoryCacheIfFailed: true,
-        handleLoadingProgress: true,
-        enableSlideOutPage: true,
-        initGestureConfigHandler: (ExtendedImageState state) {
-          return GestureConfig(
-            inPageView: true,
-            initialScale: 1.0,
-            maxScale: 5.0,
-            animationMaxScale: 6.0,
-            initialAlignment: InitialAlignment.center,
-          );
-        },
         loadStateChanged: (ExtendedImageState state) {
           switch (state.extendedImageLoadState) {
             case LoadState.loading:
@@ -81,9 +71,11 @@ class ChatPicturePreview extends StatelessWidget {
                   return null;
                 }
                 final ImageChunkEvent? loadingProgress = state.loadingProgress;
-                final double? progress = loadingProgress?.expectedTotalBytes != null
-                    ? loadingProgress!.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                    : null;
+                final double? progress =
+                    loadingProgress?.expectedTotalBytes != null
+                        ? loadingProgress!.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                        : null;
 
                 return SizedBox(
                   width: 15.0,
@@ -98,12 +90,7 @@ class ChatPicturePreview extends StatelessWidget {
                 );
               }
             case LoadState.completed:
-              if (source.url == source.thumbnail) return null;
-              final url = source.url;
-   
-              return Center(
-                child: ExtendedImage.network(url!),
-              );
+              return null;
             case LoadState.failed:
               state.imageProvider.evict();
               return ImageRes.pictureError.toImage;

@@ -158,7 +158,9 @@ class SangongGameHttp {
       }
     } else if (options.path.startsWith('/api/v1/admin/') ||
         options.path == '/api/v1/settings') {
-      if (!feature.enabled || !feature.manageEntry || !capability.canManage) {
+      final legacyEntryClosed = context.gameType != GroupGameType.sangong &&
+          (!feature.enabled || !feature.manageEntry);
+      if (legacyEntryClosed || !capability.canManage) {
         throw StateError('没有当前群的三公运营权限');
       }
     } else if (options.path.startsWith('/api/v1/me/') ||

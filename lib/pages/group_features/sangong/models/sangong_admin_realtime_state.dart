@@ -125,8 +125,10 @@ class SangongAdminRealtimeState {
         ? int.tryParse(
             '${rawSettings['doorCount'] ?? rawSettings['door_count']}')
         : null;
+    // The OpenIM service starts a newly configured idle tenant at version 0.
+    // It is a real snapshot; absent or negative versions remain invalid.
     if (version == null ||
-        version <= 0 ||
+        version < 0 ||
         count == null ||
         count < 2 ||
         count > 10) {

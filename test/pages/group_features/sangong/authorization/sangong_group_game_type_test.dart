@@ -13,6 +13,7 @@ import 'package:openim/pages/group_features/sangong/sangong_module.dart';
 import 'package:openim/pages/group_features/sangong/services/group_game_prefs.dart';
 import 'package:openim/pages/group_features/sangong/widgets/group_game_floating_entry.dart';
 import 'package:openim/pages/group_features/sangong/widgets/sangong_agent_floating_entry.dart';
+import 'package:openim/pages/group_features/widgets/group_feature_actions.dart';
 
 import '../sangong_test_support.dart';
 
@@ -112,17 +113,21 @@ void main() {
     OpenIM.iMManager.userID = 'owner';
   });
 
-  for (final (label, ex, visible) in [
-    ('ordinary', _ex(0), false),
-    ('sangong', _ex(1), true),
-    ('numeric 1.0', _ex(1.0), true),
-    ('mark six', _ex(2), false),
-    ('missing type', _ex(null, includeType: false), false),
-    ('invalid JSON', 'not-json', false),
-    ('string type', _ex('1'), false),
-    ('unknown type', _ex(7), false),
+  for (final (label, ex, visible, agentVisible) in [
+    ('ordinary', _ex(0), false, false),
+    ('sangong', _ex(1), true, false),
+    ('numeric 1.0', _ex(1.0), true, false),
+    ('mark six agent', _ex(2), false, false),
+    ('mark six draw', _ex(3), false, false),
+    ('sangong agent', _ex(4), false, true),
+    ('numeric 4.0', _ex(4.0), false, true),
+    ('missing type', _ex(null, includeType: false), false, false),
+    ('invalid JSON', 'not-json', false, false),
+    ('string type', _ex('1'), false, false),
+    ('string agent type', _ex('4'), false, false),
+    ('unknown type', _ex(7), false, false),
   ]) {
-    testWidgets('operator float visibility follows top-level $label',
+    testWidgets('operator and agent entries follow top-level $label',
         (tester) async {
       final fixture = _Fixture(ex);
       addTearDown(fixture.dispose);
@@ -131,7 +136,12 @@ void main() {
 
       expect(find.byType(GroupGameFloatingEntry),
           visible ? findsOneWidget : findsNothing);
-      expect(find.byType(SangongAgentFloatingEntry), findsOneWidget);
+      expect(find.byType(SangongAgentFloatingEntry),
+          agentVisible ? findsOneWidget : findsNothing);
+      final labels = GroupFeatureActions.items(
+              tester.element(find.text('群聊正文')), fixture.context)
+          .map((item) => item.text);
+      expect(labels.contains('三公代理'), agentVisible);
       expect(fixture.store.cachedGroupInfo(_groupID)?.ex, ex);
       expect(fixture.businessCalls, isEmpty);
       expect(
@@ -159,15 +169,31 @@ void main() {
     fixture.seed(markSixEx);
     await tester.pump();
     expect(find.byType(GroupGameFloatingEntry), findsNothing);
-    expect(find.byType(SangongAgentFloatingEntry), findsOneWidget);
+    expect(find.byType(SangongAgentFloatingEntry), findsNothing);
     expect(fixture.store.cachedGroupInfo(_groupID)?.ex, markSixEx);
     expect(fixture.store.features(_groupID).revision, 5);
     expect(originalContext.capabilitiesCurrent(), isTrue);
+
+    fixture.seed(_ex(4));
+    await flushSangong(tester);
+    expect(find.byType(GroupGameFloatingEntry), findsNothing);
+    expect(find.byType(SangongAgentFloatingEntry), findsOneWidget);
+    expect(
+        GroupFeatureActions.items(
+                tester.element(find.text('群聊正文')), fixture.context)
+            .any((item) => item.text == '三公代理'),
+        isTrue);
 
     final sangongEx = _ex(1);
     fixture.seed(sangongEx);
     await flushSangong(tester);
     expect(find.byType(GroupGameFloatingEntry), findsOneWidget);
+    expect(find.byType(SangongAgentFloatingEntry), findsNothing);
+    expect(
+        GroupFeatureActions.items(
+                tester.element(find.text('群聊正文')), fixture.context)
+            .any((item) => item.text == '三公代理'),
+        isFalse);
     expect(identical(fixture.runtime, originalRuntime), isTrue);
     expect(fixture.store.features(_groupID).revision, 5);
     expect(
@@ -219,7 +245,7 @@ void main() {
     fixture.seed(_ex(1));
     await tester.pump();
     expect(find.byType(GroupGameFloatingEntry), findsNothing);
-    expect(find.byType(SangongAgentFloatingEntry), findsOneWidget);
+    expect(find.byType(SangongAgentFloatingEntry), findsNothing);
     expect(await GroupGamePrefs.instance.isFloatVisible(fixture.preferenceKey),
         isFalse);
     expect(tester.takeException(), isNull);

@@ -6,6 +6,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:openim/pages/group_features/data/group_feature_store.dart';
+import 'package:openim/pages/group_features/models/group_game_type.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_my_config.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_surface.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_panel.dart';
@@ -185,7 +186,8 @@ void main() {
   testWidgets('toolbox removes only Sangong actions on global revocation',
       (tester) async {
     final api = SangongTestApi();
-    final feature = sangongTestContext(api);
+    final feature =
+        sangongTestContext(api, gameType: GroupGameType.sangongAgent);
     final runtime = SangongRuntime(feature);
     addTearDown(runtime.dispose);
     addTearDown(() => unmountSangong(tester));

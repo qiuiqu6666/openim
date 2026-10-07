@@ -39,14 +39,14 @@ class GroupFeatureActions {
             symbol: Icons.sports_esports_outlined,
             onTap: () => SangongModule.openManage(context,
                 featureContext: feature, runtime: sangongRuntime)),
-      if (privileged)
+      if (privileged && feature.gameType == GroupGameType.sangongAgent)
         ToolboxItemInfo(
             text: '三公代理',
             icon: '',
             symbol: Icons.groups_outlined,
             onTap: () => SangongModule.openAgent(context,
                 featureContext: feature, runtime: sangongRuntime)),
-      if (games.markSix.enabled && games.markSix.drawHistoryEntry)
+      if (feature.showMarkSixDrawHistory)
         ToolboxItemInfo(
             text: '开奖记录',
             icon: '',

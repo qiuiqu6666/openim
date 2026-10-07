@@ -118,17 +118,75 @@ void main() {
   });
 
   for (final flag in ['enabled', 'manageEntry']) {
-    test('configured owner cannot replace the $flag public switch', () async {
+    test('registered game uses aggregate management despite closed $flag', () {
       final runtime = runtimeFor(sangongTestContext(api,
           enabled: flag != 'enabled', manageEntry: flag != 'manageEntry'));
-      await runtime.config.applySaved(_ownerConfig);
-      expect(runtime.config.config.isOwner, isTrue);
+      expect(runtime.requiresGroupTenantCheck, isTrue);
+      expect(runtime.groupTenantReady, isTrue);
       expect(runtime.featureContext.capabilities.sangong.canManage, isTrue);
+      expect(runtime.http.hasTenant, isTrue);
+      expect(runtime.canManage, isTrue);
+      expectReadOnlyReason(runtime, null);
+    });
+
+    test('registered game cannot operate without aggregate permission ($flag)',
+        () {
+      final runtime = runtimeFor(sangongTestContext(api,
+          enabled: flag != 'enabled',
+          manageEntry: flag != 'manageEntry',
+          canManage: false));
+      expect(runtime.groupTenantReady, isTrue);
+      expect(runtime.canManage, isFalse);
+      expectReadOnlyReason(runtime, '当前账号没有该群的三公运营权限');
+    });
+
+    test('legacy management retains the $flag public gate', () {
+      final runtime = runtimeFor(sangongTestContext(api,
+          gameType: GroupGameType.ordinary,
+          enabled: flag != 'enabled',
+          manageEntry: flag != 'manageEntry'));
+      expect(runtime.requiresGroupTenantCheck, isFalse);
+      expect(runtime.featureContext.capabilities.sangong.canManage, isTrue);
+      expect(runtime.http.hasTenant, isTrue);
       expect(runtime.canManage, isFalse);
       expectReadOnlyReason(
           runtime, flag == 'enabled' ? '当前群尚未启用三公运营' : '当前群未开放三公运营入口');
     });
   }
+
+  test('registered game can operate without any public groupFeatures summary',
+      () {
+    final base = sangongTestContext(api);
+    final context = GroupFeatureContext(
+      groupID: base.groupID,
+      groupName: base.groupName,
+      currentUserID: base.currentUserID,
+      gameType: GroupGameType.sangong,
+      api: base.api,
+      accountPrivilege: base.privilege,
+      capabilities: base.capabilities,
+      sessionCurrent: base.sessionCurrent,
+      capabilitiesCurrent: base.capabilitiesCurrent,
+      onFeaturesChanged: base.onFeaturesChanged,
+    );
+    final runtime = runtimeFor(context);
+    expect(context.features.valid, isFalse);
+    expect(context.features.sangong.enabled, isFalse);
+    expect(context.features.sangong.manageEntry, isFalse);
+    expect(runtime.groupTenantReady, isTrue);
+    expect(runtime.canManage, isTrue);
+    expectReadOnlyReason(runtime, null);
+  });
+
+  test('current-game management migration preserves public agent conditions',
+      () {
+    final runtime = runtimeFor(sangongTestContext(api, enabled: false));
+    expect(runtime.canManage, isTrue);
+    expect(runtime.featureContext.capabilities.sangong.canOpenAgent, isTrue);
+    expect(runtime.canOpenAgent, isFalse);
+    expect(runtime.canViewRebateHistory, isFalse);
+    expectReadOnlyReason(runtime, null);
+  });
 
   test(
       'account default for another group cannot change the confirmed current binding',
@@ -265,11 +323,16 @@ void main() {
       if (message != null) logs.add(message);
     };
     addTearDown(() => debugPrint = previousPrint);
-    final context = sangongTestContext(api, canManage: false);
-    SangongApiDebugLog.permissionDenied(context, '没有运营权限');
+    final context = sangongTestContext(api,
+        enabled: false, manageEntry: false, canManage: false);
+    final runtime = runtimeFor(context);
+    SangongApiDebugLog.permissionDenied(
+        context, runtime.manageUnavailableReason!);
     final payload = _permissionPayload(logs);
-    expect(payload['reason'], '没有运营权限');
+    expect(payload['reason'], '当前账号没有该群的三公运营权限');
     expect((payload['sangong'] as Map)['canManage'], isFalse);
+    expect((payload['groupFeatures'] as Map)['enabled'], isFalse);
+    expect((payload['groupFeatures'] as Map)['manageEntry'], isFalse);
     expect(payload.containsKey('logicalTenantId'), isFalse);
     expect(payload.containsKey('myConfig'), isFalse);
     expect(api.calls, isEmpty);
@@ -283,21 +346,27 @@ void main() {
       if (message != null) logs.add(message);
     };
     addTearDown(() => debugPrint = previousPrint);
-    final context = sangongTestContext(api, canManage: false);
+    final context = sangongTestContext(api,
+        enabled: false, manageEntry: false, canManage: false);
+    final runtime = runtimeFor(context);
     final config = {
       ..._ownerConfig.toJson(),
       'imToken': 'config-im-secret',
     };
     final original = jsonEncode(config);
-    SangongApiDebugLog.permissionDenied(context, '没有运营权限',
+    SangongApiDebugLog.permissionDenied(
+        context, runtime.manageUnavailableReason!,
         logicalTenantId: '', config: config);
     final payload = _permissionPayload(logs);
+    expect(payload['reason'], '当前账号没有该群的三公运营权限');
     expect(payload['logicalTenantId'], '');
     expect((payload['myConfig'] as Map)['configured'], isTrue);
     expect((payload['myConfig'] as Map)['myRole'], 'owner');
     expect((payload['myConfig'] as Map)['imGroupGameId'], 'group-sangong');
     expect((payload['myConfig'] as Map)['imToken'], '***');
     expect((payload['sangong'] as Map)['canManage'], isFalse);
+    expect((payload['groupFeatures'] as Map)['enabled'], isFalse);
+    expect((payload['groupFeatures'] as Map)['manageEntry'], isFalse);
     expect(logs.join(), isNot(contains('config-im-secret')));
     expect(jsonEncode(config), original);
     expect(context.capabilities.sangong.canManage, isFalse);
