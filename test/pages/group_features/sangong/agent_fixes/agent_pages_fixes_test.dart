@@ -22,6 +22,8 @@ Map<String, dynamic> _member({String id = 'winter'}) => {
 
 Map<String, dynamic> _team() => {
       'agent': {'balance': 100},
+      'version': 1,
+      'nextBeforeId': 0,
       'members': [_member()],
     };
 
@@ -58,6 +60,8 @@ void main() {
       final api = SangongTestApi()
         ..respond = (_) => {
               'summary': <String, dynamic>{},
+              'version': 1,
+              'nextBeforeId': 0,
               'members': [
                 {..._member(), 'rebatePer10000': 50}
               ],
@@ -82,6 +86,8 @@ void main() {
     final api = SangongTestApi()
       ..respond = (_) => {
             'summary': <String, dynamic>{},
+            'version': 1,
+            'nextBeforeId': 0,
             'members': [
               {..._member(), 'rebatePct': 2, 'rebatePer10000': 50}
             ],
@@ -111,8 +117,9 @@ void main() {
       (tester) async {
     final response = Completer<Map<String, dynamic>>();
     final api = SangongTestApi()
-      ..respond = (call) =>
-          call.path.endsWith('/transfer-to-child') ? response.future : _team();
+      ..respond = (call) => call.path.endsWith('/commands/agent.transfer')
+          ? response.future
+          : _team();
     final runtime = SangongRuntime(sangongTestContext(api));
     addTearDown(runtime.dispose);
     addTearDown(() => unmountSangong(tester));
@@ -125,16 +132,22 @@ void main() {
     await flushSangong(tester);
     expect(find.byType(CupertinoTextField), findsOneWidget);
     await _confirmTransfer(tester);
-    expect(api.count('/transfer-to-child'), 1);
+    expect(api.count('/commands/agent.transfer'), 1);
     expect(_transferButton(tester).onPressed, isNull);
     callback();
     await flushSangong(tester);
-    expect(api.count('/transfer-to-child'), 1);
+    expect(api.count('/commands/agent.transfer'), 1);
     expect(find.byType(CupertinoTextField), findsNothing);
-    response.complete({'referenceId': 'transfer-42', 'fromBalance': 90});
+    response.complete({
+      'ok': true,
+      'requestId': api.calls
+          .lastWhere((c) => c.path.endsWith('/commands/agent.transfer'))
+          .body!['requestId'],
+      'data': {'referenceId': 'transfer-42', 'fromBalance': 90}
+    });
     await flushSangong(tester);
     expect(_transferButton(tester).onPressed, isNotNull);
-    expect(api.count('/transfer-to-child'), 1);
+    expect(api.count('/commands/agent.transfer'), 1);
     expect(tester.takeException(), isNull);
   });
 
@@ -150,7 +163,7 @@ void main() {
     await tester.tap(find.widgetWithText(CupertinoDialogAction, '取消'));
     await tester.pumpAndSettle();
     expect(_transferButton(tester).onPressed, isNotNull);
-    expect(api.count('/transfer-to-child'), 0);
+    expect(api.count('/commands/agent.transfer'), 0);
   });
 
   testWidgets('revocation while confirming a transfer prevents submission',
@@ -170,7 +183,7 @@ void main() {
     current = false;
     await tester.tap(find.widgetWithText(CupertinoDialogAction, '确认划转'));
     await tester.pumpAndSettle();
-    expect(api.count('/transfer-to-child'), 0);
+    expect(api.count('/commands/agent.transfer'), 0);
     expect(tester.takeException(), isNull);
   });
 
@@ -196,7 +209,7 @@ void main() {
       expect(runtime.canOpenAgent, isTrue);
       await tester.tap(find.widgetWithText(CupertinoDialogAction, '确认划转'));
       await tester.pumpAndSettle();
-      expect(api.count('/transfer-to-child'), 0);
+      expect(api.count('/commands/agent.transfer'), 0);
       expect(tester.takeException(), isNull);
     });
   }
@@ -204,8 +217,12 @@ void main() {
   testWidgets('rebate amount acknowledges the request without asserting credit',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/rebate/claim')
-          ? {'amount': 7}
+      ..respond = (call) => call.path.endsWith('/commands/rebate.claim')
+          ? {
+              'ok': true,
+              'requestId': call.body!['requestId'],
+              'data': {'amount': 7}
+            }
           : {'member': _member(id: 'owner')};
     final runtime =
         SangongRuntime(sangongTestContext(api, canViewHistory: false));
@@ -223,7 +240,7 @@ void main() {
     await flushSangong(tester);
     expect(find.text('返水申请已提交，金额 ¥7，请刷新确认到账'), findsOneWidget);
     expect(find.textContaining('返水申请成功，到账'), findsNothing);
-    expect(api.count('/rebate/claim'), 1);
+    expect(api.count('/commands/rebate.claim'), 1);
     expect(tester.takeException(), isNull);
   });
 
@@ -231,9 +248,8 @@ void main() {
       'latest-data failures remain visible after successful daily fallback',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/member-dashboard')
-          ? <String, dynamic>{}
-          : {'days': []};
+      ..respond = (call) =>
+          call.path.endsWith('/member') ? <String, dynamic>{} : {'days': []};
     final runtime = SangongRuntime(sangongTestContext(api));
     addTearDown(runtime.dispose);
     addTearDown(() => unmountSangong(tester));

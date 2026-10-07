@@ -1,3 +1,4 @@
+import 'package:openim/core/user_activity/activity_sdk.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -92,7 +93,7 @@ class SendVerificationApplicationLogic extends GetxController {
       Get.back();
       IMViews.showToast(StrRes.sendSuccessfully);
     } catch (error) {
-      if (isClosed) return;
+      if (isClosed || isSilentFriendRisk(error)) return;
       final message = friendAddErrorMessage(error,
           chinese: Get.locale?.languageCode == 'zh');
       if (message != null) {
@@ -113,11 +114,13 @@ class SendVerificationApplicationLogic extends GetxController {
     final reason = inputCtrl.text.trim();
     try {
       await LoadingView.singleton.wrap(
-        asyncFunction: () => OpenIM.iMManager.groupManager.joinGroup(
-          groupID: groupID!,
-          reason: reason,
-          joinSource: joinGroupMethod == JoinGroupMethod.qrcode ? 4 : 3,
-        ),
+        asyncFunction: () => observeUserActivity(
+            'group_join',
+            () => OpenIM.iMManager.groupManager.joinGroup(
+                  groupID: groupID!,
+                  reason: reason,
+                  joinSource: joinGroupMethod == JoinGroupMethod.qrcode ? 4 : 3,
+                )),
       );
       if (isClosed) return;
       IMViews.showToast(StrRes.sendSuccessfully);

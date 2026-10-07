@@ -15,7 +15,7 @@ import 'sangong_test_support.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_ledger_floating_entry.dart';
 
 dynamic profileResponse(SangongCall call) {
-  if (call.path.endsWith('/reports/users')) {
+  if (call.path.endsWith('/users')) {
     return {
       'users': [
         {
@@ -25,16 +25,17 @@ dynamic profileResponse(SangongCall call) {
           'rebatePer10000': 8
         }
       ],
-      'page': 1,
-      'totalPages': 1
+      'total': 1,
+      'nextBeforeId': 0
     };
   }
-  if (call.path.endsWith('/user-detail')) {
+  if (call.path.endsWith('/user')) {
     return {
-      'parent': {'nickname': '上级甲'}
+      'exists': true, 'user': {'userId': 19, 'imUserId': 'im_target', 'balance': 420, 'rebatePer10000': 8},
+'parent': {'nickname': '上级甲'}
     };
   }
-  if (call.path.endsWith('/credit')) return {'balance': 430};
+  if (call.path.endsWith('/commands/wallet.adjust')) return sangongReceipt(call, {'imUserId': 'im_target', 'balance': 430});
   return sangongFixtureResponse(call);
 }
 
@@ -59,8 +60,8 @@ void main() {
               'sangong': {'canManage': true, 'tenantID': 'tenant-authorized'}
             };
           }
-          if (call.path.endsWith('/user-flow')) {
-            return {'imUserId': 'im_target'};
+          if (call.path.endsWith('/user-report')) {
+            return sangongUserReport(imUserId: 'im_target');
           }
           if (call.path.endsWith('/sessions')) return {'sessions': []};
           if (call.path.endsWith('/user-hierarchy')) return {'members': []};
@@ -165,13 +166,14 @@ void main() {
     await tester.enterText(find.byType(TextField).first, '10');
     await tester.tap(find.text('上分'));
     await tester.pump(const Duration(milliseconds: 350));
-    expect(api.count('/credit'), 0);
+    expect(api.count('/commands/wallet.adjust'), 0);
     await tester.tap(find.text('确认'));
     await flushSangong(tester);
-    expect(api.count('/credit'), 1);
-    final request = api.calls.firstWhere((c) => c.path.endsWith('/credit'));
-    expect(request.body?['imUserId'], 'im_target');
-    expect(request.body?['amount'], 10);
+    expect(api.count('/commands/wallet.adjust'), 1);
+    final request =
+        api.calls.firstWhere((c) => c.path.endsWith('/commands/wallet.adjust'));
+    expect(request.body?['input']['imUserId'], 'im_target');
+    expect(request.body?['input']['delta'], 10);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
@@ -181,7 +183,7 @@ void main() {
       (tester) async {
     final response = Completer<dynamic>();
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/reports/users')
+      ..respond = (call) => call.path.endsWith('/user')
           ? response.future
           : profileResponse(call);
     final runtime = sangongTestRuntime(sangongTestContext(api));
@@ -235,7 +237,7 @@ void main() {
     }));
     expect(menus.map((m) => m.id),
         containsAll(['sangong_stats', 'sangong_banker']));
-    expect(menus.map((m) => m.id), isNot(contains('sangong_exclude')));
+    expect(menus.map((m) => m.id), contains('sangong_exclude'));
     runtime.updateContext(
         sangongTestContext(api, canManage: false, capabilityVersion: 2));
     await tester.pump();

@@ -5,14 +5,12 @@
 class SangongApiConfig {
   SangongApiConfig._();
 
-  static const baseUrl = String.fromEnvironment('SANGONG_API_BASE_URL',
-      defaultValue: 'http://129.226.192.93:10008/sangong/api/v1');
+  static const baseUrl = String.fromEnvironment('SANGONG_API_BASE_URL');
   static const pathPrefix = String.fromEnvironment(
     'SANGONG_API_PATH_PREFIX',
     defaultValue: '/sangong',
   );
-  static const tenantId = String.fromEnvironment('SANGONG_TENANT_ID',
-      defaultValue: '@z8hFfDvVQP0x');
+  static const tenantId = String.fromEnvironment('SANGONG_TENANT_ID');
 
   /// Endpoint definitions keep their /api/v1 contract paths. A complete API
   /// base already includes that version segment, so strip it exactly once.

@@ -8,6 +8,7 @@ import 'package:openim_common/openim_common.dart';
 
 import 'core/controller/im_controller.dart';
 import 'core/controller/app_controller.dart';
+import 'core/user_activity/activity_runtime.dart';
 import 'routes/app_pages.dart';
 import 'theme/app_theme_controller.dart';
 import 'widgets/app_view.dart';
@@ -22,6 +23,7 @@ class ChatApp extends StatelessWidget {
         listenable: AppThemeController.instance,
         builder: (context, _) => GetMaterialApp(
           debugShowCheckedModeBanner: false,
+          navigatorObservers: [ActivityRuntime.instance.observer],
           enableLog: true,
           routingCallback: (_) {
             if (Get.isRegistered<AppController>()) {

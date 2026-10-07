@@ -319,7 +319,7 @@ class ChatForwardingController {
         current: current,
       );
     } catch (error) {
-      if (!current()) return;
+      if (!current() || isSilentFriendRisk(error)) return;
       Logger.print('Send contact card failed: $error');
       _showToast(StrRes.sendFailed);
     }
@@ -329,12 +329,17 @@ class ChatForwardingController {
     required String userID,
     String? nickname,
     String? faceURL,
-  }) =>
-      _sendCarte(
+  }) async {
+    try {
+      await _sendCarte(
           userID: userID,
           nickname: nickname,
           faceURL: faceURL,
           current: _cardSessionGuard());
+    } catch (error) {
+      if (!isSilentFriendRisk(error)) rethrow;
+    }
+  }
 
   Future<void> _sendCarte({
     required String userID,
@@ -426,7 +431,7 @@ class ChatForwardingController {
         if (!current()) return;
       }
     } catch (error) {
-      if (!current()) return;
+      if (!current() || isSilentFriendRisk(error)) return;
       Logger.print('Recommend contact card failed: $error');
       _showToast(StrRes.sendFailed);
     }

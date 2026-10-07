@@ -197,6 +197,7 @@ class _WalletReceiveScreenState extends State<WalletReceiveScreen>
                           api: widget.api,
                           accountProvider: widget.accountProvider),
                     ),
+                    activityPage: 'wallet_history',
                   ),
                   icon: const WalletOverviewIcon.history(),
                 ),

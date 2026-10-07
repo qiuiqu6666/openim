@@ -35,7 +35,7 @@ void main() {
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/user-detail')) {
+        if (call.path.endsWith('/user')) {
           return {
             'user': {'userId': 19, 'imUserId': 'im_target'}
           };
@@ -48,7 +48,7 @@ void main() {
             ]
           };
         }
-        if (call.path.endsWith('/user-flow')) {
+        if (call.path.endsWith('/user-report')) {
           return {
             'flow': {
               'entries': List.generate(
@@ -72,7 +72,7 @@ void main() {
                 userId: 19, imUserId: 'im_target', nickname: '目标用户')));
     final summary =
         api.calls.firstWhere((c) => c.path.endsWith('/user-hierarchy'));
-    final detail = api.calls.firstWhere((c) => c.path.endsWith('/user-flow'));
+    final detail = api.calls.firstWhere((c) => c.path.endsWith('/user-report'));
     expect(summary.query?['date'], matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')));
     expect(detail.query, {'imUserId': 'im_target'},
         reason: 'The confirmed flow API has no date/page/cursor parameter.');
@@ -93,7 +93,7 @@ void main() {
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/user-detail')) return {'user': {}};
+        if (call.path.endsWith('/user')) return {'user': {}};
         if (call.path.endsWith('/sessions')) {
           return {
             'sessions': [
@@ -108,7 +108,7 @@ void main() {
           };
         }
         if (call.path.endsWith('/user-hierarchy')) return {'members': []};
-        if (call.path.endsWith('/user-flow')) {
+        if (call.path.endsWith('/user-report')) {
           return {
             'flow': {'entries': []}
           };
@@ -123,7 +123,7 @@ void main() {
             user: SangongAdminUserReport(userId: 19, imUserId: 'im_target')));
     await tester.tap(find.text('开机批次'));
     await flushSangong(tester);
-    expect(api.calls.lastWhere((c) => c.path.endsWith('/user-flow')).query,
+    expect(api.calls.lastWhere((c) => c.path.endsWith('/user-report')).query,
         {'imUserId': 'im_target', 'sessionId': 2});
     expect(api.calls.lastWhere((c) => c.path.endsWith('/user-hierarchy')).query,
         {'imUserId': 'im_target', 'sessionId': 2});
@@ -147,7 +147,7 @@ void main() {
         sangongReportDate(DateTime.now().toUtc().add(const Duration(hours: 8)));
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/user-detail')) {
+        if (call.path.endsWith('/user')) {
           return {
             'user': {'userId': 19, 'imUserId': 'im_target'}
           };
@@ -160,7 +160,7 @@ void main() {
             ]
           };
         }
-        if (call.path.endsWith('/user-flow')) {
+        if (call.path.endsWith('/user-report')) {
           return {
             'flow': {
               'entries': [

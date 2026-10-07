@@ -6,6 +6,7 @@ import 'package:openim/pages/group_features/sangong/models/agent_rebate_models.d
 import 'package:openim/pages/group_features/sangong/support/sangong_ui.dart';
 import 'package:openim/pages/group_features/sangong/widgets/app_back_button.dart';
 import '../widgets/authorization/sangong_agent_authorized_view.dart';
+import '../agents/widgets/sangong_agent_user_actions.dart';
 
 class SangongAgentMemberDetailPage extends StatefulWidget {
   const SangongAgentMemberDetailPage({super.key, required this.member});
@@ -217,6 +218,15 @@ class _State extends State<SangongAgentMemberDetailPage> {
                                       .onSurfaceVariant))
                         ])
                   ]),
+                  if (_liveMember != null && _error == null)
+                    SangongAgentUserActions(
+                        userId: m.userId,
+                        imUserId: m.imUserId,
+                        nickname: m.nickname,
+                        rebatePct: m.rebatePct,
+                        parentUserId: m.parentUserId,
+                        agent: true,
+                        onChanged: _loadDaily),
                   if (_tabIndex == 0) ...[
                     const SizedBox(height: 20),
                     _panelSwitcher(),

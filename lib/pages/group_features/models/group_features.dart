@@ -9,12 +9,13 @@ class GroupFeatures {
   const GroupFeatures(
       {this.schemaVersion = 1,
       this.revision = -1,
+      this.capabilityVersion = 0,
       this.live = const GroupLiveFeature(),
       this.sangong = const GroupGameFeature(),
       this.markSix = const GroupGameFeature(),
       this.raw = const {},
       this.valid = false});
-  final int schemaVersion, revision;
+  final int schemaVersion, revision, capabilityVersion;
   final bool valid;
   final GroupLiveFeature live;
   final GroupGameFeature sangong, markSix;
@@ -38,6 +39,10 @@ class GroupFeatures {
     return GroupFeatures(
         schemaVersion: 1,
         revision: revision,
+        capabilityVersion: map['capabilityVersion'] is int &&
+                (map['capabilityVersion'] as int) >= 0
+            ? map['capabilityVersion'] as int
+            : 0,
         valid: true,
         live: GroupLiveFeature.fromJson(map['live']),
         sangong: GroupGameFeature.fromJson(games['sangong']),

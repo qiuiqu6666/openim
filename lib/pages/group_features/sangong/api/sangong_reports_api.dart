@@ -1,4 +1,4 @@
-import '../utils/api_response_util.dart';
+import 'sangong_v2_api.dart';
 import 'sangong_game_http.dart';
 
 /// Report contracts are independent from the existing team dashboard model.
@@ -9,7 +9,6 @@ class SangongReportsApi {
   /// Preserve the service payload until the overview response schema is
   /// supplied; no team dashboard fields or client-generated totals are added.
   Future<dynamic> fetchOverview() async {
-    final response = await http.requests.get('/api/v1/me/reports/overview');
-    return unwrapApiPayload(response.data);
+    return SangongV2Api(http, agent: true).team('team-summary', const {});
   }
 }

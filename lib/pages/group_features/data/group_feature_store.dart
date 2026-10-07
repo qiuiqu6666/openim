@@ -97,6 +97,7 @@ class GroupFeatureStore extends ChangeNotifier {
       required Stream<GroupMembersInfo> memberDeleted,
       required Stream<GroupMembersInfo> memberChanged,
       required Stream<String> business,
+      Stream<Message> messages = const Stream<Message>.empty(),
       required Stream<void> synced,
       required Stream<void> kicked,
       required String Function() currentUserID}) {
@@ -120,7 +121,15 @@ class GroupFeatureStore extends ChangeNotifier {
         }
       }),
       business.listen(receiveBusiness),
-      synced.listen((_) => refreshKnownGroups()),
+      messages.listen(receiveMessage),
+      synced.listen((_) {
+        refreshKnownGroups();
+        for (final id in _groups.keys) {
+          if (active && !_left.contains(id)) {
+            _events.add({'key': 'imReconnected', 'groupID': id});
+          }
+        }
+      }),
       kicked.listen((_) => invalidateSession()),
     ]);
   }
@@ -214,7 +223,14 @@ class GroupFeatureStore extends ChangeNotifier {
     final liveQualificationChanged = old.live.isActive != next.live.isActive ||
         old.live.sessionID != next.live.sessionID ||
         old.live.anchorUserID != next.live.anchorUserID;
-    if ((liveQualificationChanged ||
+    final permissionsAdvanced =
+        next.capabilityVersion > old.capabilityVersion &&
+            next.capabilityVersion > (_capabilities[id]?.version ?? -1);
+    if (next.capabilityVersion > (_capabilityMinimumVersion[id] ?? 0)) {
+      _capabilityMinimumVersion[id] = next.capabilityVersion;
+    }
+    if ((permissionsAdvanced ||
+            liveQualificationChanged ||
             changed(old.sangong, next.sangong) ||
             changed(old.markSix, next.markSix)) &&
         (_capabilities.containsKey(id) ||
@@ -381,6 +397,33 @@ class GroupFeatureStore extends ChangeNotifier {
       'data': {'groupID': id},
     });
     notifyListeners();
+  }
+
+  /// Forward display events with the SDK-authenticated sender, never treating
+  /// user-supplied message metadata as a capability or configuration update.
+  void receiveMessage(Message message) {
+    if (!active) return;
+    final id = message.groupID;
+    if (id == null || id.isEmpty || _left.contains(id)) return;
+    try {
+      final metadata = featureMap(jsonDecode(message.ex ?? ''));
+      final event = featureMap(metadata['sangong']);
+      if (event['type'] != 'sangong.event' ||
+          event['schemaVersion'] != 2 ||
+          event['groupId'] != id) {
+        return;
+      }
+      _events.add({
+        'key': 'sangongStateMessage',
+        'groupID': id,
+        'senderID': message.sendID,
+        'serverMsgID': message.serverMsgID,
+        'seq': message.seq,
+        'data': event,
+      });
+    } catch (_) {
+      // Foreign/malformed metadata has no effect on the SDK message chain.
+    }
   }
 
   void receiveBusiness(String raw) {

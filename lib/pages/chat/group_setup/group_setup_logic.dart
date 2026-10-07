@@ -1,3 +1,4 @@
+import 'package:openim/core/user_activity/activity_sdk.dart';
 import 'group_member_order.dart';
 import 'dart:async';
 import 'dart:io';
@@ -535,9 +536,11 @@ class GroupSetupLogic extends GetxController {
           title: StrRes.quitGroupHint,
         ));
         if (confirm == true) {
-          await OpenIM.iMManager.groupManager.quitGroup(
-            groupID: groupInfo.value.groupID,
-          );
+          await observeUserActivity(
+              'group_leave',
+              () => OpenIM.iMManager.groupManager.quitGroup(
+                    groupID: groupInfo.value.groupID,
+                  ));
         } else {
           return;
         }
@@ -598,11 +601,13 @@ class GroupSetupLogic extends GetxController {
     if (list is List<String>) {
       try {
         await LoadingView.singleton.wrap(
-          asyncFunction: () => OpenIM.iMManager.groupManager.inviteUserToGroup(
-            groupID: groupInfo.value.groupID,
-            userIDList: list,
-            reason: 'Come on baby',
-          ),
+          asyncFunction: () => observeUserActivity(
+              'group_invite',
+              () => OpenIM.iMManager.groupManager.inviteUserToGroup(
+                    groupID: groupInfo.value.groupID,
+                    userIDList: list,
+                    reason: 'Come on baby',
+                  )),
         );
       } catch (_) {}
       getGroupMembers();

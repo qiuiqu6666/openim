@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'data_sp.dart';
+import 'http_util.dart';
 import '../models/user_full_info.dart';
 import '../apis.dart';
 import '../models/contact_card/contact_card_identity.dart';
@@ -173,6 +174,10 @@ class FriendAddRequest {
     return Apis.applyFriendGrant(grant: grant, message: reason);
   }
 }
+
+/// Applies to the friend grant, application and invitation workflows only.
+bool isSilentFriendRisk(Object error) =>
+    HttpUtil.isSilentError(error, path: '/chat/friend-apply');
 
 String? friendAddErrorMessage(Object error, {required bool chinese}) {
   final code = error is PlatformException

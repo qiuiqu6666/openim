@@ -4,7 +4,6 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:openim/pages/group_features/sangong/api/sangong_settings_api.dart';
 import 'package:openim/pages/group_features/sangong/support/sangong_ui.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_game_settings.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_admin_models.dart';
@@ -56,18 +55,7 @@ class _SangongGameRulesSettingsPageState
   late TextEditingController _doorCountController;
   late TextEditingController _minBetController;
   late TextEditingController _maxBetController;
-  late TextEditingController _imGroupGameIdController;
-  late TextEditingController _imGroupAdminStatsIdController;
-  late TextEditingController _imBotUserIdController;
-  late List<TextEditingController> _pointOddsControllers;
-  late List<TextEditingController> _pointBankerRakeControllers;
-  late List<TextEditingController> _pointPlayerRakeControllers;
-  late TextEditingController _pairOddsController;
-  late TextEditingController _pairBankerRakeController;
-  late TextEditingController _pairPlayerRakeController;
-  late TextEditingController _maxHandOddsController;
-  late TextEditingController _maxHandBankerRakeController;
-  late TextEditingController _maxHandPlayerRakeController;
+  late TextEditingController _rakePercentController;
 
   @override
   void initState() {
@@ -76,21 +64,7 @@ class _SangongGameRulesSettingsPageState
     _doorCountController = TextEditingController();
     _minBetController = TextEditingController();
     _maxBetController = TextEditingController();
-    _imGroupGameIdController = TextEditingController();
-    _imGroupAdminStatsIdController = TextEditingController();
-    _imBotUserIdController = TextEditingController();
-    _pointOddsControllers = List<TextEditingController>.generate(
-        10, (_) => TextEditingController());
-    _pointBankerRakeControllers = List<TextEditingController>.generate(
-        10, (_) => TextEditingController());
-    _pointPlayerRakeControllers = List<TextEditingController>.generate(
-        10, (_) => TextEditingController());
-    _pairOddsController = TextEditingController();
-    _pairBankerRakeController = TextEditingController();
-    _pairPlayerRakeController = TextEditingController();
-    _maxHandOddsController = TextEditingController();
-    _maxHandBankerRakeController = TextEditingController();
-    _maxHandPlayerRakeController = TextEditingController();
+    _rakePercentController = TextEditingController();
     unawaited(_load());
   }
 
@@ -99,24 +73,7 @@ class _SangongGameRulesSettingsPageState
     _doorCountController.dispose();
     _minBetController.dispose();
     _maxBetController.dispose();
-    _imGroupGameIdController.dispose();
-    _imGroupAdminStatsIdController.dispose();
-    _imBotUserIdController.dispose();
-    for (final controller in _pointOddsControllers) {
-      controller.dispose();
-    }
-    for (final controller in _pointBankerRakeControllers) {
-      controller.dispose();
-    }
-    for (final controller in _pointPlayerRakeControllers) {
-      controller.dispose();
-    }
-    _pairOddsController.dispose();
-    _pairBankerRakeController.dispose();
-    _pairPlayerRakeController.dispose();
-    _maxHandOddsController.dispose();
-    _maxHandBankerRakeController.dispose();
-    _maxHandPlayerRakeController.dispose();
+    _rakePercentController.dispose();
     super.dispose();
   }
 
@@ -132,14 +89,13 @@ class _SangongGameRulesSettingsPageState
     });
     try {
       final runtime = SangongScope.read(context);
-      final results = await Future.wait(
-          [runtime.settings.loadForUi(), runtime.admin.fetchSession()]);
-      final result = results[0] as SangongSettingsLoadResult;
-      final session = results[1] as SangongAdminSession;
+      final state = await runtime.admin.fetchEventsSnapshot();
+      final session = SangongAdminSession(
+          status: state.status, session: state.session, round: state.round);
       if (!mounted || !runtime.isCurrent) return;
-      _applySettings(result.settings);
+      _applySettings(state.settings);
       setState(() {
-        _canEdit = result.canEdit;
+        _canEdit = runtime.settings.canEdit;
         _session = session;
         _loading = false;
       });
@@ -156,55 +112,7 @@ class _SangongGameRulesSettingsPageState
     _doorCountController.text = '${settings.doorCount}';
     _minBetController.text = '${settings.minBet}';
     _maxBetController.text = '${settings.maxBet}';
-    _imGroupGameIdController.text = settings.imGroupGameId;
-    _imGroupAdminStatsIdController.text = settings.imGroupAdminStatsId;
-    _imBotUserIdController.text = settings.imBotUserId;
-    for (var i = 0; i < 10; i++) {
-      final point = settings.points[i];
-      _pointOddsControllers[i].text = _formatOdds(point.odds);
-      _pointBankerRakeControllers[i].text = '${point.bankerRakePoints}';
-      _pointPlayerRakeControllers[i].text = '${point.playerRakePoints}';
-    }
-    _pairOddsController.text = _formatOdds(settings.pair.odds);
-    _pairBankerRakeController.text = '${settings.pair.bankerRakePoints}';
-    _pairPlayerRakeController.text = '${settings.pair.playerRakePoints}';
-    _maxHandOddsController.text = _formatOdds(settings.maxHand.odds);
-    _maxHandBankerRakeController.text = '${settings.maxHand.bankerRakePoints}';
-    _maxHandPlayerRakeController.text = '${settings.maxHand.playerRakePoints}';
-  }
-
-  String _formatOdds(double value) {
-    if (value == value.roundToDouble()) {
-      return value.toStringAsFixed(1);
-    }
-    return value.toString();
-  }
-
-  SangongHandRule? _readHandRule({
-    required String label,
-    required TextEditingController oddsController,
-    required TextEditingController bankerRakeController,
-    required TextEditingController playerRakeController,
-    required String invalidMessage,
-  }) {
-    final odds = double.tryParse(oddsController.text.trim());
-    final bankerRake = int.tryParse(bankerRakeController.text.trim());
-    final playerRake = int.tryParse(playerRakeController.text.trim());
-    if (odds == null ||
-        bankerRake == null ||
-        playerRake == null ||
-        odds <= 0 ||
-        bankerRake < 0 ||
-        playerRake < 0) {
-      ToastUtils.toast(invalidMessage);
-      return null;
-    }
-    return SangongHandRule(
-      label: label,
-      odds: odds,
-      bankerRakePoints: bankerRake,
-      playerRakePoints: playerRake,
-    );
+    _rakePercentController.text = '${settings.rakePercent}';
   }
 
   SangongGameSettings? _readForm() {
@@ -223,12 +131,12 @@ class _SangongGameRulesSettingsPageState
       return null;
     }
 
-    final minBet = int.tryParse(_minBetController.text.trim()) ?? 0;
-    final maxBet = int.tryParse(_maxBetController.text.trim()) ?? 0;
-    if (minBet < 0 || maxBet < 0) {
+    final minBet = int.tryParse(_minBetController.text.trim());
+    final maxBet = int.tryParse(_maxBetController.text.trim());
+    if (minBet == null || maxBet == null || minBet < 0 || maxBet < 0) {
       ToastUtils.toast(
         i18n.t(
-          zhHans: '下注限额不能为负数',
+          zhHans: '请输入非负整数下注限额',
           zhHant: '下注限額不能為負數',
           en: 'Bet limits cannot be negative',
           ja: 'ベット上限は負の値にできません',
@@ -260,74 +168,19 @@ class _SangongGameRulesSettingsPageState
       return null;
     }
 
-    final points = <SangongPointRule>[];
-    for (var i = 0; i < 10; i++) {
-      final rule = _readHandRule(
-        label: '$i点',
-        oddsController: _pointOddsControllers[i],
-        bankerRakeController: _pointBankerRakeControllers[i],
-        playerRakeController: _pointPlayerRakeControllers[i],
-        invalidMessage: i18n.t(
-          zhHans: '$i点规则填写无效',
-          zhHant: '$i點規則填寫無效',
-          en: 'Invalid settings for point $i',
-          ja: '$i点の設定が無効です',
-          ko: '$i점 설정이 올바르지 않습니다',
-        ),
-      );
-      if (rule == null) return null;
-      points.add(
-        SangongPointRule(
-          point: i,
-          label: rule.label,
-          odds: rule.odds,
-          bankerRakePoints: rule.bankerRakePoints,
-          playerRakePoints: rule.playerRakePoints,
-        ),
-      );
+    final rake = int.tryParse(_rakePercentController.text.trim());
+    if (rake == null || rake < 0 || rake > 100) {
+      ToastUtils.toast(i18n.t(
+          zhHans: '庄家抽水比例须为 0～100 的整数',
+          zhHant: '莊家抽水比例須為 0～100 的整數',
+          en: 'Banker rake must be an integer from 0 to 100'));
+      return null;
     }
-
-    final pair = _readHandRule(
-      label: '对子',
-      oddsController: _pairOddsController,
-      bankerRakeController: _pairBankerRakeController,
-      playerRakeController: _pairPlayerRakeController,
-      invalidMessage: i18n.t(
-        zhHans: '对子规则填写无效',
-        zhHant: '對子規則填寫無效',
-        en: 'Invalid pair settings',
-        ja: 'ペアの設定が無効です',
-        ko: '페어 설정이 올바르지 않습니다',
-      ),
-    );
-    if (pair == null) return null;
-
-    final maxHand = _readHandRule(
-      label: '1.00',
-      oddsController: _maxHandOddsController,
-      bankerRakeController: _maxHandBankerRakeController,
-      playerRakeController: _maxHandPlayerRakeController,
-      invalidMessage: i18n.t(
-        zhHans: '1.00 规则填写无效',
-        zhHant: '1.00 規則填寫無效',
-        en: 'Invalid max-hand settings',
-        ja: '1.00の設定が無効です',
-        ko: '1.00 설정이 올바르지 않습니다',
-      ),
-    );
-    if (maxHand == null) return null;
-
     return SangongGameSettings(
-      doorCount: doorCount,
-      minBet: minBet,
-      maxBet: maxBet,
-      points: points,
-      pair: pair,
-      maxHand: maxHand,
-      imGroupGameId: _imGroupGameIdController.text.trim(),
-      imGroupAdminStatsId: _imGroupAdminStatsIdController.text.trim(),
-      imBotUserId: _imBotUserIdController.text.trim(),
-    );
+        doorCount: doorCount,
+        minBet: minBet,
+        maxBet: maxBet,
+        rakePercent: rake);
   }
 
   Future<void> _save() async {
@@ -343,11 +196,11 @@ class _SangongGameRulesSettingsPageState
       _applySettings(saved);
       ToastUtils.toast(
         i18n.t(
-          zhHans: '已保存，建议下一局生效',
-          zhHant: '已保存，建議下一局生效',
-          en: 'Saved. Changes apply from the next round.',
-          ja: '保存しました。次の局から反映されます。',
-          ko: '저장되었습니다. 다음 판부터 적용됩니다.',
+          zhHans: '规则已保存',
+          zhHant: '規則已儲存',
+          en: 'Rules saved.',
+          ja: '保存しました。',
+          ko: '저장되었습니다.',
         ),
       );
     } catch (error) {
@@ -425,6 +278,8 @@ class _SangongGameRulesSettingsPageState
       return;
     }
     final i18n = AppI18n.of(context);
+    final sessionId = _session.session?.id ?? 0;
+    if (sessionId <= 0) return;
     final ok = await AppDialog.confirm(
       context: context,
       title: i18n.t(
@@ -449,7 +304,9 @@ class _SangongGameRulesSettingsPageState
     }
     setState(() => _sessionBusy = true);
     try {
-      final result = await SangongScope.read(context).admin.stopSession();
+      final result = await SangongScope.read(context)
+          .admin
+          .stopSession(sessionId: sessionId);
       if (!mounted) return;
       await _refreshSession();
       ToastUtils.toast(
@@ -647,11 +504,11 @@ class _SangongGameRulesSettingsPageState
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Text(
               i18n.t(
-                zhHans: '建议下一局生效',
-                zhHant: '建議下一局生效',
-                en: 'Changes apply from the next round',
-                ja: '次の局から反映されます',
-                ko: '다음 판부터 적용됩니다',
+                zhHans: '请在定庄前修改规则。输赢按 1:1；只按闲家总下注流水向庄家抽水，小数向下取整。',
+                zhHant: '請在定莊前修改規則。輸贏按 1:1；只按閒家總下注流水向莊家抽水，小數向下取整。',
+                en: 'Edit before selecting the banker. Payout is 1:1; banker rake applies to total player stakes, rounded down.',
+                ja: '庄の設定前に変更してください。配当は1:1、庄の手数料は総ベット額を基準に切り捨てます。',
+                ko: '뱅커 지정 전에 변경하세요. 배당은 1:1이며 뱅커 수수료는 전체 베팅액 기준으로 내림합니다.',
               ),
               style: TextStyle(
                 color: AppColors.subText(dark: dark),
@@ -697,107 +554,17 @@ class _SangongGameRulesSettingsPageState
               ),
             ],
           ),
-          _sectionHeader(
-            i18n.t(
-              zhHans: '点数',
-              zhHant: '點數',
-              en: 'Point',
-              ja: '点数',
-              ko: '점수',
+          SettingsGroup(children: [
+            _numberField(
+              label: i18n.t(
+                  zhHans: '庄家抽水（%）', zhHant: '莊家抽水（%）', en: 'Banker rake (%)'),
+              controller: _rakePercentController,
+              readOnly: readOnly,
+              showDivider: false,
             ),
-            i18n.t(
-              zhHans: '赔率',
-              zhHant: '賠率',
-              en: 'Odds',
-              ja: 'オッズ',
-              ko: '배당',
-            ),
-            i18n.t(
-              zhHans: '庄抽水',
-              zhHant: '莊抽水',
-              en: 'Banker',
-              ja: '庄抽水',
-              ko: '뱅커',
-            ),
-            i18n.t(
-              zhHans: '闲抽水',
-              zhHant: '閒抽水',
-              en: 'Player',
-              ja: '閑抽水',
-              ko: '플레이어',
-            ),
-          ),
-          SettingsGroup(
-            children: [
-              for (var i = 0; i < 10; i++)
-                _oddsRakeRow(
-                  label: '$i点',
-                  oddsController: _pointOddsControllers[i],
-                  bankerRakeController: _pointBankerRakeControllers[i],
-                  playerRakeController: _pointPlayerRakeControllers[i],
-                  readOnly: readOnly,
-                  showDivider: i < 9,
-                ),
-            ],
-          ),
-          SettingsGroup(
-            children: [
-              _oddsRakeRow(
-                label: i18n.t(
-                  zhHans: '对子',
-                  zhHant: '對子',
-                  en: 'Pair',
-                  ja: 'ペア',
-                  ko: '페어',
-                ),
-                oddsController: _pairOddsController,
-                bankerRakeController: _pairBankerRakeController,
-                playerRakeController: _pairPlayerRakeController,
-                readOnly: readOnly,
-              ),
-              _oddsRakeRow(
-                label: '1.00',
-                oddsController: _maxHandOddsController,
-                bankerRakeController: _maxHandBankerRakeController,
-                playerRakeController: _maxHandPlayerRakeController,
-                readOnly: readOnly,
-                showDivider: false,
-              ),
-            ],
-          ),
+          ]),
         ],
       ],
-    );
-  }
-
-  Widget _sectionHeader(
-    String col1,
-    String col2,
-    String col3,
-    String col4,
-  ) {
-    final dark = settingsIsDark(context);
-    TextStyle style = TextStyle(
-      color: AppColors.subText(dark: dark),
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-    );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Row(
-        children: [
-          Expanded(flex: 3, child: Text(col1, style: style)),
-          Expanded(
-              flex: 2,
-              child: Text(col2, textAlign: TextAlign.center, style: style)),
-          Expanded(
-              flex: 2,
-              child: Text(col3, textAlign: TextAlign.center, style: style)),
-          Expanded(
-              flex: 2,
-              child: Text(col4, textAlign: TextAlign.center, style: style)),
-        ],
-      ),
     );
   }
 
@@ -814,116 +581,6 @@ class _SangongGameRulesSettingsPageState
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       readOnly: readOnly,
-    );
-  }
-
-  Widget _oddsRakeRow({
-    required String label,
-    required TextEditingController oddsController,
-    required TextEditingController bankerRakeController,
-    required TextEditingController playerRakeController,
-    required bool readOnly,
-    bool showDivider = true,
-  }) {
-    final dark = settingsIsDark(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        border: showDivider
-            ? Border(
-                bottom: BorderSide(
-                  color: AppColors.line(dark: dark),
-                  width: 0.7,
-                ),
-              )
-            : null,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: AppColors.text(dark: dark),
-                fontSize: 15,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: _compactField(
-              controller: oddsController,
-              readOnly: readOnly,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            flex: 2,
-            child: _compactField(
-              controller: bankerRakeController,
-              readOnly: readOnly,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            flex: 2,
-            child: _compactField(
-              controller: playerRakeController,
-              readOnly: readOnly,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _compactField({
-    required TextEditingController controller,
-    required bool readOnly,
-    required TextInputType keyboardType,
-    List<TextInputFormatter>? inputFormatters,
-  }) {
-    final dark = settingsIsDark(context);
-    return TextField(
-      controller: controller,
-      readOnly: readOnly,
-      enabled: !readOnly,
-      textAlign: TextAlign.center,
-      keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
-      cursorColor: AppColors.primaryBlue,
-      style: TextStyle(
-        color: AppColors.text(dark: dark),
-        fontSize: 15,
-      ),
-      decoration: InputDecoration(
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-        filled: true,
-        fillColor: AppColors.background(dark: dark),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.line(dark: dark)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppColors.line(dark: dark)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primaryBlue),
-        ),
-      ),
     );
   }
 }

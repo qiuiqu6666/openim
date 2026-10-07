@@ -6,17 +6,22 @@ import '../../models/sangong_my_config.dart';
 import '../../utils/api_response_util.dart';
 import '../diagnostics/sangong_api_debug_log.dart';
 
-/// Queries a specific tenant through Chat without granting group capabilities.
+/// Reads and saves the current game group through Chat. Agent groups use their
+/// own context endpoint; account-default configuration is never consulted.
 class SangongGroupTenantApi {
   const SangongGroupTenantApi();
 
   Future<SangongGroupTenantState> fetch(GroupFeatureContext context,
           {String? tenantId}) =>
       _inContext(context, (api) async {
-        final requestedId = _requestedId(tenantId ?? context.groupID);
+        final requestedId = _requestedId(context.groupID);
+        if (tenantId != null) {
+          throw const GroupFeatureException('请通过代理群入口查询绑定关系',
+              code: 'INVALID_REQUEST');
+        }
         try {
           final raw = await api.requestData(
-            '/sangong/api/v1/admin/tenants/${Uri.encodeComponent(requestedId)}',
+            '/sangong/api/v2/groups/${Uri.encodeComponent(requestedId)}/config',
             useBearerAuth: true,
             diagnostics: SangongApiDebugLog.create(),
             preserveEnvelope: true,
@@ -24,7 +29,7 @@ class SangongGroupTenantApi {
           return _parse(raw,
               requestedId: requestedId,
               currentGroupId: context.groupID,
-              requireCurrentGroup: tenantId == null);
+              requireCurrentGroup: true);
         } on GroupFeatureException catch (error) {
           if (error.statusCode == 404 &&
               error.serverCode == 'TENANT_NOT_FOUND') {
@@ -62,8 +67,8 @@ class SangongGroupTenantApi {
               code: 'INVALID_REQUEST');
         }
         final raw = await api.requestData(
-          '/sangong/api/v1/admin/tenants',
-          method: 'POST',
+          '/sangong/api/v2/groups/${Uri.encodeComponent(requestedId)}/config',
+          method: 'PUT',
           body: body,
           useBearerAuth: true,
           diagnostics: SangongApiDebugLog.create(),
@@ -88,14 +93,15 @@ class SangongGroupTenantApi {
   Future<SangongGroupTenantState> update(GroupFeatureContext context,
           {required String tenantId, required Map<String, dynamic> body}) =>
       _inContext(context, (api) async {
-        final requestedId = _requestedId(tenantId);
-        if (requestedId != context.groupID) {
+        final requestedId = _requestedId(context.groupID);
+        final verified = context.capabilities.sangong.tenantID;
+        if (tenantId != (verified.isNotEmpty ? verified : context.groupID)) {
           throw const GroupFeatureException('当前群不是要修改的三公下注群',
               code: 'INVALID_REQUEST');
         }
         _checkBodyGroup(body, requestedId, requireGroup: false);
         final raw = await api.requestData(
-          '/sangong/api/v1/admin/tenants/${Uri.encodeComponent(requestedId)}',
+          '/sangong/api/v2/groups/${Uri.encodeComponent(requestedId)}/config',
           method: 'PUT',
           body: body,
           useBearerAuth: true,
@@ -215,11 +221,26 @@ class SangongGroupTenantApi {
       required bool requireCurrentGroup}) {
     final data = _configurationData(raw);
     final envelope = Map<String, dynamic>.from(raw as Map);
+    if (data['configured'] == false) {
+      if (data['groupID'] != currentGroupId || data['canInitialize'] != true) {
+        _invalidResponse();
+      }
+      return SangongGroupTenantState(
+          status: SangongGroupTenantStatus.notFound,
+          tenantId: '',
+          message: '当前群尚未配置三公',
+          raw: envelope);
+    }
     final active = data['active'];
     if (active is! bool) _invalidResponse();
+    final resolvedTenant =
+        data['tenantId'] ?? data['tenantID'] ?? data['tenant_id'];
+    if (resolvedTenant is! String || resolvedTenant.trim().isEmpty) {
+      _invalidResponse();
+    }
     for (final key in const ['tenantId', 'tenantID', 'id', 'tenant_id']) {
       if (data.containsKey(key) &&
-          (data[key] is! String || data[key].trim() != requestedId)) {
+          (data[key] is! String || data[key].trim() != resolvedTenant)) {
         _invalidResponse();
       }
     }
@@ -231,13 +252,14 @@ class SangongGroupTenantApi {
         _invalidResponse();
       }
     }
+    if (!data.containsKey('imGroupGameId') &&
+        !data.containsKey('im_group_game_id')) {
+      _invalidResponse();
+    }
     final config = SangongMyConfig.fromJson({
       ...data,
       'configured': true,
-      'tenantId': requestedId,
-      if (!data.containsKey('imGroupGameId') &&
-          !data.containsKey('im_group_game_id'))
-        'imGroupGameId': requestedId,
+      'tenantId': resolvedTenant,
       if (data['canEditConfig'] == null && data['can_edit_config'] == null)
         'canEditConfig': false,
       if (data['canManageMembers'] == null &&
@@ -250,7 +272,7 @@ class SangongGroupTenantApi {
           ? SangongGroupTenantStatus.configured
           : SangongGroupTenantStatus.disabled,
       config: config,
-      tenantId: requestedId,
+      tenantId: resolvedTenant,
       message: message.isNotEmpty
           ? message
           : active == false

@@ -84,6 +84,10 @@ void main() {
   final requests = <RequestOptions>[];
   final groupRequests = <MethodCall>[];
   var reject = false;
+  var rejectCode = 20020;
+  var rejectReason = 'too frequent';
+  var rejectAt = 'friend-grants';
+  var rejectHttp = false;
 
   setUp(() async {
     Get.reset();
@@ -99,20 +103,25 @@ void main() {
     applyGate = Completer<void>();
     groupGate = Completer<void>();
     reject = false;
+    rejectCode = 20020;
+    rejectReason = 'too frequent';
+    rejectAt = 'friend-grants';
+    rejectHttp = false;
     previousClient = http.dio;
     client = Dio();
     client.interceptors.add(InterceptorsWrapper(
       onRequest: (request, handler) async {
         requests.add(request);
         if (request.path.endsWith('friend-apply')) await applyGate.future;
-        handler.resolve(Response(
+        final rejected = reject && request.path.endsWith(rejectAt);
+        final response = Response(
           requestOptions: request,
-          statusCode: 200,
-          data: reject
+          statusCode: rejected && rejectHttp ? 429 : 200,
+          data: rejected
               ? {
-                  'errCode': 20020,
+                  'errCode': rejectCode,
                   'errMsg': 'FriendGrantRejected',
-                  'errDlt': 'too frequent',
+                  'errDlt': rejectReason,
                 }
               : {
                   'errCode': 0,
@@ -120,7 +129,15 @@ void main() {
                       ? {'friendGrant': 'fg_test'}
                       : {},
                 },
-        ));
+        );
+        if (rejected && rejectHttp) {
+          handler.reject(DioException(
+              requestOptions: request,
+              response: response,
+              type: DioExceptionType.badResponse));
+        } else {
+          handler.resolve(response);
+        }
       },
     ));
     http.dio = client;
@@ -289,7 +306,8 @@ void main() {
     expect(find.text('origin'), findsOneWidget);
   });
 
-  testWidgets('failed grant restores busy state and preserves the input draft',
+  testWidgets(
+      'legacy limit quietly restores busy state and preserves the draft',
       (tester) async {
     reject = true;
     final logic = SendVerificationApplicationLogic();
@@ -307,7 +325,8 @@ void main() {
     expect(logic.inputCtrl.text, '  保留我的申请  ');
     expect(requests, hasLength(1));
     expect(find.text('verification'), findsOneWidget);
-    expect(find.text('操作过于频繁，请稍后重试'), findsOneWidget);
+    expect(EasyLoading.isShow, isFalse);
+    expect(find.text(StrRes.sendSuccessfully), findsNothing);
     reject = false;
     final retry = logic.send();
     await _advanceRequest(tester);
@@ -315,6 +334,61 @@ void main() {
     expect(requests.last.data['message'], '保留我的申请');
     await _finishRequest(tester, applyGate, retry);
     expect(find.text('origin'), findsOneWidget);
+  });
+
+  for (final endpoint in ['friend-grants', 'friend-apply']) {
+    testWidgets('risk block at $endpoint ends loading without toast or success',
+        (tester) async {
+      reject = true;
+      rejectCode = 20201;
+      rejectReason = '操作过于频繁，请稍后再试';
+      rejectAt = endpoint;
+      rejectHttp = true;
+      final logic = SendVerificationApplicationLogic();
+      await _openVerification(tester, logic, {
+        'userID': 'target-private-id',
+        'addSource': FriendAddSource.account,
+        'friendAddFields': {'account': '@real-account'},
+      });
+      logic.inputCtrl.text = '保留我的申请';
+      final pending = logic.send();
+      await _advanceRequest(tester);
+      await tester.runAsync(() async {
+        applyGate.complete();
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+      });
+      await pending;
+      await tester.pumpAndSettle();
+      expect(logic.sending.value, isFalse);
+      expect(logic.inputCtrl.text, '保留我的申请');
+      expect(find.text('verification'), findsOneWidget);
+      expect(find.byType(SpinKitCircle), findsNothing);
+      expect(EasyLoading.isShow, isFalse);
+      expect(find.text(StrRes.sendSuccessfully), findsNothing);
+      expect(requests, hasLength(endpoint == 'friend-grants' ? 1 : 2));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('expired invitation still explains how to recover',
+      (tester) async {
+    reject = true;
+    rejectReason = 'invite invalid';
+    final logic = SendVerificationApplicationLogic();
+    await _openVerification(tester, logic, {
+      'userID': 'target-private-id',
+      'addSource': FriendAddSource.account,
+      'friendAddFields': {'account': '@real-account'},
+    });
+    final pending = logic.send();
+    await _advanceRequest(tester);
+    await pending;
+    await tester.pumpAndSettle();
+    expect(find.text('邀请已失效，请获取新的邀请'), findsOneWidget);
+    expect(logic.sending.value, isFalse);
+    expect(find.text('verification'), findsOneWidget);
+    await EasyLoading.dismiss(animation: false);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('late application completion cannot pop a newer page',

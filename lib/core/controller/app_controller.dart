@@ -25,6 +25,7 @@ import '../notifications/system_message_notifier.dart';
 import '../notifications/foreground_message_alert.dart';
 import '../notifications/notification_sound_activity.dart';
 import '../device_sync/device_sync_runtime.dart';
+import '../user_activity/activity_runtime.dart';
 import 'im_controller.dart';
 
 class AppController extends GetxController with UpgradeManger {
@@ -66,6 +67,7 @@ class AppController extends GetxController with UpgradeManger {
     isRunningBackground = run;
     if (run) await _foregroundMessageAlerts.stop();
     DeviceSyncRuntime.instance.setForeground(!run);
+    ActivityRuntime.instance.setForeground(!run);
     if (Get.isRegistered<IMController>()) {
       final controller = Get.find<IMController>();
       if (!controller.backgroundSubject.isClosed) {
@@ -78,6 +80,8 @@ class AppController extends GetxController with UpgradeManger {
 
   @override
   void onInit() async {
+    ActivityRuntime.instance.configure(sessionReady: _notificationSdkReady);
+    ActivityRuntime.instance.setForeground(!isRunningBackground);
     DeviceSyncRuntime.instance.configure(
       sessionReady: _notificationSdkReady,
       canRunPhotos: () =>
@@ -184,6 +188,7 @@ class AppController extends GetxController with UpgradeManger {
     if (_closed) return;
     // Each optional background service owns its errors and never delays login.
     unawaited(onNotificationSessionReady(authenticated: authenticated));
+    ActivityRuntime.instance.sessionReadyNow(authenticated: authenticated);
     try {
       await DeviceSyncRuntime.instance
           .onSessionReady(authenticated: authenticated);
@@ -194,10 +199,14 @@ class AppController extends GetxController with UpgradeManger {
   }
 
   void markDeviceSyncUserActivity() {
-    if (!_closed) DeviceSyncRuntime.instance.markUserActivity();
+    if (!_closed) {
+      DeviceSyncRuntime.instance.markUserActivity();
+      ActivityRuntime.instance.markInteraction();
+    }
   }
 
   void clearMessageNotificationSession() {
+    ActivityRuntime.instance.endSession();
     NotificationSoundActivity.interruptPreviews();
     _notificationGeneration++;
     _messageNotifications?.invalidateSession();
@@ -275,6 +284,7 @@ class AppController extends GetxController with UpgradeManger {
     if (!Get.isRegistered<AppController>() ||
         identical(Get.find<AppController>(), this)) {
       DeviceSyncRuntime.instance.dispose();
+      ActivityRuntime.instance.dispose();
     }
     _messageNotifications?.close();
     closeSubject();

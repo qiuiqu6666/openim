@@ -260,7 +260,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
       hud = AppHud.begin();
       final result = await request(runtime.admin);
       if (!context.mounted || !_operatorActionCurrent(runtime)) return;
-      if (!result.ok || !result.sent) {
+      if (!result.ok || !(result.sent || result.queued)) {
         throw StateError(
             result.message.isNotEmpty ? result.message : '报表发送尚未确认，请刷新后查看');
       }
@@ -497,16 +497,18 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
                         onOpenSetup: () => unawaited(_openManage(scopeContext)),
                         onOpenCutoff: () => unawaited(_cutoff(scopeContext)),
                         onOpenSettle: () => unawaited(_settle(scopeContext)),
-                        onSendSettleImage: () => unawaited(_report(scopeContext,
-                            (api) => api.sendSettleReportImage())),
+                        onSendSettleImage: () => unawaited(_report(
+                            scopeContext,
+                            (api) => api.sendSettleReportImage(
+                                roundId: state?.lastSettledRound?.id ?? 0))),
                         onSendSettleBill: () => unawaited(_report(
-                            scopeContext, (api) => api.sendSettleBillImage())),
-                        onSendPointsImage: () => unawaited(_report(scopeContext,
-                            (api) => api.sendPointsReportImage())),
-                        onSendTrendImage: () => unawaited(_report(
-                            scopeContext, (api) => api.sendTrendReportImage())),
-                        onOpenRulesSettings: () =>
-                            unawaited(_openRules(scopeContext))),
+                            scopeContext,
+                            (api) => api.sendSettleBillImage(
+                                roundId: state?.lastSettledRound?.id ?? 0))),
+                        onSendPointsImage: () => unawaited(
+                            _report(scopeContext, (api) => api.sendPointsReportImage())),
+                        onSendTrendImage: () => unawaited(_report(scopeContext, (api) => api.sendTrendReportImage())),
+                        onOpenRulesSettings: () => unawaited(_openRules(scopeContext))),
                   if (widget.featureContext.gameType ==
                           GroupGameType.sangongAgent &&
                       _runtime.isSessionCurrent &&

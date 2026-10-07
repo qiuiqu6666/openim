@@ -52,7 +52,9 @@ class SangongGameHttp {
             body: options.data is Map
                 ? Map<String, dynamic>.from(options.data)
                 : null,
-            headers: requestHeaders(skipTenant: skipTenant),
+            headers: options.path.startsWith('/api/v2/')
+                ? const {}
+                : requestHeaders(skipTenant: skipTenant),
             cancelToken: _cancelToken,
             baseUrlOverride: baseUrlOverride,
             useBearerAuth: true,
@@ -129,6 +131,9 @@ class SangongGameHttp {
           _extraPrivilegeRevision: context.privilege.revision,
         },
       );
+  // Unconfirmed writes retain their request ID for an explicit user retry.
+  // This map belongs to this account/group runtime and is cleared on disposal.
+  final pendingCommandIds = <String, String>{};
   final tenantIdListenable = ValueNotifier<String?>(null);
   String? get tenantId => tenantIdListenable.value;
   bool get hasTenant => tenantId?.trim().isNotEmpty == true;
@@ -147,6 +152,53 @@ class SangongGameHttp {
     }
     final feature = context.features.sangong;
     final capability = context.capabilities.sangong;
+    if (options.path.startsWith('/api/v2/')) {
+      final agentPrefix =
+          '/api/v2/agent-groups/${Uri.encodeComponent(context.groupID)}/';
+      if (options.path.startsWith(agentPrefix)) {
+        if (!feature.enabled ||
+            !feature.agentEntry ||
+            !capability.canOpenAgent) {
+          throw StateError('没有当前群的三公代理权限');
+        }
+        final resource = options.path.substring(agentPrefix.length);
+        if (const {'member-daily', 'transfers', 'ledger'}.contains(resource) &&
+            (!feature.rebateHistoryEntry || !capability.canViewRebateHistory)) {
+          throw StateError('没有当前群的收益历史查看权限');
+        }
+        return;
+      }
+      final prefix = '/api/v2/groups/${Uri.encodeComponent(context.groupID)}/';
+      if (!options.path.startsWith(prefix)) {
+        throw StateError('请求的游戏群与当前页面不一致');
+      }
+      final resource = options.path.substring(prefix.length);
+      if (resource == 'config') {
+        if (!capability.canConfigure && !capability.canManage ||
+            options.method != 'GET' && !capability.canConfigure) {
+          throw StateError('没有当前群的三公配置权限');
+        }
+        return;
+      }
+      final personalCommand = const {
+        'commands/user.join',
+        'commands/bet.place',
+        'commands/bet.cancel',
+        'commands/rebate.claim',
+        'commands/agent.rate',
+        'commands/agent.transfer',
+      }.contains(resource);
+      final personalQuery =
+          const {'balance', 'team', 'ledger'}.contains(resource);
+      if (personalCommand || personalQuery) {
+        if (!capability.canManage && !capability.canOpenAgent) {
+          throw StateError('没有当前群的三公操作权限');
+        }
+      } else if (!capability.canManage) {
+        throw StateError('没有当前群的三公运营权限');
+      }
+      return;
+    }
     final configuration = options.path.startsWith('/api/v1/admin/my-config') ||
         options.path == '/api/v1/admin/tenants';
     if (configuration) {
@@ -189,6 +241,7 @@ class SangongGameHttp {
   void dispose() {
     if (_closed) return;
     _closed = true;
+    pendingCommandIds.clear();
     _cancelToken.cancel('Sangong scope disposed');
     client.close(force: true);
     tenantIdListenable.dispose();

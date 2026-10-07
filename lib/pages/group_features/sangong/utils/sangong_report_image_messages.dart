@@ -2,7 +2,7 @@
 import 'package:openim/pages/group_features/sangong/support/sangong_ui.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_admin_models.dart';
 
-/// 报表图片群发成功提示。
+/// 图片报表和管理群 Excel 账单的发送结果。
 String sangongReportImageSuccessToast(
   AppI18n i18n,
   SangongReportImageResult result, {
@@ -14,7 +14,19 @@ String sangongReportImageSuccessToast(
     return result.message.trim();
   }
   final type = result.type.trim().toLowerCase();
-  if (type == 'bet_report' || result.mode.isNotEmpty) {
+  if (result.queued && !result.sent) {
+    if (type == 'bill') {
+      return i18n.t(
+          zhHans: '管理群 Excel 账单已加入发送队列',
+          zhHant: '管理群 Excel 賬單已加入發送佇列',
+          en: 'Management group Excel bill queued');
+    }
+    return i18n.t(
+        zhHans: '图片报表已加入发送队列',
+        zhHant: '圖片報表已加入發送佇列',
+        en: 'Image report queued');
+  }
+  if (type == 'bets' || type == 'bet_report' || result.mode.isNotEmpty) {
     final modeLabel = result.isPreview
         ? i18n.t(
             zhHans: '预览',

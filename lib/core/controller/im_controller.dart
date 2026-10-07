@@ -11,6 +11,7 @@ import 'package:openim_live/openim_live.dart';
 
 import '../im_callback.dart';
 import '../session/sdk_session_queue.dart';
+import '../user_activity/activity_runtime.dart';
 import '../../services/account_privilege/account_privilege_runtime.dart';
 import '../session/session_request_errors.dart';
 import '../device_sync/device_sync_runtime.dart';
@@ -56,6 +57,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     if (!Get.isRegistered<IMController>() ||
         identical(Get.find<IMController>(), this)) {
       DeviceSyncRuntime.instance.resetSession();
+      ActivityRuntime.instance.resetConnection();
       AccountPrivilegeRuntime.store.reset();
     }
     _profileSessionGeneration = null;
@@ -102,13 +104,16 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       logFilePath: Config.cachePath,
       listener: OnConnectListener(
         onConnecting: () {
+          ActivityRuntime.instance.connectionChanged(connected: false);
           imSdkStatus(IMSdkStatus.connecting);
         },
         onConnectFailed: (code, error) {
+          ActivityRuntime.instance.connectionChanged(connected: false);
           imSdkStatus(IMSdkStatus.connectionFailed);
           if (code == 1506) userTokenInvalid();
         },
         onConnectSuccess: () {
+          ActivityRuntime.instance.connectionChanged(connected: true);
           imSdkStatus(IMSdkStatus.connectionSucceeded);
         },
         onKickedOffline: kickedOffline,
@@ -259,6 +264,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     try {
       final pending = _sessionQueue.login(
           () async {
+            ActivityRuntime.instance.beginConnection(userID, token);
             final user = await OpenIM.iMManager.login(
               userID: userID,
               token: token,
@@ -307,6 +313,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   Future<void>? _pendingLogout;
 
   Future<void> logout() {
+    ActivityRuntime.instance.resetConnection();
     AccountPrivilegeRuntime.store.reset();
     _profileSessionGeneration = null;
     if (_hasUserInfo) userInfo.update((val) => val?.isPrivileged = false);

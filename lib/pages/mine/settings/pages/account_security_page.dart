@@ -87,7 +87,8 @@ class _AccountSecurityPageState extends State<AccountSecurityPage> {
         ChangePhonePage(
             service: widget.service,
             isBound: _phone.isNotEmpty,
-            currentPhone: _phone));
+            currentPhone: _phone),
+        activityPage: 'account_security');
     if (result == true && mounted) await _reload();
   }
 
@@ -95,6 +96,7 @@ class _AccountSecurityPageState extends State<AccountSecurityPage> {
     if (!_ready) return false;
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
+        settings: const RouteSettings(name: '/pay_password'),
         builder: (_) => _tradePasswordSet
             ? ChangeTradePasswordPage(
                 service: widget.service,
@@ -160,6 +162,7 @@ class _AccountSecurityPageState extends State<AccountSecurityPage> {
                   onTap: () => openSettingsPage(
                     context,
                     LoginDevicesPage(service: widget.service),
+                    activityPage: 'login_devices',
                   ),
                 ),
               ],

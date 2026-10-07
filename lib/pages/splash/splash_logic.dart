@@ -6,6 +6,7 @@ import 'package:openim_common/openim_common.dart';
 
 import '../../core/controller/im_controller.dart';
 import '../../core/session/sdk_session_queue.dart';
+import '../../core/user_activity/activity_runtime.dart';
 import '../../routes/app_navigator.dart';
 
 class SplashLogic extends GetxController {
@@ -42,6 +43,7 @@ class SplashLogic extends GetxController {
       Logger.print('Restoring login session');
       await imLogic.login(account!, credential!);
       if (_closed || account != userID || credential != token) return;
+      ActivityRuntime.instance.sessionRestored(account, credential);
       Logger.print('---------im login success-------');
       PushController.login(
         account,

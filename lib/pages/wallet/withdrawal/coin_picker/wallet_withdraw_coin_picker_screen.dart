@@ -148,11 +148,13 @@ class _WithdrawCoinPickerScreenState extends State<WithdrawCoinPickerScreen>
     try {
       if (widget.initialTargetKind == WithdrawTransferTargetKind.friend) {
         final order = await openWalletPage<FundOrder>(
-            context,
-            FundSendPage(
-                isRedPacket: false,
-                internalWithdrawal: true,
-                initialCurrency: walletFundCurrency(current.code)));
+          context,
+          FundSendPage(
+              isRedPacket: false,
+              internalWithdrawal: true,
+              initialCurrency: walletFundCurrency(current.code)),
+          activityPage: 'wallet_transfer',
+        );
         if (order != null &&
             WalletOrderEvents.currentAccountKey == accountKey) {
           WalletOrderEvents.notifyBalance(accountKey: accountKey);
@@ -160,9 +162,11 @@ class _WithdrawCoinPickerScreenState extends State<WithdrawCoinPickerScreen>
         }
       } else {
         await openWalletPage<void>(
-            context,
-            WalletChainWithdrawalScreen(
-                coin: current, payMethod: current.toPayMethod(net: network)));
+          context,
+          WalletChainWithdrawalScreen(
+              coin: current, payMethod: current.toPayMethod(net: network)),
+          activityPage: 'wallet_withdraw',
+        );
       }
     } finally {
       _opening = false;

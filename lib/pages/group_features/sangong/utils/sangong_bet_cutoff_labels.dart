@@ -10,37 +10,13 @@ String sangongBetCutoffSummaryLabel({
   String? selectedMessagePreview,
   String? selectedSenderLabel,
 }) {
-  final messageId = preview.cutoffMessageId > 0
-      ? preview.cutoffMessageId
-      : cutoff?.untilMessageId;
   final msgSeq = preview.cutoffMsgSeq ?? cutoff?.untilMsgSeq;
   final sender = selectedSenderLabel?.trim() ?? '';
   final previewText = selectedMessagePreview?.trim() ?? '';
 
-  if (messageId != null && messageId > 0) {
-    if (sender.isNotEmpty && previewText.isNotEmpty) {
-      return i18n.format(
-        zhHans: '截止到消息 #$messageId（$sender $previewText）',
-        zhHant: '截止到訊息 #$messageId（$sender $previewText）',
-        en: 'Until message #$messageId ($sender $previewText)',
-        vars: {
-          'id': '$messageId',
-          'sender': sender,
-          'text': previewText,
-        },
-      );
-    }
-    return i18n.format(
-      zhHans: '截止到消息 #$messageId',
-      zhHant: '截止到訊息 #$messageId',
-      en: 'Until message #$messageId',
-      vars: {'id': '$messageId'},
-    );
-  }
-
   if (msgSeq != null && msgSeq > 0) {
     return i18n.format(
-      zhHans: '截止到 seq $msgSeq',
+      zhHans: '截止到消息 #$msgSeq${sender.isEmpty ? '' : '（$sender $previewText）'}',
       zhHant: '截止到 seq $msgSeq',
       en: 'Until seq $msgSeq',
       vars: {'seq': '$msgSeq'},
@@ -90,8 +66,8 @@ String? sangongBetExcludeSummaryLabel({
   String? excludedMessagePreview,
   String? excludedSenderLabel,
 }) {
-  final requestIds = cutoff?.allExcludeMessageIds ?? const [];
-  final responseIds = preview.excludedMessageIds;
+  final requestIds = cutoff?.sortedExclusions ?? const [];
+  final responseIds = preview.excludedMsgSeqs;
   final ids = <int>{
     ...requestIds,
     ...responseIds,

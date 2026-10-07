@@ -58,7 +58,7 @@ void main() {
       await _addHelper(tester, account);
       final write = api.calls.singleWhere((call) => call.method == 'POST');
       expect(source.requests, ['@abcdefgh12']);
-      expect(write.path, endsWith('/admin/my-config/members'));
+      expect(write.path, endsWith('/access'));
       expect(write.body, {'imUserId': 'im_real_target', 'role': 'admin'});
       expect(tester.takeException(), isNull);
     });
@@ -169,20 +169,21 @@ void main() {
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/reports/users')) {
+        if (call.path.endsWith('/users')) {
           return {
             'users': [
-              {'userId': 1, 'imUserId': 'im_loaded', 'nickname': '已加载用户'},
+              {'userId': 1, 'imUserId': 'im_loaded', 'nickname': '已加载用户', 'balance': 0},
             ],
-            'page': 1,
+            'nextBeforeId': 1,
             'pageSize': 50,
             'total': 250,
             'totalPages': 5,
           };
         }
-        if (call.path.endsWith('/reports/user-detail')) {
+        if (call.path.endsWith('/user')) {
           return {
-            'user': {
+            'exists': true,
+'user': {
               'userId': 208,
               'imUserId': 'im_real_target',
               'nickname': '公开账号目标',
@@ -204,11 +205,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 320));
     await flushSangong(tester);
     expect(source.requests, ['@abcdefgh12']);
-    final lookup = api.calls
-        .singleWhere((call) => call.path.endsWith('/reports/user-detail'));
+    final lookup = api.calls.singleWhere((call) => call.path.endsWith('/user'));
     expect(lookup.query, {'imUserId': 'im_real_target'});
     expect(lookup.headers?['X-Tenant-Id'], expectedSangongRequestTenant());
-    expect(api.count('/reports/users'), 1);
+    expect(api.count('/users'), 1);
     expect(find.text('公开账号目标'), findsOneWidget);
     expect(find.text('积分 987'), findsOneWidget);
     expect(find.text('已加载用户'), findsNothing);
@@ -218,10 +218,11 @@ void main() {
   testWidgets('account search rejects a different tenant user response',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/reports/users')
-          ? {'users': [], 'page': 1, 'totalPages': 0}
+      ..respond = (call) => call.path.endsWith('/users')
+          ? {'users': [], 'total': 0, 'nextBeforeId': 0}
           : {
-              'user': {
+              'exists': true,
+'user': {
                 'userId': 99,
                 'imUserId': 'im_wrong',
                 'nickname': '错误用户',
@@ -245,8 +246,8 @@ void main() {
       (tester) async {
     final reply = Completer<dynamic>();
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/reports/users')
-          ? {'users': [], 'page': 1, 'totalPages': 0}
+      ..respond = (call) => call.path.endsWith('/users')
+          ? {'users': [], 'total': 0, 'nextBeforeId': 0}
           : reply.future;
     final runtime = sangongTestRuntime(sangongTestContext(api));
     addTearDown(runtime.dispose);
@@ -256,10 +257,11 @@ void main() {
     await tester.enterText(find.byType(TextField), '@abcdefgh12');
     await tester.pump(const Duration(milliseconds: 320));
     await flushSangong(tester);
-    expect(api.count('/reports/user-detail'), 1);
+    expect(api.count('/user'), 1);
     await tester.enterText(find.byType(TextField), '');
     reply.complete({
-      'user': {
+      'exists': true,
+'user': {
         'userId': 208,
         'imUserId': 'im_real_target',
         'nickname': '已失效的私有结果',
@@ -274,10 +276,11 @@ void main() {
   testWidgets('revoking permission clears already displayed account results',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/reports/users')
-          ? {'users': [], 'page': 1, 'totalPages': 0}
+      ..respond = (call) => call.path.endsWith('/users')
+          ? {'users': [], 'total': 0, 'nextBeforeId': 0}
           : {
-              'user': {
+              'exists': true,
+'user': {
                 'userId': 208,
                 'imUserId': 'im_real_target',
                 'nickname': '受保护的账户结果',
@@ -307,7 +310,7 @@ void main() {
     final reply = Completer<List<UserFullInfo>?>();
     final source = _AccountSearch()..respond = (_) => reply.future;
     final api = SangongTestApi()
-      ..respond = (_) => {'users': [], 'page': 1, 'totalPages': 0};
+      ..respond = (_) => {'users': [], 'total': 0, 'nextBeforeId': 0};
     final runtime = sangongTestRuntime(sangongTestContext(api));
     addTearDown(runtime.dispose);
     addTearDown(() => unmountSangong(tester));
@@ -323,7 +326,7 @@ void main() {
       UserFullInfo(userID: 'im_real_target', account: 'abcdefgh12'),
     ]);
     await flushSangong(tester);
-    expect(api.count('/reports/user-detail'), 0);
+    expect(api.count('/user'), 0);
     expect(find.text('当前游戏权限已变化，请重新进入'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

@@ -95,13 +95,15 @@ class _WalletDepositCoinPickerScreenState
       // The address route validates a fresh authenticated response and retains
       // ownership of its allocation polling, copying and sharing lifecycle.
       await openWalletPage<void>(
-          context,
-          WalletReceiveScreen(
-              api: widget.api,
-              accountProvider: widget.accountProvider,
-              shareService: widget.shareService,
-              requireSelectedCurrency: true,
-              currency: currency));
+        context,
+        WalletReceiveScreen(
+            api: widget.api,
+            accountProvider: widget.accountProvider,
+            shareService: widget.shareService,
+            requireSelectedCurrency: true,
+            currency: currency),
+        activityPage: 'wallet_receive',
+      );
     } finally {
       _opening = false;
       if (mounted) _syncActivation();

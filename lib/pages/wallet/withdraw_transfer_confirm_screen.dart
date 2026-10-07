@@ -248,14 +248,16 @@ class _WithdrawTransferConfirmScreenState
       setState(() => _openingReview = true);
       try {
         await openWalletPage<void>(
-            context,
-            WithdrawChainReviewScreen(
-              coin: widget.coin,
-              payMethod: widget.payMethod,
-              toAddress: widget.targetValue,
-              amountMinor: amount.minor,
-              api: widget.api,
-            ));
+          context,
+          WithdrawChainReviewScreen(
+            coin: widget.coin,
+            payMethod: widget.payMethod,
+            toAddress: widget.targetValue,
+            amountMinor: amount.minor,
+            api: widget.api,
+          ),
+          activityPage: 'wallet_withdraw',
+        );
       } finally {
         if (mounted) setState(() => _openingReview = false);
       }
@@ -328,6 +330,7 @@ class _WithdrawTransferConfirmScreenState
           onPressed: () => openWalletPage<void>(
             context,
             const WalletWithdrawRecordScreen(),
+            activityPage: 'wallet_history',
           ),
           icon: Icon(
             Icons.access_time_rounded,

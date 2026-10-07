@@ -35,7 +35,7 @@ void main() {
           tester.widgetList<TextField>(find.byType(TextField)).toList();
       expect(fields[1].controller!.text, 'group-sangong');
       expect(fields.every((field) => !field.readOnly), isTrue);
-      expect(api.count('/my-config'), 1);
+      expect(api.count('/config'), 1);
       final tenant = expectedSangongRequestTenant(skipTenant: true);
       expect(
           api.calls.single.headers?.containsKey('X-Tenant-Id'), tenant != null);
@@ -59,7 +59,7 @@ void main() {
       api.respond = (_) => {'configured': false};
       await tester.tap(find.text('重试'));
       await flushSangong(tester);
-      expect(api.count('/my-config'), 2);
+      expect(api.count('/config'), 2);
       expect(find.text('保存'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -86,8 +86,7 @@ void main() {
     await flushSangong(tester);
     await tester.pump(const Duration(milliseconds: 350));
     expect(find.byType(SangongGameRulesSettingsPage), findsOneWidget);
-    expect(api.count('/settings'), 1);
-    expect(api.count('/session'), 1);
+    expect(api.count('/snapshot'), 1);
     expect(tester.takeException(), isNull);
   });
   testWidgets('private agent page renders real failure and can retry',
@@ -105,7 +104,7 @@ void main() {
     await tester.tap(find.text('重试'));
     await flushSangong(tester);
     expect(find.text('团队概览'), findsOneWidget);
-    expect(api.count('/team/dashboard'), 2);
+    expect(api.count('/team-summary'), 2);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -155,9 +154,8 @@ void main() {
                 valueListenable: state,
                 builder: (_, context, __) =>
                     SangongFeatureHost(featureContext: context))));
-    expect(api.count('/admin/tenants/group-sangong'), 1);
-    expect(api.count('/my-config'), 0);
-    expect(api.count('/events/snapshot'), 0);
+    expect(api.count('/config'), 1);
+    expect(api.count('/snapshot'), 0);
     state.value = sangongTestContext(api,
         canConfigure: false,
         canOpenAgent: false,
@@ -165,14 +163,13 @@ void main() {
         capabilityVersion: 2,
         events: events.stream);
     await flushSangong(tester);
-    expect(api.count('/admin/tenants/group-sangong'), 2);
-    expect(api.count('/my-config'), 0);
-    expect(api.streamStarts, 1);
+    expect(api.count('/config'), 2);
+    expect(api.streamStarts, 0);
     expect(find.byType(GroupGameFloatingEntry), findsOneWidget);
     events.add(
         {'key': 'groupGameChanged', 'groupID': 'group-sangong', 'action': ''});
     await flushSangong(tester);
-    expect(api.count('/events/snapshot'), 2);
+    expect(api.count('/snapshot'), 1);
     state.value = sangongTestContext(api,
         canConfigure: false,
         canManage: false,
@@ -182,7 +179,7 @@ void main() {
         events: events.stream);
     await flushSangong(tester);
     expect(find.byType(GroupGameFloatingEntry), findsNothing);
-    expect(api.streamStops, 1);
+    expect(api.streamStops, 0);
     final callsAfterRevocation = api.calls.length;
     events.add({'key': 'groupGameChanged', 'groupID': 'group-sangong'});
     await flushSangong(tester);
@@ -228,11 +225,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
   testWidgets(
-      'host retry recovers the failed snapshot without opening a second SSE',
+      'host retry recovers the failed snapshot without starting SSE',
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/events/snapshot')) {
+        if (call.path.endsWith('/snapshot')) {
           throw const GroupFeatureException('快照暂时无法读取', code: 'NETWORK_ERROR');
         }
         return sangongFixtureResponse(call);
@@ -244,13 +241,13 @@ void main() {
     await pumpSangongPage(tester, runtime,
         Scaffold(body: SangongFeatureHost(featureContext: context)));
     expect(find.text('快照暂时无法读取'), findsOneWidget);
-    expect(api.count('/events/snapshot'), 1);
-    expect(api.streamStarts, 1);
+    expect(api.count('/snapshot'), 1);
+    expect(api.streamStarts, 0);
     api.respond = sangongFixtureResponse;
     await tester.tap(find.byKey(const ValueKey('sangong-host-retry')));
     await flushSangong(tester);
-    expect(api.count('/events/snapshot'), 2);
-    expect(api.streamStarts, 1);
+    expect(api.count('/snapshot'), 2);
+    expect(api.streamStarts, 0);
     expect(find.text('快照暂时无法读取'), findsNothing);
     expect(find.byKey(const ValueKey('sangong-status-banner')), findsOneWidget);
     expect(tester.takeException(), isNull);

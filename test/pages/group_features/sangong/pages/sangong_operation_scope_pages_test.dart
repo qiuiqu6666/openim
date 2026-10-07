@@ -85,8 +85,8 @@ void main() {
       final source = _Search();
       final detailReply = Completer<dynamic>();
       final api = SangongTestApi()
-        ..respond = (call) => call.path.endsWith('/reports/users')
-            ? {'users': [], 'page': 1, 'totalPages': 0}
+        ..respond = (call) => call.path.endsWith('/users')
+            ? {'users': [], 'total': 0, 'nextBeforeId': 0}
             : detailReply.future;
       final runtime = sangongTestRuntime(sangongTestContext(api));
       addTearDown(runtime.dispose);
@@ -109,7 +109,8 @@ void main() {
         ]);
       } else {
         detailReply.complete({
-          'user': {
+          'exists': true,
+'user': {
             'userId': 208,
             'imUserId': 'im_real_target',
             'nickname': 'A 厅私有账户',
@@ -118,7 +119,7 @@ void main() {
         });
       }
       await flushSangong(tester);
-      expect(api.count('/reports/user-detail'), stage == 'account' ? 0 : 1);
+      expect(api.count('/user'), stage == 'account' ? 0 : 1);
       expect(find.text('A 厅私有账户'), findsNothing);
       expect(find.text('当前游戏权限已变化，请重新进入'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -128,7 +129,7 @@ void main() {
   testWidgets('member removal confirmation from tenant A cannot delete in B',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/my-config/members')
+      ..respond = (call) => call.path.endsWith('/access')
           ? {
               'members': [
                 {'imUserId': 'helper-A', 'role': 'admin'},
@@ -155,7 +156,7 @@ void main() {
     final api = SangongTestApi()
       ..respond = (call) => call.method == 'PUT'
           ? sangongConfig()
-          : call.path.endsWith('/my-config')
+          : call.path.endsWith('/config')
               ? {'configured': false}
               : sangongFixtureResponse(call);
     final runtime = SangongRuntime(sangongTestContext(api,

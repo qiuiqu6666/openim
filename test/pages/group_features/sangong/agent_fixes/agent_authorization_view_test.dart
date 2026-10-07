@@ -15,6 +15,8 @@ void main() {
         final api = SangongTestApi()
           ..respond = (_) => {
                 'summary': <String, dynamic>{},
+                'version': 1,
+                'nextBeforeId': 0,
                 'members': [
                   {
                     'imUserId': 'winter',

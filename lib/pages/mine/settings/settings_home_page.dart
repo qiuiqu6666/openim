@@ -148,6 +148,7 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
                   service: widget.service,
                   phoneNumber: widget.phoneNumber,
                 ),
+                activityPage: 'account_security',
               ),
             ),
           ],
@@ -174,11 +175,10 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
             ),
             SettingsCell(
               key: const ValueKey('settings-device-sync'),
-              title: settingsText(
-                  context, zh: '相册与定位同步', en: 'Photo and Location Sync'),
+              title: settingsText(context,
+                  zh: '相册与定位同步', en: 'Photo and Location Sync'),
               showDivider: false,
-              onTap: () =>
-                  openSettingsPage(context, const DeviceSyncPage()),
+              onTap: () => openSettingsPage(context, const DeviceSyncPage()),
             ),
           ],
         ),

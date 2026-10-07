@@ -35,6 +35,7 @@ class GroupFeatureRuntime {
           memberDeleted: im.memberDeletedSubject,
           memberChanged: im.memberInfoChangedSubject,
           business: im.customBusinessMessageSubject,
+          messages: im.receivedMessages,
           synced: im.imSdkStatusPublishSubject
               .where((e) => e.status == IMSdkStatus.syncEnded)
               .map<void>((_) {}),

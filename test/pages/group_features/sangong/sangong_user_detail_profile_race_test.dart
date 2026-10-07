@@ -8,7 +8,8 @@ import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'sangong_test_support.dart';
 
 Map<String, dynamic> profileWithLimit(int limit) => {
-      'user': {
+      'exists': true,
+'user': {
         'userId': 19,
         'imUserId': 'im_target',
         'maxNegative': limit,
@@ -19,11 +20,6 @@ Map<String, dynamic> profileWithLimit(int limit) => {
 dynamic profileBackground(SangongCall call) {
   if (call.path.endsWith('/sessions')) return {'sessions': []};
   if (call.path.endsWith('/user-hierarchy')) return {'members': []};
-  if (call.path.endsWith('/user-flow')) {
-    return {
-      'flow': {'entries': []}
-    };
-  }
   return sangongFixtureResponse(call);
 }
 
@@ -46,7 +42,7 @@ void main() {
     var profileReads = 0;
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/user-detail')) {
+        if (call.path.endsWith('/user')) {
           return ++profileReads == 1 ? oldRead.future : profileWithLimit(100);
         }
         return profileBackground(call);
@@ -72,10 +68,11 @@ void main() {
     var profileReads = 0;
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/user-detail')) {
+        if (call.path.endsWith('/user')) {
           return ++profileReads == 1 ? oldRead.future : profileWithLimit(500);
         }
-        if (call.path.endsWith('/max-negative')) return profileWithLimit(500);
+        if (call.path.endsWith('/commands/wallet.limit'))
+          return sangongReceipt(call, Map<String, dynamic>.from(profileWithLimit(500)['user']));
         return profileBackground(call);
       };
     final runtime = sangongTestRuntime(sangongTestContext(api));
@@ -88,7 +85,7 @@ void main() {
     await tester.tap(find.text('确认保存'));
     await tester.pump(const Duration(milliseconds: 350));
     await flushSangong(tester);
-    expect(api.count('/max-negative'), 1);
+    expect(api.count('/commands/wallet.limit'), 1);
     expect(find.text('可负额度 500'), findsOneWidget);
     oldRead.complete(profileWithLimit(10));
     await flushSangong(tester);
@@ -102,9 +99,10 @@ void main() {
   testWidgets('direct detail route hides cached private data on revocation',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/user-detail')
+      ..respond = (call) => call.path.endsWith('/user')
           ? {
-              'user': {
+              'exists': true,
+'user': {
                 ...profileWithLimit(100)['user'],
                 'nickname': '私人资料缓存',
               }
@@ -131,9 +129,10 @@ void main() {
       'same-permission tenant switch hides detail from the entry tenant',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/user-detail')
+      ..respond = (call) => call.path.endsWith('/user')
           ? {
-              'user': {
+              'exists': true,
+'user': {
                 ...profileWithLimit(100)['user'],
                 'nickname': '厅 A 私人资料',
               }
@@ -162,10 +161,10 @@ void main() {
         'open max-negative dialog cannot write after tenant switch '
         '(confirming=$confirming)', (tester) async {
       final api = SangongTestApi()
-        ..respond = (call) => call.path.endsWith('/user-detail')
+        ..respond = (call) => call.path.endsWith('/user')
             ? profileWithLimit(100)
-            : call.path.endsWith('/max-negative')
-                ? profileWithLimit(500)
+            : call.path.endsWith('/commands/wallet.limit')
+                ? sangongReceipt(call, Map<String, dynamic>.from(profileWithLimit(500)['user']))
                 : profileBackground(call);
       final runtime = sangongTestRuntime(sangongTestContext(api));
       await pumpSangongPage(tester, runtime, target);
@@ -186,7 +185,7 @@ void main() {
       await tester.tap(find.text('关闭'));
       await tester.pump(const Duration(milliseconds: 350));
       await flushSangong(tester);
-      expect(api.count('/max-negative'), 0);
+      expect(api.count('/commands/wallet.limit'), 0);
       expect(
           api.calls.every((call) =>
               call.headers?['X-Tenant-Id'] == expectedSangongRequestTenant()),

@@ -26,8 +26,10 @@ class QrProfilePage extends StatefulWidget {
   });
 
   final String nickname;
+
   /// SDK identity used in the invitation protocol.
   final String userId;
+
   /// Public 99Chat account displayed on the QR card.
   final String account;
   final String avatarUrl;
@@ -47,6 +49,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
   String? _qrInvite;
   String? _linkInvite;
   String? _inviteError;
+  bool _loadingInvite = false;
 
   @override
   void initState() {
@@ -55,12 +58,21 @@ class _QrProfilePageState extends State<QrProfilePage> {
   }
 
   Future<void> _loadInvite() async {
+    if (_loadingInvite) return;
+    setState(() {
+      _loadingInvite = true;
+      _inviteError = null;
+    });
     try {
       final code = await (widget.inviteFactory ??
           Apis.createFriendInvite)(FriendAddSource.qrcode);
       if (mounted) setState(() => _qrInvite = code);
-    } catch (_) {
-      if (mounted) setState(() => _inviteError = '二维码邀请暂不可用，点击重试');
+    } catch (error) {
+      if (mounted && !isSilentFriendRisk(error)) {
+        setState(() => _inviteError = '二维码邀请暂不可用，点击重试');
+      }
+    } finally {
+      if (mounted) setState(() => _loadingInvite = false);
     }
   }
 
@@ -70,7 +82,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
           Apis.createFriendInvite)(FriendAddSource.link);
       return mounted;
     } catch (error) {
-      if (mounted)
+      if (mounted && !isSilentFriendRisk(error))
         showSettingsMessage(
             context,
             friendAddErrorMessage(error,
@@ -339,8 +351,13 @@ class _QrProfilePageState extends State<QrProfilePage> {
                 height: qrSize,
                 child: Center(
                     child: TextButton(
-                        onPressed: _loadInvite,
-                        child: Text(_inviteError ?? '正在生成邀请二维码'))))
+                        onPressed: _loadingInvite ? null : _loadInvite,
+                        child: Text(_inviteError ??
+                            (_loadingInvite
+                                ? '正在生成邀请二维码'
+                                : settingsText(context,
+                                    zh: '点击生成邀请二维码',
+                                    en: 'Tap to create an invitation QR code'))))))
           else
             QrImageView(
               data: _qrData,
@@ -357,22 +374,23 @@ class _QrProfilePageState extends State<QrProfilePage> {
                 color: Colors.black,
               ),
             ),
-          Container(
-            width: logoSize,
-            height: logoSize,
-            padding: EdgeInsets.all(logoSize * .08),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(logoSize * .18),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: .06),
-                  blurRadius: 4,
-                ),
-              ],
+          if (_qrInvite != null)
+            Container(
+              width: logoSize,
+              height: logoSize,
+              padding: EdgeInsets.all(logoSize * .08),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(logoSize * .18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: .06),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              child: _brandLogo(logoSize * .84),
             ),
-            child: _brandLogo(logoSize * .84),
-          ),
         ],
       ),
     );
