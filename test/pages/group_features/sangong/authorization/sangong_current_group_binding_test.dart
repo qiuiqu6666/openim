@@ -20,7 +20,7 @@ import '../sangong_test_support.dart';
 
 const _chatKey = ValueKey('current-tenant-chat');
 String _tenantPath(String groupID) =>
-    '/sangong/api/v1/admin/tenants/${Uri.encodeComponent(groupID)}';
+    '/sangong/api/v2/groups/${Uri.encodeComponent(groupID)}/config';
 
 class _Fixture {
   _Fixture({
@@ -66,11 +66,11 @@ class _Fixture {
       current: () => active);
 
   Iterable<SangongCall> get lookups =>
-      api.calls.where((call) => call.path.contains('/admin/tenants/'));
+      api.calls.where((call) => call.path.endsWith('/config'));
   Iterable<SangongCall> get businessCalls => api.calls.where((call) =>
       call.useBearerAuth &&
-      !call.path.contains('/admin/tenants/') &&
-      !call.path.endsWith('/events/snapshot'));
+      !call.path.endsWith('/config') &&
+      !call.path.endsWith('/snapshot'));
 
   Map<String, dynamic> currentConfig(String id, {bool enabled = true}) => {
         ...sangongConfig(name: '当前群的厅名', group: id, tenant: id),
@@ -78,7 +78,7 @@ class _Fixture {
       };
 
   dynamic _respond(SangongCall call) {
-    if (call.path.startsWith('/sangong/api/v1/admin/tenants') &&
+    if (call.path.endsWith('/config') &&
         (call.method == 'POST' || call.method == 'PUT')) {
       savedConfig = {
         'ok': true,
@@ -88,14 +88,14 @@ class _Fixture {
         'name': call.body?['name'] ?? groupID,
         ...?call.body,
       };
-      if (call.method == 'POST') {
+      if (call.method == 'PUT') {
         canConfigure = true;
         canManage = true;
       }
       return savedConfig;
     }
-    if (call.path.contains('/admin/tenants/')) {
-      final id = Uri.decodeComponent(call.path.split('/').last);
+    if (call.path.endsWith('/config')) {
+      final id = Uri.decodeComponent(call.path.split('/')[5]);
       if (id == groupID && savedConfig != null) return savedConfig;
       return tenantResponse?.call(id) ?? currentConfig(id);
     }
@@ -123,8 +123,19 @@ class _Fixture {
           tenant: '@default-betting-tenant',
           name: '错误的默认厅');
     }
-    if (call.path.endsWith('/admin/reports/settle-image')) {
-      return {'ok': true, 'sent': true, 'type': 'settle_report'};
+    if (call.path.endsWith('/snapshot')) {
+      return {
+        ...sangongState(1),
+        'groupId': groupID,
+        'lastSettledRound': {
+          ...sangongState(1)['round'] as Map,
+          'id': 17,
+          'status': 'settled'
+        }
+      };
+    }
+    if (call.path.endsWith('/commands/report.send')) {
+      return sangongQueuedReport(call);
     }
     return sangongFixtureResponse(call);
   }
@@ -390,20 +401,21 @@ void main() {
       final entry = tester
           .widget<GroupGameFloatingEntry>(find.byType(GroupGameFloatingEntry));
       expect(entry.setupOnly, isFalse);
-      expect(fixture.api.streamStarts, 1);
-      expect(fixture.api.count('/events/snapshot'), greaterThanOrEqualTo(1));
+      expect(fixture.api.streamStarts, 0);
+      expect(fixture.api.count('/snapshot'), greaterThanOrEqualTo(1));
       expect(fixture.businessCalls, isEmpty);
       if (!includeSummary) {
         expect(fixture.context.features.valid, isFalse);
         entry.onSendSettleImage();
         await _flush(tester);
         final report = fixture.businessCalls.single;
-        expect(report.path, endsWith('/admin/reports/settle-image'));
+        expect(report.path, endsWith('/commands/report.send'));
         expect(report.method, 'POST');
         expect(report.useBearerAuth, isTrue);
-        expect(report.body, isEmpty);
+        expect(report.body!['requestId'], isA<String>());
+        expect(report.body!['input'], {'kind': 'settlement', 'roundId': 17});
         expect(find.byType(SangongManageHomePage), findsNothing);
-        expect(find.text('结算明细已发送到游戏群'), findsOneWidget);
+        expect(find.text('图片报表已加入发送队列'), findsOneWidget);
       }
 
       final actions = GroupFeatureActions.items(
@@ -419,7 +431,7 @@ void main() {
                   find.byType(GroupGameFloatingEntry))
               .setupOnly,
           isFalse);
-      expect(fixture.api.streamStarts, 1);
+      expect(fixture.api.streamStarts, 0);
       _expectNoDefaultConfigRead(fixture);
       expect(tester.takeException(), isNull);
     });
@@ -466,7 +478,7 @@ void main() {
     expect(runtime.canManage, isFalse);
     expect(find.textContaining('停用'), findsWidgets);
     expect(fixture.api.streamStarts, 0);
-    expect(fixture.api.count('/events/snapshot'), 0);
+    expect(fixture.api.count('/snapshot'), 0);
     _expectNoSetup(tester, fixture);
     expect(tester.takeException(), isNull);
   });
@@ -483,7 +495,7 @@ void main() {
             .setupOnly,
         isFalse);
     final previousStreams = fixture.api.streamStarts;
-    expect(previousStreams, 1);
+    expect(previousStreams, 0);
     final previousLookups = fixture.lookups.length;
     final reply = Completer<dynamic>();
     fixture.tenantResponse = (_) => reply.future;
@@ -497,7 +509,7 @@ void main() {
     expect(find.text('正在确认当前群的三公配置'), findsOneWidget);
     expect(fixture.lookups.length, previousLookups + 1);
     expect(fixture.api.streamStarts, previousStreams);
-    expect(fixture.api.streamStops, greaterThanOrEqualTo(1));
+    expect(fixture.api.streamStops, 0);
 
     reply.completeError(const GroupFeatureException('当前群未配置三公',
         code: 'SERVICE_UNAVAILABLE',
@@ -553,8 +565,8 @@ void main() {
     await tester.enterText(find.byType(TextField).last, 'im_bot');
     await tester.tap(find.text('保存'));
     await _flush(tester);
-    final create = fixture.api.calls.singleWhere((c) => c.method == 'POST');
-    expect(create.path, '/sangong/api/v1/admin/tenants');
+    final create = fixture.api.calls.singleWhere((c) => c.method == 'PUT');
+    expect(create.path, _tenantPath(fixture.groupID));
     expect(create.useBearerAuth, isTrue);
     expect(create.baseUrlOverride, isNull);
     expect(create.headers?.containsKey('X-Tenant-Id') ?? false, isFalse);

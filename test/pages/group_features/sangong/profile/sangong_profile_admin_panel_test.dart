@@ -10,6 +10,7 @@ import '../sangong_test_support.dart';
 
 Map<String, dynamic> _session({bool member = false, String banker = 'other'}) =>
     {
+      ...sangongState(1),
       'status': 'running',
       'round': {
         'id': 18,
@@ -50,13 +51,20 @@ dynamic _readResponse(SangongCall call) {
       'totalPages': 1,
     };
   }
-  if (call.path.endsWith('/user-detail')) {
+  if (call.path.endsWith('/user')) {
     return {
-      'user': {'imUserId': 'im_target'},
+      'exists': true,
+      'user': {
+        'userId': 19,
+        'imUserId': 'im_target',
+        'nickname': '秋',
+        'balance': 420,
+        'rebatePer10000': 8
+      },
       'parent': {'nickname': '上级甲'}
     };
   }
-  if (call.path.endsWith('/session')) return _session();
+  if (call.path.endsWith('/snapshot')) return _session();
   return sangongFixtureResponse(call);
 }
 
@@ -101,7 +109,7 @@ void main() {
   testWidgets('reference controls read real data and preview the real pool',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/session')
+      ..respond = (call) => call.path.endsWith('/snapshot')
           ? _session(member: true)
           : _readResponse(call);
     final runtime = sangongTestRuntime(sangongTestContext(api));
@@ -115,8 +123,8 @@ void main() {
     layout.jointController.text = '200';
     await tester.pump();
     expect(_layout(tester).sharePercent, 20);
-    expect(api.count('/session'), 1);
-    expect(api.count('/settings'), 1);
+    expect(api.count('/snapshot'), 1);
+    expect(api.count('/user'), 1);
     expect(
         api.calls.every(
             (c) => c.headers?['X-Tenant-Id'] == expectedSangongRequestTenant()),
@@ -129,7 +137,7 @@ void main() {
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/settings')) {
+        if (call.path.endsWith('/snapshot')) {
           throw const GroupFeatureException('规则暂不可用');
         }
         return _readResponse(call);
@@ -144,7 +152,7 @@ void main() {
     layout.pointsController.text = '10';
     layout.onCredit!();
     await flushSangong(tester);
-    expect(api.count('/credit'), 0);
+    expect(api.count('/commands/wallet.adjust'), 0);
     await unmountSangong(tester);
     runtime.dispose();
   });
@@ -152,8 +160,8 @@ void main() {
   testWidgets('inline credit waits for confirmation and preserves IM identity',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/credit')
-          ? {'balance': 430}
+      ..respond = (call) => call.path.endsWith('/commands/wallet.adjust')
+          ? sangongReceipt(call, {'imUserId': 'im_target', 'balance': 430})
           : _readResponse(call);
     final runtime = sangongTestRuntime(sangongTestContext(api));
     await _mount(tester, runtime);
@@ -161,14 +169,15 @@ void main() {
     layout.pointsController.text = '10';
     layout.onCredit!();
     await tester.pump(const Duration(milliseconds: 350));
-    expect(api.count('/credit'), 0);
+    expect(api.count('/commands/wallet.adjust'), 0);
     await tester.tap(find.text('确认'));
     await tester.pump(const Duration(milliseconds: 350));
     await flushSangong(tester);
-    expect(api.count('/credit'), 1);
-    final call = api.calls.singleWhere((c) => c.path.endsWith('/credit'));
-    expect(call.body?['imUserId'], 'im_target');
-    expect(call.body?['amount'], 10);
+    expect(api.count('/commands/wallet.adjust'), 1);
+    final call = api.calls
+        .singleWhere((c) => c.path.endsWith('/commands/wallet.adjust'));
+    expect(call.body?['input']['imUserId'], 'im_target');
+    expect(call.body?['input']['delta'], 10);
     expect(layout.pointsController.text, isEmpty);
     await unmountSangong(tester);
     runtime.dispose();
@@ -178,10 +187,10 @@ void main() {
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/banker/setup')) {
+        if (call.path.endsWith('/commands/round.banker')) {
           final response = _session(banker: 'im_target');
           (response['round'] as Map)['bankerLimit'] = 5000;
-          return response;
+          return sangongReceipt(call, {'state': response});
         }
         return _readResponse(call);
       };
@@ -191,11 +200,14 @@ void main() {
     layout.bankerController.text = '2.5000';
     await tester.pump();
     await _confirm(tester, _layout(tester).onAssignBanker!);
-    final call = api.calls.singleWhere((c) => c.path.endsWith('/banker/setup'));
-    expect(call.body, {
+    final call =
+        api.calls.singleWhere((c) => c.path.endsWith('/commands/round.banker'));
+    expect(call.body?['input'], {
+      'roundId': 18,
+      'openBetting': false,
       'imUserId': 'im_target',
       'door': 2,
-      'limit': 5000,
+      'bankerLimit': 5000,
       'nickname': '秋',
     });
     expect(layout.bankerController.text, isEmpty);
@@ -212,7 +224,7 @@ void main() {
     layout.bankerController.text = '5000';
     await tester.pump();
     await _confirm(tester, _layout(tester).onSetLimit!);
-    expect(api.count('/banker/setup'), 0);
+    expect(api.count('/commands/round.banker'), 0);
     expect(_layout(tester).error, contains('定庄信息已变化'));
     await unmountSangong(tester);
     runtime.dispose();
@@ -222,7 +234,7 @@ void main() {
       (tester) async {
     var member = false;
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/session')
+      ..respond = (call) => call.path.endsWith('/snapshot')
           ? _session(member: member)
           : _readResponse(call);
     final runtime = sangongTestRuntime(sangongTestContext(api));
@@ -231,25 +243,27 @@ void main() {
     layout.pointsController.text = '10';
     member = true;
     await _confirm(tester, layout.onDebit!);
-    expect(api.count('/session'), 2);
-    expect(api.count('/debit'), 0);
+    expect(api.count('/snapshot'), 2);
+    expect(api.count('/commands/wallet.adjust'), 0);
     expect(_layout(tester).error, contains('尚未结算'));
     await unmountSangong(tester);
     runtime.dispose();
   });
 
-  testWidgets('notification controls use both existing send endpoints',
+  testWidgets('banker and co-bank notices use the queued command',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/send')
-          ? <String, dynamic>{}
-          : _readResponse(call);
+      ..respond = (call) =>
+          (call.path.endsWith('/commands/round.co_bank_notice') ||
+                  call.path.endsWith('/commands/round.open'))
+              ? sangongReceipt(call, {'queued': true})
+              : _readResponse(call);
     final runtime = sangongTestRuntime(sangongTestContext(api));
     await _mount(tester, runtime);
     await _confirm(tester, _layout(tester).onSendBanker!);
-    expect(api.count('/banker/send'), 1);
+    expect(api.count('/commands/round.open'), 1);
     await _confirm(tester, _layout(tester).onSendCoBank!);
-    expect(api.count('/co-bank/send'), 1);
+    expect(api.count('/commands/round.co_bank_notice'), 1);
     await unmountSangong(tester);
     runtime.dispose();
   });
@@ -259,19 +273,19 @@ void main() {
     var member = true;
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/co-bank/remove')) {
+        if (call.path.endsWith('/commands/round.co_bank_remove')) {
           member = false;
-          return _session(member: member);
+          return sangongReceipt(call, {'state': _session(member: member)});
         }
-        if (call.path.endsWith('/session')) return _session(member: member);
+        if (call.path.endsWith('/snapshot')) return _session(member: member);
         return _readResponse(call);
       };
     final runtime = sangongTestRuntime(sangongTestContext(api));
     await _mount(tester, runtime);
     await _confirm(tester, _layout(tester).onRemoveCoBank!);
-    final call =
-        api.calls.singleWhere((c) => c.path.endsWith('/co-bank/remove'));
-    expect(call.body, {'userId': 19});
+    final call = api.calls
+        .singleWhere((c) => c.path.endsWith('/commands/round.co_bank_remove'));
+    expect(call.body?['input'], {'roundId': 18, 'userId': 19});
     expect(_layout(tester).sharePercent, 0);
     expect(_layout(tester).error, isNull);
     await unmountSangong(tester);
@@ -297,7 +311,7 @@ void main() {
     expect(layout.pointsController.text, isEmpty);
     expect(layout.bankerController.text, isEmpty);
     expect(layout.jointController.text, isEmpty);
-    expect(api.count('/credit'), 0);
+    expect(api.count('/commands/wallet.adjust'), 0);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
     runtime.dispose();
@@ -307,8 +321,9 @@ void main() {
       (tester) async {
     final pending = Completer<dynamic>();
     final api = SangongTestApi()
-      ..respond = (call) =>
-          call.path.endsWith('/session') ? pending.future : _readResponse(call);
+      ..respond = (call) => call.path.endsWith('/snapshot')
+          ? pending.future
+          : _readResponse(call);
     final runtime = sangongTestRuntime(sangongTestContext(api));
     await _mount(tester, runtime);
     expect(_layout(tester).points, isNull);
@@ -325,7 +340,7 @@ void main() {
   testWidgets('unconfirmed setup does not clear input or repeat the write',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/banker/setup')
+      ..respond = (call) => call.path.endsWith('/commands/round.banker')
           ? {'round': null}
           : _readResponse(call);
     final runtime = sangongTestRuntime(sangongTestContext(api));
@@ -338,7 +353,7 @@ void main() {
     expect(layout.bankerController.text, '2.5000');
     _layout(tester).onRetry!();
     await flushSangong(tester);
-    expect(api.count('/banker/setup'), 1);
+    expect(api.count('/commands/round.banker'), 1);
     await unmountSangong(tester);
     runtime.dispose();
   });

@@ -238,11 +238,12 @@ dynamic sangongFixtureResponse(SangongCall call) {
       'data': {...sangongState(1), 'groupId': group}
     };
   }
-  if (call.path.endsWith('/access'))
+  if (call.path.endsWith('/access')) {
     return {
       'ok': true,
       'data': {'members': []}
     };
+  }
   if (call.path.contains('/access/') && call.method == 'DELETE') {
     return {'ok': true, 'data': {}};
   }
@@ -301,8 +302,9 @@ dynamic sangongFixtureResponse(SangongCall call) {
       ],
     };
   }
-  if (call.path.endsWith('/team'))
+  if (call.path.endsWith('/team')) {
     return {'version': 1, 'nextBeforeId': 0, 'members': []};
+  }
   throw GroupFeatureException('Fixture has no endpoint: ${call.path}',
       code: 'FIXTURE_MISSING');
 }
@@ -314,6 +316,16 @@ Map<String, dynamic> sangongReceipt(
       'requestId': call.body?['requestId'],
       'data': data,
     };
+
+Map<String, dynamic> sangongQueuedReport(SangongCall call) =>
+    sangongReceipt(call, {
+      'queued': true,
+      'type': call.body?['input']['kind'],
+      'reportId': 'report-1',
+      'deliveryIds': ['delivery-1'],
+      if (call.body?['input']['roundId'] != null)
+        'roundId': call.body?['input']['roundId'],
+    });
 
 Map<String, dynamic> sangongUserReport(
         {String imUserId = 'owner',

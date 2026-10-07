@@ -76,7 +76,7 @@ void main() {
         enabled: false, canManage: false, canOpenAgent: false, tenantID: ''));
     addTearDown(runtime.dispose);
     await completeSangongRequest(tester, runtime.ensureManageBinding());
-    expect(api.count('/config'), 0);
+    expect(api.count('/config'), 1);
     expect(runtime.groupTenant.state?.status.name, 'notFound');
     expect(runtime.canConfigure, isTrue);
     expect(runtime.canManage, isFalse);
@@ -123,7 +123,7 @@ void main() {
     expect(runtime.canOpenAgent, isFalse);
     await rejectSangongRequest(
         tester, runtime.admin.fetchSession(), isA<DioException>());
-    expect(api.count('/session'), 1);
+    expect(api.count('/snapshot'), 1);
   });
   testWidgets('history requires both private capability and group entry',
       (tester) async {

@@ -56,17 +56,17 @@ void main() {
       'complete API base preserves endpoint paths without duplicating prefixes',
       () {
     for (final path in [
-      '/api/v1/admin/session',
-      '/api/v1/admin/events/stream',
-      '/api/v1/me/reports/overview',
-      '/api/v1/me/team/dashboard',
+      '/api/v2/groups/g/snapshot',
+      '/api/v2/groups/g/ledger',
+      '/api/v2/agent-groups/g/team-summary',
+      '/api/v2/agent-groups/g/team',
     ]) {
       expect(
           SangongApiConfig.requestPath(
-              baseUrl: 'http://129.226.192.93:10008/sangong/api/v1',
+              baseUrl: 'http://129.226.192.93:10008/sangong/api/v2',
               pathPrefix: '/sangong',
               path: path),
-          path.substring('/api/v1'.length),
+          path.substring('/api/v2'.length),
           reason: path);
     }
   });
@@ -74,10 +74,10 @@ void main() {
   test('complete API base ignores a configured legacy path prefix', () {
     expect(
         SangongApiConfig.requestPath(
-            baseUrl: 'https://game.example/deployment/api/v1',
+            baseUrl: 'https://game.example/deployment/api/v2',
             pathPrefix: '/legacy/proxy',
-            path: '/api/v1/me/reports/overview'),
-        '/me/reports/overview');
+            path: '/api/v2/agent-groups/g/team-summary'),
+        '/agent-groups/g/team-summary');
   });
 
   test('server root keeps the legacy proxy prefix and API version', () {
@@ -85,16 +85,16 @@ void main() {
         SangongApiConfig.requestPath(
             baseUrl: 'https://game.example',
             pathPrefix: '/proxy/sangong',
-            path: '/api/v1/admin/session'),
-        '/proxy/sangong/api/v1/admin/session');
+            path: '/api/v2/groups/g/snapshot'),
+        '/proxy/sangong/api/v2/groups/g/snapshot');
   });
 
   test('complete base removes the API prefix only at the endpoint start', () {
     expect(
         SangongApiConfig.requestPath(
-            baseUrl: 'https://game.example/api/v1',
+            baseUrl: 'https://game.example/api/v2',
             pathPrefix: '/sangong',
-            path: '/api/v1/admin/reference/api/v1'),
-        '/admin/reference/api/v1');
+            path: '/api/v2/admin/reference/api/v2'),
+        '/admin/reference/api/v2');
   });
 }

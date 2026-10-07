@@ -41,8 +41,9 @@ dynamic profileResponse(SangongCall call) {
       'parent': {'nickname': '上级甲'}
     };
   }
-  if (call.path.endsWith('/commands/wallet.adjust'))
+  if (call.path.endsWith('/commands/wallet.adjust')) {
     return sangongReceipt(call, {'imUserId': 'im_target', 'balance': 430});
+  }
   return sangongFixtureResponse(call);
 }
 

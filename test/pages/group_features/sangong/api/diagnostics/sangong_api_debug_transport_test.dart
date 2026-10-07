@@ -14,7 +14,7 @@ import '../../sangong_test_support.dart';
 
 const _chatToken = 'chat-token-debug-secret';
 const _tenant = '@z8hFfDvVQP0x';
-const _businessBase = 'http://129.226.192.93:10008/sangong/api/v1';
+const _businessBase = 'http://129.226.192.93:10008/sangong/api/v2';
 
 class _Transport implements HttpClientAdapter {
   final requests = <RequestOptions>[];
@@ -82,9 +82,12 @@ ResponseBody _envelope(dynamic data, {int status = 200}) =>
 
 GroupFeatureContext _context(
         GroupFeatureApi api, FixtureAccountPrivilege privilege,
-        {bool canConfigure = true, bool canManage = true}) =>
+        {bool canConfigure = true,
+        bool canManage = true,
+        Stream<Map<String, dynamic>> events = const Stream.empty()}) =>
     GroupFeatureContext(
         groupID: 'group-sangong',
+        events: events,
         groupName: '三公交流群',
         currentUserID: 'owner',
         api: api,
@@ -109,7 +112,7 @@ GroupFeatureContext _context(
         onFeaturesChanged: (_) {});
 
 void _expectSangongCredentials(RequestOptions request,
-    {String tenant = _tenant}) {
+    {String? tenant = _tenant}) {
   expect(request.headers['Authorization'], 'Bearer $_chatToken');
   expect(request.headers.containsKey('token'), isFalse);
   expect(request.headers['X-Tenant-Id'], tenant);
@@ -149,8 +152,9 @@ void main() {
     privilege.dispose();
   });
 
-  SangongRuntime runtime() {
-    final value = SangongRuntime(_context(api, privilege),
+  SangongRuntime runtime(
+      {Stream<Map<String, dynamic>> events = const Stream.empty()}) {
+    final value = SangongRuntime(_context(api, privilege, events: events),
         baseUrl: _businessBase,
         configuredTenantId: _tenant,
         pathPrefix: '/legacy/proxy');
@@ -176,15 +180,16 @@ void main() {
     final scope = runtime();
 
     final response = await scope.http.requests.get(
-        '/api/v1/me/reports/overview',
+        '/api/v2/agent-groups/group-sangong/team-summary',
         queryParameters: {'range': 'all time', 'limit': 2});
 
     final request = transport.requests.single;
     expect(request.method, 'GET');
-    expect(request.uri.path, '/sangong/api/v1/me/reports/overview');
+    expect(request.uri.path,
+        '/sangong/api/v2/agent-groups/group-sangong/team-summary');
     expect(request.queryParameters, {'range': 'all time', 'limit': 2});
     expect(response.data, raw);
-    _expectSangongCredentials(request, tenant: 'tenant-authorized');
+    _expectSangongCredentials(request, tenant: null);
     _expectCorrelatedLog(logs, request);
     final output = logs.join('\n');
     expect(output, contains('[三公API]'));
@@ -211,7 +216,7 @@ void main() {
           }, status: status);
 
       await expectLater(
-          scope.http.requests.get('/api/v1/admin/session'),
+          scope.http.requests.get('/api/v2/groups/group-sangong/snapshot'),
           throwsA(isA<DioException>().having(
               (error) => error.error,
               'existing business exception',
@@ -219,7 +224,7 @@ void main() {
                   status == 403 ? 'FORBIDDEN' : 'HTTP_500'))));
 
       final request = transport.requests.last;
-      _expectSangongCredentials(request, tenant: 'tenant-authorized');
+      _expectSangongCredentials(request, tenant: null);
       _expectCorrelatedLog(logs, request);
       final output = logs.join('\n');
       expect(output, contains('$status'));
@@ -572,23 +577,14 @@ void main() {
     expect(logs.where((line) => line.contains('结束')), hasLength(1));
   });
 
-  test('realtime automatically opts its stream and snapshot into diagnostics',
+  test(
+      'realtime diagnoses one HTTP snapshot and receives later state over OpenIM',
       () async {
-    final body = StreamController<Uint8List>();
-    addTearDown(body.close);
-    final opened = Completer<void>();
-    transport.respond = (request) {
-      if (request.uri.path.endsWith('/events/stream')) {
-        opened.complete();
-        return ResponseBody(body.stream, 200, headers: {
-          Headers.contentTypeHeader: ['text/event-stream']
-        });
-      }
-      return _envelope(sangongState(1));
-    };
-    final scope = runtime();
+    final events = StreamController<Map<String, dynamic>>.broadcast();
+    addTearDown(events.close);
+    transport.respond = (_) => _envelope(sangongState(1));
+    final scope = runtime(events: events.stream);
     scope.realtime.acquire();
-    await opened.future;
     await scope.realtime.refreshSnapshot();
     final accepted = Completer<void>();
     void changed() {
@@ -598,22 +594,15 @@ void main() {
     }
 
     scope.realtime.addListener(changed);
-    body.add(Uint8List.fromList(
-        utf8.encode('event: state\ndata: ${jsonEncode(sangongState(2))}\n\n')));
+    events.add(sangongMessageEvent(2));
     await accepted.future;
     scope.realtime.removeListener(changed);
     scope.realtime.release();
-
-    final streamRequest = transport.requests
-        .singleWhere((request) => request.uri.path.endsWith('/events/stream'));
-    final snapshotRequest = transport.requests.singleWhere(
-        (request) => request.uri.path.endsWith('/events/snapshot'));
-    for (final request in [streamRequest, snapshotRequest]) {
-      _expectSangongCredentials(request, tenant: 'tenant-authorized');
-      _expectCorrelatedLog(logs, request);
-      expect(logs.join('\n'), contains(request.uri.toString()));
-    }
-    expect(logs.any((line) => line.contains('SSE事件')), isTrue);
+    final request = transport.requests.single;
+    expect(request.uri.path, '/sangong/api/v2/groups/group-sangong/snapshot');
+    _expectSangongCredentials(request, tenant: null);
+    _expectCorrelatedLog(logs, request);
+    expect(logs.any((line) => line.contains('SSE事件')), isFalse);
     expect(scope.realtime.latestState?.version, 2);
     expect(scope.realtime.ownerCount, 0);
   });

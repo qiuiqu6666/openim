@@ -178,16 +178,13 @@ void main() {
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/reports/users')) {
+        if (call.path.endsWith('/user')) {
           return {
-            'users': [
-              {'userId': 19, 'imUserId': 'im_target', 'balance': 420}
-            ],
-            'page': 1,
-            'totalPages': 1,
+            'exists': true,
+            'user': {'userId': 19, 'imUserId': 'im_target', 'balance': 420}
           };
         }
-        if (call.path.endsWith('/user-detail')) return <String, dynamic>{};
+
         return sangongFixtureResponse(call);
       };
     final runtime = sangongTestRuntime(sangongTestContext(api));
@@ -220,7 +217,7 @@ void main() {
     expect(find.text('普通用户资料'), findsOneWidget);
     final navigator = tester.state<NavigatorState>(find.byType(Navigator));
     expect(navigator.canPop(), isFalse);
-    expect(api.count('/credit'), 0);
+    expect(api.count('/commands/wallet.adjust'), 0);
     expect(tester.takeException(), isNull);
   });
 

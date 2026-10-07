@@ -169,7 +169,7 @@ void main() {
     events.add(
         {'key': 'groupGameChanged', 'groupID': 'group-sangong', 'action': ''});
     await flushSangong(tester);
-    expect(api.count('/snapshot'), 1);
+    expect(api.count('/snapshot'), 2);
     state.value = sangongTestContext(api,
         canConfigure: false,
         canManage: false,

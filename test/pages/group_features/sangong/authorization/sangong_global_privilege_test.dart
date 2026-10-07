@@ -91,7 +91,7 @@ void main() {
     final request = runtime.admin.fetchSession();
     final rejection = expectLater(request, throwsA(isA<DioException>()));
     await flushSangong(tester);
-    expect(api.count('/session'), 1);
+    expect(api.count('/snapshot'), 1);
     api.privilege.setAllowed(false);
     api.privilege.setAllowed(true);
     response.complete({'status': 'running', 'round': null});
@@ -106,7 +106,7 @@ void main() {
       (tester) async {
     final oldResponse = Completer<dynamic>();
     final api = SangongTestApi();
-    api.respond = (call) => api.count('/my-config') == 1
+    api.respond = (call) => api.count('/config') == 1
         ? oldResponse.future
         : sangongFixtureResponse(call);
     final runtime = SangongRuntime(sangongTestContext(api, tenantID: ''));
@@ -117,7 +117,7 @@ void main() {
     api.privilege.setAllowed(false);
     api.privilege.setAllowed(true);
     await completeSangongRequest(tester, runtime.config.refreshFromNetwork());
-    expect(api.count('/my-config'), 2);
+    expect(api.count('/config'), 2);
     expect(runtime.config.hasCachedConfig, isTrue);
     oldResponse.complete(sangongConfig(name: '撤权前旧厅'));
     await flushSangong(tester);
@@ -140,7 +140,7 @@ void main() {
     api.privilege.setAllowed(true);
     await flushSangong(tester);
     await flushSangong(tester);
-    expect(api.count('/admin/tenants/group-sangong'), 1);
+    expect(api.count('/config'), 1);
     expect(api.count('/my-config'), 0);
     expect(find.byType(GroupGameFloatingEntry), findsOneWidget);
     expect(
@@ -215,17 +215,10 @@ void main() {
           'sangong': {'canManage': true, 'tenantID': 'tenant-authorized'}
         };
       }
-      if (call.path.endsWith('/reports/users')) {
+      if (call.path.endsWith('/user')) {
         return {
-          'users': [
-            {'userId': 19, 'imUserId': 'target', 'balance': 420}
-          ],
-          'page': 1,
-          'totalPages': 1
-        };
-      }
-      if (call.path.endsWith('/user-detail')) {
-        return {
+          'exists': true,
+          'user': {'userId': 19, 'imUserId': 'target', 'balance': 420},
           'parent': {'nickname': '上级甲'}
         };
       }

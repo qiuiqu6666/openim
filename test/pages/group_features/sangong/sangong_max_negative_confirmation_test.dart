@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/group_features/data/group_feature_api.dart';
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
@@ -5,9 +7,8 @@ import 'sangong_test_support.dart';
 
 void main() {
   final unknown = isA<GroupFeatureException>()
-      .having((error) => error.unknownResult, 'unknown result', isTrue);
-
-  testWidgets('empty max-negative ack cannot claim success or retry the write',
+      .having((e) => e.unknownResult, 'unknown result', isTrue);
+  testWidgets('empty receipt cannot claim success or repeat a limit write',
       (tester) async {
     final api = SangongTestApi()..respond = (_) => <String, dynamic>{};
     final runtime = SangongRuntime(sangongTestContext(api));
@@ -16,111 +17,72 @@ void main() {
         tester,
         runtime.admin.setUserMaxNegative(userId: 19, maxNegative: 500),
         unknown);
-    expect(api.count('/max-negative'), 1);
-    expect(api.count('/user-detail'), 0);
+    expect(api.count('/commands/wallet.limit'), 1);
+    expect(api.count('/user'), 0);
   });
-
-  testWidgets('returned identity and amount must confirm the requested setting',
+  testWidgets('receipt identity and amount must confirm the requested limit',
       (tester) async {
     final api = SangongTestApi();
     final runtime = SangongRuntime(sangongTestContext(api));
     addTearDown(runtime.dispose);
-    for (final body in [
-      {
-        'user': {'userId': 20, 'maxNegative': 500}
-      },
-      {
-        'user': {'userId': 19, 'maxNegative': 100}
-      },
-      {
-        'user': {'userId': 19}
-      },
-      {'ok': true},
+    for (final data in <Map<String, dynamic>>[
+      {'userId': 20, 'maxNegative': 500},
+      {'userId': 19, 'maxNegative': 100},
+      {'userId': 19},
+      {},
     ]) {
-      api.respond = (_) => body;
+      api.respond = (call) => sangongReceipt(call, data);
       await rejectSangongRequest(
           tester,
           runtime.admin.setUserMaxNegative(userId: 19, maxNegative: 500),
           unknown);
     }
-    api.respond = (_) => {
-          'user': {'userId': 19, 'maxNegative': 0}
-        };
+    api.respond =
+        (call) => sangongReceipt(call, {'userId': 19, 'maxNegative': 0});
     final result = await completeSangongRequest(
         tester, runtime.admin.setUserMaxNegative(userId: 19, maxNegative: 0));
-    expect(result['user']['maxNegative'], 0,
-        reason: 'An explicitly confirmed zero disables the negative limit.');
+    expect(result['user']['maxNegative'], 0);
   });
-
-  testWidgets('legacy ack uses one authoritative read in the same tenant',
+  testWidgets(
+      'unknown receipt retains the key for an explicit retry without readback',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.method == 'PUT'
-          ? {'ok': true}
-          : {
-              'user': {
-                'userId': 19,
-                'imUserId': 'im_target',
-                'maxNegative': 500,
-              }
-            };
-    final runtime = SangongRuntime(sangongTestContext(api));
-    addTearDown(runtime.dispose);
-    final result = await completeSangongRequest(
-        tester,
-        runtime.admin.setUserMaxNegative(
-            userId: 19, maxNegative: 500, imUserId: 'im_target'));
-    expect(result['user']['maxNegative'], 500);
-    expect(api.count('/max-negative'), 1);
-    expect(api.count('/user-detail'), 1);
-    expect(api.calls.last.query, {'imUserId': 'im_target'});
-    expect(
-        api.calls.every((call) =>
-            call.headers?['X-Tenant-Id'] == expectedSangongRequestTenant()),
-        isTrue);
-  });
-
-  testWidgets('unconfirmed readback and changed account do not save locally',
-      (tester) async {
-    final api = SangongTestApi()
-      ..respond = (call) => call.method == 'PUT'
-          ? {}
-          : {
-              'user': {
-                'userId': 19,
-                'imUserId': 'different_user',
-                'maxNegative': 500,
-              }
-            };
+      ..respond = (call) => {
+            'ok': true,
+            'requestId': 'different',
+            'data': {'userId': 19, 'maxNegative': 500}
+          };
     final runtime = SangongRuntime(sangongTestContext(api));
     addTearDown(runtime.dispose);
     await rejectSangongRequest(
         tester,
-        runtime.admin.setUserMaxNegative(
-            userId: 19, maxNegative: 500, imUserId: 'im_target'),
+        runtime.admin.setUserMaxNegative(userId: 19, maxNegative: 500),
         unknown);
-    expect(api.count('/max-negative'), 1);
-    expect(api.count('/user-detail'), 1);
-
+    final id = api.calls.single.body?['requestId'];
+    api.respond =
+        (call) => sangongReceipt(call, {'userId': 19, 'maxNegative': 500});
+    await completeSangongRequest(
+        tester, runtime.admin.setUserMaxNegative(userId: 19, maxNegative: 500));
+    expect(api.calls.length, 2);
+    expect(api.calls.last.body?['requestId'], id);
+    expect(api.count('/user'), 0);
+  });
+  testWidgets('late matching receipt cannot cross an account scope',
+      (tester) async {
+    final reply = Completer<dynamic>();
+    final api = SangongTestApi()..respond = (_) => reply.future;
     var current = true;
-    final fencedApi = SangongTestApi()
-      ..respond = (call) {
-        if (call.method == 'PUT') return {'ok': true};
-        // An otherwise valid read must not confirm a previous account's write.
-        current = false;
-        return {
-          'user': {'userId': 19, 'maxNegative': 500}
-        };
-      };
-    final fenced =
-        SangongRuntime(sangongTestContext(fencedApi, current: () => current));
-    addTearDown(fenced.dispose);
-    await rejectSangongRequest(
-        tester,
-        fenced.admin.setUserMaxNegative(
-            userId: 19, maxNegative: 500, imUserId: 'im_target'),
-        unknown);
-    expect(fencedApi.count('/max-negative'), 1);
-    expect(fencedApi.count('/user-detail'), 1);
+    final runtime =
+        SangongRuntime(sangongTestContext(api, current: () => current));
+    addTearDown(runtime.dispose);
+    final task = runtime.admin.setUserMaxNegative(userId: 19, maxNegative: 500);
+    final rejected = expectLater(task, throwsA(isA<DioException>()));
+    await flushSangong(tester);
+    current = false;
+    reply.complete(
+        sangongReceipt(api.calls.single, {'userId': 19, 'maxNegative': 500}));
+    await flushSangong(tester);
+    await rejected;
+    expect(api.calls.length, 1);
   });
 }

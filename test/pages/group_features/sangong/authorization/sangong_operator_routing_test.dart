@@ -77,9 +77,9 @@ class _Fixture {
 
   Iterable<SangongCall> get operations => api.calls.where((call) =>
       call.useBearerAuth &&
-      !call.path.contains('/admin/tenants/') &&
+      !call.path.endsWith('/config') &&
       !call.path.endsWith('/my-config') &&
-      !call.path.endsWith('/events/snapshot'));
+      !call.path.endsWith('/snapshot'));
 
   Map<String, dynamic> get round => {
         ...Map<String, dynamic>.from(sangongState(1)['round'] as Map),
@@ -87,14 +87,14 @@ class _Fixture {
       };
 
   dynamic _respond(SangongCall call) {
-    if (call.path.contains('/admin/tenants/')) {
+    if (call.path.endsWith('/config')) {
       if (!configured) {
         throw const GroupFeatureException('当前群未配置三公',
             code: 'SERVICE_UNAVAILABLE',
             statusCode: 404,
             serverCode: 'TENANT_NOT_FOUND');
       }
-      final currentGroup = Uri.decodeComponent(call.path.split('/').last);
+      final currentGroup = Uri.decodeComponent(call.path.split('/')[5]);
       return {
         ...sangongConfig(
             name: '亚多里测试', group: currentGroup, tenant: currentGroup),
@@ -127,31 +127,38 @@ class _Fixture {
         'imGroupLedgerId': groupID,
       };
     }
-    if (call.path.endsWith('/betting/preview')) {
+    if (call.path.endsWith('/bet-preview')) {
       return {
+        'version': 1,
+        'nextBeforeId': 0,
         'preview': {
+          'roundId': 18,
           'pendingMessageCount': 2,
           'report': {
             'grandTotal': 300,
             'betCount': 2,
-            'doorTotals': {'2': 300}
+            'doorTotals': {'2': 300},
+            'entries': <dynamic>[],
           },
         },
       };
     }
-    if (call.path.contains('/admin/reports/')) {
-      return {'ok': true, 'sent': true, 'type': 'fixture-report'};
+    if (call.path.endsWith('/commands/report.send')) {
+      return sangongQueuedReport(call);
     }
-    if (call.path.endsWith('/rounds/current/draws')) {
+    if (call.path.endsWith('/snapshot')) {
       return {
+        ...sangongState(1),
+        'groupId': groupID,
+        'lastSettledRound': {...round, 'id': 17, 'status': 'settled'},
         'round': round,
         'draw': {'roundId': 18, 'complete': true}
       };
     }
-    if (call.path.endsWith('/rounds/18/settle')) {
-      return {
+    if (call.path.endsWith('/commands/round.settle')) {
+      return sangongReceipt(call, {
         'round': {...round, 'status': 'settled'}
-      };
+      });
     }
     return sangongFixtureResponse(call);
   }
@@ -337,7 +344,7 @@ void main() {
     expect(find.text('查看我的配置'), findsNothing);
     expect(fixture.operations, isEmpty);
     for (final call
-        in fixture.api.calls.where((c) => c.path.contains('/admin/tenants/'))) {
+        in fixture.api.calls.where((c) => c.path.endsWith('/config'))) {
       expect(call.headers?.containsKey('X-Tenant-Id') ?? false, isFalse);
     }
     expect(fixture.api.count('/my-config'), 0);
@@ -362,8 +369,8 @@ void main() {
       entry.onOpenCutoff();
       await _flush(tester);
       expect(fixture.runtime!.canManage, isTrue);
-      expect(fixture.api.count('/session'), 1);
-      expect(fixture.api.count('/rounds/18/betting/preview'), 1);
+      expect(fixture.api.count('/snapshot'), recovered ? 3 : 2);
+      expect(fixture.api.count('/bet-preview'), 1);
       expect(find.byType(SangongBetPreviewSheet), findsOneWidget);
       _expectNoConfigOrManagementPage();
       if (recovered) {
@@ -372,27 +379,31 @@ void main() {
       }
       _navigator(tester).pop();
       await _flush(tester);
-      expect(fixture.api.count('/rounds/18/betting/submit'), 0);
+      expect(fixture.api.count('/commands/round.close'), 0);
       expect(tester.takeException(), isNull);
     });
   }
 
-  testWidgets('authorized report buttons call their own four report endpoints',
+  testWidgets('authorized report buttons queue the matching four report kinds',
       (tester) async {
     final fixture = _Fixture(canManage: true);
     await _pumpChat(tester, fixture);
     final entry = _operator(tester);
-    for (final (action, suffix) in [
-      (entry.onSendSettleImage, '/admin/reports/settle-image'),
-      (entry.onSendSettleBill, '/admin/reports/settle-bill'),
-      (entry.onSendPointsImage, '/admin/reports/users/points-image'),
-      (entry.onSendTrendImage, '/admin/reports/trend-image'),
+    for (final (action, kind) in [
+      (entry.onSendSettleImage, 'settlement'),
+      (entry.onSendSettleBill, 'bill'),
+      (entry.onSendPointsImage, 'points'),
+      (entry.onSendTrendImage, 'trend'),
     ]) {
       action();
       await _flush(tester);
-      final call =
-          fixture.operations.singleWhere((c) => c.path.endsWith(suffix));
+      final call = fixture.operations.singleWhere((c) =>
+          c.path.endsWith('/commands/report.send') &&
+          (c.body?['input'] as Map?)?['kind'] == kind);
       expect(call.method, 'POST');
+      if (kind == 'settlement' || kind == 'bill') {
+        expect((call.body!['input'] as Map)['roundId'], 17);
+      }
       _expectNoConfigOrManagementPage();
       expect(_navigator(tester).canPop(), isFalse);
     }
@@ -406,9 +417,9 @@ void main() {
     await _pumpChat(tester, fixture);
     _operator(tester).onOpenSettle();
     await _flush(tester);
-    expect(fixture.api.count('/rounds/current/draws'), 1);
+    expect(fixture.api.count('/snapshot'), 3);
     final settle = fixture.operations
-        .singleWhere((c) => c.path.endsWith('/rounds/18/settle'));
+        .singleWhere((c) => c.path.endsWith('/commands/round.settle'));
     expect(settle.method, 'POST');
     expect(fixture.operations.where((c) => c.path.endsWith('/admin/draws')),
         isEmpty);
@@ -432,8 +443,8 @@ void main() {
       await _flush(tester);
       expect(find.byType(SangongGameRulesSettingsPage), findsOneWidget);
       _expectNoConfigOrManagementPage();
-      expect(fixture.api.count('/settings'), 1);
-      expect(fixture.api.count('/session'), 1);
+      expect(fixture.api.count('/settings'), 0);
+      expect(fixture.api.count('/snapshot'), 2);
       expect(fixture.api.count('/my-config'), 0);
       expect(tester.takeException(), isNull);
     });
@@ -483,7 +494,7 @@ void main() {
 
         expect(oldRuntime.isSessionCurrent, isFalse);
         expect(fixture.operations, isEmpty);
-        expect(fixture.api.count('/rounds/18/settle'), 0);
+        expect(fixture.api.count('/commands/round.settle'), 0);
         expect(fixture.api.count('/settings'), 0);
         expect(find.byType(SangongGameRulesSettingsPage), findsNothing);
         _expectNoConfigOrManagementPage();

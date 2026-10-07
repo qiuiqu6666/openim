@@ -42,7 +42,7 @@ class _Fixture {
   _Fixture(String ex, {bool privileged = true}) {
     api.privilege.setAllowed(privileged);
     api.respond = (call) {
-      if (call.path.contains('/admin/tenants/')) {
+      if (call.path.endsWith('/config')) {
         throw const GroupFeatureException('当前群未配置三公',
             code: 'SERVICE_UNAVAILABLE',
             statusCode: 404,
@@ -63,7 +63,7 @@ class _Fixture {
   SangongRuntime? runtime;
   bool active = true;
   Iterable<SangongCall> get businessCalls =>
-      api.calls.where((call) => !call.path.contains('/admin/tenants/'));
+      api.calls.where((call) => !call.path.endsWith('/config'));
 
   String get preferenceKey => '${api.baseUrl}:owner:$_groupID';
   GroupFeatureContext get context => store.context(
@@ -144,10 +144,7 @@ void main() {
       expect(labels.contains('三公代理'), agentVisible);
       expect(fixture.store.cachedGroupInfo(_groupID)?.ex, ex);
       expect(fixture.businessCalls, isEmpty);
-      expect(
-          fixture.api.calls
-              .where((c) => c.path.contains('/admin/tenants/'))
-              .length,
+      expect(fixture.api.calls.where((c) => c.path.endsWith('/config')).length,
           visible ? 1 : 0);
       expect(fixture.api.streamStarts, 0);
       expect(tester.takeException(), isNull);

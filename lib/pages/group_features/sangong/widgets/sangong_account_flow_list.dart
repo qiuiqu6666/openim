@@ -45,87 +45,86 @@ class SangongAccountFlowList extends StatelessWidget {
       height: 1.25,
       color: Theme.of(context).colorScheme.onSurface,
     );
-    return Column(children: [
-      Expanded(
-          child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: entries.length + contributions.length,
-        itemBuilder: (_, index) {
-          if (index >= entries.length) {
-            final entry = contributions[index - entries.length];
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: entries.length + contributions.length + 1,
+      itemBuilder: (_, index) {
+        if (index == entries.length + contributions.length) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
               child: Text.rich(
                   TextSpan(children: [
-                    TextSpan(
-                        text:
-                            '【第${entry.periodNo}期】 ${entry.isMainBanker ? '主庄限额' : '合庄出资'}:',
-                        style: labelStyle),
-                    TextSpan(text: '${entry.amount}', style: amountStyle),
-                    TextSpan(
-                        text:
-                            ' 占股:${entry.sharePercent}% 总池:${entry.poolTotal}',
-                        style: labelStyle),
-                    TextSpan(
-                        text:
-                            ' 已分摊:${entry.settledAmount > 0 ? '+' : ''}${entry.settledAmount}'),
-                    TextSpan(text: '（不扣积分）', style: TextStyle(color: muted)),
+                    TextSpan(text: '本页${entries.length}笔 ', style: labelStyle),
+                    if (contributions.isNotEmpty)
+                      TextSpan(
+                          text: '出资${contributions.length}笔 ',
+                          style: labelStyle),
+                    if (bets) ...[
+                      const TextSpan(text: '账变合计:', style: labelStyle),
+                      TextSpan(text: _signed(total), style: amountStyle),
+                    ] else ...[
+                      const TextSpan(text: '总上分:', style: labelStyle),
+                      TextSpan(text: '$credit', style: amountStyle),
+                      const TextSpan(text: ' 总下分:', style: labelStyle),
+                      TextSpan(text: '$debit'),
+                    ],
                   ]),
                   style: textStyle),
-            );
-          }
-          final entry = entries[index];
-          return Padding(
-            key: ValueKey('sangong-ledger-${entry.ledgerId}'),
-            padding: const EdgeInsets.symmetric(vertical: 1),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text.rich(
-                  TextSpan(children: [
-                    TextSpan(
-                        text:
-                            '【${_time(entry.createdAt)}】 ${bets && entry.periodNo != null ? '第${entry.periodNo}期 ' : ''}${entry.label}:',
-                        style: labelStyle),
-                    TextSpan(text: _signed(entry.amount), style: amountStyle),
-                    const TextSpan(text: ' 剩余:', style: labelStyle),
-                    TextSpan(text: '${entry.balanceAfter}'),
-                  ]),
-                  style: textStyle),
-              if (!bets)
-                Text(
-                  '操作人：${operatorNames[entry.operator.trim()] == null ? (entry.operator.trim().isEmpty ? '未提供' : entry.operator.trim()) : '${operatorNames[entry.operator.trim()]}（${entry.operator.trim()}）'}',
-                  style: TextStyle(fontSize: 12, height: 1.2, color: muted),
-                ),
-              if (entry.note.isNotEmpty && entry.note != entry.label)
-                Text(entry.note,
-                    style: TextStyle(fontSize: 12, height: 1.2, color: muted)),
-            ]),
+            ),
           );
-        },
-      )),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text.rich(
-              TextSpan(children: [
-                TextSpan(text: '本页${entries.length}笔 ', style: labelStyle),
-                if (contributions.isNotEmpty)
+        }
+        if (index >= entries.length) {
+          final entry = contributions[index - entries.length];
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 1),
+            child: Text.rich(
+                TextSpan(children: [
                   TextSpan(
-                      text: '出资${contributions.length}笔 ', style: labelStyle),
-                if (bets) ...[
-                  const TextSpan(text: '账变合计:', style: labelStyle),
-                  TextSpan(text: _signed(total), style: amountStyle),
-                ] else ...[
-                  const TextSpan(text: '总上分:', style: labelStyle),
-                  TextSpan(text: '$credit', style: amountStyle),
-                  const TextSpan(text: ' 总下分:', style: labelStyle),
-                  TextSpan(text: '$debit'),
-                ],
-              ]),
-              style: textStyle),
-        ),
-      ),
-    ]);
+                      text:
+                          '【第${entry.periodNo}期】 ${entry.isMainBanker ? '主庄限额' : '合庄出资'}:',
+                      style: labelStyle),
+                  TextSpan(text: '${entry.amount}', style: amountStyle),
+                  TextSpan(
+                      text: ' 占股:${entry.sharePercent}% 总池:${entry.poolTotal}',
+                      style: labelStyle),
+                  TextSpan(
+                      text:
+                          ' 已分摊:${entry.settledAmount > 0 ? '+' : ''}${entry.settledAmount}'),
+                  TextSpan(text: '（不扣积分）', style: TextStyle(color: muted)),
+                ]),
+                style: textStyle),
+          );
+        }
+        final entry = entries[index];
+        return Padding(
+          key: ValueKey('sangong-ledger-${entry.ledgerId}'),
+          padding: const EdgeInsets.symmetric(vertical: 1),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text.rich(
+                TextSpan(children: [
+                  TextSpan(
+                      text:
+                          '【${_time(entry.createdAt)}】 ${bets && entry.periodNo != null ? '第${entry.periodNo}期 ' : ''}${entry.label}:',
+                      style: labelStyle),
+                  TextSpan(text: _signed(entry.amount), style: amountStyle),
+                  const TextSpan(text: ' 剩余:', style: labelStyle),
+                  TextSpan(text: '${entry.balanceAfter}'),
+                ]),
+                style: textStyle),
+            if (!bets)
+              Text(
+                '操作人：${operatorNames[entry.operator.trim()] == null ? (entry.operator.trim().isEmpty ? '未提供' : entry.operator.trim()) : '${operatorNames[entry.operator.trim()]}（${entry.operator.trim()}）'}',
+                style: TextStyle(fontSize: 12, height: 1.2, color: muted),
+              ),
+            if (entry.note.isNotEmpty && entry.note != entry.label)
+              Text(entry.note,
+                  style: TextStyle(fontSize: 12, height: 1.2, color: muted)),
+          ]),
+        );
+      },
+    );
   }
 }

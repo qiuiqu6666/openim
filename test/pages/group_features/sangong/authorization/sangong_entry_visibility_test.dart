@@ -23,7 +23,7 @@ class _EntryFixture {
   _EntryFixture({bool privileged = true, int gameType = 1}) {
     api.privilege.setAllowed(privileged);
     api.respond = (call) {
-      if (call.path.contains('/admin/tenants/')) {
+      if (call.path.endsWith('/config')) {
         return {
           'active': true,
           'tenantId': _groupID,
@@ -82,8 +82,8 @@ class _EntryFixture {
         current: () => active,
       );
 
-  Iterable<SangongCall> get privateCalls => api.calls.where(
-      (call) => call.useBearerAuth && !call.path.contains('/admin/tenants/'));
+  Iterable<SangongCall> get privateCalls => api.calls
+      .where((call) => call.useBearerAuth && !call.path.endsWith('/config'));
 
   Future<void> dispose() async {
     active = false;

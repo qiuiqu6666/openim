@@ -18,11 +18,7 @@ Future<SangongMyConfig> _request(SangongRuntime runtime, String method) =>
             imGroupWaterId: ' group-water ',
           );
 
-Matcher get _invalidConfiguration => isA<FormatException>().having(
-      (error) => error.message,
-      'message',
-      'Invalid Sangong configuration response',
-    );
+Matcher get _invalidConfiguration => isA<FormatException>();
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -70,7 +66,8 @@ void main() {
         expect(config.imGroupGameId, 'group-sangong');
         expect(config.isOwner, isTrue);
         expect(api.calls.last.method, method);
-        expect(api.calls.last.path, endsWith('/admin/my-config'));
+        expect(api.calls.last.path,
+            endsWith('/api/v2/groups/group-sangong/config'));
       }
       // Direct API parsing does not publish a private binding or permissions.
       expect(runtime.config.hasCachedConfig, isFalse);

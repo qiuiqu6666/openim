@@ -64,16 +64,13 @@ dynamic _response(SangongCall call, {bool manage = false}) {
       },
     };
   }
-  if (call.path.endsWith('/reports/users')) {
+  if (call.path.endsWith('/user')) {
     return {
-      'users': [
-        {'userId': 19, 'imUserId': 'target', 'balance': 420}
-      ],
-      'page': 1,
-      'totalPages': 1,
+      'exists': true,
+      'user': {'userId': 19, 'imUserId': 'target', 'balance': 420}
     };
   }
-  if (call.path.endsWith('/user-detail')) return <String, dynamic>{};
+
   return sangongFixtureResponse(call);
 }
 
@@ -199,7 +196,7 @@ void main() {
       return [_group('g', enabled: true)];
     });
     await _openLedger(tester);
-    expect(api.count('/reports/users'), 0);
+    expect(api.count('/user'), 0);
     await tester.tap(_inSheet(find.text('重试')));
     await flushSangong(tester);
     await tester.pumpAndSettle();
@@ -207,7 +204,7 @@ void main() {
     expect(groupReads, 2);
     expect(capabilityReads, 2);
     expect(find.textContaining('当前积分 420'), findsOneWidget);
-    expect(api.count('/reports/users'), 1);
+    expect(api.count('/user'), 1);
     expect(find.text('普通资料'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
@@ -256,7 +253,7 @@ void main() {
     expect(find.byKey(_unavailableKey), findsNothing);
     expect(find.byType(SangongProfileLedgerFloatingEntry), findsNothing);
     expect(find.text('普通资料'), findsOneWidget);
-    expect(api.count('/reports/users'), 0);
+    expect(api.count('/user'), 0);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
     store.dispose();
@@ -273,7 +270,7 @@ void main() {
     expect(find.byKey(_unavailableKey), findsNothing);
     expect(find.text('普通资料'), findsOneWidget);
     expect(find.byType(SangongProfileLedgerFloatingEntry), findsOneWidget);
-    expect(api.count('/reports/users'), 0);
+    expect(api.count('/user'), 0);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
     store.dispose();
@@ -291,7 +288,7 @@ void main() {
     await _mount(tester, store: newStore, groups: () async => []);
     expect(find.byKey(_unavailableKey), findsNothing);
     expect(find.text('普通资料'), findsOneWidget);
-    expect(oldApi.count('/reports/users'), 0);
+    expect(oldApi.count('/user'), 0);
     expect(newApi.calls, isEmpty);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
@@ -312,7 +309,7 @@ void main() {
     expect(find.byKey(_unavailableKey), findsNothing);
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.text('普通资料'), findsOneWidget);
-    expect(api.count('/reports/users'), 0);
+    expect(api.count('/user'), 0);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
     store.dispose();
@@ -352,7 +349,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('普通确认弹窗'), findsNothing);
     expect(find.text('普通资料'), findsOneWidget);
-    expect(api.count('/reports/users'), 0);
+    expect(api.count('/user'), 0);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
     store.dispose();
@@ -383,8 +380,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(_unavailableKey, skipOffstage: false), findsNothing);
     expect(find.byType(BottomSheet, skipOffstage: false), findsNothing);
-    expect(oldApi.count('/reports/users'), 0);
-    expect(newApi.count('/reports/users'), 0);
+    expect(oldApi.count('/user'), 0);
+    expect(newApi.count('/user'), 0);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
     oldStore.dispose();
@@ -416,7 +413,7 @@ void main() {
     await _openLedger(tester);
     expect(find.byKey(_unavailableKey), findsOneWidget);
     expect(privilege.refreshCount, 3);
-    expect(api.count('/reports/users'), 0);
+    expect(api.count('/user'), 0);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
     store.dispose();

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_game_settings.dart';
-import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 
 import '../sangong_test_support.dart';
 
@@ -12,7 +11,8 @@ void main() {
     testWidgets('$operation pins scope before interceptor dispatch',
         (tester) async {
       final api = SangongTestApi();
-      final runtime = SangongRuntime(sangongTestContext(api, tenantID: 'A'));
+      final runtime =
+          sangongTestRuntime(sangongTestContext(api, tenantID: 'A'));
       addTearDown(runtime.dispose);
       final Future<dynamic> request = switch (operation) {
         'member' => runtime.admin.upsertMyConfigMember(imUserId: 'helper-id'),
@@ -34,7 +34,7 @@ void main() {
       (tester) async {
     final gate = Completer<dynamic>();
     final api = SangongTestApi()..respond = (_) => gate.future;
-    final runtime = SangongRuntime(sangongTestContext(api, tenantID: 'A'));
+    final runtime = sangongTestRuntime(sangongTestContext(api, tenantID: 'A'));
     addTearDown(runtime.dispose);
     final request = runtime.admin.fetchMyConfigMembers();
     final expectation = expectLater(request, throwsA(isA<DioException>()));
@@ -55,7 +55,7 @@ void main() {
       (tester) async {
     final gate = Completer<dynamic>();
     final api = SangongTestApi()..respond = (_) => gate.future;
-    final runtime = SangongRuntime(sangongTestContext(api));
+    final runtime = sangongTestRuntime(sangongTestContext(api));
     addTearDown(runtime.dispose);
     final request = runtime.admin.fetchSession();
     final expectation = expectLater(request, throwsA(isA<DioException>()));
@@ -69,7 +69,7 @@ void main() {
   testWidgets('pinned wrapper preserves discovery and report query options',
       (tester) async {
     final api = SangongTestApi();
-    final runtime = SangongRuntime(sangongTestContext(api));
+    final runtime = sangongTestRuntime(sangongTestContext(api));
     addTearDown(runtime.dispose);
     await completeSangongRequest(tester, runtime.admin.fetchMyConfig());
     final tenant = expectedSangongRequestTenant(skipTenant: true);
@@ -78,9 +78,7 @@ void main() {
     expect(api.calls.single.headers?['X-Tenant-Id'], tenant);
     expect(api.calls.single.useBearerAuth, isTrue);
     api.calls.clear();
-    api.respond = (_) => {
-          'flow': {'entries': []}
-        };
+    api.respond = (_) => sangongUserReport(imUserId: 'im-target');
     await completeSangongRequest(
         tester, runtime.admin.fetchUserFlowResult(imUserId: 'im-target'));
     expect(api.calls.single.headers?['X-Tenant-Id'],

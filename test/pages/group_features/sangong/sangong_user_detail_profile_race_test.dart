@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_admin_models.dart';
 import 'package:openim/pages/group_features/sangong/pages/sangong_user_detail_page.dart';
@@ -22,11 +21,12 @@ Map<String, dynamic> reportWithLimit(int limit) => sangongUserReport(
     user: Map<String, dynamic>.from(profileWithLimit(limit)['user']));
 
 dynamic profileBackground(SangongCall call) {
-  if (call.path.endsWith('/snapshot'))
+  if (call.path.endsWith('/snapshot')) {
     return {
       'session': {'id': 2},
       'round': null
     };
+  }
   return sangongFixtureResponse(call);
 }
 
@@ -75,9 +75,10 @@ void main() {
       ..respond = (call) {
         if (call.path.endsWith('/user-report')) return oldRead.future;
         if (call.path.endsWith('/user')) return profileWithLimit(500);
-        if (call.path.endsWith('/commands/wallet.limit'))
+        if (call.path.endsWith('/commands/wallet.limit')) {
           return sangongReceipt(
               call, Map<String, dynamic>.from(profileWithLimit(500)['user']));
+        }
         return profileBackground(call);
       };
     final runtime = sangongTestRuntime(sangongTestContext(api));

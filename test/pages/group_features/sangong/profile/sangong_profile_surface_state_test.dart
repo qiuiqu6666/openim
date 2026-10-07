@@ -58,16 +58,13 @@ dynamic _profileResponse(SangongCall call) {
   if (call.path.endsWith('/feature-capabilities')) {
     return _capabilities(call.path.split('/')[3]);
   }
-  if (call.path.endsWith('/reports/users')) {
+  if (call.path.endsWith('/user')) {
     return {
-      'users': [
-        {'userId': 19, 'imUserId': 'target', 'balance': 420}
-      ],
-      'page': 1,
-      'totalPages': 1,
+      'exists': true,
+      'user': {'userId': 19, 'imUserId': 'target', 'balance': 420}
     };
   }
-  if (call.path.endsWith('/user-detail')) return <String, dynamic>{};
+
   return sangongFixtureResponse(call);
 }
 
@@ -232,11 +229,11 @@ void main() {
     expect(
         find.byKey(const ValueKey('sangong-profile-services')), findsOneWidget);
     expect(find.text('该功能的服务暂未开通'), findsOneWidget);
-    expect(api.count('/reports/users'), 0);
+    expect(api.count('/user'), 0);
     await tester.tap(find.text('重试'));
     await flushSangong(tester);
     expect(find.textContaining('当前积分 420'), findsOneWidget);
-    expect(api.count('/reports/users'), 1);
+    expect(api.count('/user'), 1);
     expect(api.count('/feature-capabilities'), 2);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
@@ -320,7 +317,7 @@ void main() {
     expect(entry?.loading, isFalse);
     expect(entry?.onLedger, isNotNull);
     expect(find.text('没有当前群的三公配置或运营权限'), findsOneWidget);
-    expect(api.count('/reports/users'), 0);
+    expect(api.count('/user'), 0);
     expect(api.count('/my-config'), 0);
     await unmountSangong(tester);
     store.dispose();

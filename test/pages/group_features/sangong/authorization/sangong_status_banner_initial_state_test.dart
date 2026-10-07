@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -24,9 +23,12 @@ const _retryKey = ValueKey('sangong-host-retry');
 
 // The service's initial complete snapshot has an explicit zero for every door.
 Map<String, dynamic> _idleState() => {
+      'schemaVersion': 2,
+      'groupId': '@status-group',
+      'botUserId': 'bot-sangong',
       'version': 0,
       'status': 'idle',
-      'settings': {'doorCount': 6},
+      'settings': {'doorCount': 6, 'minBet': 0, 'maxBet': 0, 'rakePercent': 0},
       'round': null,
       'pending': {
         'open': false,
@@ -60,7 +62,16 @@ Map<String, dynamic> _invalidState(String kind) {
 class _Fixture {
   _Fixture() {
     api.respond = (call) {
-      if (call.path.endsWith('/events/snapshot')) return _snapshot();
+      if (call.path.endsWith('/snapshot')) return _snapshot();
+      if (call.path.endsWith('/config')) {
+        return {
+          'ok': true,
+          'data': {
+            ...sangongConfig(group: '@status-group', tenant: '@status-group'),
+            'active': true
+          }
+        };
+      }
       return sangongFixtureResponse(call);
     };
     context = sangongTestContext(api,
@@ -68,10 +79,12 @@ class _Fixture {
         tenantID: '@status-group',
         agentEntry: false,
         canOpenAgent: false,
-        current: () => active);
+        current: () => active,
+        events: events.stream);
   }
 
   final api = SangongTestApi();
+  final events = StreamController<Map<String, dynamic>>.broadcast();
   late final GroupFeatureContext context;
   SangongRuntime? runtime;
   FutureOr<Map<String, dynamic>> Function()? snapshotResponse;
@@ -81,23 +94,16 @@ class _Fixture {
   Future<Map<String, dynamic>> _snapshot() async =>
       {'state': await (snapshotResponse?.call() ?? _idleState())};
 
-  void emit(Map<String, dynamic> state, {bool split = false}) {
-    final event = 'event: state\ndata: ${jsonEncode({'state': state})}\n\n';
-    final stream = api.streams.single;
-    if (split) {
-      final midpoint = event.length ~/ 2;
-      stream.add(event.substring(0, midpoint));
-      stream.add(event.substring(midpoint));
-    } else {
-      stream.add(event);
-    }
+  void emit(Map<String, dynamic> state) {
+    events.add(sangongMessageEvent(state['version'] as int? ?? 0,
+        group: '@status-group', state: {...state, 'groupId': '@status-group'}));
   }
 
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
     active = false;
-    await api.closeStreams();
+    await events.close();
     api.privilege.dispose();
   }
 }
@@ -156,6 +162,8 @@ Future<void> _flush(WidgetTester tester) async {
 
 void _expectIdleBanner(WidgetTester tester, _Fixture fixture,
     {bool hasRealtimeError = false}) {
+  expect(
+      fixture.runtime!.realtime.error, hasRealtimeError ? isNotNull : isNull);
   final bannerFinder = find.byType(GroupGameStatusBanner);
   expect(bannerFinder, findsOneWidget);
   final banner = tester.widget<GroupGameStatusBanner>(bannerFinder);
@@ -232,10 +240,10 @@ void main() {
       await _pumpHost(tester, fixture, dark: dark);
       _expectIdleBanner(tester, fixture);
       final snapshot = fixture.api.calls
-          .singleWhere((call) => call.path.endsWith('/events/snapshot'));
+          .singleWhere((call) => call.path.endsWith('/snapshot'));
       expect(snapshot.method, 'GET');
       expect(snapshot.useBearerAuth, isTrue);
-      expect(fixture.api.streamStarts, 1);
+      expect(fixture.api.streamStarts, 0);
       expect(fixture.runtime!.groupTenantReady, isTrue);
       expect(fixture.api.count('/my-config'), 0);
       expect(tester.takeException(), isNull);
@@ -243,21 +251,21 @@ void main() {
   }
 
   testWidgets(
-      'SSE zero and then one render normally without HTTP zero rollback',
+      'OpenIM zero and then one render normally without HTTP zero rollback',
       (tester) async {
     final snapshotReply = Completer<Map<String, dynamic>>();
     final fixture = _Fixture()..snapshotResponse = () => snapshotReply.future;
     await _pumpHost(tester, fixture);
-    expect(fixture.api.streamStarts, 1);
-    expect(fixture.api.count('/events/snapshot'), 1);
+    expect(fixture.api.streamStarts, 0);
+    expect(fixture.api.count('/snapshot'), 1);
     expect(fixture.runtime!.realtime.latestState, isNull);
-    fixture.emit(_idleState(), split: true);
+    fixture.emit(_idleState());
     await _flush(tester);
-    _expectIdleBanner(tester, fixture);
+    expect(fixture.runtime!.realtime.latestState, isNull);
 
-    fixture.emit(sangongState(1), split: true);
+    fixture.emit(sangongState(1));
     await _flush(tester);
-    _expectUpdatedBanner(tester, fixture);
+    expect(fixture.runtime!.realtime.latestState, isNull);
     snapshotReply.complete(_idleState());
     await _flush(tester);
     _expectUpdatedBanner(tester, fixture);
@@ -267,9 +275,9 @@ void main() {
     await completeSangongRequest(
         tester, fixture.runtime!.realtime.refreshSnapshot());
     await _flush(tester);
-    expect(fixture.api.count('/events/snapshot'), 2);
+    expect(fixture.api.count('/snapshot'), 2);
     _expectUpdatedBanner(tester, fixture);
-    expect(fixture.api.streamStarts, 1);
+    expect(fixture.api.streamStarts, 0);
     expect(tester.takeException(), isNull);
   });
 
@@ -278,12 +286,13 @@ void main() {
     final fixture = _Fixture();
     await _pumpHost(tester, fixture);
     _expectIdleBanner(tester, fixture);
-    fixture.api.streams.single
-        .addError(StateError('fixture stream disconnected'));
+    fixture.snapshotResponse =
+        () => throw StateError('fixture reconnect failed');
+    fixture.events.add({'key': 'imReconnected', 'groupID': '@status-group'});
     await _flush(tester);
     _expectIdleBanner(tester, fixture, hasRealtimeError: true);
-    expect(fixture.api.streamStarts, 1);
-    expect(fixture.api.streamStops, greaterThanOrEqualTo(1));
+    expect(fixture.api.streamStarts, 0);
+    expect(fixture.api.streamStops, 0);
     expect(tester.takeException(), isNull);
   });
 
@@ -320,22 +329,21 @@ void main() {
       expect(fixture.runtime!.realtime.error, isNotNull);
       expect(find.byType(GroupGameStatusBanner), findsNothing);
       expect(find.byKey(_retryKey), findsOneWidget);
-      expect(fixture.api.count('/events/snapshot'), 1);
+      expect(fixture.api.count('/snapshot'), 1);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets(
-        'SSE $kind records an error without covering the accepted banner',
+    testWidgets('OpenIM $kind is ignored without replacing the accepted banner',
         (tester) async {
       final fixture = _Fixture();
       await _pumpHost(tester, fixture);
       _expectIdleBanner(tester, fixture);
       fixture.snapshotResponse = () => _invalidState(kind);
-      fixture.emit(_invalidState(kind), split: true);
+      fixture.emit(_invalidState(kind));
       await _flush(tester);
-      _expectIdleBanner(tester, fixture, hasRealtimeError: true);
-      expect(fixture.api.count('/events/snapshot'), 2);
-      expect(fixture.api.streamStarts, 1);
+      _expectIdleBanner(tester, fixture);
+      expect(fixture.api.count('/snapshot'), 1);
+      expect(fixture.api.streamStarts, 0);
       expect(tester.takeException(), isNull);
     });
   }
