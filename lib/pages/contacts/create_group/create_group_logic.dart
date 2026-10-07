@@ -1,16 +1,14 @@
-import 'package:openim/core/user_activity/activity_sdk.dart';
-import 'dart:math';
-
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
+import 'package:openim/core/user_activity/activity_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../routes/app_navigator.dart';
 import '../../conversation/conversation_logic.dart';
 import '../select_contacts/select_contacts_logic.dart';
 import '../select_contacts/selection/contact_selection_policy.dart';
+import 'create_group_default_name.dart';
 
 class CreateGroupLogic extends GetxController {
   final conversationLogic = Get.find<ConversationLogic>();
@@ -39,15 +37,13 @@ class CreateGroupLogic extends GetxController {
   }
 
   String get groupName {
-    String name = nameCtrl.text.trim();
-    if (name.isEmpty) {
-      int limit = min(allList.length, 3);
-      name = allList.sublist(0, limit).map((e) => e.nickname).join('、');
-    }
-    return name;
+    final name = nameCtrl.text.trim();
+    return name.isNotEmpty ? name : defaultGroupName;
   }
 
-  completeCreation() async {
+  String get defaultGroupName => defaultCreateGroupName(allList.toList());
+
+  Future<void> completeCreation() async {
     _removeUnavailableMembers();
     if (allList.length > 1) {
       var info = await LoadingView.singleton.wrap(

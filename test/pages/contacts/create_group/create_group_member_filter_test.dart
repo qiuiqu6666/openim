@@ -113,12 +113,50 @@ void main() {
         ['ordinary', 'friend']);
     expect(logic.allList.map((member) => member.userID),
         ['self', 'ordinary', 'friend']);
-    expect(logic.groupName, '我、AI助理、好友');
+    expect(logic.groupName, '我、AI助理等3人');
     expect(defaultChecked, hasLength(4));
     expect(checked, hasLength(3));
     expect(conversations.openedUserIDs, isEmpty);
     expect(sdkCalls, isEmpty);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('empty group name follows the first two members and total count',
+      (tester) async {
+    final logic = await _openCreation(tester,
+        defaultChecked: [UserInfo(userID: 'self', nickname: '秋的测试号')],
+        checked: [UserInfo(userID: 'friend', nickname: '秋啊')]);
+
+    expect(logic.groupName, '秋的测试号、秋啊');
+    expect(logic.nameCtrl.text, isEmpty);
+    logic.nameCtrl.text = '  \n  ';
+    logic.allList.add(UserInfo(userID: 'third', nickname: '第三位'));
+    expect(logic.groupName, '秋的测试号、秋啊等3人');
+    logic.allList.add(UserInfo(userID: 'fourth', nickname: '第四位'));
+    expect(logic.groupName, '秋的测试号、秋啊等4人');
+
+    logic.nameCtrl.text = '  自定义群名  ';
+    expect(logic.groupName, '自定义群名');
+    logic.nameCtrl.clear();
+    logic.allList.removeAt(1);
+    expect(logic.groupName, '秋的测试号、第三位等3人');
+    logic.allList.removeLast();
+    expect(logic.groupName, '秋的测试号、第三位');
+    expect(sdkCalls, isEmpty);
+  });
+
+  testWidgets('default name falls back to the member ID for absent nicknames',
+      (tester) async {
+    final logic = await _openCreation(tester,
+        defaultChecked: [UserInfo(userID: 'self', nickname: ' 秋的测试号 ')],
+        checked: [UserInfo(userID: 'friend')]);
+
+    expect(logic.groupName, '秋的测试号、friend');
+    logic.allList.last.nickname = '   ';
+    expect(logic.groupName, '秋的测试号、friend');
+    logic.allList.last.nickname = ' 秋啊 ';
+    expect(logic.groupName, '秋的测试号、秋啊');
+    expect(sdkCalls, isEmpty);
   });
 
   testWidgets('submission removes official accounts added after initialization',

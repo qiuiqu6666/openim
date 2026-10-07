@@ -42,8 +42,8 @@ class _LegacyRegistrationPasswordFieldsState
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AuthFieldLabel(authText('密码', 'Password')),
           AuthTextField(
+            label: authText('密码', 'Password'),
             key: const ValueKey('legacy-registration-password'),
             controller: widget.passwordController,
             hint: authText('设置登录密码', 'Create a password'),
@@ -68,8 +68,8 @@ class _LegacyRegistrationPasswordFieldsState
                 showInvalid: widget.passwordError != null),
           ),
           const SizedBox(height: RegistrationReferenceTokens.feedbackFieldGap),
-          AuthFieldLabel(authText('确认密码', 'Confirm password')),
           AuthTextField(
+            label: authText('确认密码', 'Confirm password'),
             key: const ValueKey('legacy-registration-confirmation'),
             controller: widget.confirmationController,
             hint: authText('再次输入密码', 'Re-enter password'),

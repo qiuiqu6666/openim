@@ -63,8 +63,8 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
           child: Obx(() => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  AuthFieldLabel(authText('手机号', 'Phone')),
                   AuthCompoundField(
+                    label: authText('手机号', 'Phone'),
                     controller: logic.phoneCtrl,
                     hint: authText('请输入手机号', 'Enter phone number'),
                     enabled: !logic.submitting.value,
@@ -89,6 +89,7 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
                   const SizedBox(height: AuthReferenceTokens.feedbackFieldGap),
                   AuthCompoundField(
                     controller: logic.verificationCodeCtrl,
+                    label: authText('验证码', 'Verification code'),
                     hint: authText('6 位短信验证码', '6-digit SMS code'),
                     enabled: !logic.submitting.value,
                     keyboardType: TextInputType.number,
@@ -106,8 +107,8 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
                     trailingWidth: 122,
                   ),
                   const SizedBox(height: AuthReferenceTokens.feedbackFieldGap),
-                  AuthFieldLabel(authText('新密码', 'New password')),
                   AuthTextField(
+                    label: authText('新密码', 'New password'),
                     controller: logic.pwdCtrl,
                     hint: authText('输入新密码', 'Enter a new password'),
                     errorText: logic.fieldError(RecoveryField.password),
@@ -120,8 +121,8 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
                     suffix: _passwordToggle(confirm: false),
                   ),
                   const SizedBox(height: AuthReferenceTokens.feedbackFieldGap),
-                  AuthFieldLabel(authText('确认新密码', 'Confirm new password')),
                   AuthTextField(
+                    label: authText('确认新密码', 'Confirm new password'),
                     controller: logic.pwdAgainCtrl,
                     hint: authText('再次输入新密码', 'Re-enter the new password'),
                     errorText: logic.fieldError(RecoveryField.confirmation),

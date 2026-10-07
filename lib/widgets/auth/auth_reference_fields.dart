@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'auth_copy.dart';
 import 'auth_reference_field_frame.dart';
+import 'auth_reference_input_decoration.dart';
 import 'auth_reference_tokens.dart';
 
 /// Scroll padding so focused fields stay above the keyboard in auth scroll views.
@@ -33,6 +34,7 @@ TextStyle authFieldHintStyle(BuildContext context) {
 class AuthTextField extends StatefulWidget {
   final TextEditingController controller;
   final String hint;
+  final String? label;
   final TextInputType? keyboardType;
   final Iterable<String>? autofillHints;
   final bool obscureText;
@@ -56,6 +58,7 @@ class AuthTextField extends StatefulWidget {
     super.key,
     required this.controller,
     required this.hint,
+    this.label,
     this.keyboardType,
     this.autofillHints,
     this.obscureText = false,
@@ -198,6 +201,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
       errorText: widget.errorText,
       reserveErrorSpace: widget.reserveErrorSpace,
       showErrorMessage: widget.showErrorMessage,
+      showBorder: widget.label == null,
+      showFill: widget.label == null,
       child: TextField(
         controller: widget.controller,
         autofillHints: widget.autofillHints,
@@ -218,24 +223,16 @@ class _AuthTextFieldState extends State<AuthTextField> {
         scrollPadding: scrollPadding,
         style: inputStyle,
         cursorColor: AuthReferenceTokens.brand500,
-        decoration: InputDecoration(
-          filled: false,
-          fillColor: Colors.transparent,
-          hintText: widget.hint,
+        decoration: authReferenceInputDecoration(
+          label: widget.label,
+          hint: widget.hint,
           hintStyle: authFieldHintStyle(context),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          counterText: '',
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          prefixIcon: widget.prefix,
-          prefixIconConstraints: const BoxConstraints(minWidth: 48),
-          suffixIcon: suffix,
-          suffixIconConstraints: BoxConstraints(
-            minWidth: suffix == null ? 0 : (widget.suffix == null ? 48 : 96),
-            minHeight: AuthReferenceTokens.tapTarget,
-          ),
+          focused: _focusNode.hasFocus,
+          enabled: widget.enabled,
+          errorText: widget.errorText,
+          contentPadding: AuthReferenceTokens.fieldContentPadding,
+          prefix: widget.prefix,
+          suffix: suffix,
         ),
       ),
     );
@@ -245,6 +242,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
 class AuthCompoundField extends StatefulWidget {
   final TextEditingController controller;
   final String hint;
+  final String? label;
   final TextInputType? keyboardType;
   final Iterable<String>? autofillHints;
   final bool obscureText;
@@ -273,6 +271,7 @@ class AuthCompoundField extends StatefulWidget {
     super.key,
     required this.controller,
     required this.hint,
+    this.label,
     this.keyboardType,
     this.autofillHints,
     this.obscureText = false,
@@ -385,95 +384,85 @@ class _AuthCompoundFieldState extends State<AuthCompoundField> {
       errorText: widget.errorText,
       reserveErrorSpace: widget.reserveErrorSpace,
       showErrorMessage: widget.showErrorMessage,
-      showBorder: widget.showBorder,
+      showBorder: widget.showBorder && widget.label == null,
+      showFill: widget.label == null,
       inputFontSize: inputStyle.fontSize ?? AuthReferenceTokens.inputFontSize,
-      child: Row(
-        children: [
-          if (widget.leading != null) ...[
-            SizedBox(
-              width: widget.leadingWidth ?? 120,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: widget.leading,
-              ),
-            ),
-            Container(
-              width: 1,
-              height: 22,
-              color: AuthReferenceTokens.ink150,
-            ),
-          ],
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: widget.controller,
-                    autofillHints: widget.autofillHints,
-                    focusNode: _focusNode,
-                    autofocus: widget.autofocus,
-                    keyboardType: widget.obscureText
-                        ? (widget.keyboardType ?? TextInputType.visiblePassword)
-                        : widget.keyboardType,
-                    obscureText: widget.obscureText,
-                    enabled: widget.enabled,
-                    autocorrect: !widget.obscureText,
-                    enableSuggestions: !widget.obscureText,
-                    inputFormatters: widget.inputFormatters,
-                    maxLength: widget.maxLength,
-                    onChanged: widget.onChanged,
-                    textInputAction: widget.textInputAction,
-                    onSubmitted: widget.onFieldSubmitted,
-                    scrollPadding: scrollPadding,
-                    style: inputStyle,
-                    cursorColor: AuthReferenceTokens.brand500,
-                    decoration: InputDecoration(
-                      filled: false,
-                      fillColor: Colors.transparent,
-                      hintText: widget.hint,
-                      hintStyle:
-                          widget.hintStyle ?? authFieldHintStyle(context),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      counterText: '',
-                      contentPadding: const EdgeInsets.fromLTRB(12, 14, 8, 14),
+      child: TextField(
+        controller: widget.controller,
+        autofillHints: widget.autofillHints,
+        focusNode: _focusNode,
+        autofocus: widget.autofocus,
+        keyboardType: widget.obscureText
+            ? (widget.keyboardType ?? TextInputType.visiblePassword)
+            : widget.keyboardType,
+        obscureText: widget.obscureText,
+        enabled: widget.enabled,
+        autocorrect: !widget.obscureText,
+        enableSuggestions: !widget.obscureText,
+        inputFormatters: widget.inputFormatters,
+        maxLength: widget.maxLength,
+        onChanged: widget.onChanged,
+        textInputAction: widget.textInputAction,
+        onSubmitted: widget.onFieldSubmitted,
+        scrollPadding: scrollPadding,
+        style: inputStyle,
+        cursorColor: AuthReferenceTokens.brand500,
+        decoration: authReferenceInputDecoration(
+          label: widget.label,
+          hint: widget.hint,
+          hintStyle: widget.hintStyle ?? authFieldHintStyle(context),
+          focused: _focusNode.hasFocus,
+          enabled: widget.enabled,
+          errorText: widget.errorText,
+          showBorder: widget.showBorder,
+          contentPadding: AuthReferenceTokens.compoundFieldContentPadding,
+          prefix: widget.leading == null
+              ? null
+              : Row(mainAxisSize: MainAxisSize.min, children: [
+                  SizedBox(
+                    width: widget.leadingWidth ?? 120,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: widget.leading,
                     ),
                   ),
-                ),
-                if (_showClear)
-                  IconButton(
-                    onPressed: _clearText,
-                    tooltip: authText('清空输入', 'Clear input'),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
+                  _divider(),
+                  const SizedBox(width: 12),
+                ]),
+          suffix: !_showClear && widget.trailing == null
+              ? null
+              : Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (_showClear)
+                    IconButton(
+                      onPressed: _clearText,
+                      tooltip: authText('清空输入', 'Clear input'),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
                         minWidth: AuthReferenceTokens.tapTarget,
-                        minHeight: AuthReferenceTokens.tapTarget),
-                    icon: const Icon(
-                      Icons.cancel,
-                      size: 18,
-                      color: AuthReferenceTokens.ink300,
+                        minHeight: AuthReferenceTokens.tapTarget,
+                      ),
+                      icon: const Icon(Icons.cancel,
+                          size: 18, color: AuthReferenceTokens.ink300),
                     ),
-                  ),
-              ],
-            ),
-          ),
-          if (widget.trailing != null) ...[
-            Container(
-              width: 1,
-              height: 22,
-              color: AuthReferenceTokens.ink150,
-            ),
-            SizedBox(
-              width: widget.trailingWidth ?? 120,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: widget.trailing,
-              ),
-            ),
-          ],
-        ],
+                  if (widget.trailing != null) ...[
+                    _divider(),
+                    SizedBox(
+                      width: widget.trailingWidth ?? 120,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: widget.trailing,
+                      ),
+                    ),
+                  ],
+                ]),
+        ),
       ),
     );
   }
+
+  Widget _divider() => Container(
+        width: 1,
+        height: 22,
+        color: AuthReferenceTokens.ink150,
+      );
 }

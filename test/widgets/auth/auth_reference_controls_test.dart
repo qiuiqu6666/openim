@@ -29,7 +29,8 @@ void main() {
                                 key: fieldKey,
                                 controller: controller,
                                 focusNode: focus,
-                                hint: 'Phone',
+                                label: 'Phone',
+                                hint: 'Enter phone number',
                                 reserveErrorSpace: true,
                                 errorText: error,
                                 onFocusChanged: changes.add)
@@ -37,14 +38,21 @@ void main() {
                                 key: fieldKey,
                                 controller: controller,
                                 focusNode: focus,
-                                hint: 'Account',
+                                label: 'Account',
+                                hint: 'Enter account',
                                 reserveErrorSpace: true,
                                 errorText: error,
                                 onFocusChanged: changes.add);
                       }))))));
       final height = tester.getSize(find.byKey(fieldKey)).height;
+      final label = find.text(compound ? 'Phone' : 'Account');
+      final restingLabelY = tester.getCenter(label).dy;
       await tester.tap(find.byType(TextField));
-      await tester.pump();
+      await tester.pumpAndSettle();
+      final floatingLabelY = tester.getCenter(label).dy;
+      expect(floatingLabelY, lessThan(restingLabelY - 10));
+      expect(floatingLabelY,
+          closeTo(tester.getTopLeft(find.byType(TextField)).dy, 3));
       await tester.enterText(find.byType(TextField), '123');
       await tester.pump();
       expect(changes, [true]);
@@ -53,8 +61,12 @@ void main() {
       expect(find.text('Check this value'), findsOneWidget);
       expect(tester.getSize(find.byKey(fieldKey)).height, height);
       focus.unfocus();
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(changes, [true, false]);
+      expect(tester.getCenter(label).dy, closeTo(floatingLabelY, 1));
+      controller.clear();
+      await tester.pumpAndSettle();
+      expect(tester.getCenter(label).dy, closeTo(restingLabelY, 1));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });

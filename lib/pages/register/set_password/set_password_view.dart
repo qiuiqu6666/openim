@@ -49,8 +49,8 @@ class SetPasswordPage extends StatelessWidget {
                   ),
                   const SizedBox(
                       height: RegistrationReferenceTokens.profileGap),
-                  AuthFieldLabel(authText('昵称', 'Nickname')),
                   AuthTextField(
+                    label: authText('昵称', 'Nickname'),
                     controller: logic.nicknameCtrl,
                     focusNode: logic.nicknameFocus,
                     hint: authText('请输入昵称', 'Enter nickname'),

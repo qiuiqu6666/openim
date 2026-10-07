@@ -48,8 +48,8 @@ class RegisterPage extends StatelessWidget {
             children: [
               RegistrationStepHeading(
                   label: authText('填写账号', 'Account details'), step: 1),
-              AuthFieldLabel(phone ? authText('手机号', 'Phone') : StrRes.email),
               AuthCompoundField(
+                label: phone ? authText('手机号', 'Phone') : StrRes.email,
                 controller: logic.phoneCtrl,
                 focusNode: logic.phoneFocus,
                 hint: phone
@@ -83,6 +83,7 @@ class RegisterPage extends StatelessWidget {
               const SizedBox(height: _fieldGap),
               AuthCompoundField(
                 controller: logic.verificationCodeCtrl,
+                label: authText('验证码', 'Verification code'),
                 focusNode: logic.codeFocus,
                 hint: phone
                     ? authText('6 位短信验证码', '6-digit SMS code')
@@ -104,8 +105,8 @@ class RegisterPage extends StatelessWidget {
                 onFieldSubmitted: (_) => logic.pwdFocus.requestFocus(),
               ),
               const SizedBox(height: _fieldGap),
-              AuthFieldLabel(authText('密码', 'Password')),
               AuthTextField(
+                label: authText('密码', 'Password'),
                 controller: logic.pwdCtrl,
                 focusNode: logic.pwdFocus,
                 hint: authText('设置登录密码', 'Create a password'),
@@ -132,8 +133,8 @@ class RegisterPage extends StatelessWidget {
                         logic.errorFor(RegistrationField.password) != null),
               ),
               const SizedBox(height: _fieldGap),
-              AuthFieldLabel(authText('确认密码', 'Confirm password')),
               AuthTextField(
+                label: authText('确认密码', 'Confirm password'),
                 controller: logic.pwdAgainCtrl,
                 focusNode: logic.pwdAgainFocus,
                 hint: authText('再次输入密码', 'Re-enter password'),
@@ -158,6 +159,7 @@ class RegisterPage extends StatelessWidget {
                 const SizedBox(height: _fieldGap),
                 AuthTextField(
                   controller: logic.invitationCodeCtrl,
+                  label: authText('邀请码', 'Invitation code'),
                   hint:
                       StrRes.plsEnterInvitationCode.replaceAll('%s', '').trim(),
                   enabled: !busy,

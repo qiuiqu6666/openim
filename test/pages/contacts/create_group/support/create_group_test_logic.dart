@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/contacts/create_group/create_group_logic.dart';
+import 'package:openim/pages/contacts/create_group/create_group_default_name.dart';
 
 /// Owns editable test state without starting SDK or contact-picker requests.
 class CreateGroupTestLogic extends GetxController implements CreateGroupLogic {
@@ -33,6 +34,9 @@ class CreateGroupTestLogic extends GetxController implements CreateGroupLogic {
 
   @override
   String get groupName => nameCtrl.text.trim();
+
+  @override
+  String get defaultGroupName => defaultCreateGroupName(allList.toList());
 
   @override
   void selectAvatar() => avatarSelections++;

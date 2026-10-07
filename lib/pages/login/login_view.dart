@@ -44,8 +44,8 @@ class LoginPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           key: const ValueKey('login-password-form'),
           children: [
-            AuthFieldLabel(authText('账号', 'Account')),
             AuthTextField(
+                label: authText('账号', 'Account'),
                 key: const ValueKey('login-account'),
                 controller: logic.phoneCtrl,
                 focusNode: logic.accountFocus,
@@ -57,8 +57,8 @@ class LoginPage extends StatelessWidget {
                 autofillHints: const [AutofillHints.username],
                 onFieldSubmitted: (_) => logic.pwdFocus?.requestFocus()),
             const SizedBox(height: AuthReferenceTokens.feedbackFieldGap),
-            AuthFieldLabel(authText('密码', 'Password')),
             AuthTextField(
+                label: authText('密码', 'Password'),
                 key: const ValueKey('login-password'),
                 controller: logic.pwdCtrl,
                 focusNode: logic.pwdFocus,
@@ -94,8 +94,8 @@ class LoginPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           key: const ValueKey('login-sms-form'),
           children: [
-            AuthFieldLabel(authText('手机号', 'Phone number')),
             AuthCompoundField(
+                label: authText('手机号', 'Phone number'),
                 key: const ValueKey('login-account'),
                 controller: logic.phoneCtrl,
                 focusNode: logic.accountFocus,
@@ -117,6 +117,7 @@ class LoginPage extends StatelessWidget {
             const SizedBox(height: AuthReferenceTokens.feedbackFieldGap),
             AuthCompoundField(
                 key: const ValueKey('login-code'),
+                label: authText('验证码', 'Verification code'),
                 controller: logic.verificationCodeCtrl,
                 errorText: logic.codeError,
                 reserveErrorSpace: true,

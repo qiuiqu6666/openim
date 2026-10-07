@@ -46,7 +46,14 @@ class _GroupSetup extends GetxController implements GroupSetupLogic {
   final IMController imLogic = _IM();
 
   @override
-  String? get myGroupNickname => myGroupMembersInfo.value.nickname;
+  String? get myGroupNickname {
+    final name = myGroupMembersInfo.value.nickname?.trim();
+    return name == null ||
+            name.isEmpty ||
+            name == imLogic.userInfo.value.nickname
+        ? null
+        : name;
+  }
 
   int avatarChanges = 0;
 
@@ -165,6 +172,33 @@ void main() {
   });
 
   for (final dark in [false, true]) {
+    for (final memberName in ['我', '', null]) {
+      testWidgets(
+          'member nickname uses its original default as a placeholder ($memberName, dark=$dark)',
+          (tester) async {
+        final logic = await _open(tester,
+            setup: _GroupSetup(memberName: memberName),
+            type: EditNameType.myGroupMemberNickname,
+            dark: dark);
+        final field = find.byType(TextField);
+        expect(logic.inputCtrl.text, isEmpty);
+        final input = tester.widget<TextField>(field);
+        expect(input.controller!.text, isEmpty);
+        expect(input.decoration!.hintText, '我');
+        expect(find.text('0/30'), findsOneWidget);
+        expect(tester.testTextInput.isVisible, isFalse);
+        await tester.tap(field);
+        await tester.pump();
+        expect(tester.testTextInput.isVisible, isTrue);
+        expect(input.controller!.selection.isValid, isTrue);
+        await logic.save();
+        await tester.pumpAndSettle();
+        expect(calls, isEmpty);
+        expect(find.text('origin'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
     testWidgets('avatar-only save does not rename the group (dark=$dark)',
         (tester) async {
       final setup = _GroupSetup();
@@ -251,6 +285,55 @@ void main() {
     await _finishRequest(tester, gate, pending);
     expect(find.text('origin'), findsOneWidget);
   });
+
+  testWidgets(
+      'prefilled personal nickname remains editable as a group nickname',
+      (tester) async {
+    final logic = await _open(tester,
+        setup: _GroupSetup(memberName: null),
+        type: EditNameType.myGroupMemberNickname);
+    expect(logic.inputCtrl.text, isEmpty);
+    await tester.tap(find.byType(TextField));
+    await tester.enterText(find.byType(TextField), '群里使用的昵称');
+    final pending = logic.save();
+    await _startRequest(tester);
+    expect(calls, hasLength(1));
+    expect((calls.single.arguments as Map)['info'], {
+      'groupID': _groupID,
+      'userID': _viewerID,
+      'nickname': '群里使用的昵称',
+    });
+    await _finishRequest(tester, gate, pending);
+    expect(find.text('origin'), findsOneWidget);
+  });
+
+  for (final dark in [false, true]) {
+    testWidgets(
+        'existing group nickname supports append and middle edits ($dark)',
+        (tester) async {
+      final logic = await _open(tester,
+          type: EditNameType.myGroupMemberNickname, dark: dark);
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, '我的群昵称');
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      field.controller!.selection =
+          TextSelection.collapsed(offset: field.controller!.text.length);
+      tester.testTextInput.enterText('我的群昵称追加');
+      await tester.pump();
+      expect(logic.inputCtrl.text, '我的群昵称追加');
+      field.controller!.selection = const TextSelection.collapsed(offset: 2);
+      tester.testTextInput.updateEditingValue(const TextEditingValue(
+          text: '我的新群昵称追加', selection: TextSelection.collapsed(offset: 3)));
+      await tester.pump();
+      expect(logic.inputCtrl.text, '我的新群昵称追加');
+      final pending = logic.save();
+      await _startRequest(tester);
+      expect(((calls.single.arguments as Map)['info'] as Map)['nickname'],
+          '我的新群昵称追加');
+      await _finishRequest(tester, gate, pending);
+    });
+  }
 
   testWidgets('saving gates repeat submissions and locks the editor',
       (tester) async {
