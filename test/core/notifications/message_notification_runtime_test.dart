@@ -45,6 +45,15 @@ void main() {
     expect(h.notifier.shown.last.target.messageID, 'm1');
   });
 
+  test('global mute skips every lookup in a 1000-message burst', () async {
+    final h = _Harness();
+    await h.start();
+    h.user.globalRecvMsgOpt = 2;
+    await Future.wait(
+        List.generate(1000, (i) => h.runtime.receive(h.message('muted-$i'))));
+    expect(h.lookups, 0);
+    expect(h.notifier.shown, isEmpty);
+  });
   test('duplicate live SDK deliveries do not show or look up twice', () async {
     final h = _Harness();
     await h.start();
@@ -69,10 +78,11 @@ void main() {
     await h.start();
     final older = h.runtime.receive(h.message('m1'));
     await _flush();
-    await h.runtime.receive(h.message('m2'));
-    expect(h.notifier.shown.single.target.messageID, 'm2');
+    final newer = h.runtime.receive(h.message('m2'));
+    await _flush();
+    expect(queries, 1);
     olderLookup.complete(h.conversation(h.target('m1')));
-    await older;
+    await Future.wait([older, newer]);
     expect(h.notifier.shown, hasLength(1),
         reason: 'Delayed lookup must not make the older arrival current');
     expect(h.notifier.shown.last.target.messageID, 'm2');
@@ -161,7 +171,8 @@ void main() {
     expect(h.notifier.shown.single.vibration, isFalse);
   });
 
-  test('switching to background during native preparation cannot alert twice', () async {
+  test('switching to background during native preparation cannot alert twice',
+      () async {
     final h = _Harness();
     await h.start();
     final gate = Completer<void>();
@@ -727,6 +738,7 @@ class _FakeNotifier extends SystemMessageNotifier {
     invalidated.add((id: id, sessionKey: sessionKey));
     await beforeInvalidate;
   }
+
   @override
   Future<void> cancel(int id) async {
     cancelled.add(id);

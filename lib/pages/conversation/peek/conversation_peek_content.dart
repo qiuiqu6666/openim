@@ -151,6 +151,7 @@ class _ConversationPeekContentState extends State<ConversationPeekContent> {
                         'conversation-peek-message-${message.clientMsgID}'),
                     message: message,
                     isGroupChat: widget.conversation.isGroupChat,
+                    peerName: widget.conversation.showName ?? '',
                   );
                 }
                 return Padding(

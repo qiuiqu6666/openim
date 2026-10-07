@@ -7,6 +7,7 @@ import 'package:openim_common/openim_common.dart';
 
 import '../../chat_logic.dart';
 import '../selection/message_selection_controller.dart';
+import '../custom/chat_custom_message.dart';
 import '../../../fund/notifications/fund_claim_notice.dart';
 import '../../composer/mention_id.dart';
 import '../../fund/fund_message_card.dart';
@@ -366,11 +367,9 @@ class ChatMessageTile extends StatelessWidget {
           if (current()) logic.playOnce = false;
         }
       },
-      child: Hero(
+      child: MediaThumbnailHero(
         tag: message.clientMsgID!,
         child: _buildMediaContent(message),
-        placeholderBuilder:
-            (BuildContext context, Size heroSize, Widget child) => child,
       ),
     );
   }
@@ -429,37 +428,10 @@ class ChatMessageTile extends StatelessWidget {
             isGroupChat: logic.isGroupChat);
       }), false);
     }
-    final data = IMUtils.parseCustomMessage(message);
-    if (null != data) {
-      final viewType = data['viewType'];
-      if (viewType == CustomMessageType.call) {
-        final type = data['type'];
-        final content = data['content'];
-        final view = ChatCallItemView(type: type, content: content);
-        return CustomTypeInfo(view);
-      } else if (viewType == CustomMessageType.deletedByFriend ||
-          viewType == CustomMessageType.blockedByFriend) {
-        final view = ChatFriendRelationshipAbnormalHintView(
-          name: logic.nickname.value,
-          onTap: logic.sendFriendVerification,
-          blockedByFriend: viewType == CustomMessageType.blockedByFriend,
-          deletedByFriend: viewType == CustomMessageType.deletedByFriend,
-        );
-        return CustomTypeInfo(view, false, false);
-      } else if (viewType == CustomMessageType.removedFromGroup) {
-        return CustomTypeInfo(
-          StrRes.removedFromGroupHint.toText..style = Styles.ts_8E9AB0_12sp,
-          false,
-          false,
-        );
-      } else if (viewType == CustomMessageType.groupDisbanded) {
-        return CustomTypeInfo(
-          StrRes.groupDisbanded.toText..style = Styles.ts_8E9AB0_12sp,
-          false,
-          false,
-        );
-      }
-    }
-    return null;
+    return buildChatCustomMessage(context, message,
+        isGroupChat: logic.isGroupChat,
+        peerName: logic.nickname.value,
+        onFriendVerification: logic.sendFriendVerification,
+        textScaleFactor: logic.scaleFactor.value);
   }
 }

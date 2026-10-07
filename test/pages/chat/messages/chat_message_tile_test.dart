@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -43,6 +45,9 @@ class _TileLogic extends GetxController implements ChatLogic {
   Message? collectedFavorite;
   bool showCollectionActions = false;
   final readVisibility = <bool>[];
+
+  @override
+  final conversationInfo = ConversationInfo(conversationID: 'chat-peer');
 
   @override
   final messageList = <Message>[].obs;
@@ -150,6 +155,105 @@ void main() {
     VisibilityDetectorController.instance.updateInterval = Duration.zero;
   });
   tearDown(Get.reset);
+
+  for (final exit in ['back', 'drag', 'interrupted']) {
+    testWidgets(
+        'returning photo keeps the decoded bubble on every frame / $exit',
+        (tester) async {
+      final file = File('openim_common/assets/images/ic_archive_99chat.png');
+      final message = _message()
+        ..clientMsgID = 'picture-tile'
+        ..contentType = MessageType.picture
+        ..pictureElem = PictureElem(
+          sourcePath: file.path,
+          sourcePicture: PictureInfo(width: 120, height: 200),
+        );
+      final logic = _TileLogic(message);
+      addTearDown(logic.disposeFixture);
+      await _mount(tester, logic, message);
+      final bubble = find.descendant(
+          of: find.byType(ChatMessageTile),
+          matching: find.byType(ChatPictureView));
+      final bubbleImage =
+          find.descendant(of: bubble, matching: find.byType(ExtendedImage));
+      await tester.runAsync(() async {
+        expect(await file.exists(), isTrue);
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+      });
+      await tester.pump();
+      await tester.pump();
+      expect(bubble, findsOneWidget);
+      expect(tester.widget<ChatPictureView>(bubble).isISend, isTrue);
+      expect(
+          tester
+              .widget<ChatPictureView>(bubble)
+              .message
+              .pictureElem!
+              .sourcePath,
+          file.path);
+      expect(bubbleImage, findsOneWidget);
+      for (var attempt = 0; attempt < 30; attempt++) {
+        if ((tester.state(bubbleImage) as ExtendedImageState)
+                .extendedImageInfo !=
+            null) {
+          break;
+        }
+        await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)));
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+      final stateBeforeReturn = tester.state(bubble);
+      final imageBeforeReturn =
+          (tester.state(bubbleImage) as ExtendedImageState)
+              .extendedImageInfo!
+              .image;
+      final navigator = Navigator.of(tester.element(bubble));
+      navigator.push(PageRouteBuilder<void>(
+        opaque: false,
+        transitionDuration: const Duration(milliseconds: 300),
+        reverseTransitionDuration: const Duration(milliseconds: 300),
+        transitionsBuilder: (_, animation, __, child) =>
+            FadeTransition(opacity: animation, child: child),
+        pageBuilder: (_, __, ___) => MediaBrowser(initialIndex: 0, sources: [
+          MediaSource(file: file, thumbnail: '', tag: message.clientMsgID),
+        ]),
+      ));
+      await tester.pump();
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+      });
+      if (exit == 'interrupted') {
+        await tester.pump(const Duration(milliseconds: 100));
+      } else {
+        await tester.pumpAndSettle();
+      }
+      if (exit == 'drag') {
+        final slide = tester.state<ExtendedImageSlidePageState>(
+            find.byType(ExtendedImageSlidePage));
+        slide.slide(Offset(0, slide.pageSize.height / 2));
+        slide.endSlide(ScaleEndDetails());
+      } else {
+        navigator.pop();
+      }
+      await tester.pump();
+      for (var frame = 0; frame < 21; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(tester.state(bubble), same(stateBeforeReturn),
+            reason: 'Landing must not restart the bubble file check');
+        expect(bubbleImage, findsOneWidget);
+        expect(
+            (tester.state(bubbleImage) as ExtendedImageState)
+                .extendedImageInfo!
+                .image,
+            same(imageBeforeReturn),
+            reason: 'The already decoded picture must survive landing');
+      }
+      expect(find.byType(MediaBrowser), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 
   testWidgets('text tile renders its DTO and delegates the real reply menu',
       (tester) async {

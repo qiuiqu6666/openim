@@ -6,16 +6,27 @@ import '../select_contacts_logic.dart';
 class SelectContactsFromGroupLogic extends GetxController {
   final selectContactsLogic = Get.find<SelectContactsLogic>();
   final allList = <GroupInfo>[].obs;
+  final loading = true.obs;
+  final loadFailed = false.obs;
 
   @override
   void onReady() {
-    _getGroupRelatedToMe();
+    loadGroups();
     super.onReady();
   }
 
-  void _getGroupRelatedToMe() async {
-    final list = await OpenIM.iMManager.groupManager.getJoinedGroupList();
-    allList.addAll(list);
+  Future<void> loadGroups() async {
+    loading.value = true;
+    loadFailed.value = false;
+    try {
+      final list = await OpenIM.iMManager.groupManager.getJoinedGroupList();
+      if (isClosed) return;
+      allList.assignAll(list);
+    } catch (_) {
+      if (!isClosed) loadFailed.value = true;
+    } finally {
+      if (!isClosed) loading.value = false;
+    }
   }
 
   Iterable<GroupInfo> get operableList => allList.where(_remove);
@@ -33,7 +44,7 @@ class SelectContactsFromGroupLogic extends GetxController {
     }
   }
 
-  selectAll() {
+  void selectAll() {
     if (isSelectAll) {
       for (var info in operableList) {
         selectContactsLogic.removeItem(info);

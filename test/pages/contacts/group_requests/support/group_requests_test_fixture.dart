@@ -69,6 +69,7 @@ class GroupRequestsFixture {
   List<GroupApplicationInfo> applicant = [];
   final profiles = <String, String?>{};
   bool failProfiles = false;
+  bool failApplications = false;
   bool holdRecipient = false;
   PlatformException? writeError;
   void Function()? onWrite;
@@ -96,6 +97,9 @@ class GroupRequestsFixture {
       calls.add(call);
       switch (call.method) {
         case 'getGroupApplicationListAsRecipient':
+          if (failApplications) {
+            throw PlatformException(code: 'NETWORK', message: 'Offline');
+          }
           if (holdRecipient) {
             final reply = Completer<String>();
             recipientReplies.add(reply);

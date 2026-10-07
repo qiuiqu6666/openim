@@ -79,12 +79,14 @@ void main() {
     source.initial = [_item('冬', draft: '旧草稿')];
     logic.searchCtrl.text = '冬';
     await logic.search();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(logic.conversations.single.draftText, '旧草稿');
 
     source.updates.add([
       _item('冬', draft: '刚从聊天返回保存的新草稿'),
       _item('夏', draft: '其他会话草稿'),
     ]);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(logic.conversations.single.draftText, '刚从聊天返回保存的新草稿');
     expect(source.calls, {
       'contacts': 1,
@@ -94,6 +96,7 @@ void main() {
       'files': 1,
     });
     source.updates.add([_item('冬', draft: '')]);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(logic.conversations.single.draftText, '');
     expect(source.calls.values.every((count) => count == 1), isTrue);
   });
@@ -108,6 +111,7 @@ void main() {
       _item('群聊', group: 'MEMBER-group'),
       _item('无匹配', user: 'other-user', group: 'other-group'),
     ]);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(logic.conversations.map((item) => item.showName),
         ['member 昵称', '好友', '群聊']);
   });
@@ -120,6 +124,7 @@ void main() {
     source.updates.add([_item('冬', draft: '新草稿')]);
     source.pending['冬']!.complete([_item('冬', draft: '搜索开始时的旧草稿')]);
     await search;
+    await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(logic.conversations.single.draftText, '新草稿');
     expect(logic.loading.value, isFalse);
   });
@@ -135,11 +140,14 @@ void main() {
     source.pending['冬']!.complete([_item('冬', draft: '过时查询')]);
     source.pending['夏']!.complete([_item('夏', draft: '过时快照')]);
     await Future.wait([oldSearch, newSearch]);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(logic.conversations.single.showName, '夏');
+    await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(logic.conversations.single.draftText, '当前夏草稿');
 
     logic.searchCtrl.clear();
     source.updates.add([_item('夏', draft: '清空搜索后的变更')]);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(logic.conversations, isEmpty);
     expect(logic.query.value, isEmpty);
     expect(logic.loading.value, isFalse);
@@ -156,6 +164,7 @@ void main() {
     source.updates.add([_item('冬', draft: '关闭之后')]);
     source.pending['冬']!.complete([_item('冬', draft: '关闭之后的旧查询')]);
     await search;
+    await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(logic.conversations, isEmpty);
   });
 }

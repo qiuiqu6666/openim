@@ -11,6 +11,7 @@ import 'message_notification_avatar_cache.dart';
 import 'message_notification_policy.dart';
 import 'message_notification_preferences.dart';
 import 'message_notification_target.dart';
+import 'notification_lookup_pool.dart';
 import 'system_message_notifier.dart';
 import '../../services/fund/fund_deposit_notice.dart';
 
@@ -42,7 +43,7 @@ class MessageNotificationRuntime {
     required void Function(String) reportError,
     MessageNotificationAvatarCache? avatars,
   }) : _avatars = avatars ?? MessageNotificationAvatarCache() {
-    _loadConversation = loadConversation;
+    _lookups = NotificationLookupPool(loadConversation);
     _actions = MessageNotificationActions(
       isCurrentSession: _owns,
       isReady: () =>
@@ -74,8 +75,7 @@ class MessageNotificationRuntime {
   final MessageNotificationAvatarCache _avatars;
   late final MessageNotificationActions _actions;
   late final StreamSubscription<String> _preferencesSubscription;
-  late final Future<sdk.ConversationInfo> Function(MessageNotificationTarget)
-      _loadConversation;
+  late final NotificationLookupPool _lookups;
   final Set<String> _seen = <String>{};
   final _versions = <int, int>{};
   final _targets = <int, MessageNotificationTarget>{};
@@ -194,6 +194,7 @@ class MessageNotificationRuntime {
     final epoch = _epoch;
     if (_closed ||
         !sdkReady() ||
+        userInfo()?.globalRecvMsgOpt == 2 ||
         session == null ||
         _blockedSessionKey == session.sessionKey ||
         message.contentType == null ||
@@ -208,7 +209,8 @@ class MessageNotificationRuntime {
     if (source == null || source.isEmpty || message.sessionType == null) return;
     final messageID = message.clientMsgID ?? message.seq?.toString();
     if (messageID == null || messageID.isEmpty) return;
-    final noticeID = fundDepositNoticeID(message, receiverID: session.accountID);
+    final noticeID =
+        fundDepositNoticeID(message, receiverID: session.accountID);
     final identity = noticeID == null ? messageID : 'deposit:$noticeID';
     final key = '${session.sessionKey}|$source|$identity';
     final sourceKey = '${session.sessionKey}|${message.sessionType}|$source';
@@ -228,7 +230,8 @@ class MessageNotificationRuntime {
           sourceID: source,
           sessionType: message.sessionType!);
       if (!lookup.isValid) return;
-      final conversation = await _loadConversation(lookup);
+      final conversation = await _lookups.read(lookup);
+      if (conversation == null || !_sessionCurrent(session, epoch)) return;
       final target = MessageNotificationTarget(
           accountID: session.accountID,
           sessionKey: session.sessionKey,
@@ -435,6 +438,7 @@ class MessageNotificationRuntime {
   }
 
   void invalidateSession() {
+    _lookups.clear();
     final epoch = ++_epoch;
     if (stopForegroundAlerts != null) unawaited(_safe(stopForegroundAlerts!));
     _blockedSessionKey = currentSession()?.sessionKey;

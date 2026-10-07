@@ -163,8 +163,9 @@ void main() {
         });
     await mountMarkdown(tester, bubble(message));
     expect(find.byType(ChatMarkdownText), findsOneWidget);
-    final text = tester.widget<Text>(find.text('聊天好友: Original  **source**'));
-    expect(text.maxLines, 2);
+    expect(find.text('聊天好友'), findsWidgets);
+    final text = tester.widget<Text>(find.text('Original **source**'));
+    expect(text.maxLines, 1);
     expect(text.overflow, TextOverflow.ellipsis);
     expect(renderedMarkdownText(tester), contains('Answer'));
     expect(tester.takeException(), isNull);

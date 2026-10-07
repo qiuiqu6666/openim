@@ -159,17 +159,9 @@ class ChatPage extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (logic.quotedMessage.value != null)
-            ListTile(
-              dense: true,
-              title: Text(
-                '${logic.quotedMessage.value?.senderNickname ?? ''}: ${logic.quotedMessage.value?.textElem?.content ?? StrRes.message}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: logic.clearReply,
-              ),
+            ChatComposerContextPreview(
+              message: logic.quotedMessage.value,
+              onClose: logic.clearReply,
             ),
           ChatInputBox(
             builtinStickerPanel:

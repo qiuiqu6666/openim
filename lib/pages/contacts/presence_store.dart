@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:get/get.dart' hide Response;
 import 'package:openim_common/openim_common.dart';
 import 'package:uuid/uuid.dart';
+import 'presence/presence_snapshot_cache.dart';
 
 class UserPresence {
   UserPresence(this.online, this.lastSeenAt,
@@ -49,47 +50,47 @@ class UserPresence {
 }
 
 class PresenceStore {
-  PresenceStore({Dio? client}) : client = client ?? dio {
-    _restore();
+  PresenceStore({Dio? client, PresenceSnapshotCache? cache})
+      : client = client ?? dio {
+    _cache = cache ?? PresenceSnapshotCache('${Config.appAuthUrl}:$_owner');
+    ready = _restore();
     _labelTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (users.isNotEmpty) users.refresh();
     });
   }
   Timer? _labelTimer;
   final String? _owner = DataSp.userID;
-  Timer? _saveTimer;
-  String get _cacheKey => 'presenceSnapshotV2:${Config.appAuthUrl}:$_owner';
-  void _restore() {
+  final String? _sessionToken = DataSp.chatToken;
+  late final PresenceSnapshotCache _cache;
+  late final Future<void> ready;
+
+  Future<void> _restore() async {
     if (_owner == null) return;
-    try {
-      final cached = SpUtil().getObject(_cacheKey);
-      if (cached == null) return;
-      for (final entry in cached.entries) {
-        final value = entry.value as Map;
-        final online = value['online'] == true;
-        users[entry.key as String] = UserPresence(
-            online, online ? null : (value['lastSeenAt'] as num?)?.toInt(),
-            showLastSeen: value['showLastSeen'] != false,
-            isSelf: entry.key == _owner);
+    final cached = await _cache.read();
+    if (_closed ||
+        DataSp.userID != _owner ||
+        DataSp.chatToken != _sessionToken) {
+      return;
+    }
+    final restored = <String, UserPresence>{};
+    for (final entry in cached.entries) {
+      // A request, removal or live event always wins over a late cache read.
+      if (_versions.containsKey(entry.key) || users.containsKey(entry.key)) {
+        continue;
       }
-    } catch (_) {/* A missing or invalid cache is refreshed from the server. */}
+      final value = entry.value;
+      final online = value['online'] == true;
+      restored[entry.key] = UserPresence(
+        online,
+        online ? null : (value['lastSeenAt'] as num?)?.toInt(),
+        showLastSeen: value['showLastSeen'] != false,
+        isSelf: entry.key == _owner,
+      );
+    }
+    users.addAll(restored);
   }
 
-  void _persist() {
-    if (_owner == null || DataSp.userID != _owner) return;
-    SpUtil().putObject(
-        _cacheKey,
-        users.map((id, value) => MapEntry(id, {
-              'online': value.online,
-              'lastSeenAt': value.lastSeenAt,
-              'showLastSeen': value.showLastSeen,
-            })));
-  }
-
-  void _scheduleSave() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 200), _persist);
-  }
+  Future<void> flushCache() => _cache.flush();
 
   void _set(String id, UserPresence value) {
     final old = users[id];
@@ -99,7 +100,13 @@ class PresenceStore {
       return;
     }
     users[id] = value;
-    _scheduleSave();
+    if (_owner != null && DataSp.userID == _owner) {
+      _cache.put(id, {
+        'online': value.online,
+        'lastSeenAt': value.lastSeenAt,
+        'showLastSeen': value.showLastSeen,
+      });
+    }
   }
 
   void stopWatching(String id) {
@@ -144,13 +151,19 @@ class PresenceStore {
   void remove(String id) {
     _versions[id] = (_versions[id] ?? 0) + 1;
     users.remove(id);
-    _scheduleSave();
+    if (_owner != null && DataSp.userID == _owner) _cache.put(id, null);
   }
 
   Future<void> refresh(Iterable<String> ids) async {
     final token = DataSp.chatToken;
     final owner = DataSp.userID;
-    if (_closed || token == null || owner == null) return;
+    if (_closed ||
+        token == null ||
+        owner == null ||
+        owner != _owner ||
+        token != _sessionToken) {
+      return;
+    }
     final unique = ids.where((id) => id.isNotEmpty).toSet().toList();
     final versions = <String, int>{};
     for (final id in unique) {
@@ -196,8 +209,7 @@ class PresenceStore {
 
   void dispose() {
     _labelTimer?.cancel();
-    _saveTimer?.cancel();
-    _persist();
+    unawaited(_cache.flush());
     _closed = true;
     users.clear();
   }

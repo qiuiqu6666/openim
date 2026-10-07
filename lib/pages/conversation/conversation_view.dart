@@ -59,6 +59,9 @@ class _ConversationPageState extends State<ConversationPage> {
       logic: logic, editor: _editor, isMounted: () => mounted);
   late final _folders = ConversationFolderController(logic: logic);
   final Map<String, SlidableController> _slideControllers = {};
+  Widget? _cachedFeed;
+  final _folderUnread = <String, int>{};
+  final _notifiableFolders = <String>{};
 
   Future<void> _showQuickActions() async {
     if (_quickMenuOpen) return;
@@ -249,21 +252,38 @@ class _ConversationPageState extends State<ConversationPage> {
 
   Widget _build(BuildContext context) {
     return Obx(() {
-      final archivedConversations = logic.list
-          .where((info) =>
-              (widget.groupChats ? info.isGroupChat : info.isSingleChat) &&
-              logic.isArchived(info))
-          .toList();
-      final conversations = logic.list
-          .where((info) =>
-              !logic.isArchived(info) &&
-              (_folders.selectedFolderID != null
-                  ? logic.folderID(info) == _folders.selectedFolderID
-                  : (widget.groupChats ? info.isGroupChat : info.isSingleChat)))
-          .toList();
+      // Keep the mounted feed and scroll state while its home tab is hidden.
+      // Observe the O(1) list length even when returning the cached subtree.
+      logic.list.length;
+      if (!widget.liveUpdatesActive && _cachedFeed != null) return _cachedFeed!;
+      final archivedConversations = <ConversationInfo>[];
+      final conversations = <ConversationInfo>[];
+      _folderUnread.clear();
+      _notifiableFolders.clear();
+      for (final info in logic.list) {
+        final inTab = widget.groupChats ? info.isGroupChat : info.isSingleChat;
+        if (logic.isArchived(info)) {
+          if (inTab) archivedConversations.add(info);
+          continue;
+        }
+        final folder = logic.folderID(info);
+        if (folder != null) {
+          final unread = logic.getUnreadCount(info);
+          _folderUnread.update(folder, (count) => count + unread,
+              ifAbsent: () => unread);
+          if (unread > 0 && !logic.isNotDisturb(info)) {
+            _notifiableFolders.add(folder);
+          }
+        }
+        if (_folders.selectedFolderID != null
+            ? folder == _folders.selectedFolderID
+            : inTab) {
+          conversations.add(info);
+        }
+      }
       _publishEditBar(
           _editor.editing ? _buildEditActionBar(conversations) : null);
-      return Scaffold(
+      return _cachedFeed = Scaffold(
         backgroundColor: ConversationFeedStyle.background(context),
         appBar: GlassAppBar(
           toolbarHeight: kToolbarHeight,
@@ -431,16 +451,10 @@ class _ConversationPageState extends State<ConversationPage> {
     });
   }
 
-  Iterable<ConversationInfo> _folderConversations(ChatFolder folder) =>
-      logic.list.where((info) =>
-          !logic.isArchived(info) && logic.folderID(info) == folder.id);
-
-  int _unreadForFolder(ChatFolder folder) => _folderConversations(folder)
-      .fold(0, (sum, info) => sum + logic.getUnreadCount(info));
+  int _unreadForFolder(ChatFolder folder) => _folderUnread[folder.id] ?? 0;
 
   bool _hasNotifiableUnreadForFolder(ChatFolder folder) =>
-      _folderConversations(folder).any((info) =>
-          logic.getUnreadCount(info) > 0 && !logic.isNotDisturb(info));
+      _notifiableFolders.contains(folder.id);
 
   Widget _buildArchiveEntry(
       BuildContext context, List<ConversationInfo> archivedConversations) {

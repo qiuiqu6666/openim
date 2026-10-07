@@ -452,8 +452,7 @@ void main() {
         expect(logic.openedIDs, isEmpty);
         expect(find.text('标记未读'), findsNothing);
         expect(find.text('标记已读'), findsNothing);
-        expect(
-            _action('addToFolder'), archived ? findsNothing : findsOneWidget);
+        expect(_action('addToFolder'), findsOneWidget);
         await _dismiss(tester);
         expect(info.unreadCount, 8);
         expect(logic.openedIDs, isEmpty);
@@ -578,7 +577,8 @@ void main() {
     final info = logic.seed('chat', folderID: 'work');
     await _mount(tester, logic);
     await _peek(tester, 'chat');
-    expect(_action('removeFromFolder'), findsNothing);
+    expect(_action('removeFromFolder'), findsOneWidget);
+    expect(find.text('移动至分组'), findsOneWidget);
     await _select(tester, 'addToFolder');
     expect(find.text('添加到分组'), findsOneWidget);
     await tester.tap(find.widgetWithText(CupertinoActionSheetAction, '生活'));
@@ -649,6 +649,69 @@ void main() {
     expect(logic.organizerWrites, isEmpty);
     expect(logic.markedIDs, isEmpty);
     expect(info.unreadCount, 8);
+    await _dispose(tester);
+  });
+
+  testWidgets('open menu follows live pin, mute, archive and folder state',
+      (tester) async {
+    final sdk = _HistoryTransport()..install();
+    final logic = _FeedLogic()..folders.add(_folder('work', '工作'));
+    final info = logic.seed('chat');
+    await _mount(tester, logic);
+    await _peek(tester, 'chat');
+    info.isPinned = true;
+    info.recvMsgOpt = 2;
+    logic.list.refresh();
+    logic.states['chat'] = ChatConversationState.fromJson({
+      'conversationID': 'chat',
+      'folderID': 'work',
+      'archived': true,
+      'version': 2,
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('取消置顶'), findsOneWidget);
+    expect(find.text('取消免打扰'), findsOneWidget);
+    expect(find.text('取消归档'), findsOneWidget);
+    expect(find.text('移动至分组'), findsOneWidget);
+    expect(find.text('移出分组'), findsOneWidget);
+    expect(sdk.historyArguments, hasLength(1));
+    await _select(tester, 'removeFromFolder');
+    expect(
+        logic.organizerWrites, [(id: 'chat', folderID: null, archived: true)]);
+    await _dispose(tester);
+  });
+
+  testWidgets(
+      'a pin change during dismissal cannot reverse the selected intent',
+      (tester) async {
+    _HistoryTransport().install();
+    final logic = _FeedLogic();
+    final info = logic.seed('chat');
+    await _mount(tester, logic);
+    await _peek(tester, 'chat');
+    await tester.tap(_action('togglePin'));
+    // Another device pins it during the fade. The selected action was Pin.
+    info.isPinned = true;
+    logic.list.refresh();
+    await tester.pumpAndSettle();
+    expect(logic.pinWrites, [(id: 'chat', pinned: true)]);
+    expect(info.isPinned, isTrue);
+    await _dispose(tester);
+  });
+
+  testWidgets('archived preview can move to a folder and return to the feed',
+      (tester) async {
+    _HistoryTransport().install();
+    final logic = _FeedLogic()..folders.add(_folder('work', '工作'));
+    logic.seed('chat', archived: true);
+    await _mount(tester, logic, archived: true);
+    await _peek(tester, 'chat');
+    await _select(tester, 'addToFolder');
+    await tester.tap(find.widgetWithText(CupertinoActionSheetAction, '工作'));
+    await tester.pumpAndSettle();
+    expect(logic.organizerWrites,
+        [(id: 'chat', folderID: 'work', archived: false)]);
+    expect(_row('chat'), findsNothing);
     await _dispose(tester);
   });
 

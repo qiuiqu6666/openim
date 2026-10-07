@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'conversation_peek_actions.dart';
+import 'conversation_peek_menu_icon.dart';
 
 class _PeekMenuTokens {
   static const radius = 16.0;
@@ -77,9 +78,9 @@ class ConversationPeekMenu extends StatelessWidget {
             _MenuItem(
               action: items[index],
               label: _label(context, items[index]),
-              icon: _icon(items[index]),
+              isMuted: actions.isMuted,
               verticalPadding: itemVerticalPadding,
-              enabled: enabled,
+              enabled: enabled && actions.isAvailable,
               onTap: () => onSelected(items[index]),
             ),
           ],
@@ -95,7 +96,9 @@ class ConversationPeekMenu extends StatelessWidget {
       ConversationPeekAction.archive => actions.isArchived
           ? (zh ? '取消归档' : 'Unarchive')
           : (zh ? '归档' : 'Archive'),
-      ConversationPeekAction.addToFolder => zh ? '添加至分组' : 'Add to folder',
+      ConversationPeekAction.addToFolder => actions.hasFolder
+          ? (zh ? '移动至分组' : 'Move to folder')
+          : (zh ? '添加至分组' : 'Add to folder'),
       ConversationPeekAction.removeFromFolder =>
         zh ? '移出分组' : 'Remove from folder',
       ConversationPeekAction.togglePin =>
@@ -105,25 +108,13 @@ class ConversationPeekMenu extends StatelessWidget {
       ConversationPeekAction.delete => zh ? '删除' : 'Delete',
     };
   }
-
-  IconData _icon(ConversationPeekAction action) => switch (action) {
-        ConversationPeekAction.openChat => Icons.chat_bubble_outline_rounded,
-        ConversationPeekAction.archive => Icons.archive_outlined,
-        ConversationPeekAction.addToFolder => Icons.create_new_folder_outlined,
-        ConversationPeekAction.removeFromFolder => Icons.folder_off_outlined,
-        ConversationPeekAction.togglePin => Icons.push_pin_outlined,
-        ConversationPeekAction.toggleMute => actions.isMuted
-            ? Icons.notifications_active_outlined
-            : Icons.notifications_off_outlined,
-        ConversationPeekAction.delete => Icons.delete_outline_rounded,
-      };
 }
 
 class _MenuItem extends StatelessWidget {
   const _MenuItem({
     required this.action,
     required this.label,
-    required this.icon,
+    required this.isMuted,
     required this.verticalPadding,
     required this.enabled,
     required this.onTap,
@@ -131,7 +122,7 @@ class _MenuItem extends StatelessWidget {
 
   final ConversationPeekAction action;
   final String label;
-  final IconData icon;
+  final bool isMuted;
   final double verticalPadding;
   final bool enabled;
   final VoidCallback onTap;
@@ -161,7 +152,12 @@ class _MenuItem extends StatelessWidget {
             ),
             child: ExcludeSemantics(
               child: Row(children: [
-                Icon(icon, size: _PeekMenuTokens.iconSize, color: color),
+                ConversationPeekMenuIcon(
+                  action: action,
+                  size: _PeekMenuTokens.iconSize,
+                  color: color,
+                  isMuted: isMuted,
+                ),
                 const SizedBox(width: _PeekMenuTokens.iconGap),
                 Expanded(
                   child: Text(label,

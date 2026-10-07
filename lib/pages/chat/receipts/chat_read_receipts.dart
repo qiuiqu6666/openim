@@ -66,6 +66,12 @@ class ChatReadReceipts {
   final _conversationReads = ConversationReadCoordinator();
   Set<String> _visibleIDs = {};
   bool _atLatest = false;
+
+  void invalidateViewport() {
+    _visibleIDs.clear();
+    _atLatest = false;
+  }
+
   int _unreadRevision = 0;
   (String?, int?, int?, int)? _lastUnreadSnapshot;
   final _sdkInFlight = <String?, int>{};

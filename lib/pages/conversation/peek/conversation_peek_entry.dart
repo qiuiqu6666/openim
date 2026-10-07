@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
@@ -41,45 +43,64 @@ Future<void> showFeedConversationPeek({
   }
 
   if (!active()) return;
-  final selectedFolder = folders?.selectedFolderID;
-  final inSelectedFolder =
-      selectedFolder != null && logic.folderID(conversation) == selectedFolder;
-  final actions = ConversationPeekActions(
-    isPinned: conversation.isPinned == true,
-    isMuted: logic.isNotDisturb(conversation),
-    isArchived: logic.isArchived(conversation),
-    onOpenChat: () {
-      if (active()) logic.toChat(conversationInfo: current()!);
-    },
-    onArchive: () => run((info) async {
-      await logic.updateOrganizer(info,
-          folderID: logic.folderID(info), archived: !logic.isArchived(info));
-    }),
-    onAddToFolder: folders == null
-        ? null
-        : () => run((info) => folders.chooseFolder(context, info)),
-    onRemoveFromFolder: !inSelectedFolder
-        ? null
-        : () => run((info) async {
-              if (folders!.selectedFolderID == selectedFolder &&
-                  logic.folderID(info) == selectedFolder) {
-                await folders.removeFromFolder(info);
-              }
-            }),
-    onTogglePin: () =>
-        run((info) => logic.setPinned(info, info.isPinned != true)),
-    onToggleMute: () =>
-        run((info) => logic.setNotDisturb(info, !logic.isNotDisturb(info))),
-    // Deletion already owns its confirmation and pending-action guard.
-    onDelete: () async {
-      if (active()) await onDelete(current()!);
-    },
-  );
-  await showConversationPeek(
-    context: context,
-    conversation: conversation,
-    displayName: logic.getShowName(conversation),
-    actions: actions,
-    isActive: active,
-  );
+  ConversationPeekActions snapshot() {
+    final info = current() ?? conversation;
+    final pinned = info.isPinned == true;
+    final muted = logic.isNotDisturb(info);
+    final archived = logic.isArchived(info);
+    final folderID = logic.folderID(info);
+    return ConversationPeekActions(
+      isAvailable: active(),
+      isPinned: pinned,
+      isMuted: muted,
+      isArchived: archived,
+      hasFolder: folderID != null,
+      onOpenChat: () {
+        if (active()) logic.toChat(conversationInfo: current()!);
+      },
+      onArchive: () => run((info) async {
+        await logic.updateOrganizer(info,
+            folderID: logic.folderID(info), archived: !archived);
+      }),
+      onAddToFolder: folders == null
+          ? null
+          : () => run((info) => folders.chooseFolder(context, info)),
+      onRemoveFromFolder: folders == null || folderID == null
+          ? null
+          : () => run((info) async {
+                if (logic.folderID(info) == folderID) {
+                  await folders.removeFromFolder(info);
+                }
+              }),
+      onTogglePin: () => run((info) => logic.setPinned(info, !pinned)),
+      onToggleMute: () => run((info) => logic.setNotDisturb(info, !muted)),
+      // Deletion already owns its confirmation and pending-action guard.
+      onDelete: () async {
+        if (active()) await onDelete(current()!);
+      },
+    );
+  }
+
+  final actions = ValueNotifier(snapshot());
+  void refresh() => actions.value = snapshot();
+  final subscriptions = <StreamSubscription<dynamic>>[
+    logic.list.listen((_) => refresh()),
+    logic.states.listen((_) => refresh()),
+    logic.folders.listen((_) => refresh()),
+  ];
+  try {
+    await showConversationPeek(
+      context: context,
+      conversation: conversation,
+      displayName: logic.getShowName(conversation),
+      actions: actions.value,
+      liveActions: actions,
+      isActive: active,
+    );
+  } finally {
+    for (final subscription in subscriptions) {
+      await subscription.cancel();
+    }
+    actions.dispose();
+  }
 }

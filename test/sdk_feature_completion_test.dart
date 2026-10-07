@@ -60,6 +60,8 @@ void main() {
     ))));
     expect(find.text('Original message'), findsOneWidget);
     await tester.tap(find.text('Original message'));
+    expect(cleared, isFalse);
+    await tester.tap(find.byKey(const ValueKey('chat-context-preview-close')));
     expect(cleared, isTrue);
     expect(controller.text, 'draft');
     await tester.pumpWidget(const SizedBox());

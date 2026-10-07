@@ -20,6 +20,7 @@ import 'video_media_cache.dart';
 import 'media_preview_glass.dart';
 import 'media_browser/local_media_availability.dart';
 import 'media_browser/media_action_sheet.dart';
+import 'media_browser/media_video_hero.dart';
 
 export 'media_browser/media_source.dart';
 import 'media_browser/media_grid_thumbnail.dart';
@@ -237,24 +238,10 @@ class _MediaBrowserState extends State<MediaBrowser> {
                                 : (url, file) =>
                                     widget.onSave?.call(currentIndex),
                           ),
-                          heroBuilderForSlidingPage: (Widget result) {
-                            return Hero(
-                              tag: s.tag ?? s.thumbnail,
-                              child: result,
-                              flightShuttleBuilder: (BuildContext flightContext,
-                                  Animation<double> animation,
-                                  HeroFlightDirection flightDirection,
-                                  BuildContext fromHeroContext,
-                                  BuildContext toHeroContext) {
-                                final Hero hero =
-                                    (flightDirection == HeroFlightDirection.pop
-                                        ? fromHeroContext.widget
-                                        : toHeroContext.widget) as Hero;
-
-                                return hero.child;
-                              },
-                            );
-                          },
+                          heroBuilderForSlidingPage: (result) => MediaVideoHero(
+                            tag: s.tag ?? s.thumbnail,
+                            child: result,
+                          ),
                         )
                       : HeroWidget(
                           tag: s.tag ?? s.thumbnail,
@@ -433,8 +420,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
               alignment: AlignmentDirectional.center,
               children: [
                 AdaptiveMediaImage(
-                  image:
-                      ExtendedNetworkImageProvider(s.thumbnail, cache: true),
+                  image: ExtendedNetworkImageProvider(s.thumbnail, cache: true),
                 ),
                 const CupertinoActivityIndicator(
                   radius: 15,

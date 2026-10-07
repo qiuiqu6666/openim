@@ -1,7 +1,7 @@
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import '../../../contacts/directory/contact_directory_snapshot.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../settings_draft_store.dart';
@@ -38,22 +38,7 @@ class _MomentsFriendPickerPageState extends State<MomentsFriendPickerPage> {
   Future<void> _loadFriends() async {
     setState(() => _loading = true);
     try {
-      final list = <FriendInfo>[];
-      var count = 10000;
-      for (;;) {
-        final page = await OpenIM.iMManager.friendshipManager.getFriendListPage(
-          offset: list.length,
-          count: count,
-          filterBlack: true,
-        );
-        list.addAll(page);
-        if (page.length < count) break;
-        count = 1000;
-      }
-      final users = list
-          .map((item) => ISUserInfo.fromJson(item.toJson()))
-          .toList(growable: false);
-      final converted = IMUtils.convertToAZList(users).cast<ISUserInfo>();
+      final converted = await loadContactDirectorySnapshot();
       if (!mounted) return;
       setState(() {
         _friends = converted;
@@ -172,8 +157,10 @@ class _MomentsFriendPickerPageState extends State<MomentsFriendPickerPage> {
                     ? Center(
                         child: Text(
                           _keyword.trim().isEmpty
-                              ? settingsText(context, zh: '暂无好友', en: 'No friends')
-                              : settingsText(context, zh: '未找到相关好友', en: 'No matching friends'),
+                              ? settingsText(context,
+                                  zh: '暂无好友', en: 'No friends')
+                              : settingsText(context,
+                                  zh: '未找到相关好友', en: 'No matching friends'),
                           style: TextStyle(
                             color: AppTokens.textSecondary(dark: dark),
                           ),
@@ -236,7 +223,8 @@ class _MomentsFriendPickerPageState extends State<MomentsFriendPickerPage> {
                                         ),
                                       )
                                     : null,
-                                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 10, 16, 10),
                                 child: Row(
                                   children: [
                                     AvatarView(
@@ -250,7 +238,8 @@ class _MomentsFriendPickerPageState extends State<MomentsFriendPickerPage> {
                                       child: Text(
                                         item.showName,
                                         style: TextStyle(
-                                          color: AppTokens.textPrimary(dark: dark),
+                                          color:
+                                              AppTokens.textPrimary(dark: dark),
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
                                         ),

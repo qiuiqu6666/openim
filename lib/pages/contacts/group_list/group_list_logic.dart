@@ -32,6 +32,8 @@ class GroupListLogic extends GetxController {
   final index = 0.obs;
   final iCreatedList = <GroupInfo>[].obs;
   final iJoinedList = <GroupInfo>[].obs;
+  final loading = <bool, bool>{true: true, false: true}.obs;
+  final loadFailed = <bool, bool>{true: false, false: false}.obs;
   int iCreatedOffset = 0;
   int iJoinedOffset = 0;
   int count = 1000;
@@ -57,6 +59,9 @@ class GroupListLogic extends GetxController {
 
   void switchTab(int i) => index.value = i;
 
+  bool canLoadMore(bool iCreate) =>
+      !loading[iCreate]! && !loadFailed[iCreate]! && _hasMore[iCreate]!;
+
   Future<void> iCreatedInitial() => _load(iCreate: true, refresh: true);
   Future<void> iJoinedInitial() => _load(iCreate: false, refresh: true);
   Future<void> iCreatedLoadMore() => _load(iCreate: true, refresh: false);
@@ -71,6 +76,8 @@ class GroupListLogic extends GetxController {
     final version = _versions[iCreate]! + 1;
     _versions[iCreate] = version;
     _loading[iCreate] = true;
+    loading[iCreate] = true;
+    loadFailed[iCreate] = false;
     final controller =
         iCreate ? iCreateRefreshController : iJoinRefreshController;
     final target = iCreate ? iCreatedList : iJoinedList;
@@ -107,13 +114,17 @@ class GroupListLogic extends GetxController {
       }
     } catch (_) {
       if (_disposed || _versions[iCreate] != version) return;
+      loadFailed[iCreate] = true;
       if (refresh) {
         controller.refreshFailed();
       } else {
         controller.loadFailed();
       }
     } finally {
-      if (_versions[iCreate] == version) _loading[iCreate] = false;
+      if (!_disposed && _versions[iCreate] == version) {
+        _loading[iCreate] = false;
+        loading[iCreate] = false;
+      }
     }
   }
 

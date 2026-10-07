@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
-import 'package:intl/intl.dart';
 import 'package:openim_common/openim_common.dart';
 
-import '../../chat/fund/fund_message_card.dart';
+import '../../chat/messages/custom/chat_custom_message.dart';
 import '../../chat/media/widgets/chat_video_thumbnail.dart';
 import '../../fund/notifications/fund_claim_notice.dart';
 import 'conversation_peek_loader.dart';
@@ -15,10 +14,12 @@ class ConversationPeekMessage extends StatelessWidget {
     super.key,
     required this.message,
     required this.isGroupChat,
+    this.peerName = '',
   });
 
   final Message message;
   final bool isGroupChat;
+  final String peerName;
 
   static const avatarSize = 40.0;
   static const messageSpacing = 3.0;
@@ -49,6 +50,7 @@ class ConversationPeekMessage extends StatelessWidget {
         itemPadding: EdgeInsets.zero,
         avatarSize: avatarSize,
         ignorePointer: true,
+        textScaleFactor: DataSp.getChatFontSizeFactor(),
         showLeftNickname: isGroupChat,
         showRightNickname: false,
         // The preview has no outgoing avatar/name. Avoid depending on a full
@@ -57,7 +59,13 @@ class ConversationPeekMessage extends StatelessWidget {
         rightFaceUrl: '',
         onTapUserProfile: (_) {},
         mediaItemBuilder: _media,
-        customTypeBuilder: _custom,
+        customTypeBuilder: (context, item) => buildChatCustomMessage(
+          context,
+          item,
+          isGroupChat: isGroupChat,
+          peerName: peerName,
+          textScaleFactor: DataSp.getChatFontSizeFactor(),
+        ),
       ),
     );
   }
@@ -103,43 +111,5 @@ class ConversationPeekMessage extends StatelessWidget {
                 color: AppTokens.onAccent, size: 36)),
       ]),
     );
-  }
-
-  CustomTypeInfo? _custom(BuildContext context, Message item) {
-    final fund = FundMessageData.tryParse(item.customElem?.data);
-    if (fund != null) {
-      return CustomTypeInfo(
-          FundMessageCard(
-            message: fund,
-            isGroupChat: isGroupChat,
-            isOutgoing: item.sendID == OpenIM.iMManager.userID,
-            timeText: item.sendTime == null
-                ? ''
-                : DateFormat('HH:mm').format(
-                    DateTime.fromMillisecondsSinceEpoch(item.sendTime!)),
-            // A history snapshot is not a fresh order status response.
-            statusResolved: false,
-          ),
-          false);
-    }
-    final data = IMUtils.parseCustomMessage(item);
-    if (data?['viewType'] == CustomMessageType.call) {
-      return CustomTypeInfo(
-          ChatCallItemView(type: data!['type'], content: data['content']));
-    }
-    if (data?['viewType'] == CustomMessageType.removedFromGroup) {
-      return CustomTypeInfo(
-          _systemText(context, StrRes.removedFromGroupHint), false, false);
-    }
-    if (data?['viewType'] == CustomMessageType.groupDisbanded) {
-      return CustomTypeInfo(
-          _systemText(context, StrRes.groupDisbanded), false, false);
-    }
-    // Retain the real custom message's description when its richer business
-    // renderer needs a full chat controller (e.g. friendship verification).
-    final description = item.customElem?.description;
-    return description?.trim().isNotEmpty == true
-        ? CustomTypeInfo(ChatText(text: description!), true)
-        : null;
   }
 }

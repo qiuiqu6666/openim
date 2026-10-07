@@ -130,9 +130,9 @@ class ChatMediaController {
                   return false;
                 }
 
-                if (entity.videoDuration > const Duration(seconds: 5 * 60)) {
+                if (entity.videoDuration > const Duration(minutes: 30)) {
                   IMViews.showToast(
-                      sprintf(StrRes.selectVideoLimit, [5]) + StrRes.minute);
+                      sprintf(StrRes.selectVideoLimit, [30]) + StrRes.minute);
                   return false;
                 }
                 return true;

@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -28,6 +27,7 @@ class ChatPictureView extends StatefulWidget {
 
 class _ChatPictureViewState extends State<ChatPictureView> {
   static const _longImageAspectRatio = 3 / 5;
+  static const _longImageHeightRatio = 3.0;
 
   String? _inputPath;
   String? _sourcePath;
@@ -92,22 +92,27 @@ class _ChatPictureViewState extends State<ChatPictureView> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(
+      builder: (context, constraints) => _buildPicture(context, constraints));
+
+  Widget _buildPicture(BuildContext context, BoxConstraints constraints) {
     final picture = widget.message.pictureElem;
     final sourceSize = ChatPictureQuality.sourceSize(picture);
     final width = sourceSize.width;
     final height = sourceSize.height;
-    final limit = widget.maxDisplayWidth ?? pictureWidth;
+    final limit = (widget.maxDisplayWidth ?? pictureWidth)
+        .clamp(0.0, constraints.maxWidth);
     var displayWidth = width < limit ? width : limit;
     var displayHeight = displayWidth * height / width;
+    // Choose the visible top crop before fitting the bubble's height. Fitting
+    // the entire long image first collapses its width to an unreadable strip.
+    if (height / width > _longImageHeightRatio) {
+      displayHeight = displayWidth / _longImageAspectRatio;
+    }
     final heightLimit = widget.maxDisplayHeight;
     if (heightLimit != null && displayHeight > heightLimit) {
       displayWidth *= heightLimit / displayHeight;
       displayHeight = heightLimit;
-    }
-    final maxHeight = pictureWidth * 1.sh / 1.sw;
-    if (heightLimit == null && displayHeight > 2 * maxHeight) {
-      displayHeight = displayWidth / _longImageAspectRatio;
     }
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     final decodeSize = ChatPictureQuality.decodeSize(

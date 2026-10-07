@@ -230,6 +230,37 @@ void main() {
     expect(ChatHistoryCache.read('self', 'si_peer'), isEmpty);
   });
 
+  for (final serialized in [null, '', 'null', '  null  ', '{}']) {
+    test(
+        'absent retention metadata preserves cached and fresh replies ($serialized)',
+        () async {
+      final original = _message('original', 1)..attachedInfo = serialized;
+      final reply = _message('reply', 2)
+        ..attachedInfo = serialized
+        ..contentType = MessageType.quote
+        ..quoteElem = QuoteElem(text: 'Reply text', quoteMessage: original);
+      ChatHistoryCache.write('self', 'si_peer', [original, reply]);
+      final pending = Completer<AdvancedMessage>();
+      final loader =
+          _loader(fetch: ({required count, startMsg}) => pending.future);
+      addTearDown(loader.dispose);
+      final initial = loader.loadInitial();
+      expect(_ids(loader), ['original', 'reply']);
+      pending.complete(_page([original, reply], isEnd: true));
+      expect(await initial, isTrue);
+      expect(_ids(loader), ['original', 'reply']);
+      expect(loader.messages.any(ConversationPeekLoader.containsPrivateContent),
+          isFalse);
+      expect(ChatHistoryCache.read('self', 'si_peer').length, 2);
+
+      // An empty serialized field cannot override real private metadata.
+      original.attachedInfoElem =
+          AttachedInfoElem(isPrivateChat: true, burnDuration: 30);
+      expect(ConversationPeekLoader.isPrivateMessage(original), isTrue);
+      expect(ConversationPeekLoader.containsPrivateContent(reply), isTrue);
+    });
+  }
+
   test(
       'private retention metadata never seeds cache and expired SDK content is filtered',
       () async {
@@ -287,21 +318,27 @@ void main() {
       ..attachedInfo = jsonEncode({'isPrivateChat': true, 'burnDuration': 30});
     final quoted = _message('quoted', 2)
       ..contentType = MessageType.quote
-      ..quoteElem = QuoteElem(text: 'Quoted private content', quoteMessage: private);
+      ..quoteElem =
+          QuoteElem(text: 'Quoted private content', quoteMessage: private);
     final merged = _message('merged', 3)
       ..contentType = MessageType.merger
-      ..mergeElem = MergeElem(title: 'Merged private content', multiMessage: [quoted]);
+      ..mergeElem =
+          MergeElem(title: 'Merged private content', multiMessage: [quoted]);
     final ordinary = _message('ordinary', 4);
     ChatHistoryCache.write('self', 'si_peer', [quoted, merged, ordinary]);
     final pending = Completer<AdvancedMessage>();
-    final loader = _loader(fetch: ({required count, startMsg}) => pending.future);
+    final loader =
+        _loader(fetch: ({required count, startMsg}) => pending.future);
     addTearDown(loader.dispose);
     final initial = loader.loadInitial();
     expect(_ids(loader), ['ordinary']);
     pending.complete(_page([quoted, merged, ordinary], isEnd: true));
     expect(await initial, isTrue);
     expect(_ids(loader), ['quoted', 'merged', 'ordinary']);
-    expect(loader.messages.take(2).every(ConversationPeekLoader.containsPrivateContent),
+    expect(
+        loader.messages
+            .take(2)
+            .every(ConversationPeekLoader.containsPrivateContent),
         isTrue);
     expect(ChatHistoryCache.read('self', 'si_peer').map((m) => m.clientMsgID),
         ['ordinary']);

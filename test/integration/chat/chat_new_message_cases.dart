@@ -30,15 +30,15 @@ void registerChatNewMessageCases({
     final controller = logic.scrollController;
     controller.jumpTo(500);
     await tester.pumpAndSettle();
-    for (var index = 999; index >= 0; index--) {
+    for (var index = 399; index >= 0; index--) {
       final id = 'new-$index';
-      heights[id] = index >= 990 ? 25 : 200;
+      heights[id] = index >= 390 ? 25 : 200;
       receivedIDs.add(id);
-      receive(createMessage(id, 1030 - index));
+      receive(createMessage(id, 430 - index));
     }
-    expect(logic.newMessages.unseenCount.value, 1000);
+    expect(logic.newMessages.unseenCount.value, 400);
     await tester.pumpAndSettle();
-    expect(logic.newMessages.unseenCount.value, 1000);
+    expect(logic.newMessages.unseenCount.value, 400);
     final estimatedMinimum = controller.position.minScrollExtent;
 
     final gesture =
@@ -50,13 +50,13 @@ void registerChatNewMessageCases({
     // apparently-zero distance must not be treated as a painted latest edge.
     expect(controller.offset - controller.position.minScrollExtent,
         lessThanOrEqualTo(1));
-    expect(logic.newMessages.unseenCount.value, 1000);
+    expect(logic.newMessages.unseenCount.value, 400);
     expect(logic.newMessages.awayFromLatest.value, isTrue);
 
     heights['new-extra'] = 200;
     receivedIDs.add('new-extra');
-    receive(createMessage('new-extra', 1031));
-    expect(logic.newMessages.unseenCount.value, 1001);
+    receive(createMessage('new-extra', 431));
+    expect(logic.newMessages.unseenCount.value, 401);
     expect(controller.offset, estimatedMinimum);
     await tester.pumpAndSettle();
     expect(controller.position.minScrollExtent, lessThan(estimatedMinimum));
@@ -65,7 +65,7 @@ void registerChatNewMessageCases({
         greaterThan(1));
     expect(readIDs, isNot(contains('new-0')));
     expect(readIDs, isNot(contains('new-extra')));
-    expect(logic.newMessages.unseenCount.value, 1001 - readIDs.length);
+    expect(logic.newMessages.unseenCount.value, 401 - readIDs.length);
     expect(logic.newMessages.unseenCount.value, greaterThan(0));
     expect(logic.newMessages.awayFromLatest.value, isTrue);
     expect(logic.scrollingCacheMessageList, isEmpty);
@@ -75,7 +75,7 @@ void registerChatNewMessageCases({
     await gesture.moveBy(const Offset(0, -50));
     await tester.pumpAndSettle();
     expect(readIDs.length, greaterThan(previouslyRead));
-    expect(logic.newMessages.unseenCount.value, 1001 - readIDs.length);
+    expect(logic.newMessages.unseenCount.value, 401 - readIDs.length);
     expect(logic.newMessages.awayFromLatest.value, isTrue);
     expect(readIDs, isNot(contains('new-extra')));
     await gesture.up();

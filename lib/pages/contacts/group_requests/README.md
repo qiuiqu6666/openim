@@ -2,13 +2,11 @@
 
 ## 群通知空状态
 
-2026-10-06 补充空状态，参考 99chat `lib/src/all_group_application_list.dart:_buildNoticeList`：列表成功读取且为空时，居中显示“暂无群通知”，使用现有弱文字主题样式和统一间距，中英文均已添加文案。`applicationsLoaded` 仅在最新请求且当前账号/token 对应的 SDK 列表读取成功后设为 true；初次加载、刷新等待及请求失败不误显示为空。加载仍复用原 LoadingView，现有列表、处理人和审批数据链路保留。
+2026-10-07 群通知复用联系人模块 `empty/contact_list_placeholder.dart` 和公共 `IllustratedEmptyState`，成功空列表居中显示现有 `empty_99chat.webp` 与“暂无群通知”，支持亮暗主题、小屏滚动和英文。对照 99chat `all_group_application_list.dart:_buildNoticeList` 的状态语义，按用户要求升级为与“新的朋友”等页面相同的插画。
 
-直接复用 Center/Text、Styles、AppTokens 和原 Obx 列表，无新增重复空态组件或资源。
+`applicationsLoaded` 仅在最新请求且当前账号/token 对应的 SDK 列表读取成功后设为 true；首屏等待显示页内加载，失败显示重试入口。有记录时继续使用原列表和 LoadingView，审批、处理人和资料获取流程不变。`reloadApplications` 处理页面/事件入口错误；直接调用 `getApplicationList` 的处理详情仍收到原 SDK 异常。错误状态和结果均检查请求代次及会话归属。
 
-本次验证：既有 22 项群申请/处理人回归测试全部通过（包含亮暗主题的实际列表）；Dart 静态检查没有新增错误，翻译文件的大小写命名保留原有 4 条提示。SDK 双向申请列表仍是真实数据源，本次仅增加成功空列表的展示判断；未执行真实账号联调或 iOS 构建。
-
-Android debug 构建成功，安装包为仓库根目录 `app-group-notifications-empty-debug-20261006.apk`，440308044 字节，SHA256：`ABA298A2C3D40D4CEE6BF57E99F96220FDE56633EC41712D192E63BDC384CD4D`。
+复用原资源、组件和翻译，无新增图片或数据接口。回归测试位于 `test/pages/contacts/group_requests/`；本次未重新生成安装包或进行真机验证。
 
 列表及处理详情复用 `widgets/group_request_handler_label.dart`，在现有说明/状态下方显示本地化的“处理人：昵称”。使用现有弱文字主题样式，长昵称单行省略；缺少昵称时不占位，保留原处理状态与操作流程。
 

@@ -1,6 +1,8 @@
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
 
+import 'media_browser/media_thumbnail_hero.dart';
+
 class HeroWidget extends StatefulWidget {
   const HeroWidget({
     super.key,
@@ -52,51 +54,39 @@ class _HeroWidgetState extends State<HeroWidget> {
               (widget.slidePagekey.currentState!.offset != Offset.zero ||
                   widget.slidePagekey.currentState!.scale != 1.0);
 
-          final Widget toHeroWidget = (toHeroContext.widget as Hero).child;
-          return AnimatedBuilder(
+          final toHeroWidget = MediaThumbnailHero.flightChildOf(toHeroContext);
+          final content = Stack(
+            clipBehavior: Clip.antiAlias,
+            alignment: Alignment.center,
+            children: <Widget>[
+              FadeTransition(
+                opacity: ReverseAnimation(animation),
+                child: UnconstrainedBox(
+                  child: SizedBox(
+                    width: _rectTween!.begin!.width,
+                    height: _rectTween!.begin!.height,
+                    child: toHeroWidget,
+                  ),
+                ),
+              ),
+              FadeTransition(
+                opacity: animation,
+                child: widget.child,
+              )
+            ],
+          );
+
+          if (!fixTransform) return content;
+          final slidePage = widget.slidePagekey.currentState!;
+          return MatrixTransition(
             animation: animation,
-            builder: (BuildContext buildContext, Widget? child) {
-              Widget animatedBuilderChild = widget.child;
-
-              animatedBuilderChild = Stack(
-                clipBehavior: Clip.antiAlias,
-                alignment: Alignment.center,
-                children: <Widget>[
-                  Opacity(
-                    opacity: 1 - animation.value,
-                    child: UnconstrainedBox(
-                      child: SizedBox(
-                        width: _rectTween!.begin!.width,
-                        height: _rectTween!.begin!.height,
-                        child: toHeroWidget,
-                      ),
-                    ),
-                  ),
-                  Opacity(
-                    opacity: animation.value,
-                    child: animatedBuilderChild,
-                  )
-                ],
-              );
-
-              if (fixTransform) {
-                final Tween<Offset> offsetTween = Tween<Offset>(
-                    begin: Offset.zero,
-                    end: widget.slidePagekey.currentState!.offset);
-
-                final Tween<double> scaleTween = Tween<double>(
-                    begin: 1.0, end: widget.slidePagekey.currentState!.scale);
-                animatedBuilderChild = Transform.translate(
-                  offset: offsetTween.evaluate(animation),
-                  child: Transform.scale(
-                    scale: scaleTween.evaluate(animation),
-                    child: animatedBuilderChild,
-                  ),
-                );
-              }
-
-              return animatedBuilderChild;
+            onTransform: (value) {
+              final offset = slidePage.offset * value;
+              final scale = 1 + (slidePage.scale - 1) * value;
+              return Matrix4.translationValues(offset.dx, offset.dy, 0)
+                ..scaleByDouble(scale, scale, 1, 1);
             },
+            child: content,
           );
         }
         // The shuttle has its own subtree; never duplicate _contentKey here.

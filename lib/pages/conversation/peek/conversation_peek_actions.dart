@@ -32,6 +32,8 @@ class ConversationPeekActions {
     this.isMuted = false,
     this.isArchived = false,
     this.isOfficialAccount = false,
+    this.isAvailable = true,
+    this.hasFolder = false,
   });
 
   final VoidCallback onOpenChat;
@@ -45,6 +47,8 @@ class ConversationPeekActions {
   final bool isMuted;
   final bool isArchived;
   final bool isOfficialAccount;
+  final bool isAvailable;
+  final bool hasFolder;
 
   List<ConversationPeekAction> get menuItems {
     if (isOfficialAccount) {

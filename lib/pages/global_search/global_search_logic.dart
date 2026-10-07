@@ -60,6 +60,8 @@ class GlobalSearchLogic extends GetxController {
   final query = ''.obs;
   final index = 0.obs;
   Timer? _debounce;
+  Timer? _conversationTimer;
+  List<ConversationInfo>? _latestConversations;
   StreamSubscription<List<ConversationInfo>>? _conversationSubscription;
   int _conversationRevision = 0;
   int _generation = 0;
@@ -77,9 +79,16 @@ class GlobalSearchLogic extends GetxController {
     if (_closed) return;
     ++_conversationRevision;
     if (query.value.isEmpty) return;
-    conversations
-        .assignAll(GlobalSearchSource.matchConversations(items, query.value));
-    failures.remove(3);
+    _latestConversations = items;
+    _conversationTimer ??= Timer(const Duration(milliseconds: 80), () {
+      _conversationTimer = null;
+      final latest = _latestConversations;
+      _latestConversations = null;
+      if (_closed || query.value.isEmpty || latest == null) return;
+      conversations.assignAll(
+          GlobalSearchSource.matchConversations(latest, query.value));
+      failures.remove(3);
+    });
   }
 
   void _inputChanged() {
@@ -140,6 +149,8 @@ class GlobalSearchLogic extends GetxController {
   @override
   void onClose() {
     _closed = true;
+    _conversationTimer?.cancel();
+    _latestConversations = null;
     ++_generation;
     _debounce?.cancel();
     final subscription = _conversationSubscription;

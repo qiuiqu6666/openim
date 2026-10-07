@@ -13,6 +13,7 @@ import 'chat_attachment_view.dart';
 import 'chat_structured_message.dart';
 import 'contact_card/contact_card_identity_view.dart';
 import 'markdown/chat_message_text_source.dart';
+import 'quote/chat_quote_card.dart';
 
 double maxWidth = 247.w;
 double pictureWidth = 120.w;
@@ -277,19 +278,7 @@ class _ChatItemViewState extends State<ChatItemView> {
       child = textContent();
     } else if (_message.contentType == MessageType.quote) {
       isBubbleBg = true;
-      child = Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          textContent(),
-          const SizedBox(height: 4),
-          Text(
-            '${_message.quoteElem?.quoteMessage?.senderNickname ?? ''}: ${_message.quoteElem?.quoteMessage == null ? '' : IMUtils.parseMsg(_message.quoteElem!.quoteMessage!)}',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Styles.ts_8E9AB0_12sp,
-          ),
-        ],
-      );
+      child = textContent();
     } else if ([
           MessageType.merger,
           MessageType.location,
@@ -377,6 +366,32 @@ class _ChatItemViewState extends State<ChatItemView> {
           ),
         );
       }
+    }
+
+    // Mention replies carry their reference in atTextElem instead of quoteElem.
+    // Apply the same card after choosing the body so both live chat and peek
+    // retain the reply's text/mention formatting and its referenced message.
+    final quoted =
+        _message.quoteElem?.quoteMessage ?? _message.atTextElem?.quoteMessage;
+    if (_message.contentType == MessageType.quote ||
+        (quoted != null &&
+            [MessageType.text, MessageType.atText, MessageType.advancedText]
+                .contains(_message.contentType))) {
+      child = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ChatQuoteCard(
+            message: quoted,
+            bubbleColor: _isISend
+                ? Styles.c_CCE7FE
+                : ChatBubbleTokens.incoming(
+                    dark: Theme.of(context).brightness == Brightness.dark),
+          ),
+          const SizedBox(height: AppTokens.s3),
+          child!,
+        ],
+      );
     }
 
     senderNickname ??= widget.leftNickname ?? _message.senderNickname;

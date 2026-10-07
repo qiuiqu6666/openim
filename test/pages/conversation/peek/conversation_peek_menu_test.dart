@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/conversation/peek/conversation_peek_actions.dart';
 import 'package:openim/pages/conversation/peek/conversation_peek_menu.dart';
+import 'package:openim/pages/conversation/peek/conversation_peek_menu_icon.dart';
 import 'package:openim_common/openim_common.dart';
 
 ConversationPeekActions _actions(List<String> calls,
@@ -135,17 +136,16 @@ void main() {
       expect(divider.height, 1);
       expect(divider.thickness, .5);
       expect(divider.color, const Color(0xFF000000).withValues(alpha: .08));
+      final icons = tester.widgetList<ConversationPeekMenuIcon>(
+          find.byType(ConversationPeekMenuIcon));
+      expect(icons.map((icon) => icon.action), actions.menuItems);
       expect(
-          tester.widgetList<Icon>(find.byType(Icon)).map((icon) => icon.icon), [
-        Icons.archive_outlined,
-        Icons.create_new_folder_outlined,
-        Icons.push_pin_outlined,
-        dark
-            ? Icons.notifications_active_outlined
-            : Icons.notifications_off_outlined,
-        Icons.delete_outline_rounded,
-      ]);
-      for (final icon in tester.widgetList<Icon>(find.byType(Icon))) {
+          icons
+              .singleWhere(
+                  (icon) => icon.action == ConversationPeekAction.toggleMute)
+              .isMuted,
+          dark);
+      for (final icon in icons) {
         expect(icon.size, 20);
       }
       final delete = tester.widget<Text>(find.text('删除'));

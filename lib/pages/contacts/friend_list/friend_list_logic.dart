@@ -1,102 +1,138 @@
 import 'dart:async';
-
-import 'package:azlistview/azlistview.dart';
-import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim/routes/app_navigator.dart';
 import 'package:openim_common/openim_common.dart';
-
 import '../../../core/controller/im_controller.dart';
+import '../contacts_logic.dart';
+import '../directory/contact_directory_indexer.dart';
+import '../directory/contact_directory_snapshot.dart';
 
 class FriendListLogic extends GetxController {
   final imLoic = Get.find<IMController>();
   final friendList = <ISUserInfo>[].obs;
   final userIDList = <String>[];
-  late StreamSubscription delSub;
-  late StreamSubscription addSub;
-  late StreamSubscription infoChangedSub;
-
-  int _count = 10000;
+  final _subscriptions = <StreamSubscription>[];
+  final _indexer = ContactDirectoryIndexer();
+  final _changes = <String, ISUserInfo?>{};
+  final _account = DataSp.userID;
+  final _token = DataSp.chatToken;
+  Timer? _updateTimer;
+  ContactsLogic? _owner;
+  int _revision = 0;
+  bool _closed = false;
+  bool get _active =>
+      !_closed &&
+      !isClosed &&
+      DataSp.userID == _account &&
+      DataSp.chatToken == _token;
 
   @override
   void onInit() {
-    delSub = imLoic.friendDelSubject.listen(_delFriend);
-    addSub = imLoic.friendAddSubject.listen(_addFriend);
-    infoChangedSub = imLoic.friendInfoChangedSubject.listen(_friendInfoChanged);
-    imLoic.onBlacklistAdd = _delFriend;
-    imLoic.onBlacklistDeleted = _addFriend;
+    if (Get.isRegistered<ContactsLogic>()) {
+      final owner = Get.find<ContactsLogic>();
+      if (owner.isCurrentSession) _owner = owner;
+    }
+    if (_owner != null) {
+      _subscriptions.add(_owner!.friends.stream.listen(_publish));
+    } else {
+      _subscriptions.addAll([
+        imLoic.friendDelSubject.listen((user) => _changed(user.userID, null)),
+        imLoic.friendAddSubject.listen((user) =>
+            _changed(user.userID, ISUserInfo.fromJson(user.toJson()))),
+        imLoic.friendInfoChangedSubject.listen((user) =>
+            _changed(user.userID, ISUserInfo.fromJson(user.toJson()))),
+      ]);
+    }
+    _subscriptions.add(imLoic.blacklistChangedSubject.listen((_) {
+      if (!_active) return;
+      final owner = _owner;
+      if (owner != null) {
+        unawaited(owner.loadFriends());
+      } else {
+        unawaited(_getFriendList());
+      }
+    }));
     super.onInit();
   }
 
   @override
   void onReady() {
-    _getFriendList();
+    unawaited(_getFriendList());
     super.onReady();
   }
 
-  @override
-  void onClose() {
-    delSub.cancel();
-    addSub.cancel();
-    infoChangedSub.cancel();
-    super.onClose();
+  Future<void> _getFriendList() async {
+    try {
+      final result = await loadContactDirectorySnapshot();
+      if (!_active) return;
+      _publish(result);
+      if (_changes.isNotEmpty) await _applyChanges();
+    } catch (_) {
+      // Keep the existing snapshot on a transient SDK failure.
+    }
   }
 
-  _getFriendList() async {
-    List<FriendInfo> list = [];
-    for (int i = 0;; i++) {
-      final temp = await OpenIM.iMManager.friendshipManager.getFriendListPage(
-        offset: list.length,
-        count: _count,
-        filterBlack: true,
-      );
-      list.addAll(temp);
+  void _publish(List<ISUserInfo> result) {
+    if (!_active) return;
+    final previousIDs = userIDList.toSet();
+    final membershipChanged = previousIDs.length != result.length ||
+        result.any((user) => !previousIDs.contains(user.userID));
+    userIDList
+      ..clear()
+      ..addAll(result.map((e) => e.userID!));
+    if (membershipChanged) onUserIDList(userIDList);
+    friendList.assignAll(result);
+  }
 
-      if (temp.length < _count) {
-        break;
+  void _changed(String? id, ISUserInfo? value) {
+    if (!_active || id == null) return;
+    _changes[id] = value;
+    _revision++;
+    _updateTimer ??= Timer(const Duration(milliseconds: 80), () {
+      _updateTimer = null;
+      unawaited(_applyChanges());
+    });
+  }
+
+  Future<void> _applyChanges() async {
+    if (!_active) return;
+    final revision = _revision;
+    final byID = {for (final user in friendList) user.userID!: user};
+    for (final entry in _changes.entries) {
+      if (entry.value == null) {
+        byID.remove(entry.key);
+      } else {
+        byID[entry.key] = entry.value!;
       }
-
-      _count = 1000;
     }
-
-    final result = list.map((e) {
-      userIDList.add(e.userID!);
-
-      return ISUserInfo.fromJson(e.toJson());
-    }).toList();
-
-    final convertResult = IMUtils.convertToAZList(result);
-
-    onUserIDList(userIDList);
-    friendList.assignAll(convertResult.cast<ISUserInfo>());
+    try {
+      final indexed = await _indexer.build([
+        for (final user in byID.values)
+          ContactNameIndex(userID: user.userID!, displayName: user.showName),
+      ]);
+      if (!_active || indexed == null || revision != _revision) return;
+      _publish([
+        for (final name in indexed)
+          byID[name.userID]!
+            ..tagIndex = name.tagIndex
+            ..namePinyin = name.namePinyin
+            ..isShowSuspension = name.showHeader,
+      ]);
+    } catch (_) {/* Retry with the next directory event. */}
   }
 
   void onUserIDList(List<String> userIDList) {}
 
-  _addFriend(dynamic user) {
-    if (user is FriendInfo || user is BlacklistInfo) {
-      _addUser(user.toJson());
+  @override
+  void onClose() {
+    _closed = true;
+    _updateTimer?.cancel();
+    for (final sub in _subscriptions) {
+      unawaited(sub.cancel());
     }
-  }
-
-  _delFriend(dynamic user) {
-    if (user is FriendInfo || user is BlacklistInfo) {
-      friendList.removeWhere((e) => e.userID == user.userID);
-    }
-  }
-
-  _friendInfoChanged(FriendInfo user) {
-    friendList.removeWhere((e) => e.userID == user.userID);
-    _addUser(user.toJson());
-  }
-
-  void _addUser(Map<String, dynamic> json) {
-    final info = ISUserInfo.fromJson(json);
-    friendList.add(IMUtils.setAzPinyinAndTag(info) as ISUserInfo);
-
-    SuspensionUtil.sortListBySuspensionTag(friendList);
-
-    SuspensionUtil.setShowSuspensionStatus(friendList);
+    _indexer.close();
+    _changes.clear();
+    super.onClose();
   }
 
   void viewFriendInfo(ISUserInfo info) => AppNavigator.startUserProfilePane(

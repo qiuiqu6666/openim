@@ -119,7 +119,15 @@ class ChatLogic extends SuperController {
     messageList: messageList,
     conversation: () => conversationInfo,
     isClosed: () => _sessionInactive,
-    canReadConversation: () => !messageArrivals.hasEntering,
+    canReadConversation: () =>
+        !messageArrivals.hasEntering &&
+        !historyLoading.value &&
+        historyError.value == null &&
+        !viewingHistory.value &&
+        syncStatus.value != IMSdkStatus.syncStart &&
+        syncStatus.value != IMSdkStatus.syncProgress &&
+        syncStatus.value != IMSdkStatus.synchronizing &&
+        syncStatus.value != IMSdkStatus.syncFailed,
     isActive: () =>
         Get.currentRoute == _chatRouteName &&
         (WidgetsBinding.instance.lifecycleState == null ||
@@ -382,6 +390,7 @@ class ChatLogic extends SuperController {
       });
     },
     onFirstLoaded: _getGroupInfoAfterLoadMessage,
+    preserveReading: () => newMessages.awayFromLatest.value,
   );
   RxList<Message> get messageList => _timeline.messageList;
   List<Message> get scrollingCacheMessageList =>
@@ -638,14 +647,17 @@ class ChatLogic extends SuperController {
       if (distance > 1) newMessages.updateScrollOffset(distance);
     }
     final followLatest = !newMessages.awayFromLatest.value;
-    if (_dateWindow.buffering) {
+    if (_dateWindow.buffering ||
+        _timeline.holdForIncoming(awayFromLatest: !followLatest)) {
       newMessages.updateScrollOffset(2);
       newMessages.recordIncoming(message);
-      scrollingCacheMessageList.add(message);
+      _timeline.bufferIncoming(message);
       return;
     }
     messageArrivals.register(message,
         enabled: followLatest &&
+            !historyLoading.value &&
+            syncStatus.value == IMSdkStatus.syncEnded &&
             _timeline.hasLoadedHistory &&
             !isOfficialNotificationChat &&
             !messageSelection.active &&
@@ -660,6 +672,7 @@ class ChatLogic extends SuperController {
                 .disableAnimations);
     newMessages.recordIncoming(message);
     messageList.add(message);
+    if (followLatest) _timeline.trimLatestWindow();
     if (followLatest) {
       scrollBottom(force: false);
     }
@@ -1152,6 +1165,7 @@ class ChatLogic extends SuperController {
     if (current != null) syncStatus.value = current;
     connectionSub = imLogic.imSdkStatusPublishSubject.listen((value) {
       if (_sessionInactive) return;
+      _receipts.invalidateViewport();
       syncStatus.value = value.status;
       if (value.status == IMSdkStatus.syncEnded) {
         unawaited(_loadHistoryForSyncEnd());
@@ -1194,7 +1208,16 @@ class ChatLogic extends SuperController {
   }
 
   Future<void> _loadHistoryForSyncEnd() async {
-    if (!_sessionInactive) await _timeline.refresh();
+    if (_sessionInactive ||
+        syncStatus.value == IMSdkStatus.syncStart ||
+        syncStatus.value == IMSdkStatus.syncProgress ||
+        syncStatus.value == IMSdkStatus.synchronizing) {
+      return;
+    }
+    _receipts.invalidateViewport();
+    await _timeline.refresh();
+    // Require a new painted observation after the recovery request completes.
+    if (!_sessionInactive) messageList.refresh();
   }
 
   void _getGroupInfoAfterLoadMessage() {
@@ -1219,6 +1242,7 @@ class ChatLogic extends SuperController {
 
   @override
   void onPaused() {
+    _receipts.invalidateViewport();
     unawaited(_composer.saveDraft());
   }
 

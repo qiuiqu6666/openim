@@ -12,64 +12,82 @@ class FriendRequestsLogic extends GetxController {
   final imLogic = Get.find<IMController>();
   final homeLogic = Get.find<HomeLogic>();
   final applicationList = <FriendApplicationInfo>[].obs;
+  final loading = true.obs;
+  final loadFailed = false.obs;
+  int _loadVersion = 0;
   late StreamSubscription faSub;
 
   @override
   void onInit() {
     faSub = imLogic.friendApplicationChangedSubject.listen((value) {
-      _getFriendRequestsList();
+      loadRequests();
     });
     super.onInit();
   }
 
   @override
   void onReady() {
-    _getFriendRequestsList();
+    loadRequests();
     super.onReady();
   }
 
   @override
   void onClose() {
+    _loadVersion++;
     faSub.cancel();
     homeLogic.getUnhandledFriendApplicationCount();
     super.onClose();
   }
 
-  void _getFriendRequestsList() async {
-    final list = await Future.wait([
-      OpenIM.iMManager.friendshipManager.getFriendApplicationListAsRecipient(),
-      OpenIM.iMManager.friendshipManager.getFriendApplicationListAsApplicant(),
-    ]);
+  Future<void> loadRequests() async {
+    final version = ++_loadVersion;
+    loading.value = true;
+    loadFailed.value = false;
+    try {
+      final list = await Future.wait([
+        OpenIM.iMManager.friendshipManager
+            .getFriendApplicationListAsRecipient(),
+        OpenIM.iMManager.friendshipManager
+            .getFriendApplicationListAsApplicant(),
+      ]);
+      if (isClosed || version != _loadVersion) return;
 
-    final allList = <FriendApplicationInfo>[];
-    allList
-      ..addAll(list[0])
-      ..addAll(list[1]);
+      final allList = <FriendApplicationInfo>[];
+      allList
+        ..addAll(list[0])
+        ..addAll(list[1]);
 
-    allList.sort((a, b) {
-      if (a.createTime! > b.createTime!) {
-        return -1;
-      } else if (a.createTime! < b.createTime!) {
-        return 1;
+      allList.sort((a, b) {
+        if (a.createTime! > b.createTime!) {
+          return -1;
+        } else if (a.createTime! < b.createTime!) {
+          return 1;
+        }
+        return 0;
+      });
+
+      var haveReadList = DataSp.getHaveReadUnHandleFriendApplication();
+      haveReadList ??= <String>[];
+      for (var e in list[0]) {
+        var id = IMUtils.buildFriendApplicationID(e);
+        if (!haveReadList.contains(id)) {
+          haveReadList.add(id);
+        }
       }
-      return 0;
-    });
-
-    var haveReadList = DataSp.getHaveReadUnHandleFriendApplication();
-    haveReadList ??= <String>[];
-    for (var e in list[0]) {
-      var id = IMUtils.buildFriendApplicationID(e);
-      if (!haveReadList.contains(id)) {
-        haveReadList.add(id);
-      }
+      DataSp.putHaveReadUnHandleFriendApplication(haveReadList);
+      applicationList.assignAll(allList);
+    } catch (_) {
+      if (!isClosed && version == _loadVersion) loadFailed.value = true;
+    } finally {
+      if (!isClosed && version == _loadVersion) loading.value = false;
     }
-    DataSp.putHaveReadUnHandleFriendApplication(haveReadList);
-    applicationList.assignAll(allList);
   }
 
-  bool isISendRequest(FriendApplicationInfo info) => info.fromUserID == OpenIM.iMManager.userID;
+  bool isISendRequest(FriendApplicationInfo info) =>
+      info.fromUserID == OpenIM.iMManager.userID;
 
-  void acceptFriendApplication(FriendApplicationInfo info) => AppNavigator.startProcessFriendRequests(
+  void acceptFriendApplication(FriendApplicationInfo info) =>
+      AppNavigator.startProcessFriendRequests(
         applicationInfo: info,
       );
 
