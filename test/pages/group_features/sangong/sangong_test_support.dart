@@ -8,7 +8,6 @@ import 'package:openim/pages/group_features/data/group_feature_api.dart';
 import 'package:openim/pages/group_features/data/diagnostics/group_feature_api_diagnostics.dart';
 import 'package:openim/pages/group_features/models/group_feature_context.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_game_settings.dart';
-import 'package:openim/pages/group_features/sangong/api/sangong_api_config.dart';
 import 'package:openim/pages/group_features/sangong/models/binding/sangong_group_tenant_state.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_my_config.dart';
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
@@ -17,9 +16,7 @@ export '../../../support/account_privilege_fixture.dart';
 
 String? expectedSangongRequestTenant(
     {String verifiedTenant = 'tenant-authorized', bool skipTenant = false}) {
-  final configured = SangongApiConfig.tenantId.trim();
-  if (skipTenant && configured.isNotEmpty) return configured;
-  return skipTenant ? null : verifiedTenant;
+  return null; // v2 resolves tenants exclusively from the current group URL.
 }
 
 class SangongCall {
@@ -97,9 +94,11 @@ SangongRuntime sangongTestRuntime(GroupFeatureContext context) {
   if (runtime.requiresGroupTenantCheck) {
     runtime.groupTenant.applySaved(SangongGroupTenantState(
       status: SangongGroupTenantStatus.configured,
-      tenantId: context.groupID,
+      tenantId: context.capabilities.sangong.tenantID,
       config: SangongMyConfig.fromJson({
-        ...sangongConfig(group: context.groupID, tenant: context.groupID),
+        ...sangongConfig(
+            group: context.groupID,
+            tenant: context.capabilities.sangong.tenantID),
         'active': true,
       }),
     ));
@@ -174,6 +173,9 @@ Map<String, dynamic> sangongConfig(
     };
 
 Map<String, dynamic> sangongState(int version) => {
+      'schemaVersion': 2,
+      'groupId': 'group-sangong',
+      'botUserId': 'bot-sangong',
       'version': version,
       'status': 'betting',
       'settings': SangongGameSettings.defaults().toJson(),
@@ -193,31 +195,84 @@ Map<String, dynamic> sangongState(int version) => {
         'doorTotals': {'2': 200, '3': 100},
         'grandTotal': 300
       },
+      'placed': {
+        'betCount': 2,
+        'doorTotals': {'2': 200, '3': 100},
+        'grandTotal': 300
+      },
+    };
+
+Map<String, dynamic> sangongMessageEvent(int version,
+        {String sender = 'bot-sangong',
+        String group = 'group-sangong',
+        Map<String, dynamic>? state}) =>
+    {
+      'key': 'sangongStateMessage',
+      'groupID': group,
+      'senderID': sender,
+      'serverMsgID': 'message-$version',
+      'seq': version + 1,
+      'data': {
+        'type': 'sangong.event',
+        'schemaVersion': 2,
+        'groupId': group,
+        'eventId': 'event-$version',
+        'version': version,
+        'state': state ?? {...sangongState(version), 'groupId': group},
+      },
     };
 
 dynamic sangongFixtureResponse(SangongCall call) {
-  const currentTenantPrefix = '/sangong/api/v1/admin/tenants/';
-  if (call.path.startsWith(currentTenantPrefix)) {
-    final group =
-        Uri.decodeComponent(call.path.substring(currentTenantPrefix.length));
-    return {...sangongConfig(group: group, tenant: group), 'active': true};
+  if (call.path.startsWith('/sangong/api/v2/groups/') &&
+      call.path.endsWith('/config')) {
+    final group = Uri.decodeComponent(call.path.split('/')[5]);
+    return {
+      'ok': true,
+      'data': {...sangongConfig(group: group), 'active': true}
+    };
   }
-  if (call.path.endsWith('/my-config')) return sangongConfig();
-  if (call.path.endsWith('/events/snapshot')) return sangongState(1);
+  if (call.path.endsWith('/snapshot')) {
+    final group = Uri.decodeComponent(call.path.split('/')[5]);
+    return {
+      'ok': true,
+      'data': {...sangongState(1), 'groupId': group}
+    };
+  }
+  if (call.path.endsWith('/access'))
+    return {
+      'ok': true,
+      'data': {'members': []}
+    };
+  if (call.path.contains('/access/') && call.method == 'DELETE') {
+    return {'ok': true, 'data': {}};
+  }
+  if (call.path.endsWith('/users')) {
+    return {
+      'ok': true,
+      'data': {'users': [], 'version': 1, 'total': 0, 'nextBeforeId': 0}
+    };
+  }
+  if (call.path.endsWith('/sessions')) return {'sessions': []};
+  if (call.path.endsWith('/user-report')) {
+    return sangongUserReport(
+        imUserId: call.query?['imUserId'] as String? ?? 'owner');
+  }
   if (call.path.endsWith('/session')) {
     return {'status': 'running', 'round': sangongState(1)['round']};
   }
   if (call.path.endsWith('/settings')) {
-    return SangongGameSettings.defaults().toJson();
+    return {'settings': SangongGameSettings.defaults().toJson()};
   }
-  if (call.path.endsWith('/entry-context')) {
+  if (call.path.endsWith('/context')) {
     return {
       'showAgentEntry': true,
       'tenantId': 'tenant-authorized',
-      'agentImGroupId': 'group-sangong'
+      'agentImGroupId': Uri.decodeComponent(call.path.split('/')[5]),
+      'agentImUserId': 'owner',
+      'agent': {'userId': 8, 'imUserId': 'owner', 'balance': 1000}
     };
   }
-  if (call.path.endsWith('/team/dashboard')) {
+  if (call.path.endsWith('/team-summary')) {
     return {
       'batch': {
         'status': 'running',
@@ -232,6 +287,8 @@ dynamic sangongFixtureResponse(SangongCall call) {
         'rebateAmount': 60,
         'pendingRebate': 30
       },
+      'version': 1,
+      'nextBeforeId': 0,
       'members': [
         {
           'imUserId': 'winter',
@@ -244,10 +301,35 @@ dynamic sangongFixtureResponse(SangongCall call) {
       ],
     };
   }
-  if (call.path.endsWith('/members')) return {'members': []};
+  if (call.path.endsWith('/team'))
+    return {'version': 1, 'nextBeforeId': 0, 'members': []};
   throw GroupFeatureException('Fixture has no endpoint: ${call.path}',
       code: 'FIXTURE_MISSING');
 }
+
+Map<String, dynamic> sangongReceipt(
+        SangongCall call, Map<String, dynamic> data) =>
+    {
+      'ok': true,
+      'requestId': call.body?['requestId'],
+      'data': data,
+    };
+
+Map<String, dynamic> sangongUserReport(
+        {String imUserId = 'owner',
+        List<Map<String, dynamic>> entries = const [],
+        int? total,
+        int nextBeforeId = 0,
+        Map<String, dynamic> summary = const {},
+        Map<String, dynamic> user = const {}}) =>
+    {
+      'version': 1,
+      'user': {'userId': 19, 'imUserId': imUserId, 'balance': 1000, ...user},
+      'summary': summary,
+      'entries': entries,
+      'totalEntries': total ?? entries.length,
+      'nextBeforeId': nextBeforeId,
+    };
 
 Future<void> pumpSangongPage(
     WidgetTester tester, SangongRuntime runtime, Widget page,

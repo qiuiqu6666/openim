@@ -29,11 +29,16 @@ void main() {
     final api = SangongTestApi()
       ..respond = (call) => {
             'code': 0,
-            'data': call.path.endsWith('/team/members')
-                ? {'members': []}
-                : call.path.endsWith('/team/dashboard')
-                    ? {'summary': <String, dynamic>{}, 'members': []}
-                    : call.path.endsWith('/member-dashboard')
+            'data': call.path.endsWith('/team')
+                ? {'version': 1, 'nextBeforeId': 0, 'members': []}
+                : call.path.endsWith('/team-summary')
+                    ? {
+                        'summary': <String, dynamic>{},
+                        'version': 1,
+                        'nextBeforeId': 0,
+                        'members': []
+                      }
+                    : call.path.endsWith('/member')
                         ? {
                             'member': {'imUserId': 'winter'}
                           }
@@ -59,12 +64,16 @@ void main() {
       {'imUserId': 'winter', 'balance': double.infinity},
     ]) {
       api.respond = (_) => {
+            'version': 1,
+            'nextBeforeId': 0,
             'members': [row]
           };
       await rejectSangongRequest(tester,
           runtime.agent.fetchSangongTeamMembers(), isA<FormatException>());
     }
     api.respond = (_) => {
+          'version': 1,
+          'nextBeforeId': 0,
           'members': [
             {'imUserId': 'winter', 'balance': '0', 'pendingRebate': 0}
           ]
@@ -80,17 +89,27 @@ void main() {
     final runtime = SangongRuntime(sangongTestContext(api));
     addTearDown(runtime.dispose);
     for (final response in [
-      {'members': []},
+      {'version': 1, 'nextBeforeId': 0, 'members': []},
       {'summary': <String, dynamic>{}},
       {
         'summary': {'totalBalance': 'NaN'},
+        'version': 1,
+        'nextBeforeId': 0,
         'members': []
       },
       {
         'summary': {'totalBalance': false},
+        'version': 1,
+        'nextBeforeId': 0,
         'members': []
       },
-      {'summary': <String, dynamic>{}, 'members': [], 'batch': []},
+      {
+        'summary': <String, dynamic>{},
+        'version': 1,
+        'nextBeforeId': 0,
+        'members': [],
+        'batch': []
+      },
     ]) {
       api.respond = (_) => response;
       await rejectSangongRequest(tester,
@@ -166,11 +185,15 @@ void main() {
           isA<GroupFeatureException>()
               .having((error) => error.unknownResult, 'unknownResult', isTrue));
     }
-    api.respond = (_) => {'amount': '0'};
+    api.respond = (call) => {
+          'ok': true,
+          'requestId': call.body!['requestId'],
+          'data': {'amount': '0'}
+        };
     final result = await completeSangongRequest(
         tester, runtime.agent.claimSangongRebate());
     expect(result['amount'], '0');
-    expect(api.count('/rebate/claim'), 6);
+    expect(api.count('/commands/rebate.claim'), 6);
   });
 
   testWidgets('nonfinite transfer quantities never reach the transport',

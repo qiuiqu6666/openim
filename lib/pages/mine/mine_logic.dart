@@ -97,7 +97,7 @@ class MineLogic extends GetxController {
             FavoriteRuntime.sendItemsToConversation(context, items),
         onCancelSendItemsToConversation: (items) =>
             FavoriteRuntime.cancelSendItems(context, items),
-      ));
+      ), activityPage: 'favorites',);
 
   void openCalls(BuildContext context) => openSettingsPage(
         context,
@@ -190,7 +190,7 @@ class MineLogic extends GetxController {
                 userId: user.userID ?? '',
                 nickname: user.nickname ?? '',
                 avatarUrl: user.faceURL ?? ''),
-          ));
+          ), activityPage: 'moments',);
     } finally {
       _momentsRouteOpen = false;
     }

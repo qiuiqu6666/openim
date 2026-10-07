@@ -11,7 +11,7 @@ import 'package:openim/pages/group_features/sangong/models/binding/sangong_group
 
 import '../../sangong_test_support.dart';
 
-const _groupId = '@TGS#下注群 /?%';
+const _groupId = '@TGS#下注群';
 const _chatToken = 'current-chat-token';
 
 class _Transport implements HttpClientAdapter {
@@ -126,7 +126,7 @@ void main() {
       () async {
     final response = {
       'errCode': 0,
-      'data': {..._tenant(), 'configured': false}
+      'data': {..._tenant(), 'configured': true}
     };
     final original = jsonEncode(response);
     transport.respond = (_) => _json(response);
@@ -136,7 +136,7 @@ void main() {
     final state = await lookup.fetch(scope);
     final request = transport.requests.single;
     expect(request.uri.toString(),
-        '${api.baseUrl}/sangong/api/v1/admin/tenants/${Uri.encodeComponent(_groupId)}');
+        '${api.baseUrl}/sangong/api/v2/groups/${Uri.encodeComponent(_groupId)}/config');
     expect(request.uri.fragment, isEmpty);
     expect(request.uri.query, isEmpty);
     expect(request.method, 'GET');
@@ -168,44 +168,47 @@ void main() {
     expect(logs.join('\n'), isNot(contains(_chatToken)));
   });
 
-  test('explicit agent tenant may bind a different betting group', () async {
-    const tenant = '@TGS#游戏群';
-    transport.respond = (_) => _json(_tenant(id: tenant));
-    final state =
-        await lookup.fetch(context(groupId: 'agent-group'), tenantId: tenant);
-    expect(state.status, SangongGroupTenantStatus.configured);
-    expect(state.tenantId, tenant);
-    expect(state.config!.imGroupGameId, tenant);
-    expect(transport.requests.single.uri.toString(),
-        '${api.baseUrl}/sangong/api/v1/admin/tenants/${Uri.encodeComponent(tenant)}');
-    expect(
-        transport.requests.single.headers.containsKey('X-Tenant-Id'), isFalse);
+  test('game configuration cannot be redirected through an agent tenant',
+      () async {
+    await expectLater(
+        lookup.fetch(context(groupId: 'agent-group'), tenantId: 'game-group'),
+        throwsA(_failure('INVALID_REQUEST')));
+    expect(transport.requests, isEmpty);
+  });
+
+  test(
+      'an explicit unconfigured group enables initialization without guessing a tenant',
+      () async {
+    transport.respond = (_) => _json({
+          'ok': true,
+          'data': {
+            'configured': false,
+            'groupID': _groupId,
+            'canInitialize': true
+          }
+        });
+    final state = await lookup.fetch(context());
+    expect(state.status, SangongGroupTenantStatus.notFound);
+    expect(state.tenantId, isEmpty);
+    expect(state.config, isNull);
   });
 
   for (final active in [true, false]) {
-    test('active=$active alone fills queried IDs without inventing roles',
-        () async {
+    test('active=$active without binding identity is rejected', () async {
       transport.respond = (_) => _json({'active': active});
-      final state = await lookup.fetch(context());
-      expect(
-          state.status,
-          active
-              ? SangongGroupTenantStatus.configured
-              : SangongGroupTenantStatus.disabled);
-      expect(state.config!.configured, isTrue);
-      expect(state.tenantId, _groupId);
-      expect(state.config!.imGroupGameId, _groupId);
-      expect(state.config!.myRole, isEmpty);
-      expect(state.config!.canEditConfig, isFalse);
-      expect(state.config!.canManageMembers, isFalse);
-      expect(state.raw, {'active': active});
-      if (!active) expect(state.message, '当前群的三公已停用');
+      await expectLater(
+          lookup.fetch(context()), throwsA(_failure('INVALID_RESPONSE')));
     });
   }
 
   test('owner role without permission fields keeps config permissions false',
       () async {
-    transport.respond = (_) => _json({'active': true, 'myRole': 'owner'});
+    transport.respond = (_) => _json({
+          'active': true,
+          'tenantId': _groupId,
+          'imGroupGameId': _groupId,
+          'myRole': 'owner'
+        });
     final config = (await lookup.fetch(context())).config!;
     expect(config.myRole, 'owner');
     expect(config.canEditConfig, isFalse);
@@ -243,15 +246,13 @@ void main() {
     }
   });
 
-  test('each explicit tenant ID alias is accepted only for the requested ID',
+  test('legacy tenant identity may differ from the immutable game group',
       () async {
-    for (final key in ['tenantId', 'tenantID', 'id', 'tenant_id']) {
-      transport.respond = (_) => _json({'active': true, key: _groupId});
-      expect((await lookup.fetch(context())).tenantId, _groupId);
-      transport.respond = (_) => _json({'active': true, key: 'another-tenant'});
-      await expectLater(
-          lookup.fetch(context()), throwsA(_failure('INVALID_RESPONSE')));
-    }
+    transport.respond =
+        (_) => _json({..._tenant(), 'tenantId': 'legacy-tenant'});
+    final state = await lookup.fetch(context());
+    expect(state.tenantId, 'legacy-tenant');
+    expect(state.config!.imGroupGameId, _groupId);
   });
 
   test(
@@ -300,7 +301,7 @@ void main() {
     await expectLater(
         lookup.fetch(context(groupId: 'agent-group'),
             tenantId: 'requested-tenant'),
-        throwsA(_failure('INVALID_RESPONSE')));
+        throwsA(_failure('INVALID_REQUEST')));
   });
 
   for (final key in ['code', 'errorCode', 'errCode', 'error.code']) {
@@ -555,7 +556,8 @@ void main() {
     expect(request.followRedirects, isFalse);
   }
 
-  test('native group admin creates through Chat POST201 with raw body and DTO',
+  test(
+      'native group admin initializes through current-group PUT with raw body and DTO',
       () async {
     final body = writeBody();
     final bodyBefore = jsonEncode(body);
@@ -569,9 +571,9 @@ void main() {
     final scope = context(groupAdmin: true);
     final state = await lookup.create(scope, body: body);
     final request = transport.requests.single;
-    expect(request.method, 'POST');
-    expect(
-        request.uri.toString(), '${api.baseUrl}/sangong/api/v1/admin/tenants');
+    expect(request.method, 'PUT');
+    expect(request.uri.toString(),
+        '${api.baseUrl}/sangong/api/v2/groups/${Uri.encodeComponent(_groupId)}/config');
     expect(request.data, body);
     expectWriteCredentials(request);
     expect(state.status, SangongGroupTenantStatus.configured);
@@ -601,7 +603,7 @@ void main() {
       final request = transport.requests.single;
       expect(request.method, 'PUT');
       expect(request.uri.toString(),
-          '${api.baseUrl}/sangong/api/v1/admin/tenants/${Uri.encodeComponent(_groupId)}');
+          '${api.baseUrl}/sangong/api/v2/groups/${Uri.encodeComponent(_groupId)}/config');
       expect(request.data, body);
       expectWriteCredentials(request);
       expect(

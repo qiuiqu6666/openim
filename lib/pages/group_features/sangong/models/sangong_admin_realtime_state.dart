@@ -87,13 +87,18 @@ class SangongPlacedBetSummary {
   }
 }
 
-/// `GET /admin/events/snapshot` 与 SSE `event: state` 的完整快照。
+/// V2 HTTP snapshot and authenticated OpenIM message.ex public state.
 class SangongAdminRealtimeState {
   SangongAdminRealtimeState({
+    this.schemaVersion = 1,
+    this.groupID = '',
+    this.botUserID = '',
+    this.collectionReady = false,
     this.version = 0,
     this.at = '',
     this.status = '',
     this.round,
+    this.session,
     this.lastSettledRound,
     SangongGameSettings? settings,
     this.draw,
@@ -102,11 +107,15 @@ class SangongAdminRealtimeState {
   }) : settings = settings ?? SangongGameSettings.defaults();
 
   final int version;
+  final int schemaVersion;
+  final String groupID, botUserID;
+  final bool collectionReady;
   final String at;
   final String status;
   final SangongAdminRound? round;
+  final SangongSessionInfo? session;
 
-  /// 最近一局已结算。设置页「冲正重结」只看有无此字段做文案；提交不走它的 id。
+  /// 最近一局已结算。设置页「冲正重结」只看有无此字段做文案；提交携带它的 id，防止操作另一局。
   final SangongAdminRound? lastSettledRound;
   final SangongGameSettings settings;
   final SangongDrawStatus? draw;
@@ -146,6 +155,14 @@ class SangongAdminRealtimeState {
     final pendingRaw = json['pending'];
     final placedRaw = json['placed'];
     return SangongAdminRealtimeState(
+      session: json['session'] is Map
+          ? SangongSessionInfo.fromJson(
+              Map<String, dynamic>.from(json['session']))
+          : null,
+      schemaVersion: _readInt(json['schemaVersion']),
+      groupID: json['groupId']?.toString() ?? '',
+      botUserID: json['botUserId']?.toString() ?? '',
+      collectionReady: json['collectionReady'] == true,
       version: _readInt(json['version']),
       at: json['at']?.toString() ?? '',
       status: json['status']?.toString() ?? '',
@@ -182,7 +199,9 @@ class SangongAdminRealtimeState {
   GroupGameRoundStatus toGroupGameRoundStatus() {
     final round = this.round;
     final SangongDoorBetTotals totals;
-    if (round?.canSubmitBets == true) {
+    if (schemaVersion == 2 && round != null) {
+      totals = placed.doorTotals;
+    } else if (round?.canSubmitBets == true) {
       totals = pending.doorTotals;
     } else if (round?.hasBetWindowClose == true) {
       totals = placed.doorTotals;

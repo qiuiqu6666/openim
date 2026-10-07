@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/group_feature_api.dart';
 import '../models/sangong_admin_models.dart';
 import '../models/sangong_game_settings.dart';
+import '../models/sangong_admin_realtime_state.dart';
 import '../sangong_scope.dart';
 import '../services/authorization/sangong_operation_scope.dart';
 import '../support/sangong_ui.dart' show DioErrorMessage, ToastUtils;
@@ -111,7 +112,6 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
       !_loading &&
       !_writing &&
       _error == null &&
-      _user != null &&
       _settings != null &&
       _session != null;
 
@@ -141,31 +141,26 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
       _detail = {};
     });
     try {
-      final results = await Future.wait<Object?>([
-        runtime.admin.findUserReport(target),
+      final results = await Future.wait<Object>([
         runtime.admin.fetchUserDetail(target),
-        runtime.admin.fetchSession(),
-        runtime.settings.fetch(),
+        runtime.admin.fetchEventsSnapshot(),
       ]);
       if (!current()) return;
-      final user = results[0] as SangongAdminUserReport?;
-      if (user == null || user.imUserId != target) {
-        throw StateError('未找到该用户的游戏账号');
-      }
-      final detail = results[1] as Map<String, dynamic>;
+      final detail = results[0] as Map<String, dynamic>;
+      final state = results[1] as SangongAdminRealtimeState;
       final rawUser = detail['user'];
-      if (rawUser is Map) {
-        final returnedIm =
-            '${rawUser['imUserId'] ?? rawUser['im_user_id'] ?? ''}'.trim();
-        if (returnedIm.isNotEmpty && returnedIm != target) {
-          throw StateError('游戏资料与当前用户不匹配，请重试');
-        }
+      final user = rawUser is Map
+          ? SangongAdminUserReport.fromJson(Map<String, dynamic>.from(rawUser))
+          : null;
+      if (user != null && user.imUserId != target) {
+        throw StateError('游戏资料与当前用户不匹配');
       }
       setState(() {
         _user = user;
         _detail = detail;
-        _session = results[2] as SangongAdminSession;
-        _settings = results[3] as SangongGameSettings;
+        _session = SangongAdminSession(
+            status: state.status, session: state.session, round: state.round);
+        _settings = state.settings;
       });
     } catch (error) {
       if (current()) setState(() => _error = DioErrorMessage.forApp(error));
@@ -308,6 +303,11 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
       return;
     }
     final target = widget.userID, nickname = _displayName;
+    final roundId = _session?.round?.id ?? 0;
+    if (roundId <= 0) {
+      _invalid("请先开机");
+      return;
+    }
     final action = setLimit ? '设置限额' : '定庄';
     final selectedDoor = door;
     await _submit(action,
@@ -327,6 +327,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
         }
       }
       final result = await runtime.admin.assignBanker(
+          roundId: roundId,
           imUserId: target,
           door: selectedDoor,
           limit: limit,
@@ -366,7 +367,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
         throw StateError('该用户未合庄');
       }
       final result = remove
-          ? await runtime.admin.removeCoBank(userId: id)
+          ? await runtime.admin.removeCoBank(roundId: round.id, userId: id)
           : await runtime.admin
               .addCoBank(roundId: round.id, userId: id, amount: amount!);
       if (!current()) return;
@@ -380,16 +381,23 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     }, clear: _joint);
   }
 
-  Future<void> _send({required bool coBank}) => _submit(
-          coBank ? '发送合庄通知' : '发送定庄通知', coBank ? '发送当前群的合庄通知？' : '发送当前群的定庄通知？',
-          (runtime, current) async {
-        if (!current()) return;
-        if (coBank) {
-          await runtime.admin.sendCoBankNotification();
-        } else {
-          await runtime.admin.sendBankerNotification();
-        }
-      });
+  Future<void> _send({required bool coBank}) {
+    final roundId = _session?.round?.id ?? 0;
+    if (roundId <= 0) {
+      _invalid('当前无有效局');
+      return Future.value();
+    }
+    return _submit(
+        coBank ? '发送合庄通知' : '发送定庄通知', coBank ? '发送当前群的合庄通知？' : '发送当前群的定庄通知？',
+        (runtime, current) async {
+      if (!current()) return;
+      if (coBank) {
+        await runtime.admin.sendCoBankNotification(roundId: roundId);
+      } else {
+        await runtime.admin.sendBankerNotification(roundId: roundId);
+      }
+    });
+  }
 
   String get _displayName => _user?.nickname.trim().isNotEmpty == true
       ? _user!.nickname.trim()

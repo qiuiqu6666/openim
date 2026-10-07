@@ -50,7 +50,7 @@ class SangongMessageActions {
       final settings = await runtime.settings.fetch();
       if (!runtime.canManage) return;
       final result = await runtime.admin
-          .previewBets(cutoff: cutoff, roundId: session.round?.id);
+          .previewBets(cutoff: cutoff, roundId: session.round!.id);
       if (!context.mounted || !runtime.canManage) return;
       await SangongBetPreviewSheet.show(context,
           preview: result.preview,
@@ -80,6 +80,10 @@ class SangongMessageActions {
             text: '定庄',
             onTap: () => run(() async {
                   final featureContext = runtime.featureContext;
+                  final session = await runtime.admin.fetchSession();
+                  final roundId = session.round?.id ?? 0;
+                  if (!context.mounted || !runtime.canManage) return;
+                  if (roundId <= 0) throw StateError('请先开机');
                   final confirmed = await showDialog<bool>(
                       context: context,
                       builder: (dialog) => SangongPrivilegeRouteGuard(
@@ -102,8 +106,7 @@ class SangongMessageActions {
                                   ])));
                   if (confirmed != true || !runtime.canManage) return;
                   final result = await runtime.admin.quickSetupBanker(
-                      messageId:
-                          SangongBetSubmitCutoff.readBackendMessageId(message),
+                      roundId: roundId,
                       text: message.textElem?.content,
                       imUserId: message.sendID,
                       nickname: message.senderNickname);

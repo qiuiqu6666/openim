@@ -460,7 +460,7 @@ class SangongBetPreviewEntry {
   final String outcome;
   final String source;
 
-  bool get canExclude => messageId != null && messageId! > 0;
+  bool get canExclude => msgSeq != null && msgSeq! > 0;
 
   bool get isAdminSource => source.trim().toLowerCase() == 'admin';
 
@@ -617,7 +617,7 @@ class SangongBetPreview {
     this.untilMsgSeq,
     this.previewCloseMsgTime = '',
     this.previewCloseAt = '',
-    this.excludedMessageIds = const [],
+    this.excludedMsgSeqs = const [],
     this.excludedManualCount = 0,
   });
 
@@ -630,7 +630,7 @@ class SangongBetPreview {
   final int? untilMsgSeq;
   final String previewCloseMsgTime;
   final String previewCloseAt;
-  final List<int> excludedMessageIds;
+  final List<int> excludedMsgSeqs;
   final int excludedManualCount;
 
   factory SangongBetPreview.fromJson(Map<String, dynamic>? json) {
@@ -682,8 +682,8 @@ class SangongBetPreview {
       previewCloseAt: json['previewCloseAt']?.toString() ??
           json['preview_close_at']?.toString() ??
           '',
-      excludedMessageIds: _readIntList(
-        json['excludedMessageIds'] ?? json['excluded_message_ids'],
+      excludedMsgSeqs: _readIntList(
+        json['excludedMsgSeqs'] ?? json['excluded_msg_seqs'],
       ),
       excludedManualCount: _readInt(
         json['excludedManualCount'] ?? json['excluded_manual_count'],
@@ -714,6 +714,8 @@ class SangongReportImageResult {
   const SangongReportImageResult({
     this.ok = false,
     this.sent = false,
+    this.queued = false,
+    this.reportId = '',
     this.type = '',
     this.mode = '',
     this.periodNo = 0,
@@ -731,6 +733,8 @@ class SangongReportImageResult {
 
   final bool ok;
   final bool sent;
+  final bool queued;
+  final String reportId;
   final String type;
   final String mode;
   final int periodNo;
@@ -751,6 +755,8 @@ class SangongReportImageResult {
     return SangongReportImageResult(
       ok: _readBool(json['ok']),
       sent: _readBool(json['sent']),
+      queued: json['queued'] == true,
+      reportId: json['reportId']?.toString() ?? '',
       type: json['type']?.toString() ?? '',
       mode: json['mode']?.toString() ?? '',
       periodNo: _readInt(json['periodNo'] ?? json['period_no']),
@@ -906,6 +912,8 @@ class SangongBetSubmitRecallSummary {
 class SangongBetSubmitResult {
   const SangongBetSubmitResult({
     this.placedCount = 0,
+    this.refundedAmount = 0,
+    this.collectionReady = false,
     this.failedCount = 0,
     this.isRecutoff = false,
     this.cutoffMessageId = 0,
@@ -919,6 +927,8 @@ class SangongBetSubmitResult {
   });
 
   final int placedCount;
+  final int refundedAmount;
+  final bool collectionReady;
   final int failedCount;
   final bool isRecutoff;
   final int cutoffMessageId;

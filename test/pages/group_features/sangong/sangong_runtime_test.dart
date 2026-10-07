@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
@@ -21,14 +20,14 @@ void main() {
     final second = runtime.config.refreshFromNetwork();
     expect(identical(first, second), isTrue);
     await flushSangong(tester);
-    expect(api.count('/my-config'), 1);
+    expect(api.count('/config'), 1);
     await runtime.config
         .applySaved(SangongMyConfig.fromJson(sangongConfig(name: '新厅')));
     gate.complete(sangongConfig(name: '旧厅'));
     await completeSangongRequest(tester, first);
     expect(runtime.config.config.name, '新厅');
     await completeSangongRequest(tester, runtime.config.refreshFromNetwork());
-    expect(api.count('/my-config'), 1);
+    expect(api.count('/config'), 1);
     expect(runtime.http.tenantId, 'tenant-authorized');
   });
   testWidgets(
@@ -77,7 +76,7 @@ void main() {
         enabled: false, canManage: false, canOpenAgent: false, tenantID: ''));
     addTearDown(runtime.dispose);
     await completeSangongRequest(tester, runtime.ensureManageBinding());
-    expect(api.count('/my-config'), 0);
+    expect(api.count('/config'), 0);
     expect(runtime.groupTenant.state?.status.name, 'notFound');
     expect(runtime.canConfigure, isTrue);
     expect(runtime.canManage, isFalse);
@@ -160,70 +159,106 @@ void main() {
     expect(changes, isEmpty);
   });
   testWidgets(
-      'one stream and one snapshot serve multiple owners; no 15-second polling',
+      'one OpenIM subscription serves multiple owners without SSE or polling',
       (tester) async {
     final api = SangongTestApi();
-    final runtime = sangongTestRuntime(sangongTestContext(api));
+    final events = StreamController<Map<String, dynamic>>.broadcast();
+    addTearDown(events.close);
+    final runtime =
+        sangongTestRuntime(sangongTestContext(api, events: events.stream));
     addTearDown(runtime.dispose);
     runtime.realtime.acquire();
     runtime.realtime.acquire();
     await flushSangong(tester);
     expect(runtime.realtime.ownerCount, 2);
-    expect(api.streamStarts, 1);
-    expect(api.count('/events/snapshot'), 1);
-    api.streams.last
-        .add('event: state\ndata: ${jsonEncode(sangongState(3))}\n\n');
+    expect(events.hasListener, isTrue);
+    expect(api.streamStarts, 0);
+    expect(api.count('/snapshot'), 1);
+    expect(runtime.realtime.error, isNull,
+        reason: api.calls.map((call) => call.path).join(','));
+    events.add(sangongMessageEvent(3));
     await tester.pump();
-    api.streams.last
-        .add('event: state\ndata: ${jsonEncode(sangongState(2))}\n\n');
+    events.add(sangongMessageEvent(2));
+    events.add(sangongMessageEvent(100, sender: 'player'));
     await tester.pump();
     expect(runtime.realtime.latestState!.version, 3);
-    await tester.pump(const Duration(seconds: 16));
-    expect(api.count('/events/snapshot'), 1);
+    await tester.pump(const Duration(minutes: 1));
+    expect(api.count('/snapshot'), 1);
     runtime.realtime.release();
-    expect(api.streamStops, 0);
+    expect(events.hasListener, isTrue);
     runtime.realtime.release();
     await tester.pump();
-    expect(api.streamStops, 1);
+    expect(events.hasListener, isFalse);
     expect(runtime.realtime.ownerCount, 0);
   });
-  testWidgets('background stops SSE and resume calibrates once',
+  testWidgets('background suspends updates and resume calibrates once',
       (tester) async {
     final api = SangongTestApi();
-    final runtime = sangongTestRuntime(sangongTestContext(api));
+    final events = StreamController<Map<String, dynamic>>.broadcast();
+    addTearDown(events.close);
+    final runtime =
+        sangongTestRuntime(sangongTestContext(api, events: events.stream));
     addTearDown(runtime.dispose);
     runtime.realtime.acquire();
     await flushSangong(tester);
     runtime.realtime.didChangeAppLifecycleState(AppLifecycleState.paused);
     await tester.pump();
-    expect(api.streamStops, 1);
+    expect(events.hasListener, isFalse);
     await tester.pump(const Duration(seconds: 60));
-    expect(api.streamStarts, 1);
+    expect(api.count('/snapshot'), 1);
     runtime.realtime.didChangeAppLifecycleState(AppLifecycleState.resumed);
     await flushSangong(tester);
-    expect(api.streamStarts, 2);
-    expect(api.count('/events/snapshot'), 2);
+    expect(events.hasListener, isTrue);
+    expect(api.count('/snapshot'), 2);
     runtime.realtime.release();
   });
-  testWidgets('HTTP snapshot cannot roll back a state that arrived over SSE',
+  testWidgets(
+      'initial HTTP identifies the bot before applying buffered messages',
       (tester) async {
     final api = SangongTestApi();
     final gate = Completer<dynamic>();
     api.respond = (_) => gate.future;
-    final runtime = sangongTestRuntime(sangongTestContext(api));
+    final events = StreamController<Map<String, dynamic>>.broadcast();
+    addTearDown(events.close);
+    final runtime =
+        sangongTestRuntime(sangongTestContext(api, events: events.stream));
     addTearDown(runtime.dispose);
     runtime.realtime.acquire();
     await flushSangong(tester);
-    api.streams.last
-        .add('event: state\ndata: ${jsonEncode(sangongState(8))}\n\n');
+    events.add(sangongMessageEvent(8));
+    events.add(sangongMessageEvent(99, sender: 'imposter'));
     await tester.pump();
+    expect(runtime.realtime.latestState, isNull);
     gate.complete(sangongState(2));
     await flushSangong(tester);
     expect(runtime.realtime.latestState!.version, 8);
     runtime.realtime.release();
   });
   testWidgets(
-      'disposing a live scope cancels stream and prevents delayed snapshot application',
+      'reconnect merges HTTP reads and late HTTP cannot roll back an event',
+      (tester) async {
+    final api = SangongTestApi();
+    final events = StreamController<Map<String, dynamic>>.broadcast();
+    addTearDown(events.close);
+    final runtime =
+        sangongTestRuntime(sangongTestContext(api, events: events.stream));
+    addTearDown(runtime.dispose);
+    runtime.realtime.acquire();
+    await flushSangong(tester);
+    final gate = Completer<dynamic>();
+    api.respond = (_) => gate.future;
+    events.add({'key': 'imReconnected', 'groupID': 'group-sangong'});
+    events.add({'key': 'imReconnected', 'groupID': 'group-sangong'});
+    await flushSangong(tester);
+    expect(api.count('/snapshot'), 2);
+    events.add(sangongMessageEvent(9));
+    await tester.pump();
+    gate.complete(sangongState(2));
+    await flushSangong(tester);
+    expect(runtime.realtime.latestState!.version, 9);
+    runtime.realtime.release();
+  });
+  testWidgets('disposing prevents delayed snapshot application',
       (tester) async {
     final api = SangongTestApi();
     final gate = Completer<dynamic>();
@@ -234,14 +269,11 @@ void main() {
     runtime.dispose();
     gate.complete(sangongState(9));
     await flushSangong(tester);
-    expect(api.streamStops, 1);
     expect(runtime.realtime.latestState, isNull);
     expect(runtime.isCurrent, isFalse);
     expect(tester.takeException(), isNull);
   });
-  testWidgets(
-      'empty HTTP snapshot is an error rather than a normal six-door state',
-      (tester) async {
+  testWidgets('empty HTTP snapshot remains an error', (tester) async {
     final api = SangongTestApi()..respond = (_) => <String, dynamic>{};
     final runtime = sangongTestRuntime(sangongTestContext(api));
     addTearDown(runtime.dispose);
@@ -249,31 +281,28 @@ void main() {
     await flushSangong(tester);
     expect(runtime.realtime.latestState, isNull);
     expect(runtime.realtime.error, '返回数据格式无效，请重试');
-    expect(api.count('/events/snapshot'), 1);
+    expect(api.count('/snapshot'), 1);
     runtime.realtime.release();
   });
   testWidgets(
-      'missing or negative SSE version calibrates and does not freeze future state',
+      'malformed messages cannot trigger request storms or freeze valid updates',
       (tester) async {
     final api = SangongTestApi();
-    var snapshotVersion = 1;
-    api.respond = (_) => sangongState(snapshotVersion++);
-    final runtime = sangongTestRuntime(sangongTestContext(api));
+    final events = StreamController<Map<String, dynamic>>.broadcast();
+    addTearDown(events.close);
+    final runtime =
+        sangongTestRuntime(sangongTestContext(api, events: events.stream));
     addTearDown(runtime.dispose);
     runtime.realtime.acquire();
     await flushSangong(tester);
-    final missing = sangongState(2)..remove('version');
-    api.streams.last.add('event: state\ndata: ${jsonEncode(missing)}\n\n');
+    for (var i = 0; i < 30; i++) {
+      events.add(
+          sangongMessageEvent(2, state: sangongState(2)..remove('version')));
+    }
     await flushSangong(tester);
-    expect(api.count('/events/snapshot'), 2);
-    expect(runtime.realtime.latestState!.version, 2);
-    api.streams.last
-        .add('event: state\ndata: ${jsonEncode(sangongState(-1))}\n\n');
-    await flushSangong(tester);
-    expect(api.count('/events/snapshot'), 3);
-    expect(runtime.realtime.latestState!.version, 3);
-    api.streams.last
-        .add('event: state\ndata: ${jsonEncode(sangongState(4))}\n\n');
+    expect(api.count('/snapshot'), 1);
+    expect(runtime.realtime.latestState!.version, 1);
+    events.add(sangongMessageEvent(4));
     await tester.pump();
     expect(runtime.realtime.latestState!.version, 4);
     expect(runtime.realtime.error, isNull);

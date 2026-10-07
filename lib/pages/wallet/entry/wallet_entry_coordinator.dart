@@ -84,6 +84,7 @@ class WalletEntryCoordinator {
         final saved = await openWalletPage<bool>(
           context,
           TradePasswordPage(service: settings),
+          activityPage: 'pay_password',
         );
         // The parent route must have resumed before reading status or opening
         // the wallet. A canceled setup never continues into the wallet.

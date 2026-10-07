@@ -167,7 +167,8 @@ class SangongRoundSettleFlow {
       }
       try {
         if (inputs.isNotEmpty) {
-          final mutation = await runtime.admin.submitDraws(inputs);
+          final mutation = await runtime.admin
+              .submitDraws(inputs, roundId: drawStatus.roundId);
           latestDraw = mutation.draw;
           if (!mutation.draw.complete) {
             final missing = mutation.draw.missingDoors;
@@ -310,7 +311,8 @@ class SangongRoundSettleFlow {
         return false;
       }
       try {
-        final result = await runtime.admin.resettleLastSettled(draws: inputs);
+        final result = await runtime.admin
+            .resettleLastSettled(roundId: lastSettled.id, draws: inputs);
         if (!result.ok) throw StateError('冲正重结结果尚未确认，请刷新后查看');
       } finally {
         AppDialog.hideLoading();

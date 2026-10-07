@@ -51,7 +51,8 @@ class _WalletHomeViewState extends State<WalletHomeView> {
         return;
       }
       await openWalletPage<void>(
-          context, WithdrawCoinPickerScreen(initialTargetKind: kind));
+          context, WithdrawCoinPickerScreen(initialTargetKind: kind),
+          activityPage: 'wallet_withdraw');
     } finally {
       _withdrawSheetOpen = false;
     }
@@ -67,7 +68,11 @@ class _WalletHomeViewState extends State<WalletHomeView> {
                 CoinType.trx => 'TRX',
                 CoinType.cny => '99',
               };
-    openWalletPage<void>(context, WalletRecordScreen(initialCoin: code));
+    openWalletPage<void>(
+      context,
+      WalletRecordScreen(initialCoin: code),
+      activityPage: 'wallet_history',
+    );
   }
 
   @override
@@ -184,7 +189,10 @@ class _WalletHomeViewState extends State<WalletHomeView> {
                           ko: '입금'),
                       primary: true,
                       onTap: () => openWalletPage<void>(
-                          context, const WalletDepositCoinPickerScreen()),
+                        context,
+                        const WalletDepositCoinPickerScreen(),
+                        activityPage: 'wallet_receive',
+                      ),
                     ),
                   ),
                   const SizedBox(width: AppTokens.s4),
@@ -211,7 +219,10 @@ class _WalletHomeViewState extends State<WalletHomeView> {
                           ja: '振替',
                           ko: '이체'),
                       onTap: () => openWalletPage<void>(
-                          context, const WalletExchangeScreen()),
+                        context,
+                        const WalletExchangeScreen(),
+                        activityPage: 'wallet_swap',
+                      ),
                     ),
                   ),
                 ],

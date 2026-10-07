@@ -249,6 +249,7 @@ class _WithdrawAddressScreenState extends State<WithdrawAddressScreen> {
         payMethod: widget.payMethod,
         initialAddress: target.value,
       ),
+      activityPage: 'wallet_withdraw',
     );
   }
 

@@ -9,6 +9,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../../core/controller/app_controller.dart';
+import '../../core/user_activity/activity_runtime.dart';
 import '../../core/controller/im_controller.dart';
 import '../../core/im_callback.dart';
 import '../../core/session/local_session_exit.dart';
@@ -81,6 +82,7 @@ class HomeLogic extends SuperController {
 
   switchTab(index) {
     this.index.value = index;
+    ActivityRuntime.instance.setHomeTab(index);
   }
 
   _getUnreadMsgCount() {

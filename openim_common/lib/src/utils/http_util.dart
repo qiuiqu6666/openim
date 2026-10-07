@@ -8,6 +8,8 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:openim_common/openim_common.dart';
 
+import 'http/risk_feedback.dart';
+
 var dio = Dio();
 
 class HttpUtil {
@@ -64,6 +66,27 @@ class HttpUtil {
       token is String &&
       token.isNotEmpty &&
       (token == DataSp.chatToken || token == DataSp.imToken);
+
+  /// Callers that own feedback must also check this before a fallback toast.
+  /// Keep propagating the original failure; never treat silence as success.
+  static bool isSilentError(Object error, {String? path}) {
+    if (error is (int, String?)) {
+      return RiskFeedback.isSilent(
+          code: error.$1, path: path, detail: error.$2);
+    }
+    if (error is DioException) {
+      final response = _readResponse(error.response?.data);
+      if (response != null) {
+        return RiskFeedback.isSilent(
+          code: response.errCode,
+          path: path ?? error.requestOptions.path,
+          detail:
+              response.errDlt.isNotEmpty ? response.errDlt : response.errMsg,
+        );
+      }
+    }
+    return false;
+  }
 
   /// Resolve at display time, so a locale switch affects an in-flight request.
   static String errorMessage(Object error, {String? path, String? fallback}) {
@@ -168,6 +191,7 @@ class HttpUtil {
       // The session owner displays the expiry prompt while returning to login.
       if (showErrorToast &&
           !sessionOwnsFeedback &&
+          !isSilentError(failure, path: path) &&
           !(error is DioException && error.type == DioExceptionType.cancel)) {
         IMViews.showToast(errorMessage(failure, path: path));
       }

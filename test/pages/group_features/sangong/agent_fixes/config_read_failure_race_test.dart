@@ -21,7 +21,7 @@ void main() {
     final value = await task;
     expect(value.name, '已保存的新配置');
     expect(runtime.config.config.name, '已保存的新配置');
-    expect(api.count('/my-config'), 1);
+    expect(api.count('/config'), 1);
   });
 
   for (final invalidation in ['context', 'authorization']) {
@@ -48,7 +48,7 @@ void main() {
       reply.completeError(StateError('old scope read'));
       await flushSangong(tester);
       await expectation;
-      expect(api.count('/my-config'), 1);
+      expect(api.count('/config'), 1);
     });
   }
 }

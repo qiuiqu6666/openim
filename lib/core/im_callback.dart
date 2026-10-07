@@ -30,6 +30,9 @@ mixin IMCallback {
 
   final revokedMessages = PublishSubject<RevokedInfo>();
   final deletedMessages = PublishSubject<Message>();
+
+  /// Observers share incoming SDK messages without replacing the chat callback.
+  final receivedMessages = PublishSubject<Message>();
   Function(RevokedInfo info)? onRecvMessageRevoked;
 
   Function(List<ReadReceiptInfo> list)? onRecvC2CReadReceipt;
@@ -152,6 +155,7 @@ mixin IMCallback {
   }
 
   void recvNewMessage(Message msg) {
+    receivedMessages.addSafely(msg);
     FundRefreshEvents.observeMessage(msg);
     if (msg.contentType == MessageType.custom &&
         msg.customElem?.description == 'assistantStream') {
@@ -163,6 +167,7 @@ mixin IMCallback {
   }
 
   void recvOfflineMessage(Message msg) {
+    receivedMessages.addSafely(msg);
     FundRefreshEvents.observeMessage(msg);
     if (msg.contentType == MessageType.custom &&
         msg.customElem?.description == 'assistantStream') {
@@ -284,6 +289,7 @@ mixin IMCallback {
     userStatusChangedSubject.close();
     customBusinessMessageSubject.close();
     inputStateChangedSubject.close();
+    receivedMessages.close();
     initializedSubject.close();
     friendApplicationChangedSubject.close();
     friendAddSubject.close();

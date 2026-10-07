@@ -20,7 +20,11 @@ Future<void> openWalletPaymentPassword(BuildContext context,
     {SettingsService? service}) async {
   try {
     final settings = _walletSettings(service);
-    await openWalletPage<void>(context, TradePasswordPage(service: settings));
+    await openWalletPage<void>(
+      context,
+      TradePasswordPage(service: settings),
+      activityPage: 'pay_password',
+    );
   } catch (_) {
     if (context.mounted) WalletTip.show(context, '无法打开支付密码设置，请重新登录后重试');
   }

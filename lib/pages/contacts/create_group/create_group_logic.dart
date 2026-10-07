@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
+import 'package:openim/core/user_activity/activity_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../routes/app_navigator.dart';
@@ -46,18 +47,20 @@ class CreateGroupLogic extends GetxController {
     _removeUnavailableMembers();
     if (allList.length > 1) {
       var info = await LoadingView.singleton.wrap(
-        asyncFunction: () => OpenIM.iMManager.groupManager.createGroup(
-          groupInfo: GroupInfo(
-            groupID: '',
-            groupName: groupName,
-            faceURL: faceURL.value,
-            groupType: GroupType.work,
-          ),
-          memberUserIDs: allList
-              .where((e) => e.userID != OpenIM.iMManager.userID)
-              .map((e) => e.userID!)
-              .toList(),
-        ),
+        asyncFunction: () => observeUserActivity(
+            'group_create',
+            () => OpenIM.iMManager.groupManager.createGroup(
+                  groupInfo: GroupInfo(
+                    groupID: '',
+                    groupName: groupName,
+                    faceURL: faceURL.value,
+                    groupType: GroupType.work,
+                  ),
+                  memberUserIDs: allList
+                      .where((e) => e.userID != OpenIM.iMManager.userID)
+                      .map((e) => e.userID!)
+                      .toList(),
+                )),
       );
       conversationLogic.toChat(
         offUntilHome: true,

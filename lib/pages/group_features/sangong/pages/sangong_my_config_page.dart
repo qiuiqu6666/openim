@@ -13,6 +13,7 @@ import '../services/authorization/sangong_operation_scope.dart';
 import '../models/binding/sangong_group_tenant_state.dart';
 import '../api/binding/sangong_group_tenant_api.dart';
 import '../api/diagnostics/sangong_api_debug_log.dart';
+import '../agents/pages/sangong_agent_groups_page.dart';
 
 /// 三公「我的配置」：绑定下注群 / 结账群 / 机器人（仅群主可改）。
 class SangongMyConfigPage extends StatefulWidget {
@@ -615,6 +616,14 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
             ),
           ],
         ),
+        if (_canEdit && _config.configured)
+          SettingsGroup(children: [
+            SettingsCell(
+                title: '代理群绑定',
+                value: '独立代理群',
+                showDivider: false,
+                onTap: () => SangongAgentGroupsPage.open(context))
+          ]),
         if (_canEdit &&
             !widget.groupScoped &&
             !_config.configured &&

@@ -1,34 +1,31 @@
 import 'dart:async';
-import 'dart:convert';
-import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
 import '../sangong_scope.dart';
 import '../models/sangong_admin_realtime_state.dart';
 import '../support/sangong_ui.dart';
-import '../utils/sangong_sse_parser.dart';
-import '../api/diagnostics/sangong_api_debug_log.dart';
+import 'realtime/sangong_state_event.dart';
 
-/// One reference-counted stream per account/group/authorized tenant. Snapshot
-/// on subscribe/reconnect/resume; no unconditional 15-second recovery polling.
+/// One account/group subscription. HTTP calibrates entry, reconnect and resume;
+/// authenticated bot messages carry subsequent public snapshots over OpenIM.
 class SangongRealtime extends ChangeNotifier with WidgetsBindingObserver {
   SangongRealtime(this.runtime);
   final SangongRuntime runtime;
   SangongAdminRealtimeState? latestState;
   String? error;
-  int _owners = 0, _generation = 0, _attempt = 0, _stateEpoch = 0;
+  int _owners = 0, _generation = 0, _attempt = 0;
   bool _foreground = true, _disposed = false;
   String? _tenant;
-  StreamSubscription<String>? _stream;
-  CancelToken? _cancel;
-  Timer? _retry, _idle;
+  String _botUserID = '';
+  StreamSubscription<Map<String, dynamic>>? _events;
+  Timer? _retry;
   Future<void>? _snapshot;
-  final _parser = SangongSseParser();
+  final _earlyEvents = <Map<String, dynamic>>[];
   bool get _canRun =>
       !_disposed && _owners > 0 && _foreground && runtime.canManage;
   int get ownerCount => _owners;
+
   void acquire() {
-    if (_disposed) return;
-    if (++_owners != 1) return;
+    if (_disposed || ++_owners != 1) return;
     _foreground = WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
@@ -37,8 +34,7 @@ class SangongRealtime extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void release() {
-    if (_owners == 0 || _disposed) return;
-    if (--_owners != 0) return;
+    if (_owners == 0 || _disposed || --_owners != 0) return;
     WidgetsBinding.instance.removeObserver(this);
     runtime.http.tenantIdListenable.removeListener(_tenantChanged);
     _stop();
@@ -47,6 +43,7 @@ class SangongRealtime extends ChangeNotifier with WidgetsBindingObserver {
   void _tenantChanged() {
     latestState = null;
     error = null;
+    _botUserID = '';
     _attempt = 0;
     _stop();
     _connect();
@@ -56,101 +53,79 @@ class SangongRealtime extends ChangeNotifier with WidgetsBindingObserver {
     _generation++;
     _retry?.cancel();
     _retry = null;
-    _idle?.cancel();
-    _idle = null;
-    _stream?.cancel();
-    _stream = null;
-    _cancel?.cancel('Sangong stream suspended');
-    _cancel = null;
+    _events?.cancel();
+    _events = null;
     _snapshot = null;
-    _parser.reset();
+    _earlyEvents.clear();
   }
 
   void _connect() {
     if (!_canRun) return;
-    final generation = _generation;
     _tenant = runtime.http.tenantId;
-    final token = _cancel = CancelToken();
-    unawaited(refreshSnapshot());
-    _stream = runtime.featureContext.api
-        .eventStream(runtime.http.requestPath('/api/v1/admin/events/stream'),
-            headers: runtime.http.requestHeaders(),
-            baseUrlOverride: runtime.http.baseUrlOverride,
-            useBearerAuth: true,
-            diagnostics: SangongApiDebugLog.create(),
-            cancelToken: token)
-        .listen((chunk) {
-      if (!_current(generation)) return;
-      _armIdle(generation);
-      _parser.feed(chunk, (event, data) {
-        if (event != 'state' && event != 'message') return;
-        try {
-          final json = jsonDecode(data);
-          if (json is! Map) throw const FormatException('Invalid SSE state');
-          final map = Map<String, dynamic>.from(json);
-          final raw = map['state'] ?? map;
-          if (raw is! Map ||
-              !raw.containsKey('version') ||
-              raw['settings'] is! Map) {
-            throw const FormatException('Invalid SSE state');
-          }
-          _accept(SangongAdminRealtimeState.fromRequiredJson(
-              Map<String, dynamic>.from(raw)));
-          _attempt = 0;
-        } catch (failure) {
-          error = DioErrorMessage.forApp(failure);
-          notifyListeners();
-          // A malformed/gapped state triggers one merged calibration request.
-          unawaited(refreshSnapshot());
+    final generation = _generation;
+    _events = runtime.featureContext.events.listen((event) {
+      if (!_current(generation) ||
+          event['groupID'] != runtime.featureContext.groupID) {
+        return;
+      }
+      if (event['key'] == 'imReconnected') {
+        unawaited(refreshSnapshot());
+      } else if (event['key'] == 'sangongStateMessage') {
+        if (_botUserID.isEmpty) {
+          if (_earlyEvents.length == 64) _earlyEvents.removeAt(0);
+          _earlyEvents.add(event);
+        } else {
+          _acceptEvent(event);
         }
-      });
-    }, onError: (Object failure) {
-      if (_current(generation)) _recover(failure);
-    }, onDone: () {
-      if (_current(generation)) _recover(StateError('三公实时连接已中断'));
+      }
     });
-    _armIdle(generation);
+    unawaited(refreshSnapshot());
   }
 
   bool _current(int generation) =>
       _canRun && generation == _generation && _tenant == runtime.http.tenantId;
-  void _armIdle(int generation) {
-    _idle?.cancel();
-    _idle = Timer(const Duration(seconds: 45), () {
-      if (_current(generation)) _recover(StateError('三公实时连接超时'));
-    });
-  }
 
-  void _recover(Object failure) {
-    error = DioErrorMessage.forApp(failure);
-    _stop();
-    if (!_canRun) return;
-    notifyListeners();
-    const delays = [1, 2, 5, 10, 30];
-    final delay = delays[_attempt.clamp(0, delays.length - 1)];
-    _attempt++;
-    _retry = Timer(Duration(seconds: delay), _connect);
+  void _acceptEvent(Map<String, dynamic> event) {
+    final state = readSangongStateEvent(event,
+        groupID: runtime.featureContext.groupID,
+        botUserID: _botUserID,
+        currentVersion: latestState?.version ?? -1);
+    if (state != null) _accept(state);
   }
 
   Future<void> refreshSnapshot() {
     if (!_canRun) return Future.value();
     final pending = _snapshot;
     if (pending != null) return pending;
-    final generation = _generation, epoch = _stateEpoch;
+    final generation = _generation;
     late final Future<void> task;
     task = runtime.admin.fetchEventsSnapshot().then((state) {
       if (!_current(generation)) return;
-      // HTTP cannot roll back an SSE event which overtook the request.
-      if (epoch != _stateEpoch &&
-          state.version <= (latestState?.version ?? 0)) {
-        return;
+      if (state.groupID != runtime.featureContext.groupID ||
+          state.botUserID.isEmpty ||
+          state.schemaVersion != 2) {
+        throw const FormatException('Invalid Sangong group snapshot');
       }
+      _botUserID = state.botUserID;
+      _attempt = 0;
+      _retry?.cancel();
       _accept(state);
-    }).catchError((Object failure) {
-      if (_current(generation)) {
-        error = DioErrorMessage.forApp(failure);
-        notifyListeners();
+      final buffered = List<Map<String, dynamic>>.of(_earlyEvents);
+      _earlyEvents.clear();
+      for (final event in buffered) {
+        _acceptEvent(event);
       }
+    }).catchError((Object failure) {
+      if (!_current(generation)) return;
+      error = DioErrorMessage.forApp(failure);
+      notifyListeners();
+      const delays = [1, 2, 5, 10, 30];
+      final delay = delays[_attempt.clamp(0, delays.length - 1)];
+      _attempt++;
+      _retry?.cancel();
+      _retry = Timer(Duration(seconds: delay), () {
+        unawaited(refreshSnapshot());
+      });
     }).whenComplete(() {
       if (identical(_snapshot, task)) _snapshot = null;
     });
@@ -159,17 +134,14 @@ class SangongRealtime extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _accept(SangongAdminRealtimeState state) {
-    final previous = latestState;
-    // version is the service's tenant snapshot version, not group ex revision.
-    if (previous != null && state.version <= previous.version) {
-      if (state.version == previous.version && error != null) {
+    if (latestState != null && state.version <= latestState!.version) {
+      if (state.version == latestState!.version && error != null) {
         error = null;
         notifyListeners();
       }
       return;
     }
     latestState = state;
-    _stateEpoch++;
     error = null;
     notifyListeners();
   }

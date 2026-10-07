@@ -30,14 +30,16 @@ Future<void> openWalletFriendTransfer(
       return;
     }
     final order = await openWalletPage<FundOrder>(
-        context,
-        FundSendPage(
-          isRedPacket: false,
-          userID: userID,
-          recipientName: name,
-          recipientFaceURL: faceURL,
-          paymentPreferences: preferences,
-        ));
+      context,
+      FundSendPage(
+        isRedPacket: false,
+        userID: userID,
+        recipientName: name,
+        recipientFaceURL: faceURL,
+        paymentPreferences: preferences,
+      ),
+      activityPage: 'wallet_transfer',
+    );
     if (order == null || WalletOrderEvents.currentAccountKey != owner) return;
     WalletOrderEvents.notifyBalance(accountKey: owner);
     WalletOrderEvents.notifyRecord(accountKey: owner);

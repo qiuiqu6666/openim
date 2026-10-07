@@ -1,3 +1,4 @@
+import 'package:openim/core/user_activity/activity_sdk.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -58,9 +59,11 @@ class FriendSetupLogic extends GetxController {
     ));
     if (confirm) {
       await LoadingView.singleton.wrap(asyncFunction: () async {
-        await OpenIM.iMManager.friendshipManager.deleteFriend(
-          userID: userProfilesLogic.userInfo.value.userID!,
-        );
+        await observeUserActivity(
+            'friend_delete',
+            () => OpenIM.iMManager.friendshipManager.deleteFriend(
+                  userID: userProfilesLogic.userInfo.value.userID!,
+                ));
         userProfilesLogic.userInfo.update((val) {
           val?.isFriendship = false;
         });
@@ -107,7 +110,8 @@ class FriendSetupLogic extends GetxController {
     }
     final result = await AppNavigator.startSelectContacts(
       action: SelAction.recommend,
-      sharedContact: UserInfo.fromJson(userProfilesLogic.userInfo.value.toJson()),
+      sharedContact:
+          UserInfo.fromJson(userProfilesLogic.userInfo.value.toJson()),
       ex: '[${StrRes.carte}]${userProfilesLogic.userInfo.value.nickname}',
     );
     if (null != result) {
@@ -116,6 +120,14 @@ class FriendSetupLogic extends GetxController {
       for (var info in checkedList) {
         final userID = IMUtils.convertCheckedToUserID(info);
         final groupID = IMUtils.convertCheckedToGroupID(info);
+        final String extension;
+        try {
+          extension = await createFriendCardExtension(
+              userProfilesLogic.userInfo.value.userID!);
+        } catch (error) {
+          if (isSilentFriendRisk(error)) return;
+          rethrow;
+        }
         if (customEx is String && customEx.isNotEmpty) {
           OpenIM.iMManager.messageManager.sendMessage(
             message: await OpenIM.iMManager.messageManager.createTextMessage(
@@ -130,8 +142,7 @@ class FriendSetupLogic extends GetxController {
         OpenIM.iMManager.messageManager.sendMessage(
           message: await OpenIM.iMManager.messageManager.createCardMessage(
             userID: userProfilesLogic.userInfo.value.userID!,
-            ex: await createFriendCardExtension(
-                userProfilesLogic.userInfo.value.userID!),
+            ex: extension,
             nickname: userProfilesLogic.userInfo.value.showName,
             faceURL: userProfilesLogic.userInfo.value.faceURL,
           ),

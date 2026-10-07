@@ -1,3 +1,4 @@
+import '../core/user_activity/activity_sdk.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
@@ -40,12 +41,14 @@ class ChatMessageSender {
           'Create a new message before sending');
     }
     if (_transport != null) return _transport(message, target);
-    return OpenIM.iMManager.messageManager.sendMessage(
-      message: message,
-      userID: hasUser ? user : null,
-      groupID: hasGroup ? group : null,
-      offlinePushInfo: Config.offlinePushInfo,
-    );
+    return observeUserActivity(
+        messageActivity(message.contentType),
+        () => OpenIM.iMManager.messageManager.sendMessage(
+              message: message,
+              userID: hasUser ? user : null,
+              groupID: hasGroup ? group : null,
+              offlinePushInfo: Config.offlinePushInfo,
+            ));
   }
 
   Future<FavoriteSendResult> send(

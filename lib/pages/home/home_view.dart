@@ -285,7 +285,10 @@ class _HomePageState extends State<HomePage> {
       body: PersistentTabView(
         controller: _tabController,
         tabs: _tabs(context),
-        onTabChanged: (index) => _activeTabIndex.value = index,
+        onTabChanged: (index) {
+          _activeTabIndex.value = index;
+          logic.switchTab(index);
+        },
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         navBarBuilder: (config) => ValueListenableBuilder<int>(
             valueListenable: _editBarRevision,

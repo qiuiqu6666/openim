@@ -8,15 +8,19 @@ import '../widgets/wallet_99chat_tokens.dart';
 ///
 /// The root navigator boundary keeps the five main tabs out of Wallet child
 /// pages, while [AppMaterialPageRoute] mirrors 99chat's edge-swipe interaction.
-Future<T?> openWalletPage<T>(BuildContext context, Widget page) {
+Future<T?> openWalletPage<T>(BuildContext context, Widget page,
+    {String activityPage = 'wallet'}) {
   return Navigator.of(context, rootNavigator: true).push<T>(
-    AppMaterialPageRoute<T>(builder: (_) => page),
+    AppMaterialPageRoute<T>(
+        builder: (_) => page, settings: RouteSettings(name: '/$activityPage')),
   );
 }
 
-Future<T?> replaceWalletPage<T, TO>(BuildContext context, Widget page) {
+Future<T?> replaceWalletPage<T, TO>(BuildContext context, Widget page,
+    {String activityPage = 'wallet'}) {
   return Navigator.of(context, rootNavigator: true).pushReplacement<T, TO>(
-    AppMaterialPageRoute<T>(builder: (_) => page),
+    AppMaterialPageRoute<T>(
+        builder: (_) => page, settings: RouteSettings(name: '/$activityPage')),
   );
 }
 
@@ -114,9 +118,8 @@ class _WalletRouteDepthTransition extends StatelessWidget {
       animation: animation,
       child: child,
       builder: (context, child) {
-        final activeCurve = animation.status == AnimationStatus.reverse
-            ? reverseCurve
-            : curve;
+        final activeCurve =
+            animation.status == AnimationStatus.reverse ? reverseCurve : curve;
         final progress = activeCurve.transform(animation.value.clamp(0.0, 1.0));
         final scrimOpacity = maximumScrimOpacity * progress;
         return ColoredBox(

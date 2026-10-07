@@ -337,7 +337,10 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
       final receipt = await _operation.refreshOrder();
       if (!mounted || !_operation.sameAccount) return;
       await openWalletPage<void>(
-          context, WalletOperationDetailScreen(receipt: receipt));
+        context,
+        WalletOperationDetailScreen(receipt: receipt),
+        activityPage: 'wallet_order',
+      );
       if (mounted && _operation.sameAccount) await _load();
     } catch (failure) {
       if (mounted) {

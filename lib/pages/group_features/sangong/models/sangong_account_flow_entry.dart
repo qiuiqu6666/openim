@@ -26,6 +26,7 @@ class SangongAccountFlowEntry {
 
   static const betTypes = {
     'bet_hold',
+    'bet_cancel',
     'bet_recall',
     'bet_void',
     'bet_restart',
@@ -43,6 +44,7 @@ class SangongAccountFlowEntry {
   String get label =>
       const {
         'bet_hold': '下注扣款',
+        'bet_cancel': '撤注退款',
         'bet_recall': '撤回下注',
         'bet_void': '作废退还',
         'bet_restart': '重开退还',

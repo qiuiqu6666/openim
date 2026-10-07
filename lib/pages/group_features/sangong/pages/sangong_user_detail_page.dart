@@ -14,6 +14,7 @@ import 'package:openim/pages/group_features/sangong/widgets/app_back_button.dart
 import '../widgets/sangong_user_flow_tabs.dart';
 import '../profile/sangong_authorized_view.dart';
 import '../services/authorization/sangong_operation_scope.dart';
+import '../agents/widgets/sangong_agent_user_actions.dart';
 
 String sangongReportDate(DateTime date) =>
     '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -68,7 +69,6 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
     super.initState();
     _pageScope = SangongOperationScope.capture(
         _runtime.featureContext, _runtime.http.tenantId);
-    _loadProfile();
     _loadSessions();
     _load();
   }
@@ -109,6 +109,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
   Future<void> _load() async {
     if (!_current) return;
     final generation = ++_generation;
+    final profileGeneration = _profileGeneration;
     setState(() {
       _busy = true;
       _error = null;
@@ -139,20 +140,21 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
           return;
         }
       }
-      final results = await Future.wait<Object>([
-        _api.fetchUserHierarchyReport(
-            imUserId: widget.user.imUserId,
-            date: batch ? null : day,
-            sessionId: sessionId),
-        _api.fetchUserFlowResult(
-            imUserId: widget.user.imUserId, sessionId: sessionId),
-      ]);
+      final flowResult = await _api.fetchUserFlowResult(
+        imUserId: widget.user.imUserId,
+        sessionId: sessionId,
+        date: batch ? null : day,
+      );
       if (!_current || generation != _generation) return;
-      final flowResult = results[1] as SangongUserFlowResult;
       final flow = flowResult.report;
       setState(() {
-        _summary = sangongOwnSummary(
-            results[0] as List<Map<String, dynamic>>, widget.user.imUserId);
+        _summary = flowResult.summary;
+        // A report started before a confirmed limit/rate edit may still supply
+        // valid ledger totals, but must not restore its older user profile.
+        if (profileGeneration == _profileGeneration) {
+          _detail = flowResult.detail;
+          _profileError = null;
+        }
         _flow = flow;
         _flowResult = flowResult;
         _names = {};
@@ -367,14 +369,6 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
     );
   }
 
-  List<SangongAccountFlowEntry> _visible(
-          List<SangongAccountFlowEntry> entries) =>
-      _batch
-          ? entries
-          : entries
-              .where((e) => sangongEntryOnDate(e, sangongReportDate(_date)))
-              .toList();
-
   @override
   Widget build(BuildContext context) {
     final raw = _detail['user'];
@@ -413,7 +407,6 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                         onPressed: _busy
                             ? null
                             : () {
-                                _loadProfile();
                                 _load();
                               },
                         icon: const Icon(Icons.refresh)),
@@ -520,6 +513,21 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                           widget.user.balance,
                                         ),
                                       ),
+                                      if (_profileError == null &&
+                                          profile['userId'] is int)
+                                        SangongAgentUserActions(
+                                            userId: profile['userId'] as int,
+                                            imUserId: widget.user.imUserId,
+                                            nickname: nickname,
+                                            rebatePct: num.tryParse(
+                                                    '${profile['rebatePct']}') ??
+                                                0,
+                                            parentUserId: parent is Map
+                                                ? int.tryParse(
+                                                        '${parent['userId']}') ??
+                                                    0
+                                                : 0,
+                                            onChanged: _loadProfile),
                                     ]),
                               ),
                               Padding(
@@ -539,7 +547,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                         segments: const [
                                           ButtonSegment(
                                               value: false,
-                                              label: Text('每日汇总'),
+                                              label: Text('经营日汇总'),
                                               icon: Icon(
                                                   Icons.calendar_today_outlined,
                                                   size: 16)),
@@ -572,7 +580,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                       TextButton(
                                           onPressed: _pickDate,
                                           child: Text(
-                                              '${sangongReportDate(_date)} · 上海时间')),
+                                              '${sangongReportDate(_date)} · 上海时间开机日')),
                                       IconButton(
                                           onPressed: sangongReportDate(_date) ==
                                                   today
@@ -688,7 +696,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                       Tooltip(
                                           triggerMode: TooltipTriggerMode.tap,
                                           message:
-                                              '明细可能不完整，以汇总为准。盈亏不含上下分、下注扣款和返水。',
+                                              '盈亏包含下注扣款、退款、派彩和庄方结算，不含上下分及返水。',
                                           child: Padding(
                                               padding: const EdgeInsets.all(6),
                                               child: Icon(Icons.info_outline,
@@ -711,9 +719,6 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                         ),
                                   ),
                                 ),
-                                if (!_batch)
-                                  const Text('合庄出资无日期字段，请按开机批次查看',
-                                      style: TextStyle(fontSize: 11)),
                               ],
                             ])),
                             if (!_busy && _error == null)
@@ -735,15 +740,14 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                     ]))
                               : TabBarView(children: [
                                   SangongAccountFlowList(
-                                      entries: _visible(_flow.betEntries),
-                                      bets: true),
+                                      entries: _flow.betEntries, bets: true),
                                   SangongAccountFlowList(
-                                      entries: _visible(_flow.bankerEntries),
+                                      entries: _flow.bankerEntries,
                                       bets: true,
                                       contributions:
                                           _batch ? _flow.coBankFlow : const []),
                                   SangongAccountFlowList(
-                                      entries: _visible(_flow.scoreEntries),
+                                      entries: _flow.scoreEntries,
                                       bets: false,
                                       operatorNames: _names),
                                 ]))),

@@ -331,6 +331,7 @@ class _WalletRecordScreenState extends State<WalletRecordScreen>
               ),
             ),
           ),
+          activityPage: 'wallet_order',
         ),
       );
     }
@@ -380,7 +381,10 @@ class _WalletRecordScreenState extends State<WalletRecordScreen>
                     months: allMonths,
                     onMonthChanged: _pickMonth,
                     onOpenRecord: (item) => openWalletPage<void>(
-                        context, WalletRecordDetailScreen(item: item)));
+                          context,
+                          WalletRecordDetailScreen(item: item),
+                          activityPage: 'wallet_order',
+                        ));
               },
             ),
           ),

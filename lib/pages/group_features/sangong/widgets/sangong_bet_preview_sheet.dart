@@ -136,7 +136,7 @@ class _SangongBetPreviewSheetState extends State<SangongBetPreviewSheet> {
   }
 
   Future<bool> _confirmExcludeEntry(SangongBetPreviewEntry entry) async {
-    final messageId = entry.messageId;
+    final messageId = entry.msgSeq;
     if (messageId == null || messageId <= 0 || _submitting || _refreshing) {
       return false;
     }
@@ -159,8 +159,8 @@ class _SangongBetPreviewSheetState extends State<SangongBetPreviewSheet> {
       ),
       message: detail.isNotEmpty
           ? i18n.format(
-              zhHans: '确定将以下注单不计入统计？\n$detail',
-              zhHant: '確定將以下注單不計入統計？\n$detail',
+              zhHans: '确定将这条消息的全部注单排除，并在确认截止时退款？\n$detail',
+              zhHant: '確定將這條訊息的全部注單排除，並在確認截止時退款？\n$detail',
               en: 'Exclude this bet from the preview?\n$detail',
               vars: {'detail': detail},
             )
@@ -190,7 +190,7 @@ class _SangongBetPreviewSheetState extends State<SangongBetPreviewSheet> {
   }
 
   Future<void> _performExcludeEntry(SangongBetPreviewEntry entry) async {
-    final messageId = entry.messageId;
+    final messageId = entry.msgSeq;
     if (messageId == null || messageId <= 0 || !mounted) {
       return;
     }

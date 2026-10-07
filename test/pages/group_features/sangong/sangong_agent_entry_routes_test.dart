@@ -10,8 +10,8 @@ void main() {
 
   for (final dark in [false, true]) {
     for (final entry in [
-      (tooltip: '查下级', title: '查询下级', endpoint: '/team/members'),
-      (tooltip: '团队反水', title: '团队统计', endpoint: '/team/dashboard'),
+      (tooltip: '查下级', title: '查询下级', endpoint: '/team'),
+      (tooltip: '团队反水', title: '团队统计', endpoint: '/team-summary'),
     ]) {
       testWidgets('${entry.tooltip} opens ${entry.title}, dark=$dark',
           (tester) async {

@@ -180,6 +180,17 @@ void main() {
   });
 
   for (final entry in _Entry.values) {
+    for (final error in [(20201, 'risk limited'), (20020, 'too frequent')]) {
+      test('$entry stops silently when the invitation is limited: $error',
+          () async {
+        fixture.onExtension = () async => throw error;
+        await fixture.run(entry);
+        expect(fixture.nativeCalls, isEmpty);
+        expect(fixture.sends, isEmpty);
+        expect(fixture.toasts, isEmpty);
+        expect(fixture.extensionTargets, [_target]);
+      });
+    }
     for (final invalidation in ['closed', 'account', 'token', 'SDK']) {
       test(
           '$entry captures the login session before opening its picker: $invalidation',

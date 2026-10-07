@@ -523,12 +523,14 @@ class _WalletChainWithdrawalScreenState
                       onPressed: !_controller.isCurrentAccount
                           ? null
                           : () => openWalletPage<void>(
-                              context,
-                              WalletWithdrawRecordScreen(
-                                  repository: WalletFundRepository(
-                                      api: operation.api,
-                                      accountProvider:
-                                          widget.accountProvider))),
+                                context,
+                                WalletWithdrawRecordScreen(
+                                    repository: WalletFundRepository(
+                                        api: operation.api,
+                                        accountProvider:
+                                            widget.accountProvider)),
+                                activityPage: 'wallet_history',
+                              ),
                       icon: const Icon(Icons.history_rounded))),
             ],
           ),

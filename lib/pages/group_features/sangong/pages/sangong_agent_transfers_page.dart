@@ -33,6 +33,7 @@ class _TransfersState extends State<SangongAgentTransfersPage> {
   late final _api = widget.api ??
       SangongTransfersApi(
           dio: SangongScope.read(context).http.client,
+          groupId: SangongScope.read(context).featureContext.groupID,
           scopedOptions: SangongScope.read(context).http.scopedOptions);
   String _direction = 'all';
   int? _sessionId;
