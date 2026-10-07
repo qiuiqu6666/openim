@@ -229,34 +229,52 @@ void main() {
     await pending;
     expect(store.capabilities('g').sangong.canManage, false);
   });
-  test('SDK permission revision refreshes once even with unchanged public entries', () async {
+  test(
+      'SDK permission revision refreshes once even with unchanged public entries',
+      () async {
     Map<String, dynamic> caps(int version, bool manage) => {
-      'errCode': 0, 'data': {'groupID': 'g', 'capabilityVersion': version,
-        'cacheTTLSeconds': 300, 'sangong': {'canManage': manage}}
-    };
+          'errCode': 0,
+          'data': {
+            'groupID': 'g',
+            'capabilityVersion': version,
+            'cacheTTLSeconds': 300,
+            'sangong': {'canManage': manage}
+          }
+        };
     store.apply('g', {..._summary(1), 'capabilityVersion': 1});
     http.data = caps(1, true);
     await store.loadCapabilities('g');
     expect(store.capabilities('g').sangong.canManage, isTrue);
     http.data = caps(2, false);
-    final mirror = GroupInfo(groupID: 'g', ex: jsonEncode({
-      'groupFeatures': {..._summary(2), 'capabilityVersion': 2}
-    }));
+    final mirror = GroupInfo(
+        groupID: 'g',
+        ex: jsonEncode({
+          'groupFeatures': {..._summary(2), 'capabilityVersion': 2}
+        }));
     store.seed(mirror);
     store.seed(mirror);
     await store.loadCapabilities('g');
     expect(http.requests.length, 2);
     expect(store.capabilities('g').sangong.canManage, isFalse);
-    store.seed(GroupInfo(groupID: 'g', ex: jsonEncode({
-      'groupFeatures': {..._summary(1), 'capabilityVersion': 1}
-    })));
+    store.seed(GroupInfo(
+        groupID: 'g',
+        ex: jsonEncode({
+          'groupFeatures': {..._summary(1), 'capabilityVersion': 1}
+        })));
     expect(http.requests.length, 2);
     expect(store.capabilities('g').version, 2);
   });
-  test('SDK capability floor rejects an older HTTP permission response', () async {
+  test('SDK capability floor rejects an older HTTP permission response',
+      () async {
     store.apply('g', {..._summary(2), 'capabilityVersion': 7});
-    http.data = {'errCode': 0, 'data': {'groupID': 'g', 'capabilityVersion': 6,
-      'sangong': {'canManage': true}}};
+    http.data = {
+      'errCode': 0,
+      'data': {
+        'groupID': 'g',
+        'capabilityVersion': 6,
+        'sangong': {'canManage': true}
+      }
+    };
     await store.loadCapabilities('g');
     expect(store.capabilities('g').sangong.canManage, isFalse);
     expect(store.capabilityError('g')?.code, 'STALE_CAPABILITIES');

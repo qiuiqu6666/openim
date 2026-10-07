@@ -224,8 +224,7 @@ void main() {
     expect(find.byTooltip('收起').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
-  testWidgets(
-      'host retry recovers the failed snapshot without starting SSE',
+  testWidgets('host retry recovers the failed snapshot without starting SSE',
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) {

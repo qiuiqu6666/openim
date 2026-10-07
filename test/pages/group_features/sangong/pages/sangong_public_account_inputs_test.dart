@@ -172,7 +172,12 @@ void main() {
         if (call.path.endsWith('/users')) {
           return {
             'users': [
-              {'userId': 1, 'imUserId': 'im_loaded', 'nickname': '已加载用户', 'balance': 0},
+              {
+                'userId': 1,
+                'imUserId': 'im_loaded',
+                'nickname': '已加载用户',
+                'balance': 0
+              },
             ],
             'nextBeforeId': 1,
             'pageSize': 50,
@@ -183,7 +188,7 @@ void main() {
         if (call.path.endsWith('/user')) {
           return {
             'exists': true,
-'user': {
+            'user': {
               'userId': 208,
               'imUserId': 'im_real_target',
               'nickname': '公开账号目标',
@@ -222,7 +227,7 @@ void main() {
           ? {'users': [], 'total': 0, 'nextBeforeId': 0}
           : {
               'exists': true,
-'user': {
+              'user': {
                 'userId': 99,
                 'imUserId': 'im_wrong',
                 'nickname': '错误用户',
@@ -261,7 +266,7 @@ void main() {
     await tester.enterText(find.byType(TextField), '');
     reply.complete({
       'exists': true,
-'user': {
+      'user': {
         'userId': 208,
         'imUserId': 'im_real_target',
         'nickname': '已失效的私有结果',
@@ -280,7 +285,7 @@ void main() {
           ? {'users': [], 'total': 0, 'nextBeforeId': 0}
           : {
               'exists': true,
-'user': {
+              'user': {
                 'userId': 208,
                 'imUserId': 'im_real_target',
                 'nickname': '受保护的账户结果',

@@ -1,7 +1,5 @@
-/// Shared destination for Sangong business requests and realtime streams.
-/// Current-group tenant management uses the current Chat destination instead.
-/// A full /api/v1 base owns its service prefix. An empty configured base keeps
-/// using Chat with the separate path prefix for existing proxy deployments.
+/// Current Chat destination by default. An optional full /api/v2 base owns its
+/// prefix; group identity always remains in the request path.
 class SangongApiConfig {
   SangongApiConfig._();
 
@@ -12,15 +10,17 @@ class SangongApiConfig {
   );
   static const tenantId = String.fromEnvironment('SANGONG_TENANT_ID');
 
-  /// Endpoint definitions keep their /api/v1 contract paths. A complete API
-  /// base already includes that version segment, so strip it exactly once.
+  /// A complete API base already includes the version segment.
   static String requestPath(
       {required String baseUrl,
       required String pathPrefix,
       required String path}) {
     final basePath = Uri.parse(baseUrl).path.replaceFirst(RegExp(r'/+$'), '');
+    if (basePath.endsWith('/api/v2')) {
+      return path.replaceFirst(RegExp(r'^/api/v2(?=/|$)'), '');
+    }
     if (basePath.endsWith('/api/v1')) {
-      return path.replaceFirst(RegExp(r'^/api/v1(?=/|$)'), '');
+      throw ArgumentError('三公已升级为 v2，请更新服务地址');
     }
     return '$pathPrefix$path';
   }

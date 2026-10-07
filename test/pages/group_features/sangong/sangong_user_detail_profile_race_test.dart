@@ -9,7 +9,7 @@ import 'sangong_test_support.dart';
 
 Map<String, dynamic> profileWithLimit(int limit) => {
       'exists': true,
-'user': {
+      'user': {
         'userId': 19,
         'imUserId': 'im_target',
         'maxNegative': limit,
@@ -17,9 +17,16 @@ Map<String, dynamic> profileWithLimit(int limit) => {
       }
     };
 
+Map<String, dynamic> reportWithLimit(int limit) => sangongUserReport(
+    imUserId: 'im_target',
+    user: Map<String, dynamic>.from(profileWithLimit(limit)['user']));
+
 dynamic profileBackground(SangongCall call) {
-  if (call.path.endsWith('/sessions')) return {'sessions': []};
-  if (call.path.endsWith('/user-hierarchy')) return {'members': []};
+  if (call.path.endsWith('/snapshot'))
+    return {
+      'session': {'id': 2},
+      'round': null
+    };
   return sangongFixtureResponse(call);
 }
 
@@ -36,24 +43,23 @@ void _switchToConfirmedTenant(SangongRuntime runtime, SangongTestApi api) {
 }
 
 void main() {
-  testWidgets('older profile response cannot replace a newer refresh',
+  testWidgets('older report cannot replace a newer selected batch',
       (tester) async {
     final oldRead = Completer<dynamic>();
     var profileReads = 0;
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/user')) {
-          return ++profileReads == 1 ? oldRead.future : profileWithLimit(100);
+        if (call.path.endsWith('/user-report')) {
+          return ++profileReads == 1 ? oldRead.future : reportWithLimit(100);
         }
         return profileBackground(call);
       };
     final runtime = sangongTestRuntime(sangongTestContext(api));
     await pumpSangongPage(tester, runtime, target);
-    await tester.tap(find.descendant(
-        of: find.byType(AppBar), matching: find.byIcon(Icons.refresh)));
+    await tester.tap(find.text('开机批次'));
     await flushSangong(tester);
     expect(find.text('可负额度 100'), findsOneWidget);
-    oldRead.complete(profileWithLimit(10));
+    oldRead.complete(reportWithLimit(10));
     await flushSangong(tester);
     expect(find.text('可负额度 100'), findsOneWidget);
     expect(find.text('可负额度 10'), findsNothing);
@@ -65,14 +71,13 @@ void main() {
   testWidgets('late pre-save profile cannot overwrite confirmed new limit',
       (tester) async {
     final oldRead = Completer<dynamic>();
-    var profileReads = 0;
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/user')) {
-          return ++profileReads == 1 ? oldRead.future : profileWithLimit(500);
-        }
+        if (call.path.endsWith('/user-report')) return oldRead.future;
+        if (call.path.endsWith('/user')) return profileWithLimit(500);
         if (call.path.endsWith('/commands/wallet.limit'))
-          return sangongReceipt(call, Map<String, dynamic>.from(profileWithLimit(500)['user']));
+          return sangongReceipt(
+              call, Map<String, dynamic>.from(profileWithLimit(500)['user']));
         return profileBackground(call);
       };
     final runtime = sangongTestRuntime(sangongTestContext(api));
@@ -87,7 +92,7 @@ void main() {
     await flushSangong(tester);
     expect(api.count('/commands/wallet.limit'), 1);
     expect(find.text('可负额度 500'), findsOneWidget);
-    oldRead.complete(profileWithLimit(10));
+    oldRead.complete(reportWithLimit(10));
     await flushSangong(tester);
     expect(find.text('可负额度 500'), findsOneWidget);
     expect(find.text('可负额度 10'), findsNothing);
@@ -99,10 +104,11 @@ void main() {
   testWidgets('direct detail route hides cached private data on revocation',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/user')
+      ..respond = (call) => call.path.endsWith('/user-report')
           ? {
+              ...reportWithLimit(100),
               'exists': true,
-'user': {
+              'user': {
                 ...profileWithLimit(100)['user'],
                 'nickname': '私人资料缓存',
               }
@@ -129,10 +135,11 @@ void main() {
       'same-permission tenant switch hides detail from the entry tenant',
       (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/user')
+      ..respond = (call) => call.path.endsWith('/user-report')
           ? {
+              ...reportWithLimit(100),
               'exists': true,
-'user': {
+              'user': {
                 ...profileWithLimit(100)['user'],
                 'nickname': '厅 A 私人资料',
               }
@@ -161,10 +168,11 @@ void main() {
         'open max-negative dialog cannot write after tenant switch '
         '(confirming=$confirming)', (tester) async {
       final api = SangongTestApi()
-        ..respond = (call) => call.path.endsWith('/user')
-            ? profileWithLimit(100)
+        ..respond = (call) => call.path.endsWith('/user-report')
+            ? reportWithLimit(100)
             : call.path.endsWith('/commands/wallet.limit')
-                ? sangongReceipt(call, Map<String, dynamic>.from(profileWithLimit(500)['user']))
+                ? sangongReceipt(call,
+                    Map<String, dynamic>.from(profileWithLimit(500)['user']))
                 : profileBackground(call);
       final runtime = sangongTestRuntime(sangongTestContext(api));
       await pumpSangongPage(tester, runtime, target);

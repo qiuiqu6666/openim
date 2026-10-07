@@ -110,7 +110,7 @@ void main() {
       } else {
         detailReply.complete({
           'exists': true,
-'user': {
+          'user': {
             'userId': 208,
             'imUserId': 'im_real_target',
             'nickname': 'A 厅私有账户',

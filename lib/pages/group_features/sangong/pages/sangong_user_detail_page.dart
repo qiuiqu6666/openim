@@ -109,6 +109,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
   Future<void> _load() async {
     if (!_current) return;
     final generation = ++_generation;
+    final profileGeneration = _profileGeneration;
     setState(() {
       _busy = true;
       _error = null;
@@ -148,8 +149,12 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
       final flow = flowResult.report;
       setState(() {
         _summary = flowResult.summary;
-        _detail = flowResult.detail;
-        _profileError = null;
+        // A report started before a confirmed limit/rate edit may still supply
+        // valid ledger totals, but must not restore its older user profile.
+        if (profileGeneration == _profileGeneration) {
+          _detail = flowResult.detail;
+          _profileError = null;
+        }
         _flow = flow;
         _flowResult = flowResult;
         _names = {};
@@ -402,7 +407,6 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                         onPressed: _busy
                             ? null
                             : () {
-                                _loadProfile();
                                 _load();
                               },
                         icon: const Icon(Icons.refresh)),

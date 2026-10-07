@@ -31,11 +31,18 @@ dynamic profileResponse(SangongCall call) {
   }
   if (call.path.endsWith('/user')) {
     return {
-      'exists': true, 'user': {'userId': 19, 'imUserId': 'im_target', 'balance': 420, 'rebatePer10000': 8},
-'parent': {'nickname': '上级甲'}
+      'exists': true,
+      'user': {
+        'userId': 19,
+        'imUserId': 'im_target',
+        'balance': 420,
+        'rebatePer10000': 8
+      },
+      'parent': {'nickname': '上级甲'}
     };
   }
-  if (call.path.endsWith('/commands/wallet.adjust')) return sangongReceipt(call, {'imUserId': 'im_target', 'balance': 430});
+  if (call.path.endsWith('/commands/wallet.adjust'))
+    return sangongReceipt(call, {'imUserId': 'im_target', 'balance': 430});
   return sangongFixtureResponse(call);
 }
 
@@ -183,9 +190,8 @@ void main() {
       (tester) async {
     final response = Completer<dynamic>();
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/user')
-          ? response.future
-          : profileResponse(call);
+      ..respond = (call) =>
+          call.path.endsWith('/user') ? response.future : profileResponse(call);
     final runtime = sangongTestRuntime(sangongTestContext(api));
     await pumpSangongPage(tester, runtime,
         const Scaffold(body: SangongProfilePanel(userID: 'im_target')));
