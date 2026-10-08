@@ -77,8 +77,14 @@ class SangongRoundApi {
 
   List<Map<String, dynamic>> draws(List<SangongDrawInput> entries) =>
       entries.map((e) {
-        final match =
-            RegExp(r'^(0|1)(?:\.(\d{1,2}))?$').firstMatch(e.amount.trim());
+        final raw = e.amount.trim();
+        // The keypad submits two digits, matching Java's draw input format.
+        // In particular, 01 is one hundredth while 00 represents 1.00.
+        if (RegExp(r'^\d{2}$').hasMatch(raw)) {
+          final value = int.parse(raw);
+          return {'door': e.door, 'amountHundredths': value == 0 ? 100 : value};
+        }
+        final match = RegExp(r'^(0|1)(?:\.(\d{1,2}))?$').firstMatch(raw);
         if (match == null) throw ArgumentError('开彩金额必须为 0.01～1.00');
         final amount = int.parse(match.group(1)!) * 100 +
             int.parse((match.group(2) ?? '').padRight(2, '0'));
