@@ -13,8 +13,12 @@ import 'sangong_profile_admin_layout.dart';
 /// The 99chat controls, backed by one authorized OpenIM account/group/tenant.
 class SangongProfilePanel extends StatefulWidget {
   const SangongProfilePanel(
-      {super.key, required this.userID, this.embedded = false});
+      {super.key,
+      required this.userID,
+      this.nickname = '',
+      this.embedded = false});
   final String userID;
+  final String nickname;
   final bool embedded;
   @override
   State<SangongProfilePanel> createState() => _SangongProfilePanelState();
@@ -399,9 +403,11 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     });
   }
 
-  String get _displayName => _user?.nickname.trim().isNotEmpty == true
-      ? _user!.nickname.trim()
-      : widget.userID;
+  String get _displayName => widget.nickname.trim().isNotEmpty
+      ? widget.nickname.trim()
+      : _user?.nickname.trim().isNotEmpty == true
+          ? _user!.nickname.trim()
+          : widget.userID;
 
   String get _parentLabel {
     final parent = _detail['parent'];

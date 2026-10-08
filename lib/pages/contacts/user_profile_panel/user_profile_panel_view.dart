@@ -142,7 +142,9 @@ class UserProfilePanelPage extends StatelessWidget {
                             ]),
                           ] else
                             _header(context),
-                          SangongInlineProfilePanel(userID: user.userID ?? ''),
+                          SangongInlineProfilePanel(
+                              userID: user.userID ?? '',
+                              nickname: user.nickname ?? ''),
                           if (canChat && friend)
                             UserProfileQuickActions(
                               voiceLabel: 'profileVoiceCall'.tr,

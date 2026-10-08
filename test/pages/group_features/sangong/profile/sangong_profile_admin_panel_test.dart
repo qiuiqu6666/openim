@@ -71,14 +71,15 @@ dynamic _readResponse(SangongCall call) {
 SangongProfileAdminLayout _layout(WidgetTester tester) => tester
     .widget<SangongProfileAdminLayout>(find.byType(SangongProfileAdminLayout));
 
-Future<void> _mount(
-        WidgetTester tester, SangongRuntime runtime) =>
+Future<void> _mount(WidgetTester tester, SangongRuntime runtime,
+        {String nickname = ''}) =>
     pumpSangongPage(
         tester,
         runtime,
-        const Scaffold(
+        Scaffold(
             body: SingleChildScrollView(
-                child: SangongProfilePanel(userID: 'im_target'))));
+                child: SangongProfilePanel(
+                    userID: 'im_target', nickname: nickname))));
 
 Future<void> _confirm(WidgetTester tester, VoidCallback action) async {
   action();
@@ -195,7 +196,7 @@ void main() {
         return _readResponse(call);
       };
     final runtime = sangongTestRuntime(sangongTestContext(api));
-    await _mount(tester, runtime);
+    await _mount(tester, runtime, nickname: '资料页真实昵称');
     final layout = _layout(tester);
     layout.bankerController.text = '2.5000';
     await tester.pump();
@@ -208,9 +209,10 @@ void main() {
       'imUserId': 'im_target',
       'door': 2,
       'bankerLimit': 5000,
-      'nickname': '秋',
+      'nickname': '资料页真实昵称',
     });
     expect(layout.bankerController.text, isEmpty);
+    expect(_layout(tester).error, isNull);
     await unmountSangong(tester);
     runtime.dispose();
   });

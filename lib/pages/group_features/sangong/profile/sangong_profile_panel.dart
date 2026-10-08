@@ -8,15 +8,17 @@ import 'sangong_profile_entry_scope.dart';
 export 'sangong_profile_admin_panel.dart' show SangongProfilePanel;
 
 class SangongInlineProfilePanel extends StatelessWidget {
-  const SangongInlineProfilePanel({super.key, required this.userID});
+  const SangongInlineProfilePanel(
+      {super.key, required this.userID, this.nickname = ''});
   final String userID;
+  final String nickname;
   @override
   Widget build(BuildContext context) {
     if (MediaQuery.sizeOf(context).width >= 900) return const SizedBox.shrink();
     final entry = SangongProfileEntryScope.maybeOf(context);
     if (entry != null) {
       return entry.userID == userID
-          ? SangongProfileEntryCard(userID: userID)
+          ? SangongProfileEntryCard(userID: userID, nickname: nickname)
           : const SizedBox.shrink();
     }
     final runtime =
@@ -25,7 +27,8 @@ class SangongInlineProfilePanel extends StatelessWidget {
         userID == runtime?.featureContext.currentUserID) {
       return const SizedBox.shrink();
     }
-    return _mobileCard(context, SangongProfilePanel(userID: userID));
+    return _mobileCard(
+        context, SangongProfilePanel(userID: userID, nickname: nickname));
   }
 }
 
@@ -38,8 +41,12 @@ Widget _mobileCard(BuildContext context, Widget child) => Padding(
 /// Only the authorized child owns private reports and mutation controls.
 class SangongProfileEntryCard extends StatefulWidget {
   const SangongProfileEntryCard(
-      {super.key, required this.userID, this.embedded = false});
+      {super.key,
+      required this.userID,
+      this.nickname = '',
+      this.embedded = false});
   final String userID;
+  final String nickname;
   final bool embedded;
   @override
   State<SangongProfileEntryCard> createState() =>
@@ -119,7 +126,9 @@ class _SangongProfileEntryCardState extends State<SangongProfileEntryCard> {
                         entry.selectedGroupID == null ? '选择游戏群' : '切换游戏群'))),
           if (ready)
             SangongProfilePanel(
-                userID: widget.userID, embedded: widget.embedded)
+                userID: widget.userID,
+                nickname: widget.nickname,
+                embedded: widget.embedded)
           else
             SangongProfileAdminLayout(
                 pointsController: _points,
