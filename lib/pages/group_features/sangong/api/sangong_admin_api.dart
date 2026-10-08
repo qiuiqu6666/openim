@@ -194,13 +194,15 @@ class SangongAdminApi {
           required String imUserId,
           required int door,
           int? limit,
-          String? nickname}) =>
+          String? nickname,
+          bool openBetting = false}) =>
       _rounds.assignBanker(
           roundId: roundId,
           imUserId: imUserId,
           door: door,
           limit: limit,
-          nickname: nickname);
+          nickname: nickname,
+          openBetting: openBetting);
   Future<void> sendBankerNotification({required int roundId}) async {
     await _rounds.command('round.open', roundId);
   }
@@ -223,8 +225,16 @@ class SangongAdminApi {
           {required int roundId, required int userId, required int amount}) =>
       _rounds.coBank(
           'round.co_bank', roundId, {'userId': userId, 'amount': amount});
-  Future<void> sendCoBankNotification({required int roundId}) async {
-    await _rounds.command('round.co_bank_notice', roundId);
+  Future<void> sendCoBankNotification(
+      {required int roundId,
+      int? userId,
+      int? amount,
+      bool remove = false}) async {
+    await _rounds.command('round.co_bank_notice', roundId, {
+      if (userId != null) 'userId': userId,
+      if (amount != null) 'amount': amount,
+      if (remove) 'remove': true,
+    });
   }
 
   Future<SangongAdminSession> removeCoBank(

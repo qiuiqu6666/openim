@@ -123,7 +123,12 @@ void main() {
     expect(layout.disabled, isFalse);
     layout.jointController.text = '200';
     await tester.pump();
-    expect(_layout(tester).sharePercent, 20);
+    expect(_layout(tester).sharePercent, 25);
+    _layout(tester).onSetCoBank!();
+    await tester.pump();
+    expect(_layout(tester).coBankSummary, contains('未保存'));
+    expect(api.count('/commands/round.co_bank'), 0);
+    expect(api.count('/commands/round.co_bank_notice'), 0);
     expect(api.count('/snapshot'), 1);
     expect(api.count('/user'), 1);
     expect(
@@ -200,12 +205,16 @@ void main() {
     final layout = _layout(tester);
     layout.bankerController.text = '2.5000';
     await tester.pump();
-    await _confirm(tester, _layout(tester).onAssignBanker!);
+    _layout(tester).onAssignBanker!();
+    await tester.pump();
+    expect(api.count('/commands/round.banker'), 0);
+    expect(_layout(tester).bankerSummary, contains('未保存'));
+    await _confirm(tester, _layout(tester).onSendBanker!);
     final call =
         api.calls.singleWhere((c) => c.path.endsWith('/commands/round.banker'));
     expect(call.body?['input'], {
       'roundId': 18,
-      'openBetting': false,
+      'openBetting': true,
       'imUserId': 'im_target',
       'door': 2,
       'bankerLimit': 5000,
@@ -225,9 +234,10 @@ void main() {
     final layout = _layout(tester);
     layout.bankerController.text = '5000';
     await tester.pump();
-    await _confirm(tester, _layout(tester).onSetLimit!);
+    _layout(tester).onSetLimit!();
+    await tester.pump();
     expect(api.count('/commands/round.banker'), 0);
-    expect(_layout(tester).error, contains('定庄信息已变化'));
+    expect(_layout(tester).error, isNull);
     await unmountSangong(tester);
     runtime.dispose();
   });
@@ -270,12 +280,38 @@ void main() {
     runtime.dispose();
   });
 
+  testWidgets('co-bank amount is only saved by Send in one command',
+      (tester) async {
+    final api = SangongTestApi()
+      ..respond = (call) => call.path.endsWith('/commands/round.co_bank_notice')
+          ? sangongReceipt(call, {'state': _session(member: true)})
+          : _readResponse(call);
+    final runtime = sangongTestRuntime(sangongTestContext(api));
+    await _mount(tester, runtime);
+    _layout(tester).jointController.text = '300';
+    await tester.pump();
+    _layout(tester).onSetCoBank!();
+    await tester.pump();
+    expect(api.calls.where((c) => c.method == 'POST'), isEmpty);
+    expect(_layout(tester).coBankSummary, contains('未保存'));
+    await _confirm(tester, _layout(tester).onSendCoBank!);
+    final writes = api.calls.where((c) => c.method == 'POST').toList();
+    expect(writes, hasLength(1));
+    expect(writes.single.path, endsWith('/commands/round.co_bank_notice'));
+    expect(writes.single.body?['input'],
+        {'roundId': 18, 'userId': 19, 'amount': 300});
+    expect(_layout(tester).coBankSummary, isNot(contains('未保存')));
+    expect(_layout(tester).error, isNull);
+    await unmountSangong(tester);
+    runtime.dispose();
+  });
+
   testWidgets('cancel co-bank checks membership and confirms its removal',
       (tester) async {
     var member = true;
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/commands/round.co_bank_remove')) {
+        if (call.path.endsWith('/commands/round.co_bank_notice')) {
           member = false;
           return sangongReceipt(call, {'state': _session(member: member)});
         }
@@ -284,10 +320,15 @@ void main() {
       };
     final runtime = sangongTestRuntime(sangongTestContext(api));
     await _mount(tester, runtime);
-    await _confirm(tester, _layout(tester).onRemoveCoBank!);
+    _layout(tester).onRemoveCoBank!();
+    await tester.pump();
+    expect(api.count('/commands/round.co_bank_notice'), 0);
+    expect(member, isTrue);
+    expect(_layout(tester).coBankSummary, contains('未保存'));
+    await _confirm(tester, _layout(tester).onSendCoBank!);
     final call = api.calls
-        .singleWhere((c) => c.path.endsWith('/commands/round.co_bank_remove'));
-    expect(call.body?['input'], {'roundId': 18, 'userId': 19});
+        .singleWhere((c) => c.path.endsWith('/commands/round.co_bank_notice'));
+    expect(call.body?['input'], {'roundId': 18, 'userId': 19, 'remove': true});
     expect(_layout(tester).sharePercent, 0);
     expect(_layout(tester).error, isNull);
     await unmountSangong(tester);
@@ -350,9 +391,11 @@ void main() {
     final layout = _layout(tester);
     layout.bankerController.text = '2.5000';
     await tester.pump();
-    await _confirm(tester, _layout(tester).onAssignBanker!);
+    _layout(tester).onAssignBanker!();
+    await tester.pump();
+    await _confirm(tester, _layout(tester).onSendBanker!);
     expect(_layout(tester).error, contains('结果尚未确认'));
-    expect(layout.bankerController.text, '2.5000');
+    expect(_layout(tester).bankerSummary, contains('未保存'));
     _layout(tester).onRetry!();
     await flushSangong(tester);
     expect(api.count('/commands/round.banker'), 1);

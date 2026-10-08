@@ -9,6 +9,7 @@ import '../support/sangong_ui.dart' show DioErrorMessage, ToastUtils;
 import '../utils/sangong_banker_setup_input.dart';
 import '../widgets/authorization/privilege_route_guard.dart';
 import 'sangong_profile_admin_layout.dart';
+import 'sangong_profile_config_draft.dart';
 
 /// The 99chat controls, backed by one authorized OpenIM account/group/tenant.
 class SangongProfilePanel extends StatefulWidget {
@@ -25,6 +26,7 @@ class SangongProfilePanel extends StatefulWidget {
 }
 
 class _SangongProfilePanelState extends State<SangongProfilePanel> {
+  final _draft = SangongProfileConfigDraft();
   final _points = TextEditingController();
   final _banker = TextEditingController();
   final _joint = TextEditingController();
@@ -79,6 +81,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     _generation++;
     _writeGeneration++;
     _scope = null;
+    _draft.clear();
     _user = null;
     _session = null;
     _settings = null;
@@ -160,6 +163,9 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
         throw StateError('游戏资料与当前用户不匹配');
       }
       setState(() {
+        if (_draft.roundId != null && _draft.roundId != state.round?.id) {
+          _draft.clear();
+        }
         _user = user;
         _detail = detail;
         _session = SangongAdminSession(
@@ -295,7 +301,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     int? door = parsed.door, limit = parsed.limit;
     if (setLimit && !parsed.hasExplicitLimit) {
       limit = parsed.door;
-      door = _session?.round?.bankerDoor;
+      door = _draft.bankerDoor ?? _session?.round?.bankerDoor;
     }
     if (door == null || (setLimit && limit == null)) {
       _invalid(setLimit ? '请先定庄或输入「庄门.限额」' : '请输入庄门（如 2 或 2.5000）');
@@ -306,46 +312,26 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
       _invalid('展示限额须为大于等于 0 的整数');
       return;
     }
-    final target = widget.userID, nickname = _displayName;
+    final target = widget.userID;
     final roundId = _session?.round?.id ?? 0;
     if (roundId <= 0) {
       _invalid("请先开机");
       return;
     }
-    final action = setLimit ? '设置限额' : '定庄';
-    final selectedDoor = door;
-    await _submit(action,
-        '为$nickname 设置庄 $selectedDoor 门${limit == null ? '' : '，展示限额 $limit'}？',
-        (runtime, current) async {
-      final settings = await runtime.settings.fetch();
-      if (!current()) return;
-      if (selectedDoor < 1 || selectedDoor > settings.doorCount) {
-        throw StateError('庄门超出当前门数');
-      }
-      if (setLimit && !parsed.hasExplicitLimit) {
-        final session = await runtime.admin.fetchSession();
-        if (!current()) return;
-        if (session.round?.bankerImUserId != target ||
-            session.round?.bankerDoor != selectedDoor) {
-          throw StateError('当前定庄信息已变化，请刷新后设置限额');
-        }
-      }
-      final result = await runtime.admin.assignBanker(
-          roundId: roundId,
-          imUserId: target,
-          door: selectedDoor,
-          limit: limit,
-          nickname: nickname);
-      if (!current()) return;
-      final round = result.round;
-      if (round == null ||
-          round.id <= 0 ||
-          round.bankerImUserId != target ||
-          round.bankerDoor != selectedDoor ||
-          (limit != null && (round.bankerLimit ?? 0) != limit)) {
-        _unknownResult();
-      }
-    }, clear: _banker);
+    if (setLimit &&
+        !parsed.hasExplicitLimit &&
+        _draft.bankerDoor == null &&
+        _session?.round?.bankerImUserId != target) {
+      _invalid('请先在当前页面为该用户定庄');
+      return;
+    }
+    setState(() {
+      _draft.bind(roundId);
+      _draft.bankerDoor = door;
+      _draft.bankerLimit =
+          limit ?? _draft.bankerLimit ?? _session?.round?.bankerLimit ?? 0;
+      _banker.clear();
+    });
   }
 
   Future<void> _coBank({required bool remove}) async {
@@ -357,32 +343,16 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     }
     final amount = remove ? null : _positiveAmount(_joint, '合庄金额');
     if (!remove && amount == null) return;
-    final action = remove ? '取消合庄' : '合庄';
-    await _submit(action,
-        remove ? '取消$_displayName本局的合庄？' : '为$_displayName合庄 $amount 积分？',
-        (runtime, current) async {
-      final session = await runtime.admin.fetchSession();
-      if (!current()) return;
-      final round = session.round;
-      if (round == null || round.id <= 0 || round.isRoundClosed) {
-        throw StateError('当前无有效局，无法$action');
-      }
-      if (remove && _member(session) == null) {
-        throw StateError('该用户未合庄');
-      }
-      final result = remove
-          ? await runtime.admin.removeCoBank(roundId: round.id, userId: id)
-          : await runtime.admin
-              .addCoBank(roundId: round.id, userId: id, amount: amount!);
-      if (!current()) return;
-      final member = _member(result);
-      if (result.round?.id != round.id ||
-          (remove
-              ? member != null
-              : member == null || member.amount < amount!)) {
-        _unknownResult();
-      }
-    }, clear: _joint);
+    final round = _session?.round;
+    if (round == null || round.id <= 0 || round.isRoundClosed) {
+      _invalid('当前无有效局');
+      return;
+    }
+    setState(() {
+      _draft.bind(round.id);
+      _draft.coBankAmount = remove ? 0 : amount;
+      _joint.clear();
+    });
   }
 
   Future<void> _send({required bool coBank}) {
@@ -391,14 +361,47 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
       _invalid('当前无有效局');
       return Future.value();
     }
-    return _submit(
-        coBank ? '发送合庄通知' : '发送定庄通知', coBank ? '发送当前群的合庄通知？' : '发送当前群的定庄通知？',
+    if (_draft.roundId != null && _draft.roundId != roundId) {
+      _draft.clear();
+      _invalid('当前局已变化，请重新设置');
+      return Future.value();
+    }
+    final draftDoor = _draft.bankerDoor, draftLimit = _draft.bankerLimit;
+    final draftAmount = _draft.coBankAmount;
+    final message = coBank
+        ? (draftAmount == null ? '发送当前群的合庄通知？' : '保存本页合庄设置并发送到群聊？')
+        : (draftDoor == null
+            ? '发送当前群的定庄通知？'
+            : '为$_displayName 保存庄$draftDoor门、限额${draftLimit ?? 0}并发送到群聊？');
+    return _submit(coBank ? '保存并发送合庄' : '保存并发送定庄', message,
         (runtime, current) async {
       if (!current()) return;
       if (coBank) {
-        await runtime.admin.sendCoBankNotification(roundId: roundId);
+        await runtime.admin.sendCoBankNotification(
+            roundId: roundId,
+            userId: draftAmount == null ? null : _user?.userId,
+            amount: draftAmount != null && draftAmount > 0 ? draftAmount : null,
+            remove: draftAmount == 0);
+        if (current()) _draft.coBankAmount = null;
       } else {
-        await runtime.admin.sendBankerNotification(roundId: roundId);
+        if (draftDoor != null) {
+          final result = await runtime.admin.assignBanker(
+              roundId: roundId,
+              imUserId: widget.userID,
+              door: draftDoor,
+              limit: draftLimit,
+              nickname: _displayName,
+              openBetting: true);
+          if (!current()) return;
+          if (result.round?.bankerImUserId != widget.userID ||
+              result.round?.bankerDoor != draftDoor ||
+              result.round?.bankerLimit != draftLimit) {
+            _unknownResult();
+          }
+          _draft.bankerDoor = _draft.bankerLimit = null;
+        } else {
+          await runtime.admin.sendBankerNotification(roundId: roundId);
+        }
       }
     });
   }
@@ -422,30 +425,34 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     if (_session == null) return null;
     final round = _session!.round;
     if (round == null) return '庄 不限额';
-    final door = round.bankerDoor;
-    final limit = round.bankerLimit;
-    return '${door == null ? '庄' : '庄$door门'} ${limit == null || limit == 0 ? '不限额' : '限额$limit'}';
+    final door = _draft.bankerDoor ?? round.bankerDoor;
+    final limit = _draft.bankerLimit ?? round.bankerLimit;
+    return '${door == null ? '庄' : '庄$door门'} ${limit == null || limit == 0 ? '不限额' : '限额$limit'}${_draft.bankerDoor == null ? '' : '（未保存）'}';
   }
 
-  double? get _sharePercent {
-    final round = _session?.round;
-    if (round == null) return null;
-    final amount = int.tryParse(_joint.text.trim());
-    if (amount != null && amount > 0 && round.coBank.poolTotal >= 0) {
-      return amount.toDouble() *
-          100 /
-          (round.coBank.poolTotal.toDouble() + amount.toDouble());
-    }
-    return _member(_session)?.sharePercent ?? 0;
+  SangongCoBank? get _coBankPreview {
+    final saved = _session?.round?.coBank;
+    if (saved == null) return null;
+    return _draft.preview(saved,
+        userId: _user?.userId ?? 0,
+        imUserId: widget.userID,
+        nickname: _displayName);
   }
+
+  double? get _sharePercent => _coBankPreview == null
+      ? null
+      : _coBankPreview!.memberForImUserId(widget.userID)?.sharePercent ??
+          _coBankPreview!.memberForUserId(_user?.userId ?? 0)?.sharePercent ??
+          0;
 
   String? get _coBankSummary {
     final round = _session?.round;
     if (round == null) return null;
-    final members = round.coBank.members;
+    final coBank = _coBankPreview!;
+    final members = coBank.members;
     final labels = members.map((member) =>
         '【${member.nickname.trim().isEmpty ? member.imUserId.isEmpty ? member.userId : member.imUserId : member.nickname.trim()}】${member.sharePercent.toStringAsFixed(2)}%');
-    return '庄池：${round.coBank.poolTotal} · 合庄庄家: ${labels.isEmpty ? '—' : labels.join('，')}';
+    return '庄池：${coBank.poolTotal} · 合庄庄家: ${labels.isEmpty ? '—' : labels.join('，')}${_draft.coBankAmount == null ? '' : '（未保存）'}';
   }
 
   @override
@@ -476,8 +483,11 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
             : () => _assignBanker(setLimit: true),
         onSendBanker: () => _send(coBank: false),
         onSetCoBank: () => _coBank(remove: false),
-        onRemoveCoBank:
-            _member(_session) == null ? null : () => _coBank(remove: true),
+        onRemoveCoBank: _sharePercent == 0 &&
+                _draft.coBankAmount == null &&
+                _member(_session) == null
+            ? null
+            : () => _coBank(remove: true),
         onSendCoBank: () => _send(coBank: true));
   }
 }
