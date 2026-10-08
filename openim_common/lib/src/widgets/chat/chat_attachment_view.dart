@@ -150,7 +150,9 @@ class _ChatFileMessageViewState extends State<ChatFileMessageView> {
         final url = element.sourceUrl;
         if (url == null || url.isEmpty) throw StateError('Missing file URL');
         await for (final event in (widget.cacheManager ?? DefaultCacheManager())
-            .getFileStream(url, withProgress: true)) {
+            .getFileStream(
+                OpenIMMediaUrl.resolve(url, imApiUrl: Config.imApiUrl),
+                withProgress: true)) {
           if (!_isCurrent(generation)) return;
           if (event is DownloadProgress) {
             setState(() => _progress = event.progress);

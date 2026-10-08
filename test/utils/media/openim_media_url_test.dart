@@ -9,6 +9,12 @@ void main() {
       '?height=960&width=960&type=image';
 
   group('OpenIMMediaUrl.resolve', () {
+    test('resolves historical Sangong XLSX downloads through the public API', () {
+      const path = '/object/sangong-go/report.xlsx';
+      expect(OpenIMMediaUrl.resolve('http://127.0.0.1:10002$path',
+          imApiUrl: api), '$api$path');
+    });
+
     test('corrects the logged Sangong object URL through the IM API', () {
       expect(OpenIMMediaUrl.resolve(logged, imApiUrl: api),
           '$api$objectPath?height=960&width=960&type=image');

@@ -1131,7 +1131,10 @@ class IMUtils {
       if (!isAvailableFileSize && isExitNetwork && url != null) {
         try {
           await File(localCachePath).parent.create(recursive: true);
-          await HttpUtil.download(url, cachePath: localCachePath);
+          await HttpUtil.download(
+            OpenIMMediaUrl.resolve(url, imApiUrl: Config.imApiUrl),
+            cachePath: localCachePath,
+          );
           availablePath = localCachePath;
           isAvailableFileSize = fileSize == null ||
               await File(localCachePath).length() == fileSize;
