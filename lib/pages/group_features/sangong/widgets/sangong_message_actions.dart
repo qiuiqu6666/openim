@@ -56,6 +56,8 @@ class SangongMessageActions {
           cutoff: cutoff,
           roundId: session.round?.id ?? 0,
           doorCount: settings.doorCount,
+          bankerName: session.round!.bankerNickname,
+          bankerDoor: session.round!.bankerDoor,
           selectedMessagePreview:
               SangongBetSubmitCutoff.readMessagePreviewText(message),
           selectedSenderLabel: SangongBetSubmitCutoff.readSenderLabel(message),

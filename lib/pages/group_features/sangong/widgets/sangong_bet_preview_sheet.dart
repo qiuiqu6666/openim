@@ -389,10 +389,10 @@ class _SangongBetPreviewSheetState extends State<SangongBetPreviewSheet> {
                       Text(
                         i18n.format(
                           zhHans:
-                              '截止点之后 ${preview.excludedAfterCutoff} 条待处理下注未纳入',
+                              '截止点之后 ${preview.excludedAfterCutoff} 条下注消息未纳入',
                           zhHant:
-                              '截止點之後 ${preview.excludedAfterCutoff} 條待處理下注未納入',
-                          en: '${preview.excludedAfterCutoff} pending bet(s) after cutoff excluded',
+                              '截止點之後 ${preview.excludedAfterCutoff} 條下注消息未納入',
+                          en: '${preview.excludedAfterCutoff} betting message(s) after cutoff excluded',
                           vars: {
                             'count': '${preview.excludedAfterCutoff}',
                           },
