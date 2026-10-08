@@ -5,6 +5,7 @@ import '../../models/sangong_admin_models.dart';
 import '../../pages/sangong_user_detail_page.dart';
 import '../data/report_query_controller.dart';
 import '../widgets/report_widgets.dart';
+import '../widgets/report_sections.dart';
 
 class SangongReportDetailPage extends StatefulWidget {
   const SangongReportDetailPage(
@@ -38,7 +39,7 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
       SangongScope.read(context), widget.resource,
       listKey: widget.listKey, query: widget.query);
   bool _direct = false;
-  String _type = '';
+  late String _type = widget.query['type']?.toString() ?? '';
   @override
   void initState() {
     super.initState();
@@ -66,7 +67,8 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
     final root = data['self'];
     return Column(children: [
       SwitchListTile(
-          title: const Text('仅直属下级'),
+          title: const Text('只看直属成员'),
+          subtitle: Text(_direct ? '当前只查询直接下级' : '当前查询所有层级下级'),
           value: _direct,
           onChanged: _controller.busy
               ? null
@@ -75,34 +77,77 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
                   unawaited(_controller
                       .replaceQuery({...widget.query, 'direct': value}));
                 }),
-      const ListTile(
-          title: Text('下级团队汇总'),
-          subtitle: Text('不包含团队负责人本人；不同上级团队可能重叠，不可相加作为全群总额。')),
+      const ReportSection('下级团队汇总',
+          icon: Icons.groups_outlined, description: '统计当前筛选范围内的下级，不包含负责人本人。'),
+      const ReportNotice('同一成员可能属于多个上级团队，多个团队的金额不能直接相加作为全群总额。'),
       if (summary is Map)
         ReportMetrics({
           '成员数': summary['memberCount'],
           '直属成员': summary['directMemberCount'],
-          '批次余额': summary['totalBalance'],
+          '批次最后积分': summary['totalBalance'],
           '闲家流水': summary['playerTurnover'],
           '庄家流水': summary['bankerTurnover'],
           '上分 / 划入': summary['totalUp'],
           '下分 / 划出': summary['totalDown'],
-          '游戏账变净额': summary['profitLoss'],
+          '游戏积分变动': reportSigned(summary['profitLoss']),
           '已入账返水': summary['totalRebate'],
         }),
       if (root is Map)
         ListTile(
             title: Text('负责人：${reportUser(Map<String, dynamic>.from(root))}'),
             subtitle: Text(
-                '本人批次余额 ${reportValue(root['balance'])} · 当前余额 ${reportValue(root['currentBalance'])}'),
+                '本人批次最后积分 ${reportValue(root['balance'])} · 当前积分 ${reportValue(root['currentBalance'])}'),
             onTap: () => _openUser(Map<String, dynamic>.from(root))),
-      ..._controller.rows.map((row) => Card(
+      const ReportSection('团队成员',
+          icon: Icons.people_outline, description: '点击成员查看个人明细。'),
+      ..._controller.rows.map((row) => ReportCard(
           child: ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.person_outline)),
               title: Text(reportUser(row)),
+              trailing: const Icon(Icons.chevron_right),
               subtitle: Text(
-                  '层级 ${row['levelNo']} · 上级编号 ${row['parentUserId']}\n批次余额 ${reportValue(row['balance'])} · 当前余额 ${reportValue(row['currentBalance'])}\n闲家 ${reportValue(row['playerTurnover'])} · 庄家 ${reportValue(row['bankerTurnover'])} · 返水 ${reportValue(row['batchRebate'])}'),
+                  '当前积分 ${reportValue(row['currentBalance'])} · 批次最后积分 ${reportValue(row['balance'])}\n闲家流水 ${reportValue(row['playerTurnover'])} · 庄家流水 ${reportValue(row['bankerTurnover'])}\n已入账返水 ${reportValue(row['batchRebate'])}'),
               onTap: () => _openUser(row)))),
     ]);
+  }
+
+  Widget _settledPerson(Map<String, dynamic> item, Map round, bool banker) {
+    final id = item['imUserId'];
+    return ReportCard(
+        child: ExpansionTile(
+      leading: CircleAvatar(
+          child: Icon(
+              banker ? Icons.account_balance_outlined : Icons.person_outline)),
+      title: Text(reportUser(item)),
+      subtitle: Text(
+          '本局净额 ${reportSigned(item['net'])}\n结算后积分 ${reportValue(item['balanceAfter'])}'),
+      children: [
+        ReportMetrics({
+          '结算前积分': item['balanceBefore'],
+          '结算后积分': item['balanceAfter'],
+          if (banker) ...{
+            '投入金额': item['amount'],
+            '合庄占比': item['sharePercent'] == null
+                ? null
+                : '${item['sharePercent']}%',
+            '分摊下注流水': item['betShare'],
+            '分摊抽水': item['rakeShare'],
+          } else
+            '本局下注': item['totalBet'],
+          '本局净额': reportSigned(item['net']),
+        }),
+        if (!banker) ReportNotice(reportDoorBets(item['doorBets'])),
+        if (id is String && id.isNotEmpty)
+          TextButton.icon(
+              icon: const Icon(Icons.receipt_long_outlined),
+              label: const Text('查看该用户本批次账变'),
+              onPressed: () => unawaited(SangongReportDetailPage.open(context,
+                  title: '${reportUser(item)} · 账变',
+                  resource: 'ledger',
+                  listKey: 'entries',
+                  query: {'sessionId': round['sessionId'], 'imUserId': id}))),
+      ],
+    ));
   }
 
   Widget _round(Map<String, dynamic> data) {
@@ -111,44 +156,40 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
         data['settlement'] is Map ? data['settlement'] as Map : const {};
     final draws = data['draws'] is List ? data['draws'] as List : const [];
     return Column(children: [
-      ReportMetrics({
-        '期号': round['periodNo'],
-        '状态': reportPhase(round['status']),
-        '庄门': round['bankerDoor'],
-        '庄家': settlement['bankerNickname'] ?? round['bankerUserId'],
-        '总下注': settlement['grandTotal'],
-        '抽水': settlement['rake'],
-        '庄净': settlement['bankerNet'],
-        '结算时间': reportTime(round['settledAt'])
-      }),
-      ...draws.whereType<Map>().map((draw) => ListTile(
-          title: Text('${draw['door']}门'),
-          trailing: Text(draw['amountHundredths'] is num
-              ? ((draw['amountHundredths'] as num) / 100).toStringAsFixed(2)
-              : '—'))),
+      ReportSection(
+          '第${round['periodNo'] ?? '—'}期 · ${reportPhase(round['status'])}',
+          icon: Icons.casino_outlined,
+          description:
+              '庄门 ${round['bankerDoor'] ?? '—'} · 结算时间 ${reportTime(round['settledAt'])}'),
+      if (settlement.isNotEmpty) ...[
+        ReportMetrics({
+          '庄家': settlement['bankerNickname'],
+          '闲家总下注': settlement['grandTotal'],
+          '庄家净额': reportSigned(settlement['bankerNet']),
+          '本局抽水': settlement['rake'],
+        }),
+        const ReportNotice('本局净额：正数为增加，负数为减少。下方展开可查看每位用户的结算前后积分。'),
+      ],
+      const ReportSection('各门开奖', icon: Icons.grid_view_outlined),
+      if (draws.isEmpty) const ReportNotice('本局尚未录入开奖。'),
+      if (draws.isNotEmpty)
+        ReportMetrics({
+          for (final draw in draws.whereType<Map>())
+            '${draw['door']}门${draw['door'] == round['bankerDoor'] ? ' · 庄' : ''}':
+                draw['amountHundredths'] is num
+                    ? ((draw['amountHundredths'] as num) / 100)
+                        .toStringAsFixed(2)
+                    : null,
+        }),
       for (final key in ['bankers', 'players'])
         if (settlement[key] is List) ...[
-          ListTile(title: Text(key == 'bankers' ? '庄家 / 合庄明细' : '闲家明细')),
-          ...(settlement[key] as List).whereType<Map>().map((item) => Card(
-                  child: ListTile(
-                title: Text(reportUser(Map<String, dynamic>.from(item))),
-                subtitle: Text(
-                    '结算前 ${reportValue(item['balanceBefore'])} → 结算后 ${reportValue(item['balanceAfter'])}\n下注 / 流水 ${reportValue(item['totalBet'] ?? item['betShare'])} · 净额 ${reportValue(item['net'])}\n${key == 'bankers' ? '投入 ${reportValue(item['amount'])} · 占比 ${reportValue(item['sharePercent'])}% · 分摊抽水 ${reportValue(item['rakeShare'])}' : '各门下注 ${reportValue(item['doorBets'])}'}'),
-                onTap: () => unawaited(SangongReportDetailPage.open(context,
-                    title:
-                        '${reportUser(Map<String, dynamic>.from(item))} · 账变',
-                    resource: 'ledger',
-                    listKey: 'entries',
-                    query: {
-                      'sessionId': round['sessionId'],
-                      if (item['imUserId'] is String)
-                        'imUserId': item['imUserId']
-                    })),
-              ))),
+          ReportSection(key == 'bankers' ? '庄家与合庄结算' : '闲家结算',
+              description: '共 ${(settlement[key] as List).length} 人 · 点击展开明细'),
+          ...(settlement[key] as List).whereType<Map>().map((item) =>
+              _settledPerson(
+                  Map<String, dynamic>.from(item), round, key == 'bankers')),
         ],
-      if (settlement.isEmpty)
-        const ListTile(
-            title: Text('本局暂无有效结算明细'), subtitle: Text('未结算或已作废的牌局不会显示为已结算。')),
+      if (settlement.isEmpty) const ReportNotice('本局暂无有效结算。未结算或已作废的牌局不计入结算汇总。'),
     ]);
   }
 
@@ -168,12 +209,16 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
                     onRefresh: () => _controller.load(),
                     child: ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
+                        padding: EdgeInsets.only(
+                            bottom: MediaQuery.paddingOf(context).bottom + 24),
                         children: [
                           if (widget.resource == 'team')
                             _team(_controller.data),
                           if (widget.resource == 'management-round')
                             _round(_controller.data),
                           if (widget.resource == 'ledger') ...[
+                            const ReportNotice(
+                                '按时间从新到旧显示。正数增加积分，负数减少积分；点击记录可查看操作人和备注。'),
                             Padding(
                                 padding: const EdgeInsets.all(16),
                                 child: DropdownButtonFormField<String>(
@@ -191,8 +236,7 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
                                             setState(() => _type = value);
                                             unawaited(_controller.replaceQuery({
                                               ...widget.query,
-                                              if (value.isNotEmpty)
-                                                'type': value
+                                              'type': value
                                             }));
                                           })),
                             ..._controller.rows.map(ReportLedgerTile.new),

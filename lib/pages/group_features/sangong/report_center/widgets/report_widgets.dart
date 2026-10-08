@@ -2,7 +2,25 @@ import 'package:flutter/material.dart';
 import '../../models/sangong_account_flow_entry.dart';
 import '../data/report_query_controller.dart';
 
-String reportValue(Object? value) => value == null ? '—' : '$value';
+String reportValue(Object? value) {
+  if (value == null) return '—';
+  if (value is! num) return '$value';
+  final parts = '$value'.split('.');
+  final integer = parts.first
+      .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+  return parts.length == 1 ? integer : '$integer.${parts.last}';
+}
+
+String reportSigned(Object? value) =>
+    value is num && value > 0 ? '+${reportValue(value)}' : reportValue(value);
+String reportDoorBets(Object? raw) {
+  if (raw is! Map || raw.isEmpty) return '暂无各门下注';
+  final entries = raw.entries.toList()
+    ..sort((a, b) => (int.tryParse('${a.key}') ?? 0)
+        .compareTo(int.tryParse('${b.key}') ?? 0));
+  return entries.map((e) => '${e.key}门 ${reportValue(e.value)}').join(' · ');
+}
+
 String reportTime(Object? raw) {
   if (raw == null || '$raw'.isEmpty) return '—';
   final date = DateTime.tryParse('$raw');
@@ -12,8 +30,14 @@ String reportTime(Object? raw) {
   return '${local.year}-${pad(local.month)}-${pad(local.day)} ${pad(local.hour)}:${pad(local.minute)}:${pad(local.second)}';
 }
 
-String reportUser(Map<String, dynamic> row) =>
-    '${row['nickname'] ?? row['imUserId'] ?? '用户'}';
+String reportUser(Map<String, dynamic> row) {
+  for (final key in ['nickname', 'imUserId']) {
+    final value = row[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+  }
+  return row['userId'] == null ? '用户' : '用户 #${row['userId']}';
+}
+
 String reportPhase(Object? status) =>
     const {
       'await_banker': '待定庄',
@@ -24,10 +48,12 @@ String reportPhase(Object? status) =>
       'voided': '已作废',
       'running': '运行中',
       'idle': '已关机',
+      'stopped': '已关机',
+      'closed': '已结束',
     }['$status'] ??
     reportValue(status);
 String ledgerLabel(Object? type) =>
-    SangongAccountFlowEntry.fromJson({'type': type}).label;
+    ledgerKinds[type] ?? SangongAccountFlowEntry.fromJson({'type': type}).label;
 const ledgerKinds = {
   '': '全部账变',
   'admin_credit': '上分',
@@ -37,15 +63,35 @@ const ledgerKinds = {
   'bet_void': '作废退款',
   'settle_win': '闲家结算',
   'settle_banker': '庄家结算',
-  'user_transfer_in': '划入',
-  'user_transfer_out': '划出',
+  'settle_void': '结算冲正',
+  'bet_recall': '撤回下注',
+  'bet_restart': '重开退还',
+  'rebate_player': '用户返水入账',
+  'rebate_agent_diff': '代理返水入账',
+  'rebate_player_void': '返水冲正追回',
+  'user_transfer_in': '下级划入',
+  'user_transfer_out': '向下级划出',
 };
 
-class ReportMetrics extends StatelessWidget {
-  const ReportMetrics(this.values, {super.key});
-  final Map<String, Object?> values;
+class ReportCard extends StatelessWidget {
+  const ReportCard({super.key, required this.child});
+  final Widget child;
   @override
   Widget build(BuildContext context) => Card(
+        elevation: 0,
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        color: Theme.of(context).colorScheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: child,
+      );
+}
+
+class ReportMetrics extends StatelessWidget {
+  const ReportMetrics(this.values, {super.key, this.hints = const {}});
+  final Map<String, Object?> values;
+  final Map<String, String> hints;
+  @override
+  Widget build(BuildContext context) => ReportCard(
       child: Padding(
           padding: const EdgeInsets.all(16),
           child: LayoutBuilder(builder: (_, box) {
@@ -62,8 +108,16 @@ class ReportMetrics extends StatelessWidget {
                               Text(entry.key,
                                   style: Theme.of(context).textTheme.bodySmall),
                               Text(reportValue(entry.value),
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                              if (hints[entry.key] != null) ...[
+                                const SizedBox(height: 4),
+                                Text(hints[entry.key]!,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall),
+                              ],
                             ])))
                     .toList());
           })));
@@ -92,7 +146,7 @@ class ReportPagingFooter extends StatelessWidget {
           Padding(
               padding: const EdgeInsets.all(12),
               child: Text(controller.rows.isEmpty
-                  ? '暂无记录'
+                  ? '暂无记录，请尝试其他批次或筛选条件'
                   : '已显示 ${controller.rows.length} 条${controller.cursor == 0 ? ' · 已全部加载' : ''}')),
       ]);
 }
@@ -101,16 +155,52 @@ class ReportLedgerTile extends StatelessWidget {
   const ReportLedgerTile(this.row, {super.key});
   final Map<String, dynamic> row;
   @override
-  Widget build(BuildContext context) => Card(
-          child: ExpansionTile(
-        title: Text('${reportUser(row)} · ${ledgerLabel(row['type'])}'),
-        subtitle: Text(
-            '${reportTime(row['createdAt'])}\n变动 ${reportValue(row['amount'])} · 余分 ${reportValue(row['balanceAfter'])}'),
-        children: [
-          ListTile(
-              title: Text('${row['note'] ?? ''}'),
-              subtitle: SelectableText(
-                  '流水 #${row['id'] ?? row['ledgerId']}\n用户 ${row['imUserId'] ?? row['userId']}\n操作人 ${row['operator'] ?? '—'}\n批次 ${row['sessionId'] ?? '—'} · 关联 ${row['refType'] ?? ''} #${row['refId'] ?? '—'}'))
-        ],
-      ));
+  Widget build(BuildContext context) {
+    final amount = row['amount'];
+    final negative = amount is num && amount < 0;
+    final colors = Theme.of(context).colorScheme;
+    return ReportCard(
+        child: ExpansionTile(
+      leading: CircleAvatar(
+          backgroundColor:
+              negative ? colors.errorContainer : colors.primaryContainer,
+          child: Icon(
+              amount is! num
+                  ? Icons.more_horiz
+                  : negative
+                      ? Icons.remove
+                      : amount > 0
+                          ? Icons.add
+                          : Icons.horizontal_rule,
+              color: negative
+                  ? colors.onErrorContainer
+                  : colors.onPrimaryContainer)),
+      title:
+          Text(reportUser(row), maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(ledgerLabel(row['type'])),
+        const SizedBox(height: 4),
+        Text(reportTime(row['createdAt']),
+            style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 6),
+        Wrap(spacing: 12, runSpacing: 4, children: [
+          Text(
+              '${negative ? '减少' : amount is num && amount > 0 ? '增加' : '变动'} ${reportSigned(amount)}',
+              style: TextStyle(
+                  color: negative ? colors.error : colors.primary,
+                  fontWeight: FontWeight.w600)),
+          Text('变动后积分 ${reportValue(row['balanceAfter'])}'),
+        ]),
+      ]),
+      children: [
+        const Divider(height: 1),
+        ListTile(
+            title: Text((row['note']?.toString().isNotEmpty ?? false)
+                ? '${row['note']}'
+                : '无备注'),
+            subtitle: SelectableText(
+                '流水编号 ${row['id'] ?? row['ledgerId']}\n用户ID ${row['imUserId'] ?? row['userId']}\n操作人 ${row['operator'] ?? '—'}\n批次编号 ${row['sessionId'] ?? '—'}\n关联记录 ${row['refType'] ?? '—'} #${row['refId'] ?? '—'}')),
+      ],
+    ));
+  }
 }

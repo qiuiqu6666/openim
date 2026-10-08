@@ -47,10 +47,12 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       final api = SangongTestApi()
         ..respond = (call) {
-          if (call.path.endsWith('/management-summary'))
+          if (call.path.endsWith('/management-summary')) {
             return managementSummary();
-          if (call.path.endsWith('/sessions'))
+          }
+          if (call.path.endsWith('/sessions')) {
             return {'version': 7, 'sessions': [], 'nextBeforeId': 0};
+          }
           if (call.path.endsWith('/management-users')) {
             expect(call.query?['sessionId'], 2);
             return {
