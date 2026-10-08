@@ -12,7 +12,6 @@ import 'package:openim/pages/group_features/sangong/support/sangong_ui.dart';
 import 'package:openim/pages/group_features/sangong/widgets/sangong_account_flow_list.dart';
 import 'package:openim/pages/group_features/sangong/widgets/app_back_button.dart';
 import '../widgets/sangong_user_flow_tabs.dart';
-import '../widgets/sangong_user_group_entry.dart';
 import '../profile/sangong_authorized_view.dart';
 import '../services/authorization/sangong_operation_scope.dart';
 import '../agents/widgets/sangong_agent_user_actions.dart';
@@ -510,14 +509,6 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                                           color: muted)),
                                                 ])),
                                           ]),
-                                      if (_profileError == null)
-                                        SangongUserGroupEntry(
-                                          imUserId: widget.user.imUserId,
-                                          groupName: profile['group'] is Map
-                                              ? '${profile['group']['name'] ?? ''}'
-                                              : widget.user.group.name,
-                                          onChanged: _loadProfile,
-                                        ),
                                       _maxNegativeEntry(
                                         muted,
                                         _signedInt(

@@ -522,9 +522,9 @@ class _SangongGameRulesSettingsPageState
               SettingsCell(
                 title: i18n.t(zhHans: '全部用户', zhHant: '全部用戶', en: 'All users'),
                 value: i18n.t(
-                    zhHans: '积分 / 分组 / 流水',
-                    zhHant: '積分 / 分組 / 流水',
-                    en: 'Points / groups / ledger'),
+                    zhHans: '积分 / 流水',
+                    zhHant: '積分 / 流水',
+                    en: 'Points / ledger'),
                 showDivider: false,
                 onTap: _saving || _sessionBusy
                     ? null

@@ -172,13 +172,11 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
   }
 
   Widget _userTile(Map<String, dynamic> row, {required bool team}) {
-    final group = row['group'] is Map ? row['group'] as Map : const {};
     final parent = row['parent'] is Map ? row['parent'] as Map : const {};
     return Card(
         child: ExpansionTile(
       title: Text(reportUser(row)),
-      subtitle: Text(
-          '当前积分 ${reportValue(row['balance'])} · 分组 ${group['name'] ?? '未分组'}\n${row['imUserId']}'),
+      subtitle: Text('当前积分 ${reportValue(row['balance'])}\n${row['imUserId']}'),
       children: [
         ReportMetrics({
           '批次期末积分': row['closingBalance'],
