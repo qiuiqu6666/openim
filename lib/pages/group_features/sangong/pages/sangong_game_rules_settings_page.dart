@@ -1,9 +1,12 @@
+import '../report_center/pages/report_center_page.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'sangong_my_config_page.dart';
+import 'sangong_members_page.dart';
+import 'sangong_all_users_page.dart';
 import 'package:flutter/services.dart';
 import 'package:openim/pages/group_features/sangong/support/sangong_ui.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_game_settings.dart';
@@ -500,6 +503,44 @@ class _SangongGameRulesSettingsPageState
               ),
             ],
           ),
+          if (SangongScope.read(context).canManageMembers)
+            SettingsGroup(children: [
+              SettingsCell(
+                title: i18n.t(zhHans: '帮工管理', zhHant: '幫工管理', en: 'Helpers'),
+                value: i18n.t(
+                    zhHans: '添加 / 移除帮工',
+                    zhHant: '新增 / 移除幫工',
+                    en: 'Add / remove helpers'),
+                showDivider: false,
+                onTap: _saving || _sessionBusy
+                    ? null
+                    : () => unawaited(SangongMembersPage.open(context)),
+              ),
+            ]),
+          if (SangongScope.read(context).canManage)
+            SettingsGroup(children: [
+              SettingsCell(
+                title: i18n.t(zhHans: '全部用户', zhHant: '全部用戶', en: 'All users'),
+                value: i18n.t(
+                    zhHans: '积分 / 分组 / 流水',
+                    zhHant: '積分 / 分組 / 流水',
+                    en: 'Points / groups / ledger'),
+                showDivider: false,
+                onTap: _saving || _sessionBusy
+                    ? null
+                    : () => unawaited(SangongAllUsersPage.open(context)),
+              )
+            ]),
+          if (SangongScope.read(context).canManage)
+            SettingsGroup(children: [
+              SettingsCell(
+                  title: '报表中心',
+                  value: '汇总 / 用户 / 团队 / 账变 / 牌局',
+                  showDivider: false,
+                  onTap: _saving || _sessionBusy
+                      ? null
+                      : () => unawaited(SangongReportCenterPage.open(context)))
+            ]),
           _buildSessionGroup(i18n, dark),
           if (SangongScope.read(context).canManage &&
               _session.isRunning &&

@@ -1,3 +1,4 @@
+import '../report_center/pages/report_center_page.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'dart:async' show unawaited;
@@ -149,8 +150,7 @@ class SangongManageHomePage extends StatelessWidget {
                   );
                 },
               ),
-            if (canManageMembers &&
-                !SangongScope.read(context).requiresGroupTenantCheck)
+            if (canManageMembers)
               SettingsCell(
                 title: i18n.t(
                   zhHans: '成员管理',
@@ -167,6 +167,12 @@ class SangongManageHomePage extends StatelessWidget {
                   SangongMembersPage.open(context);
                 },
               ),
+            SettingsCell(
+              title: '报表中心',
+              value: '汇总 / 用户 / 团队 / 账变 / 牌局',
+              showDivider: true,
+              onTap: () => SangongReportCenterPage.open(context),
+            ),
             SettingsCell(
               title: '全部用户',
               value: '查看用户积分、返水与上级',

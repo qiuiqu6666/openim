@@ -159,9 +159,9 @@ class _SangongBetPreviewSheetState extends State<SangongBetPreviewSheet> {
       ),
       message: detail.isNotEmpty
           ? i18n.format(
-              zhHans: '确定将这条消息的全部注单排除，并在确认截止时退款？\n$detail',
-              zhHant: '確定將這條訊息的全部注單排除，並在確認截止時退款？\n$detail',
-              en: 'Exclude this bet from the preview?\n$detail',
+              zhHans: '确定将这条消息的全部注单排除，并在开奖时退款？\n$detail',
+              zhHant: '確定將這條訊息的全部注單排除，並在開獎時退款？\n$detail',
+              en: 'Exclude all bets in this message and refund at draw entry?\n$detail',
               vars: {'detail': detail},
             )
           : i18n.format(
@@ -389,9 +389,9 @@ class _SangongBetPreviewSheetState extends State<SangongBetPreviewSheet> {
                       Text(
                         i18n.format(
                           zhHans:
-                              '截止点之后 ${preview.excludedAfterCutoff} 条下注消息未纳入',
+                              '截止点之后 ${preview.excludedAfterCutoff} 条下注消息未纳入，开奖时退回',
                           zhHant:
-                              '截止點之後 ${preview.excludedAfterCutoff} 條下注消息未納入',
+                              '截止點之後 ${preview.excludedAfterCutoff} 條下注消息未納入，開獎時退回',
                           en: '${preview.excludedAfterCutoff} betting message(s) after cutoff excluded',
                           vars: {
                             'count': '${preview.excludedAfterCutoff}',

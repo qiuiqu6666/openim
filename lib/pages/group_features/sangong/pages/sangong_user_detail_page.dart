@@ -12,6 +12,7 @@ import 'package:openim/pages/group_features/sangong/support/sangong_ui.dart';
 import 'package:openim/pages/group_features/sangong/widgets/sangong_account_flow_list.dart';
 import 'package:openim/pages/group_features/sangong/widgets/app_back_button.dart';
 import '../widgets/sangong_user_flow_tabs.dart';
+import '../widgets/sangong_user_group_entry.dart';
 import '../profile/sangong_authorized_view.dart';
 import '../services/authorization/sangong_operation_scope.dart';
 import '../agents/widgets/sangong_agent_user_actions.dart';
@@ -37,7 +38,9 @@ Map<String, dynamic> sangongOwnSummary(
 }
 
 class SangongUserDetailPage extends StatefulWidget {
-  const SangongUserDetailPage({super.key, required this.user});
+  const SangongUserDetailPage(
+      {super.key, required this.user, this.initialSessionId});
+  final int? initialSessionId;
   final SangongAdminUserReport user;
   @override
   State<SangongUserDetailPage> createState() => _SangongUserDetailPageState();
@@ -69,6 +72,8 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
     super.initState();
     _pageScope = SangongOperationScope.capture(
         _runtime.featureContext, _runtime.http.tenantId);
+    _sessionId = widget.initialSessionId;
+    _batch = _sessionId != null;
     _loadSessions();
     _load();
   }
@@ -505,6 +510,14 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                                           color: muted)),
                                                 ])),
                                           ]),
+                                      if (_profileError == null)
+                                        SangongUserGroupEntry(
+                                          imUserId: widget.user.imUserId,
+                                          groupName: profile['group'] is Map
+                                              ? '${profile['group']['name'] ?? ''}'
+                                              : widget.user.group.name,
+                                          onChanged: _loadProfile,
+                                        ),
                                       _maxNegativeEntry(
                                         muted,
                                         _signedInt(

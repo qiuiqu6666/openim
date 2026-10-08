@@ -142,7 +142,7 @@ Content-Type: application/json
 | round.co_bank_close | `{"roundId":18}` | 关闭合庄 |
 | round.co_bank_notice | `{"roundId":18}` | 排队发送合庄通知 |
 | round.close | `{"roundId":18}` | 截止到服务端核对的当前消息边界 |
-| round.close | `{"roundId":18,"untilMsgSeq":120,"excludeMsgSeqs":[118]}` | 截止到所选消息；排除明确消息；自动退回边界后的有效下注 |
+| round.close | `{"roundId":18,"untilMsgSeq":120,"excludeMsgSeqs":[118]}` | 截止到所选消息；排除明确消息；排除边界后的有效下注，录入开奖号成功时退款 |
 | round.draws | `{"roundId":18,"draws":[{"door":1,"amountHundredths":36}]}` | 录入门位开奖号；结算前必须齐全 |
 | round.settle | `{"roundId":18}` | 按 1:1、统一庄抽水结算，返佣入待领记录，排队发送四类结算报表 |
 | round.reverse | `{"roundId":18}` | 冲正该局实际结算入账和返佣，清空开奖号，废弃旧自动报表 |
@@ -319,3 +319,11 @@ Flutter 接受事件前核对群、sendID=可信 snapshot.botUserId、非空 ser
 本次服务端切换已完成：独立数据库集成测试、Java 报表样本核对、475 项 Flutter 回归、真实 OpenIM 群下注/撤回/截止/结算/报表链路，以及数据库备份恢复演练。维护窗口中先停止 Java 和旧入口，确认任务排空，再应用 MySQL 026–032 迁移并显式转移执行权，随后启动 Go Chat API/RPC。两个实际群的配置、状态、用户、批次、能力接口已用现有登录会话验证；无效 Token 返回 401，旧游戏接口返回 410。不能让两个执行器同时处理同一租户。Android/iOS 安装包仍需各自的构建与设备验收。
 
 实现入口：`api/service.go`、`api/query.go`、`engine/service.go`、`storage/mysql/game_queries.go`；Flutter 对应 `lib/pages/group_features/sangong/api/` 与 `services/realtime/`。该契约的金额和路由以这些实现及集成测试共同校验。
+
+### 详细报表中心（管理权限）
+
+新增只读 `management-summary`、`management-users`、`management-teams`、`management-round`。群主和获授权帮工可读，普通成员拒绝访问；租户仍由当前群确定。
+
+前三者支持 `sessionId`，省略取最近经营批次。用户/团队列表支持 `beforeId`、`limit`、`search`（昵称包含匹配或完整 IM 用户 ID，最长128字节）。牌局详情要求 `roundId`，只能查询本群牌局，已结算明细来自冻结快照。
+
+`ledger` 增加可选 `type` 精确筛选，返回昵称、IM 用户 ID、操作人，保留金额、账变后余额、来源与备注。分页末页 `nextBeforeId=0`。总览是全批次统计，当前积分及当前运行状态明确属于实时数据。作废或已冲正结算不计入有效结算汇总。
