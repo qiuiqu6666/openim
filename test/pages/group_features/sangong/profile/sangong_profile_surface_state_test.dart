@@ -70,7 +70,7 @@ dynamic _profileResponse(SangongCall call) {
 
 Future<void> _mountSurface(WidgetTester tester,
     {required GroupFeatureStore store,
-    required Future<List<GroupInfo>> Function() groups,
+    Future<List<GroupInfo>> Function()? groups,
     String userID = 'target',
     String? groupID,
     bool dark = false,
@@ -174,7 +174,7 @@ void main() {
     await _mountSurface(tester, store: store, groups: () async => []);
     expect(
         find.byKey(const ValueKey('sangong-profile-services')), findsOneWidget);
-    expect(find.text('暂无已加入的群聊，请加入群聊后重试'), findsOneWidget);
+    expect(find.text('暂无已配置或授权的游戏群，请先配置游戏群或联系配置者授权'), findsOneWidget);
     final ledger = find.byType(SangongProfileLedgerFloatingEntry);
     expect(
         tester.widget<SangongProfileLedgerFloatingEntry>(ledger).onOpenLedger,
@@ -323,19 +323,47 @@ void main() {
     store.dispose();
   });
 
-  testWidgets('group-member profile cannot select an unrelated returned group',
+  testWidgets('normal entry discovers the only authorized game group automatically',
       (tester) async {
-    final api = SangongTestApi();
+    final api = SangongTestApi()..respond = (call) {
+      if (call.path.endsWith('/admin/tenants')) {
+        return {'tenants': [
+          {'imGroupGameId': 'g', 'name': '游戏群',
+            'myRole': 'admin', 'active': true}
+        ]};
+      }
+      if (call.path.endsWith('/feature-capabilities')) {
+        return _capabilities('g', manage: true);
+      }
+      return _profileResponse(call);
+    };
     final store = _store(api, FixtureAccountPrivilege());
+    SangongProfileEntryScope? entry;
+    await _mountSurface(tester, store: store, groupID: 'ordinary',
+        observe: (value) => entry = value);
+    expect(entry?.selectedGroupID, 'g');
+    expect(entry?.error, isNull);
+    expect(api.count('/admin/tenants'), 1);
+    expect(api.count('/user'), 1);
+    expect(find.textContaining('当前积分 420'), findsOneWidget);
+    await unmountSangong(tester);
+    store.dispose();
+  });
+
+  testWidgets('profile from another group uses the operator authorized game group',
+      (tester) async {
+    final api = SangongTestApi()..respond = _profileResponse;
+    final store = _store(api, FixtureAccountPrivilege());
+    SangongProfileEntryScope? entry;
     await _mountSurface(tester,
         store: store,
-        groupID: 'expected',
-        groups: () async => [_group('unrelated', enabled: true)]);
-    expect(
-        find.byKey(const ValueKey('sangong-profile-services')), findsOneWidget);
-    expect(find.text('暂无已加入的群聊，请加入群聊后重试'), findsOneWidget);
-    expect(api.calls, isEmpty);
-    expect(store.cachedGroupInfo('unrelated'), isNull);
+        groupID: 'ordinary-group',
+        groups: () async => [_group('authorized-game')],
+        observe: (value) => entry = value);
+    expect(entry?.selectedGroupID, 'authorized-game');
+    expect(api.calls.first.path,
+        '/chat/groups/authorized-game/feature-capabilities');
+    expect(api.calls.any((call) => call.path.contains('ordinary-group')), isFalse);
     await unmountSangong(tester);
     store.dispose();
   });

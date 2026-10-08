@@ -6,6 +6,7 @@ import 'package:openim_common/openim_common.dart' show AppTokens;
 import '../../../../core/controller/im_controller.dart';
 import '../../data/group_feature_runtime.dart';
 import '../sangong_scope.dart';
+import '../api/profile/sangong_profile_groups_api.dart';
 import '../api/diagnostics/sangong_api_debug_log.dart';
 import '../support/sangong_ui.dart' show DioErrorMessage;
 import 'sangong_profile_entry_scope.dart';
@@ -150,16 +151,11 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
       _lastPrivileged = true;
       final groups = widget.loadGroups != null
           ? await widget.loadGroups!()
-          : widget.groupID?.isNotEmpty == true
-              ? await OpenIM.iMManager.groupManager
-                  .getGroupsInfo(groupIDList: [widget.groupID!])
-              : await OpenIM.iMManager.groupManager.getJoinedGroupList();
+          : await SangongProfileGroupsApi(store.api).load();
       if (!_current(generation, store, owner) || !_privileged) return;
       final candidates = <String, GroupInfo>{};
       for (final group in groups) {
-        if (group.groupID.isEmpty ||
-            (widget.groupID?.isNotEmpty == true &&
-                group.groupID != widget.groupID)) {
+        if (group.groupID.isEmpty) {
           continue;
         }
         candidates[group.groupID] = group;
@@ -180,7 +176,7 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
         setState(() {
           _loading = false;
           if (_groups.isEmpty) {
-            _error = '暂无已加入的群聊，请加入群聊后重试';
+            _error = '暂无已配置或授权的游戏群，请先配置游戏群或联系配置者授权';
           }
         });
       }
