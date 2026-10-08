@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'authorization/privilege_route_guard.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 import '../sangong_scope.dart';
@@ -79,32 +78,10 @@ class SangongMessageActions {
             id: 'sangong_banker',
             text: '定庄',
             onTap: () => run(() async {
-                  final featureContext = runtime.featureContext;
                   final session = await runtime.admin.fetchSession();
                   final roundId = session.round?.id ?? 0;
                   if (!context.mounted || !runtime.canManage) return;
                   if (roundId <= 0) throw StateError('请先开机');
-                  final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (dialog) => SangongPrivilegeRouteGuard(
-                          featureContext: featureContext,
-                          refreshOnEntry: false,
-                          isCurrent: () => runtime.canManage,
-                          builder: (_) => AlertDialog(
-                                  title: const Text('定庄'),
-                                  content: Text(
-                                      '为 ${message.senderNickname ?? message.sendID} 定庄：${message.textElem?.content}？'),
-                                  actions: [
-                                    TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(dialog, false),
-                                        child: const Text('取消')),
-                                    TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(dialog, true),
-                                        child: const Text('确认'))
-                                  ])));
-                  if (confirmed != true || !runtime.canManage) return;
                   final result = await runtime.admin.quickSetupBanker(
                       roundId: roundId,
                       text: message.textElem?.content,
