@@ -72,6 +72,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final brightness in Brightness.values) {
+    testWidgets('Sangong summary uses ordinary text style in $brightness',
+        (tester) async {
+      const source = '庄【秋的测试号】1包共0注\n==================\n'
+          '第❶门:0注\n第❷门:0注\n第❸门:0注\n第❹门:0注\n第❺门:0注\n第❻门:0注\n'
+          '==================\n请核对统计清单、出入认表';
+      const ex = '{"marker":"sangong-go:delivery",'
+          '"sangongReport":{"schemaVersion":2,"kind":"bets",'
+          '"reportId":"report","deliveryId":"delivery"}}';
+      final message = markdownMessage(source, extra: {'ex': ex});
+      await mountMarkdown(tester, bubble(markdownMessage('普通聊天文字')),
+          brightness: brightness);
+      final normalStyle =
+          tester.widget<MatchTextView>(find.byType(MatchTextView)).textStyle;
+
+      String? copied;
+      await mountMarkdown(
+          tester, bubble(message, copied: (text) => copied = text),
+          brightness: brightness);
+      expect(find.byType(ChatMarkdownText), findsNothing);
+      final body = tester.widget<MatchTextView>(find.byType(MatchTextView));
+      expect(body.textStyle, normalStyle);
+      expect(body.text, source);
+      expect(copied, source);
+      expect(message.textElem?.content, source);
+      expect(message.ex, ex);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('unrelated or malformed metadata retains ordinary Markdown',
+      (tester) async {
+    for (final ex in ['{"unrelated":true}', 'legacy text', '[]', 'null']) {
+      await mountMarkdown(
+          tester, bubble(markdownMessage('# Heading', extra: {'ex': ex})));
+      expect(find.byType(ChatMarkdownText), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('custom text bubble keeps Markdown footer outside code and table',
       (tester) async {
     const source = '```dart\nfinal x = 1;\n```\n\n'

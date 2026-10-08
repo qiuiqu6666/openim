@@ -238,10 +238,12 @@ class _ChatItemViewState extends State<ChatItemView> {
           ? widget.textContentBuilder?.call(context, _message)
           : null;
       if (override != null) return override;
-      markdownContent = ChatMarkdownText.hasMarkdown(textSource);
+      final allowMarkdown = chatMessageAllowsMarkdown(_message);
+      markdownContent =
+          allowMarkdown && ChatMarkdownText.hasMarkdown(textSource);
       return ChatText(
         text: textSource,
-        enableMarkdown: true,
+        enableMarkdown: allowMarkdown,
         textStyle: _textBubbleStyle?.textStyle(_isISend),
         maximumWidth: _textBubbleStyle == null ? null : double.infinity,
         textScaler:

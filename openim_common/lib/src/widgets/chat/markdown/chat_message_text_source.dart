@@ -1,5 +1,20 @@
+import 'dart:convert';
+
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
+
+/// Generated report separators are literal text, not Markdown headings.
+/// Use the server's report marker so ordinary chat keeps Markdown support.
+bool chatMessageAllowsMarkdown(Message message) {
+  final ex = message.ex;
+  if (ex == null || ex.isEmpty) return true;
+  try {
+    final metadata = jsonDecode(ex);
+    return metadata is! Map || metadata['sangongReport'] is! Map;
+  } on FormatException {
+    return true;
+  }
+}
 
 /// Bubble text keeps line breaks; conversation summaries still use parseMsg.
 /// Mention names are a display adaptation and never mutate the SDK message.
