@@ -500,11 +500,11 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
                         onSendSettleImage: () => unawaited(_report(
                             scopeContext,
                             (api) => api.sendSettleReportImage(
-                                roundId: state?.lastSettledRound?.id ?? 0))),
+                                roundId: 0))),
                         onSendSettleBill: () => unawaited(_report(
                             scopeContext,
                             (api) => api.sendSettleBillImage(
-                                roundId: state?.lastSettledRound?.id ?? 0))),
+                                roundId: 0))),
                         onSendPointsImage: () => unawaited(
                             _report(scopeContext, (api) => api.sendPointsReportImage())),
                         onSendTrendImage: () => unawaited(_report(scopeContext, (api) => api.sendTrendReportImage())),

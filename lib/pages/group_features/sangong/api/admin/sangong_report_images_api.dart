@@ -13,13 +13,12 @@ class SangongReportImagesApi {
       int? groupId,
       String? targetGroupId,
       SangongBetSubmitCutoff? cutoff}) async {
-    if ({'bets', 'settlement', 'bill'}.contains(kind) &&
-        (roundId == null || roundId <= 0)) {
+    if (kind == 'bets' && (roundId == null || roundId <= 0)) {
       throw StateError('请先选择要发送报表的局');
     }
     final data = await SangongV2Api(http).command('report.send', {
       'kind': kind,
-      if (roundId != null) 'roundId': roundId,
+      if (roundId != null && roundId > 0) 'roundId': roundId,
       if (groupId != null) 'groupId': groupId,
       if (targetGroupId != null && targetGroupId.trim().isNotEmpty)
         'targetGroupId': targetGroupId.trim(),
@@ -31,7 +30,7 @@ class SangongReportImagesApi {
         (data['reportId'] as String).isEmpty ||
         data['deliveryIds'] is! List ||
         (data['deliveryIds'] as List).isEmpty ||
-        (roundId != null && data['roundId'] != roundId)) {
+        (roundId != null && roundId > 0 && data['roundId'] != roundId)) {
       throw const GroupFeatureException('报表提交结果尚未确认，请查看群消息后重试',
           code: 'UNKNOWN_RESULT', unknownResult: true);
     }
