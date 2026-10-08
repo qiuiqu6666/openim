@@ -55,6 +55,21 @@ void main() {
     });
   }
 
+  testWidgets('rate change settlement displays frozen old rate in score list',
+      (tester) async {
+    final raw = rebateRow();
+    (raw['rebate'] as Map<String, dynamic>)['claimType'] = 'RATE_CHANGE';
+    final entry = SangongAccountFlowEntry.fromJson(raw);
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: SangongAccountFlowList(entries: [entry], bets: false))));
+    expect(find.text('修改比例前结清返水'), findsOneWidget);
+    expect(find.text('返水比例：1%'), findsOneWidget);
+    expect(find.text('返水金额：100'), findsOneWidget);
+    expect(find.text('用户申请返水'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('old receipts display actual amount without inventing a rate',
       (tester) async {
     final raw = rebateRow()..remove('rebate');

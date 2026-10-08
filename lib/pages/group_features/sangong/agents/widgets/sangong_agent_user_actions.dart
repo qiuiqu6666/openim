@@ -122,7 +122,8 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
     final confirmed = await AppDialog.confirm(
         context: context,
         title: '确认返水比例',
-        message: '将 $_name（$account）在当前下注群的返水比例设为 $rate%。',
+        message:
+            '将 $_name（$account）在当前下注群的返水比例设为 $rate%。\n系统会先按旧比例结清未领取的历史返水，再保存新比例。',
         dialogWrapper: _dialog);
     if (!mounted || !_current || !confirmed) return false;
     await _api.setRate(_userId, rate);

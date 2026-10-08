@@ -11,6 +11,11 @@ class SangongRebateReceipt {
   final int? turnover, amount;
   final String rate, claimType, accountType, turnoverBasis;
   bool get automatic => claimType == 'AUTO';
+  String get claimLabel => claimType == 'RATE_CHANGE'
+      ? '修改比例前结清返水'
+      : automatic
+          ? '关机自动返水'
+          : '用户申请返水';
   bool get agent => accountType == 'AGENT_DIFF';
   String get rateLabel {
     if (rate.isEmpty) return '未记录';

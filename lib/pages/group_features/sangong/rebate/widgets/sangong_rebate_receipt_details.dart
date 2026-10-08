@@ -14,8 +14,7 @@ class SangongRebateReceiptDetails extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           if (data != null)
-            Text(
-                '${data.automatic ? '关机自动返水' : '用户申请返水'}${data.agent ? ' · 代理差额返水' : ''}',
+            Text('${data.claimLabel}${data.agent ? ' · 代理差额返水' : ''}',
                 style: Theme.of(context)
                     .textTheme
                     .bodyMedium
