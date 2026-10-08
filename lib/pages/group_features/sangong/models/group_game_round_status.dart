@@ -1,3 +1,5 @@
+import '../identity/models/sangong_display_identity.dart';
+
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 /// 群聊三公当前局状态（实时数据由后续接口填充）。
 class GroupGameRoundStatus {
@@ -27,7 +29,8 @@ class GroupGameRoundStatus {
   bool get hasBankerLimitDisplay => bankerLimit != null && bankerLimit! > 0;
 
   String formatStatusLine() {
-    final name = bankerName.trim();
+    final name =
+        bankerName.trim().isEmpty ? '' : sangongDisplayName(bankerName, '');
     final door = bankerDoor;
     final doorPart = door != null && door >= 1 ? '$door包' : '包';
     final base = '庄【$name】$doorPart共$totalBetCount注';

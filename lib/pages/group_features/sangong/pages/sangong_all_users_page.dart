@@ -1,3 +1,4 @@
+import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'dart:async';
 
@@ -193,7 +194,10 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
         .where((user) =>
             _query.isEmpty ||
             user.nickname.toLowerCase().contains(_query.toLowerCase()) ||
-            user.imUserId.toLowerCase().contains(_query.toLowerCase()))
+            (SangongIdentityScope.read(context).peek(user.imUserId)?.account ??
+                    '')
+                .toLowerCase()
+                .contains(_query.toLowerCase()))
         .toList();
     users.sort((a, b) => _pointsDescending
         ? b.balance.compareTo(a.balance)
@@ -285,7 +289,7 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
               onChanged: _onQueryChanged,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search_rounded, size: 23),
-                hintText: '公开账号名；已加载的昵称或用户 ID',
+                hintText: '搜索公开账号或已加载的昵称',
                 isDense: true,
                 filled: true,
                 fillColor: colors.surfaceContainerHighest,
@@ -380,7 +384,6 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
     final colors = Theme.of(context).colorScheme;
     final nickname = user.nickname.trim();
     final id = user.imUserId.trim();
-    final avatar = user.faceUrl.trim();
     return SettingsCell(
       onTap: id.isEmpty
           ? null
@@ -392,16 +395,7 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
                   ),
                 )
               : null,
-      leading: CircleAvatar(
-        radius: 22,
-        backgroundImage: avatar.isNotEmpty ? NetworkImage(avatar) : null,
-        child: avatar.isEmpty
-            ? Text((nickname.isNotEmpty ? nickname : id)
-                .characters
-                .first
-                .toUpperCase())
-            : null,
-      ),
+      leading: SangongIMAvatar(userID: id, nickname: nickname),
       title: '',
       titleWidget: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -412,6 +406,8 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          SangongPublicAccount(
+              userID: id, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 3),
           Text(
             '下级 ${user.childrenCount}  ·  返水 ${user.rebatePer10000}',

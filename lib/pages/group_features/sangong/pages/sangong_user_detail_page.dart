@@ -1,13 +1,12 @@
+import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_admin_models.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_account_flow_entry.dart';
 import '../models/sangong_user_flow_result.dart';
-import 'package:openim/pages/group_features/sangong/utils/sangong_operator_names.dart';
 import 'package:openim/pages/group_features/sangong/support/sangong_ui.dart';
 import 'package:openim/pages/group_features/sangong/widgets/sangong_account_flow_list.dart';
 import 'package:openim/pages/group_features/sangong/widgets/app_back_button.dart';
@@ -56,7 +55,6 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
   int _profileGeneration = 0;
   String? _error, _profileError, _sessionsError;
   Map<String, dynamic> _detail = {}, _summary = {};
-  Map<String, String> _names = {};
   List<Map<String, dynamic>> _sessions = [];
   SangongUserFlowReport _flow = const SangongUserFlowReport();
   SangongUserFlowResult _flowResult = const SangongUserFlowResult();
@@ -161,19 +159,8 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
         }
         _flow = flow;
         _flowResult = flowResult;
-        _names = {};
         _busy = false;
       });
-      final names = await resolveSangongOperatorNames(
-          flow.scoreEntries.map((e) => e.operator), (ids) async {
-        final users =
-            await OpenIM.iMManager.userManager.getUsersInfo(userIDList: ids);
-        return {
-          for (final user in users)
-            if (user.userID != null) user.userID!: user.nickname ?? ''
-        };
-      }, isActive: () => _current && generation == _generation);
-      if (_current && generation == _generation) setState(() => _names = names);
     } catch (error) {
       if (_current && generation == _generation) {
         setState(() {
@@ -378,13 +365,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
     final raw = _detail['user'];
     final profile = raw is Map ? raw : const {};
     final nickname = profile['nickname']?.toString() ?? widget.user.nickname;
-    final avatar = profile['avatarUrl']?.toString() ??
-        profile['faceUrl']?.toString() ??
-        widget.user.faceUrl;
     final parent = _detail['parent'];
-    final parentText = parent is Map
-        ? '${parent['nickname'] ?? ''}（${parent['imUserId'] ?? parent['userId'] ?? ''}）'
-        : '未设置';
     final metrics = <String, String>{
       '闲流水': 'playerTurnover',
       '庄流水': 'bankerTurnover',
@@ -432,29 +413,25 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Row(children: [
-                                        CircleAvatar(
-                                            radius: 23,
-                                            backgroundImage: avatar.isEmpty
-                                                ? null
-                                                : NetworkImage(avatar),
-                                            child: avatar.isEmpty
-                                                ? const Icon(Icons.person)
-                                                : null),
+                                        SangongIMAvatar(
+                                            userID: widget.user.imUserId,
+                                            nickname: nickname,
+                                            size: 46),
                                         const SizedBox(width: 12),
                                         Expanded(
                                             child: Column(
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: [
-                                              Text(
-                                                  nickname.isEmpty
-                                                      ? widget.user.imUserId
-                                                      : nickname,
+                                              SangongUserName(
+                                                  userID: widget.user.imUserId,
+                                                  nickname: nickname,
                                                   style: const TextStyle(
                                                       fontSize: 17,
                                                       fontWeight:
                                                           FontWeight.w600)),
-                                              Text('ID：${widget.user.imUserId}',
+                                              SangongPublicAccount(
+                                                  userID: widget.user.imUserId,
                                                   style: TextStyle(
                                                       fontSize: 12,
                                                       color: muted)),
@@ -502,11 +479,23 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                                           fontSize: 12,
                                                           color: muted)),
                                                   const SizedBox(height: 4),
-                                                  Text(
-                                                      '上级：${_profileError != null ? '暂未获取' : parentText}',
-                                                      style: TextStyle(
-                                                          fontSize: 12,
-                                                          color: muted)),
+                                                  if (_profileError != null ||
+                                                      parent is! Map)
+                                                    Text(
+                                                        _profileError != null
+                                                            ? '上级：暂未获取'
+                                                            : '上级：未设置',
+                                                        style: TextStyle(
+                                                            fontSize: 12,
+                                                            color: muted))
+                                                  else
+                                                    SangongPublicAccount(
+                                                        userID:
+                                                            '${parent['imUserId'] ?? ''}',
+                                                        prefix: '上级账号：',
+                                                        style: TextStyle(
+                                                            fontSize: 12,
+                                                            color: muted)),
                                                 ])),
                                           ]),
                                       _maxNegativeEntry(
@@ -751,9 +740,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                       contributions:
                                           _batch ? _flow.coBankFlow : const []),
                                   SangongAccountFlowList(
-                                      entries: _flow.scoreEntries,
-                                      bets: false,
-                                      operatorNames: _names),
+                                      entries: _flow.scoreEntries, bets: false),
                                 ]))),
             )));
   }

@@ -1,3 +1,4 @@
+import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'package:flutter/material.dart';
@@ -320,7 +321,7 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
 
   Widget _memberCard(Map<String, dynamic> member) {
     final name = _text(member['nickname']).trim().isEmpty
-        ? _text(member['imUserId'])
+        ? '用户'
         : _text(member['nickname']);
     return Card(
       elevation: 0,
@@ -329,15 +330,11 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        leading: CircleAvatar(
-            radius: 24,
-            backgroundImage: _text(member['avatarUrl']).isEmpty
-                ? null
-                : NetworkImage(_text(member['avatarUrl'])),
-            child: _text(member['avatarUrl']).isEmpty
-                ? Text(name.isEmpty ? '?' : name.characters.first)
-                : null),
-        title: Text(name,
+        leading: SangongIMAvatar(
+            userID: _text(member['imUserId']), nickname: name, size: 48),
+        title: SangongUserName(
+            userID: _text(member['imUserId']),
+            nickname: name,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),

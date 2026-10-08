@@ -1,3 +1,4 @@
+import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'package:flutter/material.dart';
@@ -142,7 +143,7 @@ class _SangongBetPreviewSheetState extends State<SangongBetPreviewSheet> {
     }
     final i18n = AppI18n.of(context);
     final detailParts = <String>[
-      entry.displayName,
+      sangongDisplayName(entry.displayName, entry.imUserId),
       if (entry.text.trim().isNotEmpty)
         entry.text.trim()
       else
@@ -701,13 +702,12 @@ class _BetEntryTile extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        entry.displayName,
+                        sangongDisplayName(entry.displayName, entry.imUserId),
                         style: TextStyle(
                           color: titleColor,
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (entry.isAdminSource) ...[
@@ -854,8 +854,9 @@ class _UserBetDetailTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  user.displayName,
+                child: SangongUserName(
+                  userID: user.imUserId,
+                  nickname: user.displayName,
                   style: TextStyle(
                     color: titleColor,
                     fontSize: 15,

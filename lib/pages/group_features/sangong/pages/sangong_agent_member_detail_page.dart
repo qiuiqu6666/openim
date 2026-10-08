@@ -1,3 +1,4 @@
+import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'package:flutter/material.dart';
@@ -154,7 +155,7 @@ class _State extends State<SangongAgentMemberDetailPage> {
   @override
   Widget build(BuildContext context) {
     final m = _liveMember ?? widget.member;
-    final name = m.nickname.trim().isEmpty ? m.imUserId : m.nickname.trim();
+    final name = sangongDisplayName(m.nickname, m.imUserId);
     return SangongAgentAuthorizedView(
       runtime: _accountSession.runtime,
       session: _accountSession,
@@ -196,21 +197,20 @@ class _State extends State<SangongAgentMemberDetailPage> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                 children: [
                   Row(children: [
-                    CircleAvatar(
-                        radius: 28,
-                        backgroundImage: m.avatarUrl.isEmpty
-                            ? null
-                            : NetworkImage(m.avatarUrl),
-                        child: m.avatarUrl.isEmpty
-                            ? Text(name.characters.first)
-                            : null),
+                    SangongIMAvatar(
+                        userID: m.imUserId, nickname: name, size: 56),
                     const SizedBox(width: 12),
                     Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(name,
+                          SangongUserName(
+                              userID: m.imUserId,
+                              nickname: name,
                               style: const TextStyle(
                                   fontSize: 20, fontWeight: FontWeight.w700)),
+                          SangongPublicAccount(
+                              userID: m.imUserId,
+                              style: Theme.of(context).textTheme.bodySmall),
                           Text('第 ${m.levelNo} 级代理 · 返水 ${money(m.rebatePct)}%',
                               style: TextStyle(
                                   color: Theme.of(context)

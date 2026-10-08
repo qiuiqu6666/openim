@@ -1,3 +1,4 @@
+import 'package:openim/pages/group_features/sangong/identity/widgets/sangong_identity_view.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -140,7 +141,10 @@ void main() {
     addTearDown(runtime.dispose);
     addTearDown(() => unmountSangong(tester));
     await _pump(tester, runtime, const SangongMembersPage());
-    await tester.tap(find.text('helper-A'));
+    expect(find.text('helper-A'), findsNothing);
+    await tester.tap(find.byWidgetPredicate((widget) =>
+        widget is SangongPublicAccount && widget.userID == 'helper-A'));
+    await flushSangong(tester);
     await tester.pump(const Duration(milliseconds: 300));
     _switchTenant(runtime, api);
     await tester.tap(find.text('移除'));

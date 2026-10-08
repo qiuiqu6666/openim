@@ -1,3 +1,4 @@
+import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'dart:async' show unawaited;
@@ -248,7 +249,8 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
       _gameGroupController.text = config.imGroupGameId;
       _statsGroupController.text = config.imGroupAdminStatsId;
       _ledgerGroupController.text = config.imGroupLedgerId;
-      _botController.text = config.imBotUserId;
+      _botController.clear();
+      unawaited(_loadBotAccount(config));
       return;
     }
     if (_nameController.text.trim().isEmpty) {
@@ -257,6 +259,21 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
     final preset = ChatIdFormat.normalizeGroupId(widget.initialGameGroupId);
     if (_gameGroupController.text.trim().isEmpty && preset.isNotEmpty) {
       _gameGroupController.text = preset;
+    }
+  }
+
+  Future<void> _loadBotAccount(SangongMyConfig config) async {
+    final scope = _captureScope();
+    final identity =
+        await SangongIdentityScope.read(context).resolve(config.imBotUserId);
+    if (!mounted ||
+        !_matches(scope) ||
+        _config.imBotUserId != config.imBotUserId ||
+        _botController.text.isNotEmpty) {
+      return;
+    }
+    if (identity?.account.isNotEmpty == true) {
+      _botController.text = identity!.account;
     }
   }
 
@@ -317,12 +334,12 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
       );
       return;
     }
-    if (bot.isEmpty) {
+    if (bot.isEmpty && _config.imBotUserId.isEmpty) {
       ToastUtils.toast(
         i18n.t(
-          zhHans: '请填写机器人公开账号名或用户 ID',
-          zhHant: '請填寫機器人公開帳號名或用戶 ID',
-          en: 'Enter bot public account or user ID',
+          zhHans: '请填写机器人公开账号名',
+          zhHant: '請填寫機器人公開帳號名',
+          en: 'Enter bot public account',
         ),
       );
       return;
@@ -330,8 +347,9 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
 
     setState(() => _saving = true);
     try {
-      final botUserId =
-          await _identity.resolve(bot, knownUserId: _config.imBotUserId);
+      final botUserId = bot.isEmpty
+          ? _config.imBotUserId
+          : await _identity.resolve(bot, knownUserId: _config.imBotUserId);
       if (botUserId == null || !_matches(scope) || !_runtime.canConfigure) {
         return;
       }
@@ -607,9 +625,9 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
             SettingsInputCell(
               label: i18n.t(zhHans: '机器人', zhHant: '機器人', en: 'Bot'),
               hint: i18n.t(
-                zhHans: '公开账号名（可带 @）或用户 ID',
-                zhHant: '公開帳號名（可帶 @）或用戶 ID',
-                en: 'Public account (optional @) or user ID',
+                zhHans: '公开账号名（可带 @）',
+                zhHant: '公開帳號名（可帶 @）',
+                en: 'Public account (optional @)',
               ),
               controller: _botController,
               readOnly: readOnly,

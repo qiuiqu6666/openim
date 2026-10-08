@@ -1,3 +1,7 @@
+import 'package:openim_common/openim_common.dart'
+    show normalizePublicAccountSearch;
+import '../../services/account_identity/sangong_account_identity_resolver.dart';
+import '../../identity/widgets/sangong_identity_view.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../sangong_scope.dart';
@@ -28,7 +32,13 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
   ReportQueryController? _list;
   final _search = TextEditingController();
   int _tab = 0, _selection = 0;
-  String _type = '';
+  String _type = '', _searchValue = '';
+  String? _searchError;
+  bool _searching = false;
+  int _searchRequest = 0;
+  late final _accountSearch = SangongAccountIdentityResolver(
+      isCurrent: () => mounted && _summary.current,
+      scopeToken: () => _summary.scope.token);
   int? get _sessionId {
     final session = _summary.data['session'];
     return session is Map ? session['id'] as int? : null;
@@ -62,6 +72,7 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
     _sessions.dispose();
     _list?.dispose();
     _search.dispose();
+    _accountSearch.close();
     super.dispose();
   }
 
@@ -79,8 +90,8 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
         listKey: keys[_tab],
         query: {
           ..._batchQuery,
-          if ((_tab == 1 || _tab == 2) && _search.text.trim().isNotEmpty)
-            'search': _search.text.trim(),
+          if ((_tab == 1 || _tab == 2) && _searchValue.isNotEmpty)
+            'search': _searchValue,
           if (_tab == 3 && _type.isNotEmpty) 'type': _type,
         });
     unawaited(_list!.load());
@@ -89,11 +100,49 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
   void _selectTab(int value) {
     if (value == _tab) return;
     _search.clear();
+    _searchRequest++;
+    _accountSearch.cancel();
+    _searchValue = '';
+    _searching = false;
+    _searchError = null;
     _type = '';
     _list?.dispose();
     _list = null;
     setState(() => _tab = value);
     if (value != 0 && _summary.data.isNotEmpty) _makeList();
+  }
+
+  Future<void> _searchReports() async {
+    if (!_summary.current) return;
+    final request = ++_searchRequest;
+    final input = _search.text.trim();
+    setState(() {
+      _searching = true;
+      _searchError = null;
+    });
+    try {
+      final term = normalizePublicAccountSearch(input) == null
+          ? input
+          : await _accountSearch.resolve(input, allowInternalUserId: false);
+      if (!mounted ||
+          !_summary.current ||
+          request != _searchRequest ||
+          term == null) {
+        return;
+      }
+      setState(() {
+        _searchValue = term;
+        _makeList();
+      });
+    } catch (failure) {
+      if (mounted && _summary.current && request == _searchRequest) {
+        setState(() => _searchError = '$failure');
+      }
+    } finally {
+      if (mounted && request == _searchRequest) {
+        setState(() => _searching = false);
+      }
+    }
   }
 
   Future<void> _refresh() async {
@@ -202,10 +251,14 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
     final parent = row['parent'] is Map ? row['parent'] as Map : const {};
     return ReportCard(
         child: ExpansionTile(
-      leading: CircleAvatar(
-          child: Icon(team ? Icons.groups_outlined : Icons.person_outline)),
-      title: Text(reportUser(row)),
+      leading: SangongIMAvatar(
+          userID: '${row['imUserId'] ?? ''}', nickname: reportUser(row)),
+      title: SangongUserName(
+          userID: '${row['imUserId'] ?? ''}', nickname: reportUser(row)),
       subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SangongPublicAccount(
+            userID: '${row['imUserId'] ?? ''}',
+            style: Theme.of(context).textTheme.bodySmall),
         Text(
             team
                 ? '直属下级 ${reportValue(row['childrenCount'])} 人'
@@ -220,7 +273,7 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
       children: [
         Padding(
             padding: const EdgeInsets.all(12),
-            child: SelectableText('用户ID ${row['imUserId']}')),
+            child: SangongPublicAccount(userID: '${row['imUserId'] ?? ''}')),
         const ReportNotice('当前积分为实时余额；批次最后积分为该批次最后一次账变后的余额。游戏变动包含下注扣款、退款及结算。'),
         ReportMetrics({
           '批次最后积分': row['closingBalance'],
@@ -260,23 +313,25 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
             child: TextField(
                 controller: _search,
                 decoration: InputDecoration(
-                    hintText: '输入昵称或完整用户ID',
+                    hintText: '输入昵称或完整公开账号',
                     prefixIcon: const Icon(Icons.person_search_outlined),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
                     suffixIcon: IconButton(
                         tooltip: '搜索',
                         icon: const Icon(Icons.search),
-                        onPressed: list.busy
+                        onPressed: list.busy || _searching
                             ? null
                             : () {
-                                setState(_makeList);
+                                unawaited(_searchReports());
                               })),
                 onSubmitted: list.busy
                     ? null
                     : (_) {
-                        setState(_makeList);
+                        unawaited(_searchReports());
                       })),
+      if (_searching) const LinearProgressIndicator(),
+      if (_searchError != null) ReportNotice(_searchError!),
       if (_tab == 3)
         Padding(
             padding: const EdgeInsets.all(16),

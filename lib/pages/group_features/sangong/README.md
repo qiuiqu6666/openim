@@ -18,6 +18,7 @@
 | `services/binding/` | 当前群配置发现、已确认绑定、竞争请求失效 |
 | `services/realtime/`、`services/sangong_realtime.dart` | 初始 HTTP 校准、可信 OpenIM 公共状态、重连/前台恢复 |
 | `services/authorization/` | 跨 await 的账号、群、租户与权限版本保护 |
+| `identity/` | 公开账号、真实 IM 头像与登录隔离的展示资料缓存 |
 | `services/account_identity/` | 复用联系人搜索，把公开账号精确解析成 OpenIM userID |
 | `agents/` | 独立代理群绑定、成员归属及比例编辑；复用已有设置和确认组件 |
 | `profile/` | 联系人资料页三公服务卡、积分操作和流水入口；见其 README |

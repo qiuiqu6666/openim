@@ -1,3 +1,4 @@
+import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'package:flutter/material.dart';
@@ -285,7 +286,7 @@ class _TransfersState extends State<SangongAgentTransfersPage> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                '${record.isOutgoing ? '转出给' : '转入自'} ${record.displayName}',
+                '${record.isOutgoing ? '转出给' : '转入自'} ${sangongDisplayName(record.displayName, record.counterpartImUserId)}',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
@@ -295,7 +296,7 @@ class _TransfersState extends State<SangongAgentTransfersPage> {
               style: TextStyle(
                   fontSize: 20, fontWeight: FontWeight.w700, color: color)),
           if (record.counterpartImUserId.isNotEmpty)
-            Text('用户 ID：${record.counterpartImUserId}'),
+            SangongPublicAccount(userID: record.counterpartImUserId),
           Text(time),
           Text('批次 ID：${record.sessionId}'),
           if (record.referenceId.isNotEmpty)

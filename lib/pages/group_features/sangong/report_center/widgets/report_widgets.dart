@@ -1,3 +1,4 @@
+import '../../identity/widgets/sangong_identity_view.dart';
 import 'package:flutter/material.dart';
 import '../../models/sangong_account_flow_entry.dart';
 import '../../rebate/widgets/sangong_rebate_receipt_details.dart';
@@ -32,11 +33,13 @@ String reportTime(Object? raw) {
 }
 
 String reportUser(Map<String, dynamic> row) {
-  for (final key in ['nickname', 'imUserId']) {
+  for (final key in ['nickname']) {
     final value = row[key]?.toString().trim() ?? '';
-    if (value.isNotEmpty) return value;
+    if (value.isNotEmpty) {
+      return sangongDisplayName(value, '${row['imUserId'] ?? ''}');
+    }
   }
-  return row['userId'] == null ? '用户' : '用户 #${row['userId']}';
+  return '用户';
 }
 
 String reportPhase(Object? status) =>
@@ -163,20 +166,8 @@ class ReportLedgerTile extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return ReportCard(
         child: ExpansionTile(
-      leading: CircleAvatar(
-          backgroundColor:
-              negative ? colors.errorContainer : colors.primaryContainer,
-          child: Icon(
-              amount is! num
-                  ? Icons.more_horiz
-                  : negative
-                      ? Icons.remove
-                      : amount > 0
-                          ? Icons.add
-                          : Icons.horizontal_rule,
-              color: negative
-                  ? colors.onErrorContainer
-                  : colors.onPrimaryContainer)),
+      leading: SangongIMAvatar(
+          userID: '${row['imUserId'] ?? ''}', nickname: reportUser(row)),
       title:
           Text(reportUser(row), maxLines: 2, overflow: TextOverflow.ellipsis),
       subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -199,12 +190,20 @@ class ReportLedgerTile extends StatelessWidget {
       ]),
       children: [
         const Divider(height: 1),
+        Padding(
+            padding: const EdgeInsets.all(12),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SangongPublicAccount(userID: '${row['imUserId'] ?? ''}'),
+              SangongPublicAccount(
+                  userID: '${row['operator'] ?? ''}', prefix: '操作人账号：'),
+            ])),
         ListTile(
             title: Text((row['note']?.toString().isNotEmpty ?? false)
                 ? '${row['note']}'
                 : '无备注'),
             subtitle: SelectableText(
-                '流水编号 ${row['id'] ?? row['ledgerId']}\n用户ID ${row['imUserId'] ?? row['userId']}\n操作人 ${row['operator'] ?? '—'}\n批次编号 ${row['sessionId'] ?? '—'}\n关联记录 ${row['refType'] ?? '—'} #${row['refId'] ?? '—'}')),
+                '流水编号 ${row['id'] ?? row['ledgerId']}\n批次编号 ${row['sessionId'] ?? '—'}\n关联记录 ${row['refType'] ?? '—'} #${row['refId'] ?? '—'}')),
       ],
     ));
   }

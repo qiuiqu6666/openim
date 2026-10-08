@@ -1,3 +1,4 @@
+import '../../identity/widgets/sangong_identity_view.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../sangong_scope.dart';
@@ -102,8 +103,12 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
           icon: Icons.people_outline, description: '点击成员查看个人明细。'),
       ..._controller.rows.map((row) => ReportCard(
           child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-              title: Text(reportUser(row)),
+              leading: SangongIMAvatar(
+                  userID: '${row['imUserId'] ?? ''}',
+                  nickname: reportUser(row)),
+              title: SangongUserName(
+                  userID: '${row['imUserId'] ?? ''}',
+                  nickname: reportUser(row)),
               trailing: const Icon(Icons.chevron_right),
               subtitle: Text(
                   '当前积分 ${reportValue(row['currentBalance'])} · 批次最后积分 ${reportValue(row['balance'])}\n闲家流水 ${reportValue(row['playerTurnover'])} · 庄家流水 ${reportValue(row['bankerTurnover'])}\n已入账返水 ${reportValue(row['batchRebate'])}'),
@@ -115,10 +120,8 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
     final id = item['imUserId'];
     return ReportCard(
         child: ExpansionTile(
-      leading: CircleAvatar(
-          child: Icon(
-              banker ? Icons.account_balance_outlined : Icons.person_outline)),
-      title: Text(reportUser(item)),
+      leading: SangongIMAvatar(userID: '$id', nickname: reportUser(item)),
+      title: SangongUserName(userID: '$id', nickname: reportUser(item)),
       subtitle: Text(
           '本局净额 ${reportSigned(item['net'])}\n结算后积分 ${reportValue(item['balanceAfter'])}'),
       children: [
@@ -163,7 +166,8 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
               '庄门 ${round['bankerDoor'] ?? '—'} · 结算时间 ${reportTime(round['settledAt'])}'),
       if (settlement.isNotEmpty) ...[
         ReportMetrics({
-          '庄家': settlement['bankerNickname'],
+          '庄家': sangongDisplayName('${settlement['bankerNickname'] ?? ''}',
+              '${settlement['bankerImUserId'] ?? ''}'),
           '闲家总下注': settlement['grandTotal'],
           '庄家净额': reportSigned(settlement['bankerNet']),
           '本局抽水': settlement['rake'],

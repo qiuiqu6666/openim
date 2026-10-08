@@ -1,3 +1,4 @@
+import '../../identity/widgets/sangong_identity_view.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../sangong_scope.dart';
@@ -100,8 +101,7 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
     }
   }
 
-  String get _name =>
-      widget.nickname.trim().isEmpty ? widget.imUserId : widget.nickname;
+  String get _name => sangongDisplayName(widget.nickname, widget.imUserId);
 
   Future<bool> _editRate() async {
     final input = await AppDialog.prompt(
@@ -114,10 +114,15 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
         dialogWrapper: _dialog);
     if (!mounted || !_current || input == null) return false;
     final rate = sangongRebateRate(input);
+    final identity =
+        await SangongIdentityScope.read(context).resolve(widget.imUserId);
+    if (!mounted || !_current) return false;
+    final account =
+        identity?.account.isNotEmpty == true ? identity!.account : '账号未获取';
     final confirmed = await AppDialog.confirm(
         context: context,
         title: '确认返水比例',
-        message: '将 $_name（${widget.imUserId}）在当前下注群的返水比例设为 $rate%。',
+        message: '将 $_name（$account）在当前下注群的返水比例设为 $rate%。',
         dialogWrapper: _dialog);
     if (!mounted || !_current || !confirmed) return false;
     await _api.setRate(_userId, rate);
@@ -129,8 +134,8 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
     final input = await AppDialog.prompt(
         context: context,
         title: '设置上级代理',
-        message: '填写上级的公开账号名或 IM 用户 ID。上级须属于当前下注群；已有账务或下级的成员不能改变归属。',
-        placeholder: '公开账号名或 IM 用户 ID',
+        message: '填写上级的公开账号名。上级须属于当前下注群；已有账务或下级的成员不能改变归属。',
+        placeholder: '公开账号名',
         maxLength: 128,
         dialogWrapper: _dialog);
     if (!mounted || !_current || input == null) return false;
@@ -146,12 +151,23 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
     }
     final parentId = parent['userId'] as int;
     if (parentId == _userId) throw StateError('不能将自己设为上级');
-    final parentName = parent['nickname']?.toString() ?? imId;
+    final parentName = sangongDisplayName('${parent['nickname'] ?? ''}', imId);
+    final identities = await Future.wait([
+      SangongIdentityScope.read(context).resolve(widget.imUserId),
+      SangongIdentityScope.read(context).resolve(imId)
+    ]);
+    if (!mounted || !_current) return false;
+    final account = identities[0]?.account.isNotEmpty == true
+        ? identities[0]!.account
+        : '账号未获取';
+    final parentAccount = identities[1]?.account.isNotEmpty == true
+        ? identities[1]!.account
+        : '账号未获取';
     final confirmed = await AppDialog.confirm(
         context: context,
         title: '确认上级代理',
         message:
-            '将 $_name（${widget.imUserId}）挂靠到 $parentName（$imId）。此关系仅适用于当前下注群。',
+            '将 $_name（$account）挂靠到 $parentName（$parentAccount）。此关系仅适用于当前下注群。',
         dialogWrapper: _dialog);
     if (!mounted || !_current || !confirmed) return false;
     await _api.attach(_userId, parentId);

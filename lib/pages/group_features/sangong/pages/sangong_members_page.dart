@@ -1,3 +1,4 @@
+import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'dart:async' show unawaited;
@@ -166,9 +167,9 @@ class _SangongMembersPageState extends State<SangongMembersPage> {
         en: 'Helper must be privileged. They can operate but not edit config.',
       ),
       placeholder: i18n.t(
-        zhHans: '公开账号名（可带 @）或用户 ID',
-        zhHant: '公開帳號名（可帶 @）或用戶 ID',
-        en: 'Public account (optional @) or user ID',
+        zhHans: '公开账号名（可带 @）',
+        zhHant: '公開帳號名（可帶 @）',
+        en: 'Public account (optional @)',
       ),
       cancelText: i18n.t(zhHans: '取消', zhHant: '取消', en: 'Cancel'),
       confirmText: i18n.t(zhHans: '添加', zhHant: '添加', en: 'Add'),
@@ -223,13 +224,18 @@ class _SangongMembersPageState extends State<SangongMembersPage> {
       );
       return;
     }
+    final profile =
+        await SangongIdentityScope.read(context).resolve(member.imUserId);
+    if (!mounted || !_matches(scope)) return;
+    final displayAccount =
+        profile?.account.isNotEmpty == true ? profile!.account : '账号未获取';
     final ok = await AppDialog.confirm(
       context: context,
       title: i18n.t(zhHans: '移除帮工', zhHant: '移除幫工', en: 'Remove helper'),
       message: i18n.t(
-        zhHans: '确定移除 ${member.imUserId}？移除后对方将看不到本群三公入口。',
-        zhHant: '確定移除 ${member.imUserId}？移除後對方將看不到本群三公入口。',
-        en: 'Remove ${member.imUserId}? They will lose access.',
+        zhHans: '确定移除 $displayAccount？移除后对方将看不到本群三公入口。',
+        zhHant: '確定移除 $displayAccount？移除後對方將看不到本群三公入口。',
+        en: 'Remove $displayAccount? They will lose access.',
       ),
       confirmText: i18n.t(zhHans: '移除', zhHant: '移除', en: 'Remove'),
       destructive: true,
@@ -342,7 +348,10 @@ class _SangongMembersPageState extends State<SangongMembersPage> {
             children: [
               for (var i = 0; i < _members.length; i++)
                 SettingsCell(
-                  title: _members[i].imUserId,
+                  leading: SangongIMAvatar(userID: _members[i].imUserId),
+                  title: '',
+                  titleWidget:
+                      SangongPublicAccount(userID: _members[i].imUserId),
                   value: _roleLabel(i18n, _members[i]),
                   showArrow: !_members[i].isOwner,
                   showDivider: i < _members.length - 1,

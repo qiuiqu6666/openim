@@ -1,3 +1,7 @@
+import 'package:openim_common/openim_common.dart'
+    show normalizePublicAccountSearch;
+import '../services/account_identity/sangong_account_identity_resolver.dart';
+import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'package:flutter/material.dart';
@@ -34,10 +38,15 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
   SangongTeamMembersDto? _data;
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  String? _searchedUserID;
+  int _searchRequest = 0;
+  late final _accountSearch =
+      SangongAccountIdentityResolver(isCurrent: () => _isCurrentSession);
 
   @override
   void dispose() {
     _searchController.dispose();
+    _accountSearch.close();
     super.dispose();
   }
 
@@ -87,7 +96,7 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
         context: context,
         title: '划转积分',
         message:
-            '将自己的积分划转给 ${member.nickname.isEmpty ? member.imUserId : member.nickname}${available == null ? '' : '\n可划转约 $available'}',
+            '将自己的积分划转给 ${sangongDisplayName(member.nickname, member.imUserId)}${available == null ? '' : '\n可划转约 $available'}',
         placeholder: '请输入划转数量',
         cancelText: '取消',
         confirmText: '下一步',
@@ -157,6 +166,29 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
     }
   }
 
+  Future<void> _search(String value) async {
+    final request = ++_searchRequest;
+    setState(() {
+      _searchQuery = value;
+      _searchedUserID = null;
+    });
+    if (normalizePublicAccountSearch(value) == null) {
+      _accountSearch.cancel();
+      return;
+    }
+    try {
+      final id =
+          await _accountSearch.resolve(value, allowInternalUserId: false);
+      if (mounted && _isCurrentSession && request == _searchRequest) {
+        setState(() => _searchedUserID = id);
+      }
+    } catch (error) {
+      if (mounted && _isCurrentSession && request == _searchRequest) {
+        ToastUtils.toast(DioErrorMessage.forApp(error), context: context);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = _data;
@@ -165,8 +197,14 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
         .where(
           (member) =>
               query.isEmpty ||
+              member.imUserId == _searchedUserID ||
               member.nickname.toLowerCase().contains(query) ||
-              member.imUserId.toLowerCase().contains(query),
+              (SangongIdentityScope.read(context)
+                          .peek(member.imUserId)
+                          ?.account ??
+                      '')
+                  .toLowerCase()
+                  .contains(query),
         )
         .toList();
     return SangongAgentAuthorizedView(
@@ -211,9 +249,9 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
               child: TextField(
                 controller: _searchController,
                 textInputAction: TextInputAction.search,
-                onChanged: (value) => setState(() => _searchQuery = value),
+                onChanged: _search,
                 decoration: InputDecoration(
-                  hintText: '搜索昵称或用户 ID',
+                  hintText: '搜索昵称或公开账号',
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _searchQuery.isEmpty
                       ? null
@@ -222,7 +260,7 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
                           icon: const Icon(Icons.clear),
                           onPressed: () {
                             _searchController.clear();
-                            setState(() => _searchQuery = '');
+                            _search('');
                           },
                         ),
                   isDense: true,
@@ -293,27 +331,22 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
   }
 
   Widget _memberTile(SangongTeamMemberDto member) {
-    final name = member.nickname.trim().isEmpty
-        ? member.imUserId
-        : member.nickname.trim();
+    final name = member.nickname.trim().isEmpty ? '用户' : member.nickname.trim();
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      leading: CircleAvatar(
-        radius: 26,
-        backgroundImage: member.avatarUrl.trim().isEmpty
-            ? null
-            : NetworkImage(member.avatarUrl.trim()),
-        child: member.avatarUrl.trim().isEmpty
-            ? Text(name.isEmpty ? '?' : name.characters.first)
-            : null,
-      ),
-      title: Text(
-        name,
+      leading: SangongIMAvatar(
+          userID: member.imUserId, nickname: member.nickname, size: 52),
+      title: SangongUserName(
+        userID: member.imUserId,
+        nickname: name,
         style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
       ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          SangongPublicAccount(
+              userID: member.imUserId,
+              style: Theme.of(context).textTheme.bodySmall),
           Text(
               '第 ${member.levelNo} 级  ·  余额 ${_amount(member.balance)}  ·  未返水 ${_amount(member.pendingRebate)}'),
           Text(

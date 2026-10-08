@@ -1,3 +1,4 @@
+import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:flutter/material.dart';
 import '../rebate/widgets/sangong_rebate_receipt_details.dart';
@@ -124,10 +125,13 @@ class SangongAccountFlowList extends StatelessWidget {
               SangongRebateReceiptDetails(
                   receipt: entry.rebate, amount: entry.amount),
             if (!bets)
-              Text(
-                '操作人：${operatorNames[entry.operator.trim()] == null ? (entry.operator.trim().isEmpty ? '未提供' : entry.operator.trim()) : '${operatorNames[entry.operator.trim()]}（${entry.operator.trim()}）'}',
-                style: TextStyle(fontSize: 12, height: 1.2, color: muted),
-              ),
+              entry.operator.isEmpty || entry.operator == 'system'
+                  ? Text(entry.operator == 'system' ? '操作人：系统' : '操作人：未提供',
+                      style: TextStyle(fontSize: 12, color: muted))
+                  : SangongPublicAccount(
+                      userID: entry.operator,
+                      prefix: '操作人账号：',
+                      style: TextStyle(fontSize: 12, color: muted)),
             if (entry.note.isNotEmpty && entry.note != entry.label)
               Text(entry.note,
                   style: TextStyle(fontSize: 12, height: 1.2, color: muted)),
