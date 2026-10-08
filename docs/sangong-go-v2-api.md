@@ -249,6 +249,42 @@ Java 对照要求：
 
 sessionId 和 batchNo 不能同时传；batchNo 和 from/to 不能混用。rate 采用百分比字符串，必须遵循上级 ≥ 本人 ≥ 下级，服务端校验，不在 Flutter 用浮点数计算收益。不同下注群的相同 OpenIM 账号具有独立的三公 userId、余额、代理树和返佣。
 
+### 6.1 用户归属代理群（2026-10-08 新增）
+
+这组接口保存“当前下注群内的某个用户归属哪个代理群”。与 `agent.group_bind` 的群级绑定、`agent.attach` 的代理上下级，以及隐藏的积分分组互相独立；不改变余额、返水比例、代理树或代理群访问权限。每个用户在每个下注群最多归属一个代理群，不从群成员列表或代理树自动推断。
+
+**查询**：`GET G/user-agent-group?imUserId=<OpenIM用户ID>`。必须传 `imUserId`，不得传公开账号或三公数字 userId。成功响应：
+
+```json
+{"ok":true,"data":{"userId":9,"imUserId":"im_target","agentGroupId":"agents-B","gameGroupId":"game-A","version":12}}
+```
+
+没有归属时 `agentGroupId` 为 `null`；该用户尚未建立当前下注群的三公账户时返回 `USER_NOT_FOUND`，不要把它当作已有用户的空归属。
+
+**保存或更换**：`POST G/commands/user.agent_group`：
+
+```json
+{"requestId":"<UUID>","input":{"imUserId":"im_target","agentGroupId":"agents-B"}}
+```
+
+成功响应：
+
+```json
+{"ok":true,"requestId":"<同一UUID>","data":{"userId":9,"imUserId":"im_target","agentGroupId":"agents-B","gameGroupId":"game-A","version":13}}
+```
+
+**清除**：调用同一保存接口，显式传 `"agentGroupId":""`。不要省略字段或传 `null`。回执中的 `agentGroupId` 为 `null`。
+
+查询与保存均要求当前下注群的特权账号、真实 OpenIM 群管理员/群主身份及本租户 `owner/admin` 授权。保存还校验目标用户是当前下注群真实成员、三公账户有效。独立代理群入口 `A` 不提供这些管理操作。所有写入继续使用统一幂等和审计记录，相同请求重试不重复写入事件。
+
+可选群读取 `GET G/agent-groups`（`data.agentGroupIds`），再用现有 OpenIM 群聊列表/群资料显示群名与群头像，按 groupID 匹配。选择器可以复用已有群聊列表，但只允许选已绑定当前下注群的代理群；未绑定需先由有权限的 owner 使用 `agent.group_bind`，不在保存用户归属时自动绑定。群名和群头像不由此接口重复存储。
+
+错误：`AGENT_GROUP_NOT_BOUND` 表示先绑定当前下注群；`AGENT_GROUP_TENANT_MISMATCH` 表示绑定其他下注群；`INVALID_GROUP` 表示群标识无效；`INVALID_INPUT` 表示参数缺失/格式错误；`FORBIDDEN` 表示权限或成员资格不符；`IDEMPOTENCY_CONFLICT` 表示复用了不同内容的幂等键。
+
+用户详情接入：使用当前页面绑定的下注群 ID 查询；公开账号仅用于显示，请求使用用户资料里的内部 IM 标识。保存确认回执后重新查询。关闭页面、切换登录/群或权限变化时丢弃迟到结果。更换选择生成新 requestId；超时重试保留原 requestId 和 input。
+
+服务端新增迁移 `035_go_user_agent_groups.sql`，单独保存租户、用户、代理群、操作人及更新时间。先应用迁移，再更新 Chat RPC；不迁移已有积分分组或代理树数据为用户归属。
+
 ## 7 OpenIM 自定义字段与减少请求
 
 群摘要位于 `GroupInfo.ex.groupFeatures`。保留 ex 中其他字段和其他游戏配置，由 Chat 的统一群资料同步任务写回：
