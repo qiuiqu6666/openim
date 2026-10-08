@@ -18,6 +18,7 @@ class SangongRealtime extends ChangeNotifier with WidgetsBindingObserver {
   String _botUserID = '';
   StreamSubscription<Map<String, dynamic>>? _events;
   Timer? _retry;
+  Timer? _calibration;
   Future<void>? _snapshot;
   final _earlyEvents = <Map<String, dynamic>>[];
   bool get _canRun =>
@@ -51,6 +52,8 @@ class SangongRealtime extends ChangeNotifier with WidgetsBindingObserver {
 
   void _stop() {
     _generation++;
+    _calibration?.cancel();
+    _calibration = null;
     _retry?.cancel();
     _retry = null;
     _events?.cancel();
@@ -63,6 +66,13 @@ class SangongRealtime extends ChangeNotifier with WidgetsBindingObserver {
     if (!_canRun) return;
     _tenant = runtime.http.tenantId;
     final generation = _generation;
+    // Quiet mutations (bets, refunds, banker reset) intentionally have no chat
+    // message. Calibrate only while this foreground group has an active owner.
+    _calibration = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (_current(generation) && error == null) {
+        unawaited(refreshSnapshot());
+      }
+    });
     _events = runtime.featureContext.events.listen((event) {
       if (!_current(generation) ||
           event['groupID'] != runtime.featureContext.groupID) {

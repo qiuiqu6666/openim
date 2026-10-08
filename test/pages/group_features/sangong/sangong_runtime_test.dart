@@ -158,8 +158,7 @@ void main() {
         tester, runtime.admin.startSession(), isA<DioException>());
     expect(changes, isEmpty);
   });
-  testWidgets(
-      'one OpenIM subscription serves multiple owners without SSE or polling',
+  testWidgets('one subscription shares quiet-state calibration across owners',
       (tester) async {
     final api = SangongTestApi();
     final events = StreamController<Map<String, dynamic>>.broadcast();
@@ -182,14 +181,20 @@ void main() {
     events.add(sangongMessageEvent(100, sender: 'player'));
     await tester.pump();
     expect(runtime.realtime.latestState!.version, 3);
-    await tester.pump(const Duration(minutes: 1));
-    expect(api.count('/snapshot'), 1);
+    api.respond = (call) => {'ok': true, 'data': sangongState(4)};
+    await tester.pump(const Duration(seconds: 3));
+    await flushSangong(tester);
+    expect(api.count('/snapshot'), 2);
+    expect(runtime.realtime.latestState!.version, 4);
     runtime.realtime.release();
     expect(events.hasListener, isTrue);
     runtime.realtime.release();
     await tester.pump();
     expect(events.hasListener, isFalse);
     expect(runtime.realtime.ownerCount, 0);
+    final readsAfterRelease = api.count('/snapshot');
+    await tester.pump(const Duration(seconds: 6));
+    expect(api.count('/snapshot'), readsAfterRelease);
   });
   testWidgets('background suspends updates and resume calibrates once',
       (tester) async {
