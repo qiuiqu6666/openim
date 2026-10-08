@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/sangong_account_flow_entry.dart';
+import '../../rebate/widgets/sangong_rebate_receipt_details.dart';
 import '../data/report_query_controller.dart';
 
 String reportValue(Object? value) {
@@ -156,6 +157,7 @@ class ReportLedgerTile extends StatelessWidget {
   final Map<String, dynamic> row;
   @override
   Widget build(BuildContext context) {
+    final entry = SangongAccountFlowEntry.fromJson(row);
     final amount = row['amount'];
     final negative = amount is num && amount < 0;
     final colors = Theme.of(context).colorScheme;
@@ -183,6 +185,9 @@ class ReportLedgerTile extends StatelessWidget {
         Text(reportTime(row['createdAt']),
             style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 6),
+        if (entry.isRebate && entry.type != 'rebate_player_void')
+          SangongRebateReceiptDetails(
+              receipt: entry.rebate, amount: entry.amount),
         Wrap(spacing: 12, runSpacing: 4, children: [
           Text(
               '${negative ? '减少' : amount is num && amount > 0 ? '增加' : '变动'} ${reportSigned(amount)}',

@@ -327,3 +327,7 @@ Flutter 接受事件前核对群、sendID=可信 snapshot.botUserId、非空 ser
 前三者支持 `sessionId`，省略取最近经营批次。用户/团队列表支持 `beforeId`、`limit`、`search`（昵称包含匹配或完整 IM 用户 ID，最长128字节）。牌局详情要求 `roundId`，只能查询本群牌局，已结算明细来自冻结快照。
 
 `ledger` 增加可选 `type` 精确筛选，返回昵称、IM 用户 ID、操作人，保留金额、账变后余额、来源与备注。分页末页 `nextBeforeId=0`。总览是全批次统计，当前积分及当前运行状态明确属于实时数据。作废或已冲正结算不计入有效结算汇总。
+
+### 返水账变凭据
+
+`user-report.entries` 与 `ledger.entries` 的用户/代理返水账变增加可选 `rebate`：`turnover`（流水）、`rate`（百分比字符串）、`amount`（实际入账金额）、`claimType`（MANUAL/AUTO）、`accountType`（PLAYER_REBATE/AGENT_DIFF）、`turnoverBasis`（unclaimed/team_total）。用户记录的是本次未返流水；代理记录团队累计有效流水与本人配置比例，金额仍按分支比例差额计算。以上值与入账在同一事务保存，不随当前配置变化。旧记录缺失此字段时不得推算历史比例，也不得再次入账。用户详情上下分列表展示这些既有账变及返水冲正，人工上下分与返水合计分别统计。

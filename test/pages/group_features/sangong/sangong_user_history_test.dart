@@ -23,7 +23,8 @@ void main() {
                   'amount': 10,
                   'createdAt': '2026-10-06T00:00:00+08:00',
                 })));
-    expect(result.report.scoreEntries, isEmpty);
+    expect(result.report.scoreEntries.length, 500);
+    expect(result.report.scoreEntries.every((e) => e.isRebate), isTrue);
     expect(result.returnedLedgerCount, 500);
     expect(result.reachedLedgerLimit, isTrue);
     expect(result.coverageMessage(batch: false), contains('共 600 条账变'));

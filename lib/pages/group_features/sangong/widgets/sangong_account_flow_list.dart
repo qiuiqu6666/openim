@@ -1,5 +1,6 @@
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:flutter/material.dart';
+import '../rebate/widgets/sangong_rebate_receipt_details.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_account_flow_entry.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_co_bank_flow_entry.dart';
 
@@ -37,6 +38,9 @@ class SangongAccountFlowList extends StatelessWidget {
     final debit = entries
         .where((e) => e.isDebit)
         .fold<int>(0, (sum, e) => sum - e.amount);
+    final rebate = entries
+        .where((e) => e.isRebate)
+        .fold<int>(0, (sum, e) => sum + e.amount);
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     const labelStyle = TextStyle(color: Color(0xFF88B04B));
     const amountStyle = TextStyle(color: Color(0xFFC0504D));
@@ -69,6 +73,8 @@ class SangongAccountFlowList extends StatelessWidget {
                       TextSpan(text: '$credit', style: amountStyle),
                       const TextSpan(text: ' 总下分:', style: labelStyle),
                       TextSpan(text: '$debit'),
+                      const TextSpan(text: ' 返水净入账:', style: labelStyle),
+                      TextSpan(text: _signed(rebate), style: amountStyle),
                     ],
                   ]),
                   style: textStyle),
@@ -114,6 +120,9 @@ class SangongAccountFlowList extends StatelessWidget {
                   TextSpan(text: '${entry.balanceAfter}'),
                 ]),
                 style: textStyle),
+            if (entry.isRebate && entry.type != 'rebate_player_void')
+              SangongRebateReceiptDetails(
+                  receipt: entry.rebate, amount: entry.amount),
             if (!bets)
               Text(
                 '操作人：${operatorNames[entry.operator.trim()] == null ? (entry.operator.trim().isEmpty ? '未提供' : entry.operator.trim()) : '${operatorNames[entry.operator.trim()]}（${entry.operator.trim()}）'}',

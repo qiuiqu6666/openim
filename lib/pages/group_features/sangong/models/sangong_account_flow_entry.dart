@@ -1,3 +1,5 @@
+import '../rebate/models/sangong_rebate_receipt.dart';
+
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 /// Unified /admin/reports/user-flow entry. Amount is always signed.
 class SangongAccountFlowEntry {
@@ -15,7 +17,9 @@ class SangongAccountFlowEntry {
       this.refId,
       this.note = '',
       this.operator = '',
-      this.createdAt = ''});
+      this.createdAt = '',
+      this.rebate});
+  final SangongRebateReceipt? rebate;
   final int ledgerId;
   final int? userId;
   final String imUserId, nickname, type, note, operator, createdAt;
@@ -39,10 +43,19 @@ class SangongAccountFlowEntry {
   bool get isBet => betTypes.contains(type);
   bool get isCredit => creditTypes.contains(type);
   bool get isDebit => debitTypes.contains(type);
-  bool get isScoreTransfer => isCredit || isDebit;
+  static const rebateTypes = {
+    'rebate_player',
+    'rebate_agent_diff',
+    'rebate_player_void'
+  };
+  bool get isRebate => rebateTypes.contains(type);
+  bool get isScoreTransfer => isCredit || isDebit || isRebate;
 
   String get label =>
       const {
+        'rebate_player': '用户返水入账',
+        'rebate_agent_diff': '代理返水入账',
+        'rebate_player_void': '返水冲正追回',
         'bet_hold': '下注扣款',
         'bet_cancel': '撤注退款',
         'bet_recall': '撤回下注',
@@ -78,5 +91,9 @@ class SangongAccountFlowEntry {
         note: json['note']?.toString() ?? '',
         operator: json['operator']?.toString() ?? '',
         createdAt: json['createdAt']?.toString() ?? '',
+        rebate: json['rebate'] is Map
+            ? SangongRebateReceipt.fromJson(
+                Map<String, dynamic>.from(json['rebate'] as Map))
+            : null,
       );
 }
