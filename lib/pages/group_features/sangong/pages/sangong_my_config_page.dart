@@ -538,13 +538,13 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
             _config.configured
                 ? i18n.t(
                     zhHans: _canEdit
-                        ? '保存后，只有绑定的下注群聊天里才会出现三公入口。结账群用于管理账单。'
+                        ? '报表群接收管理账单，上下分通知群接收上下分消息。修改机器人或接收群前请先关机，填写后点击保存生效。'
                         : '你是帮工，只能在操作台上下分跑局，不能改配置。',
                     zhHant: _canEdit
-                        ? '保存後，只有綁定的下注群聊天裡才會出現三公入口。結賬群用於管理帳單。'
+                        ? '報表群接收管理帳單，上下分通知群接收上下分訊息。修改機器人或接收群前請先關機，填寫後點擊保存生效。'
                         : '你是幫工，只能在操作台上下分跑局，不能改配置。',
                     en: _canEdit
-                        ? 'After saving, the entry only appears in the bound game group.'
+                        ? 'The report group receives management bills; the notice group receives credit/debit messages. Stop the session before changing the bot or recipient groups, then save.'
                         : 'Helpers can operate rounds but cannot edit config.',
                   )
                 : i18n.t(
@@ -589,7 +589,7 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
               readOnly: readOnly || _config.configured || widget.groupScoped,
             ),
             SettingsInputCell(
-              label: i18n.t(zhHans: '结账群', zhHant: '結賬群', en: 'Settle group'),
+              label: i18n.t(zhHans: '报表群', zhHant: '報表群', en: 'Report group'),
               hint: i18n.t(zhHans: '群 ID', zhHant: '群 ID', en: 'Group ID'),
               controller: _statsGroupController,
               readOnly: readOnly,

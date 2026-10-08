@@ -3,6 +3,7 @@ import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
+import 'sangong_my_config_page.dart';
 import 'package:flutter/services.dart';
 import 'package:openim/pages/group_features/sangong/support/sangong_ui.dart';
 import 'package:openim/pages/group_features/sangong/models/sangong_game_settings.dart';
@@ -450,6 +451,26 @@ class _SangongGameRulesSettingsPageState
             ),
           )
         else ...[
+          SettingsGroup(
+            children: [
+              SettingsCell(
+                title: i18n.t(
+                  zhHans: '当前群配置',
+                  zhHant: '目前群配置',
+                  en: 'Current Group Config',
+                ),
+                showDivider: false,
+                onTap: _saving || _sessionBusy
+                    ? null
+                    : () => unawaited(SangongMyConfigPage.open(
+                          context,
+                          groupScoped: true,
+                          initialGameGroupId:
+                              SangongScope.read(context).featureContext.groupID,
+                        )),
+              ),
+            ],
+          ),
           _buildSessionGroup(i18n, dark),
           if (widget.onFloatVisibleChanged != null)
             SettingsGroup(
