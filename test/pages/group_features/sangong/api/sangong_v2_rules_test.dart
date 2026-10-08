@@ -5,6 +5,32 @@ import 'package:openim/pages/group_features/sangong/pages/sangong_game_rules_set
 import '../sangong_test_support.dart';
 
 void main() {
+  testWidgets('reset pins current round and requires committed awaiting state',
+      (tester) async {
+    final api = SangongTestApi();
+    final runtime = sangongTestRuntime(sangongTestContext(api));
+    addTearDown(runtime.dispose);
+    api.respond = (call) => {
+          'ok': true,
+          'requestId': call.body!['requestId'],
+          'data': {
+            'state': {
+              'groupId': 'group-sangong',
+              'version': 2,
+              'status': 'running',
+              'round': {'id': 7, 'periodNo': 4, 'status': 'await_banker'},
+            },
+          },
+        };
+    final result = await completeSangongRequest(
+        tester, runtime.admin.resetUnopenedRound(7));
+    expect(result.round!.periodNo, 4);
+    expect(result.round!.status, 'await_banker');
+    expect(api.calls.single.path,
+        '/sangong/api/v2/groups/group-sangong/commands/round.reset');
+    expect(api.calls.single.body!['input'], {'roundId': 7});
+  });
+
   testWidgets('rule write contains only the four effective group rules',
       (tester) async {
     final api = SangongTestApi();

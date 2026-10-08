@@ -189,6 +189,16 @@ class SangongAdminApi {
   }
 
   SangongRoundApi get _rounds => SangongRoundApi(http);
+
+  Future<SangongAdminSession> resetUnopenedRound(int roundId) async {
+    final data = await _rounds.command('round.reset', roundId);
+    final result = SangongAdminSession.fromJson(_rounds.state(data));
+    if (result.round?.id != roundId || result.round?.status != 'await_banker') {
+      _unknownResult();
+    }
+    return result;
+  }
+
   Future<SangongAdminSession> assignBanker(
           {required int roundId,
           required String imUserId,

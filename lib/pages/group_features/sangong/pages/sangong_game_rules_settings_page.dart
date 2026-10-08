@@ -329,6 +329,35 @@ class _SangongGameRulesSettingsPageState
     }
   }
 
+  Future<void> _resetRound() async {
+    final runtime = SangongScope.read(context);
+    final round = _session.round;
+    if (_sessionBusy || _saving || !runtime.canManage || round == null) return;
+    final ok = await AppDialog.confirm(
+      context: context,
+      title: '退回全部注单并取消定庄',
+      message:
+          '退回第${round.periodNo}期全部有效下注，清除庄家和合庄，保留本期期号并恢复未定庄。已撤注退款的注单不会重复退款。',
+    );
+    if (!mounted || !ok || !runtime.isCurrent) return;
+    setState(() => _sessionBusy = true);
+    try {
+      final session = await runtime.admin.resetUnopenedRound(round.id);
+      if (!mounted || !runtime.isCurrent) return;
+      setState(() {
+        _session = session;
+        _canEdit = runtime.settings.canEdit;
+      });
+      ToastUtils.toast('全部有效注单已退回，已恢复未定庄');
+    } catch (error) {
+      if (mounted && runtime.isCurrent) {
+        ToastUtils.toast(DioErrorMessage.forApp(error));
+      }
+    } finally {
+      if (mounted) setState(() => _sessionBusy = false);
+    }
+  }
+
   Widget _buildSessionGroup(AppI18n i18n, bool dark) {
     final running = _session.isRunning;
     final actionLabel = running
@@ -472,6 +501,25 @@ class _SangongGameRulesSettingsPageState
             ],
           ),
           _buildSessionGroup(i18n, dark),
+          if (SangongScope.read(context).canManage &&
+              _session.isRunning &&
+              _session.round != null &&
+              (_session.round!.bankerDoor ?? 0) > 0 &&
+              _session.round!.drawLockedAt.isEmpty &&
+              const {'betting', 'co_bank_closed', 'await_banker_door'}
+                  .contains(_session.round!.status))
+            SettingsGroup(children: [
+              SettingsCell(
+                title: i18n.t(
+                    zhHans: '退回全部注单并取消定庄',
+                    zhHant: '退回全部注單並取消定莊',
+                    en: 'Refund all bets and clear banker'),
+                showDivider: false,
+                onTap: _saving || _sessionBusy
+                    ? null
+                    : () => unawaited(_resetRound()),
+              ),
+            ]),
           if (widget.onFloatVisibleChanged != null)
             SettingsGroup(
               children: [
