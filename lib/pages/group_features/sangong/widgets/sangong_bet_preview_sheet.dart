@@ -561,9 +561,10 @@ class _SangongBetPreviewSheetState extends State<SangongBetPreviewSheet> {
           return tile;
         }
         return Dismissible(
-          key: ValueKey('bet-entry-${entry.messageId}'),
-          direction: DismissDirection.endToStart,
-          confirmDismiss: busy ? null : (_) => _confirmExcludeEntry(entry),
+          key: ValueKey(
+              'bet-entry-${widget.roundId}-${entry.msgSeq ?? entry.messageId ?? entry.index}-${entry.imUserId}'),
+          direction: busy ? DismissDirection.none : DismissDirection.endToStart,
+          confirmDismiss: (_) => _confirmExcludeEntry(entry),
           background: _ExcludeSwipeBackground(i18n: i18n),
           child: tile,
         );

@@ -402,7 +402,7 @@ void main() {
           (c.body?['input'] as Map?)?['kind'] == kind);
       expect(call.method, 'POST');
       if (kind == 'settlement' || kind == 'bill') {
-        expect((call.body!['input'] as Map)['roundId'], 17);
+        expect((call.body!['input'] as Map).containsKey('roundId'), isFalse);
       }
       _expectNoConfigOrManagementPage();
       expect(_navigator(tester).canPop(), isFalse);
