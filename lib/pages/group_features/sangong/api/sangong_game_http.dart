@@ -172,14 +172,12 @@ class SangongGameHttp {
       final agentPrefix =
           '/api/v2/agent-groups/${Uri.encodeComponent(context.groupID)}/';
       if (options.path.startsWith(agentPrefix)) {
-        if (!feature.enabled ||
-            !feature.agentEntry ||
-            !capability.canOpenAgent) {
+        if (!capability.canOpenAgent) {
           throw StateError('没有当前群的三公代理权限');
         }
         final resource = options.path.substring(agentPrefix.length);
         if (const {'member-daily', 'transfers', 'ledger'}.contains(resource) &&
-            (!feature.rebateHistoryEntry || !capability.canViewRebateHistory)) {
+            !capability.canViewRebateHistory) {
           throw StateError('没有当前群的收益历史查看权限');
         }
         return;
@@ -233,12 +231,12 @@ class SangongGameHttp {
       }
     } else if (options.path.startsWith('/api/v1/me/') ||
         options.path.startsWith('/api/v1/agent/')) {
-      if (!feature.enabled || !feature.agentEntry || !capability.canOpenAgent) {
+      if (!capability.canOpenAgent) {
         throw StateError('没有当前群的三公代理权限');
       }
       if ((options.path == '/api/v1/me/member-daily' ||
               options.path == '/api/v1/me/transfers') &&
-          (!feature.rebateHistoryEntry || !capability.canViewRebateHistory)) {
+          !capability.canViewRebateHistory) {
         throw StateError('没有当前群的收益历史查看权限');
       }
     }

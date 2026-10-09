@@ -42,11 +42,13 @@ class AgentRebateFloatPrefs {
     await prefs.setDouble(_key(conversationId, 'top'), offset.dy);
   }
 
-  Future<bool> readExpanded(String conversationId) async {
+  Future<bool> readExpanded(String conversationId,
+      {bool defaultValue = false}) async {
     final cached = _expandedCache[conversationId];
     if (cached != null) return cached;
     final prefs = await SharedPreferences.getInstance();
-    final expanded = prefs.getBool(_key(conversationId, 'expanded')) ?? false;
+    final expanded =
+        prefs.getBool(_key(conversationId, 'expanded')) ?? defaultValue;
     _expandedCache[conversationId] = expanded;
     return expanded;
   }

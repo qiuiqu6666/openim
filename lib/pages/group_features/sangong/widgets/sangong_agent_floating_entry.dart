@@ -27,6 +27,7 @@ class SangongAgentFloatingEntry extends StatelessWidget {
       conversationId: conversationId,
       variant: AgentRebateFloatingVariant.sangong,
       defaultBottom: 500,
+      defaultExpanded: true,
       onOpenDescendants: onOpenQuery,
       onOpenRebate: onOpenTeam,
       onOpenHistory: onOpenPersonal,

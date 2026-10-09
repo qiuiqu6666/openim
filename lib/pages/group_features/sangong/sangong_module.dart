@@ -153,8 +153,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
           capabilities.canManage) {
         await runtime.ensureManageBinding();
       }
-      if (capabilities.canOpenAgent &&
-          widget.featureContext.features.sangong.agentEntry) {
+      if (capabilities.canOpenAgent) {
         await runtime.ensureAgentBinding();
       }
       if (!mounted ||

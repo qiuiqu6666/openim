@@ -47,7 +47,7 @@ class _GroupChatFeatureSurfaceState extends State<GroupChatFeatureSurface> {
         // Re-entering a group must discover account settings changed while the
         // app stayed in the foreground. The account store fences old sessions.
         unawaited(feature.privilege.refresh());
-        unawaited(store.loadCapabilities(feature.groupID));
+        unawaited(store.loadCapabilities(feature.groupID, force: true));
       }
     });
   }

@@ -137,14 +137,11 @@ class SangongRuntime extends ChangeNotifier {
 
   bool get canOpenAgent =>
       isCurrent &&
-      featureContext.features.sangong.enabled &&
-      featureContext.features.sangong.agentEntry &&
+      canAccessModule &&
       http.hasTenant &&
       featureContext.capabilities.sangong.canOpenAgent;
   bool get canViewRebateHistory =>
-      canOpenAgent &&
-      featureContext.features.sangong.rebateHistoryEntry &&
-      featureContext.capabilities.sangong.canViewRebateHistory;
+      canOpenAgent && featureContext.capabilities.sangong.canViewRebateHistory;
   bool get canManageMembers =>
       canManage &&
       (featureContext.capabilities.sangong.raw['canManageMembers'] == true ||
@@ -249,8 +246,6 @@ class SangongRuntime extends ChangeNotifier {
   Future<void> ensureAgentBinding() async {
     if (!isCurrent ||
         !canAccessModule ||
-        !featureContext.features.sangong.enabled ||
-        !featureContext.features.sangong.agentEntry ||
         !featureContext.capabilities.sangong.canOpenAgent) {
       throw StateError('没有当前群的三公代理权限');
     }

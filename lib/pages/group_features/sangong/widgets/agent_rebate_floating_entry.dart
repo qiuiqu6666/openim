@@ -10,7 +10,7 @@ enum AgentRebateFloatingVariant { game, sangong }
 
 /// 群聊页代理查询浮窗：查下级 / 历史记录。
 ///
-/// 默认收起为边缘把手，点击后展开；拖动结束后自动吸附到左右边缘。
+/// 首次展开状态由调用方指定，之后记住用户选择；拖动后吸附到左右边缘。
 class AgentRebateFloatingEntry extends StatefulWidget {
   const AgentRebateFloatingEntry({
     super.key,
@@ -21,6 +21,7 @@ class AgentRebateFloatingEntry extends StatefulWidget {
     required this.onOpenHistory,
     this.variant = AgentRebateFloatingVariant.game,
     this.defaultBottom = 220,
+    this.defaultExpanded = false,
   });
 
   final SangongFloatTheme theme;
@@ -30,6 +31,7 @@ class AgentRebateFloatingEntry extends StatefulWidget {
   final VoidCallback onOpenHistory;
   final AgentRebateFloatingVariant variant;
   final double defaultBottom;
+  final bool defaultExpanded;
 
   static const Size _collapsedSize = Size(58, 58);
   static const Size _expandedSize = Size(58, 262);
@@ -57,18 +59,17 @@ class _AgentRebateFloatingEntryState extends State<AgentRebateFloatingEntry> {
     super.initState();
     final saved =
         AgentRebateFloatPrefs.instance.readOffsetSync(widget.conversationId);
-    final expanded =
-        AgentRebateFloatPrefs.instance.readExpandedSync(widget.conversationId);
+    final expanded = AgentRebateFloatPrefs.instance
+            .readExpandedSync(widget.conversationId) ??
+        widget.defaultExpanded;
     if (saved != null) {
       _offset = saved;
       _preferredOffset = saved;
     }
-    if (expanded != null) {
-      _expanded = expanded;
-      _childSize = expanded
-          ? AgentRebateFloatingEntry._expandedSize
-          : AgentRebateFloatingEntry._collapsedSize;
-    }
+    _expanded = expanded;
+    _childSize = expanded
+        ? AgentRebateFloatingEntry._expandedSize
+        : AgentRebateFloatingEntry._collapsedSize;
     unawaited(_restorePrefs());
   }
 
@@ -77,7 +78,8 @@ class _AgentRebateFloatingEntryState extends State<AgentRebateFloatingEntry> {
         '[AgentRebateFloat] restore_start conv=${widget.conversationId}');
     final results = await Future.wait([
       AgentRebateFloatPrefs.instance.readOffset(widget.conversationId),
-      AgentRebateFloatPrefs.instance.readExpanded(widget.conversationId),
+      AgentRebateFloatPrefs.instance.readExpanded(widget.conversationId,
+          defaultValue: widget.defaultExpanded),
     ]);
     if (!mounted) return;
     final media = MediaQuery.of(context);

@@ -13,6 +13,7 @@ import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'package:openim/pages/group_features/sangong/widgets/group_game_floating_entry.dart';
 import 'package:openim/pages/group_features/sangong/widgets/sangong_agent_floating_entry.dart';
 import 'package:openim/pages/group_features/widgets/group_feature_actions.dart';
+import 'package:openim/pages/group_features/widgets/group_chat_feature_surface.dart';
 import '../sangong_test_support.dart';
 
 const _groupID = 'group-sangong';
@@ -101,7 +102,9 @@ class _EntryFixture {
 }
 
 Future<void> _pumpChat(WidgetTester tester, _EntryFixture fixture,
-    {bool dark = false}) async {
+    {bool dark = false,
+    TargetPlatform platform = TargetPlatform.android,
+    bool useChatSurface = false}) async {
   await fixture.store.loadCapabilities(_groupID);
   await tester.pumpWidget(ScreenUtilInit(
     designSize: const Size(375, 812),
@@ -111,31 +114,38 @@ Future<void> _pumpChat(WidgetTester tester, _EntryFixture fixture,
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: ThemeData(
         brightness: dark ? Brightness.dark : Brightness.light,
+        platform: platform,
         colorSchemeSeed: const Color(0xff0089ff),
       ),
       home: Scaffold(
         body: ListenableBuilder(
           listenable: fixture.store,
-          builder: (context, _) => SangongFeatureHost(
-            featureContext: fixture.context,
-            builder: (context, status, overlay) {
-              fixture.runtime = SangongScope.read(context);
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  Positioned.fill(
-                    child: Column(children: [
-                      status,
-                      const Expanded(
-                        child: Center(child: Text('普通聊天', key: _chatKey)),
-                      ),
-                    ]),
-                  ),
-                  overlay,
-                ],
-              );
-            },
-          ),
+          builder: (context, _) => useChatSurface
+              ? GroupChatFeatureSurface(
+                  store: fixture.store,
+                  featureContext: fixture.context,
+                  child: const Center(child: Text('普通聊天', key: _chatKey)),
+                )
+              : SangongFeatureHost(
+                  featureContext: fixture.context,
+                  builder: (context, status, overlay) {
+                    fixture.runtime = SangongScope.read(context);
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Positioned.fill(
+                          child: Column(children: [
+                            status,
+                            const Expanded(
+                              child: Center(child: Text('普通聊天', key: _chatKey)),
+                            ),
+                          ]),
+                        ),
+                        overlay,
+                      ],
+                    );
+                  },
+                ),
         ),
       ),
     ),
@@ -167,6 +177,96 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     OpenIM.iMManager.userID = 'owner';
   });
+
+  testWidgets('entering agent chat refreshes cached personal permissions',
+      (tester) async {
+    final fixture = _EntryFixture(privileged: false, gameType: 0)
+      ..capabilitiesUnavailable = false;
+    addTearDown(fixture.dispose);
+    addTearDown(() => unmountSangong(tester));
+    await fixture.store.loadCapabilities(_groupID);
+    expect(fixture.context.capabilities.sangong.canOpenAgent, isFalse);
+
+    // An administrator binds this user while the app still caches a denial.
+    // No SDK summary or capability-version notification arrives on this device.
+    fixture.agentAssigned = true;
+    await _pumpChat(tester, fixture, useChatSurface: true);
+    expect(_toolboxLabels(tester, fixture), ['三公代理']);
+    for (final label in ['查', '团', '个', '隐']) {
+      expect(find.text(label), findsOneWidget);
+    }
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    fixture.agentAssigned = false;
+    await _pumpChat(tester, fixture, useChatSurface: true);
+    expect(find.byType(SangongAgentFloatingEntry), findsNothing);
+    expect(_toolboxLabels(tester, fixture), isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final dark in [false, true]) {
+    for (final staleSummary in [false, true]) {
+      testWidgets(
+          'assigned agent buttons ignore missing/stale public summary dark=$dark stale=$staleSummary',
+          (tester) async {
+        final fixture = _EntryFixture(privileged: false, gameType: 0)
+          ..capabilitiesUnavailable = false
+          ..agentAssigned = true;
+        if (staleSummary) {
+          fixture.store.seed(GroupInfo(
+              groupID: _groupID,
+              ex: jsonEncode({
+                'groupFeatures': {
+                  'schemaVersion': 1,
+                  'revision': 1,
+                  'games': {
+                    'sangong': {
+                      'enabled': false,
+                      'agentEntry': false,
+                      'rebateHistoryEntry': false
+                    }
+                  }
+                },
+              })));
+        }
+        addTearDown(fixture.dispose);
+        addTearDown(() => unmountSangong(tester));
+        await _pumpChat(tester, fixture,
+            dark: dark,
+            platform:
+                staleSummary ? TargetPlatform.iOS : TargetPlatform.android);
+        expect(_toolboxLabels(tester, fixture), ['三公代理']);
+        expect(find.byType(GroupGameFloatingEntry), findsNothing);
+        for (final label in ['查', '团', '个', '隐']) {
+          expect(find.text(label), findsOneWidget);
+        }
+        // Exercise the actual chat buttons, not only the toolbox shortcut.
+        for (final item in [
+          ('查', SangongAgentTeamPage),
+          ('团', SangongAgentDashboardPage),
+          ('个', SangongAgentPersonalPage)
+        ]) {
+          await tester.tap(find.text(item.$1));
+          await _flushRoute(tester);
+          expect(find.byType(item.$2), findsOneWidget);
+          final navigator =
+              tester.state<NavigatorState>(find.byType(Navigator).first);
+          navigator.pop();
+          await _flushRoute(tester);
+        }
+        expect(
+            fixture.api.calls.where((c) => c.path.contains('/api/v2/groups/')),
+            isEmpty);
+        fixture.agentAssigned = false;
+        fixture.capabilityVersion++;
+        await fixture.store.loadCapabilities(_groupID, force: true);
+        await _flushRoute(tester);
+        expect(find.byType(SangongAgentFloatingEntry), findsNothing);
+        expect(_toolboxLabels(tester, fixture), isEmpty);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
 
   for (final dark in [false, true]) {
     testWidgets(
