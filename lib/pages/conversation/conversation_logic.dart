@@ -15,6 +15,8 @@ import '../../core/im_callback.dart';
 import '../../core/conversation_reads/conversation_read_projection.dart';
 import '../../core/conversation_reads/conversation_read_request.dart';
 import '../../routes/app_navigator.dart';
+import '../../routes/app_pages.dart';
+import '../../services/legacy_identity/legacy_group_identity.dart';
 import '../../services/chat_history_cache.dart';
 import '../contacts/add_by_search/add_by_search_logic.dart';
 import '../home/home_logic.dart';
@@ -23,11 +25,15 @@ import 'conversation_organizer.dart';
 import 'deletion/conversation_deletion_guard.dart';
 import 'drafts/conversation_draft_text.dart';
 import 'legacy_cleanup/legacy_service_conversation_cleanup.dart';
+import 'group_identity/legacy_group_conversation_migration.dart';
 import 'summary/conversation_latest_message_text.dart';
 
 class ConversationLogic extends GetxController with WidgetsBindingObserver {
-  ConversationLogic({LegacyServiceConversationCleanup? legacyCleanup})
-      : _legacyCleanup = legacyCleanup ?? LegacyServiceConversationCleanup();
+  ConversationLogic(
+      {LegacyServiceConversationCleanup? legacyCleanup,
+      LegacyGroupConversationMigration? groupMigration})
+      : _legacyCleanup = legacyCleanup ?? LegacyServiceConversationCleanup(),
+        _groupMigration = groupMigration ?? LegacyGroupConversationMigration();
 
   static const int _receiveMessages = 0;
   static const int _receiveWithoutNotification = 2;
@@ -55,6 +61,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final _deletions = ConversationDeletionGuard();
   final _readProjection = ConversationReadProjection();
   final LegacyServiceConversationCleanup _legacyCleanup;
+  final LegacyGroupConversationMigration _groupMigration;
   bool get _sessionActive =>
       !_closed &&
       _accountID == OpenIM.iMManager.userID &&
@@ -460,23 +467,29 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _cleanupLegacyConversations() {
+  Future<void> _cleanupLegacyConversations() async {
     final clearing = _clearGeneration;
-    return _legacyCleanup.run(
-      isActive: () => _sessionActive && clearing == _clearGeneration,
-      onDeleted: (info) {
-        final id = info.conversationID;
-        _updates.remove(id);
-        onChangeConversations.remove(id);
-        _deletions.begin(info);
-        _deletions.complete(id);
-        if (_readingList) _changesDuringRead[id] = null;
-        ChatHistoryCache.removeConversation(_accountID, id);
-        list.removeWhere((item) => item.conversationID == id);
-        homeLogic.conversationsAtFirstPage
-            .removeWhere((item) => item.conversationID == id);
-        tempDraftText.remove(id);
-      },
+    bool active() => _sessionActive && clearing == _clearGeneration;
+    void removeLocal(ConversationInfo info) {
+      final id = info.conversationID;
+      _updates.remove(id);
+      onChangeConversations.remove(id);
+      _deletions.begin(info);
+      _deletions.complete(id);
+      if (_readingList) _changesDuringRead[id] = null;
+      ChatHistoryCache.removeConversation(_accountID, id);
+      list.removeWhere((item) => item.conversationID == id);
+      homeLogic.conversationsAtFirstPage
+          .removeWhere((item) => item.conversationID == id);
+      tempDraftText.remove(id);
+    }
+
+    await _legacyCleanup.run(isActive: active, onDeleted: removeLocal);
+    if (!active()) return;
+    await _groupMigration.run(
+      // Do not touch SDK drafts while a chat/composer owns its in-memory draft.
+      isActive: () => active() && Get.currentRoute == AppRoutes.home,
+      onHidden: removeLocal,
     );
   }
 
@@ -824,6 +837,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     ConversationInfo? conversationInfo,
     Message? searchMessage,
   }) async {
+    if (groupID != null) groupID = LegacyGroupIdentity.canonical(groupID);
     conversationInfo ??= await _createConversation(
       sourceID: userID ?? groupID!,
       sessionType: userID == null ? sessionType! : ConversationType.single,

@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
+import '../../../services/legacy_identity/legacy_group_identity.dart';
+
 /// Contact transports leave lifecycle and error policy to the search owner.
 class ContactSearchSource {
   Future<List<UserFullInfo>?> users(String keyword, int page,
@@ -47,5 +49,6 @@ class ContactSearchSource {
       );
 
   Future<List<GroupInfo>> groups(String keyword) =>
-      OpenIM.iMManager.groupManager.getGroupsInfo(groupIDList: [keyword]);
+      OpenIM.iMManager.groupManager
+          .getGroupsInfo(groupIDList: [LegacyGroupIdentity.canonical(keyword)]);
 }

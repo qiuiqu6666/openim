@@ -1,12 +1,8 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
-import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
-
-typedef LegacyCleanupSession = ({String owner, String token, String server});
-typedef LegacyCleanupPost = Future<dynamic> Function(
-    String url, Map<String, dynamic> body, Options options);
+import '../../../services/legacy_identity/legacy_server_snapshot.dart';
+export '../../../services/legacy_identity/legacy_server_snapshot.dart'
+    show LegacyCleanupSession, LegacyCleanupPost;
 
 /// Completes one server-authorized cleanup for devices with an older SDK cache.
 /// The SDK's incremental conversation sync deliberately skips local deletions.
@@ -21,7 +17,7 @@ class LegacyServiceConversationCleanup {
     LegacyCleanupPost? post,
     Future<bool> Function(String key)? isCompleted,
     Future<void> Function(String key)? markCompleted,
-  })  : _session = session ?? _currentSession,
+  })  : _session = session ?? LegacyServerSnapshot.currentSession,
         _readPage = readPage ??
             ((offset, count) => OpenIM.iMManager.conversationManager
                 .getConversationListSplit(offset: offset, count: count)),
@@ -42,7 +38,7 @@ class LegacyServiceConversationCleanup {
         _hideConversation = hideConversation ??
             ((id) async => OpenIM.iMManager.conversationManager
                 .hideConversation(conversationID: id)),
-        _post = post ?? _defaultPost,
+        _post = post ?? LegacyServerSnapshot.defaultPost,
         _isCompleted = isCompleted ?? _readCompleted,
         _markCompleted = markCompleted ?? _writeCompleted;
 
@@ -79,7 +75,10 @@ class LegacyServiceConversationCleanup {
   Future<void> _run(bool Function() isActive,
       void Function(ConversationInfo) onDeleted) async {
     final session = _session();
-    if (session == null || !_allowedServer(session.server)) return;
+    if (session == null ||
+        !LegacyServerSnapshot.allowedServer(session.server)) {
+      return;
+    }
     bool current() => isActive() && _session() == session;
     if (!current()) return;
     try {
@@ -101,7 +100,8 @@ class LegacyServiceConversationCleanup {
           .where((item) => _eligible(session.owner, item))
           .toList(growable: false);
       if (candidates.isEmpty || !current()) return;
-      final serverIDs = await _serverIDs(session);
+      final serverIDs =
+          await LegacyServerSnapshot.serverIDs(session, post: _post);
       if (!current()) return;
       for (final candidate in candidates) {
         if (!current()) return;
@@ -112,7 +112,8 @@ class LegacyServiceConversationCleanup {
         if (!current()) return;
         if (completed) continue;
         // A new server conversation or local message wins over this old snapshot.
-        final latestServerIDs = await _serverIDs(session);
+        final latestServerIDs =
+            await LegacyServerSnapshot.serverIDs(session, post: _post);
         if (!current()) return;
         if (latestServerIDs.contains(id)) continue;
         final latest = await _readConversation(id);
@@ -162,7 +163,8 @@ class LegacyServiceConversationCleanup {
           if (!safeToHide) continue;
           // Both mutations below are local-only. In particular this maintenance
           // path must never call the SDK's server-wide clear-conversation API.
-          final finalServerIDs = await _serverIDs(session);
+          final finalServerIDs =
+              await LegacyServerSnapshot.serverIDs(session, post: _post);
           if (!current()) return;
           if (finalServerIDs.contains(id)) continue;
           final finalLocal = await _readConversation(id);
@@ -222,75 +224,6 @@ class LegacyServiceConversationCleanup {
     }
     if (item.latestMsg != null && (item.latestMsg!.seq ?? 0) <= 0) return false;
     return true;
-  }
-
-  Future<Set<String>> _serverIDs(LegacyCleanupSession session) async {
-    final response = await _post(
-      '${session.server.replaceFirst(RegExp(r'/+$'), '')}/conversation/get_full_conversation_ids',
-      // The empty-server hash is zero; a nonzero request also requests that list.
-      // A rare equal hash is handled conservatively as no deletion permission.
-      {'userID': session.owner, 'idHash': 1},
-      Options(contentType: Headers.jsonContentType, headers: {
-        'token': session.token,
-        'operationID': const Uuid().v4(),
-      }),
-    );
-    if (response is! Map || response['errCode'] != 0) {
-      throw const FormatException('Conversation cleanup response unavailable');
-    }
-    final data = response['data'];
-    if (data is! Map ||
-        data['versionID'] is! String ||
-        (data['versionID'] as String).isEmpty ||
-        (data['equal'] != null && data['equal'] != false)) {
-      throw const FormatException('Conversation cleanup needs a full snapshot');
-    }
-    final ids = data['conversationIDs'];
-    // Protobuf JSON omits an empty list. versionID above proves a real response.
-    if (ids == null) return {};
-    if (ids is! List || ids.any((id) => id is! String || id.isEmpty)) {
-      throw const FormatException('Invalid conversation cleanup IDs');
-    }
-    return ids.cast<String>().toSet();
-  }
-
-  static bool _allowedServer(String server) {
-    final uri = Uri.tryParse(server);
-    return uri != null &&
-        (uri.scheme == 'http' || uri.scheme == 'https') &&
-        uri.host == '129.226.192.93' &&
-        uri.userInfo.isEmpty &&
-        !uri.hasQuery &&
-        !uri.hasFragment;
-  }
-
-  static LegacyCleanupSession? _currentSession() {
-    final owner = DataSp.userID;
-    final token = DataSp.imToken;
-    if (owner == null ||
-        owner.isEmpty ||
-        token == null ||
-        token.isEmpty ||
-        OpenIM.iMManager.userID != owner) {
-      return null;
-    }
-    return (owner: owner, token: token, server: Config.imApiUrl);
-  }
-
-  static Future<dynamic> _defaultPost(
-      String url, Map<String, dynamic> body, Options options) async {
-    // Dedicated client: no shared auth interceptor, credential logging, or redirects.
-    final client = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 15),
-      followRedirects: false,
-    ));
-    try {
-      return (await client.post<dynamic>(url, data: body, options: options))
-          .data;
-    } finally {
-      client.close();
-    }
   }
 
   static Future<bool> _readCompleted(String key) async =>

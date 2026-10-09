@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 
 import '../../../core/controller/im_controller.dart';
 import '../../../routes/app_navigator.dart';
+import '../../../services/legacy_identity/legacy_group_identity.dart';
 import '../../conversation/conversation_logic.dart';
 
 enum JoinGroupMethod { search, qrcode, invite }
@@ -24,7 +25,9 @@ class GroupProfilePanelLogic extends GetxController {
 
   @override
   void onInit() {
-    groupInfo = Rx(GroupInfo(groupID: Get.arguments['groupID']));
+    groupInfo = Rx(GroupInfo(
+        groupID:
+            LegacyGroupIdentity.canonical(Get.arguments['groupID'] as String)));
     joinGroupMethod = Get.arguments['joinGroupMethod'];
     sub = imLogic.groupApplicationChangedSubject.listen(_onChanged);
     joinedGroupAddedSub = imLogic.joinedGroupAddedSubject.listen(_onChanged);
