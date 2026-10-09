@@ -22,9 +22,13 @@ import '../group_features/data/group_feature_runtime.dart';
 import 'conversation_organizer.dart';
 import 'deletion/conversation_deletion_guard.dart';
 import 'drafts/conversation_draft_text.dart';
+import 'legacy_cleanup/legacy_service_conversation_cleanup.dart';
 import 'summary/conversation_latest_message_text.dart';
 
 class ConversationLogic extends GetxController with WidgetsBindingObserver {
+  ConversationLogic({LegacyServiceConversationCleanup? legacyCleanup})
+      : _legacyCleanup = legacyCleanup ?? LegacyServiceConversationCleanup();
+
   static const int _receiveMessages = 0;
   static const int _receiveWithoutNotification = 2;
   final popCtrl = CustomPopupMenuController();
@@ -50,6 +54,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final _changesDuringRead = <String, ConversationInfo?>{};
   final _deletions = ConversationDeletionGuard();
   final _readProjection = ConversationReadProjection();
+  final LegacyServiceConversationCleanup _legacyCleanup;
   bool get _sessionActive =>
       !_closed &&
       _accountID == OpenIM.iMManager.userID &&
@@ -134,6 +139,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         if (reInstall) {
           onRefresh();
           reInstall = false;
+        } else if (status == IMSdkStatus.syncEnded) {
+          unawaited(_cleanupLegacyConversations());
         }
       }
     }));
@@ -445,7 +452,33 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   void _sortConversationList() =>
       OpenIM.iMManager.conversationManager.simpleSort(list);
 
-  Future<void> onRefresh() => _loadConversationList(firstPageOnly: false);
+  Future<void> onRefresh() async {
+    final clearing = _clearGeneration;
+    await _cleanupLegacyConversations();
+    if (_sessionActive && clearing == _clearGeneration) {
+      await _loadConversationList(firstPageOnly: false);
+    }
+  }
+
+  Future<void> _cleanupLegacyConversations() {
+    final clearing = _clearGeneration;
+    return _legacyCleanup.run(
+      isActive: () => _sessionActive && clearing == _clearGeneration,
+      onDeleted: (info) {
+        final id = info.conversationID;
+        _updates.remove(id);
+        onChangeConversations.remove(id);
+        _deletions.begin(info);
+        _deletions.complete(id);
+        if (_readingList) _changesDuringRead[id] = null;
+        ChatHistoryCache.removeConversation(_accountID, id);
+        list.removeWhere((item) => item.conversationID == id);
+        homeLogic.conversationsAtFirstPage
+            .removeWhere((item) => item.conversationID == id);
+        tempDraftText.remove(id);
+      },
+    );
+  }
 
   Future<void> _loadConversationList({required bool firstPageOnly}) async {
     if (!_sessionActive) return;
@@ -515,6 +548,9 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> getFirstPage() async {
+    final clearing = _clearGeneration;
+    await _cleanupLegacyConversations();
+    if (!_sessionActive || clearing != _clearGeneration) return;
     final result = homeLogic.conversationsAtFirstPage;
     if (result.isNotEmpty) {
       final currentByID = {
