@@ -142,7 +142,7 @@ class _SangongUserAgentGroupEntryState
         final input = await AppDialog.prompt(
             context: context,
             title: '设置代理群',
-            message: '可从群资料复制群 ID。用户加入该群后，可查看自己的代理和团队数据。',
+            message: '可从群资料复制群 ID。一个代理群只对应一个厅；用户加入后可查看自己在本厅的代理和团队数据。',
             placeholder: '请输入群 ID',
             initialValue: _groupId ?? '',
             confirmText: '保存',

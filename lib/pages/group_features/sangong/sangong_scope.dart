@@ -55,7 +55,6 @@ class SangongRuntime extends ChangeNotifier {
   bool _disposed = false;
   bool _contextNotificationQueued = false;
   AgentEntryContextDto? agentContext;
-  String? preferredAgentHallId;
   bool get isSessionCurrent => !_disposed && featureContext.sessionCurrent();
   bool get isCurrent =>
       isSessionCurrent && featureContext.capabilitiesCurrent();
@@ -69,9 +68,8 @@ class SangongRuntime extends ChangeNotifier {
     final agentOnly = capability.canOpenAgent &&
         !capability.canConfigure &&
         !capability.canManage &&
-        (capability.requiresTenantSelection ||
-            capability.tenantID.isNotEmpty &&
-                capability.tenantID != featureContext.groupID);
+        capability.tenantID.isNotEmpty &&
+        capability.tenantID != featureContext.groupID;
     return !agentOnly;
   }
 
@@ -199,7 +197,6 @@ class SangongRuntime extends ChangeNotifier {
         old.canConfigure != next.canConfigure ||
         old.canManage != next.canManage ||
         old.canOpenAgent != next.canOpenAgent ||
-        old.requiresTenantSelection != next.requiresTenantSelection ||
         old.tenantID != next.tenantID) {
       _clearPrivateBinding();
     }

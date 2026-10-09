@@ -20,12 +20,12 @@ GroupFeatureContext _context(SangongTestApi api) => GroupFeatureContext(
           sangong: GroupGameCapabilities(
               canOpenAgent: true,
               canViewRebateHistory: true,
-              raw: {'requiresTenantSelection': true})),
+              tenantID: 'a')),
       sessionCurrent: () => true,
       onFeaturesChanged: (_) {},
     );
 
-Map<String, dynamic> _choices([List<String> ids = const ['a', 'b']]) => {
+Map<String, dynamic> _choices([List<String> ids = const ['a']]) => {
       'agentImUserId': 'owner',
       'agentImGroupId': 'shared-agent',
       'tenants': [
@@ -55,107 +55,64 @@ Future<SangongRuntime> _pump(
   bool dark = false,
   TargetPlatform platform = TargetPlatform.android,
   String section = 'team',
-  String? initialTenantId,
-  ValueChanged<String>? onSelected,
 }) async {
   final context = _context(api);
   final runtime = SangongRuntime(context);
   addTearDown(runtime.dispose);
   addTearDown(() => unmountSangong(tester));
-  await pumpSangongPage(
-      tester,
-      runtime,
-      SangongAgentHallPage(
-          featureContext: context,
-          section: section,
-          initialTenantId: initialTenantId,
-          onSelected: onSelected),
-      dark: dark,
-      platform: platform);
+  await pumpSangongPage(tester, runtime,
+      SangongAgentHallPage(featureContext: context, section: section),
+      dark: dark, platform: platform);
   return runtime;
 }
 
 void main() {
   for (final dark in [false, true]) {
     for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
-      testWidgets(
-          'select and switch halls without mixing requests $dark $platform',
+      testWidgets('fixed hall opens directly without a picker $dark $platform',
           (tester) async {
         final api = SangongTestApi()..respond = _response;
-        final selected = <String>[];
-        await _pump(tester, api,
-            dark: dark, platform: platform, onSelected: selected.add);
-        expect(find.text('选择厅'), findsOneWidget);
-        expect(api.calls.every((c) => c.path.endsWith('/tenants')), isTrue);
-        await tester.tap(find.text('a 厅'));
-        await flushSangong(tester);
-        expect(find.text('当前厅：a 厅'), findsOneWidget);
+        await _pump(tester, api, dark: dark, platform: platform);
+        expect(find.text('所属厅：a 厅'), findsOneWidget);
+        expect(find.text('选择厅'), findsNothing);
+        expect(find.text('切换厅'), findsNothing);
         expect(api.calls.last.query?['tenantId'], 'a');
-        await tester.tap(find.text('切换厅'));
-        await flushSangong(tester);
-        expect(find.byType(SangongAgentTeamPage), findsNothing);
-        await tester.tap(find.text('b 厅'));
-        await flushSangong(tester);
-        expect(find.text('当前厅：b 厅'), findsOneWidget);
-        expect(api.calls.last.query?['tenantId'], 'b');
-        expect(selected, ['a', 'b']);
+        expect(tester.takeException(), isNull);
+      });
+    }
+    for (final ids in [
+      <String>[],
+      ['a', 'b'],
+      ['b']
+    ]) {
+      testWidgets('invalid fixed hall refuses private requests $ids dark=$dark',
+          (tester) async {
+        final api = SangongTestApi()
+          ..respond = (call) =>
+              call.path.endsWith('/tenants') ? _choices(ids) : _response(call);
+        await _pump(tester, api, dark: dark);
+        expect(find.text('重试'), findsOneWidget);
+        expect(find.text('切换厅'), findsNothing);
+        expect(api.calls.every((c) => c.path.endsWith('/tenants')), isTrue);
         expect(tester.takeException(), isNull);
       });
     }
   }
-
-  testWidgets(
-      'personal detail keeps the selected runtime alive and switches balance',
-      (tester) async {
+  testWidgets('personal view keeps its fixed hall and balance', (tester) async {
     final api = SangongTestApi()..respond = _response;
-    await _pump(tester, api, section: 'personal', initialTenantId: 'a');
+    await _pump(tester, api, section: 'personal');
     expect(find.byType(SangongAgentMemberDetailPage), findsOneWidget);
-    expect(find.text('当前厅：a 厅'), findsOneWidget);
+    expect(find.text('所属厅：a 厅'), findsOneWidget);
     expect(find.text('111'), findsOneWidget);
-    await tester.tap(find.text('切换厅'));
-    await flushSangong(tester);
-    await tester.tap(find.text('b 厅'));
-    await flushSangong(tester);
-    expect(find.text('当前厅：b 厅'), findsOneWidget);
-    expect(find.text('222'), findsOneWidget);
-    expect(find.text('111'), findsNothing);
+    expect(find.text('切换厅'), findsNothing);
     expect(tester.takeException(), isNull);
   });
-
-  testWidgets('late result from old hall is discarded after switching',
-      (tester) async {
-    final old = Completer<dynamic>();
-    final api = SangongTestApi()
-      ..respond = (call) =>
-          call.path.endsWith('/team') && call.query?['tenantId'] == 'a'
-              ? old.future
-              : _response(call);
-    await _pump(tester, api, initialTenantId: 'a');
-    await tester.tap(find.text('切换厅'));
-    await flushSangong(tester);
-    await tester.tap(find.text('b 厅'));
-    await flushSangong(tester);
-    old.complete({
-      'members': [
-        {'imUserId': 'stale', 'nickname': '旧厅成员'}
-      ],
-      'version': 1,
-      'nextBeforeId': 0
-    });
-    await flushSangong(tester);
-    expect(find.text('当前厅：b 厅'), findsOneWidget);
-    expect(find.text('旧厅成员'), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets(
-      'unconfirmed write blocks switching and pins both tenant selectors',
-      (tester) async {
+  testWidgets('write remains pinned to the group hall', (tester) async {
     final command = Completer<dynamic>();
     final api = SangongTestApi()
       ..respond =
           (call) => call.method == 'POST' ? command.future : _response(call);
-    await _pump(tester, api, initialTenantId: 'a');
+    await _pump(tester, api);
     final runtime =
         SangongScope.read(tester.element(find.byType(SangongAgentTeamPage)));
     final claim = runtime.agent.claimSangongRebate();
@@ -163,44 +120,19 @@ void main() {
     final write = api.calls.last;
     expect(write.body?['tenantId'], 'a');
     expect(write.body?['expectedTenantId'], 'a');
-    await tester.tap(find.text('切换厅'));
-    await flushSangong(tester);
-    expect(find.text('当前厅：a 厅'), findsOneWidget);
-    expect(find.textContaining('当前操作结果尚未确认'), findsOneWidget);
+    expect(find.text('切换厅'), findsNothing);
     command.complete(sangongReceipt(write, {'amount': 0}));
     await completeSangongRequest(tester, claim);
-    await tester.tap(find.text('切换厅'));
-    await flushSangong(tester);
-    expect(find.text('选择厅'), findsOneWidget);
   });
-
-  testWidgets(
-      'revoked remembered hall is not restored, single hall opens directly',
+  testWidgets('late discovery after leaving cannot open private data',
       (tester) async {
-    final api = SangongTestApi()
-      ..respond = (call) =>
-          call.path.endsWith('/tenants') ? _choices(['b']) : _response(call);
-    await _pump(tester, api, initialTenantId: 'a');
-    expect(find.text('当前厅：b 厅'), findsOneWidget);
-    expect(
-        api.calls
-            .where((c) => !c.path.endsWith('/tenants'))
-            .every((c) => c.query?['tenantId'] == 'b'),
-        isTrue);
+    final delayed = Completer<dynamic>();
+    final api = SangongTestApi()..respond = (_) => delayed.future;
+    await _pump(tester, api);
+    await unmountSangong(tester);
+    delayed.complete(_choices());
+    await flushSangong(tester);
+    expect(api.calls.length, 1);
+    expect(tester.takeException(), isNull);
   });
-
-  for (final dark in [false, true]) {
-    testWidgets('empty and invalid discovery reveal no private data dark=$dark',
-        (tester) async {
-      final api = SangongTestApi()..respond = (_) => _choices([]);
-      await _pump(tester, api, dark: dark);
-      expect(find.text('当前代理群暂无可查看的厅'), findsOneWidget);
-      api.respond = (_) => {..._choices(), 'agentImUserId': 'someone-else'};
-      await tester.tap(find.byTooltip('刷新'));
-      await flushSangong(tester);
-      expect(find.text('重试'), findsOneWidget);
-      expect(api.calls.every((c) => c.path.endsWith('/tenants')), isTrue);
-      expect(tester.takeException(), isNull);
-    });
-  }
 }

@@ -38,7 +38,7 @@ void main() {
     }
   }
 
-  testWidgets('multi-hall chat entry shares the chosen hall across 查 and 团',
+  testWidgets('fixed-hall chat entry keeps 查 and 团 in the group hall',
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) {
@@ -47,9 +47,15 @@ void main() {
             'agentImUserId': 'owner',
             'agentImGroupId': 'shared-agents',
             'tenants': [
-              for (final id in ['a', 'b'])
+              for (final id in ['b'])
                 {'tenantId': id, 'name': '$id 厅', 'imGroupGameId': '$id-game'}
             ]
+          };
+        }
+        if (call.path.endsWith('/context')) {
+          return {
+            ...sangongFixtureResponse(call) as Map<String, dynamic>,
+            'tenantId': 'b'
           };
         }
         return sangongFixtureResponse(call);
@@ -59,22 +65,19 @@ void main() {
         gameType: GroupGameType.sangongAgent,
         canConfigure: false,
         canManage: false,
-        tenantID: '',
-        requiresTenantSelection: true);
+        tenantID: 'b');
     final runtime = SangongRuntime(feature);
     addTearDown(runtime.dispose);
     addTearDown(() => unmountSangong(tester));
     await pumpSangongPage(tester, runtime,
         Scaffold(body: SangongFeatureHost(featureContext: feature)));
     expect(find.text('查'), findsOneWidget);
-    expect(api.count('/context'), 0);
     await tester.tap(find.byTooltip('查下级'));
     await flushSangong(tester);
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('选择厅'), findsOneWidget);
-    await tester.tap(find.text('b 厅'));
-    await flushSangong(tester);
-    expect(find.text('当前厅：b 厅'), findsOneWidget);
+    expect(find.text('选择厅'), findsNothing);
+    expect(find.text('切换厅'), findsNothing);
+    expect(find.text('所属厅：b 厅'), findsOneWidget);
     expect(api.calls.last.query?['tenantId'], 'b');
     Navigator.of(tester.element(find.text('查询下级'))).pop();
     await tester.pumpAndSettle();
@@ -82,7 +85,7 @@ void main() {
     await flushSangong(tester);
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('团队统计'), findsOneWidget);
-    expect(find.text('当前厅：b 厅'), findsOneWidget);
+    expect(find.text('所属厅：b 厅'), findsOneWidget);
     expect(api.calls.last.query?['tenantId'], 'b');
     expect(tester.takeException(), isNull);
   });

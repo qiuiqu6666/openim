@@ -154,7 +154,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
           capabilities.canManage) {
         await runtime.ensureManageBinding();
       }
-      if (capabilities.canOpenAgent && !capabilities.requiresTenantSelection) {
+      if (capabilities.canOpenAgent) {
         await runtime.ensureAgentBinding();
       }
       if (!mounted ||
@@ -599,12 +599,6 @@ class SangongModule {
               builder: (_) => agent
                   ? SangongAgentHallPage(
                       featureContext: current,
-                      initialTenantId: nextRuntime.preferredAgentHallId,
-                      onSelected: (id) {
-                        if (nextRuntime.isCurrent) {
-                          nextRuntime.preferredAgentHallId = id;
-                        }
-                      },
                       section: section,
                       pathPrefix: pathPrefix)
                   : _SangongModulePage(
