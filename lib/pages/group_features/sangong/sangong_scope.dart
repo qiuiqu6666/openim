@@ -22,6 +22,8 @@ class SangongRuntime extends ChangeNotifier {
   SangongRuntime(this.featureContext,
       {String? baseUrl,
       String? configuredTenantId,
+      this.selectedAgentTenantId,
+      this.selectedAgentHallName,
       String pathPrefix = SangongApiConfig.pathPrefix}) {
     http = SangongGameHttp(featureContext,
         baseUrl: baseUrl,
@@ -41,6 +43,7 @@ class SangongRuntime extends ChangeNotifier {
     _applyCapabilities();
   }
   GroupFeatureContext featureContext;
+  final String? selectedAgentTenantId, selectedAgentHallName;
   late final SangongGameHttp http;
   late final SangongAdminApi admin;
   late final AgentRebateApi agent;
@@ -52,6 +55,7 @@ class SangongRuntime extends ChangeNotifier {
   bool _disposed = false;
   bool _contextNotificationQueued = false;
   AgentEntryContextDto? agentContext;
+  String? preferredAgentHallId;
   bool get isSessionCurrent => !_disposed && featureContext.sessionCurrent();
   bool get isCurrent =>
       isSessionCurrent && featureContext.capabilitiesCurrent();
@@ -65,8 +69,9 @@ class SangongRuntime extends ChangeNotifier {
     final agentOnly = capability.canOpenAgent &&
         !capability.canConfigure &&
         !capability.canManage &&
-        capability.tenantID.isNotEmpty &&
-        capability.tenantID != featureContext.groupID;
+        (capability.requiresTenantSelection ||
+            capability.tenantID.isNotEmpty &&
+                capability.tenantID != featureContext.groupID);
     return !agentOnly;
   }
 
@@ -154,6 +159,10 @@ class SangongRuntime extends ChangeNotifier {
   void _applyCapabilities() {
     if (!canAccessModule) return;
     final capability = featureContext.capabilities.sangong;
+    if (selectedAgentTenantId != null && capability.canOpenAgent) {
+      http.setTenantId(selectedAgentTenantId);
+      return;
+    }
     if ((capability.canManage || capability.canOpenAgent) &&
         capability.tenantID.isNotEmpty) {
       http.setTenantId(capability.tenantID);
@@ -190,6 +199,7 @@ class SangongRuntime extends ChangeNotifier {
         old.canConfigure != next.canConfigure ||
         old.canManage != next.canManage ||
         old.canOpenAgent != next.canOpenAgent ||
+        old.requiresTenantSelection != next.requiresTenantSelection ||
         old.tenantID != next.tenantID) {
       _clearPrivateBinding();
     }

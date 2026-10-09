@@ -4,11 +4,30 @@ import '../models/agent_rebate_models.dart';
 import 'sangong_game_http.dart';
 import 'sangong_agent_response.dart';
 import 'sangong_v2_api.dart';
+import '../agents/halls/sangong_agent_hall.dart';
 
 class AgentRebateApi {
   AgentRebateApi(this.http) : _api = SangongV2Api(http, agent: true);
   final SangongGameHttp http;
   final SangongV2Api _api;
+
+  Future<List<SangongAgentHall>> fetchHalls() async {
+    final data = await _api.read('tenants', binding: true);
+    if (data['agentImGroupId'] != http.context.groupID ||
+        data['agentImUserId'] != http.context.currentUserID ||
+        data['tenants'] is! List) {
+      throw const FormatException('代理厅归属数据无效');
+    }
+    final items = <SangongAgentHall>[];
+    final seen = <String>{};
+    for (final value in data['tenants'] as List) {
+      if (value is! Map) throw const FormatException('厅资料无效');
+      final hall = SangongAgentHall.fromJson(Map<String, dynamic>.from(value));
+      if (!seen.add(hall.tenantId)) throw const FormatException('厅资料重复');
+      items.add(hall);
+    }
+    return items;
+  }
 
   Future<AgentEntryContextDto> fetchEntryContext(String imGroupId) async {
     if (imGroupId.trim() != http.context.groupID) {
@@ -19,6 +38,7 @@ class AgentRebateApi {
     if (data['agentImGroupId'] != imGroupId.trim() ||
         data['agentImUserId'] != http.context.currentUserID ||
         data['tenantId'] is! String ||
+        http.hasTenant && data['tenantId'] != http.tenantId ||
         agent is! Map ||
         SangongAgentResponse.number(agent['balance']) == null) {
       throw const FormatException('代理身份或绑定数据无效');

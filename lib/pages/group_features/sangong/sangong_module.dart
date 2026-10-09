@@ -1,4 +1,5 @@
 import 'services/authorization/sangong_access_policy.dart';
+import 'agents/halls/sangong_agent_hall_page.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/group_feature_context.dart';
@@ -153,7 +154,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
           capabilities.canManage) {
         await runtime.ensureManageBinding();
       }
-      if (capabilities.canOpenAgent) {
+      if (capabilities.canOpenAgent && !capabilities.requiresTenantSelection) {
         await runtime.ensureAgentBinding();
       }
       if (!mounted ||
@@ -506,8 +507,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
                         onSendTrendImage: () => unawaited(
                             _report(scopeContext, (api) => api.sendTrendReportImage())),
                         onOpenRulesSettings: () => unawaited(_openRules(scopeContext))),
-                  if (_runtime.canOpenAgent &&
-                      sangongAgentEntryVisible(widget.featureContext))
+                  if (sangongAgentEntryVisible(widget.featureContext))
                     SangongAgentFloatingEntry(
                         key: ValueKey(
                             'sangong-agent-${widget.featureContext.groupID}'),
@@ -594,14 +594,26 @@ class SangongModule {
               scopeChanges: nextRuntime,
               isCurrent: () =>
                   nextRuntime.isSessionCurrent &&
-                  (!agent || nextRuntime.canOpenAgent),
-              builder: (_) => _SangongModulePage(
-                  runtime: nextRuntime,
-                  owned: runtime == null,
-                  agent: agent,
-                  floatVisible: floatVisible,
-                  onFloatVisibleChanged: onFloatVisibleChanged,
-                  section: section))));
+                  (!agent ||
+                      sangongAssignedAgentAccess(nextRuntime.featureContext)),
+              builder: (_) => agent
+                  ? SangongAgentHallPage(
+                      featureContext: current,
+                      initialTenantId: nextRuntime.preferredAgentHallId,
+                      onSelected: (id) {
+                        if (nextRuntime.isCurrent) {
+                          nextRuntime.preferredAgentHallId = id;
+                        }
+                      },
+                      section: section,
+                      pathPrefix: pathPrefix)
+                  : _SangongModulePage(
+                      runtime: nextRuntime,
+                      owned: runtime == null,
+                      agent: agent,
+                      floatVisible: floatVisible,
+                      onFloatVisibleChanged: onFloatVisibleChanged,
+                      section: section))));
     } finally {
       if (runtime == null) nextRuntime.dispose();
     }

@@ -6,8 +6,8 @@ import '../utils/api_response_util.dart';
 import '../services/authorization/sangong_operation_scope.dart';
 import 'sangong_game_http.dart';
 
-/// Group identity is part of the URL; a client-supplied tenant never selects an
-/// account. The host resolves each logged-in user and agent group to its tenant.
+/// Group identity is part of the URL. Agent hall selections are always checked
+/// against the authenticated user's assignments by the host.
 class SangongV2Api {
   SangongV2Api(this.http, {this.agent = false});
   final SangongGameHttp http;
@@ -20,7 +20,11 @@ class SangongV2Api {
   Future<Map<String, dynamic>> read(String resource,
       {Map<String, dynamic>? query, bool binding = false}) async {
     final response = await http.requests.get(path(resource),
-        queryParameters: query,
+        queryParameters: {
+          ...?query,
+          if (agent && resource != 'tenants' && http.hasTenant)
+            'tenantId': http.tenantId,
+        },
         options: binding
             ? Options(extra: const {SangongGameHttp.extraSkipTenant: true})
             : null);
@@ -46,6 +50,7 @@ class SangongV2Api {
       'requestId': id,
       'input': input,
       if (agent && http.hasTenant) 'expectedTenantId': http.tenantId,
+      if (agent && http.hasTenant) 'tenantId': http.tenantId,
     });
     final envelope = response.data;
     // The Chat host may wrap the Sangong envelope once. Unwrap only the host;

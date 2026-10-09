@@ -9,7 +9,11 @@ import '../widgets/authorization/sangong_agent_authorized_view.dart';
 
 class SangongAgentPersonalPage extends StatefulWidget {
   const SangongAgentPersonalPage(
-      {super.key, required this.imGroupId, this.imUserId});
+      {super.key,
+      required this.imGroupId,
+      this.imUserId,
+      this.embedded = false});
+  final bool embedded;
   final String imGroupId;
   final String? imUserId;
 
@@ -65,6 +69,7 @@ class _State extends State<SangongAgentPersonalPage> {
 
   String? _error;
   bool _loading = true;
+  SangongAgentMemberDetailPage? _detail;
 
   @override
   void initState() {
@@ -87,6 +92,13 @@ class _State extends State<SangongAgentPersonalPage> {
         member:
             SangongTeamMemberDto.fromJson(Map<String, dynamic>.from(member)),
       );
+      if (widget.embedded) {
+        setState(() {
+          _detail = detail;
+          _loading = false;
+        });
+        return;
+      }
       await Navigator.of(context).pushReplacement(
         SangongPageRoute(
           agent: true,
@@ -107,7 +119,9 @@ class _State extends State<SangongAgentPersonalPage> {
   }
 
   @override
-  Widget build(BuildContext context) => SangongAgentAuthorizedView(
+  Widget build(BuildContext context) =>
+      _detail ??
+      SangongAgentAuthorizedView(
         runtime: _accountSession.runtime,
         session: _accountSession,
         child: Scaffold(

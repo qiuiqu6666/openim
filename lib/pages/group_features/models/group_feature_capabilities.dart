@@ -67,4 +67,6 @@ class GroupGameCapabilities {
         machineCode: featureString(map['machineCode']),
         raw: Map.unmodifiable(map));
   }
+
+  bool get requiresTenantSelection => raw['requiresTenantSelection'] == true;
 }

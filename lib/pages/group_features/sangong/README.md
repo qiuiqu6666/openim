@@ -47,7 +47,7 @@
 
 `user-report` 聚合资料、汇总、流水和合庄记录；日期按上海经营日，选择批次时不再同时发 date。流水按游标最多读 5 页共 500 条，显示已读取范围和服务端总数；不混合版本不同的分页。合庄列表首屏最多 500 条并显示截断提示。旧报表响应不能覆盖较新完成的额度/比例编辑。
 
-代理群通过 `context` 确认唯一下注群绑定。账号、余额、代理树和返佣均按下注群租户隔离。比例使用最多四位小数的百分比字符串，不在客户端计算级差收益。公开账号输入先解析 OpenIM ID，再定位本租户数值 userId。
+代理群通过 `tenants` 获取本人可查看的厅，单厅直接进入，多厅选择；业务请求带所选 tenantId。账号、余额、代理树和返佣均按下注群租户隔离。比例使用最多四位小数的百分比字符串，不在客户端计算级差收益。公开账号输入先解析 OpenIM ID，再定位本租户数值 userId。
 
 ## OpenIM 与请求合并
 
@@ -70,3 +70,5 @@
 `sangong_module.dart` 仍集中协调 host 生命周期和操作入口；`widgets/sangong_bet_preview_sheet.dart` 仍维护同一截止表单状态。它们超过 500 行时需检查职责，新独立功能不得继续堆入。接口已按配置、用户、账务、局和报表拆到 api/admin；代理管理已独立放入 agents。不要通过共享全部私有状态的 part/extension 做表面拆分。
 
 用户代理群：`agents/user_group/` 在用户详情复用 `AppDialog.prompt` 输入群 ID，`agents/data/` 保存个人归属。按旧 99chat 的 `AgentRebateApi.bindAgentChatGroup` 保存行为迁移，保留 OpenIM 原始群 ID。无需预先群级绑定或目标群管理员身份，入口根据登录用户＋群 ID 定位所属厅。接口与迁移说明见 `docs/sangong-go-v2-api.md` 的 6.1 节。
+
+多厅代理入口：`agents/halls/` 维护厅列表模型、入口选择页及厅名栏，复用现有代理总览、团队、个人页及权限保护。`SangongAgentHallPage` 拥有发现上下文和当前选中厅的独立上下文；切厅/销毁时负责关闭，禁止把聊天运行上下文的 tenantId 改为某个代理厅。聊天上下文仅保存临时选择偏好；再次进入重查列表。子页面继续使用既有 `SangongPageRoute` 传递固定的选中上下文。测试在 `test/pages/group_features/sangong/agents/halls/`，协议见文档 6.2 节。旧 99chat 未确认有同群多厅选择，此目录是为当前需求新增的组合入口。

@@ -119,6 +119,7 @@ GroupFeatureContext sangongTestContext(
   bool canOpenAgent = true,
   bool canViewHistory = true,
   String tenantID = 'tenant-authorized',
+  bool requiresTenantSelection = false,
   int capabilityVersion = 1,
   bool Function()? current,
   bool Function()? capabilitiesCurrent,
@@ -148,7 +149,8 @@ GroupFeatureContext sangongTestContext(
                 canManage: canManage,
                 canOpenAgent: canOpenAgent,
                 canViewRebateHistory: canViewHistory,
-                tenantID: tenantID)),
+                tenantID: tenantID,
+                raw: {'requiresTenantSelection': requiresTenantSelection})),
         sessionCurrent: current ?? () => true,
         capabilitiesCurrent: capabilitiesCurrent ?? () => true,
         onFeaturesChanged: onFeaturesChanged ?? (_) {},
@@ -223,6 +225,19 @@ Map<String, dynamic> sangongMessageEvent(int version,
     };
 
 dynamic sangongFixtureResponse(SangongCall call) {
+  if (call.path.contains('/agent-groups/') && call.path.endsWith('/tenants')) {
+    return {
+      'agentImUserId': 'owner',
+      'agentImGroupId': Uri.decodeComponent(call.path.split('/')[5]),
+      'tenants': [
+        {
+          'tenantId': 'tenant-authorized',
+          'name': '一号厅',
+          'imGroupGameId': 'game-room'
+        }
+      ],
+    };
+  }
   if (call.path.startsWith('/sangong/api/v2/groups/') &&
       call.path.endsWith('/config')) {
     final group = Uri.decodeComponent(call.path.split('/')[5]);

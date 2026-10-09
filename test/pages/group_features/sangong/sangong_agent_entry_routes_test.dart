@@ -27,10 +27,6 @@ void main() {
         await pumpSangongPage(tester, runtime,
             Scaffold(body: SangongFeatureHost(featureContext: feature)),
             dark: dark);
-        await tester.tap(find.byTooltip('展开代理功能'));
-        await flushSangong(tester);
-        await tester.pump(const Duration(milliseconds: 400));
-
         await tester.tap(find.byTooltip(entry.tooltip));
         await flushSangong(tester);
         await tester.pump(const Duration(milliseconds: 400));
@@ -41,4 +37,53 @@ void main() {
       });
     }
   }
+
+  testWidgets('multi-hall chat entry shares the chosen hall across 查 and 团',
+      (tester) async {
+    final api = SangongTestApi()
+      ..respond = (call) {
+        if (call.path.endsWith('/tenants')) {
+          return {
+            'agentImUserId': 'owner',
+            'agentImGroupId': 'shared-agents',
+            'tenants': [
+              for (final id in ['a', 'b'])
+                {'tenantId': id, 'name': '$id 厅', 'imGroupGameId': '$id-game'}
+            ]
+          };
+        }
+        return sangongFixtureResponse(call);
+      };
+    final feature = sangongTestContext(api,
+        groupID: 'shared-agents',
+        gameType: GroupGameType.sangongAgent,
+        canConfigure: false,
+        canManage: false,
+        tenantID: '',
+        requiresTenantSelection: true);
+    final runtime = SangongRuntime(feature);
+    addTearDown(runtime.dispose);
+    addTearDown(() => unmountSangong(tester));
+    await pumpSangongPage(tester, runtime,
+        Scaffold(body: SangongFeatureHost(featureContext: feature)));
+    expect(find.text('查'), findsOneWidget);
+    expect(api.count('/context'), 0);
+    await tester.tap(find.byTooltip('查下级'));
+    await flushSangong(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('选择厅'), findsOneWidget);
+    await tester.tap(find.text('b 厅'));
+    await flushSangong(tester);
+    expect(find.text('当前厅：b 厅'), findsOneWidget);
+    expect(api.calls.last.query?['tenantId'], 'b');
+    Navigator.of(tester.element(find.text('查询下级'))).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('团队反水'));
+    await flushSangong(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('团队统计'), findsOneWidget);
+    expect(find.text('当前厅：b 厅'), findsOneWidget);
+    expect(api.calls.last.query?['tenantId'], 'b');
+    expect(tester.takeException(), isNull);
+  });
 }

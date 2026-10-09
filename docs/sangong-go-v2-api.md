@@ -6,7 +6,7 @@
 
 ## 1 请求约定
 
-下注群资源前缀记为 `G=/sangong/api/v2/groups/{groupID}`，代理群资源前缀记为 `A=/sangong/api/v2/agent-groups/{agentGroupID}`。ID 来自当前 OpenIM 群，作为不透明字符串使用，并对路径段执行 `Uri.encodeComponent`。一次请求只操作路径中明确绑定的租户。
+下注群资源前缀记为 `G=/sangong/api/v2/groups/{groupID}`，代理群资源前缀记为 `A=/sangong/api/v2/agent-groups/{agentGroupID}`。ID 来自当前 OpenIM 群，作为不透明字符串使用，并对路径段执行 `Uri.encodeComponent`。下注群路径确定一个厅；代理群可对应当前用户的多个厅，按 6.2 节选择。一次业务请求仅操作一个已授权的厅。
 
 所有三公请求均使用以下请求头：
 
@@ -235,7 +235,8 @@ Java 对照要求：
 | POST `G/commands/agent.group_bind` | `{"agentGroupId":"agents-B"}` | 绑定独立代理群；不会把下注群变成代理群 |
 | POST `G/commands/agent.attach` | `{"userId":9,"parentUserId":8}` | 设置未建立上级的成员关系；禁止环和跨租户 |
 | POST `G/commands/admin.rebate_rate` | `{"userId":8,"rate":"0.5"}` | 管理员设置成员返水比例 |
-| GET `A/context` | 无 | 按登录用户＋当前群定位厅和代理身份；未绑定不能从账号默认厅兜底 |
+| GET `A/tenants` | 无 | 当前登录用户在此代理群的有效厅列表，详见 6.2 |
+| GET `A/context` | tenantId，单厅兼容省略 | 按登录用户＋当前群＋所选厅定位代理身份 |
 | GET `A/balance` | 无 | 本人余额 |
 | GET `A/team` | direct、imUserId、sessionId/batchNo、beforeId、limit | 团队/直属列表；只读授权下级 |
 | GET `A/team-summary` | direct、sessionId/batchNo、beforeId、limit | 团队汇总 |
@@ -285,13 +286,13 @@ sessionId 和 batchNo 不能同时传；batchNo 和 from/to 不能混用。rate 
 
 用户详情点击“设置/更换”直接输入群 ID，保存当前厅＋指定用户＋群 ID 的个人归属。不再要求预先绑定群级关系，也不查询操作者是否加入目标代理群或为该群管理员；保存管理权限仍由当前下注群校验。输入只去掉首尾空格，保留 OpenIM ID 中的 `@`、大小写和 `group_` 等原始内容；不得照搬腾讯版删除这些字符的处理。群资料显示的前导 `@` 仅在 OpenIM 确认原值不存在、去掉该前缀后能匹配真实群时解析；精确匹配优先，查询失败不擅自修改 ID。群名通过 OpenIM 查询，查不到时仍显示已保存的群 ID，方便纠错；不以群名查询失败阻断保存。
 
-同一个群可供多个用户、不同厅的不同用户使用。每个厅内的用户最多设置一个群；同一 IM 用户＋同一群只能归属一个厅，数据库唯一键防止并发占用或覆盖其他厅记录。个人代理查询和命令都按登录用户＋群 ID 定位厅，在事务内再次检查归属、账户状态和返水资格。即便该群已有旧的群级绑定，仍按个人归属决定该用户的数据范围；若该群同时是另一个厅的下注群，对这个用户优先显示已明确设置的个人代理归属，不授予那个厅的管理权限。
+同一个群可供多个用户、多个厅使用，同一 IM 用户可以将不同厅的个人归属设置到同一群。每个厅内的用户仍最多设置一个群；主键 tenant_id＋user_id 保证更改只作用于当前厅。个人代理查询和命令按登录用户＋群 ID＋所选厅定位，在事务内再次检查归属、账户状态和返水资格。旧群级绑定不决定个人数据范围；若该群同时是另一个厅的下注群，个人代理归属不授予那个厅的管理权限。
 
 旧客户端传入的 `bindIfNeeded` 仅作为兼容布尔字段接收并忽略，无论省略、true 或 false 都直接保存个人归属；字符串或 null 仍视为错误。`GET G/agent-groups` 和 `agent.group_bind` 保留旧的群级管理用途，不再作为个人代理群设置的前置条件。用户设置不创建、覆盖或删除旧群级绑定。任一步失败，个人归属、入口刷新和审计一起回滚；相同 requestId 重试不重复记录。
 
-错误：`AGENT_USER_GROUP_ALREADY_BOUND` 表示同一用户＋群已归属其他厅，应清除原绑定或改用其他群；`INVALID_GROUP` 表示群标识无效；`INVALID_INPUT` 表示参数缺失/格式错误；`FORBIDDEN` 表示当前厅权限或成员资格不符；`IDEMPOTENCY_CONFLICT` 表示复用了不同内容的幂等键。
+错误：`INVALID_GROUP` 表示群标识无效；`INVALID_INPUT` 表示参数缺失/格式错误；`FORBIDDEN` 表示当前厅权限或成员资格不符；`IDEMPOTENCY_CONFLICT` 表示复用了不同内容的幂等键。迁移 038 后，跨厅设置同一用户＋群不再返回旧错误 `AGENT_USER_GROUP_ALREADY_BOUND`。
 
-新客户端在 `A/commands/*` 的请求外层携带 `expectedTenantId`（与 `requestId`、`input` 同级）。该字段仅用于核对页面原归属，不能选择租户或绕过权限；服务端在事务锁内核对，发生变化时返回 `AGENT_TENANT_CHANGED`，客户端需重新进入。旧客户端省略时保留原有按当前归属执行的兼容行为。
+新客户端在 `A/commands/*` 的请求外层携带 `tenantId` 和 `expectedTenantId`（与 `requestId`、`input` 同级）。前者选择当前用户已授权的厅，后者仅核对页面原归属，不能独立选择或授权租户。两者不符返回 `AGENT_TENANT_CHANGED`；所选绑定已失效返回 `FORBIDDEN`，绝不改投其他厅。只有一个有效归属时兼容未传 tenantId 的旧请求，多厅必须选择，详见下节。
 
 用户进入指定群聊可见“三公代理”入口，打开已有代理总览、团队和个人页面；仅可查询本人及授权下级，不开放运营管理数据。
 
@@ -299,7 +300,29 @@ sessionId 和 batchNo 不能同时传；batchNo 和 from/to 不能混用。rate 
 
 用户详情接入：使用当前页面绑定的下注群 ID 查询；公开账号仅用于显示，请求使用用户资料里的内部 IM 标识。保存确认回执后重新查询。关闭页面、切换登录/群或权限变化时丢弃迟到结果。更换输入生成新 requestId；超时重试保留原 requestId 和 input。
 
-服务端先应用 `035_go_user_agent_groups.sql` 保存个人归属，再应用 `037_go_user_agent_routes.sql` 补充 IM 用户标识及“用户＋群”的唯一索引。037 从已有用户记录回填身份，保留原绑定；需暂停写入、备份并检查历史重复或孤立记录后迁移，再更新 Chat RPC。此次迁移不改余额、流水、返水比例或代理树。
+迁移顺序为 035、037、038：035 保存个人归属，037 回填 IM 用户标识，038 将“用户＋群”唯一索引替换为普通查询索引，保留 tenant_id＋user_id 主键。暂停写入并备份后迁移，同时更新 Chat API 和 RPC；现有绑定及更新时间保持不变，不修改余额、流水、返水比例或代理树。
+
+### 6.2 同一代理群选择多个厅（2026-10-09）
+
+`gameType=4` 只表示三公代理入口，不包含当前用户的数据归属。进入页面先调用 `GET A/tenants`，服务端按登录用户和当前代理群返回有效归属，不接受指定其他用户的参数：
+
+```json
+{"ok":true,"data":{"agentImUserId":"im_target","agentImGroupId":"agents-B","tenants":[{"tenantId":"hall-A","name":"一号厅","imGroupGameId":"game-A"},{"tenantId":"hall-B","name":"二号厅","imGroupGameId":"game-B"}]}}
+```
+
+列表只含厅 ID、厅名和下注群 ID，不包含余额、比例或成员。仅返回当前 Go 引擎管理、已启用、本人账户有效且返水比例大于 0 的厅；请求者仍必须为代理群真实成员。
+
+| 操作 | 选择方式 |
+| --- | --- |
+| 查询厅列表 | `GET A/tenants`，不传 tenantId |
+| 代理查询 | 所有 `A/context`、`balance`、`team`、`team-summary`、`member`、`member-daily`、`transfers`、`ledger` 在原参数外增加 `tenantId=hall-A` |
+| 代理写入 | 请求外层 `{"requestId":"<UUID>","tenantId":"hall-A","expectedTenantId":"hall-A","input":{...}}` |
+
+tenantId 不能用于运营群 `G` 接口。代理端仅能选本人列表内的厅，服务端每次重新校验，猜测别人的厅 ID 仍返回 `FORBIDDEN`。没有指定 tenantId 且仅有一个有效厅时直接进入；有多个有效厅时返回 `AGENT_TENANT_REQUIRED`（请先选择要查看的厅），不默认取第一个。返水、比例、划转及其幂等回执均按所选厅独立处理；重试必须保留所选厅、requestId 和 input。
+
+多厅的私有能力返回 `canOpenAgent=true`、`canViewRebateHistory=true`、`requiresTenantSelection=true`、`tenantID=""`，不授予管理能力。Chat API 保留该标记，不能把空 tenantID 误判为没有代理入口。单厅能力继续返回原有 tenantID。
+
+客户端复用原代理页面：一个厅自动进入，多个厅先选，页头显示“当前厅”及“切换厅”。同一次群聊中，“查、团、个”沿用最近选择，每次进入先重查有效列表；已撤销的选择不恢复。每次切换建立独立运行上下文并销毁旧上下文，旧响应不得填入新厅。操作结果未确认时暂时禁止切厅，供原请求核对或重试。子详情保留所属厅标签，返回主代理页切换。
 
 ## 7 OpenIM 自定义字段与减少请求
 

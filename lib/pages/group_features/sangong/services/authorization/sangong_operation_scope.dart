@@ -19,6 +19,7 @@ class SangongOperationScope {
           context.capabilities.sangong.canOpenAgent,
           context.capabilities.sangong.canViewRebateHistory,
           context.capabilities.sangong.raw['canManageMembers'] == true,
+          context.capabilities.sangong.requiresTenantSelection,
           context.features.sangong.enabled,
           context.features.sangong.manageEntry,
           context.features.sangong.agentEntry,
@@ -33,7 +34,18 @@ class SangongOperationScope {
   final int privilegeRevision;
   final bool privileged;
   final String capabilityTenantId;
-  final (bool, bool, bool, bool, bool, bool, bool, bool, bool) permissions;
+  final (
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool
+  ) permissions;
 
   Object get token => (
         context.api,

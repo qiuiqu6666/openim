@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../agents/halls/sangong_agent_hall_banner.dart';
 import '../../sangong_scope.dart';
 import '../app_back_button.dart';
 
@@ -67,7 +68,15 @@ class _SangongAgentAuthorizedViewState
 
   @override
   Widget build(BuildContext context) => _authorized
-      ? widget.child
+      ? (widget.runtime.selectedAgentHallName == null
+          ? widget.child
+          : SafeArea(
+              bottom: false,
+              child: Column(children: [
+                SangongAgentHallBanner(
+                    name: widget.runtime.selectedAgentHallName!),
+                Expanded(child: widget.child),
+              ])))
       : Scaffold(
           appBar: AppBar(
             leading: const AppBackButton(),

@@ -82,7 +82,8 @@ void main() {
     expect(api.calls.single.body, {
       'requestId': 'claim-1',
       'input': {},
-      'expectedTenantId': runtime.http.tenantId
+      'expectedTenantId': runtime.http.tenantId,
+      'tenantId': runtime.http.tenantId
     });
     api.respond = (_) => {
           'ok': true,
