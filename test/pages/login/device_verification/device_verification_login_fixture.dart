@@ -173,6 +173,14 @@ class DeviceLoginFixture {
     });
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
+    // Wait for the asynchronous HTTP error/challenge chain, rather than relying
+    // on the first process's font/plugin initialization finishing within 5 ms.
+    for (var i = 0; i < 20 && find.text('设备验证').evaluate().isEmpty; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('设备验证'), findsOneWidget);
     expect(ModalRoute.of(tester.element(deviceCodeField))!.isCurrent, isTrue);
     expectNoSession();

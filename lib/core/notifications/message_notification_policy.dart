@@ -84,6 +84,7 @@ abstract final class MessageNotificationPolicy {
 
     final preview =
         isForeground ? preferences.openedPreview : preferences.closedPreview;
+    if (preview == MessageNotificationPreview.hidden) return null;
     final isOfficialNotification =
         conversation.conversationType == ConversationType.single &&
             OfficialAccount.from(

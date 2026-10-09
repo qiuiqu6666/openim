@@ -7,6 +7,7 @@ import 'package:openim_common/openim_common.dart';
 
 import '../../services/moments_repository.dart';
 import 'media/moments_media_gallery.dart';
+import 'media/moments_video_preview.dart';
 import 'moments_actions.dart';
 import 'moments_widgets.dart';
 
@@ -68,7 +69,9 @@ class _MomentsMediaPreviewState extends State<MomentsMediaPreview> {
     _invalid = widget.initialIndex < 0 ||
         widget.initialIndex >= widget.post.mediaList.length ||
         widget.repository.postById(widget.post.momentId) == null;
-    if (!_invalid) unawaited(_load());
+    if (!_invalid && !widget.post.mediaList[widget.initialIndex].isVideo) {
+      unawaited(_load());
+    }
   }
 
   @override
@@ -295,6 +298,12 @@ class _MomentsMediaPreviewState extends State<MomentsMediaPreview> {
           title: momentsText(context, zh: '内容已不可用', en: 'Content unavailable'),
           message: momentsText(context,
               zh: '查看权限或登录状态已变化', en: 'Access or account has changed.')));
+    }
+    if (widget.post.mediaList[widget.initialIndex].isVideo) {
+      return MomentsVideoPreview(
+          repository: widget.repository,
+          post: widget.post,
+          media: widget.post.mediaList[widget.initialIndex]);
     }
     if (!_ready) {
       return _pendingViewer(_error == null

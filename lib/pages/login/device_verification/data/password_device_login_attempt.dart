@@ -5,7 +5,7 @@ import 'package:uuid/uuid.dart';
 import 'device_verification_code_result.dart';
 
 /// Owns one password-login snapshot in memory. SMS confirmation preserves the
-/// original identity, MD5 password and device metadata instead of SMS login.
+/// original identity, password proofs and device metadata instead of SMS login.
 class PasswordDeviceLoginAttempt {
   PasswordDeviceLoginAttempt._(this._request);
 
@@ -41,6 +41,7 @@ class PasswordDeviceLoginAttempt {
       'phoneNumber',
       'email',
       'password',
+      'passwordPlaintext',
       'areaCode',
       'platform',
       'deviceID',
@@ -56,6 +57,11 @@ class PasswordDeviceLoginAttempt {
                 (request[key] as String).trim().isEmpty)) ||
         request['password'] is! String ||
         !RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(request['password'] as String) ||
+        (request.containsKey('passwordPlaintext') &&
+            (request['passwordPlaintext'] is! String ||
+                (request['passwordPlaintext'] as String).isEmpty ||
+                IMUtils.generateMD5(request['passwordPlaintext'] as String) !=
+                    request['password'])) ||
         request['deviceID'] is! String ||
         !RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$')
             .hasMatch(request['deviceID'] as String) ||

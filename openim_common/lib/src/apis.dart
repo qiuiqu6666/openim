@@ -6,6 +6,8 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:uuid/uuid.dart';
 
+import 'apis/auth/legacy_password_login.dart';
+
 class Apis {
   static Future<String> createFriendGrant(Map<String, String> input) async {
     final data = await HttpUtil.post('${Config.appAuthUrl}/chat/friend-grants',
@@ -104,7 +106,7 @@ class Apis {
         isCurrent: isCurrent, showErrorToast: showErrorToast);
   }
 
-  /// Freeze the existing OpenIM identity and MD5 password with this device.
+  /// Freeze the identity and password proof with this device.
   /// The map belongs to one attempt and must remain in memory only.
   static Future<Map<String, dynamic>> prepareLoginRequest({
     String? areaCode,
@@ -130,6 +132,7 @@ class Apis {
       if (areaCode != null) 'areaCode': areaCode,
       ...identities,
       if (password != null) 'password': IMUtils.generateMD5(password),
+      if (password != null) 'passwordPlaintext': password,
       'platform': IMUtils.getPlatform(),
       if (verificationCode != null) 'verifyCode': verificationCode,
     });
@@ -146,12 +149,19 @@ class Apis {
       if (isCurrent != null && !isCurrent()) {
         throw StateError('Login attempt is no longer current');
       }
-      final data = await HttpUtil.post(Urls.login,
-          showErrorToast: showErrorToast,
-          withoutToken: true,
-          requestOperationID: const Uuid().v4(),
-          options: Options(contentType: Headers.jsonContentType),
-          data: Map<String, dynamic>.from(request));
+      final endpoint = Uri.parse(Urls.login);
+      final data = await LegacyPasswordLogin.submit(
+        request: request,
+        endpoint: endpoint,
+        isCurrent: isCurrent,
+        post: (payload) => HttpUtil.post(endpoint.toString(),
+            showErrorToast: false,
+            withoutToken: true,
+            requestOperationID: const Uuid().v4(),
+            options: Options(
+                contentType: Headers.jsonContentType, followRedirects: false),
+            data: payload),
+      );
       if (data is! Map ||
           ['userID', 'chatToken', 'imToken'].any((key) =>
               data[key] is! String || (data[key] as String).trim().isEmpty)) {
@@ -159,6 +169,12 @@ class Apis {
       }
       return LoginCertificate.fromJson(Map<String, dynamic>.from(data));
     } catch (e, s) {
+      if (showErrorToast &&
+          (isCurrent == null || isCurrent()) &&
+          !HttpUtil.isSilentError(e, path: Urls.login) &&
+          !(e is DioException && e.type == DioExceptionType.cancel)) {
+        IMViews.showToast(HttpUtil.errorMessage(e, path: Urls.login));
+      }
       if (isCurrent == null) {
         _catchErrorHelper(e, s);
       } else if (isCurrent()) {

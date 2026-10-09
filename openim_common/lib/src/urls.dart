@@ -14,7 +14,7 @@ class Urls {
 
   static final resetPwd = "${Config.appAuthUrl}/account/password/reset";
   static final changePwd = "${Config.appAuthUrl}/account/password/change";
-  static final login = "${Config.appAuthUrl}/account/login";
+  static String get login => "${Config.appAuthUrl}/account/login";
 
   static final upgrade = "${Config.appAuthUrl}/app/check";
   static final getClientConfig = '${Config.appAuthUrl}/client_config/get';

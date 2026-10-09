@@ -47,6 +47,7 @@ dependencies:
   search_keyword_text: ^0.0.2
   animated_text_kit: ^4.2.2
   crypto: ^3.0.2
+  pointycastle: 4.0.0
   url_launcher: ^6.1.10
   common_utils: ^2.1.0
   uri_to_file: ^1.0.0

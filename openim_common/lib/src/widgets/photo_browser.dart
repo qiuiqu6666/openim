@@ -667,6 +667,7 @@ class VideoPlayerView extends StatefulWidget {
     this.path,
     this.url,
     this.coverUrl,
+    this.httpHeaders = const {},
     this.file,
     this.heroTag,
     this.onDownload,
@@ -679,6 +680,7 @@ class VideoPlayerView extends StatefulWidget {
   final String? url;
   final File? file;
   final String? coverUrl;
+  final Map<String, String> httpHeaders;
   final String? heroTag;
   final bool autoPlay;
   final bool muted;
@@ -698,6 +700,7 @@ class _MobileVideoPlayerViewState extends State<VideoPlayerView> {
         path: widget.path,
         url: widget.url,
         coverUrl: widget.coverUrl,
+        httpHeaders: widget.httpHeaders,
         autoPlay: widget.autoPlay,
         muted: widget.muted,
         showControls: widget.showControls,
@@ -734,7 +737,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
       if (local != null && await local.exists()) source = local.path;
       final url = widget.url;
       if (source == null && url != null && url.isNotEmpty) {
-        final cached = await VideoMediaCache.cachedFile(url);
+        final cached = widget.httpHeaders.isEmpty
+            ? await VideoMediaCache.cachedFile(url)
+            : null;
         source = cached?.path ?? url;
       }
       if (_disposed || source == null) return;
@@ -744,8 +749,12 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
         await player.setPlaylistMode(PlaylistMode.single);
         if (_disposed) return;
       }
-      await player.open(Media(source), play: widget.autoPlay);
-      if (source == url && url != null && url.isNotEmpty) {
+      await player.open(Media(source, httpHeaders: widget.httpHeaders),
+          play: widget.autoPlay);
+      if (source == url &&
+          url != null &&
+          url.isNotEmpty &&
+          widget.httpHeaders.isEmpty) {
         unawaited(Future<void>.delayed(
             const Duration(seconds: 2), () => VideoMediaCache.remember(url)));
       }
@@ -784,11 +793,12 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
               const MaterialPlayOrPauseButton(),
               const MaterialPositionIndicator(),
               const Spacer(),
-              MaterialCustomButton(
-                  icon: const Icon(Icons.more_vert),
-                  onPressed: () {
-                    _showActionSheet(context);
-                  }),
+              if (widget.onDownload != null && widget.httpHeaders.isEmpty)
+                MaterialCustomButton(
+                    icon: const Icon(Icons.more_vert),
+                    onPressed: () {
+                      _showActionSheet(context);
+                    }),
             ],
           ),
           fullscreen: media_kit_video_controls

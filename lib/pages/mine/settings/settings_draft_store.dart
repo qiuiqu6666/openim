@@ -1,10 +1,10 @@
-import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../core/notifications/message_notification_preferences.dart';
+import '../../../core/notifications/legacy_notification_preferences.dart';
 import '../../../core/notifications/message_notification_sound.dart';
 import '../../chat/calling/preferences/call_notification_preferences.dart';
 
@@ -16,8 +16,23 @@ import '../../chat/calling/preferences/call_notification_preferences.dart';
 class SettingsDraftStore extends ChangeNotifier {
   SettingsDraftStore() : ownerUserId = _currentOwner() {
     _hydrateLocalSettings();
+    _legacySeedValue =
+        SpUtil().getDynamic(legacyNotificationSeedKey(ownerUserId));
+    _notificationSubscription =
+        MessageNotificationPreferences.changes.listen((owner) {
+      if (isCurrentAccount && owner == ownerUserId) {
+        final seed =
+            SpUtil().getDynamic(legacyNotificationSeedKey(ownerUserId));
+        if (seed == _legacySeedValue) return;
+        _legacySeedValue = seed;
+        _hydrateNotificationPreferences();
+        notifyListeners();
+      }
+    });
   }
 
+  StreamSubscription<String>? _notificationSubscription;
+  Object? _legacySeedValue;
   final String ownerUserId;
   bool _disposed = false;
   bool get isCurrentAccount => !_disposed && ownerUserId == _currentOwner();
@@ -32,6 +47,7 @@ class SettingsDraftStore extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    unawaited(_notificationSubscription?.cancel());
     super.dispose();
   }
 
@@ -45,18 +61,7 @@ class SettingsDraftStore extends ChangeNotifier {
         sp.getBool(_localKey('notify_quick_answer'), defValue: true) ?? true;
     notificationQuickReply =
         sp.getBool(_localKey('notify_quick_reply'), defValue: true) ?? true;
-    notifyWhenOpen =
-        sp.getBool(_localKey('notify_when_open'), defValue: true) ?? true;
-    notifyWhenClosed =
-        sp.getBool(_localKey('notify_when_closed'), defValue: true) ?? true;
-    closedNotificationPreview =
-        sp.getString(_localKey('notify_closed_preview'), defValue: 'detail') ??
-            'detail';
-    openedNotificationPreview = sp.getString(
-          _localKey('notify_open_preview'),
-          defValue: 'detail',
-        ) ??
-        'detail';
+    _hydrateNotificationPreferences();
     messageSoundEnabled =
         sp.getBool(_localKey('message_sound_enabled'), defValue: true) ?? true;
     messageSound = MessageNotificationSoundIds.normalizedId(
@@ -65,6 +70,15 @@ class SettingsDraftStore extends ChangeNotifier {
     callRingtoneEnabled =
         sp.getBool(_localKey('call_ringtone_enabled'), defValue: true) ?? true;
     vibration = sp.getBool(_localKey('vibration'), defValue: true) ?? true;
+  }
+
+  void _hydrateNotificationPreferences() {
+    final notificationPreferences =
+        MessageNotificationPreferences.read(ownerUserId);
+    notifyWhenOpen = notificationPreferences.notifyWhenOpen;
+    notifyWhenClosed = notificationPreferences.notifyWhenClosed;
+    closedNotificationPreview = notificationPreferences.closedPreview.name;
+    openedNotificationPreview = notificationPreferences.openedPreview.name;
   }
 
   void _putBool(String name, bool value) {
@@ -355,8 +369,9 @@ class SettingsDraftStore extends ChangeNotifier {
   }
 
   void resetChatBackground() {
-    if (chatBackgroundId == 'default' && chatBackgroundImageBytes == null)
+    if (chatBackgroundId == 'default' && chatBackgroundImageBytes == null) {
       return;
+    }
     chatBackgroundId = 'default';
     chatBackgroundImageBytes = null;
     notifyListeners();

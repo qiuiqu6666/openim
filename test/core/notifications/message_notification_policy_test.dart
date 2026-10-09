@@ -67,6 +67,26 @@ void main() {
   });
   tearDown(Get.reset);
 
+  test(
+      'hidden suppresses visual notification in both states while remaining eligible for independent foreground alerts',
+      () {
+    for (final foreground in [true, false]) {
+      expect(
+          _present(
+              isForeground: foreground,
+              preferences: const MessageNotificationPreferences(
+                  openedPreview: MessageNotificationPreview.hidden,
+                  closedPreview: MessageNotificationPreview.hidden)),
+          isNull);
+    }
+    expect(
+        MessageNotificationPolicy.accepts(
+            message: _message(),
+            conversation: _conversation(),
+            currentUserID: 'self'),
+        isTrue);
+  });
+
   test('missing persisted values preserve current notification defaults', () {
     final preferences = MessageNotificationPreferences.read('self');
     expect(preferences.notifyWhenOpen, isTrue);
@@ -300,8 +320,12 @@ void main() {
               preferences: MessageNotificationPreferences(
                   quickReply: true,
                   openedPreview: preview,
-                  closedPreview: preview))!;
-          expect(presentation.showReply, isFalse);
+                  closedPreview: preview));
+          if (preview == MessageNotificationPreview.hidden) {
+            expect(presentation, isNull);
+            continue;
+          }
+          expect(presentation!.showReply, isFalse);
           if (preview == MessageNotificationPreview.detail) {
             expect(presentation.body, 'SDK message body');
           }

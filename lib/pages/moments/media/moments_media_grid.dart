@@ -36,7 +36,8 @@ class MomentsMediaGrid extends StatelessWidget {
       return Semantics(
         button: true,
         label: momentsText(context,
-            zh: '查看第${index + 1}张图片', en: 'View image ${index + 1}'),
+            zh: item.isVideo ? '查看视频' : '查看第${index + 1}张图片',
+            en: item.isVideo ? 'View video' : 'View image ${index + 1}'),
         child: InkWell(
           key: ValueKey('moments_media_${post.momentId}_$index'),
           onTap: () => onOpen(index),
@@ -50,7 +51,11 @@ class MomentsMediaGrid extends StatelessWidget {
                 media: item,
                 onDimensions: onDimensions,
               ),
-              if (longImage)
+              if (item.isVideo)
+                const Center(
+                    child: Icon(Icons.play_circle_fill_rounded,
+                        color: MomentsTheme.coverForeground, size: 48)),
+              if (longImage && !item.isVideo)
                 Positioned(
                     right: 6,
                     bottom: 6,

@@ -275,7 +275,9 @@ extension WalletRecordDtoX on WalletRecordDto {
               title.contains('充值'));
 
   bool get isChainWithdraw => journal != null
-      ? journal!.bizType == 'withdraw'
+      ? journal!.bizType == 'withdraw' ||
+          (journal!.bizType == 'withdraw_fee_refund' &&
+              journal!.chainTxID.isNotEmpty)
       : type == WalletRecordType.transfer &&
           (title.contains('提现') ||
               (addr.trim().isNotEmpty && payee.trim() == '外部地址'));

@@ -55,7 +55,9 @@ extension WalletJournalRecordMapper on WalletJournalEntry {
     if (bizType == 'deposit' || bizType == 'deposit_reversal') {
       return WalletRecordType.receive;
     }
-    if (bizType == 'withdraw') return WalletRecordType.transfer;
+    if (bizType == 'withdraw' || bizType == 'withdraw_fee_refund') {
+      return WalletRecordType.transfer;
+    }
     if (bizType == 'transfer' || bizType == 'group_transfer') {
       return direction == 'income'
           ? WalletRecordType.receive

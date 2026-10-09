@@ -138,6 +138,35 @@ void main() {
     expect(adapter.requests.single.contentType, Headers.jsonContentType);
   });
 
+  test(
+      'legacy HTTP encrypted retry prevents redirects and retains frozen proof',
+      () async {
+    await DataSp.putServerConfig({'authUrl': 'http://129.226.192.93:10008'});
+    final request = await Apis.prepareLoginRequest(
+        account: 'public-account', password: 'Original-password-123');
+    final attempt = PasswordDeviceLoginAttempt.fromRequest(request);
+    adapter.reply(null, code: 20084);
+    adapter.reply(null, code: 20081);
+    await expectLater(attempt.submit(), throwsA(anything));
+    expect(adapter.requests, hasLength(2));
+    expect(adapter.requests.first.data['passwordPlaintext'], isNull);
+    expect(adapter.requests.last.data['passwordPlaintext'],
+        startsWith('rsa-oaep-sha256-v1:'));
+    expect(adapter.requests.last.data['passwordPlaintext'],
+        isNot(contains('Original-password-123')));
+    expect(adapter.requests.every((r) => !r.followRedirects), isTrue);
+    adapter.reply(null, code: 20084);
+    adapter.reply(_certificate);
+    await attempt.submit(verifyCode: '123456');
+    expect(adapter.requests.last.data['verifyCode'], '123456');
+    expect(adapter.requests.last.data['account'], 'public-account');
+    expect(adapter.requests.last.data['phoneNumber'], isNull);
+    expect(adapter.requests.last.data['password'], request['password']);
+    expect(adapter.requests.every((r) => r.headers['token'] == null), isTrue);
+    attempt.close();
+    expect(() => attempt.submit(), throwsStateError);
+  });
+
   test('verification resubmits the frozen password/device request with code',
       () async {
     final original = _passwordRequest();

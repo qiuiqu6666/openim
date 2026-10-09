@@ -2,15 +2,18 @@ import 'dart:async';
 
 import 'package:openim_common/openim_common.dart' show SpUtil;
 import 'message_notification_sound.dart';
+import 'legacy_notification_preferences.dart';
 
 enum MessageNotificationPreview {
   detail,
   sender,
-  none;
+  none,
+  hidden;
 
   static MessageNotificationPreview parse(Object? value) => switch (value) {
         'sender' => sender,
         'none' => none,
+        'hidden' => hidden,
         _ => detail,
       };
 }
@@ -48,7 +51,9 @@ class MessageNotificationPreferences {
     final owner = accountID.trim();
     final prefix = '99chat_settings_${owner.isEmpty ? 'anonymous' : owner}_';
     final storage = SpUtil();
-    Object? value(String key) => storage.getDynamic('$prefix$key');
+    final inherited = legacyNotificationDefaults(owner);
+    Object? value(String key) =>
+        storage.getDynamic('$prefix$key') ?? inherited[key];
     bool enabled(String key) => switch (value(key)) {
           bool result => result,
           _ => true,

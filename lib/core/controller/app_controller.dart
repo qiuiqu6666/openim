@@ -96,7 +96,9 @@ class AppController extends GetxController with UpgradeManger {
     _messageNotifications = MessageNotificationRuntime(
       notifier: SystemMessageNotifier(flutterLocalNotificationsPlugin),
       currentSession: _notificationSession,
-      sdkReady: _notificationSdkReady,
+      sdkReady: () =>
+          _notificationSdkReady() &&
+          Get.find<IMController>().notificationPreferencesReady,
       isForeground: () => !isRunningBackground,
       activeConversationID: () {
         if (!AppRoutes.isConversationRoute(Get.currentRoute)) return null;

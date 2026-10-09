@@ -1,5 +1,34 @@
+/// Immutable server migration snapshot; never accepted from SDK/public profiles.
+class LegacyNotificationSnapshot {
+  const LegacyNotificationSnapshot(
+      {required this.version,
+      required this.systemEnabled,
+      required this.displayMode});
+  final String version;
+  final bool systemEnabled;
+  final String displayMode;
+  factory LegacyNotificationSnapshot.fromJson(Map<String, dynamic> json) {
+    if (json['version'] != 'chat99-notifications-v1' ||
+        json['systemEnabled'] is! bool ||
+        !const ['show_all', 'generic', 'hidden']
+            .contains(json['displayMode'])) {
+      throw const FormatException('Invalid legacy notification snapshot');
+    }
+    return LegacyNotificationSnapshot(
+        version: json['version'],
+        systemEnabled: json['systemEnabled'],
+        displayMode: json['displayMode']);
+  }
+  Map<String, dynamic> toJson() => {
+        'version': version,
+        'systemEnabled': systemEnabled,
+        'displayMode': displayMode
+      };
+}
+
 class UserFullInfo {
   String? userID;
+  LegacyNotificationSnapshot? legacyNotificationSnapshot;
   String? password;
   String? account;
   String? phoneNumber;
@@ -47,6 +76,7 @@ class UserFullInfo {
 
   UserFullInfo({
     this.userID,
+    this.legacyNotificationSnapshot,
     this.password,
     this.account,
     this.phoneNumber,
@@ -87,6 +117,10 @@ class UserFullInfo {
 
   UserFullInfo.fromJson(Map<String, dynamic> json) {
     userID = json['userID'];
+    legacyNotificationSnapshot = json['legacyNotificationSnapshot'] == null
+        ? null
+        : LegacyNotificationSnapshot.fromJson(
+            Map<String, dynamic>.from(json['legacyNotificationSnapshot']));
     password = json['password'];
     account = json['account'];
     phoneNumber = json['phoneNumber'];
@@ -132,6 +166,9 @@ class UserFullInfo {
   Map<String, dynamic> toJson() {
     final data = <String, dynamic>{};
     data['userID'] = userID;
+    if (legacyNotificationSnapshot != null) {
+      data['legacyNotificationSnapshot'] = legacyNotificationSnapshot!.toJson();
+    }
     data['password'] = password;
     data['account'] = account;
     data['phoneNumber'] = phoneNumber;

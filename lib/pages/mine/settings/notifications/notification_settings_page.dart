@@ -62,6 +62,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
   String _previewLabel(String value) {
     switch (value) {
+      case 'hidden':
+        return settingsText(context, zh: '不显示通知', en: 'Hide notifications');
       case 'none':
         return settingsText(context, zh: '不显示详情', en: 'Hide details');
       case 'sender':
@@ -120,7 +122,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         context,
         title: settingsText(context, zh: '通知显示内容', en: 'Notification Content'),
         actions: [
-          for (final id in ['detail', 'sender', 'none'])
+          for (final id in ['detail', 'sender', 'none', 'hidden'])
             SettingsAction(_previewLabel(id), id, selected: current == id),
         ],
       );

@@ -14,12 +14,14 @@ class NativeMediaVideo extends StatefulWidget {
       this.url,
       this.path,
       this.coverUrl,
+      this.httpHeaders = const {},
       required this.autoPlay,
       required this.muted,
       this.showControls = true,
       this.looping = false});
   final File? file;
   final String? url, path, coverUrl;
+  final Map<String, String> httpHeaders;
   final bool autoPlay, muted;
   final bool showControls, looping;
   @override
@@ -49,13 +51,15 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
       if (!local && (url == null || url.isEmpty)) {
         throw StateError('Missing video');
       }
-      final cached =
-          !local && url != null ? await VideoMediaCache.cachedFile(url) : null;
+      final cached = !local && url != null && widget.httpHeaders.isEmpty
+          ? await VideoMediaCache.cachedFile(url)
+          : null;
       if (_closed) return;
       final sourceFile = local ? file : cached;
       final controller = sourceFile != null
           ? VideoPlayerController.file(sourceFile)
-          : VideoPlayerController.networkUrl(Uri.parse(url!));
+          : VideoPlayerController.networkUrl(Uri.parse(url!),
+              httpHeaders: widget.httpHeaders);
       _controller = controller;
       await controller.initialize();
       if (_closed) return;
@@ -67,7 +71,10 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
       }
       if (widget.autoPlay) await controller.play();
       if (mounted && !_closed) setState(() {});
-      if (!local && cached == null && url != null) {
+      if (!local &&
+          cached == null &&
+          url != null &&
+          widget.httpHeaders.isEmpty) {
         unawaited(Future<void>.delayed(const Duration(seconds: 2), () async {
           if (!_closed) await VideoMediaCache.remember(url);
         }));

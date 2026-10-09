@@ -44,7 +44,13 @@ android {
         multiDexEnabled true
         manifestPlaceholders += [AMAP_ANDROID_KEY: amapAndroidKey]
 
-        ndk { abiFilters "arm64-v8a", "x86_64" }
+        // Flutter configures ABI splits itself. Keeping a second fixed filter
+        // conflicts with --split-per-abi and needlessly builds other targets.
+        if (!(project.findProperty('split-per-abi') ?: 'false').toString().toBoolean()) {
+            def requestedPlatforms = (project.findProperty('target-platform') ?: 'android-arm64,android-x64').toString().split(',')
+            def platformAbis = ['android-arm': 'armeabi-v7a', 'android-arm64': 'arm64-v8a', 'android-x64': 'x86_64']
+            ndk { abiFilters(*requestedPlatforms.collect { platformAbis[it] }.findAll { it != null }) }
+        }
     }
 
     signingConfigs {

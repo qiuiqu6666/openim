@@ -10,6 +10,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:openim_live/openim_live.dart';
 
 import '../im_callback.dart';
+import '../notifications/legacy_notification_preferences.dart';
+import '../notifications/message_notification_preferences.dart';
 import '../session/sdk_session_queue.dart';
 import '../user_activity/activity_runtime.dart';
 import '../../services/account_privilege/account_privilege_runtime.dart';
@@ -29,6 +31,15 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   late Rx<UserFullInfo> userInfo;
   bool _hasUserInfo = false;
   int? _profileSessionGeneration;
+  int? _notificationProfileGeneration;
+  (String, String?, String)? _notificationProfileSession;
+  final _legacyNotificationSeeder = LegacyNotificationPreferenceSeeder();
+  bool get notificationPreferencesReady =>
+      _profileSessionGeneration != null &&
+      _notificationProfileGeneration == _profileSessionGeneration &&
+      _notificationProfileSession ==
+          (OpenIM.iMManager.userID, DataSp.chatToken, Config.appAuthUrl);
+
   bool _privilegeListenerAttached = false;
   late String atAllTag;
   late final _callPreferencesBinding = CallNotificationPreferenceBinding(
@@ -61,6 +72,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       AccountPrivilegeRuntime.store.reset();
     }
     _profileSessionGeneration = null;
+    _notificationProfileGeneration = null;
+    _notificationProfileSession = null;
     if (_hasUserInfo) userInfo.update((val) => val?.isPrivileged = false);
     final closingCallRecords = CallRecordsRuntime.currentRepository;
     FavoriteRuntime.detachSync();
@@ -258,6 +271,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   Future login(String userID, String token) async {
     AccountPrivilegeRuntime.store.reset();
     _profileSessionGeneration = null;
+    _notificationProfileGeneration = null;
+    _notificationProfileSession = null;
     if (_hasUserInfo) userInfo.update((val) => val?.isPrivileged = false);
     int? generation;
     final credentialToken = DataSp.chatToken;
@@ -316,6 +331,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     ActivityRuntime.instance.resetConnection();
     AccountPrivilegeRuntime.store.reset();
     _profileSessionGeneration = null;
+    _notificationProfileGeneration = null;
+    _notificationProfileSession = null;
     if (_hasUserInfo) userInfo.update((val) => val?.isPrivileged = false);
     DeviceSyncRuntime.instance.resetSession();
     initLogic.clearMessageNotificationSession();
@@ -389,6 +406,14 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       final data = await AccountPrivilegeRuntime.store.refreshProfile();
       if (!current()) return false;
       if (data != null && data.userID == account) {
+        final ready = await _legacyNotificationSeeder.apply(
+            owner: account,
+            snapshot: data.legacyNotificationSnapshot,
+            isCurrent: current);
+        if (!current() || !ready) return false;
+        _notificationProfileGeneration = generation;
+        _notificationProfileSession = (account, token, base);
+        MessageNotificationPreferences.notifyChanged(account);
         target.update((val) {
           val?.account = data.account;
           val?.allowAddFriend = data.allowAddFriend;
