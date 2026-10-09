@@ -15,6 +15,7 @@ class SangongAgentMemberDetailPage extends StatefulWidget {
 
   static Future<void> open(BuildContext context, SangongTeamMemberDto member) =>
       Navigator.of(context).push(SangongPageRoute(
+        agent: true,
         context: context,
         settings: const RouteSettings(name: 'sangong_agent_member_detail'),
         builder: (_) => SangongAgentMemberDetailPage(member: member),

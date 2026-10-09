@@ -1,3 +1,5 @@
+import '../services/authorization/sangong_access_policy.dart';
+import '../services/authorization/sangong_operation_scope.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../models/group_feature_context.dart';
@@ -33,9 +35,15 @@ class SangongGameHttp {
         final requestPrivilegeRevision =
             options.extra[_extraPrivilegeRevision] ??
                 context.privilege.revision;
+        final agentRequest = options.path.startsWith(
+            '/api/v2/agent-groups/${Uri.encodeComponent(requestContext.groupID)}/');
+        final requestScope =
+            options.extra[_extraScope] as SangongOperationScope?;
         bool scopeCurrent() =>
             !_closed &&
-            identical(requestContext, context) &&
+            (identical(requestContext, context) ||
+                agentRequest &&
+                    requestScope?.matches(context, tenantId) == true) &&
             requestContext.sessionCurrent() &&
             requestContext.capabilitiesCurrent() &&
             identical(requestPrivilege, context.privilege) &&
@@ -101,6 +109,7 @@ class SangongGameHttp {
   static const _extraTenant = 'sangongRequestTenant';
   static const _extraPrivilege = 'sangongRequestPrivilege';
   static const _extraPrivilegeRevision = 'sangongRequestPrivilegeRevision';
+  static const _extraScope = 'sangongRequestScope';
   GroupFeatureContext context;
   final String? baseUrlOverride;
 
@@ -129,6 +138,7 @@ class SangongGameHttp {
           _extraTenant: tenantId,
           _extraPrivilege: context.privilege,
           _extraPrivilegeRevision: context.privilege.revision,
+          _extraScope: SangongOperationScope.capture(context, tenantId),
         },
       );
   // Unconfirmed writes retain their request ID for an explicit user retry.
@@ -141,13 +151,19 @@ class SangongGameHttp {
       !_closed &&
       context.sessionCurrent() &&
       context.capabilitiesCurrent() &&
+      sangongModuleAccess(context);
+  bool get canCallAdmin =>
+      hasAuth &&
+      hasTenant &&
       context.privilege
           .allows(userID: context.currentUserID, baseUrl: context.api.baseUrl);
-  bool get canCallAdmin => hasAuth && hasTenant;
   bool _closed = false;
   void _checkPermission(RequestOptions options) {
-    if (!context.privilege
-        .allows(userID: context.currentUserID, baseUrl: context.api.baseUrl)) {
+    if (!context.privilege.allows(
+            userID: context.currentUserID, baseUrl: context.api.baseUrl) &&
+        !(sangongAssignedAgentAccess(context) &&
+            options.path.startsWith(
+                '/api/v2/agent-groups/${Uri.encodeComponent(context.groupID)}/'))) {
       throw StateError('当前账号没有三公特权');
     }
     final feature = context.features.sangong;

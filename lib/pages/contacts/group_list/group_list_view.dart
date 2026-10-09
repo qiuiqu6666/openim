@@ -11,9 +11,20 @@ import 'group_list_logic.dart';
 import '../empty/contact_list_placeholder.dart';
 
 class GroupListPage extends StatelessWidget {
-  final logic = Get.find<GroupListLogic>();
+  final GroupListLogic logic;
+  final ValueChanged<GroupInfo>? onSelected;
+  final Set<String>? allowedGroupIDs;
+  final String? title;
+  final String? disabledReason;
 
-  GroupListPage({super.key});
+  GroupListPage(
+      {super.key,
+      GroupListLogic? logic,
+      this.onSelected,
+      this.allowedGroupIDs,
+      this.title,
+      this.disabledReason})
+      : logic = logic ?? Get.find<GroupListLogic>();
 
   @override
   Widget build(BuildContext context) {
@@ -29,8 +40,8 @@ class GroupListPage extends StatelessWidget {
 
   Widget _build(BuildContext context) {
     return Scaffold(
-      appBar:
-          TitleBar.back(title: StrRes.myGroup, backIconColor: Styles.c_0089FF),
+      appBar: TitleBar.back(
+          title: title ?? StrRes.myGroup, backIconColor: Styles.c_0089FF),
       backgroundColor: Styles.c_F8F9FA,
       body: Column(
         children: [
@@ -122,6 +133,9 @@ class GroupListPage extends StatelessWidget {
         child: Column(children: [
           ListTile(
             key: ValueKey(info.groupID),
+            enabled: onSelected == null ||
+                allowedGroupIDs == null ||
+                allowedGroupIDs!.contains(info.groupID),
             minVerticalPadding: AppTokens.s3,
             horizontalTitleGap: AppTokens.s5,
             contentPadding: const EdgeInsets.symmetric(
@@ -141,7 +155,7 @@ class GroupListPage extends StatelessWidget {
             ),
             title: Text(
               (info.groupName ?? '').trim().isEmpty
-                  ? info.groupID
+                  ? (onSelected == null ? info.groupID : '未命名群聊')
                   : info.groupName!,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -149,11 +163,18 @@ class GroupListPage extends StatelessWidget {
                   Styles.ts_0C1C33_17sp.copyWith(fontWeight: FontWeight.w500),
             ),
             subtitle: Text(
-                'profileCommonGroupsMembers'
-                    .trParams({'count': '${info.memberCount ?? 0}'}),
+                onSelected != null &&
+                        allowedGroupIDs != null &&
+                        !allowedGroupIDs!.contains(info.groupID) &&
+                        disabledReason != null
+                    ? disabledReason!
+                    : 'profileCommonGroupsMembers'
+                        .trParams({'count': '${info.memberCount ?? 0}'}),
                 style: Styles.ts_8E9AB0_14sp),
             trailing: Icon(Icons.chevron_right, color: Styles.c_8E9AB0),
-            onTap: () => logic.toGroupChat(info),
+            onTap: () => onSelected == null
+                ? logic.toGroupChat(info)
+                : onSelected!(info),
           ),
           if (showDivider)
             Divider(

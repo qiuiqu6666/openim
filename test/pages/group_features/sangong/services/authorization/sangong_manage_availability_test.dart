@@ -296,9 +296,9 @@ void main() {
     });
   }
 
-  test('revoked account privilege explains denial and never restores binding',
+  test('revoked unassigned account privilege never restores management binding',
       () async {
-    final runtime = runtimeFor(sangongTestContext(api));
+    final runtime = runtimeFor(sangongTestContext(api, canOpenAgent: false));
     await runtime.config.applySaved(_ownerConfig);
     api.privilege.setAllowed(false);
     expect(runtime.canManage, isFalse);

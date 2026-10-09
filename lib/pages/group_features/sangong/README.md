@@ -2,13 +2,13 @@
 
 参考 99chat 提交 `d7c3c65`，Apache-2.0；迁入源码保留来源注释，许可证见 `LICENSE-99chat`。页面继续复用 OpenIM、GetX、SettingsScaffold/SettingsCell、AppDialog、主题与生命周期能力。新版 Go 的接口适配不改变 SDK 消息和会话核心。
 
-详细协议见 [Go v2 接口与 Flutter 接入](../../../../docs/sangong-go-v2-api.md)。当前是切换前验证代码，不能据此认定线上已经接管 Java。
+详细协议见 [Go v2 接口与 Flutter 接入](../../../../docs/sangong-go-v2-api.md)。当前部署已使用 Go 页面接口；安装包仍需单独构建发布。
 
 ## 入口与责任
 
 `sangong_module.dart` 是外部入口。`SangongFeatureHost` 每个账号/群持有一份 `SangongRuntime`，builder 接收 `(scopeContext, statusBanner, overlay)`。状态条放消息列表上方，overlay 放有明确尺寸的 Stack；子页面传入同一 runtime，复用绑定和实时状态。独立路由创建的 runtime 随路由销毁。
 
-`openManage` 打开运营或当前群初始化；`openAgent` 提供 dashboard、team、personal。代理浮窗沿用查/团/个/隐，运营浮窗沿用截/结/图/账/分/势/设/隐。账号必须是 Chat 确认的特权用户。gameType=1 运营群、gameType=4 代理群仅影响入口展示，不代替私有能力和租户绑定。
+`openManage` 打开运营或当前群初始化；`openAgent` 提供 dashboard、team、personal。代理浮窗沿用查/团/个/隐，运营浮窗沿用截/结/图/账/分/势/设/隐。运营入口要求 Chat 确认的特权用户；个人代理入口允许普通用户，但必须具备服务端确认的当前群代理权限（正返水比例、明确归属、有效账户和真实群成员）。群类型和公共摘要不能单独授予代理权限。
 
 | 目录 | 维护责任 |
 | --- | --- |
@@ -21,6 +21,7 @@
 | `identity/` | 公开账号、真实 IM 头像与登录隔离的展示资料缓存 |
 | `services/account_identity/` | 复用联系人搜索，把公开账号精确解析成 OpenIM userID |
 | `agents/` | 独立代理群绑定、成员归属及比例编辑；复用已有设置和确认组件 |
+| `agents/user_group/` | 用户详情中的代理群归属，复用联系人群列表选择；独立持有加载/保存状态与作用域保护 |
 | `profile/` | 联系人资料页三公服务卡、积分操作和流水入口；见其 README |
 | `pages/` | 管理、当前群配置、用户统计和代理业务页面 |
 | `widgets/` | 状态条、浮窗、截止预览、开奖/重结流程、账务页签 |

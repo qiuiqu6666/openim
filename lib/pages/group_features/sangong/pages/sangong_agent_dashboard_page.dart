@@ -19,6 +19,7 @@ class SangongAgentDashboardPage extends StatefulWidget {
   }) =>
       Navigator.of(context).push(
         SangongPageRoute(
+          agent: true,
           context: context,
           settings: const RouteSettings(name: 'sangong_agent_dashboard'),
           builder: (_) => SangongAgentDashboardPage(imGroupId: imGroupId),

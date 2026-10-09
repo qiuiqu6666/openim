@@ -1,3 +1,4 @@
+import 'services/authorization/sangong_access_policy.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/group_feature_context.dart';
@@ -74,12 +75,12 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
   void _create() {
     _runtime =
         SangongRuntime(widget.featureContext, pathPrefix: widget.pathPrefix);
-    _lastPrivileged = _runtime.isPrivileged;
+    _lastPrivileged = _runtime.canAccessModule;
     _runtime.addListener(_changed);
     _runtime.realtime.addListener(_changed);
     _events = widget.featureContext.events.listen((event) {
       if (!_runtime.isCurrent ||
-          !_runtime.isPrivileged ||
+          !_runtime.canAccessModule ||
           event['groupID'] != widget.featureContext.groupID) {
         return;
       }
@@ -94,7 +95,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
 
   void _changed() {
     if (!mounted) return;
-    final privileged = _runtime.isPrivileged;
+    final privileged = _runtime.canAccessModule;
     final restored = privileged && !_lastPrivileged;
     _lastPrivileged = privileged;
     if (!privileged) {
@@ -135,14 +136,14 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
   Future<void> _loadPass() async {
     final generation = ++_loadGeneration;
     final runtime = _runtime;
-    if (!runtime.isCurrent || !runtime.isPrivileged) return;
+    if (!runtime.isCurrent || !runtime.canAccessModule) return;
     try {
       final visible =
           await GroupGamePrefs.instance.isFloatVisible(runtime.preferenceKey);
       if (!mounted ||
           generation != _loadGeneration ||
           !runtime.isCurrent ||
-          !runtime.isPrivileged) {
+          !runtime.canAccessModule) {
         return;
       }
       setState(() => _floatVisible = visible);
@@ -159,7 +160,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
       if (!mounted ||
           generation != _loadGeneration ||
           !runtime.isCurrent ||
-          !runtime.isPrivileged) {
+          !runtime.canAccessModule) {
         return;
       }
       _error = null;
@@ -169,7 +170,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
       if (!mounted ||
           generation != _loadGeneration ||
           !runtime.isCurrent ||
-          !runtime.isPrivileged) {
+          !runtime.canAccessModule) {
         return;
       }
       setState(() => _error = DioErrorMessage.forApp(failure));
@@ -497,22 +498,16 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
                         onOpenSetup: () => unawaited(_openManage(scopeContext)),
                         onOpenCutoff: () => unawaited(_cutoff(scopeContext)),
                         onOpenSettle: () => unawaited(_settle(scopeContext)),
-                        onSendSettleImage: () => unawaited(_report(
-                            scopeContext,
-                            (api) => api.sendSettleReportImage(
-                                roundId: 0))),
-                        onSendSettleBill: () => unawaited(_report(
-                            scopeContext,
-                            (api) => api.sendSettleBillImage(
-                                roundId: 0))),
-                        onSendPointsImage: () => unawaited(
-                            _report(scopeContext, (api) => api.sendPointsReportImage())),
-                        onSendTrendImage: () => unawaited(_report(scopeContext, (api) => api.sendTrendReportImage())),
+                        onSendSettleImage: () => unawaited(_report(scopeContext,
+                            (api) => api.sendSettleReportImage(roundId: 0))),
+                        onSendSettleBill: () => unawaited(_report(scopeContext,
+                            (api) => api.sendSettleBillImage(roundId: 0))),
+                        onSendPointsImage: () => unawaited(_report(scopeContext,
+                            (api) => api.sendPointsReportImage())),
+                        onSendTrendImage: () => unawaited(
+                            _report(scopeContext, (api) => api.sendTrendReportImage())),
                         onOpenRulesSettings: () => unawaited(_openRules(scopeContext))),
-                  if (widget.featureContext.gameType ==
-                          GroupGameType.sangongAgent &&
-                      _runtime.isSessionCurrent &&
-                      _runtime.isPrivileged)
+                  if (_runtime.canOpenAgent)
                     SangongAgentFloatingEntry(
                         key: ValueKey(
                             'sangong-agent-${widget.featureContext.groupID}'),
@@ -568,7 +563,9 @@ class SangongModule {
       String section = 'dashboard'}) async {
     if (!featureContext.sessionCurrent()) return;
     final privilege = featureContext.privilege;
-    final allowed = await privilege.refresh();
+    final allowed = agent
+        ? sangongAssignedAgentAccess(featureContext)
+        : await privilege.refresh();
     if (!allowed || !context.mounted || !featureContext.sessionCurrent()) {
       return;
     }
@@ -578,8 +575,10 @@ class SangongModule {
         current.groupID != featureContext.groupID ||
         !identical(current.api, featureContext.api) ||
         !identical(current.privilege, privilege) ||
-        !privilege.allows(
-            userID: current.currentUserID, baseUrl: current.api.baseUrl)) {
+        !(agent
+            ? sangongAssignedAgentAccess(current)
+            : privilege.allows(
+                userID: current.currentUserID, baseUrl: current.api.baseUrl))) {
       return;
     }
     final nextRuntime =
@@ -588,11 +587,14 @@ class SangongModule {
     try {
       await Navigator.of(context).push<void>(MaterialPageRoute(
           builder: (_) => SangongPrivilegeRouteGuard(
+              allowAssignedAgent: agent,
               featureContext: current,
               refreshOnEntry: false,
               requireCapabilitiesCurrent: false,
               scopeChanges: nextRuntime,
-              isCurrent: () => nextRuntime.isSessionCurrent,
+              isCurrent: () =>
+                  nextRuntime.isSessionCurrent &&
+                  (!agent || nextRuntime.canOpenAgent),
               builder: (_) => _SangongModulePage(
                   runtime: nextRuntime,
                   owned: runtime == null,
@@ -650,7 +652,9 @@ class _SangongModulePageState extends State<_SangongModulePage> {
       if (!mounted ||
           generation != _generation ||
           !widget.runtime.isSessionCurrent ||
-          !widget.runtime.isPrivileged) {
+          !(widget.agent
+              ? widget.runtime.canAccessModule
+              : widget.runtime.isPrivileged)) {
         return;
       }
       widget.runtime.updateContext(current);
@@ -662,7 +666,9 @@ class _SangongModulePageState extends State<_SangongModulePage> {
       if (!mounted ||
           generation != _generation ||
           !widget.runtime.isSessionCurrent ||
-          !widget.runtime.isPrivileged) {
+          !(widget.agent
+              ? widget.runtime.canAccessModule
+              : widget.runtime.isPrivileged)) {
         return;
       }
       if (!widget.runtime.isCurrent) {
@@ -677,7 +683,9 @@ class _SangongModulePageState extends State<_SangongModulePage> {
       if (mounted &&
           generation == _generation &&
           widget.runtime.isSessionCurrent &&
-          widget.runtime.isPrivileged) {
+          (widget.agent
+              ? widget.runtime.canAccessModule
+              : widget.runtime.isPrivileged)) {
         setState(() {
           _loading = false;
           _error = DioErrorMessage.forApp(failure);
@@ -712,9 +720,12 @@ class _SangongModulePageState extends State<_SangongModulePage> {
         }
         return SangongPrivilegeRouteGuard(
             featureContext: widget.runtime.featureContext,
+            allowAssignedAgent: widget.agent,
             refreshOnEntry: false,
             scopeChanges: widget.runtime,
-            isCurrent: () => widget.runtime.isCurrent,
+            isCurrent: () =>
+                widget.runtime.isCurrent &&
+                (!widget.agent || widget.runtime.canOpenAgent),
             builder: _businessPage);
       }));
 

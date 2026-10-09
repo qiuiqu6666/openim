@@ -1,3 +1,4 @@
+import 'services/authorization/sangong_access_policy.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -136,7 +137,6 @@ class SangongRuntime extends ChangeNotifier {
 
   bool get canOpenAgent =>
       isCurrent &&
-      isPrivileged &&
       featureContext.features.sangong.enabled &&
       featureContext.features.sangong.agentEntry &&
       http.hasTenant &&
@@ -153,8 +153,9 @@ class SangongRuntime extends ChangeNotifier {
               : config.config.canManageMembers));
   String get preferenceKey =>
       '${featureContext.api.baseUrl}:${featureContext.currentUserID}:${featureContext.groupID}';
+  bool get canAccessModule => sangongModuleAccess(featureContext);
   void _applyCapabilities() {
-    if (!isPrivileged) return;
+    if (!canAccessModule) return;
     final capability = featureContext.capabilities.sangong;
     if ((capability.canManage || capability.canOpenAgent) &&
         capability.tenantID.isNotEmpty) {
@@ -175,9 +176,8 @@ class SangongRuntime extends ChangeNotifier {
     if (_disposed) return;
     if (!isPrivileged) {
       _clearPrivateBinding();
-    } else {
-      _applyCapabilities();
     }
+    _applyCapabilities();
     notifyListeners();
   }
 
@@ -202,7 +202,7 @@ class SangongRuntime extends ChangeNotifier {
     }
     featureContext = value;
     http.context = value;
-    if (!isPrivileged) _clearPrivateBinding();
+    if (!canAccessModule) _clearPrivateBinding();
     _applyCapabilities();
     _notifyContextChanged();
   }
@@ -248,7 +248,7 @@ class SangongRuntime extends ChangeNotifier {
 
   Future<void> ensureAgentBinding() async {
     if (!isCurrent ||
-        !isPrivileged ||
+        !canAccessModule ||
         !featureContext.features.sangong.enabled ||
         !featureContext.features.sangong.agentEntry ||
         !featureContext.capabilities.sangong.canOpenAgent) {
@@ -258,7 +258,7 @@ class SangongRuntime extends ChangeNotifier {
     final scope = SangongOperationScope.capture(featureContext, http.tenantId);
     final entry = await agent.fetchEntryContext(featureContext.groupID);
     if (!isCurrent ||
-        !isPrivileged ||
+        !canAccessModule ||
         !scope.matches(featureContext, http.tenantId)) {
       throw StateError('账号或群上下文已变化，请重新进入');
     }
@@ -405,16 +405,24 @@ class SangongPageRoute<T> extends MaterialPageRoute<T> {
   SangongPageRoute(
       {required BuildContext context,
       required WidgetBuilder builder,
+      bool agent = false,
       super.settings,
       super.fullscreenDialog})
-      : super(builder: _capture(context, builder));
-  static WidgetBuilder _capture(BuildContext context, WidgetBuilder builder) {
+      : super(builder: _capture(context, builder, agent));
+  static WidgetBuilder _capture(
+      BuildContext context, WidgetBuilder builder, bool agent) {
     final runtime = SangongScope.read(context);
     final featureContext = runtime.featureContext;
+    final scope =
+        SangongOperationScope.capture(featureContext, runtime.http.tenantId);
     return (_) => SangongPrivilegeRouteGuard(
           featureContext: featureContext,
+          allowAssignedAgent: agent,
           scopeChanges: runtime,
-          isCurrent: () => runtime.isCurrent,
+          isCurrent: () =>
+              runtime.isCurrent &&
+              scope.matches(runtime.featureContext, runtime.http.tenantId) &&
+              (!agent || runtime.canOpenAgent),
           builder: (_) =>
               SangongScope(runtime: runtime, child: Builder(builder: builder)),
         );

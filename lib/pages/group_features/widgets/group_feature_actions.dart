@@ -1,3 +1,4 @@
+import '../sangong/services/authorization/sangong_access_policy.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import '../data/group_feature_store.dart';
@@ -39,7 +40,7 @@ class GroupFeatureActions {
             symbol: Icons.sports_esports_outlined,
             onTap: () => SangongModule.openManage(context,
                 featureContext: feature, runtime: sangongRuntime)),
-      if (privileged && feature.gameType == GroupGameType.sangongAgent)
+      if (sangongAssignedAgentAccess(feature))
         ToolboxItemInfo(
             text: '三公代理',
             icon: '',

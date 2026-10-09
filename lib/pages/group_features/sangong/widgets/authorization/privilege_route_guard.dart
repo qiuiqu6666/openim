@@ -1,3 +1,4 @@
+import '../../services/authorization/sangong_access_policy.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -11,6 +12,7 @@ class SangongPrivilegeRouteGuard extends StatefulWidget {
     super.key,
     required GroupFeatureContext this.featureContext,
     required this.builder,
+    this.allowAssignedAgent = false,
     this.refreshOnEntry = true,
     this.requireCapabilitiesCurrent = true,
     this.scopeChanges,
@@ -34,14 +36,15 @@ class SangongPrivilegeRouteGuard extends StatefulWidget {
     this.isCurrent,
   })  : featureContext = null,
         accountPrivilege = privilege,
-        requireCapabilitiesCurrent = false;
+        requireCapabilitiesCurrent = false,
+        allowAssignedAgent = false;
 
   final GroupFeatureContext? featureContext;
   final AccountPrivilegeAccess? accountPrivilege;
   final String? userID, baseUrl;
   final bool Function()? sessionCurrent;
   final WidgetBuilder builder;
-  final bool refreshOnEntry;
+  final bool refreshOnEntry, allowAssignedAgent;
 
   /// The public module entry may show permission loading/errors. Private
   /// business pages keep the captured capability fence enabled.
@@ -65,7 +68,12 @@ class _SangongPrivilegeRouteGuardState
   bool _sawAllowed = false;
   int? _authorizedRevision;
 
-  bool get _allowed => _privilege.allows(userID: _userID, baseUrl: _baseUrl);
+  bool get _agentAllowed =>
+      widget.allowAssignedAgent &&
+      _entry != null &&
+      sangongAssignedAgentAccess(_entry);
+  bool get _allowed =>
+      _privilege.allows(userID: _userID, baseUrl: _baseUrl) || _agentAllowed;
   bool get _current =>
       (_entry?.sessionCurrent() ?? widget.sessionCurrent!()) &&
       (!widget.requireCapabilitiesCurrent || _entry!.capabilitiesCurrent()) &&
@@ -90,7 +98,7 @@ class _SangongPrivilegeRouteGuardState
   Future<void> _authorize() async {
     bool confirmed;
     try {
-      confirmed = await _privilege.refresh();
+      confirmed = _agentAllowed || await _privilege.refresh();
     } catch (_) {
       confirmed = false;
     }

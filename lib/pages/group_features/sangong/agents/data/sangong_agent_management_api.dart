@@ -46,6 +46,30 @@ class SangongAgentManagementApi {
     }
   }
 
+  Future<String?> userGroup(String imUserId) async {
+    final data =
+        await _api.read('user-agent-group', query: {'imUserId': imUserId});
+    return _readUserGroup(data, imUserId);
+  }
+
+  Future<void> setUserGroup(String imUserId, String? groupId) async {
+    final data = await _api.command('user.agent_group',
+        {'imUserId': imUserId, 'agentGroupId': groupId ?? ''});
+    if (_readUserGroup(data, imUserId) != groupId) throw _unknown;
+  }
+
+  String? _readUserGroup(Map<String, dynamic> data, String imUserId) {
+    if (data['imUserId'] != imUserId ||
+        data['gameGroupId'] != http.context.groupID ||
+        !data.containsKey('agentGroupId') ||
+        (data['agentGroupId'] != null &&
+            (data['agentGroupId'] is! String ||
+                (data['agentGroupId'] as String).isEmpty))) {
+      throw _unknown;
+    }
+    return data['agentGroupId'] as String?;
+  }
+
   Future<void> attach(int userId, int parentId) async {
     if (userId <= 0 || parentId <= 0 || userId == parentId) {
       throw StateError('上级用户无效');

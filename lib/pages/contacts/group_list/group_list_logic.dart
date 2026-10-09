@@ -47,7 +47,9 @@ class GroupListLogic extends GetxController {
   void onInit() {
     super.onInit();
     _syncSubscription =
-        Get.find<IMController>().imSdkStatusPublishSubject.listen((event) {
+        (Get.isRegistered<IMController>() ? Get.find<IMController>() : null)
+            ?.imSdkStatusPublishSubject
+            .listen((event) {
       if (event.status == IMSdkStatus.syncEnded) {
         iCreatedInitial();
         iJoinedInitial();

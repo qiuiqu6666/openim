@@ -23,10 +23,11 @@ void main() {
   });
 
   testWidgets(
-      'false global privilege rejects every private API despite business grants',
+      'unassigned ordinary user cannot call private APIs despite management flags',
       (tester) async {
     final api = SangongTestApi()..privilege.setAllowed(false);
-    final runtime = SangongRuntime(sangongTestContext(api));
+    final runtime =
+        SangongRuntime(sangongTestContext(api, canOpenAgent: false));
     addTearDown(runtime.dispose);
     expect(runtime.canConfigure, isFalse);
     expect(runtime.canManage, isFalse);
@@ -69,7 +70,8 @@ void main() {
   testWidgets('revocation clears bindings and cached configuration immediately',
       (tester) async {
     final api = SangongTestApi();
-    final runtime = SangongRuntime(sangongTestContext(api));
+    final runtime =
+        SangongRuntime(sangongTestContext(api, canOpenAgent: false));
     addTearDown(runtime.dispose);
     await runtime.config.applySaved(SangongMyConfig.fromJson(sangongConfig()));
     var notifications = 0;
@@ -183,7 +185,8 @@ void main() {
     expect(find.text('普通聊天'), findsOneWidget);
   });
 
-  testWidgets('toolbox removes only Sangong actions on global revocation',
+  testWidgets(
+      'toolbox removes management while retaining an assigned agent entry',
       (tester) async {
     final api = SangongTestApi();
     final feature =
@@ -199,7 +202,7 @@ void main() {
     final hidden =
         GroupFeatureActions.items(context, feature).map((i) => i.text).toList();
     expect(hidden, isNot(contains('三公运营')));
-    expect(hidden, isNot(contains('三公代理')));
+    expect(hidden, contains('三公代理'));
     expect(hidden, contains('群直播'));
   });
 

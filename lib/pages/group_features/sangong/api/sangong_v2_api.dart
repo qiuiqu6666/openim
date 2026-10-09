@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:uuid/uuid.dart';
 import '../../data/group_feature_api.dart';
 import '../utils/api_response_util.dart';
+import '../services/authorization/sangong_operation_scope.dart';
 import 'sangong_game_http.dart';
 
 /// Group identity is part of the URL; a client-supplied tenant never selects an
@@ -65,12 +66,18 @@ class SangongV2Api {
       String resource, Map<String, dynamic> query) async {
     final context = http.context;
     final tenant = http.tenantId;
+    final scope = SangongOperationScope.capture(context, tenant);
+    // Chat can rebuild an equivalent context during capability refresh. Agent
+    // pagination pins account/group/tenant/permissions, not widget identity.
+    bool current() => agent
+        ? scope.matches(http.context, http.tenantId)
+        : identical(context, http.context) && tenant == http.tenantId;
     final first = await read(resource, query: {...query, 'limit': 100});
     if (first['members'] is! List) throw const FormatException('团队数据无效');
     final members = List<dynamic>.from(first['members']);
     var before = _cursor(first);
     while (before > 0) {
-      if (!identical(context, http.context) || tenant != http.tenantId) {
+      if (!current()) {
         throw StateError('账号或群上下文已变化，请重新进入');
       }
       final page = await read(resource,
@@ -84,7 +91,7 @@ class SangongV2Api {
       if (next >= before) throw const FormatException('团队分页游标无效');
       before = next;
     }
-    if (!identical(context, http.context) || tenant != http.tenantId) {
+    if (!current()) {
       throw StateError('账号或群上下文已变化，请重新进入');
     }
     return {...first, 'members': members, 'nextBeforeId': 0};

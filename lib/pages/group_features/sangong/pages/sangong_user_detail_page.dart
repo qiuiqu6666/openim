@@ -1,3 +1,4 @@
+import '../agents/user_group/sangong_user_agent_group_entry.dart';
 import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
@@ -506,6 +507,16 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                           widget.user.balance,
                                         ),
                                       ),
+                                      if (_profileError == null &&
+                                          profile['userId'] is int)
+                                        SangongUserAgentGroupEntry(
+                                            key: ValueKey(
+                                                'agent-group-${widget.user.imUserId}'),
+                                            imUserId: widget.user.imUserId,
+                                            hasRebate: (num.tryParse(
+                                                        '${profile['rebatePct'] ?? 0}') ??
+                                                    0) >
+                                                0),
                                       if (_profileError == null &&
                                           profile['userId'] is int)
                                         SangongAgentUserActions(

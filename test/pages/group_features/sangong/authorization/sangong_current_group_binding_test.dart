@@ -676,8 +676,7 @@ void main() {
       expect(find.byType(GroupGameFloatingEntry), findsNothing);
       if (agentOnly) {
         expect(fixture.runtime!.requiresGroupTenantCheck, isFalse);
-        expect(find.byType(SangongAgentFloatingEntry),
-            type == 4 ? findsOneWidget : findsNothing);
+        expect(find.byType(SangongAgentFloatingEntry), findsOneWidget);
       }
       _expectNoDefaultConfigRead(fixture);
       expect(tester.takeException(), isNull);

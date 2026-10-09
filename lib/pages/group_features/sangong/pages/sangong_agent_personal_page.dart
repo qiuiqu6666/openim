@@ -40,6 +40,7 @@ class SangongAgentPersonalPage extends StatefulWidget {
       if (member is! Map) throw StateError('个人数据格式无效');
       if (!context.mounted || !session.isCurrent) return;
       await Navigator.of(context).push(SangongPageRoute(
+        agent: true,
         context: context,
         settings: const RouteSettings(name: 'sangong_agent_member_detail'),
         builder: (_) => SangongAgentMemberDetailPage(
@@ -88,6 +89,7 @@ class _State extends State<SangongAgentPersonalPage> {
       );
       await Navigator.of(context).pushReplacement(
         SangongPageRoute(
+          agent: true,
           context: context,
           settings: const RouteSettings(name: 'sangong_agent_member_detail'),
           builder: (_) => detail,

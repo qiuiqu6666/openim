@@ -16,6 +16,7 @@ class SangongAgentTransfersPage extends StatefulWidget {
 
   static Future<void> open(BuildContext context) => Navigator.of(context).push(
         SangongPageRoute(
+          agent: true,
           context: context,
           settings: const RouteSettings(name: 'sangong_agent_transfers'),
           builder: (_) => const SangongAgentTransfersPage(),

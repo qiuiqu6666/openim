@@ -1,3 +1,4 @@
+import 'sangong_access_policy.dart';
 import '../../../models/group_feature_context.dart';
 
 /// An operation belongs to one account, group and authorization snapshot.
@@ -49,7 +50,7 @@ class SangongOperationScope {
       );
 
   bool matches(GroupFeatureContext current, String? currentTenant) =>
-      privileged &&
+      sangongModuleAccess(context) &&
       context.sessionCurrent() &&
       context.capabilitiesCurrent() &&
       current.sessionCurrent() &&
@@ -60,11 +61,10 @@ class SangongOperationScope {
       userId == current.currentUserID &&
       groupId == current.groupID &&
       baseUrl == current.api.baseUrl &&
-      privileged &&
+      sangongModuleAccess(context) &&
       identical(privilege, current.privilege) &&
       privilegeRevision == current.privilege.revision &&
-      current.privilege.allows(
-          userID: current.currentUserID, baseUrl: current.api.baseUrl) &&
+      sangongModuleAccess(current) &&
       identical(context.api, current.api);
 
   bool sameContext(GroupFeatureContext current) =>

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -45,8 +46,13 @@ class _EntryFixture {
           'sangong': {
             'canConfigure': businessGranted,
             'canManage': businessGranted,
-            'canOpenAgent': businessGranted,
-            'tenantID': businessGranted ? _groupID : '',
+            'canOpenAgent': agentAssigned,
+            'canViewRebateHistory': agentAssigned,
+            'tenantID': agentAssigned
+                ? 'tenant-authorized'
+                : businessGranted
+                    ? _groupID
+                    : '',
           },
         };
       }
@@ -71,6 +77,7 @@ class _EntryFixture {
   bool active = true;
   bool capabilitiesUnavailable = true;
   bool businessGranted = false;
+  bool agentAssigned = false;
   int capabilityVersion = 1;
   SangongRuntime? runtime;
 
@@ -163,7 +170,60 @@ void main() {
 
   for (final dark in [false, true]) {
     testWidgets(
-        'privileged agent-group member keeps agent entries without operation permission, dark=$dark',
+        'assigned ordinary member opens agent module from chat dark=$dark',
+        (tester) async {
+      final fixture = _EntryFixture(privileged: false, gameType: 4)
+        ..capabilitiesUnavailable = false
+        ..agentAssigned = true;
+      fixture.store.seed(GroupInfo(
+          groupID: _groupID,
+          ex: jsonEncode({
+            'gameType': 4,
+            'groupFeatures': {
+              'schemaVersion': 1,
+              'revision': 1,
+              'games': {
+                'sangong': {
+                  'enabled': true,
+                  'agentEntry': true,
+                  'rebateHistoryEntry': true,
+                }
+              }
+            }
+          })));
+      addTearDown(fixture.dispose);
+      addTearDown(() => unmountSangong(tester));
+      await _pumpChat(tester, fixture, dark: dark);
+      expect(_toolboxLabels(tester, fixture), ['三公代理']);
+      expect(find.byType(SangongAgentFloatingEntry), findsOneWidget);
+      _openToolbox(tester, fixture, '三公代理');
+      await _flushRoute(tester);
+      expect(find.byType(SangongAgentDashboardPage), findsOneWidget);
+      expect(find.text('团队概览'), findsOneWidget);
+      expect(find.text('重试'), findsNothing);
+      expect(fixture.api.calls.where((c) => c.path.contains('/api/v2/groups/')),
+          isEmpty);
+      expect(
+          fixture.api.calls
+              .where((c) => c.path.contains('/api/v2/agent-groups/')),
+          isNotEmpty,
+          reason: tester
+              .widgetList<Text>(find.byType(Text))
+              .map((t) => t.data)
+              .join('|'));
+
+      fixture.agentAssigned = false;
+      fixture.capabilityVersion++;
+      await fixture.store.loadCapabilities(_groupID, force: true);
+      await _flushRoute(tester);
+      expect(find.byType(SangongAgentDashboardPage), findsNothing);
+      expect(find.byType(SangongAgentFloatingEntry), findsNothing);
+      expect(_toolboxLabels(tester, fixture), isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'privileged member without assigned-agent capabilities keeps only management entry, dark=$dark',
         (tester) async {
       final fixture = _EntryFixture(gameType: 4);
       addTearDown(fixture.dispose);
@@ -173,9 +233,9 @@ void main() {
       expect(fixture.context.isGroupAdmin, isFalse);
       expect(fixture.context.features.valid, isFalse);
       expect(fixture.context.capabilities.sangong.canManage, isFalse);
-      expect(_toolboxLabels(tester, fixture), containsAll(['三公运营', '三公代理']));
+      expect(_toolboxLabels(tester, fixture), ['三公运营']);
       expect(find.byType(GroupGameFloatingEntry), findsNothing);
-      expect(find.byType(SangongAgentFloatingEntry), findsOneWidget);
+      expect(find.byType(SangongAgentFloatingEntry), findsNothing);
       expect(fixture.privateCalls, isEmpty);
 
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
@@ -192,16 +252,12 @@ void main() {
       navigator.pop();
       await _flushRoute(tester);
 
-      tester
-          .widget<SangongAgentFloatingEntry>(
-              find.byType(SangongAgentFloatingEntry))
-          .onOpenTeam();
+      // Direct agent navigation also needs the verified personal capability.
+      await SangongModule.openAgent(tester.element(find.byKey(_chatKey)),
+          featureContext: fixture.context, runtime: fixture.runtime);
       await _flushRoute(tester);
-      expect(find.text('三公代理'), findsOneWidget);
-      expect(find.text('该功能的服务暂未开通'), findsOneWidget);
-      expect(find.text('重试'), findsOneWidget);
+      expect(navigator.canPop(), isFalse);
       expect(fixture.privateCalls, isEmpty);
-      expect(fixture.api.privilege.refreshCount, greaterThanOrEqualTo(2));
       expect(tester.takeException(), isNull);
     });
   }
@@ -220,9 +276,9 @@ void main() {
     fixture.api.privilege.setAllowed(true);
     await fixture.api.privilege.refresh();
     await flushSangong(tester);
-    expect(_toolboxLabels(tester, fixture), containsAll(['三公运营', '三公代理']));
+    expect(_toolboxLabels(tester, fixture), ['三公运营']);
     expect(find.byType(GroupGameFloatingEntry), findsNothing);
-    expect(find.byType(SangongAgentFloatingEntry), findsOneWidget);
+    expect(find.byType(SangongAgentFloatingEntry), findsNothing);
 
     fixture.api.privilege.setAllowed(false);
     await flushSangong(tester);

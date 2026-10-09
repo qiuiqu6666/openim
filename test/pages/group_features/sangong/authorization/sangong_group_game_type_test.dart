@@ -119,15 +119,15 @@ void main() {
     ('numeric 1.0', _ex(1.0), true, false),
     ('mark six agent', _ex(2), false, false),
     ('mark six draw', _ex(3), false, false),
-    ('sangong agent', _ex(4), false, true),
-    ('numeric 4.0', _ex(4.0), false, true),
+    ('sangong agent', _ex(4), false, false),
+    ('numeric 4.0', _ex(4.0), false, false),
     ('missing type', _ex(null, includeType: false), false, false),
     ('invalid JSON', 'not-json', false, false),
     ('string type', _ex('1'), false, false),
     ('string agent type', _ex('4'), false, false),
     ('unknown type', _ex(7), false, false),
   ]) {
-    testWidgets('operator and agent entries follow top-level $label',
+    testWidgets('public type $label alone cannot grant personal agent access',
         (tester) async {
       final fixture = _Fixture(ex);
       addTearDown(fixture.dispose);
@@ -174,12 +174,12 @@ void main() {
     fixture.seed(_ex(4));
     await flushSangong(tester);
     expect(find.byType(GroupGameFloatingEntry), findsNothing);
-    expect(find.byType(SangongAgentFloatingEntry), findsOneWidget);
+    expect(find.byType(SangongAgentFloatingEntry), findsNothing);
     expect(
         GroupFeatureActions.items(
                 tester.element(find.text('群聊正文')), fixture.context)
             .any((item) => item.text == '三公代理'),
-        isTrue);
+        isFalse);
 
     final sangongEx = _ex(1);
     fixture.seed(sangongEx);
