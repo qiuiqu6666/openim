@@ -82,7 +82,8 @@ Map<String, dynamic> _folder(String id,
     {
       'id': id,
       'name': name ?? id,
-      'sortOrder': order,
+      // ChatFolder uses protobuf JSON omitempty for its zero sort order.
+      if (order != 0) 'sortOrder': order,
       'createdAt': id == 'a' ? 1 : 2,
       'updatedAt': updated,
     };
@@ -156,6 +157,80 @@ void main() {
     }
     http.dio.close(force: true);
     Get.reset();
+  });
+
+  test('folder parser defaults only absent or null sort order to zero', () {
+    final omitted = _folder('default');
+    expect(omitted.containsKey('sortOrder'), isFalse);
+    expect(ChatFolder.fromJson(omitted).sortOrder, 0);
+    expect(ChatFolder.fromJson({...omitted, 'sortOrder': null}).sortOrder, 0);
+    expect(ChatFolder.fromJson({...omitted, 'sortOrder': 0}).sortOrder, 0);
+    expect(ChatFolder.fromJson(_folder('ordered', order: 9)).sortOrder, 9);
+    expect(() => ChatFolder.fromJson({...omitted, 'sortOrder': '0'}),
+        throwsA(isA<TypeError>()));
+  });
+
+  testWidgets('refreshOrganizer loads zero sort order without an error toast',
+      (tester) async {
+    await _mount(tester);
+    final logic = createLogic();
+    await tester.runAsync(() async {
+      final refreshing = logic.refreshOrganizer();
+      await _waitForRequests(adapter, 1);
+      adapter.requests.last.reply({
+        'folders': [_folder('later', order: 3), _folder('default')],
+      });
+      await _waitForRequests(adapter, 2);
+      adapter.requests.last.reply({'states': [], 'syncAt': 1});
+      await refreshing;
+      expect(logic.folders.map((folder) => folder.id), ['default', 'later']);
+      expect(logic.folders.map((folder) => folder.sortOrder), [0, 3]);
+      expect(logic.organizerError.value, isNull);
+      expect(logic.organizerLoading.value, isFalse);
+    });
+    await tester.pump();
+    expect(EasyLoading.isShow, isFalse);
+    await _disposeHost(tester);
+  });
+
+  testWidgets('refreshOrganizer accepts omitted and null empty folder lists',
+      (tester) async {
+    await _mount(tester);
+    await tester.runAsync(() async {
+      for (final response in <Map<String, dynamic>>[
+        {},
+        {'folders': null},
+        {'folders': []},
+      ]) {
+        final logic = createLogic();
+        final count = adapter.requests.length;
+        final refreshing = logic.refreshOrganizer();
+        await _waitForRequests(adapter, count + 1);
+        adapter.requests.last.reply(response);
+        await _waitForRequests(adapter, count + 2);
+        adapter.requests.last.reply({'states': [], 'syncAt': 0});
+        await refreshing;
+        expect(logic.folders, isEmpty);
+        expect(logic.organizerError.value, isNull);
+        expect(logic.organizerLoading.value, isFalse);
+        closeLogic(logic);
+      }
+    });
+    await tester.pump();
+    expect(EasyLoading.isShow, isFalse);
+    await _disposeHost(tester);
+  });
+
+  testWidgets('folder API rejects a non-list folders value', (tester) async {
+    await _mount(tester);
+    await tester.runAsync(() async {
+      final pending = ChatOrganizerApi.getFolders();
+      final rejected = expectLater(pending, throwsA(isA<TypeError>()));
+      await _waitForRequests(adapter, 1);
+      adapter.requests.last.reply({'folders': 'invalid'});
+      await rejected;
+    });
+    await _disposeHost(tester);
   });
 
   testWidgets(

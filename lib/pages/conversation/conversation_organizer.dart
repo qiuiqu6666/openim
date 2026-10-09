@@ -11,7 +11,7 @@ class ChatFolder {
   ChatFolder.fromJson(Map<String, dynamic> json)
       : id = json['id'] as String,
         name = json['name'] as String,
-        sortOrder = (json['sortOrder'] as num).toInt(),
+        sortOrder = (json['sortOrder'] as num?)?.toInt() ?? 0,
         createdAt = (json['createdAt'] as num).toInt(),
         updatedAt = (json['updatedAt'] as num).toInt();
 }
@@ -66,7 +66,7 @@ class ChatOrganizerApi {
 
   static Future<List<ChatFolder>> getFolders() async {
     final data = _data(await dio.get('$_base/folders', options: _options));
-    return (data['folders'] as List)
+    return (data['folders'] as List? ?? const [])
         .map((item) =>
             ChatFolder.fromJson(Map<String, dynamic>.from(item as Map)))
         .toList();
