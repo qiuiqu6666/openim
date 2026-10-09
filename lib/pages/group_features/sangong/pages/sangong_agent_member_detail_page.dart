@@ -111,14 +111,14 @@ class _State extends State<SangongAgentMemberDetailPage> {
 
   String money(num v) =>
       v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
-  Widget metric(String title, num value) =>
+  Widget metric(String title, num value, {String suffix = ''}) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title,
             style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 12)),
         const SizedBox(height: 4),
-        Text(money(value),
+        Text('${money(value)}$suffix',
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
       ]);
 
@@ -273,7 +273,7 @@ class _State extends State<SangongAgentMemberDetailPage> {
                                           ? m.batchRebate
                                           : m.todayRebate),
                                   metric('待返水', m.pendingRebate),
-                                  metric('返水比例', m.rebatePct),
+                                  metric('返水比例', m.rebatePct, suffix: '%'),
                                 ]))),
                     if (_tabIndex == 0 && _isCurrentLoginMember)
                       Padding(
