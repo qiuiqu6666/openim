@@ -141,7 +141,11 @@ class _State extends State<SangongAgentMemberDetailPage> {
       if (amount is! num && num.tryParse('$amount') == null) {
         throw const FormatException('Invalid rebate result');
       }
-      ToastUtils.toast('返水申请已提交，金额 ¥${money(_dayNum(amount))}，请刷新确认到账',
+      final claimedAmount = _dayNum(amount);
+      ToastUtils.toast(
+          claimedAmount == 0
+              ? '当前暂无可领取返水'
+              : '返水申请已提交，金额 ¥${money(claimedAmount)}，请刷新确认到账',
           context: context);
       await _loadDaily();
     } catch (e) {
