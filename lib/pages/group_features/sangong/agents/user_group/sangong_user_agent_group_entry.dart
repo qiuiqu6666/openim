@@ -20,7 +20,7 @@ class SangongUserAgentGroupEntry extends StatefulWidget {
   final String imUserId;
   final bool hasRebate;
   final Future<List<GroupInfo>> Function(List<String>)? fetchGroups;
-  final Future<GroupInfo?> Function(BuildContext, List<String>)? pickGroup;
+  final Future<GroupInfo?> Function(BuildContext)? pickGroup;
   @override
   State<SangongUserAgentGroupEntry> createState() =>
       _SangongUserAgentGroupEntryState();
@@ -100,8 +100,8 @@ class _SangongUserAgentGroupEntryState
     }
   }
 
-  Future<GroupInfo?> _select(List<String> ids) async {
-    if (widget.pickGroup != null) return widget.pickGroup!(context, ids);
+  Future<GroupInfo?> _select() async {
+    if (widget.pickGroup != null) return widget.pickGroup!(context);
     final controller = GroupListLogic();
     controller.onInit();
     try {
@@ -110,8 +110,6 @@ class _SangongUserAgentGroupEntryState
           builder: (page) => GroupListPage(
               logic: controller,
               title: '选择代理群',
-              allowedGroupIDs: ids.toSet(),
-              disabledReason: '未绑定当前下注群',
               onSelected: (group) => Navigator.of(page).pop(group))));
     } finally {
       controller.onClose();
@@ -137,16 +135,10 @@ class _SangongUserAgentGroupEntryState
     try {
       GroupInfo? selected;
       if (!clear) {
-        final ids = await _api.groups();
-        if (!mounted || !_current) return;
-        if (ids.isEmpty) {
-          ToastUtils.toast('请先在代理群绑定中添加当前下注群的代理群', context: context);
-          return;
-        }
-        selected = await _select(ids);
+        selected = await _select();
         if (!mounted || !_current || selected == null) return;
-        if (!ids.contains(selected.groupID)) {
-          throw StateError('请选择已绑定当前下注群的代理群');
+        if (selected.groupID == _runtime.featureContext.groupID) {
+          throw StateError('请选择独立的代理群，不能选择当前下注群');
         }
       }
       if (!mounted || !_current) return;
@@ -155,7 +147,7 @@ class _SangongUserAgentGroupEntryState
           title: clear ? '清除代理群' : '设置代理群',
           message: clear
               ? '清除后，该用户将无法从原代理群进入三公代理。'
-              : '设置为“${selected!.groupName?.isNotEmpty == true ? selected.groupName : '所选群聊'}”。用户加入该群后，可进入三公代理查看自己的数据。',
+              : '设置为“${selected!.groupName?.isNotEmpty == true ? selected.groupName : '所选群聊'}”。未绑定的群会同时绑定当前下注群，无需另行设置。用户加入该群后，可进入三公代理查看自己的数据。',
           dialogWrapper: _guardDialog);
       if (!_current || !confirmed) return;
       await _api.setUserGroup(_userId, clear ? null : selected!.groupID);

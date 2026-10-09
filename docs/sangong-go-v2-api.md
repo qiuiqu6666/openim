@@ -270,7 +270,7 @@ sessionId 和 batchNo 不能同时传；batchNo 和 from/to 不能混用。rate 
 **保存或更换**：`POST G/commands/user.agent_group`：
 
 ```json
-{"requestId":"<UUID>","input":{"imUserId":"im_target","agentGroupId":"agents-B"}}
+{"requestId":"<UUID>","input":{"imUserId":"im_target","agentGroupId":"agents-B","bindIfNeeded":true}}
 ```
 
 成功响应：
@@ -283,11 +283,13 @@ sessionId 和 batchNo 不能同时传；batchNo 和 from/to 不能混用。rate 
 
 查询与保存均要求当前下注群的特权账号、真实 OpenIM 群管理员/群主身份及本租户 `owner/admin` 授权。保存还校验目标用户是当前下注群真实成员、三公账户有效；设置或更换要求返水比例大于 0，否则返回 `REBATE_RATE_REQUIRED`。比例为 0 时仍允许清除已有绑定。独立代理群入口 `A` 不提供这些管理操作。所有写入继续使用统一幂等和审计记录，相同请求重试不重复写入事件。
 
-可选群读取 `GET G/agent-groups`（`data.agentGroupIds`），再用现有 OpenIM 群聊列表/群资料显示群名与群头像，按 groupID 匹配。选择器可以复用已有群聊列表，但只允许选已绑定当前下注群的代理群；未绑定需先由有权限的 owner 使用 `agent.group_bind`，不在保存用户归属时自动绑定。群名和群头像不由此接口重复存储。
+用户详情直接复用 OpenIM 群聊列表选择，显示真实群名和群头像，不再要求先查询或填写群级绑定。保存传入 `bindIfNeeded:true`：所选群尚未绑定时，在同一事务中建立当前下注群的代理群绑定并保存用户归属。新建绑定额外要求操作者是所选群的真实 OpenIM 群主/管理员；当前下注群的 owner 或 admin 均可执行。已绑定当前下注群时直接保存归属，保持原有权限。禁止使用下注群作为代理群，禁止占用其他下注群的代理群。任一步失败，群绑定、用户归属和审计一起回滚；重试使用同一 requestId，不重复记录。
 
-错误：`AGENT_GROUP_NOT_BOUND` 表示先绑定当前下注群；`AGENT_GROUP_TENANT_MISMATCH` 表示绑定其他下注群；`INVALID_GROUP` 表示群标识无效；`INVALID_INPUT` 表示参数缺失/格式错误；`FORBIDDEN` 表示权限或成员资格不符；`IDEMPOTENCY_CONFLICT` 表示复用了不同内容的幂等键。
+`bindIfNeeded` 为可选布尔字段，旧调用省略或传 false 时仍只接受已绑定的代理群；不能传字符串或 null。清除时仅传空 `agentGroupId`，不带 `bindIfNeeded:true`。`GET G/agent-groups` 继续用于查看已绑定群，独立 `agent.group_bind` 命令仍要求 owner。群名和群头像不由归属接口重复存储。
 
-客户端用户详情已提供“代理群”的设置、更换和清除操作，复用现有群聊列表，未绑定当前下注群的群不可选。用户进入指定群聊可见“三公代理”入口，打开已有代理总览、团队和个人页面；仅可查询本人及授权下级，不开放运营管理数据。
+错误：`AGENT_GROUP_NOT_BOUND` 表示旧调用未启用自动绑定；`AGENT_GROUP_MANAGER_REQUIRED` 表示操作者没有所选群的管理身份，不能创建绑定；`AGENT_GROUP_IS_GAME_GROUP` 表示选择了下注群；`AGENT_GROUP_TENANT_MISMATCH` 表示绑定其他下注群；`INVALID_GROUP` 表示群标识无效；`INVALID_INPUT` 表示参数缺失/格式错误；`FORBIDDEN` 表示权限或成员资格不符；`IDEMPOTENCY_CONFLICT` 表示复用了不同内容的幂等键。
+
+客户端用户详情已提供“代理群”的设置、更换和清除操作，复用现有群聊列表，可直接选择未绑定群并一次保存。用户进入指定群聊可见“三公代理”入口，打开已有代理总览、团队和个人页面；仅可查询本人及授权下级，不开放运营管理数据。
 
 更换或清除绑定、停用账户、返水比例降至 0 或退出指定群后，原群私有接口将拒绝访问，旧幂等请求也重新检查资格。归属和比例变更会更新群能力版本，客户端收到更新后刷新入口并关闭失效页面。公开群摘要不包含用户归属或私有权限，不能单独作为授权依据。
 

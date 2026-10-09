@@ -53,8 +53,11 @@ class SangongAgentManagementApi {
   }
 
   Future<void> setUserGroup(String imUserId, String? groupId) async {
-    final data = await _api.command('user.agent_group',
-        {'imUserId': imUserId, 'agentGroupId': groupId ?? ''});
+    final data = await _api.command('user.agent_group', {
+      'imUserId': imUserId,
+      'agentGroupId': groupId ?? '',
+      if (groupId != null) 'bindIfNeeded': true,
+    });
     if (_readUserGroup(data, imUserId) != groupId) throw _unknown;
   }
 

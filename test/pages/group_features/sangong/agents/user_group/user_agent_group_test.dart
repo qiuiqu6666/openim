@@ -58,7 +58,8 @@ void main() {
   });
 
   for (final dark in [false, true]) {
-    testWidgets('group list selects only bound groups dark=$dark',
+    testWidgets(
+        'direct group picker allows previously unbound groups dark=$dark',
         (tester) async {
       final runtime = sangongTestRuntime(sangongTestContext(SangongTestApi()));
       final logic = GroupListLogic(
@@ -84,15 +85,13 @@ void main() {
           GroupListPage(
             logic: logic,
             title: '选择代理群',
-            allowedGroupIDs: {'agents-A'},
-            disabledReason: '未绑定当前下注群',
             onSelected: (group) => selected = group,
           ),
           dark: dark);
       await flushSangong(tester);
-      expect(find.text('未绑定当前下注群'), findsOneWidget);
+      expect(find.text('未绑定当前下注群'), findsNothing);
       await tester.tap(find.text('普通群聊'));
-      expect(selected, isNull);
+      expect(selected?.groupID, 'unbound');
       await tester.tap(find.text('可选代理群'));
       expect(selected?.groupID, 'agents-A');
       expect(tester.takeException(), isNull);
@@ -105,13 +104,13 @@ void main() {
       final api = SangongTestApi();
       api.respond = (call) {
         if (call.path.endsWith('/agent-groups')) {
-          return {
-            'gameGroupId': 'group-sangong',
-            'agentGroupIds': ['agents-A']
-          };
+          return {'gameGroupId': 'group-sangong', 'agentGroupIds': <String>[]};
         }
         if (call.method == 'POST') {
+          expect(call.path, endsWith('/commands/user.agent_group'));
           final input = call.body!['input'] as Map;
+          expect(input['bindIfNeeded'],
+              input['agentGroupId'] == '' ? isNull : isTrue);
           assigned = input['agentGroupId'] == ''
               ? null
               : input['agentGroupId'] as String;
@@ -143,8 +142,7 @@ void main() {
                   hasRebate: true,
                   fetchGroups: (_) async =>
                       [GroupInfo(groupID: 'agents-A', groupName: '秋的代理群')],
-                  pickGroup: (_, ids) async {
-                    expect(ids, ['agents-A']);
+                  pickGroup: (_) async {
                     return GroupInfo(groupID: 'agents-A', groupName: '秋的代理群');
                   })),
           dark: dark);
@@ -167,6 +165,8 @@ void main() {
       await flushSangong(tester);
       await tester.pump(const Duration(milliseconds: 300));
       expect(assigned, isNull);
+      expect(api.calls.where((c) => c.path.endsWith('/agent-groups')), isEmpty);
+      expect(api.calls.where((c) => c.method == 'POST'), hasLength(2));
       expect(find.text('未设置'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
