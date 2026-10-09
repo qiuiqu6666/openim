@@ -40,7 +40,7 @@ class GroupFeatureActions {
             symbol: Icons.sports_esports_outlined,
             onTap: () => SangongModule.openManage(context,
                 featureContext: feature, runtime: sangongRuntime)),
-      if (sangongAssignedAgentAccess(feature))
+      if (sangongAgentEntryVisible(feature))
         ToolboxItemInfo(
             text: '三公代理',
             icon: '',

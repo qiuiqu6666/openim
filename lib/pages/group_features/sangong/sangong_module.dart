@@ -506,7 +506,8 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
                         onSendTrendImage: () => unawaited(
                             _report(scopeContext, (api) => api.sendTrendReportImage())),
                         onOpenRulesSettings: () => unawaited(_openRules(scopeContext))),
-                  if (_runtime.canOpenAgent)
+                  if (_runtime.canOpenAgent &&
+                      sangongAgentEntryVisible(widget.featureContext))
                     SangongAgentFloatingEntry(
                         key: ValueKey(
                             'sangong-agent-${widget.featureContext.groupID}'),

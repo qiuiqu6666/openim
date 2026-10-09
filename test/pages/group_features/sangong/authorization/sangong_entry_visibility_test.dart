@@ -180,7 +180,7 @@ void main() {
 
   testWidgets('entering agent chat refreshes cached personal permissions',
       (tester) async {
-    final fixture = _EntryFixture(privileged: false, gameType: 0)
+    final fixture = _EntryFixture(privileged: false, gameType: 4)
       ..capabilitiesUnavailable = false;
     addTearDown(fixture.dispose);
     addTearDown(() => unmountSangong(tester));
@@ -204,18 +204,50 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('OpenIM group type controls agent entry and updates in place',
+      (tester) async {
+    final fixture = _EntryFixture(privileged: false, gameType: 0)
+      ..capabilitiesUnavailable = false
+      ..agentAssigned = true;
+    addTearDown(fixture.dispose);
+    addTearDown(() => unmountSangong(tester));
+    await _pumpChat(tester, fixture);
+    expect(find.byType(SangongAgentFloatingEntry), findsNothing);
+    expect(_toolboxLabels(tester, fixture), isEmpty);
+
+    // OpenIM's group-info notification supplies the type written after binding.
+    for (final kind in [4, 0, 2, 3, 4, 1]) {
+      fixture.store.seed(GroupInfo(
+          groupID: _groupID,
+          ex: jsonEncode({'gameType': kind, 'unrelated': 'preserved'})));
+      await _flushRoute(tester);
+      final visible = kind == 4 || kind == 1;
+      expect(find.byType(SangongAgentFloatingEntry),
+          visible ? findsOneWidget : findsNothing);
+      expect(_toolboxLabels(tester, fixture).contains('三公代理'), visible);
+      expect(fixture.context.capabilities.sangong.canOpenAgent, isTrue);
+    }
+    fixture.agentAssigned = false;
+    await fixture.store.loadCapabilities(_groupID, force: true);
+    await _flushRoute(tester);
+    expect(find.byType(SangongAgentFloatingEntry), findsNothing);
+    expect(_toolboxLabels(tester, fixture), isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final dark in [false, true]) {
     for (final staleSummary in [false, true]) {
       testWidgets(
           'assigned agent buttons ignore missing/stale public summary dark=$dark stale=$staleSummary',
           (tester) async {
-        final fixture = _EntryFixture(privileged: false, gameType: 0)
+        final fixture = _EntryFixture(privileged: false, gameType: 4)
           ..capabilitiesUnavailable = false
           ..agentAssigned = true;
         if (staleSummary) {
           fixture.store.seed(GroupInfo(
               groupID: _groupID,
               ex: jsonEncode({
+                'gameType': 4,
                 'groupFeatures': {
                   'schemaVersion': 1,
                   'revision': 1,

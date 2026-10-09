@@ -9,6 +9,13 @@ bool sangongAssignedAgentAccess(GroupFeatureContext context) =>
     context.capabilities.sangong.canOpenAgent &&
     context.capabilities.sangong.tenantID.isNotEmpty;
 
+/// OpenIM's group type chooses the entry; it never grants personal access.
+/// An active betting group can also host a personally assigned agent route.
+bool sangongAgentEntryVisible(GroupFeatureContext context) =>
+    (context.gameType == GroupGameType.sangongAgent ||
+        context.gameType == GroupGameType.sangong) &&
+    sangongAssignedAgentAccess(context);
+
 bool sangongModuleAccess(GroupFeatureContext context) =>
     context.privilege
         .allows(userID: context.currentUserID, baseUrl: context.api.baseUrl) ||
