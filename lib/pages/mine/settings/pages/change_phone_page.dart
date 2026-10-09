@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../settings_service.dart';
+import '../account_security/sms_policy_state.dart';
 import 'country_code_page.dart';
 import '../widgets/verification_code_flow.dart';
 import '../widgets/settings_widgets.dart';
@@ -25,7 +26,10 @@ class ChangePhonePage extends StatefulWidget {
   State<ChangePhonePage> createState() => _ChangePhonePageState();
 }
 
-class _ChangePhonePageState extends State<ChangePhonePage> {
+class _ChangePhonePageState extends State<ChangePhonePage>
+    with SmsPolicyState<ChangePhonePage> {
+  @override
+  SettingsService get securityService => widget.service;
   late final TextEditingController areaCodeController;
   final oldCodeController = TextEditingController();
   final newPhoneController = TextEditingController();
@@ -39,11 +43,15 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
   bool busy = false;
 
   bool get _isBindMode => !widget.isBound;
-  int get _uiStep => step <= 1 ? 1 : 2;
+  int get _uiStep => smsExempt ? 2 : (step <= 1 ? 1 : 2);
   bool get _validNewPhone => newPhoneController.text.trim().length >= 6;
-  bool get _canVerifyOld => oldCodeController.text.length == 6 && !busy;
+  bool get _canVerifyOld =>
+      smsPolicyReady && oldCodeController.text.length == 6 && !busy;
   bool get _canBindConfirm =>
-      _validNewPhone && newCodeController.text.length == 6 && !busy;
+      smsPolicyReady &&
+      _validNewPhone &&
+      (smsExempt || newCodeController.text.length == 6) &&
+      !busy;
   bool get _canConfirm => _canBindConfirm;
 
   String get _currentPhoneDisplay {
@@ -144,6 +152,7 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
 
   Future<void> _confirm() async {
     if (!_canConfirm) return;
+    if (!await refreshSmsPolicy() || !mounted || !_canConfirm) return;
     FocusManager.instance.primaryFocus?.unfocus();
     if (!widget.service.isSecurityBackendAvailable) {
       showUnavailableSettingsAction(
@@ -157,13 +166,13 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
       if (_isBindMode) {
         await widget.service.bindPhone(
             phone: newPhoneController.text.trim(),
-            code: newCodeController.text,
+            code: smsExempt ? '' : newCodeController.text,
             areaCode: areaCodeController.text.trim());
       } else {
         await widget.service.changePhone(
             phone: newPhoneController.text.trim(),
-            oldCode: oldCodeController.text,
-            newCode: newCodeController.text,
+            oldCode: smsExempt ? '' : oldCodeController.text,
+            newCode: smsExempt ? '' : newCodeController.text,
             areaCode: areaCodeController.text.trim());
       }
       if (!mounted) return;
@@ -230,6 +239,7 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
       embedded: widget.embedded,
       dismissKeyboardOnOutsideTap: true,
       children: [
+        smsPolicyNotice(context),
         if (_isBindMode) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
@@ -258,19 +268,20 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
                   LengthLimitingTextInputFormatter(20),
                 ],
               ),
-              _CodeCell(
-                label:
-                    settingsText(context, zh: '验证码', en: 'Verification Code'),
-                hint: settingsText(context,
-                    zh: '请输入验证码', en: 'Enter verification code'),
-                buttonText: _codeFlow.label(context),
-                controller: newCodeController,
-                onPressed: _validNewPhone && !busy && _codeFlow.canSend
-                    ? () => _sendCode(newPhoneController.text.trim())
-                    : null,
-                dark: dark,
-                showDivider: false,
-              ),
+              if (!smsExempt)
+                _CodeCell(
+                  label:
+                      settingsText(context, zh: '验证码', en: 'Verification Code'),
+                  hint: settingsText(context,
+                      zh: '请输入验证码', en: 'Enter verification code'),
+                  buttonText: _codeFlow.label(context),
+                  controller: newCodeController,
+                  onPressed: _validNewPhone && !busy && _codeFlow.canSend
+                      ? () => _sendCode(newPhoneController.text.trim())
+                      : null,
+                  dark: dark,
+                  showDivider: false,
+                ),
             ],
           ),
           Padding(
@@ -295,21 +306,24 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Text(
-              _uiStep == 1
-                  ? settingsText(
-                      context,
-                      zh: '先填写当前手机的验证码，再输入新号码；提交时验证两个号码。',
-                      en: 'Enter the code sent to your current phone, then enter the new number. Both are verified on submit.',
-                    )
-                  : settingsText(
-                      context,
-                      zh: '请输入新手机号和验证码，提交时验证新旧号码。',
-                      en: 'Enter the new phone and code. Both codes are verified when you submit.',
-                    ),
+              smsExempt
+                  ? settingsText(context,
+                      zh: '请输入新的手机号码。', en: 'Enter your new phone number.')
+                  : _uiStep == 1
+                      ? settingsText(
+                          context,
+                          zh: '先填写当前手机的验证码，再输入新号码；提交时验证两个号码。',
+                          en: 'Enter the code sent to your current phone, then enter the new number. Both are verified on submit.',
+                        )
+                      : settingsText(
+                          context,
+                          zh: '请输入新手机号和验证码，提交时验证新旧号码。',
+                          en: 'Enter the new phone and code. Both codes are verified when you submit.',
+                        ),
               style: TextStyle(color: helperColor, fontSize: 13, height: 1.45),
             ),
           ),
-          _StepIndicator(currentStep: _uiStep),
+          if (!smsExempt) _StepIndicator(currentStep: _uiStep),
           if (_uiStep == 1) ...[
             _StepLabel(
               text: settingsText(
@@ -358,13 +372,14 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
               ),
             ),
           ] else ...[
-            _StepLabel(
-              text: settingsText(
-                context,
-                zh: '第 2 步  绑定新手机号',
-                en: 'Step 2  Bind New Phone Number',
+            if (!smsExempt)
+              _StepLabel(
+                text: settingsText(
+                  context,
+                  zh: '第 2 步  绑定新手机号',
+                  en: 'Step 2  Bind New Phone Number',
+                ),
               ),
-            ),
             SettingsGroup(
               margin: EdgeInsets.zero,
               children: [
@@ -388,41 +403,43 @@ class _ChangePhonePageState extends State<ChangePhonePage> {
                     LengthLimitingTextInputFormatter(20),
                   ],
                 ),
-                _CodeCell(
-                  label:
-                      settingsText(context, zh: '新号验证码', en: 'New Number Code'),
-                  hint: settingsText(context,
-                      zh: '请输入验证码', en: 'Enter verification code'),
-                  buttonText: _codeFlow.label(context),
-                  controller: newCodeController,
-                  onPressed: _validNewPhone && !busy && _codeFlow.canSend
-                      ? () => _sendCode(newPhoneController.text.trim())
-                      : null,
-                  dark: dark,
-                  showDivider: false,
-                ),
+                if (!smsExempt)
+                  _CodeCell(
+                    label: settingsText(context,
+                        zh: '新号验证码', en: 'New Number Code'),
+                    hint: settingsText(context,
+                        zh: '请输入验证码', en: 'Enter verification code'),
+                    buttonText: _codeFlow.label(context),
+                    controller: newCodeController,
+                    onPressed: _validNewPhone && !busy && _codeFlow.canSend
+                        ? () => _sendCode(newPhoneController.text.trim())
+                        : null,
+                    dark: dark,
+                    showDivider: false,
+                  ),
               ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: busy ? null : () => setState(() => step = 1),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppTokens.accent,
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    settingsText(context, zh: '返回上一步', en: 'Back'),
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w500),
+            if (!smsExempt)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: busy ? null : () => setState(() => step = 1),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTokens.accent,
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      settingsText(context, zh: '返回上一步', en: 'Back'),
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
                   ),
                 ),
               ),
-            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
               child: SizedBox(

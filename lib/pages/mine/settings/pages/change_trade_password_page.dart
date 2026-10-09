@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../settings_service.dart';
+import '../account_security/sms_policy_state.dart';
 import '../widgets/verification_code_flow.dart';
 import '../widgets/settings_widgets.dart';
 
@@ -21,7 +22,10 @@ class ChangeTradePasswordPage extends StatefulWidget {
       _ChangeTradePasswordPageState();
 }
 
-class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
+class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage>
+    with SmsPolicyState<ChangeTradePasswordPage> {
+  @override
+  SettingsService get securityService => widget.service;
   final _codeFlow = VerificationCodeFlow();
   final _old = TextEditingController();
   final _next = TextEditingController();
@@ -65,13 +69,15 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
   bool _sixDigits(String text) => RegExp(r'^\d{6}$').hasMatch(text.trim());
 
   bool get _canSubmit =>
+      smsPolicyReady &&
       !_submitting &&
-      _sixDigits(_old.text) &&
+      (smsExempt || _sixDigits(_old.text)) &&
       _sixDigits(_next.text) &&
       _next.text.trim() == _confirm.text.trim();
 
   Future<void> _submit() async {
     if (!_canSubmit) return;
+    if (!await refreshSmsPolicy() || !mounted || !_canSubmit) return;
     if (!widget.service.isSecurityBackendAvailable) {
       showUnavailableSettingsAction(
         context,
@@ -81,9 +87,10 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
     }
     setState(() => _submitting = true);
     try {
-      if (_smsMode) {
+      if (_smsMode || smsExempt) {
         await widget.service.resetTradePassword(
-            code: _old.text.trim(), password: _next.text.trim());
+            code: smsExempt ? '' : _old.text.trim(),
+            password: _next.text.trim());
       } else {
         await widget.service.changeTradePassword(
             oldPassword: _old.text.trim(), newPassword: _next.text.trim());
@@ -157,18 +164,23 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
       title: settingsText(context, zh: '修改支付密码', en: 'Change Payment Password'),
       dismissKeyboardOnOutsideTap: true,
       children: [
+        smsPolicyNotice(context),
         Padding(
           padding: const EdgeInsets.fromLTRB(
               AppTokens.s5, AppTokens.s4, AppTokens.s5, AppTokens.s4),
           child: Text(
             settingsText(
               context,
-              zh: _smsMode
-                  ? '通过绑定手机的验证码设置新的 6 位支付密码。'
-                  : '请输入当前支付密码，并设置新的 6 位数字支付密码。',
-              en: _smsMode
-                  ? 'Use a code sent to your bound phone to set a new payment password.'
-                  : 'Enter your current payment password, then set a new 6-digit one.',
+              zh: smsExempt
+                  ? '请输入并确认新的 6 位支付密码。'
+                  : _smsMode
+                      ? '通过绑定手机的验证码设置新的 6 位支付密码。'
+                      : '请输入当前支付密码，并设置新的 6 位数字支付密码。',
+              en: smsExempt
+                  ? 'Enter and confirm a new 6-digit payment password.'
+                  : _smsMode
+                      ? 'Use a code sent to your bound phone to set a new payment password.'
+                      : 'Enter your current payment password, then set a new 6-digit one.',
             ),
             style: TextStyle(
                 color: helper,
@@ -179,36 +191,38 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage> {
         SettingsGroup(
           margin: EdgeInsets.zero,
           children: [
-            if (_smsMode)
+            if (!smsExempt && _smsMode)
               SettingsCell(
                 title: settingsText(context,
                     zh: '绑定手机号', en: 'Bound Phone Number'),
                 value: _maskedPhone,
                 showArrow: false,
               ),
-            SettingsInputCell(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: AppTokens.s5),
-              label: settingsText(context,
-                  zh: _smsMode ? '验证码' : '原密码',
-                  en: _smsMode ? 'SMS Code' : 'Current Password'),
-              hint: settingsText(context,
-                  zh: _smsMode ? '请输入验证码' : '请输入 6 位支付密码',
-                  en: _smsMode ? 'Enter the 6-digit code' : 'Enter 6 digits'),
-              controller: _old,
-              obscureText: !_smsMode && _obscureOld,
-              keyboardType: TextInputType.number,
-              inputFormatters: digits,
-              trailing: _smsMode
-                  ? TextButton(
-                      style: TextButton.styleFrom(
-                          foregroundColor: AppTokens.accent),
-                      onPressed:
-                          _submitting || !_codeFlow.canSend ? null : _openReset,
-                      child: Text(_codeFlow.label(context)))
-                  : _eye(_obscureOld,
-                      () => setState(() => _obscureOld = !_obscureOld)),
-            ),
+            if (!smsExempt)
+              SettingsInputCell(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: AppTokens.s5),
+                label: settingsText(context,
+                    zh: _smsMode ? '验证码' : '原密码',
+                    en: _smsMode ? 'SMS Code' : 'Current Password'),
+                hint: settingsText(context,
+                    zh: _smsMode ? '请输入验证码' : '请输入 6 位支付密码',
+                    en: _smsMode ? 'Enter the 6-digit code' : 'Enter 6 digits'),
+                controller: _old,
+                obscureText: !_smsMode && _obscureOld,
+                keyboardType: TextInputType.number,
+                inputFormatters: digits,
+                trailing: _smsMode
+                    ? TextButton(
+                        style: TextButton.styleFrom(
+                            foregroundColor: AppTokens.accent),
+                        onPressed: _submitting || !_codeFlow.canSend
+                            ? null
+                            : _openReset,
+                        child: Text(_codeFlow.label(context)))
+                    : _eye(_obscureOld,
+                        () => setState(() => _obscureOld = !_obscureOld)),
+              ),
             SettingsInputCell(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: AppTokens.s5),

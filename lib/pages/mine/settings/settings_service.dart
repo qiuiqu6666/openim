@@ -25,6 +25,7 @@ abstract class SettingsService {
       Future.error(UnsupportedError('Nickname check unavailable'));
   bool get isSecurityBackendAvailable => isBackendAvailable;
   String get securityPhone => '';
+  bool get securitySmsExempt => false;
   String get securityAreaCode => '+86';
   Future<void> refreshSecurity() async {}
   Future<List<Map<String, dynamic>>> getLoginRecords() async => [];

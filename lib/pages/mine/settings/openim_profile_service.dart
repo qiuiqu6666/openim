@@ -93,6 +93,8 @@ class OpenIMProfileService extends StubSettingsService {
   @override
   String get securityPhone => controller.userInfo.value.phoneNumber ?? '';
   @override
+  bool get securitySmsExempt => controller.userInfo.value.smsVerificationExempt;
+  @override
   String get securityAreaCode {
     final code = controller.userInfo.value.areaCode ?? '';
     return code.isEmpty ? '+86' : (code.startsWith('+') ? code : '+$code');
@@ -100,12 +102,19 @@ class OpenIMProfileService extends StubSettingsService {
 
   @override
   Future<void> refreshSecurity() async {
+    final owner = OpenIM.iMManager.userID;
+    final token = DataSp.chatToken;
     final info = await Apis.queryMyFullInfo();
     if (info == null) throw StateError('Could not load account');
-    if (controller.isClosed) return;
+    if (controller.isClosed ||
+        owner != OpenIM.iMManager.userID ||
+        token != DataSp.chatToken) {
+      throw StateError('Account session changed');
+    }
     controller.userInfo.update((user) {
       user?.phoneNumber = info.phoneNumber;
       user?.areaCode = info.areaCode;
+      user?.smsVerificationExempt = info.smsVerificationExempt;
     });
   }
 

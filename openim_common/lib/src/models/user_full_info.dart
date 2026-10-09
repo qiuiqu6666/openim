@@ -36,6 +36,7 @@ class UserFullInfo {
 
   /// Only an explicit boolean from the full profile grants account privileges.
   bool isPrivileged = false;
+  bool smsVerificationExempt = false;
   List<DepartmentInfo>? departmentList;
 
   bool get isMale => gender == 1;
@@ -80,6 +81,7 @@ class UserFullInfo {
     this.isFriendship = false,
     this.isBlacklist = false,
     this.isPrivileged = false,
+    this.smsVerificationExempt = false,
     this.departmentList,
   });
 
@@ -119,6 +121,7 @@ class UserFullInfo {
     isFriendship = json['isFriendship'] ?? false;
     isBlacklist = json['isBlacklist'] ?? false;
     isPrivileged = json['isPrivileged'] == true;
+    smsVerificationExempt = json['smsVerificationExempt'] == true;
     departmentList = json['departmentList'] == null
         ? null
         : (json['departmentList'] as List)
@@ -162,6 +165,7 @@ class UserFullInfo {
     data['isFriendship'] = isFriendship;
     data['isBlacklist'] = isBlacklist;
     data['isPrivileged'] = isPrivileged;
+    data['smsVerificationExempt'] = smsVerificationExempt;
     data['departmentList'] = departmentList?.map((e) => e.toJson()).toList();
     return data;
   }

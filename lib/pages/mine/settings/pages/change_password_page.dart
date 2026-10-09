@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../settings_service.dart';
+import '../account_security/sms_policy_state.dart';
 import '../widgets/verification_code_flow.dart';
 import '../widgets/settings_widgets.dart';
 
@@ -20,7 +21,10 @@ class ChangePasswordPage extends StatefulWidget {
   State<ChangePasswordPage> createState() => _ChangePasswordPageState();
 }
 
-class _ChangePasswordPageState extends State<ChangePasswordPage> {
+class _ChangePasswordPageState extends State<ChangePasswordPage>
+    with SmsPolicyState<ChangePasswordPage> {
+  @override
+  SettingsService get securityService => widget.service;
   static final RegExp _passwordPattern =
       RegExp(r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$');
 
@@ -48,12 +52,14 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       _newPassword.text != _confirmPassword.text;
 
   bool get _canSubmit {
-    if (_busy ||
+    if (!smsPolicyReady ||
+        _busy ||
         !_passwordPattern.hasMatch(_newPassword.text) ||
         _confirmPasswordMismatch) {
       return false;
     }
     if (_confirmPassword.text != _newPassword.text) return false;
+    if (smsExempt) return true;
     if (_isPhoneBound) return _smsCode.text.length == 6;
     return _oldPassword.text.isNotEmpty;
   }
@@ -119,6 +125,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   Future<void> _submit() async {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!_canSubmit) return;
+    if (!await refreshSmsPolicy() || !mounted || !_canSubmit) return;
     if (!widget.service.isSecurityBackendAvailable) {
       showUnavailableSettingsAction(
         context,
@@ -129,10 +136,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
     setState(() => _busy = true);
     try {
-      if (_isPhoneBound) {
+      if (_isPhoneBound || smsExempt) {
         await widget.service.changePasswordWithPhoneCode(
           phone: widget.phoneNumber.trim(),
-          code: _smsCode.text,
+          code: smsExempt ? '' : _smsCode.text,
           newPassword: _newPassword.text,
         );
       } else {
@@ -164,20 +171,25 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       title: settingsText(context, zh: '修改密码', en: 'Change Password'),
       dismissKeyboardOnOutsideTap: true,
       children: [
+        smsPolicyNotice(context),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
           child: Text(
-            _isPhoneBound
-                ? settingsText(
-                    context,
-                    zh: '通过短信验证码验证身份后，设置新的登录密码。',
-                    en: 'Verify your identity with an SMS code, then set a new login password.',
-                  )
-                : settingsText(
-                    context,
-                    zh: '请输入旧密码和新密码，完成登录密码修改。',
-                    en: 'Enter your current password and a new password to update your login password.',
-                  ),
+            smsExempt
+                ? settingsText(context,
+                    zh: '请输入并确认新的登录密码。',
+                    en: 'Enter and confirm your new login password.')
+                : _isPhoneBound
+                    ? settingsText(
+                        context,
+                        zh: '通过短信验证码验证身份后，设置新的登录密码。',
+                        en: 'Verify your identity with an SMS code, then set a new login password.',
+                      )
+                    : settingsText(
+                        context,
+                        zh: '请输入旧密码和新密码，完成登录密码修改。',
+                        en: 'Enter your current password and a new password to update your login password.',
+                      ),
             style: TextStyle(
               color: helperColor,
               fontSize: 13,
@@ -188,7 +200,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         SettingsGroup(
           margin: EdgeInsets.zero,
           children: [
-            if (_isPhoneBound) ...[
+            if (!smsExempt && _isPhoneBound) ...[
               SettingsCell(
                 title: settingsText(context,
                     zh: '绑定手机号', en: 'Bound Phone Number'),
@@ -203,7 +215,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                 buttonText: _codeFlow.label(context),
                 onPressed: _busy || !_codeFlow.canSend ? null : _sendCode,
               ),
-            ] else
+            ] else if (!smsExempt)
               _PasswordInputRow(
                 label: settingsText(context, zh: '旧密码', en: 'Current Password'),
                 hint: settingsText(context,
