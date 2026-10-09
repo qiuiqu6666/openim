@@ -2,8 +2,6 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
-import '../../../../contacts/group_list/group_list_logic.dart';
-import '../../../../contacts/group_list/group_list_view.dart';
 import '../../sangong_scope.dart';
 import '../../services/authorization/sangong_operation_scope.dart';
 import '../../support/sangong_ui.dart';
@@ -15,12 +13,10 @@ class SangongUserAgentGroupEntry extends StatefulWidget {
       {super.key,
       required this.imUserId,
       required this.hasRebate,
-      this.fetchGroups,
-      this.pickGroup});
+      this.fetchGroups});
   final String imUserId;
   final bool hasRebate;
   final Future<List<GroupInfo>> Function(List<String>)? fetchGroups;
-  final Future<GroupInfo?> Function(BuildContext)? pickGroup;
   @override
   State<SangongUserAgentGroupEntry> createState() =>
       _SangongUserAgentGroupEntryState();
@@ -100,20 +96,21 @@ class _SangongUserAgentGroupEntryState
     }
   }
 
-  Future<GroupInfo?> _select() async {
-    if (widget.pickGroup != null) return widget.pickGroup!(context);
-    final controller = GroupListLogic();
-    controller.onInit();
+  Future<String> _resolveGroupId(String input) async {
+    // Group profiles display an @ prefix even when it is absent from the SDK ID.
+    // Prefer an exact match; only use the display alias when IM confirms it.
+    if (!input.startsWith('@') || input.length == 1) return input;
+    final ids = [input, input.substring(1)];
     try {
-      return await Navigator.of(context).push<GroupInfo>(SangongPageRoute(
-          context: context,
-          builder: (page) => GroupListPage(
-              logic: controller,
-              title: '选择代理群',
-              onSelected: (group) => Navigator.of(page).pop(group))));
-    } finally {
-      controller.onClose();
+      final groups = await (widget.fetchGroups?.call(ids) ??
+          OpenIM.iMManager.groupManager.getGroupsInfo(groupIDList: ids));
+      for (final id in ids) {
+        if (groups.any((group) => group.groupID == id)) return id;
+      }
+    } catch (_) {
+      // Keep the supplied ID if optional IM metadata cannot confirm an alias.
     }
+    return input;
   }
 
   Widget _guardDialog(BuildContext dialogContext, Widget child) =>
@@ -123,7 +120,7 @@ class _SangongUserAgentGroupEntryState
               ? child
               : CupertinoAlertDialog(title: const Text('游戏权限已变化'), actions: [
                   CupertinoDialogAction(
-                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      onPressed: () => Navigator.of(dialogContext).pop(),
                       child: const Text('关闭'))
                 ]));
 
@@ -133,24 +130,31 @@ class _SangongUserAgentGroupEntryState
     }
     setState(() => _saving = true);
     try {
-      GroupInfo? selected;
-      if (!clear) {
-        selected = await _select();
-        if (!mounted || !_current || selected == null) return;
-        if (selected.groupID == _runtime.featureContext.groupID) {
-          throw StateError('请选择独立的代理群，不能选择当前下注群');
-        }
+      String? groupId;
+      if (clear) {
+        final confirmed = await AppDialog.confirm(
+            context: context,
+            title: '清除代理群',
+            message: '清除后，该用户将无法从原代理群进入三公代理。',
+            dialogWrapper: _guardDialog);
+        if (!_current || !confirmed) return;
+      } else {
+        final input = await AppDialog.prompt(
+            context: context,
+            title: '设置代理群',
+            message: '可从群资料复制群 ID。用户加入该群后，可查看自己的代理和团队数据。',
+            placeholder: '请输入群 ID',
+            initialValue: _groupId ?? '',
+            confirmText: '保存',
+            maxLength: 128,
+            dialogWrapper: _guardDialog);
+        if (!_current || input == null) return;
+        groupId = input.trim();
+        if (groupId.isEmpty) return;
+        groupId = await _resolveGroupId(groupId);
+        if (!_current) return;
       }
-      if (!mounted || !_current) return;
-      final confirmed = await AppDialog.confirm(
-          context: context,
-          title: clear ? '清除代理群' : '设置代理群',
-          message: clear
-              ? '清除后，该用户将无法从原代理群进入三公代理。'
-              : '设置为“${selected!.groupName?.isNotEmpty == true ? selected.groupName : '所选群聊'}”。未绑定的群会同时绑定当前下注群，无需另行设置。用户加入该群后，可进入三公代理查看自己的数据。',
-          dialogWrapper: _guardDialog);
-      if (!_current || !confirmed) return;
-      await _api.setUserGroup(_userId, clear ? null : selected!.groupID);
+      await _api.setUserGroup(_userId, groupId);
       if (!mounted || !_current) return;
       await _load();
       if (mounted && _current) ToastUtils.toast('已保存', context: context);
@@ -168,9 +172,7 @@ class _SangongUserAgentGroupEntryState
     if (!_current) return const SizedBox.shrink();
     final title = _groupId == null
         ? '未设置'
-        : (_group?.groupName?.isNotEmpty == true
-            ? _group!.groupName!
-            : '已设置（群名暂未获取）');
+        : (_group?.groupName?.isNotEmpty == true ? _group!.groupName! : '已设置');
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       ListTile(
           contentPadding: EdgeInsets.zero,
@@ -180,7 +182,9 @@ class _SangongUserAgentGroupEntryState
               ? '正在加载…'
               : _error != null
                   ? '加载失败，请重试'
-                  : title),
+                  : _groupId == null
+                      ? title
+                      : '$title\n群 ID：$_groupId'),
           trailing: _error != null
               ? IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
               : TextButton(

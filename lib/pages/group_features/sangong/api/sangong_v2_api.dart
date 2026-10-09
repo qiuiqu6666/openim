@@ -7,7 +7,7 @@ import '../services/authorization/sangong_operation_scope.dart';
 import 'sangong_game_http.dart';
 
 /// Group identity is part of the URL; a client-supplied tenant never selects an
-/// account. The host resolves agent groups to their bound game tenant.
+/// account. The host resolves each logged-in user and agent group to its tenant.
 class SangongV2Api {
   SangongV2Api(this.http, {this.agent = false});
   final SangongGameHttp http;
@@ -42,8 +42,11 @@ class SangongV2Api {
     ]);
     final id = requestId ??
         http.pendingCommandIds.putIfAbsent(key, () => const Uuid().v4());
-    final response = await http.requests.post(path('commands/$action'),
-        data: {'requestId': id, 'input': input});
+    final response = await http.requests.post(path('commands/$action'), data: {
+      'requestId': id,
+      'input': input,
+      if (agent && http.hasTenant) 'expectedTenantId': http.tenantId,
+    });
     final envelope = response.data;
     // The Chat host may wrap the Sangong envelope once. Unwrap only the host;
     // keep the command receipt for matching the idempotency key.

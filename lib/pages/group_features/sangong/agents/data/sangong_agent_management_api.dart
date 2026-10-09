@@ -53,12 +53,18 @@ class SangongAgentManagementApi {
   }
 
   Future<void> setUserGroup(String imUserId, String? groupId) async {
+    final id = groupId?.trim();
+    if (id != null &&
+        (id.isEmpty ||
+            id.length > 128 ||
+            RegExp(r'[\x00-\x1f\x7f/\\%;]').hasMatch(id))) {
+      throw StateError('请填写有效的群 ID');
+    }
     final data = await _api.command('user.agent_group', {
       'imUserId': imUserId,
-      'agentGroupId': groupId ?? '',
-      if (groupId != null) 'bindIfNeeded': true,
+      'agentGroupId': id ?? '',
     });
-    if (_readUserGroup(data, imUserId) != groupId) throw _unknown;
+    if (_readUserGroup(data, imUserId) != id) throw _unknown;
   }
 
   String? _readUserGroup(Map<String, dynamic> data, String imUserId) {

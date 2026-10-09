@@ -235,7 +235,7 @@ Java 对照要求：
 | POST `G/commands/agent.group_bind` | `{"agentGroupId":"agents-B"}` | 绑定独立代理群；不会把下注群变成代理群 |
 | POST `G/commands/agent.attach` | `{"userId":9,"parentUserId":8}` | 设置未建立上级的成员关系；禁止环和跨租户 |
 | POST `G/commands/admin.rebate_rate` | `{"userId":8,"rate":"0.5"}` | 管理员设置成员返水比例 |
-| GET `A/context` | 无 | 当前群绑定、当前代理身份；未绑定不能从账号默认厅兜底 |
+| GET `A/context` | 无 | 按登录用户＋当前群定位厅和代理身份；未绑定不能从账号默认厅兜底 |
 | GET `A/balance` | 无 | 本人余额 |
 | GET `A/team` | direct、imUserId、sessionId/batchNo、beforeId、limit | 团队/直属列表；只读授权下级 |
 | GET `A/team-summary` | direct、sessionId/batchNo、beforeId、limit | 团队汇总 |
@@ -270,7 +270,7 @@ sessionId 和 batchNo 不能同时传；batchNo 和 from/to 不能混用。rate 
 **保存或更换**：`POST G/commands/user.agent_group`：
 
 ```json
-{"requestId":"<UUID>","input":{"imUserId":"im_target","agentGroupId":"agents-B","bindIfNeeded":true}}
+{"requestId":"<UUID>","input":{"imUserId":"im_target","agentGroupId":"agents-B"}}
 ```
 
 成功响应：
@@ -283,19 +283,23 @@ sessionId 和 batchNo 不能同时传；batchNo 和 from/to 不能混用。rate 
 
 查询与保存均要求当前下注群的特权账号、真实 OpenIM 群管理员/群主身份及本租户 `owner/admin` 授权。保存还校验目标用户是当前下注群真实成员、三公账户有效；设置或更换要求返水比例大于 0，否则返回 `REBATE_RATE_REQUIRED`。比例为 0 时仍允许清除已有绑定。独立代理群入口 `A` 不提供这些管理操作。所有写入继续使用统一幂等和审计记录，相同请求重试不重复写入事件。
 
-用户详情直接复用 OpenIM 群聊列表选择，显示真实群名和群头像，不再要求先查询或填写群级绑定。保存传入 `bindIfNeeded:true`：所选群尚未绑定时，在同一事务中建立当前下注群的代理群绑定并保存用户归属。新建绑定额外要求操作者是所选群的真实 OpenIM 群主/管理员；当前下注群的 owner 或 admin 均可执行。已绑定当前下注群时直接保存归属，保持原有权限。禁止使用下注群作为代理群，禁止占用其他下注群的代理群。任一步失败，群绑定、用户归属和审计一起回滚；重试使用同一 requestId，不重复记录。
+用户详情点击“设置/更换”直接输入群 ID，保存当前厅＋指定用户＋群 ID 的个人归属。不再要求预先绑定群级关系，也不查询操作者是否加入目标代理群或为该群管理员；保存管理权限仍由当前下注群校验。输入只去掉首尾空格，保留 OpenIM ID 中的 `@`、大小写和 `group_` 等原始内容；不得照搬腾讯版删除这些字符的处理。群资料显示的前导 `@` 仅在 OpenIM 确认原值不存在、去掉该前缀后能匹配真实群时解析；精确匹配优先，查询失败不擅自修改 ID。群名通过 OpenIM 查询，查不到时仍显示已保存的群 ID，方便纠错；不以群名查询失败阻断保存。
 
-`bindIfNeeded` 为可选布尔字段，旧调用省略或传 false 时仍只接受已绑定的代理群；不能传字符串或 null。清除时仅传空 `agentGroupId`，不带 `bindIfNeeded:true`。`GET G/agent-groups` 继续用于查看已绑定群，独立 `agent.group_bind` 命令仍要求 owner。群名和群头像不由归属接口重复存储。
+同一个群可供多个用户、不同厅的不同用户使用。每个厅内的用户最多设置一个群；同一 IM 用户＋同一群只能归属一个厅，数据库唯一键防止并发占用或覆盖其他厅记录。个人代理查询和命令都按登录用户＋群 ID 定位厅，在事务内再次检查归属、账户状态和返水资格。即便该群已有旧的群级绑定，仍按个人归属决定该用户的数据范围；若该群同时是另一个厅的下注群，对这个用户优先显示已明确设置的个人代理归属，不授予那个厅的管理权限。
 
-错误：`AGENT_GROUP_NOT_BOUND` 表示旧调用未启用自动绑定；`AGENT_GROUP_MANAGER_REQUIRED` 表示操作者没有所选群的管理身份，不能创建绑定；`AGENT_GROUP_IS_GAME_GROUP` 表示选择了下注群；`AGENT_GROUP_TENANT_MISMATCH` 表示绑定其他下注群；`INVALID_GROUP` 表示群标识无效；`INVALID_INPUT` 表示参数缺失/格式错误；`FORBIDDEN` 表示权限或成员资格不符；`IDEMPOTENCY_CONFLICT` 表示复用了不同内容的幂等键。
+旧客户端传入的 `bindIfNeeded` 仅作为兼容布尔字段接收并忽略，无论省略、true 或 false 都直接保存个人归属；字符串或 null 仍视为错误。`GET G/agent-groups` 和 `agent.group_bind` 保留旧的群级管理用途，不再作为个人代理群设置的前置条件。用户设置不创建、覆盖或删除旧群级绑定。任一步失败，个人归属、入口刷新和审计一起回滚；相同 requestId 重试不重复记录。
 
-客户端用户详情已提供“代理群”的设置、更换和清除操作，复用现有群聊列表，可直接选择未绑定群并一次保存。用户进入指定群聊可见“三公代理”入口，打开已有代理总览、团队和个人页面；仅可查询本人及授权下级，不开放运营管理数据。
+错误：`AGENT_USER_GROUP_ALREADY_BOUND` 表示同一用户＋群已归属其他厅，应清除原绑定或改用其他群；`INVALID_GROUP` 表示群标识无效；`INVALID_INPUT` 表示参数缺失/格式错误；`FORBIDDEN` 表示当前厅权限或成员资格不符；`IDEMPOTENCY_CONFLICT` 表示复用了不同内容的幂等键。
+
+新客户端在 `A/commands/*` 的请求外层携带 `expectedTenantId`（与 `requestId`、`input` 同级）。该字段仅用于核对页面原归属，不能选择租户或绕过权限；服务端在事务锁内核对，发生变化时返回 `AGENT_TENANT_CHANGED`，客户端需重新进入。旧客户端省略时保留原有按当前归属执行的兼容行为。
+
+用户进入指定群聊可见“三公代理”入口，打开已有代理总览、团队和个人页面；仅可查询本人及授权下级，不开放运营管理数据。
 
 更换或清除绑定、停用账户、返水比例降至 0 或退出指定群后，原群私有接口将拒绝访问，旧幂等请求也重新检查资格。归属和比例变更会更新群能力版本，客户端收到更新后刷新入口并关闭失效页面。公开群摘要不包含用户归属或私有权限，不能单独作为授权依据。
 
-用户详情接入：使用当前页面绑定的下注群 ID 查询；公开账号仅用于显示，请求使用用户资料里的内部 IM 标识。保存确认回执后重新查询。关闭页面、切换登录/群或权限变化时丢弃迟到结果。更换选择生成新 requestId；超时重试保留原 requestId 和 input。
+用户详情接入：使用当前页面绑定的下注群 ID 查询；公开账号仅用于显示，请求使用用户资料里的内部 IM 标识。保存确认回执后重新查询。关闭页面、切换登录/群或权限变化时丢弃迟到结果。更换输入生成新 requestId；超时重试保留原 requestId 和 input。
 
-服务端新增迁移 `035_go_user_agent_groups.sql`，单独保存租户、用户、代理群、操作人及更新时间。先应用迁移，再更新 Chat RPC；不迁移已有积分分组或代理树数据为用户归属。
+服务端先应用 `035_go_user_agent_groups.sql` 保存个人归属，再应用 `037_go_user_agent_routes.sql` 补充 IM 用户标识及“用户＋群”的唯一索引。037 从已有用户记录回填身份，保留原绑定；需暂停写入、备份并检查历史重复或孤立记录后迁移，再更新 Chat RPC。此次迁移不改余额、流水、返水比例或代理树。
 
 ## 7 OpenIM 自定义字段与减少请求
 

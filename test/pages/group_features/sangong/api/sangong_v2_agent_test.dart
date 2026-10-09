@@ -79,7 +79,11 @@ void main() {
     final result = await completeSangongRequest(
         tester, v2.command('rebate.claim', {}, requestId: 'claim-1'));
     expect(result['balance'], 49);
-    expect(api.calls.single.body, {'requestId': 'claim-1', 'input': {}});
+    expect(api.calls.single.body, {
+      'requestId': 'claim-1',
+      'input': {},
+      'expectedTenantId': runtime.http.tenantId
+    });
     api.respond = (_) => {
           'ok': true,
           'requestId': 'other',

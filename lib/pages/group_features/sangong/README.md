@@ -68,3 +68,5 @@
 ## 文件规模
 
 `sangong_module.dart` 仍集中协调 host 生命周期和操作入口；`widgets/sangong_bet_preview_sheet.dart` 仍维护同一截止表单状态。它们超过 500 行时需检查职责，新独立功能不得继续堆入。接口已按配置、用户、账务、局和报表拆到 api/admin；代理管理已独立放入 agents。不要通过共享全部私有状态的 part/extension 做表面拆分。
+
+用户代理群：`agents/user_group/` 在用户详情复用 `AppDialog.prompt` 输入群 ID，`agents/data/` 保存个人归属。按旧 99chat 的 `AgentRebateApi.bindAgentChatGroup` 保存行为迁移，保留 OpenIM 原始群 ID。无需预先群级绑定或目标群管理员身份，入口根据登录用户＋群 ID 定位所属厅。接口与迁移说明见 `docs/sangong-go-v2-api.md` 的 6.1 节。
