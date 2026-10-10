@@ -56,8 +56,32 @@ class Config {
   static const groupScheme = "https://99chat.vip?group=";
 
   static const _host = "129.226.192.93";
+  static const defaultChatApiUrl = 'https://99chatapi.99chat.vip';
+  static const defaultIMApiUrl = 'https://99imapi.99chat.vip';
+  static const defaultIMWsUrl = 'wss://websocket.99chat.vip';
 
-  static const _ipRegex = '((2[0-4]\\d|25[0-5]|[01]?\\d\\d?)\\.){3}(2[0-4]\\d|25[0-5]|[01]?\\d\\d?)';
+  static String _serviceUrl(
+      String key, String fallback, String legacyScheme, int legacyPort) {
+    final configured = DataSp.getServerConfig()?[key] as String?;
+    if (configured == null) return fallback;
+    final uri = Uri.tryParse(configured);
+    // Existing installations may have saved the previous default. Only migrate
+    // that exact endpoint; custom servers continue to use their own settings.
+    if (uri != null &&
+        uri.scheme == legacyScheme &&
+        uri.host == _host &&
+        uri.port == legacyPort &&
+        uri.userInfo.isEmpty &&
+        (uri.path.isEmpty || uri.path == '/') &&
+        !uri.hasQuery &&
+        !uri.hasFragment) {
+      return fallback;
+    }
+    return configured;
+  }
+
+  static const _ipRegex =
+      '((2[0-4]\\d|25[0-5]|[01]?\\d\\d?)\\.){3}(2[0-4]\\d|25[0-5]|[01]?\\d\\d?)';
 
   static bool get _isIP => RegExp(_ipRegex).hasMatch(_host);
 
@@ -79,32 +103,14 @@ class Config {
     return url ?? (_isIP ? "http://$_host:10009" : "https://$_host/chat");
   }
 
-  static String get appAuthUrl {
-    String? url;
-    var server = DataSp.getServerConfig();
-    if (null != server) {
-      url = server['authUrl'];
-    }
-    return url ?? (_isIP ? "http://$_host:10008" : "https://$_host/chat");
-  }
+  static String get appAuthUrl =>
+      _serviceUrl('authUrl', defaultChatApiUrl, 'http', 10008);
 
-  static String get imApiUrl {
-    String? url;
-    var server = DataSp.getServerConfig();
-    if (null != server) {
-      url = server['apiUrl'];
-    }
-    return url ?? (_isIP ? 'http://$_host:10002' : "https://$_host/api");
-  }
+  static String get imApiUrl =>
+      _serviceUrl('apiUrl', defaultIMApiUrl, 'http', 10002);
 
-  static String get imWsUrl {
-    String? url;
-    var server = DataSp.getServerConfig();
-    if (null != server) {
-      url = server['wsUrl'];
-    }
-    return url ?? (_isIP ? "ws://$_host:10001" : "wss://$_host/msg_gateway");
-  }
+  static String get imWsUrl =>
+      _serviceUrl('wsUrl', defaultIMWsUrl, 'ws', 10001);
 
   static int get logLevel {
     String? level;

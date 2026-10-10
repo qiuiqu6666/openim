@@ -44,7 +44,11 @@ class LegacyServerSnapshot {
     final uri = Uri.tryParse(server);
     return uri != null &&
         (uri.scheme == 'http' || uri.scheme == 'https') &&
-        uri.host == '129.226.192.93' &&
+        (uri.host == '129.226.192.93' ||
+            (uri.scheme == 'https' &&
+                uri.host == '99imapi.99chat.vip' &&
+                uri.port == 443 &&
+                (uri.path.isEmpty || uri.path == '/'))) &&
         uri.userInfo.isEmpty &&
         !uri.hasQuery &&
         !uri.hasFragment;

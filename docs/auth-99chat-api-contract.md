@@ -6,11 +6,13 @@
 
 | 服务 | 地址 |
 | --- | --- |
-| Chat API | `http://129.226.192.93:10008` |
-| OpenIM API | `http://129.226.192.93:10002` |
-| OpenIM WebSocket | `ws://129.226.192.93:10001` |
+| Chat API | `https://99chatapi.99chat.vip` |
+| OpenIM API | `https://99imapi.99chat.vip` |
+| OpenIM WebSocket | `wss://websocket.99chat.vip` |
 
-这些是默认配置；已有用户保存的服务器配置仍由现有配置流程读取。
+这些是默认配置。已保存的旧默认 IP 地址自动映射到对应域名，自定义服务器地址保留。
+WebSocket 使用 WSS。域名由服务器代理转发到原有本机服务端口，HTTPS 证书由代理自动管理。
+腾讯云直播回调为 `https://99chatapi.99chat.vip/group-live/api/v1/callbacks/tencent`，使用 POST。
 
 ## 已有参数可以支持的流程
 
