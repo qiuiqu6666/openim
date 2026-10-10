@@ -681,6 +681,84 @@ void main() {
     expect(logic.notAllowLookGroupMemberProfiles.value, isTrue);
   });
 
+  for (final viewer in [
+    GroupRoleLevel.member,
+    GroupRoleLevel.admin,
+    GroupRoleLevel.owner
+  ]) {
+    for (final target in [
+      GroupRoleLevel.member,
+      GroupRoleLevel.admin,
+      GroupRoleLevel.owner
+    ]) {
+      testWidgets('protected group add entry and application $viewer/$target',
+          (tester) async {
+        await open(tester);
+        logic.userInfo.update((user) => user?.allowAddFriend = 1);
+        protection.protect.value = true;
+        await protection.refresh();
+        im.memberInfoChangedSubject.add(GroupMembersInfo(
+            groupID: _group, userID: 'im_me', roleLevel: viewer));
+        im.memberInfoChangedSubject.add(GroupMembersInfo(
+            groupID: _group, userID: _peer, roleLevel: target));
+        await tester.pump();
+        final allowed =
+            viewer != GroupRoleLevel.member || target != GroupRoleLevel.member;
+        expect(logic.showFriendAddEntry, allowed);
+        expect(logic.notAllowAddGroupMemberFriend.value, !allowed);
+        logic.addFriend();
+        await tester.pumpAndSettle();
+        if (allowed) {
+          expect(applications.single['userID'], _peer);
+          expect(applications.single['friendGroupID'], _group);
+          expect(
+              applications.single['addSource'],
+              viewer == GroupRoleLevel.member
+                  ? FriendAddSource.group
+                  : FriendAddSource.manage);
+        } else {
+          expect(applications, isEmpty);
+        }
+      });
+    }
+  }
+
+  testWidgets('target demotion revokes entry while profile stays open',
+      (tester) async {
+    await open(tester);
+    logic.userInfo.update((user) => user?.allowAddFriend = 1);
+    protection.protect.value = true;
+    await protection.refresh();
+    im.memberInfoChangedSubject.add(GroupMembersInfo(
+        groupID: _group, userID: _peer, roleLevel: GroupRoleLevel.admin));
+    await tester.pump();
+    expect(logic.showFriendAddEntry, isTrue);
+    im.memberInfoChangedSubject.add(GroupMembersInfo(
+        groupID: _group, userID: _peer, roleLevel: GroupRoleLevel.member));
+    await tester.pump();
+    expect(logic.showFriendAddEntry, isFalse);
+    logic.addFriend();
+    await tester.pumpAndSettle();
+    expect(applications, isEmpty);
+  });
+
+  testWidgets('confirmed manager can add before SDK role cache loads',
+      (tester) async {
+    await open(tester);
+    logic.userInfo.update((user) => user?.allowAddFriend = 1);
+    protection.protect.value = true;
+    protection.canManage.value = true;
+    await protection.refresh();
+    expect(logic.showFriendAddEntry, isTrue);
+    expect(logic.friendAddRequestSource, FriendAddSource.manage);
+    // An explicit, newer SDK downgrade overrides an older HTTP response.
+    im.memberInfoChangedSubject.add(GroupMembersInfo(
+        groupID: _group, userID: 'im_me', roleLevel: GroupRoleLevel.member));
+    await tester.pump();
+    expect(logic.showFriendAddEntry, isFalse);
+    expect(logic.friendAddRequestSource, FriendAddSource.group);
+  });
+
   testWidgets('privacy update clears account without a member version change',
       (tester) async {
     await open(tester);

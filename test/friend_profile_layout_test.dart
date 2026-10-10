@@ -66,6 +66,11 @@ class ProfileFixture extends GetxController implements UserProfilePanelLogic {
   @override
   bool get isAllowAddFriend => allowAdd;
   @override
+  bool get showFriendAddEntry =>
+      !isFriendship &&
+      (allowAdd ||
+          (group && (iAmOwner.value || iHaveAdminOrOwnerPermission.value)));
+  @override
   bool get allowSendMsgNotFriend => true;
   @override
   void addFriend() => action = 'add';

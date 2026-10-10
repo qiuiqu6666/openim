@@ -71,6 +71,17 @@ class ProfilePanelFixture extends GetxController
   @override
   bool get isAllowAddFriend => userInfo.value.allowAddFriend == 1;
   @override
+  bool get showFriendAddEntry =>
+      !isMyself &&
+      !isFriendship &&
+      hasActiveGroupMemberContext &&
+      ((isGroupMemberPage &&
+              (iAmOwner.value || iHaveAdminOrOwnerPermission.value)) ||
+          (isAllowAddFriend &&
+              (!isGroupMemberPage ||
+                  forceCanAdd == true ||
+                  !notAllowAddGroupMemberFriend.value)));
+  @override
   bool get allowSendMsgNotFriend => allowMessaging;
   @override
   bool? forceCanAdd = false;

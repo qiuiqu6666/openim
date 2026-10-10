@@ -41,16 +41,7 @@ class UserProfilePanelPage extends StatelessWidget {
         final ready = logic.profileLayoutReady.value;
         final canChat = !logic.isMyself &&
             (logic.isFriendship || logic.allowSendMsgNotFriend);
-        final groupManager = logic.isGroupMemberPage &&
-            (logic.iAmOwner.value || logic.iHaveAdminOrOwnerPermission.value);
-        final canAdd = !logic.isMyself &&
-            !logic.isFriendship &&
-            logic.hasActiveGroupMemberContext &&
-            (groupManager ||
-                (logic.isAllowAddFriend &&
-                    (!logic.isGroupMemberPage ||
-                        logic.forceCanAdd == true ||
-                        !logic.notAllowAddGroupMemberFriend.value)));
+        final canAdd = logic.showFriendAddEntry;
         final background = UserProfileTokens.background(context);
         final friend = logic.isFriendship && !logic.isMyself;
         return Scaffold(
