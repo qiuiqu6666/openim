@@ -26,6 +26,7 @@ import 'deletion/conversation_deletion_guard.dart';
 import 'drafts/conversation_draft_text.dart';
 import 'legacy_cleanup/legacy_service_conversation_cleanup.dart';
 import 'group_identity/legacy_group_conversation_migration.dart';
+import 'group_identity/legacy_group_conversation_projection.dart';
 import 'summary/conversation_latest_message_text.dart';
 
 class ConversationLogic extends GetxController with WidgetsBindingObserver {
@@ -60,6 +61,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final _changesDuringRead = <String, ConversationInfo?>{};
   final _deletions = ConversationDeletionGuard();
   final _readProjection = ConversationReadProjection();
+  final _groupProjection = LegacyGroupConversationProjection();
   final LegacyServiceConversationCleanup _legacyCleanup;
   final LegacyGroupConversationMigration _groupMigration;
   bool get _sessionActive =>
@@ -163,6 +165,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     _changesDuringRead.clear();
     _deletions.clear();
     _readProjection.clear();
+    _groupProjection.clear();
     WidgetsBinding.instance.removeObserver(this);
     _businessSubscription?.cancel();
     for (final subscription in _subscriptions) {
@@ -267,11 +270,11 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     for (final info in accepted) {
       currentByID[info.conversationID] = info;
     }
-    final merged = currentByID.values.toList();
+    final merged = _groupProjection.project(currentByID.values);
     OpenIM.iMManager.conversationManager.simpleSort(merged);
     list.value = merged;
     groupFeatures.hydrate(
-        accepted.where((info) => info.isGroupChat).map((info) => info.groupID));
+        merged.where((info) => info.isGroupChat).map((info) => info.groupID));
   }
 
   String getConversationID(ConversationInfo info) {
@@ -521,7 +524,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       final currentByID = {
         for (final info in list) info.conversationID: info,
       };
-      final merged = byID.values
+      final merged = _groupProjection.project(byID.values)
           .map((info) => _readProjection.project(info,
               current: currentByID[info.conversationID]))
           .toList();
@@ -569,12 +572,12 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       final currentByID = {
         for (final info in list) info.conversationID: info,
       };
-      list.value = result
+      list.value = _groupProjection.project(result)
           .map((info) => _readProjection.project(info,
               current: currentByID[info.conversationID]))
           .toList();
       groupFeatures.hydrate(
-          result.where((info) => info.isGroupChat).map((info) => info.groupID));
+          list.where((info) => info.isGroupChat).map((info) => info.groupID));
       _sortConversationList();
     } else {
       await _loadConversationList(firstPageOnly: true);
@@ -593,6 +596,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     _changesDuringRead.clear();
     _deletions.clear();
     _readProjection.clear();
+    _groupProjection.clear();
     list.clear();
     folders.clear();
     states.clear();
