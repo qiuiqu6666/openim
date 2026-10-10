@@ -14,7 +14,7 @@ String chatQuoteSummary(Message? message) {
   final summary = fund?.isPacket == true
       ? '[${fund!.typeLabel}] ${fund.remark}'
       : IMUtils.parseMsg(message);
-  final normalized = summary.replaceAll(RegExp(r'\s+'), ' ').trim();
+  final normalized = graphemeTrim(graphemeCollapseWhitespace(summary));
   return normalized.isEmpty ? StrRes.message : normalized;
 }
 
@@ -33,7 +33,7 @@ class ChatQuoteContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = message?.senderNickname?.trim() ?? '';
+    final name = graphemeTrim(message?.senderNickname ?? '');
     final sender = name.isNotEmpty ? name : message?.sendID ?? StrRes.message;
     final title = replyLabel ? '${StrRes.reply} $sender' : sender;
     final summary = chatQuoteSummary(message);

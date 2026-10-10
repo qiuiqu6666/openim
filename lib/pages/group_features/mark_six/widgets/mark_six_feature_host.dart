@@ -4,10 +4,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/group_feature_context.dart';
 import '../data/mark_six_controller.dart';
 import '../data/mark_six_repository.dart';
+import '../data/diagnostics/mark_six_api_debug_log.dart';
+import '../agent/binding/robot_group_binding_controller.dart';
 import '../mark_six_module.dart';
 import 'mark_six_drawer.dart';
 import 'mark_six_style.dart';
@@ -28,6 +31,7 @@ class MarkSixFeatureHost extends StatefulWidget {
 
 class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
   late MarkSixController _controller;
+  RobotGroupBindingController? _robotBinding;
   double _verticalPosition = .3;
   bool _drawerOpen = false;
   VoidCallback? _dismissDrawer;
@@ -53,13 +57,44 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
   void initState() {
     super.initState();
     _controller = MarkSixController(MarkSixRepository(widget.featureContext));
+    _attachRobotBinding();
+  }
+
+  void _attachRobotBinding() {
+    _robotBinding?.removeListener(_robotBindingChanged);
+    _robotBinding?.dispose();
+    _robotBinding = null;
+    MarkSixApiDebugLog.event('群入口检查', {
+      'groupId': widget.featureContext.groupID,
+      'gameType': widget.featureContext.gameType.index,
+      'queryRobotBinding':
+          widget.featureContext.gameType == GroupGameType.markSixAgent,
+    });
+    if (widget.featureContext.gameType != GroupGameType.markSixAgent) return;
+    final binding =
+        _robotBinding = RobotGroupBindingController(widget.featureContext);
+    binding.addListener(_robotBindingChanged);
+    unawaited(binding.load());
+  }
+
+  void _robotBindingChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void didUpdateWidget(covariant MarkSixFeatureHost oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final old = oldWidget.featureContext, next = widget.featureContext;
+    if (old.groupID != next.groupID ||
+        old.currentUserID != next.currentUserID ||
+        old.gameType != next.gameType ||
+        !identical(old.api, next.api) ||
+        !old.sessionCurrent()) {
+      _attachRobotBinding();
+    }
     if (_contextKey(oldWidget.featureContext) !=
             _contextKey(widget.featureContext) ||
+        !identical(old.api, next.api) ||
         !oldWidget.featureContext.sessionCurrent()) {
       final retired = _controller;
       final dismiss = _dismissDrawer;
@@ -77,6 +112,8 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
 
   @override
   void dispose() {
+    _robotBinding?.removeListener(_robotBindingChanged);
+    _robotBinding?.dispose();
     final dismiss = _dismissDrawer;
     if (dismiss != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => dismiss());
@@ -90,19 +127,23 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
     final c = widget.featureContext;
     final feature = c.features.markSix;
     final cap = c.capabilities.markSix;
+    final robotAgentGroup = c.gameType == GroupGameType.markSixAgent;
     final enabled = c.sessionCurrent() && feature.enabled;
     final draw = c.showMarkSixDrawHistory &&
         (c.gameType == GroupGameType.markSix ||
             _controller.repository.machineCode.isNotEmpty);
-    final agent = enabled &&
+    final agent = c.sessionCurrent() &&
         c.capabilitiesCurrent() &&
-        feature.agentEntry &&
+        (robotAgentGroup || (enabled && feature.agentEntry)) &&
         cap.canOpenAgent;
-    final history = enabled &&
+    final history = c.sessionCurrent() &&
         c.capabilitiesCurrent() &&
-        feature.rebateHistoryEntry &&
+        (robotAgentGroup || (enabled && feature.rebateHistoryEntry)) &&
         cap.canViewRebateHistory;
-    final overlay = !draw && !agent && !history
+    final showAgent = robotAgentGroup
+        ? c.sessionCurrent() && (_robotBinding?.bound ?? false)
+        : agent || history;
+    final overlay = !draw && !showAgent
         ? const SizedBox.shrink()
         : Positioned.fill(child: LayoutBuilder(builder: (context, constraints) {
             if (!constraints.hasBoundedHeight || !constraints.hasBoundedWidth) {
@@ -177,7 +218,7 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
                                         child: Icon(Icons.chevron_left_rounded,
                                             size: 28,
                                             color: style.secondary))))))),
-              if (agent || history)
+              if (showAgent)
                 _AgentFloatingEntry(
                     key: ValueKey(
                         'mark-six-agent-${c.currentUserID}-${c.groupID}'),
@@ -257,6 +298,10 @@ class _AgentFloatingEntryState extends State<_AgentFloatingEntry> {
   }
 
   void _toggle() {
+    if (!widget.canAgent && !widget.canHistory) {
+      IMViews.showToast('暂无代理功能权限');
+      return;
+    }
     setState(() => _expanded = !_expanded);
     unawaited(_save());
   }
@@ -314,7 +359,8 @@ class _AgentFloatingEntryState extends State<_AgentFloatingEntry> {
                         child: SingleChildScrollView(
                             child: Column(
                                 mainAxisSize: MainAxisSize.min,
-                                children: !_expanded
+                                children: !_expanded ||
+                                        (!widget.canAgent && !widget.canHistory)
                                     ? [_button(context, '显', '展开代理功能', _toggle)]
                                     : [
                                         if (widget.canAgent) ...[

@@ -158,7 +158,7 @@ class _ArchiveLogic extends GetxController
   }
 
   @override
-  Future<void> deleteConversation(ConversationInfo info) async {
+  Future<void> deleteConversation(ConversationInfo info, {bool propagateError = false}) async {
     list.removeWhere((item) => item.conversationID == info.conversationID);
     states.remove(info.conversationID);
   }

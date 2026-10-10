@@ -18,7 +18,7 @@ class SetFriendRemarkLogic extends GetxController {
 
   void save() async {
     if (isClosed) return;
-    final remark = inputCtrl.text.trim();
+    final remark = graphemeTrim(inputCtrl.text);
     // Showing a nickname as a hint must not create a friend remark.
     if (remark == _originalRemark) {
       Get.back();
@@ -45,7 +45,7 @@ class SetFriendRemarkLogic extends GetxController {
   void onInit() {
     final user = userProfilesLogic.userInfo.value;
     inputCtrl = TextEditingController(text: user.remark);
-    _originalRemark = inputCtrl.text.trim();
+    _originalRemark = graphemeTrim(inputCtrl.text);
     super.onInit();
   }
 

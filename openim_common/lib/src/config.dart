@@ -57,7 +57,8 @@ class Config {
 
   static const _host = "129.226.192.93";
 
-  static const _ipRegex = '((2[0-4]\\d|25[0-5]|[01]?\\d\\d?)\\.){3}(2[0-4]\\d|25[0-5]|[01]?\\d\\d?)';
+  static const _ipRegex =
+      '((2[0-4]\\d|25[0-5]|[01]?\\d\\d?)\\.){3}(2[0-4]\\d|25[0-5]|[01]?\\d\\d?)';
 
   static bool get _isIP => RegExp(_ipRegex).hasMatch(_host);
 
@@ -85,7 +86,8 @@ class Config {
     if (null != server) {
       url = server['authUrl'];
     }
-    return url ?? (_isIP ? "http://$_host:10008" : "https://$_host/chat");
+    return _currentEndpoint(
+        url, 'http://$_host:10008', 'https://99chatapi.99chat.vip');
   }
 
   static String get imApiUrl {
@@ -94,7 +96,8 @@ class Config {
     if (null != server) {
       url = server['apiUrl'];
     }
-    return url ?? (_isIP ? 'http://$_host:10002' : "https://$_host/api");
+    return _currentEndpoint(
+        url, 'http://$_host:10002', 'https://99imapi.99chat.vip');
   }
 
   static String get imWsUrl {
@@ -103,7 +106,20 @@ class Config {
     if (null != server) {
       url = server['wsUrl'];
     }
-    return url ?? (_isIP ? "ws://$_host:10001" : "wss://$_host/msg_gateway");
+    return _currentEndpoint(
+        url, 'ws://$_host:10001', 'wss://websocket.99chat.vip');
+  }
+
+  // Upgrade saved defaults too, while preserving explicitly configured servers.
+  static String _currentEndpoint(
+      String? saved, String previous, String current) {
+    final value = saved?.trim();
+    if (value == null ||
+        value.isEmpty ||
+        value.replaceFirst(RegExp(r'/+$'), '') == previous) {
+      return current;
+    }
+    return value;
   }
 
   static int get logLevel {

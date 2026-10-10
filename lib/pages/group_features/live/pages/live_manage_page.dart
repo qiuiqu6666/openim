@@ -12,6 +12,7 @@ import '../models/live_errors.dart';
 import '../models/live_models.dart';
 import '../models/live_summary_events.dart';
 import '../widgets/live_style.dart';
+import '../widgets/live_sheet_surface.dart';
 import '../widgets/live_obs_guide.dart';
 import 'live_member_picker.dart';
 import 'live_push_page.dart';
@@ -166,26 +167,28 @@ class _LiveManagePageState extends State<LiveManagePage>
     final at = await showModalBottomSheet<DateTime>(
         context: context,
         useSafeArea: true,
-        backgroundColor: LiveStyle.card(context),
-        builder: (sheetContext) => SizedBox(
-            height: 310,
-            child: Column(children: [
-              Row(children: [
-                TextButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('取消')),
-                const Spacer(),
-                TextButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(selected),
-                    child: const Text('完成'))
-              ]),
-              Expanded(
-                  child: CupertinoDatePicker(
-                      initialDateTime: selected,
-                      minimumDate: minimum,
-                      use24hFormat: true,
-                      onDateTimeChanged: (value) => selected = value))
-            ])));
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) => LiveSheetSurface(
+            child: SizedBox(
+                height: 310,
+                child: Column(children: [
+                  Row(children: [
+                    TextButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: const Text('取消')),
+                    const Spacer(),
+                    TextButton(
+                        onPressed: () =>
+                            Navigator.of(sheetContext).pop(selected),
+                        child: const Text('完成'))
+                  ]),
+                  Expanded(
+                      child: CupertinoDatePicker(
+                          initialDateTime: selected,
+                          minimumDate: minimum,
+                          use24hFormat: true,
+                          onDateTimeChanged: (value) => selected = value))
+                ]))));
     if (current && at != null) {
       setState(() {
         _scheduled = at;
@@ -700,7 +703,7 @@ class _LiveManagePageState extends State<LiveManagePage>
                             disabledBorder: InputBorder.none,
                             contentPadding:
                                 const EdgeInsets.symmetric(vertical: 16)))),
-                Text('${controller.text.length}/$maxLength',
+                Text('${controller.text.characters.length}/$maxLength',
                     style: const TextStyle(
                         fontSize: 12, color: Color(0xFFC0C4CC))),
               ])));

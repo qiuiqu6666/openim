@@ -7,6 +7,7 @@ import 'controller/app_controller.dart';
 import 'conversation_reads/conversation_read_request.dart';
 import '../services/chat_history_cache.dart';
 import '../services/fund/fund_refresh_events.dart';
+import '../pages/ai_assistant/streaming/diagnostics/assistant_stream_log.dart';
 
 enum IMSdkStatus {
   connectionFailed,
@@ -49,9 +50,11 @@ mixin IMCallback {
 
   Function(int current, int size)? onUploadProgress;
 
-  final conversationAddedSubject = BehaviorSubject<List<ConversationInfo>>();
+  // Incremental notifications must never replay into a later account or route.
+  // Each screen obtains its initial snapshot from the current SDK session.
+  final conversationAddedSubject = PublishSubject<List<ConversationInfo>>();
 
-  final conversationChangedSubject = BehaviorSubject<List<ConversationInfo>>();
+  final conversationChangedSubject = PublishSubject<List<ConversationInfo>>();
 
   final conversationReadRequestSubject =
       PublishSubject<ConversationReadRequest>(sync: true);
@@ -59,36 +62,35 @@ mixin IMCallback {
   final unreadMsgCountEventSubject = PublishSubject<int>();
 
   final friendApplicationChangedSubject =
-      BehaviorSubject<FriendApplicationInfo>();
+      PublishSubject<FriendApplicationInfo>();
 
-  final friendAddSubject = BehaviorSubject<FriendInfo>();
+  final friendAddSubject = PublishSubject<FriendInfo>();
 
-  final friendDelSubject = BehaviorSubject<FriendInfo>();
+  final friendDelSubject = PublishSubject<FriendInfo>();
 
   final friendInfoChangedSubject = PublishSubject<FriendInfo>();
 
   final blacklistChangedSubject = PublishSubject<BlacklistInfo>();
 
-  final selfInfoUpdatedSubject = BehaviorSubject<UserInfo>();
+  final selfInfoUpdatedSubject = PublishSubject<UserInfo>();
 
-  final userStatusChangedSubject = BehaviorSubject<UserStatusInfo>();
+  final userStatusChangedSubject = PublishSubject<UserStatusInfo>();
 
-  final groupInfoUpdatedSubject = BehaviorSubject<GroupInfo>();
+  final groupInfoUpdatedSubject = PublishSubject<GroupInfo>();
 
-  final groupApplicationChangedSubject =
-      BehaviorSubject<GroupApplicationInfo>();
+  final groupApplicationChangedSubject = PublishSubject<GroupApplicationInfo>();
 
   final initializedSubject = PublishSubject<bool>();
 
-  final memberAddedSubject = BehaviorSubject<GroupMembersInfo>();
+  final memberAddedSubject = PublishSubject<GroupMembersInfo>();
 
-  final memberDeletedSubject = BehaviorSubject<GroupMembersInfo>();
+  final memberDeletedSubject = PublishSubject<GroupMembersInfo>();
 
   final memberInfoChangedSubject = PublishSubject<GroupMembersInfo>();
 
-  final joinedGroupDeletedSubject = BehaviorSubject<GroupInfo>();
+  final joinedGroupDeletedSubject = PublishSubject<GroupInfo>();
 
-  final joinedGroupAddedSubject = BehaviorSubject<GroupInfo>();
+  final joinedGroupAddedSubject = PublishSubject<GroupInfo>();
 
   final onKickedOfflineSubject = PublishSubject<KickoffType>();
 
@@ -126,8 +128,8 @@ mixin IMCallback {
     onKickedOfflineSubject.add(KickoffType.userTokenInvalid);
   }
 
-  void selfInfoUpdated(UserInfo u) {
-    selfInfoUpdatedSubject.addSafely(u);
+  void selfInfoUpdated(UserInfo user) {
+    selfInfoUpdatedSubject.addSafely(user);
   }
 
   void userStausChanged(UserStatusInfo u) {
@@ -139,7 +141,7 @@ mixin IMCallback {
   }
 
   void recvMessageRevoked(RevokedInfo info) {
-    ChatHistoryCache.removeMessage(OpenIM.iMManager.userID, info.clientMsgID);
+    ChatHistoryCache.revokeMessage(OpenIM.iMManager.userID, info);
     revokedMessages.addSafely(info);
     onRecvMessageRevoked?.call(info);
   }
@@ -155,6 +157,8 @@ mixin IMCallback {
   }
 
   void recvNewMessage(Message msg) {
+    AssistantStreamLog.received(msg,
+        source: 'normal', hasReceiver: onRecvNewMessage != null);
     receivedMessages.addSafely(msg);
     FundRefreshEvents.observeMessage(msg);
     if (msg.contentType == MessageType.custom &&
@@ -167,6 +171,8 @@ mixin IMCallback {
   }
 
   void recvOfflineMessage(Message msg) {
+    AssistantStreamLog.received(msg,
+        source: 'offline', hasReceiver: onRecvNewMessage != null);
     receivedMessages.addSafely(msg);
     FundRefreshEvents.observeMessage(msg);
     if (msg.contentType == MessageType.custom &&

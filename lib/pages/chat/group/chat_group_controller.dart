@@ -72,6 +72,7 @@ class ChatGroupController {
   final memberUpdateInfoMap = <String, GroupMembersInfo>{};
   final _removedMemberIDs = <String>{};
   final groupMemberRoleLevel = GroupRoleLevel.member.obs;
+  final _adminListLoaded = false.obs;
   final isInGroup = true.obs;
   final memberCount = 0.obs;
   final announcement = ''.obs;
@@ -86,14 +87,34 @@ class ChatGroupController {
   int _profileRevision = 0;
   int _selfRevision = 0;
   int _adminRevision = 0;
-  int _memberActionRevision = 0;
+  final _memberActionRevision = 0.obs;
   final _adminChanges = <String, (int, GroupMembersInfo?)>{};
 
   bool get isClosed => _closed;
 
   /// Invalidates avatar permission reads when SDK membership or roles change.
-  int get memberActionRevision => _memberActionRevision;
+  int get memberActionRevision => _memberActionRevision.value;
   bool hasMemberLeft(String userID) => _removedMemberIDs.contains(userID);
+
+  /// Unknown roles stay unavailable until the complete owner/admin list loads.
+  /// This getter observes role updates used by reactive message menus.
+  int? memberRoleFor(String userID) {
+    _memberActionRevision.value;
+    final loaded = _adminListLoaded.value;
+    if (hasMemberLeft(userID) || !isInGroup.value) return null;
+    if (userID == currentUserID()) {
+      final role = groupMemberRoleLevel.value;
+      return groupMembersInfo == null ? null : role;
+    }
+    if (userID == groupOwnerID) return GroupRoleLevel.owner;
+    final known = ownerAndAdmin.firstWhereOrNull((m) => m.userID == userID);
+    return known != null
+        ? known.roleLevel
+        : (loaded
+            ? GroupRoleLevel.member
+            : memberUpdateInfoMap[userID]?.roleLevel);
+  }
+
   bool get isGroupChat => groupID()?.trim().isNotEmpty == true;
   bool get isInvalidGroup => isGroupChat && !isInGroup.value;
   bool get isAdminOrOwner =>
@@ -122,7 +143,8 @@ class ChatGroupController {
     _subscriptions.addAll([
       _events.joined.listen((info) {
         if (!_matches(info.groupID)) return;
-        _memberActionRevision++;
+        _memberActionRevision.value++;
+        _adminListLoaded.value = false;
         _removedMemberIDs.clear();
         _membershipRevision++;
         isInGroup.value = true;
@@ -133,14 +155,20 @@ class ChatGroupController {
       }),
       _events.memberAdded.listen((info) {
         if (!_matches(info.groupID)) return;
-        _memberActionRevision++;
+        _memberActionRevision.value++;
         _removedMemberIDs.remove(info.userID);
         _putMemberInfo(info);
+        final memberID = info.userID;
+        if (memberID != null &&
+            [GroupRoleLevel.member, GroupRoleLevel.admin, GroupRoleLevel.owner]
+                .contains(info.roleLevel)) {
+          _recordAdminChange(memberID, info);
+        }
         messages.refresh();
       }),
       _events.memberDeleted.listen((info) {
         if (!_matches(info.groupID)) return;
-        _memberActionRevision++;
+        _memberActionRevision.value++;
         final id = info.userID;
         if (id != null) {
           _removedMemberIDs.add(id);
@@ -148,13 +176,15 @@ class ChatGroupController {
           memberUpdateInfoMap.remove(id);
         }
         if (info.userID == currentUserID()) _leaveGroup();
+        messages.refresh();
       }),
       _events.memberChanged.listen(_onMemberChanged),
       _events.groupChanged.listen((info) {
         if (!_matches(info.groupID)) return;
-        _memberActionRevision++;
+        _memberActionRevision.value++;
         _profileRevision++;
         _applyGroupInfo(info);
+        messages.refresh();
       }),
     ]);
   }
@@ -171,9 +201,10 @@ class ChatGroupController {
       membership == _membershipRevision;
 
   void _leaveGroup() {
-    _memberActionRevision++;
+    _memberActionRevision.value++;
     _membershipRevision++;
     isInGroup.value = false;
+    _adminListLoaded.value = false;
     clearInput();
   }
 
@@ -260,6 +291,8 @@ class ChatGroupController {
           _applyAdminChange(entry.key, entry.value.$2);
         }
       }
+      _adminListLoaded.value = true;
+      messages.refresh();
     } catch (error) {
       if (_queryStillCurrent(id, userID, membership)) _report(error);
     }
@@ -285,7 +318,7 @@ class ChatGroupController {
 
   void _onMemberChanged(GroupMembersInfo info) {
     if (!_matches(info.groupID)) return;
-    _memberActionRevision++;
+    _memberActionRevision.value++;
     if (info.userID == currentUserID()) {
       _selfRevision++;
       groupMembersInfo = info;

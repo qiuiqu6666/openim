@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
@@ -129,8 +129,14 @@ void main() {
   setUpAll(() async {
     directory = await Directory.systemTemp.createTemp('chat-history-assets-');
     imagePath = '${directory.path}/thumbnail.png';
-    await File(imagePath).writeAsBytes(base64Decode(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a/q8AAAAASUVORK5CYII='));
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder).drawColor(Colors.blue, BlendMode.src);
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(2, 2);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    await File(imagePath).writeAsBytes(bytes!.buffer.asUint8List());
+    image.dispose();
+    picture.dispose();
   });
   tearDownAll(() async {
     // Image decoding can briefly retain the Windows fixture handle.

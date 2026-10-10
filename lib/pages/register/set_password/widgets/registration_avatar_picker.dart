@@ -40,7 +40,8 @@ class RegistrationAvatarPicker extends StatelessWidget {
               child: CircleAvatar(
                 key: const ValueKey('registration-avatar-preview'),
                 radius: RegistrationReferenceTokens.avatarRadius,
-                backgroundColor: AuthReferenceTokens.ink100,
+                backgroundColor: AuthReferenceTokens.color(
+                    context, AuthReferenceTokens.ink100),
                 backgroundImage: bytes == null ? null : MemoryImage(bytes!),
                 child: picking
                     ? const SizedBox(
@@ -50,9 +51,10 @@ class RegistrationAvatarPicker extends StatelessWidget {
                             color: AuthReferenceTokens.brand500),
                       )
                     : bytes == null
-                        ? const Icon(Icons.add_a_photo_outlined,
+                        ? Icon(Icons.add_a_photo_outlined,
                             size: RegistrationReferenceTokens.avatarIconSize,
-                            color: AuthReferenceTokens.link)
+                            color: AuthReferenceTokens.color(
+                                context, AuthReferenceTokens.link))
                         : null,
               ),
             ),
@@ -60,8 +62,9 @@ class RegistrationAvatarPicker extends StatelessWidget {
           TextButton(
             key: const ValueKey('registration-avatar-action'),
             onPressed: callback,
-            style:
-                TextButton.styleFrom(foregroundColor: AuthReferenceTokens.link),
+            style: TextButton.styleFrom(
+                foregroundColor: AuthReferenceTokens.color(
+                    context, AuthReferenceTokens.link)),
             child: Text(label),
           ),
         ],

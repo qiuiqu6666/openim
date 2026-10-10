@@ -24,6 +24,26 @@ enum SelAction {
 
 class SelectContactsLogic extends GetxController
     implements OrganizationMultiSelBridge {
+  SelectContactsLogic()
+      : _onPicked = null,
+        _selectionCurrent = null;
+
+  /// Reuses the existing single-contact/group pages without a send dialog.
+  /// This controller is owned by the caller, not registered over an active
+  /// forwarding controller in Get's global registry.
+  SelectContactsLogic.single({
+    required ValueChanged<Object> onPicked,
+    required bool Function() isCurrent,
+  })  : _onPicked = onPicked,
+        _selectionCurrent = isCurrent {
+    action = SelAction.carte;
+    openSelectedSheet = false;
+  }
+
+  final ValueChanged<Object>? _onPicked;
+  final bool Function()? _selectionCurrent;
+  bool get isSingleSelection => _onPicked != null;
+  bool get selectionCurrent => !isClosed && (_selectionCurrent?.call() ?? true);
   final checkedList = <String, dynamic>{}.obs;
   final defaultCheckedIDList = <String>{}.obs;
   List<String>? excludeIDList;
@@ -44,6 +64,10 @@ class SelectContactsLogic extends GetxController
 
   @override
   void onInit() {
+    if (isSingleSelection) {
+      super.onInit();
+      return;
+    }
     action = Get.arguments['action'];
     groupID = Get.arguments['groupID'];
     excludeIDList = Get.arguments['excludeIDList'];
@@ -91,15 +115,19 @@ class SelectContactsLogic extends GetxController
   bool get _selectingGroupMembers =>
       action == SelAction.crateGroup || action == SelAction.addMember;
 
-  bool allowsSelection(Object? info) => _selectingGroupMembers
-      ? ContactSelectionPolicy.allowsGroupMember(info)
-      : ContactSelectionPolicy.allows(info);
+  bool allowsSelection(Object? info) => isSingleSelection
+      ? selectionCurrent && parseID(info)?.trim().isNotEmpty == true
+      : _selectingGroupMembers
+          ? ContactSelectionPolicy.allowsGroupMember(info)
+          : ContactSelectionPolicy.allows(info);
 
-  bool allowsUserID(String userID) => _selectingGroupMembers
-      ? ContactSelectionPolicy.allowsGroupMemberUserID(userID)
-      : ContactSelectionPolicy.allowsUserID(userID);
+  bool allowsUserID(String userID) => isSingleSelection
+      ? selectionCurrent && userID.trim().isNotEmpty
+      : _selectingGroupMembers
+          ? ContactSelectionPolicy.allowsGroupMemberUserID(userID)
+          : ContactSelectionPolicy.allowsUserID(userID);
 
-  bool isVisible(Object? info) => _selectingGroupMembers
+  bool isVisible(Object? info) => isSingleSelection || _selectingGroupMembers
       ? allowsSelection(info)
       : ContactSelectionPolicy.allowsVisible(info,
           showNotificationAccounts: action == SelAction.forward);
@@ -300,6 +328,10 @@ class SelectContactsLogic extends GetxController
 
   Future<void> confirmSelectedItem(dynamic info) async {
     if (!allowsSelection(info)) return;
+    if (isSingleSelection) {
+      _onPicked!(info as Object);
+      return;
+    }
     if (action == SelAction.carte) {
       if (isClosed ||
           _confirmingCard ||

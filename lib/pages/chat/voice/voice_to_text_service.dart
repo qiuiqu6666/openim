@@ -386,8 +386,8 @@ class VoiceToTextService {
     if (data is! Map || data['text'] is! String) {
       throw const VoiceToTextException('voiceToTextFailed');
     }
-    final text = (data['text'] as String).trim();
-    if (text.isEmpty) {
+    final text = data['text'] as String;
+    if (text.trim().isEmpty) {
       throw const VoiceToTextException('voiceToTextEmpty');
     }
     return text;

@@ -30,9 +30,10 @@ class _FolderNameDialogState extends State<FolderNameDialog> {
 
   void _submit() {
     if (_closing || !mounted) return;
-    final name = _controller.text.trim();
+    final name = graphemeTrim(_controller.text);
     if (name.isEmpty) return;
-    final error = widget.validator?.call(name)?.trim();
+    final rawError = widget.validator?.call(name);
+    final error = rawError == null ? null : graphemeTrim(rawError);
     if (error != null && error.isNotEmpty) {
       setState(() => _error = error);
       return;

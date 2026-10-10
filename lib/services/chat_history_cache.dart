@@ -1,4 +1,5 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'chat_revocation_notice.dart';
 
 /// Small, process-local first-page snapshots, isolated by signed-in IM account.
 /// Private/expiring messages are always obtained afresh from the SDK.
@@ -7,6 +8,28 @@ class ChatHistoryCache {
   static const _maxMessages = 40;
   static final _entries = <(String, String), List<Message>>{};
   static final _removedMessages = <(String, String)>{};
+  static final _revocations = <(String, String), RevokedInfo>{};
+
+  static void revokeMessage(String accountID, RevokedInfo info) {
+    final id = info.clientMsgID;
+    if (id == null || id.isEmpty) return;
+    _revocations[(accountID, id)] = info;
+    while (_revocations.length > 1024) {
+      _revocations.remove(_revocations.keys.first);
+    }
+    for (final entry in _entries.entries) {
+      if (entry.key.$1 != accountID) continue;
+      for (var i = 0; i < entry.value.length; i++) {
+        entry.value[i] = applyRevocation(accountID, entry.value[i]);
+      }
+    }
+  }
+
+  static Message applyRevocation(String accountID, Message message) {
+    final info = _revocations[(accountID, message.clientMsgID)];
+    return info == null ? message : ChatRevocationNotice.replace(message, info);
+  }
+
   static int _epoch = 0;
   static int _nextRevision = 0;
   static int _revisionFloor = 0;
@@ -30,7 +53,7 @@ class ChatHistoryCache {
         m.attachedInfoElem?.isPrivateChat == true ||
         isRemoved(accountID, m.clientMsgID));
     if (cached.isNotEmpty) _entries[key] = cached;
-    return List<Message>.of(cached);
+    return cached.map((m) => applyRevocation(accountID, m)).toList();
   }
 
   static void write(
@@ -51,6 +74,7 @@ class ChatHistoryCache {
             !isRemoved(accountID, m.clientMsgID) &&
             m.attachedInfoElem?.isPrivateChat != true &&
             m.contentType != MessageType.typing)
+        .map((m) => applyRevocation(accountID, m))
         .toList();
     if (safe.isNotEmpty) _entries[key] = safe;
     while (_entries.length > _maxConversations) {
@@ -94,6 +118,7 @@ class ChatHistoryCache {
     _epoch++;
     _entries.clear();
     _removedMessages.clear();
+    _revocations.clear();
     _conversationRevisions.clear();
     _nextRevision = _revisionFloor = 0;
     _latestSeedSafe = true;

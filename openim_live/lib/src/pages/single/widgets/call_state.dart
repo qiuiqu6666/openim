@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart' show ValueListenable;
 
 import 'package:flutter/material.dart';
@@ -17,7 +16,6 @@ import '../../../platform/call_picture_in_picture.dart';
 import '../../../session/single_call_session.dart';
 import '../../../widgets/call_compact_surface.dart';
 import '../../../widgets/call_surface/call_full_screen_surface.dart';
-import '../../../widgets/incoming_call/incoming_call_quick_answer_sheet.dart';
 import 'controls.dart';
 import 'participant.dart';
 
@@ -83,7 +81,6 @@ abstract class SignalState<T extends SignalView> extends State<T>
   bool minimize = false, enabledMicrophone = true, enabledSpeaker = true;
   bool _startedCalling = false, _cameraPaused = false;
   bool _backgrounded = false;
-  bool _quickAnswerExpanded = false;
   bool _incomingWaitingEnded = false;
   bool _smallScreenRemote = true;
   bool? _pipEnabled;
@@ -99,7 +96,6 @@ abstract class SignalState<T extends SignalView> extends State<T>
   void initState() {
     super.initState();
     roomID = widget.roomID;
-    widget.incomingCallPreferences?.addListener(_onIncomingPreferencesChanged);
     pictureInPicture = CallPictureInPictureController(
       onRestore: onTapMaximize,
       onClosed: () =>
@@ -138,23 +134,6 @@ abstract class SignalState<T extends SignalView> extends State<T>
       if (current) setState(() => userInfo = info);
     } catch (e) {
       Logger.print('Call profile unavailable: ${e.runtimeType}');
-    }
-  }
-
-  void _onIncomingPreferencesChanged() {
-    if (current) {
-      setState(() {});
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant T oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.incomingCallPreferences != widget.incomingCallPreferences) {
-      oldWidget.incomingCallPreferences
-          ?.removeListener(_onIncomingPreferencesChanged);
-      widget.incomingCallPreferences
-          ?.addListener(_onIncomingPreferencesChanged);
     }
   }
 
@@ -323,27 +302,15 @@ abstract class SignalState<T extends SignalView> extends State<T>
     ));
   }
 
-  Future<void> _enterPip() async {
-    final entered = await pictureInPicture.enter();
-    if (!mounted || !session.active) return;
-    if (!entered) {
-      IMViews.showToast(Localizations.localeOf(context).languageCode == 'zh'
-          ? '当前设备暂不支持画中画'
-          : 'Picture in Picture is unavailable');
-    }
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!session.active) return;
     if (state == AppLifecycleState.detached) {
       unawaited(endActive(reason: 'detached'));
     } else {
-      if (session.connected &&
-          state == AppLifecycleState.inactive &&
-          Platform.isIOS) {
-        unawaited(pictureInPicture.enter());
-      }
+      // Native Android / AVKit own PiP auto-entry on leaving the app.
+      // `inactive` alone also occurs for system dialogs and is not a request
+      // to send the user to the desktop or enter a system floating window.
       if (state == AppLifecycleState.paused) {
         _backgrounded = true;
         _updateBackgroundCamera();
@@ -356,8 +323,6 @@ abstract class SignalState<T extends SignalView> extends State<T>
 
   @override
   void dispose() {
-    widget.incomingCallPreferences
-        ?.removeListener(_onIncomingPreferencesChanged);
     WidgetsBinding.instance.removeObserver(this);
     _signalSubscription?.cancel();
     session.removeListener(_onSessionChanged);
@@ -380,25 +345,6 @@ abstract class SignalState<T extends SignalView> extends State<T>
     // Remove every call surface and its PopScope immediately, while keeping
     // the owner mounted until cleanup closes the call and releases admission.
     if (!session.active) return const SizedBox.shrink();
-    if (!minimize &&
-        !_quickAnswerExpanded &&
-        widget.initState == CallState.beCalled &&
-        callState == CallState.beCalled &&
-        widget.incomingCallPreferences?.value.quickAnswerPopup == true) {
-      return Stack(children: [
-        Positioned.fill(
-          child: IncomingCallQuickAnswerSheet(
-            key: const ValueKey('incoming-call-quick-answer'),
-            userID: widget.userID,
-            userInfo: userInfo,
-            callType: widget.callType,
-            onAccept: () => unawaited(onTapPickup()),
-            onReject: () => unawaited(onTapReject()),
-            onExpand: () => setState(() => _quickAnswerExpanded = true),
-          ),
-        ),
-      ]);
-    }
     final remote = _video(remoteParticipantTrack);
     final local = _video(localParticipantTrack);
     final mainVideo = _smallScreenRemote ? remote : local;
@@ -431,12 +377,12 @@ abstract class SignalState<T extends SignalView> extends State<T>
                 roomDidUpdateStream: roomDidUpdateSubject.stream,
                 initState: widget.initState,
                 callType: widget.callType,
+                userID: widget.userID,
                 userInfo: userInfo,
                 duration: duration,
                 active: session.active,
                 connected: session.connected,
                 onMinimize: onTapMinimize,
-                onPictureInPicture: session.connected ? _enterPip : null,
                 onEnabledMicrophone: (enabled) => enabledMicrophone = enabled,
                 onEnabledSpeaker: (enabled) => enabledSpeaker = enabled,
                 onSetMicrophone: setMicrophone,

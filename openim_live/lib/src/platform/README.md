@@ -5,6 +5,8 @@
 结束时先 `stop()` 再释放房间。Android系统恢复触发 `onRestore`；用户关闭
 系统窗口触发 `onClosed`。Session标识隔离旧呼叫的迟到回调。
 
+应用内两个缩小入口（返回箭头与“小窗”按钮）都调用 `onTapMinimize`，只显示可拖动的应用内通话浮窗，不能直接请求原生 `enter`。通话接通后仍保持原生 PiP 自动进入配置；用户返回桌面时由 Android/AVKit 触发，恢复回应用时沿用 `onRestore`。iOS 的 `inactive` 还可能表示系统弹窗或控制中心，因此不作为主动进入 PiP 的条件。
+
 ## Android
 
 `openim_call_pip` → `MainActivity` → `calling/CallPictureInPictureBridge`。

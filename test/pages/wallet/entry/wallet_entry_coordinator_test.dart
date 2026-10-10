@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/mine/settings/pages/trade_password_page.dart';
+import 'package:openim/pages/wallet/entry/wallet_entry_coordinator.dart';
 
 import 'support/wallet_entry_fixture.dart';
 
@@ -173,6 +174,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(await pending, isFalse);
     expect(fixture.allowed, isEmpty);
+    expect(fixture.coordinator.phase, WalletEntryPhase.failed);
     expect(find.byType(TradePasswordPage), findsNothing);
   });
 
@@ -279,7 +281,7 @@ void main() {
     const Locale('ko', 'KR'): '결제 비밀번호 상태를 확인할 수 없습니다. 다시 시도해 주세요.',
   };
   for (final entry in errors.entries) {
-    testWidgets('status failure uses the shared tip in ${entry.key}',
+    testWidgets('status failure exposes an inline message in ${entry.key}',
         (tester) async {
       final settings = WalletEntrySettings()
         ..check = (_) async => throw StateError('backend unavailable');

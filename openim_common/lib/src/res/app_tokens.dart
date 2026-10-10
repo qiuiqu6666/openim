@@ -15,6 +15,7 @@ class AppTokens {
   static const Color walletDanger = Color(0xFFE60022);
   static const Color paymentErrorDark = Color(0xFFFF6B73);
   static const Color success = Color(0xFF059669);
+  static const Color successDark = Color(0xFF34D399);
   static const Color biometricGreen = Color(0xFF07C160);
   static const Color warning = Color(0xFFD97706);
   static const Color backgroundLight = Color(0xFFF5F6F8);
@@ -69,6 +70,9 @@ class AppTokens {
   static Color border({required bool dark}) => dark ? borderDark : borderLight;
   static Color paymentError({required bool dark}) =>
       dark ? paymentErrorDark : walletDanger;
+
+  static Color statusSuccess({required bool dark}) =>
+      dark ? successDark : success;
 
   // 4pt spacing scale used by 99chat surfaces.
   static const double s2 = 4;

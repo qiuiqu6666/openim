@@ -138,6 +138,7 @@ class ImageRes {
   static const circle = "$_dir/ic_circle.webp";
   static const liveClose = "$_dir/ic_live_close.webp";
   static const liveHangUp = "$_callDir/hangup.png";
+  static const liveMinimize = "$_callDir/floating_button.png";
   static const liveMicOff = "$_callDir/mute_on.png";
   static const liveMicOn = "$_callDir/mute.png";
   static const livePicUp = "$_callDir/dialing.png";

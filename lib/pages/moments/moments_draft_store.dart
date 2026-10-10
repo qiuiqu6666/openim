@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:characters/characters.dart';
 import 'package:flutter/foundation.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:path/path.dart' as p;
@@ -172,7 +173,7 @@ class MomentsDraftStore extends ChangeNotifier {
   bool get frozen => job != null;
   bool get resultUncertain =>
       job?.submitted == true && stage != MomentsPublishStage.submitFailed;
-  bool get hasContent => text.trim().isNotEmpty || media.isNotEmpty;
+  bool get hasContent => graphemeTrim(text).isNotEmpty || media.isNotEmpty;
   String get cacheKey =>
       'momentsDraft:${Uri.encodeComponent(serviceKey)}:${Uri.encodeComponent(ownerUserId)}';
 
@@ -406,11 +407,11 @@ class MomentsDraftStore extends ChangeNotifier {
       }
       if (job == null) {
         confirmedMomentId = null;
-        final trimmed = text.trim();
+        final trimmed = graphemeTrim(text);
         if (trimmed.isEmpty && media.isEmpty) {
           throw const FormatException('Please add text or images');
         }
-        if (trimmed.runes.length > capabilities.maxTextLength ||
+        if (trimmed.characters.length > capabilities.maxTextLength ||
             media.length > capabilities.maxImages.clamp(0, 9)) {
           throw const FormatException('Content exceeds the server limit');
         }

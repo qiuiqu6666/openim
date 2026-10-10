@@ -105,9 +105,9 @@ class GroupRequestsFixture {
             recipientReplies.add(reply);
             return reply.future;
           }
-          return jsonEncode(recipient.map((item) => item.toJson()).toList());
+          return _page(recipient, call);
         case 'getGroupApplicationListAsApplicant':
-          return jsonEncode(applicant.map((item) => item.toJson()).toList());
+          return _page(applicant, call);
         case 'getJoinedGroupList':
         case 'getGroupMembersInfo':
           return '[]';
@@ -132,6 +132,14 @@ class GroupRequestsFixture {
               'Unexpected group application method: ${call.method}');
       }
     });
+  }
+
+  String _page(List<GroupApplicationInfo> items, MethodCall call) {
+    final req = Map<Object?, Object?>.from(call.arguments['req'] as Map);
+    final offset = req['offset'] as int;
+    final count = req['count'] as int;
+    return jsonEncode(
+        items.skip(offset).take(count).map((item) => item.toJson()).toList());
   }
 
   Future<GroupRequestsLogic> mount(WidgetTester tester) async {

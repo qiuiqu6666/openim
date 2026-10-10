@@ -1,5 +1,7 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
+import '../../../services/chat_history_cache.dart';
+import '../../../services/chat_revocation_notice.dart';
 
 /// Pending mentions are conversation state, not properties of the latest message.
 String? conversationMentionTag(ConversationInfo info) {
@@ -26,8 +28,13 @@ String? conversationPrefixTag(ConversationInfo info) {
 /// Shared last-message formatting. Draft bodies and unread badges stay with callers.
 String conversationLatestMessageText(ConversationInfo info) {
   try {
-    final message = info.latestMsg;
-    if (message == null) return '';
+    final latest = info.latestMsg;
+    if (latest == null) return '';
+    final message = ChatHistoryCache.applyRevocation(
+        OpenIM.iMManager.userID, latest);
+    if (message.contentType == MessageType.revokeMessageNotification) {
+      return ChatRevocationNotice.text(message, OpenIM.iMManager.userID);
+    }
     final notification = IMUtils.parseNtf(message, isConversation: true);
     if (notification != null) return notification;
     final text = IMUtils.parseMsg(message, isConversation: true);

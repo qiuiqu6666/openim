@@ -8,10 +8,11 @@ class PlatformRelease {
             ? (data['latestVersion'] as String).trim()
             : (data['version'] as String? ?? '').trim(),
         minimum = (data['minVersion'] as String? ?? '').trim(),
+        changelog = (data['changelog'] as String? ?? '').trim(),
         grayRatio = ((data['grayRatio'] as num? ?? 0).toInt()).clamp(0, 100),
         downloadURL = (data['downloadURL'] as String? ?? '').trim(),
         downloadLink = (data['downloadLink'] as String? ?? '').trim();
-  final String latest, minimum, downloadURL, downloadLink;
+  final String latest, minimum, changelog, downloadURL, downloadLink;
   final int grayRatio;
   String get installURL => downloadLink.isNotEmpty ? downloadLink : downloadURL;
   String get shareURL => downloadURL.isNotEmpty ? downloadURL : downloadLink;
@@ -31,7 +32,8 @@ class PlatformConfig {
 }
 
 class PlatformConfigService {
-  static Future<PlatformConfig> fetch({Dio? client}) async {
+  static Future<PlatformConfig> fetch(
+      {Dio? client, String? baseUrl, CancelToken? cancelToken}) async {
     // Dedicated public client: no account token or authenticated interceptors.
     final http = client ??
         Dio(BaseOptions(
@@ -39,7 +41,8 @@ class PlatformConfigService {
             receiveTimeout: const Duration(seconds: 10)));
     try {
       final response = await http.get<Map<String, dynamic>>(
-          '${Config.appAuthUrl}/chat/platform',
+          '${(baseUrl ?? Config.appAuthUrl).replaceFirst(RegExp(r'/+$'), '')}/chat/platform',
+          cancelToken: cancelToken,
           options: Options(headers: {'operationID': HttpUtil.operationID}));
       final body = response.data;
       if (body == null || body['errCode'] != 0 || body['data'] is! Map) {

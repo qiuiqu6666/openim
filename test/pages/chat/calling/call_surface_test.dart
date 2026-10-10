@@ -11,6 +11,8 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+// SignalView exposes the LiveKit types owned by the openim_live package.
+// ignore: depend_on_referenced_packages
 import 'package:livekit_client/livekit_client.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:openim_live/src/models/call_types.dart';
@@ -66,10 +68,9 @@ class _TestSignalView extends SignalView {
     required PublishSubject<CallEvent> events,
     required Future<SignalingCertificate> Function() pickup,
     required this.probe,
-    CallType callType = CallType.audio,
+    super.callType = CallType.audio,
   }) : super(
           key: key,
-          callType: callType,
           initState: CallState.beCalled,
           roomID: 'surface-room',
           userID: 'real-peer',
@@ -164,7 +165,6 @@ void main() {
               onCancel: () {},
               onHangUp: (_) {},
               onMinimize: () {},
-              onPictureInPicture: () {},
             ),
             dark: dark,
             scale: 2));
@@ -302,7 +302,6 @@ void main() {
         onCancel: () => invocations++,
         onHangUp: (_) => invocations++,
         onMinimize: () => invocations++,
-        onPictureInPicture: () => invocations++,
         onSetMicrophone: (_) async => invocations++,
         onSetSpeaker: (_) async => invocations++,
         onSetCamera: (_) async => invocations++,

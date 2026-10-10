@@ -5,6 +5,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
 import '../settings_service.dart';
+import '../feedback/widgets/feedback_attachment_preview.dart';
 import '../widgets/settings_widgets.dart';
 import '../../../customer_service/customer_service.dart';
 
@@ -82,8 +83,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
   bool get _canSubmit =>
       !_submitting &&
       !_picking &&
-      _controller.text.trim().isNotEmpty &&
-      _controller.text.trim().runes.length <= _maxContentLength;
+      graphemeTrim(_controller.text).isNotEmpty &&
+      graphemeTrim(_controller.text).characters.length <= _maxContentLength;
 
   Future<void> _pickImages() async {
     if (_picking || _attachments.length >= _maxScreenshots) return;
@@ -162,7 +163,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
 
     setState(() => _submitting = true);
     try {
-      final fingerprint = Object.hash(_type, _controller.text.trim(),
+      final fingerprint = Object.hash(_type, graphemeTrim(_controller.text),
           _includeDiagnostics, Object.hashAll(_attachments));
       if (_clientRequestID == null || fingerprint != _submittedFingerprint) {
         _clientRequestID = const Uuid().v4();
@@ -171,7 +172,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
       _feedbackID = await widget.service.createFeedback(
         clientRequestID: _clientRequestID!,
         type: _type,
-        content: _controller.text.trim(),
+        content: graphemeTrim(_controller.text),
         attachments: List.unmodifiable(_attachments),
         includeSDKLogs: _includeDiagnostics,
       );
@@ -936,15 +937,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
           Positioned.fill(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.memory(
-                item.bytes,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                errorBuilder: (_, __, ___) => const ColoredBox(
-                  color: Color(0xFFF4F6F9),
-                  child: Icon(Icons.broken_image_outlined),
-                ),
-              ),
+              child: FeedbackAttachmentPreview(bytes: item.bytes),
             ),
           ),
           Positioned(

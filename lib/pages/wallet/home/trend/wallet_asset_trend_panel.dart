@@ -33,11 +33,11 @@ class WalletAssetTrendPanel extends StatelessWidget {
         ja: '資産推移',
         ko: '자산 추이');
     final explanation = i18n.t(
-        zhHans: '使用最新40条记录，固定40个滑动点，不足部分在前面补零。按住横向滑动查看余额，松开恢复当前余额。',
-        zhHant: '使用最新40筆記錄，固定40個滑動點，不足部分在前面補零。按住橫向滑動查看餘額，鬆開恢復目前餘額。',
-        en: 'Latest 40 records, padded with leading zeros to 40 points. Hold and slide to inspect; release to restore the current balance.',
-        ja: '選択期間の資産評価額の変化。資産推移データはまだありません。',
-        ko: '선택 기간의 자산 가치 변화입니다. 자산 추이 데이터가 없습니다.');
+        zhHans: '展示近期资产余额的变化。按住图表左右滑动可查看历史余额，松开后显示当前余额。',
+        zhHant: '顯示近期資產餘額的變化。按住圖表左右滑動可查看歷史餘額，鬆開後顯示目前餘額。',
+        en: 'Shows recent changes in your asset balance. Press and slide left or right to view past balances. Release to show your current balance.',
+        ja: '最近の資産残高の変化を表示します。グラフを押したまま左右に動かすと過去の残高を確認できます。指を離すと現在の残高に戻ります。',
+        ko: '최근 자산 잔액의 변화를 보여줍니다. 차트를 누른 채 좌우로 움직이면 과거 잔액을 확인할 수 있습니다. 손을 떼면 현재 잔액이 표시됩니다.');
     return Column(
       key: const ValueKey('wallet-trend-panel'),
       crossAxisAlignment: CrossAxisAlignment.stretch,

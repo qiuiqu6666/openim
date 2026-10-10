@@ -107,7 +107,7 @@ class _GroupMemberPermissionsPageState
     _debounce?.cancel();
     _generation++;
     setState(() {
-      query = text.trim();
+      query = graphemeTrim(text);
       members.clear();
       _offset = 0;
       more = true;
@@ -244,44 +244,58 @@ class _GroupMemberPermissionsPageState
     final owners = members.where((m) => m.roleLevel == GroupRoleLevel.owner);
     final admins = displayedMembers;
     Widget card(String label, List<Widget> children) => Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
-      decoration: BoxDecoration(
-        color: Styles.c_FFFFFF,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(padding: const EdgeInsets.only(bottom: 10),
-          child: Text(label, style: Styles.ts_8E9AB0_14sp)),
-        ...children,
-      ]),
-    );
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
+          decoration: BoxDecoration(
+            color: Styles.c_FFFFFF,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(label, style: Styles.ts_8E9AB0_14sp)),
+            ...children,
+          ]),
+        );
     Widget memberRow(GroupMembersInfo member, {bool removable = false}) =>
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(children: [
-          AvatarView(width: 44, height: 44, isCircle: true,
-            url: member.faceURL, text: member.nickname),
-          const SizedBox(width: 12),
-          Expanded(child: Text(member.nickname ?? '', maxLines: 1,
-            overflow: TextOverflow.ellipsis, style: Styles.ts_0C1C33_17sp)),
-          if (removable && member.userID != OpenIM.iMManager.userID &&
-              member.roleLevel != GroupRoleLevel.owner &&
-              (widget.owner || (mutedList && member.roleLevel == GroupRoleLevel.member)))
-            IconButton(
-              tooltip: mutedList ? '解除禁言' : '移除管理员',
-              onPressed: busy == null ? () => change(member, mutedList ? 0 : -1) : null,
-              icon: Icon(Icons.remove_circle_outline, color: Styles.c_FF381F),
-            ),
-        ]),
-      );
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(children: [
+            AvatarView(
+                width: 44,
+                height: 44,
+                isCircle: true,
+                url: member.faceURL,
+                text: member.nickname),
+            const SizedBox(width: 12),
+            Expanded(
+                child: Text(member.nickname ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Styles.ts_0C1C33_17sp)),
+            if (removable &&
+                member.userID != OpenIM.iMManager.userID &&
+                member.roleLevel != GroupRoleLevel.owner &&
+                (widget.owner ||
+                    (mutedList && member.roleLevel == GroupRoleLevel.member)))
+              IconButton(
+                tooltip: mutedList ? '解除禁言' : '移除管理员',
+                onPressed: busy == null
+                    ? () => change(member, mutedList ? 0 : -1)
+                    : null,
+                icon: Icon(Icons.remove_circle_outline, color: Styles.c_FF381F),
+              ),
+          ]),
+        );
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       children: [
         if (loading || busy != null)
           LinearProgressIndicator(color: Styles.c_0089FF),
         if (!mutedList)
-          card(StrRes.groupOwner, [for (final member in owners) memberRow(member)]),
+          card(StrRes.groupOwner,
+              [for (final member in owners) memberRow(member)]),
         card('${mutedList ? '禁言成员' : '管理员'} (${admins.length})', [
           if (widget.owner || mutedList)
             InkWell(
@@ -291,7 +305,8 @@ class _GroupMemberPermissionsPageState
                 child: Row(children: [
                   Icon(Icons.add_circle_outline, color: Styles.c_0089FF),
                   const SizedBox(width: 12),
-                  Text(mutedList ? '添加禁言成员' : '添加管理员', style: Styles.ts_0089FF_17sp),
+                  Text(mutedList ? '添加禁言成员' : '添加管理员',
+                      style: Styles.ts_0089FF_17sp),
                 ]),
               ),
             ),
@@ -330,223 +345,247 @@ class _GroupMemberPermissionsPageState
         ),
         body: SafeArea(
             top: false,
-            child: !picking ? _adminCards() : Column(children: [
-              if (!picking &&
-                  (widget.owner || mode == MemberPermissionMode.muted))
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 44,
-                    child: OutlinedButton.icon(
-                      onPressed: busy == null ? addMember : null,
-                      icon: const Icon(Icons.add, size: 20),
-                      label: Text((mode == MemberPermissionMode.admins
-                              ? 'sdkMakeAdmin'
-                              : 'sdkMute')
-                          .tr),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Styles.c_0089FF,
-                        side: BorderSide(color: Styles.c_0089FF),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+            child: !picking
+                ? _adminCards()
+                : Column(children: [
+                    if (!picking &&
+                        (widget.owner || mode == MemberPermissionMode.muted))
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 44,
+                          child: OutlinedButton.icon(
+                            onPressed: busy == null ? addMember : null,
+                            icon: const Icon(Icons.add, size: 20),
+                            label: Text((mode == MemberPermissionMode.admins
+                                    ? 'sdkMakeAdmin'
+                                    : 'sdkMute')
+                                .tr),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Styles.c_0089FF,
+                              side: BorderSide(color: Styles.c_0089FF),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                      child: SearchBox(
+                        enabled: true,
+                        controller: searchController,
+                        hintText: 'groupMemberSearchHint'.tr,
+                        onChanged: searchChanged,
+                        onCleared: () => searchChanged(''),
+                        onSubmitted: (value) {
+                          searchChanged(value);
+                          load();
+                        },
                       ),
                     ),
-                  ),
-                ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                child: SearchBox(
-                  enabled: true,
-                  controller: searchController,
-                  hintText: 'groupMemberSearchHint'.tr,
-                  onChanged: searchChanged,
-                  onCleared: () => searchChanged(''),
-                  onSubmitted: (value) {
-                    searchChanged(value);
-                    load();
-                  },
-                ),
-              ),
-              if (displayedMembers.isEmpty && !loading && !failed && !more)
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.group_outlined,
-                            size: 48, color: Styles.c_8E9AB0),
-                        const SizedBox(height: 12),
-                        Text('chatSearchEmpty'.tr,
-                            style: Styles.ts_8E9AB0_14sp),
-                      ],
-                    ),
-                  ),
-                ),
-              SizedBox(
-                  height: 2,
-                  child: loading || busy != null
-                      ? LinearProgressIndicator(color: Styles.c_0089FF)
-                      : null),
-              if (displayedMembers.isNotEmpty || loading || failed || more)
-                Expanded(
-                    child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                        itemCount: displayedMembers.length + 1,
-                        itemBuilder: (_, index) {
-                          if (index == displayedMembers.length) {
-                            return failed
-                                ? TextButton(
-                                    onPressed: loading ? null : load,
-                                    child: Text('chatSearchRetry'.tr))
-                                : loading || more
-                                    ? Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: Center(
-                                            child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Styles.c_0089FF)),
-                                      )
-                                    : const SizedBox.shrink();
-                          }
-                          final member = displayedMembers[index];
-                          final canEdit = member.userID !=
-                                  OpenIM.iMManager.userID &&
-                              member.roleLevel != GroupRoleLevel.owner &&
-                              (widget.owner ||
-                                  member.roleLevel == GroupRoleLevel.member);
-                          final muted = (member.muteEndTime ?? 0) >
-                              DateTime.now().millisecondsSinceEpoch ~/ 1000;
-                          final name =
-                              member.nickname?.trim().isNotEmpty == true
-                                  ? member.nickname!.trim()
-                                  : member.userID ?? '';
-                          final role = member.roleLevel == GroupRoleLevel.owner
-                              ? StrRes.groupOwner
-                              : member.roleLevel == GroupRoleLevel.admin
-                                  ? 'sdkAdmin'.tr
-                                  : StrRes.groupMember;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Material(
-                              color: Styles.c_FFFFFF,
-                              borderRadius: BorderRadius.circular(12),
-                              clipBehavior: Clip.antiAlias,
-                              child: Column(children: [
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(16, 14, 8, 14),
-                                  child: Row(children: [
-                                    AvatarView(
-                                        width: 44,
-                                        height: 44,
-                                        isCircle: true,
-                                        text: name,
-                                        url: member.faceURL),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                        child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w500,
-                                                color: Styles.c_0C1C33)),
-                                        const SizedBox(height: 6),
-                                        Wrap(
-                                            spacing: 8,
-                                            runSpacing: 4,
-                                            children: [
-                                              Text(role,
-                                                  style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: member.roleLevel ==
-                                                              GroupRoleLevel
-                                                                  .member
-                                                          ? Styles.c_8E9AB0
-                                                          : Styles.c_0089FF)),
-                                              if (muted)
-                                                Text('sdkMuted'.tr,
-                                                    style: TextStyle(
-                                                        fontSize: 12,
-                                                        color:
-                                                            Styles.c_FF381F)),
-                                            ]),
-                                      ],
-                                    )),
-                                    if (canEdit)
-                                      busy == member.userID
+                    if (displayedMembers.isEmpty &&
+                        !loading &&
+                        !failed &&
+                        !more)
+                      Expanded(
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.group_outlined,
+                                  size: 48, color: Styles.c_8E9AB0),
+                              const SizedBox(height: 12),
+                              Text('chatSearchEmpty'.tr,
+                                  style: Styles.ts_8E9AB0_14sp),
+                            ],
+                          ),
+                        ),
+                      ),
+                    SizedBox(
+                        height: 2,
+                        child: loading || busy != null
+                            ? LinearProgressIndicator(color: Styles.c_0089FF)
+                            : null),
+                    if (displayedMembers.isNotEmpty ||
+                        loading ||
+                        failed ||
+                        more)
+                      Expanded(
+                          child: ListView.builder(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                              itemCount: displayedMembers.length + 1,
+                              itemBuilder: (_, index) {
+                                if (index == displayedMembers.length) {
+                                  return failed
+                                      ? TextButton(
+                                          onPressed: loading ? null : load,
+                                          child: Text('chatSearchRetry'.tr))
+                                      : loading || more
                                           ? Padding(
-                                              padding: const EdgeInsets.all(14),
-                                              child: SizedBox(
-                                                  width: 20,
-                                                  height: 20,
+                                              padding: const EdgeInsets.all(16),
+                                              child: Center(
                                                   child:
                                                       CircularProgressIndicator(
                                                           strokeWidth: 2,
                                                           color:
-                                                              Styles.c_0089FF)))
-                                          : PopupMenuButton<int>(
-                                              tooltip:
-                                                  'sdkMemberPermissions'.tr,
-                                              icon: Icon(
-                                                  CupertinoIcons.ellipsis,
-                                                  color: Styles.c_8E9AB0,
-                                                  size: 22),
-                                              color: Styles.c_FFFFFF,
-                                              shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          12)),
-                                              enabled: busy == null,
-                                              onSelected: (v) =>
-                                                  change(member, v),
-                                              itemBuilder: (_) => [
-                                                    if (widget.owner &&
-                                                        (mode ==
-                                                                MemberPermissionMode
-                                                                    .admins ||
-                                                            mode ==
-                                                                MemberPermissionMode
-                                                                    .addAdmin))
-                                                      PopupMenuItem(
-                                                          value: -1,
-                                                          child: Text(member
-                                                                      .roleLevel ==
-                                                                  GroupRoleLevel
-                                                                      .admin
-                                                              ? 'sdkRemoveAdmin'
-                                                                  .tr
-                                                              : 'sdkMakeAdmin'
-                                                                  .tr)),
+                                                              Styles.c_0089FF)),
+                                            )
+                                          : const SizedBox.shrink();
+                                }
+                                final member = displayedMembers[index];
+                                final canEdit = member.userID !=
+                                        OpenIM.iMManager.userID &&
+                                    member.roleLevel != GroupRoleLevel.owner &&
+                                    (widget.owner ||
+                                        member.roleLevel ==
+                                            GroupRoleLevel.member);
+                                final muted = (member.muteEndTime ?? 0) >
+                                    DateTime.now().millisecondsSinceEpoch ~/
+                                        1000;
+                                final name = graphemeTrim(member.nickname ?? '')
+                                        .isNotEmpty
+                                    ? graphemeTrim(member.nickname!)
+                                    : member.userID ?? '';
+                                final role = member.roleLevel ==
+                                        GroupRoleLevel.owner
+                                    ? StrRes.groupOwner
+                                    : member.roleLevel == GroupRoleLevel.admin
+                                        ? 'sdkAdmin'.tr
+                                        : StrRes.groupMember;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Material(
+                                    color: Styles.c_FFFFFF,
+                                    borderRadius: BorderRadius.circular(12),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: Column(children: [
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            16, 14, 8, 14),
+                                        child: Row(children: [
+                                          AvatarView(
+                                              width: 44,
+                                              height: 44,
+                                              isCircle: true,
+                                              text: name,
+                                              url: member.faceURL),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                              child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(name,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: Styles.c_0C1C33)),
+                                              const SizedBox(height: 6),
+                                              Wrap(
+                                                  spacing: 8,
+                                                  runSpacing: 4,
+                                                  children: [
+                                                    Text(role,
+                                                        style: TextStyle(
+                                                            fontSize: 12,
+                                                            color: member.roleLevel ==
+                                                                    GroupRoleLevel
+                                                                        .member
+                                                                ? Styles
+                                                                    .c_8E9AB0
+                                                                : Styles
+                                                                    .c_0089FF)),
                                                     if (muted)
-                                                      PopupMenuItem(
-                                                          value: 0,
-                                                          child: Text(
-                                                              'sdkUnmute'.tr)),
-                                                    if (mode ==
-                                                        MemberPermissionMode
-                                                            .addMuted)
-                                                      for (final seconds in [
-                                                        600,
-                                                        3600,
-                                                        86400
-                                                      ])
-                                                        PopupMenuItem(
-                                                            value: seconds,
-                                                            child: Text(
-                                                                '${'sdkMute'.tr} ${seconds ~/ 60} ${'sdkMinutes'.tr}')),
+                                                      Text('sdkMuted'.tr,
+                                                          style: TextStyle(
+                                                              fontSize: 12,
+                                                              color: Styles
+                                                                  .c_FF381F)),
                                                   ]),
-                                  ]),
-                                ),
-                              ]),
-                            ),
-                          );
-                        })),
-            ])),
+                                            ],
+                                          )),
+                                          if (canEdit)
+                                            busy == member.userID
+                                                ? Padding(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                            14),
+                                                    child: SizedBox(
+                                                        width: 20,
+                                                        height: 20,
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                                strokeWidth: 2,
+                                                                color: Styles
+                                                                    .c_0089FF)))
+                                                : PopupMenuButton<int>(
+                                                    tooltip:
+                                                        'sdkMemberPermissions'
+                                                            .tr,
+                                                    icon: Icon(
+                                                        CupertinoIcons.ellipsis,
+                                                        color: Styles.c_8E9AB0,
+                                                        size: 22),
+                                                    color: Styles.c_FFFFFF,
+                                                    shape: RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(12)),
+                                                    enabled: busy == null,
+                                                    onSelected: (v) =>
+                                                        change(member, v),
+                                                    itemBuilder: (_) => [
+                                                          if (widget.owner &&
+                                                              (mode ==
+                                                                      MemberPermissionMode
+                                                                          .admins ||
+                                                                  mode ==
+                                                                      MemberPermissionMode
+                                                                          .addAdmin))
+                                                            PopupMenuItem(
+                                                                value: -1,
+                                                                child: Text(member
+                                                                            .roleLevel ==
+                                                                        GroupRoleLevel
+                                                                            .admin
+                                                                    ? 'sdkRemoveAdmin'
+                                                                        .tr
+                                                                    : 'sdkMakeAdmin'
+                                                                        .tr)),
+                                                          if (muted)
+                                                            PopupMenuItem(
+                                                                value: 0,
+                                                                child: Text(
+                                                                    'sdkUnmute'
+                                                                        .tr)),
+                                                          if (mode ==
+                                                              MemberPermissionMode
+                                                                  .addMuted)
+                                                            for (final seconds
+                                                                in [
+                                                              600,
+                                                              3600,
+                                                              86400
+                                                            ])
+                                                              PopupMenuItem(
+                                                                  value:
+                                                                      seconds,
+                                                                  child: Text(
+                                                                      '${'sdkMute'.tr} ${seconds ~/ 60} ${'sdkMinutes'.tr}')),
+                                                        ]),
+                                        ]),
+                                      ),
+                                    ]),
+                                  ),
+                                );
+                              })),
+                  ])),
       );
 }

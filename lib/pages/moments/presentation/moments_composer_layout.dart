@@ -63,11 +63,12 @@ class MomentsComposerLayout extends StatelessWidget {
               hintText: momentsText(context,
                   zh: '这一刻的想法...', en: 'What is on your mind...'),
               hintStyle: TextStyle(color: MomentsTheme.secondary(dark)),
-              errorText: controller.text.trim().runes.length > maxText
-                  ? momentsText(context,
-                      zh: '正文最多 $maxText 个字',
-                      en: 'Use no more than $maxText characters')
-                  : null),
+              errorText:
+                  graphemeTrim(controller.text).characters.length > maxText
+                      ? momentsText(context,
+                          zh: '正文最多 $maxText 个字',
+                          en: 'Use no more than $maxText characters')
+                      : null),
           style: TextStyle(
               color: MomentsTheme.text(dark),
               fontSize: MomentsSecondaryLayout.nameSize,

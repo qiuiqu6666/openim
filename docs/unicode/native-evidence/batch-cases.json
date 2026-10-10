@@ -1,0 +1,212 @@
+[
+  {
+    "sampleIndex": 0,
+    "sample": "single supplementary emoji",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 0,
+    "sample": "single supplementary emoji",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 1,
+    "sample": "emoji presentation VS16",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 1,
+    "sample": "emoji presentation VS16",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 2,
+    "sample": "text presentation VS15",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 2,
+    "sample": "text presentation VS15",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 3,
+    "sample": "ZWJ sequence",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 3,
+    "sample": "ZWJ sequence",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 4,
+    "sample": "skin tone modifier",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 4,
+    "sample": "skin tone modifier",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 5,
+    "sample": "family",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 5,
+    "sample": "family",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 6,
+    "sample": "couple",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 6,
+    "sample": "couple",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 7,
+    "sample": "gender",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 7,
+    "sample": "gender",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 8,
+    "sample": "profession",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 8,
+    "sample": "profession",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 9,
+    "sample": "regional indicator flag",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 9,
+    "sample": "regional indicator flag",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 10,
+    "sample": "single regional indicator",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 10,
+    "sample": "single regional indicator",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 11,
+    "sample": "keycap",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 11,
+    "sample": "keycap",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 12,
+    "sample": "tag sequence",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 12,
+    "sample": "tag sequence",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 13,
+    "sample": "combining accents",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 13,
+    "sample": "combining accents",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 14,
+    "sample": "whitespace base with combining mark",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 14,
+    "sample": "whitespace base with combining mark",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 15,
+    "sample": "supplementary CJK",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 15,
+    "sample": "supplementary CJK",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 16,
+    "sample": "Indic conjunct",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 16,
+    "sample": "Indic conjunct",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 17,
+    "sample": "CJK and Latin mixed",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 17,
+    "sample": "CJK and Latin mixed",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 18,
+    "sample": "RTL mixed",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 18,
+    "sample": "RTL mixed",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 19,
+    "sample": "multilingual",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 19,
+    "sample": "multilingual",
+    "theme": "light"
+  },
+  {
+    "sampleIndex": 20,
+    "sample": "supplementary raw future value",
+    "theme": "dark"
+  },
+  {
+    "sampleIndex": 20,
+    "sample": "supplementary raw future value",
+    "theme": "light"
+  }
+]

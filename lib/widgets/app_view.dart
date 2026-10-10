@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -54,15 +53,7 @@ class AppView extends StatelessWidget {
     );
 
     configureEasyLoadingInteractions();
-    EasyLoading.instance
-      ..indicatorSize = 50
-      ..backgroundColor = Styles.c_0C1C33
-      ..indicatorColor = CupertinoColors.systemGrey2
-      ..progressColor = CupertinoColors.systemGrey2
-      ..progressWidth = 6.0
-      ..textColor = Colors.white
-      ..loadingStyle = EasyLoadingStyle.custom
-      ..indicatorType = EasyLoadingIndicatorType.fadingCircle;
+    configureEasyLoadingAppearance();
     return builder;
   }
 }

@@ -6,8 +6,10 @@
 
 `preferences/` 读取 `99chat_settings_<accountID>_notify_quick_answer` 与 `call_ringtone_enabled`，设置保存后通过 `CallNotificationPreferences.notifyChanged(accountID)` 发布变化。`IMController` 持有唯一 `CallNotificationPreferenceBinding`，销毁时关闭；其他账号变化不会影响当前通话。公共包只接收 `IncomingCallPreferences`，不导入应用设置或存储。
 
-快捷弹层、全屏、接听与拒接共用公共包的原 `SingleCallSession` 和期限。关闭快捷接听仍显示全屏接听入口，关闭来电铃声不停止出站回铃；设置更新、权限/接听开始、终态及退出账号使旧来电音频失效。后台在线邀请返回前台时读取原账号的来电偏好并展示入口，现有离线推送边界不变。
+应用内语音/视频邀请直接显示全屏来电页，与 99chat 一致。移除了底部快捷接听弹层和“打开通话”中间入口；既有 `notify_quick_answer` 设置值保留兼容，但不再决定来电展示方式。全屏、最小化、接听与拒接共用原 `SingleCallSession` 和期限。关闭来电铃声不停止出站回铃；设置更新、权限/接听开始、终态及退出账号使旧来电音频失效。后台在线邀请返回前台时读取原账号的铃声偏好并显示全屏入口，现有离线推送边界不变。
 
-99chat 参考为 `notification_settings_service.dart`、`incoming_call_coordinator.dart` 和 `livekit_call_ringtone.dart`：来电静音只控制 incoming，禁用提示仍保留应用内接听入口。其 `notifyVibration` 仅用于消息/系统消息；本模块同样不新增来电振动。其快捷接听 key 已持久化但未接入来电显示，本次将该开关接入已有通话浮层。
+99chat 来电展示参考 `lib/src/services/livekit_call_signaling.dart`、`livekit_call_navigator.dart` 与 `lib/src/pages/livekit_call_page.dart`（本地参考提交 `d7c3c655b20dd06458d1882b114e68c1c24133e3`）。铃声参考 `notification_settings_service.dart`、`incoming_call_coordinator.dart` 和 `livekit_call_ringtone.dart`：来电静音只控制 incoming，禁用提示仍保留应用内接听入口。其 `notifyVibration` 仅用于消息/系统消息；本模块同样不新增来电振动。
 
-测试归属 `test/pages/chat/calling/preferences/` 与 `ringtone/call_waiting_sound_controller_test.dart`，覆盖账号隔离、重复订阅释放、实际来电静音/异步装载取消、出站回铃保留、后台恢复、弹层接听/拒接与期限保持，全部通过本地模拟边界执行。
+全屏邀请 UI 位于 `openim_live/lib/src/widgets/incoming_call/`，复用 `CallFullScreenSurface`、`AvatarView`、`LiveButton` 和现有图片加载器；独立维护布局与延迟背景解码，不持有信令或媒体。正常屏幕对齐 99chat 的 110px 头像、1/4 屏头像位置、2/3 屏提示、底部 50px 按钮区域与原图。小屏/大字体保留安全区并支持滚动。
+
+测试归属 `test/pages/chat/calling/incoming/`、`preferences/`、`termination/` 与 `ringtone/call_waiting_sound_controller_test.dart`，覆盖全屏邀请、账号隔离、实际来电静音/异步装载取消、出站回铃保留、后台恢复、接听/拒接幂等与期限保持，通过本地模拟边界执行。真实双端音视频与系统来电界面仍需设备验收。

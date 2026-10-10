@@ -11,6 +11,7 @@ abstract final class LiveStyle {
   static const waitingIndicatorSize = 36.0;
   static const waitingProgressSize = 24.0;
   static const cardRadius = 20.0;
+  static const sheetRadius = 28.0;
   static const fieldRadius = 12.0;
   static const submitHeight = 52.0;
   static const blue = Color(0xFF2D8CFF);

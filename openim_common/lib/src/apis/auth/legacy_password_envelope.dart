@@ -18,7 +18,10 @@ class LegacyPasswordEnvelope {
 
   static bool permits(Uri endpoint) =>
       {'http', 'https'}.contains(endpoint.scheme) &&
-      endpoint.host == host &&
+      (endpoint.host == host ||
+          (endpoint.scheme == 'https' &&
+              endpoint.host == '99chatapi.99chat.vip' &&
+              endpoint.port == 443)) &&
       endpoint.userInfo.isEmpty;
 
   static String encrypt(String plaintext, Uri endpoint) {

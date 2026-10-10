@@ -314,6 +314,7 @@ class _SangongRoundSettleDialogState extends State<SangongRoundSettleDialog> {
   }
 
   Widget _buildHeader(AppI18n i18n, Color titleColor, Color subColor) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
       child: Row(
@@ -363,8 +364,8 @@ class _SangongRoundSettleDialogState extends State<SangongRoundSettleDialog> {
                           ),
                     style: TextStyle(
                       color: _tailSumCheckDigit == 0
-                          ? AppColors.success
-                          : AppColors.primaryRed,
+                          ? AppTokens.statusSuccess(dark: dark)
+                          : AppTokens.paymentError(dark: dark),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),

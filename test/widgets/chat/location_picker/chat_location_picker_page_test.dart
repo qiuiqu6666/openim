@@ -17,12 +17,31 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-      'map events from tap and drag send the selected coordinates and trimmed name',
+      'location descriptions preserve complex Unicode and edge whitespace',
       (tester) async {
     final harness = LocationPickerHarness();
     try {
       await harness.mount(tester);
-      expect(harness.source.requests, [false]);
+      await harness.selectMapPoint(tester);
+      const raw = ' \u0301\u{1F469}\u{1F3FD}\u200D\u{1F4BB}公园\u00A0';
+      await tester.enterText(locationKey('name'), raw);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump();
+      await tester.tap(locationKey('send'));
+      await tester.pumpAndSettle();
+      expect(harness.result!.description, raw);
+    } finally {
+      await harness.close(tester);
+    }
+  });
+
+  testWidgets(
+      'map events from tap and drag send the selected coordinates and raw name',
+      (tester) async {
+    final harness = LocationPickerHarness();
+    try {
+      await harness.mount(tester);
+      expect(harness.source.requests, [true]);
       expect(
           tester.widget<FilledButton>(locationKey('send')).onPressed, isNull);
       expect(find.byType(LocationStreetMapFixture), findsOneWidget);
@@ -44,7 +63,7 @@ void main() {
       expect(harness.returned, isTrue);
       expect(harness.result!.latitude, closeTo(selected.latitude, .000001));
       expect(harness.result!.longitude, closeTo(selected.longitude, .000001));
-      expect(harness.result!.description, '河畔公园南门');
+      expect(harness.result!.description, '  河畔公园南门  ');
       expect(tester.takeException(), isNull);
     } finally {
       await harness.close(tester);
@@ -60,7 +79,7 @@ void main() {
     final harness = LocationPickerHarness(source: source);
     try {
       await harness.mount(tester);
-      expect(source.requests, [false]);
+      expect(source.requests, [true]);
       expect(
           tester.widget<FilledButton>(locationKey('send')).onPressed, isNull);
       await tester.tap(locationKey('back'));
@@ -73,7 +92,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pumpAndSettle();
       expect(locationKey('map'), findsNothing);
-      expect(source.requests, [false]);
+      expect(source.requests, [true]);
       expect(tester.takeException(), isNull);
     } finally {
       if (!pending.isCompleted) pending.complete(null);
@@ -100,7 +119,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(locationKey('locate'));
       await tester.pump();
-      expect(harness.source.requests, [false, true]);
+      expect(harness.source.requests, [true, true]);
       expect(tester.getRect(locationKey('map')), beforeMap);
       expect(tester.getRect(locationKey('selection')), beforeSelection);
       expect(_coordinates(tester), beforeCoordinates);
@@ -164,7 +183,7 @@ void main() {
       resumeLocationTestApp(tester);
       await tester.pumpAndSettle();
       expect(_coordinates(tester), coordinates);
-      expect(harness.source.requests, [false, true, true]);
+      expect(harness.source.requests, [true, true, true]);
       harness.source.respond = (_) async => const LatLng(22, 114);
       await tester.tap(locationKey('locate'));
       await tester.pumpAndSettle();

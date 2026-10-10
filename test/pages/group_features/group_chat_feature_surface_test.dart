@@ -69,10 +69,17 @@ class _FixtureHTTP implements HttpClientAdapter {
     }
     final Object data = request.path.endsWith('/feature-capabilities')
         ? _caps
-        : request.path.endsWith('/admin/tenants/g')
-            ? {'tenantId': 'g', 'imGroupGameId': 'g', 'active': true}
-            : request.path.endsWith('/events/snapshot')
+        : request.path.endsWith('/sangong/api/v2/groups/g/config')
+            ? {
+                'tenantId': 'confirmed-tenant',
+                'imGroupGameId': 'g',
+                'active': true
+              }
+            : request.path.endsWith('/sangong/api/v2/groups/g/snapshot')
                 ? {
+                    'schemaVersion': 2,
+                    'groupId': 'g',
+                    'botUserId': 'robot-g',
                     'version': 1,
                     'status': 'running',
                     'settings': {'doorCount': 6},
@@ -86,6 +93,18 @@ class _FixtureHTTP implements HttpClientAdapter {
                     },
                     'pending': {
                       'open': true,
+                      'grandTotal': 1200,
+                      'doorTotals': {
+                        '1': 200,
+                        '2': 100,
+                        '3': 300,
+                        '4': 200,
+                        '5': 200,
+                        '6': 200
+                      }
+                    },
+                    'placed': {
+                      'betCount': 6,
                       'grandTotal': 1200,
                       'doorTotals': {
                         '1': 200,
@@ -250,14 +269,18 @@ void main() {
           expect(tester.takeException(), isNull);
           expect(
               adapter.requests
-                  .where((path) => path.endsWith('/events/snapshot'))
+                  .where((path) =>
+                      path.endsWith('/sangong/api/v2/groups/g/snapshot'))
                   .length,
               1);
           expect(
               adapter.requests
                   .where((path) => path.endsWith('/events/stream'))
                   .length,
-              1);
+              0);
+          expect(
+              adapter.requests.where((path) => path.startsWith('/me/robot/')),
+              isEmpty);
           if (export) {
             await tester.runAsync(() => precacheImage(
                 const AssetImage('assets/img/group_live_banner.webp'),

@@ -37,7 +37,7 @@ class CreateGroupLogic extends GetxController {
   }
 
   String get groupName {
-    final name = nameCtrl.text.trim();
+    final name = graphemeTrim(nameCtrl.text);
     return name.isNotEmpty ? name : defaultGroupName;
   }
 

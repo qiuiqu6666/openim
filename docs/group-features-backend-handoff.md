@@ -332,6 +332,7 @@ operationID: 每次请求新生成的 UUID
 
 ### 六合彩
 
+- 类型 2 的六合彩代理群进群调用 `GET /me/robot/groups/{URL编码App群ID}`，请求使用 Chat `token/operationID`，不附 `X-Group-Id`。返回成功外壳（支持 `code:0,message:"ok"`），`data` 包含 `groupId/bound/enabled/machineCodeMasked`；未绑定仍成功返回 `bound:false`。客户端仅按 `bound:true` 显示浮动入口，具体业务仍由个人能力和实际接口授权，遮蔽机器码不能用作开奖绑定。
 - 群公开摘要给真实 `machineCode`，开奖只需群成员权限；当前解析绑定优先级为 capability.machineCode → ex.machineCode → capability.gameID → ex.gameID。
 - 开奖读取 `/api/v1/lotteries/mark-six-demo/{config,draws,predictions}`，携带 `machineCode` 和 `X-Group-Id`。`mark-six-demo` 是参考路由名，不代表客户端会生成演示数据。
 - 私人 `/me/agent/...` 用当前 Chat 用户＋`X-Group-Id` 校验代理与业务绑定，不依赖客户端机器码或三公租户。

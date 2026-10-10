@@ -1,0 +1,131 @@
+{
+  "date": "2026-10-08",
+  "project": "E:/openim/openim-flutter-demo",
+  "flutter": "3.41.6",
+  "characters": "1.4.1",
+  "unicodeSegmentationVersion": "16.0",
+  "flutterOpenimSdk": "3.8.3+hotfix.12",
+  "extendedTextField": "16.0.2",
+  "execution": {
+    "runner": "E:/flutter/flutter/bin/cache/dart-sdk/bin/dart.exe E:/flutter/flutter/bin/cache/flutter_tools.snapshot",
+    "reason": "Windows flutter.bat stalled; the installed Flutter tool snapshot was invoked directly"
+  },
+  "regression": {
+    "command": [
+      "flutter",
+      "test",
+      "--no-pub",
+      "test/utils/text",
+      "test/widgets/chat/editing",
+      "test/widgets/text",
+      "test/widgets/chat/markdown",
+      "test/chat_input_box_test.dart",
+      "test/chat_message_sender_test.dart",
+      "test/pages/chat/composer",
+      "test/services/messaging/unicode",
+      "test/theme/typography",
+      "test/pages/contacts/user_profile_panel/identity",
+      "test/pages/contacts/user_profile_panel/user_profile_panel_test.dart",
+      "test/pages/contacts/user_profile_panel/user_profile_panel_loading_test.dart",
+      "test/pages/ai_assistant/data",
+      "test/pages/ai_assistant/protocol",
+      "test/pages/ai_assistant/search",
+      "test/pages/register/register_unicode_nickname_rules_test.dart",
+      "test/core/notifications",
+      "test/pages/chat/voice",
+      "test/voice_transcription_view_test.dart",
+      "test/fund_message_test.dart",
+      "test/fund_api_test.dart",
+      "test/moments_api_contract_test.dart",
+      "test/pages/group_features/live/live_api_test.dart",
+      "test/sdk_feature_completion_test.dart",
+      "test/pages/conversation/peek",
+      "test/folder_name_dialog_test.dart",
+      "test/pages/chat/group/member_actions",
+      "test/widgets/chat/location_picker/chat_location_picker_page_test.dart",
+      "test/nickname_edit_entry_test.dart",
+      "test/pages/chat/messages/contact_card",
+      "test/pages/mine/identity/account_display_test.dart",
+      "test/pages/group_features/sangong/api/sangong_my_config_status_test.dart",
+      "test/pages/group_features/sangong/pages/sangong_config_directory_test.dart",
+      "test/pages/customer_service/customer_service_api_test.dart",
+      "test/pages/chat/history_search",
+      "test/pages/global_search/global_search_draft_test.dart",
+      "test/pages/mine/settings/settings_draft_unicode_test.dart",
+      "test/settings_draft_store_test.dart",
+      "test/profile_nickname_save_test.dart",
+      "test/nickname_api_test.dart",
+      "test/signature_edit_test.dart",
+      "--reporter",
+      "expanded"
+    ],
+    "exitCode": 0,
+    "passed": 1602,
+    "skipped": 16,
+    "failed": 0,
+    "skipReason": "Existing conditional preview exports; Unicode structural regressions were not skipped",
+    "outputTail": "00:24 +1602 ~16: All tests passed!",
+    "log": "E:/openim/.temp/unicode-final-tests-passed.log",
+    "scope": "Related suites, not every repository test"
+  },
+  "analyze": {
+    "command": [
+      "flutter",
+      "analyze",
+      "--no-pub"
+    ],
+    "exitCode": 1,
+    "errors": 9,
+    "warnings": 31,
+    "infos": 461,
+    "total": 501,
+    "errorPaths": [
+      "local_plugin/uri_to_file/example/lib/main.dart",
+      "local_plugin/uri_to_file/example/test/widget_test.dart",
+      "local_plugin/voice_note_kit/example/test/widget_test.dart"
+    ],
+    "applicationOrCommonOrNewUnicodeCompilationErrors": 0,
+    "outputTail": "501 issues found. (ran in 13.0s)",
+    "log": "E:/openim/.temp/unicode-final-analyze-complete.log"
+  },
+  "androidBuild": {
+    "command": [
+      "flutter",
+      "build",
+      "apk",
+      "--debug",
+      "--no-pub"
+    ],
+    "exitCode": 0,
+    "gradleSeconds": 24.8,
+    "artifact": "build/app/outputs/flutter-apk/app-debug.apk",
+    "installed": false,
+    "log": "E:/openim/.temp/unicode-main-build.log"
+  },
+  "androidProbe": {
+    "applicationId": "dev.codex.unicode_native_probe",
+    "device": "emulator-5554",
+    "androidVersion": "9",
+    "api": 28,
+    "samples": 21,
+    "themes": 2,
+    "uniqueCases": 42,
+    "checksPerCase": 8,
+    "allChecksTrue": true,
+    "seedUnchanged": true,
+    "ownScreenshotsGenerated": 42,
+    "screenshotsRetainedInReport": 6,
+    "evidence": "native-evidence/README.md",
+    "limitations": [
+      "Controller-seeded sequences, not physical IME",
+      "No actual Clipboard or live OpenIM/database roundtrip",
+      "Newest raw code point renders tofu in both system Text and project controls"
+    ]
+  },
+  "physicalAndroid": "尚未真机验证",
+  "iOS": "尚未真机验证; no iOS build or simulator run",
+  "deployedDatabases": "未验证; no deployed schema/connection access",
+  "diffCheck": {
+    "exitCode": 0
+  }
+}

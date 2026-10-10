@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -81,8 +82,9 @@ Message aiOpenimStreamFragment(String id,
       },
     });
 
-Message aiOpenimStreamFinal(String id, String text, String streamID) =>
-    aiOpenimText(id, text)..ex = jsonEncode({'streamID': streamID});
+Message aiOpenimStreamFinal(String id, String text, String streamID,
+        {int time = 1}) =>
+    aiOpenimText(id, text, time: time)..ex = jsonEncode({'streamID': streamID});
 
 Message aiOpenimPicture(String id) => Message.fromJson({
       'clientMsgID': id,
@@ -111,6 +113,8 @@ class AiOpenimTestFixture {
   late AiOpenimTestConversation conversations;
   int _serial = 0;
   bool failNextSend = false;
+  Completer<void>? createTextMessageGate;
+  Completer<void>? sendMessageGate;
 
   Future<void> initialize() async {
     Get.testMode = true;
@@ -167,6 +171,7 @@ class AiOpenimTestFixture {
     }
     if (call.method == 'getBlacklist') return '[]';
     if (call.method == 'createTextMessage') {
+      await createTextMessageGate?.future;
       return jsonEncode(aiOpenimText('sent-${++_serial}', args['text'],
               outgoing: true, time: 20 + _serial)
           .toJson());
@@ -200,6 +205,7 @@ class AiOpenimTestFixture {
       });
     }
     if (call.method == 'sendMessage') {
+      await sendMessageGate?.future;
       if (failNextSend) {
         failNextSend = false;
         throw PlatformException(code: 'NETWORK');
@@ -214,6 +220,9 @@ class AiOpenimTestFixture {
   }
 
   Future<void> dispose() async {
+    for (final gate in [createTextMessageGate, sendMessageGate]) {
+      if (gate != null && !gate.isCompleted) gate.complete();
+    }
     for (final logic in controllers.reversed) {
       if (!logic.isClosed) logic.onDelete();
     }

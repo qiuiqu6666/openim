@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/group_features/data/group_feature_api.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_admin_layout.dart';
@@ -76,20 +77,25 @@ Future<void> _mount(WidgetTester tester, SangongRuntime runtime,
     pumpSangongPage(
         tester,
         runtime,
-        Scaffold(
-            body: SingleChildScrollView(
-                child: SangongProfilePanel(
-                    userID: 'im_target', nickname: nickname))));
+        Builder(
+            builder: (context) => EasyLoading.init()(
+                context,
+                Scaffold(
+                    body: SingleChildScrollView(
+                        child: SangongProfilePanel(
+                            userID: 'im_target', nickname: nickname))))));
 
 Future<void> _confirm(WidgetTester tester, VoidCallback action) async {
   action();
   await tester.pump(const Duration(milliseconds: 350));
-  await tester.tap(find.text('确认'));
-  await tester.pump(const Duration(milliseconds: 350));
+  expect(find.byType(AlertDialog), findsNothing);
   await flushSangong(tester);
 }
 
 void main() {
+  tearDown(() async {
+    await EasyLoading.dismiss(animation: false);
+  });
   test('banker input follows all reference separators without guessing text',
       () {
     for (final separator in ['.', '/', '、', '-', '+']) {
@@ -163,7 +169,7 @@ void main() {
     runtime.dispose();
   });
 
-  testWidgets('inline credit waits for confirmation and preserves IM identity',
+  testWidgets('inline credit submits directly and preserves IM identity',
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) => call.path.endsWith('/commands/wallet.adjust')
@@ -175,9 +181,7 @@ void main() {
     layout.pointsController.text = '10';
     layout.onCredit!();
     await tester.pump(const Duration(milliseconds: 350));
-    expect(api.count('/commands/wallet.adjust'), 0);
-    await tester.tap(find.text('确认'));
-    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byType(AlertDialog), findsNothing);
     await flushSangong(tester);
     expect(api.count('/commands/wallet.adjust'), 1);
     final call = api.calls
@@ -257,7 +261,12 @@ void main() {
     await _confirm(tester, layout.onDebit!);
     expect(api.count('/snapshot'), 2);
     expect(api.count('/commands/wallet.adjust'), 0);
-    expect(_layout(tester).error, contains('尚未结算'));
+    expect(_layout(tester).error, isNull);
+    expect(_layout(tester).disabled, isFalse);
+    expect(_layout(tester).pointsController.text, '10');
+    expect(find.text('当前庄／合庄对局尚未结算，暂不可下分'), findsOneWidget);
+    expect(find.text('重试'), findsNothing);
+    await EasyLoading.dismiss(animation: false);
     await unmountSangong(tester);
     runtime.dispose();
   });
@@ -335,7 +344,7 @@ void main() {
     runtime.dispose();
   });
 
-  testWidgets('revocation closes confirmation and clears all private inputs',
+  testWidgets('revocation disables actions and clears all private inputs',
       (tester) async {
     final api = SangongTestApi()..respond = _readResponse;
     final runtime = sangongTestRuntime(sangongTestContext(api));
@@ -344,8 +353,6 @@ void main() {
     layout.pointsController.text = '10';
     layout.bankerController.text = '2.5000';
     layout.jointController.text = '200';
-    layout.onCredit!();
-    await tester.pump(const Duration(milliseconds: 350));
     api.privilege.setAllowed(false);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
@@ -354,6 +361,8 @@ void main() {
     expect(layout.pointsController.text, isEmpty);
     expect(layout.bankerController.text, isEmpty);
     expect(layout.jointController.text, isEmpty);
+    layout.onCredit!();
+    await flushSangong(tester);
     expect(api.count('/commands/wallet.adjust'), 0);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);
@@ -394,11 +403,14 @@ void main() {
     _layout(tester).onAssignBanker!();
     await tester.pump();
     await _confirm(tester, _layout(tester).onSendBanker!);
-    expect(_layout(tester).error, contains('结果尚未确认'));
+    expect(_layout(tester).error, isNull);
+    expect(_layout(tester).disabled, isFalse);
+    expect(find.text('操作结果尚未确认，请刷新后查看'), findsOneWidget);
     expect(_layout(tester).bankerSummary, contains('未保存'));
     _layout(tester).onRetry!();
     await flushSangong(tester);
     expect(api.count('/commands/round.banker'), 1);
+    await EasyLoading.dismiss(animation: false);
     await unmountSangong(tester);
     runtime.dispose();
   });

@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
+import 'support/unicode/unicode_samples.dart';
+
 Future<void> pumpTranscript(
   WidgetTester tester,
   Widget child, {
@@ -33,6 +35,19 @@ Future<void> pumpTranscript(
 
 void main() {
   tearDown(Get.reset);
+
+  testWidgets('selectable transcription keeps every raw Unicode structure',
+      (tester) async {
+    for (final sample in unicodeSamples) {
+      final raw = ' \u0301${sample.text}\n\t ';
+      await pumpTranscript(tester,
+          VoiceTranscriptionView(state: VoiceTranscriptionState(text: raw)));
+      expect(
+          tester.widget<SelectableText>(find.byType(SelectableText)).data, raw,
+          reason: sample.name);
+      expect(tester.takeException(), isNull);
+    }
+  });
 
   test('empty and whitespace results are not transcripts', () {
     expect(const VoiceTranscriptionState().hasText, isFalse);
@@ -118,7 +133,7 @@ void main() {
       textScale: 2,
       width: 160,
     );
-    expect(find.text('转文字失败'), findsOneWidget);
+    expect(find.text('转文字失败'), findsNothing);
     expect(find.text('语音识别服务暂不可用，请稍后重试'), findsOneWidget);
     await tester.tap(find.text('重试转文字'));
     await tester.pump();
@@ -180,7 +195,7 @@ void main() {
       ),
     );
     final text = tester.widget<SelectableText>(find.byType(SelectableText));
-    expect(text.data, '你好，明天见。');
+    expect(text.data, ' 你好，明天见。 ');
     expect(find.byType(TextButton), findsNothing);
     expect(toggles, 0);
     expect(tester.takeException(), isNull);

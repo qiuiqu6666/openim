@@ -71,17 +71,15 @@ class GroupManagePage extends StatelessWidget {
                                   : logic.friendProtection.refresh),
                         if (logic.friendProtection.ready.value)
                           _toggle('群成员隐私保护',
-                              value: logic.friendProtection.protect.value,
-                              onChanged: logic.friendProtection.busy.value ||
+                              subtitle: '开启后不允许查看群成员资料，关闭后允许查看',
+                              value: logic.friendProtection.protect.value ||
+                                  info.lookMemberInfo == 1,
+                              onChanged: busy ||
+                                      !owner ||
+                                      logic.friendProtection.busy.value ||
                                       !logic.friendProtection.canManage.value
                                   ? null
-                                  : logic.friendProtection.setProtected),
-                        if (owner)
-                          _toggle('允许查看群成员资料',
-                              value: info.lookMemberInfo != 1,
-                              onChanged: busy
-                                  ? null
-                                  : (v) => logic.saveRules(look: v ? 0 : 1)),
+                                  : logic.setMemberPrivacy),
                       ]),
                       if (owner) ...[
                         const SizedBox(height: 16),
@@ -145,8 +143,12 @@ class GroupManagePage extends StatelessWidget {
                             size: 18, color: Styles.c_8E9AB0),
                   ]))));
   Widget _toggle(String title,
-          {required bool value, required ValueChanged<bool>? onChanged}) =>
-      _row(title, trailing: AppSwitch(value: value, onChanged: onChanged));
+          {String? subtitle,
+          required bool value,
+          required ValueChanged<bool>? onChanged}) =>
+      _row(title,
+          subtitle: subtitle,
+          trailing: AppSwitch(value: value, onChanged: onChanged));
 
   Future<void> _selectJoinRule(BuildContext context, int current) async {
     final draft = current.clamp(0, 2);

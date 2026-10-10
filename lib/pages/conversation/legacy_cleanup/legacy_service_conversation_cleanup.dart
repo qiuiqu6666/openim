@@ -63,17 +63,20 @@ class LegacyServiceConversationCleanup {
   Future<void> run({
     required bool Function() isActive,
     required void Function(ConversationInfo) onDeleted,
+    Future<bool> Function(Future<void> Function())? mutate,
   }) {
     if (_pending != null) return _pending!;
-    final task = _run(isActive, onDeleted);
+    final task = _run(isActive, onDeleted, mutate);
     _pending = task;
     return task.whenComplete(() {
       if (identical(_pending, task)) _pending = null;
     });
   }
 
-  Future<void> _run(bool Function() isActive,
-      void Function(ConversationInfo) onDeleted) async {
+  Future<void> _run(
+      bool Function() isActive,
+      void Function(ConversationInfo) onDeleted,
+      Future<bool> Function(Future<void> Function())? mutate) async {
     final session = _session();
     if (session == null ||
         !LegacyServerSnapshot.allowedServer(session.server)) {
@@ -171,7 +174,12 @@ class LegacyServiceConversationCleanup {
               safeToHide = false;
               continue;
             }
-            await _deleteMessage(id, message.clientMsgID!);
+            Future<void> action() => _deleteMessage(id, message.clientMsgID!);
+            if (mutate == null) {
+              await action();
+            } else if (!await mutate(action)) {
+              return;
+            }
             if (!current()) return;
           }
           if (!safeToHide) continue;
@@ -188,7 +196,11 @@ class LegacyServiceConversationCleanup {
               !_eligible(session.owner, finalLocal.single)) {
             continue;
           }
-          await _hideConversation(id);
+          if (mutate == null) {
+            await _hideConversation(id);
+          } else if (!await mutate(() => _hideConversation(id))) {
+            return;
+          }
           if (!current()) return;
           onDeleted(finalLocal.single);
           // Persist only after exact local message deletion and local hide finish.

@@ -6,6 +6,8 @@ import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 
 import '../sangong_test_support.dart';
 
+import '../../../../support/unicode/unicode_samples.dart';
+
 Future<SangongMyConfig> _request(SangongRuntime runtime, String method) =>
     method == 'GET'
         ? runtime.admin.fetchMyConfig()
@@ -37,6 +39,32 @@ void main() {
     addTearDown(api.privilege.dispose);
     addTearDown(runtime.dispose);
   });
+
+  for (final sample in unicodeSamples) {
+    test('configuration name preserves ${sample.name} through API and model',
+        () async {
+      final raw = ' \u0301${sample.text}\n\t ';
+      api.respond = (call) => jsonDecode(jsonEncode({
+            ...sangongConfig(),
+            'name': call.body?['name'] ?? raw,
+          }));
+      final saved = await runtime.admin.saveMyConfig(
+        name: raw,
+        imGroupGameId: ' group-sangong ',
+        imGroupAdminStatsId: ' group-statistics ',
+        imGroupLedgerId: ' group-credit ',
+        imBotUserId: ' bot-sangong ',
+      );
+      final body = api.calls.single.body!;
+      expect(body['name'], raw);
+      expect(body['imGroupGameId'], 'group-sangong');
+      expect(saved.name.codeUnits, raw.codeUnits);
+      expect(saved.copyWith().toSaveBody()['name'], raw);
+      final restored = SangongMyConfig.fromJson(Map<String, dynamic>.from(
+          jsonDecode(jsonEncode(saved.toSaveBody()))));
+      expect(restored.name, raw);
+    });
+  }
 
   for (final method in ['GET', 'PUT']) {
     test('$method accepts explicit boolean and compatible configuration status',
@@ -150,7 +178,7 @@ void main() {
       expect(api.calls.single.method, method);
       if (method == 'PUT') {
         expect(api.calls.single.body, {
-          'name': '一号厅',
+          'name': ' 一号厅 ',
           'imGroupGameId': 'group-sangong',
           'imGroupAdminStatsId': 'group-statistics',
           'imGroupLedgerId': 'group-credit',

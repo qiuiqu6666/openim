@@ -106,7 +106,8 @@ void main() {
     }
   });
 
-  test('optional remarks preserve legacy cards and count Unicode code points',
+  test(
+      'received optional remarks preserve complete Unicode independently of send limits',
       () {
     expect(parse(payload()).remark, '');
     expect(parse(payload(remark: '  \n\t  ')).remark, '');
@@ -118,11 +119,12 @@ void main() {
     expect(data.copyWith(remark: '  生日快乐，朋友🎂  ').remark, '生日快乐，朋友🎂');
     expect(data.copyWith(remark: '').remark, '');
     expect(data.remark, twelveEmoji);
-    // A combining accent is its own code point, rather than part of the
-    // preceding glyph for the backend's twelve-code-point limit.
     expect(parse(payload(remark: List.filled(6, 'e\u0301').join())).remark,
         List.filled(6, 'e\u0301').join());
-    expect(parse(payload(remark: List.filled(7, 'e\u0301').join())).remark, '');
+    expect(parse(payload(remark: List.filled(7, 'e\u0301').join())).remark,
+        List.filled(7, 'e\u0301').join());
+    const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}';
+    expect(parse(payload(remark: family * 3)).remark, family * 3);
   });
 
   test('malformed optional remarks do not broaden custom-message recognition',
@@ -133,7 +135,6 @@ void main() {
       true,
       ['祝福'],
       {'text': '祝福'},
-      List.filled(13, '🎉').join(),
     ]) {
       final map = {...payload(), 'remark': remark};
       final data = parse(map);

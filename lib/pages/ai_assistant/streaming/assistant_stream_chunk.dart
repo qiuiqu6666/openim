@@ -29,17 +29,19 @@ class AssistantStreamChunk {
       if (data is! Map ||
           data['streamID'] is! String ||
           (data['streamID'] as String).trim().isEmpty ||
-          data['index'] is! int ||
-          (data['index'] as int) < 0 ||
+          (data.containsKey('index') && data['index'] is! int) ||
+          (data['index'] is int && (data['index'] as int) < 0) ||
           data['text'] is! String ||
-          data['end'] is! bool) {
+          (data.containsKey('end') && data['end'] is! bool)) {
         return null;
       }
       return AssistantStreamChunk(
         streamID: data['streamID'],
-        index: data['index'],
+        // Go's omitempty may omit the first index and nonterminal false flag.
+        // Explicit nulls and incorrect types still fail the checks above.
+        index: data.containsKey('index') ? data['index'] as int : 0,
         text: data['text'],
-        end: data['end'],
+        end: data.containsKey('end') ? data['end'] as bool : false,
       );
     } on FormatException {
       return null;

@@ -15,7 +15,6 @@ import '../../core/im_callback.dart';
 import '../../core/conversation_reads/conversation_read_projection.dart';
 import '../../core/conversation_reads/conversation_read_request.dart';
 import '../../routes/app_navigator.dart';
-import '../../routes/app_pages.dart';
 import '../../services/legacy_identity/legacy_group_identity.dart';
 import '../../services/chat_history_cache.dart';
 import '../contacts/add_by_search/add_by_search_logic.dart';
@@ -25,16 +24,12 @@ import 'conversation_organizer.dart';
 import 'deletion/conversation_deletion_guard.dart';
 import 'drafts/conversation_draft_text.dart';
 import 'legacy_cleanup/legacy_service_conversation_cleanup.dart';
-import 'group_identity/legacy_group_conversation_migration.dart';
 import 'group_identity/legacy_group_conversation_projection.dart';
 import 'summary/conversation_latest_message_text.dart';
 
 class ConversationLogic extends GetxController with WidgetsBindingObserver {
-  ConversationLogic(
-      {LegacyServiceConversationCleanup? legacyCleanup,
-      LegacyGroupConversationMigration? groupMigration})
-      : _legacyCleanup = legacyCleanup ?? LegacyServiceConversationCleanup(),
-        _groupMigration = groupMigration ?? LegacyGroupConversationMigration();
+  ConversationLogic({LegacyServiceConversationCleanup? legacyCleanup})
+      : _legacyCleanup = legacyCleanup ?? LegacyServiceConversationCleanup();
 
   static const int _receiveMessages = 0;
   static const int _receiveWithoutNotification = 2;
@@ -63,7 +58,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final _readProjection = ConversationReadProjection();
   final _groupProjection = LegacyGroupConversationProjection();
   final LegacyServiceConversationCleanup _legacyCleanup;
-  final LegacyGroupConversationMigration _groupMigration;
+  Future<void>? _legacyMutation;
   bool get _sessionActive =>
       !_closed &&
       _accountID == OpenIM.iMManager.userID &&
@@ -405,7 +400,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  Future<void> deleteConversation(ConversationInfo info) async {
+  Future<void> deleteConversation(ConversationInfo info,
+      {bool propagateError = false}) async {
     if (!_sessionActive || !_deletions.begin(info)) return;
     _updates.remove(info.conversationID);
     onChangeConversations.remove(info.conversationID);
@@ -426,8 +422,9 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     } catch (error) {
       if (_sessionActive && clearing == _clearGeneration) {
         onChanged([_deletions.fail(info.conversationID) ?? info]);
-        IMViews.showToast(error.toString());
+        if (!propagateError) IMViews.showToast(error.toString());
       }
+      if (propagateError) rethrow;
     } finally {
       if (clearing == _clearGeneration) _deletions.fail(info.conversationID);
     }
@@ -464,11 +461,12 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     final clearing = _clearGeneration;
     await _loadConversationList(firstPageOnly: false);
     if (_sessionActive && clearing == _clearGeneration) {
-      await _cleanupLegacyConversations();
+      unawaited(_cleanupLegacyConversations());
     }
   }
 
   Future<void> _cleanupLegacyConversations() async {
+    if (!_sessionActive || _readingList) return;
     final clearing = _clearGeneration;
     bool active() => _sessionActive && clearing == _clearGeneration;
     void removeLocal(ConversationInfo info) {
@@ -485,16 +483,28 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       tempDraftText.remove(id);
     }
 
-    await _legacyCleanup.run(isActive: active, onDeleted: removeLocal);
-    if (!active()) return;
-    await _groupMigration.run(
-      // Do not touch SDK drafts while a chat/composer owns its in-memory draft.
-      isActive: () => active() && Get.currentRoute == AppRoutes.home,
-      onHidden: removeLocal,
+    await _legacyCleanup.run(
+      isActive: active,
+      onDeleted: removeLocal,
+      mutate: (action) => _mutateLegacyConversation(action, active),
     );
   }
 
-  Future<void> _loadConversationList({required bool firstPageOnly}) async {
+  Future<bool> _mutateLegacyConversation(
+      Future<void> Function() action, bool Function() active) async {
+    if (!active() || _readingList) return false;
+    final task = Future<void>.sync(action);
+    _legacyMutation = task;
+    try {
+      await task;
+      return true;
+    } finally {
+      if (identical(_legacyMutation, task)) _legacyMutation = null;
+    }
+  }
+
+  Future<void> _loadConversationList(
+      {required bool firstPageOnly, bool useCachedFirstPage = false}) async {
     if (!_sessionActive) return;
     final generation = ++_listGeneration;
     _readingList = true;
@@ -502,8 +512,24 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     _listFailed.value = false;
     _changesDuringRead.clear();
     try {
+      // Only an already-started local mutation may delay a list read. History
+      // checks run in the background and cannot shift SDK pagination offsets.
+      final mutation = _legacyMutation;
+      if (mutation != null) {
+        try {
+          await mutation;
+        } catch (_) {
+          // Cleanup handles its own failure; the list must still be read.
+        }
+      }
+      if (!_sessionActive || generation != _listGeneration) return;
+      final cached = firstPageOnly && useCachedFirstPage
+          ? homeLogic.conversationsAtFirstPage
+          : const <ConversationInfo>[];
       final snapshot = firstPageOnly
-          ? await getConversationFirstPage()
+          ? useCachedFirstPage && cached.isNotEmpty
+              ? List<ConversationInfo>.of(cached)
+              : await getConversationFirstPage()
           : await _request(generation);
       if (!_sessionActive || generation != _listGeneration) return;
       final byID = {
@@ -562,25 +588,11 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   Future<void> getFirstPage() async {
     final clearing = _clearGeneration;
-    if (!_sessionActive || clearing != _clearGeneration) return;
-    final result = homeLogic.conversationsAtFirstPage;
-    if (result.isNotEmpty) {
-      final currentByID = {
-        for (final info in list) info.conversationID: info,
-      };
-      list.value = _groupProjection
-          .project(result)
-          .map((info) => _readProjection.project(info,
-              current: currentByID[info.conversationID]))
-          .toList();
-      _sortConversationList();
-    } else {
-      await _loadConversationList(firstPageOnly: true);
-    }
+    await _loadConversationList(firstPageOnly: true, useCachedFirstPage: true);
     // Publish local rows before maintenance scans/history/network checks. The
     // deletion guard still rejects stale SDK snapshots after cleanup finishes.
     if (_sessionActive && clearing == _clearGeneration) {
-      await _cleanupLegacyConversations();
+      unawaited(_cleanupLegacyConversations());
     }
   }
 

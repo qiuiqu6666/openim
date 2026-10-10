@@ -121,11 +121,11 @@ class SetPasswordLogic extends GetxController {
 
   void _onChanged() {
     if (_closed || isClosed) return;
-    final nickname = nicknameCtrl.text.trim();
+    final nickname = graphemeTrim(nicknameCtrl.text);
     _profileDraft?.nickname = nicknameCtrl.text;
     _touchedFields.refresh();
     nicknameError.value = errorFor(RegistrationField.nickname);
-    enabled.value = nickname.length >= 2 &&
+    enabled.value = nickname.characters.length >= 2 &&
         RegisterPasswordRules.valid(pwdCtrl.text) &&
         pwdAgainCtrl.text == pwdCtrl.text;
   }
@@ -181,7 +181,7 @@ class SetPasswordLogic extends GetxController {
     _session = session;
     final input = _submitted ??
         (
-          nickname: nicknameCtrl.text.trim(),
+          nickname: graphemeTrim(nicknameCtrl.text),
           password: pwdCtrl.text,
           areaCode: areaCode,
           phoneNumber: phoneNumber,

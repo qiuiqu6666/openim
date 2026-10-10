@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:openim_common/openim_common.dart';
 import '../../../../core/controller/im_controller.dart';
 import '../../../../pages/mine/settings/openim_profile_service.dart';
 import '../../../../pages/mine/settings/settings_service.dart';
@@ -17,6 +18,7 @@ import '../models/live_models.dart';
 import '../models/live_summary_events.dart';
 import '../models/live_tip_currency.dart';
 import '../widgets/live_style.dart';
+import '../widgets/live_sheet_surface.dart';
 
 class GroupLiveTipSheet {
   static Future<void> show(BuildContext context,
@@ -28,12 +30,13 @@ class GroupLiveTipSheet {
           context: context,
           useSafeArea: true,
           isScrollControlled: true,
-          backgroundColor: LiveStyle.card(context),
-          builder: (_) => _LiveTipForm(
-              featureContext: featureContext,
-              session: session,
-              security: security,
-              pendingStore: pendingStore));
+          backgroundColor: Colors.transparent,
+          builder: (_) => LiveSheetSurface(
+              child: _LiveTipForm(
+                  featureContext: featureContext,
+                  session: session,
+                  security: security,
+                  pendingStore: pendingStore)));
 }
 
 class _LiveTipForm extends StatefulWidget {
@@ -211,7 +214,7 @@ class _LiveTipFormState extends State<_LiveTipForm>
       _syncCurrencies();
       if (_currency == null) throw const FormatException('打赏币种尚未配置');
       final units = _currency!.units(_amount.text);
-      if (_memo.text.trim().runes.length > 50) {
+      if (graphemeTrim(_memo.text).characters.length > 50) {
         throw const FormatException('备注最多 50 个字');
       }
       final ready = await _passwordReady();
@@ -225,7 +228,7 @@ class _LiveTipFormState extends State<_LiveTipForm>
             'currency': _currency!.code,
             'amount': units,
             'amountText': _amount.text.trim(),
-            'memo': _memo.text.trim()
+            'memo': graphemeTrim(_memo.text)
           };
       final result = await showPasswordPaymentSheet<Map<String, dynamic>>(
           context: context,

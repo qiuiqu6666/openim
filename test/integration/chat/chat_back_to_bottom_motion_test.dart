@@ -13,6 +13,7 @@ import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/pages/group_features/data/group_feature_runtime.dart';
 import 'package:openim/services/chat_history_cache.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:openim_common/src/widgets/chat/chat_list_viewport.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
@@ -169,6 +170,59 @@ void main() {
       expect(logic.newMessages.awayFromLatest.value, isFalse);
       expect(find.byType(NewMessageIndicator), findsNothing);
       expect(tester.takeException(), isNull);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      if (!logic.isClosed) logic.onDelete();
+      await tester.pump();
+    }
+  });
+
+  testWidgets('leaving a group reparents the existing message viewport',
+      (tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    Get.routing.args = {
+      'conversationInfo': ConversationInfo(
+          conversationID: 'chat',
+          userID: 'peer',
+          conversationType: ConversationType.single,
+          showName: 'Group',
+          unreadCount: 0,
+          groupAtType: GroupAtType.atNormal),
+    };
+    logic = Get.put<ChatLogic>(ChatLogic(), tag: GetTags.chat);
+    opened = true;
+    await tester.idle();
+    histories.single.complete(List.generate(80, _historyMessage));
+    await tester.idle();
+    // History is seeded through the existing SDK fixture; change only the
+    // group presentation to exercise the production membership branches.
+    logic.conversationInfo
+      ..conversationType = ConversationType.superGroup
+      ..groupID = 'dissolved-group';
+    try {
+      await tester.pumpWidget(ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (_, __) => GetMaterialApp(
+              translations: TranslationService(),
+              locale: const Locale('zh', 'CN'),
+              home: ChatPage())));
+      await tester.pumpAndSettle();
+      final timelineState = tester.state(find.byType(ChatListView));
+      logic.scrollController.jumpTo(500);
+      await tester.pumpAndSettle();
+      final viewportState = tester.state(find.byType(ChatListViewport));
+      logic.isInGroup.value = false;
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(tester.state(find.byType(ChatListView)), same(timelineState));
+      expect(logic.scrollController.positions, hasLength(1));
+      expect(tester.state(find.byType(ChatListViewport)), same(viewportState));
+      // The disabled composer changes viewport height; anchoring can adjust
+      // the offset slightly, but must never reset to the latest message.
+      expect(logic.scrollController.offset, greaterThan(400));
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());
       if (!logic.isClosed) logic.onDelete();

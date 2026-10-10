@@ -150,9 +150,9 @@ class VoiceTranscriptionController extends ChangeNotifier {
       Message message, String id, _VoiceTranscriptionJob job) async {
     if (!_isCurrent(id, job, message)) return;
     try {
-      final text = (await _transcribe(message, cancelToken: job.token)).trim();
+      final text = await _transcribe(message, cancelToken: job.token);
       if (!_isCurrent(id, job, message)) return;
-      if (text.isEmpty) {
+      if (text.trim().isEmpty) {
         throw const VoiceToTextException('voiceToTextEmpty');
       }
       _states[id] = VoiceTranscriptionState(text: text);

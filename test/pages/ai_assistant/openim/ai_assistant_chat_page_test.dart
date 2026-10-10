@@ -7,6 +7,8 @@ import 'package:openim/pages/ai_assistant/ai_assistant_chat_page.dart';
 import 'package:openim/pages/ai_assistant/navigation/ai_assistant_header.dart';
 import 'package:openim/pages/ai_assistant/presentation/composer/ai_openim_composer.dart';
 import 'package:openim/pages/ai_assistant/presentation/messages/ai_assistant_text.dart';
+import 'package:openim/pages/ai_assistant/presentation/messages/ai_openim_message_tile.dart';
+import 'package:openim/pages/ai_assistant/theme/ai_palette.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
 import 'package:openim/pages/official_account/official_account_chrome_tokens.dart';
 import 'package:openim/pages/official_account/widgets/official_account_name_label.dart';
@@ -388,6 +390,38 @@ void main() {
   });
 
   for (final dark in [false, true]) {
+    aiTestWidgets('outgoing search hits remain readable in theme ($dark)',
+        (tester) async {
+      final message = aiOpenimText('theme-search', '帮我整理讨论内容', outgoing: true);
+      final logic = fixture.open();
+      await tester.idle();
+      fixture.histories.single.complete([]);
+      final host = AiUiTestHost(dark: dark, disableAnimations: true);
+      await host.mount(
+          tester,
+          host.scaffold((_) => AiOpenIMMessageTile(
+                logic: logic,
+                message: message,
+                query: '整理',
+              )));
+      final text = tester.widget<AiHighlightText>(find.byType(AiHighlightText));
+      expect(text.style.color, AiPalette.primary(dark));
+      final rich = tester.widget<RichText>(find.descendant(
+          of: find.byType(AiHighlightText), matching: find.byType(RichText)));
+      final spans = <TextSpan>[];
+      rich.text.visitChildren((span) {
+        if (span is TextSpan) spans.add(span);
+        return true;
+      });
+      final hit = spans.singleWhere((span) => span.text == '整理');
+      expect(hit.style!.backgroundColor, AiPalette.searchHit);
+      expect(hit.style!.color, AiPalette.text);
+      final foreground = hit.style!.color!.computeLuminance();
+      final background = hit.style!.backgroundColor!.computeLuminance();
+      expect((background + .05) / (foreground + .05), greaterThan(4.5));
+      expect(tester.takeException(), isNull);
+    });
+
     aiTestWidgets(
         'small phone and landscape respect keyboard and large text ($dark)',
         (tester) async {

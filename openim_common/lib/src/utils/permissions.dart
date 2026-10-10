@@ -10,10 +10,6 @@ import 'package:sprintf/sprintf.dart';
 class Permissions {
   Permissions._();
 
-  static Future<bool> checkSystemAlertWindow() async {
-    return Permission.systemAlertWindow.isGranted;
-  }
-
   static Future<bool> checkStorage() async {
     return await Permission.storage.isGranted;
   }

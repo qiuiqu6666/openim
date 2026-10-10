@@ -53,8 +53,7 @@ class SangongAgentPersonalPage extends StatefulWidget {
       ));
     } catch (e) {
       if (context.mounted && session.isCurrent) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(_personalErrorText(e))));
+        ToastUtils.toast(_personalErrorText(e), context: context);
       }
     }
   }

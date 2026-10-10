@@ -113,9 +113,8 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
       loginType.value == LoginType.email ? phoneCtrl.text.trim() : null;
   String? get phone =>
       loginType.value == LoginType.phone ? phoneCtrl.text.trim() : null;
-  String? get account => loginType.value == LoginType.account
-      ? phoneCtrl.text.trim().replaceFirst(RegExp(r'^@+'), '').trim()
-      : null;
+  String? get account =>
+      loginType.value == LoginType.account ? phoneCtrl.text.trim() : null;
   LoginType operateType = LoginType.phone;
   bool _loggingIn = false;
   bool _closed = false;
@@ -162,15 +161,25 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
       _restoringCredentials = true;
       if (credentials.account.isNotEmpty) {
         areaCode.value = credentials.areaCode;
-        // Preserve the user-ID meaning of an otherwise phone/email-shaped ID.
-        final markedAccount =
-            credentials.loginType == LoginType.account.rawValue &&
-                (credentials.account.contains('@') ||
-                    AuthFormRules.phone(
-                            credentials.account, credentials.areaCode) ==
-                        null);
-        phoneCtrl.text =
-            markedAccount ? '@${credentials.account}' : credentials.account;
+        var rememberedAccount = credentials.account;
+        if (credentials.loginType == LoginType.account.rawValue &&
+            !rememberedAccount.startsWith('@')) {
+          // Older secure records stored the request account without its marker.
+          // Recover only a matching original input from the local login record.
+          final original = map is Map ? map['phoneNumber'] : null;
+          if (original is String &&
+              original.trim().startsWith('@') &&
+              original.trim().replaceFirst(RegExp(r'^@+'), '').trim() ==
+                  rememberedAccount) {
+            rememberedAccount = original.trim();
+          } else if (rememberedAccount.contains('@') ||
+              AuthFormRules.phone(rememberedAccount, credentials.areaCode) ==
+                  null) {
+            // Preserve the identity type for older phone/email-shaped IDs.
+            rememberedAccount = '@$rememberedAccount';
+          }
+        }
+        phoneCtrl.text = rememberedAccount;
         if (rememberPassword.value && credentials.password != null) {
           pwdCtrl.text = credentials.password!;
         }
@@ -307,7 +316,9 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
   String? _accountError() => switch (loginType.value) {
         LoginType.phone => AuthFormRules.phone(phone, areaCode.value),
         LoginType.email => AuthFormRules.email(email),
-        LoginType.account => AuthFormRules.account(account),
+        // A marker alone is not an account; keep it intact in request payloads.
+        LoginType.account => AuthFormRules.account(
+            account?.replaceFirst(RegExp(r'^@+'), '').trim()),
       };
 
   bool _checkingInput({bool accountOnly = false}) {
@@ -344,6 +355,7 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
       final passwordLogin = isPasswordLogin.value;
       final requestedAccount =
           account ?? email ?? phone ?? phoneCtrl.text.trim();
+      final rememberedAccount = phoneCtrl.text.trim();
       final requestedAreaCode = areaCode.value;
       final requestedType = loginType.value;
       final loginAccount = {
@@ -430,7 +442,7 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
       Logger.print('push login success');
       try {
         await _credentialsStore.saveSuccessful(
-          account: requestedAccount,
+          account: rememberedAccount,
           areaCode: requestedAreaCode,
           loginType: requestedType.rawValue,
           password: passwordLogin && !deviceVerified ? password : null,

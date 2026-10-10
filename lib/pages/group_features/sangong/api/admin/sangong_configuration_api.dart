@@ -61,7 +61,7 @@ class SangongConfigurationApi {
       throw ArgumentError('下注群必须是当前群');
     }
     final body = <String, dynamic>{
-      'name': name.trim(),
+      'name': name,
       'imGroupGameId': imGroupGameId.trim(),
       'imGroupAdminStatsId': imGroupAdminStatsId.trim(),
       'imGroupLedgerId': imGroupLedgerId.trim(),

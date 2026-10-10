@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'mark_six_style.dart';
 
-AppBar markSixLotteryAppBar(BuildContext context, String title) {
+AppBar markSixLotteryAppBar(BuildContext context) {
   final style = MarkSixStyle.of(context);
   return AppBar(
       elevation: 0,
@@ -38,7 +38,7 @@ AppBar markSixLotteryAppBar(BuildContext context, String title) {
       title: FittedBox(
           fit: BoxFit.scaleDown,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(title.isEmpty ? '99chat' : title,
+            Text('京东微信红包',
                 style: TextStyle(
                     color: style.text,
                     fontSize: 18,

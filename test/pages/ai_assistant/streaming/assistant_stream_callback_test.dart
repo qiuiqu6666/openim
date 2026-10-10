@@ -66,6 +66,7 @@ void main() {
     final ordinary = Message(contentType: MessageType.text);
     im.recvOfflineMessage(ordinary);
     expect(offline, [ordinary]);
-    expect(app.notifications, [ordinary]);
+    // Offline replay stays silent even if syncEnded arrives before delivery.
+    expect(app.notifications, isEmpty);
   });
 }

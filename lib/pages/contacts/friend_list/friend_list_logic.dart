@@ -8,8 +8,14 @@ import '../directory/contact_directory_indexer.dart';
 import '../directory/contact_directory_snapshot.dart';
 
 class FriendListLogic extends GetxController {
+  FriendListLogic({Future<List<ISUserInfo>> Function()? loadDirectory})
+      : _loadDirectory = loadDirectory ?? loadContactDirectorySnapshot;
+
+  final Future<List<ISUserInfo>> Function() _loadDirectory;
   final imLoic = Get.find<IMController>();
   final friendList = <ISUserInfo>[].obs;
+  final loading = true.obs;
+  final loadFailed = false.obs;
   final userIDList = <String>[];
   final _subscriptions = <StreamSubscription>[];
   final _indexer = ContactDirectoryIndexer();
@@ -62,15 +68,23 @@ class FriendListLogic extends GetxController {
   }
 
   Future<void> _getFriendList() async {
+    if (!_active) return;
+    loading.value = true;
+    loadFailed.value = false;
     try {
-      final result = await loadContactDirectorySnapshot();
+      final result = await _loadDirectory();
       if (!_active) return;
       _publish(result);
       if (_changes.isNotEmpty) await _applyChanges();
     } catch (_) {
       // Keep the existing snapshot on a transient SDK failure.
+      if (_active) loadFailed.value = true;
+    } finally {
+      if (_active) loading.value = false;
     }
   }
+
+  Future<void> reloadFriends() => _getFriendList();
 
   void _publish(List<ISUserInfo> result) {
     if (!_active) return;

@@ -40,8 +40,15 @@ class Button extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isEnabled = enabled && !loading;
+    final theme = Theme.of(context);
     final effectiveTextStyle = isEnabled
-        ? textStyle ?? Styles.ts_FFFFFF_17sp_semibold
+        ? textStyle ??
+            (theme.brightness == Brightness.dark &&
+                    enabledColor == null &&
+                    gradient == null
+                ? Styles.ts_FFFFFF_17sp_semibold
+                    .copyWith(color: theme.colorScheme.onPrimary)
+                : Styles.ts_FFFFFF_17sp_semibold)
         : disabledTextStyle ?? textStyle ?? Styles.ts_FFFFFF_17sp_semibold;
     final foreground = effectiveTextStyle.foreground?.color ??
         effectiveTextStyle.color ??

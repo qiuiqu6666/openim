@@ -6,7 +6,7 @@
 
 - `chat_location_picker.dart`：页面、路由/前后台可见性、发送现有位置 record。
 - `chat_location_picker_controller.dart`：选点和定位状态；请求串行、退出/后台和晚到定位结果隔离。
-- `data/chat_location_source.dart`：现有 Geolocator 定位。自动定位只使用已有权限；用户点击定位后才可申请权限，20 秒超时。
+- `data/chat_location_source.dart`：现有 Geolocator 定位。位置页面首次可见且地图就绪后自动申请一次使用期间定位权限；已有权限直接定位，20 秒超时。拒绝后继续允许手动选点，普通后台/路由恢复不重复申请；点击“重试”或定位按钮可再次尝试。定位服务关闭时先引导开启服务。
 - `widgets/`：地图操作层与所选位置/名称/发送面板。复用 GlassAppBar、AppTokens、现有导航，支持亮暗、小屏、大字、横屏和键盘。
 - `native/`：平台地图桥接及 Android 高德隐私同意。无公共包到应用页面的反向依赖。
 - Android 原生归属 `android/app/src/main/java/io/openim/location/`；iOS 原生归属 `ios/Runner/NativeChatLocationMap.swift`。
@@ -16,6 +16,8 @@ Android 内嵌高德地图，iOS 内嵌 MapKit。Web/桌面继续使用原 Flutt
 调用方及 Dart/native 边界坐标均为 **WGS84**，保持既有消息协议。Android GPS 显示通过高德官方 `CoordinateConverter.GPS` 转换，地图选点经 GCJ-02 逆变换回 WGS84；官方可用范围与中国范围外的点不偏移。iOS 使用 MapKit 坐标 API 原始值。地图 SDK 不主动申请定位权限或启动自己的定位服务。
 
 人工选点保留名称输入，覆盖晚到的定位成功/失败。后台、被不透明路由覆盖或销毁后不接收旧定位/选点结果，恢复不重复启动尚未完成的定位。
+
+通过页面“去设置”进入系统设置后，返回时静默复查并定位一次，不再次弹出权限申请；没有授权仍保留原提示。“打开定位服务”返回后继续先前被服务关闭中断的权限检查，尚未授权时自动申请。期间手动修改选点则不自动覆盖，页面关闭后不再启动请求。系统授权弹窗的 inactive 状态保留当前请求，避免授权后丢弃定位结果。Android 原有高德隐私同意流程仍先于地图就绪执行。
 
 ## Android 稍后配置 Key
 

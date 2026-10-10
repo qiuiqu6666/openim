@@ -92,7 +92,7 @@ class _GroupAnnouncementBannerState extends State<GroupAnnouncementBanner> {
     if (_dismissed || _showing || ModalRoute.of(context)?.isCurrent != true) {
       return;
     }
-    if (widget.text.trim().isNotEmpty &&
+    if (graphemeTrim(widget.text).isNotEmpty &&
         prefs.getString(_readKey) != widget.text) {
       await _showAnnouncement();
     }
@@ -130,7 +130,7 @@ class _GroupAnnouncementBannerState extends State<GroupAnnouncementBanner> {
         .textTheme
         .bodyMedium!
         .copyWith(color: Styles.c_0089FF);
-    final text = widget.text.replaceAll(RegExp(r'\s+'), ' ');
+    final text = graphemeCollapseWhitespace(widget.text);
     return Material(
       color: Styles.c_0089FF.withValues(alpha: 0.08),
       child: InkWell(

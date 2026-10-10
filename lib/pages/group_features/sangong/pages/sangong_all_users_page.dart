@@ -278,35 +278,49 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
     }
     final users = _visibleUsers();
     final colors = Theme.of(context).colorScheme;
-    final header = Container(
-      color: colors.surface,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+    final header = Padding(
+      padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _searchController,
               onChanged: _onQueryChanged,
+              textInputAction: TextInputAction.search,
+              style: TextStyle(fontSize: 15, color: colors.onSurface),
               decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search_rounded, size: 23),
-                hintText: '搜索公开账号或已加载的昵称',
+                prefixIcon: Icon(Icons.search_rounded,
+                    size: 21, color: colors.onSurfaceVariant),
+                hintText: '搜索公开账号或昵称',
+                hintStyle:
+                    TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: '清空搜索',
+                        icon: const Icon(Icons.cancel_rounded, size: 19),
+                        onPressed: () {
+                          _searchController.clear();
+                          _onQueryChanged('');
+                        },
+                      ),
                 isDense: true,
                 filled: true,
-                fillColor: colors.surfaceContainerHighest,
+                fillColor: colors.surfaceContainerLow,
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 15,
+                  horizontal: 12,
+                  vertical: 13,
                 ),
                 border: const OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(28)),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                   borderSide: BorderSide.none,
                 ),
                 enabledBorder: const OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(28)),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: const BorderRadius.all(Radius.circular(28)),
+                  borderRadius: const BorderRadius.all(Radius.circular(12)),
                   borderSide: BorderSide(color: colors.primary, width: 1.2),
                 ),
               ),
@@ -315,8 +329,8 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
           const SizedBox(width: 8),
           DecoratedBox(
             decoration: BoxDecoration(
-              color: colors.surfaceContainerHighest,
-              shape: BoxShape.circle,
+              color: colors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: IconButton(
               tooltip: _pointsDescending ? '积分从高到低' : '积分从低到高',
@@ -324,9 +338,9 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
                   setState(() => _pointsDescending = !_pointsDescending),
               icon: Icon(
                 _pointsDescending
-                    ? Icons.arrow_downward_rounded
-                    : Icons.arrow_upward_rounded,
-                color: colors.onSurfaceVariant,
+                    ? Icons.sort_rounded
+                    : Icons.vertical_align_bottom_rounded,
+                color: colors.primary,
               ),
             ),
           ),

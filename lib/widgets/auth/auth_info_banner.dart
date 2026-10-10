@@ -13,18 +13,24 @@ class AuthInfoBanner extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(AuthReferenceTokens.bannerPadding),
         decoration: BoxDecoration(
-          color: AuthReferenceTokens.brand50,
+          color:
+              AuthReferenceTokens.color(context, AuthReferenceTokens.brand50),
           borderRadius: BorderRadius.circular(AuthReferenceTokens.bannerRadius),
-          border: Border.all(color: AuthReferenceTokens.brand100),
+          border: Border.all(
+              color: AuthReferenceTokens.color(
+                  context, AuthReferenceTokens.brand100)),
         ),
         child: Row(
           children: [
             Icon(icon,
-                color: AuthReferenceTokens.brand500,
+                color: AuthReferenceTokens.color(
+                    context, AuthReferenceTokens.brand500),
                 size: AuthReferenceTokens.bannerIcon),
             const SizedBox(width: AuthReferenceTokens.bannerIconGap),
             Expanded(
-              child: Text(text, style: AuthReferenceTokens.bannerText),
+              child: Text(text,
+                  style: AuthReferenceTokens.style(
+                      context, AuthReferenceTokens.bannerText)),
             ),
           ],
         ),

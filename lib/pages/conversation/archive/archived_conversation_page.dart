@@ -1,3 +1,4 @@
+import '../../mine/settings/widgets/settings_widgets.dart' show showSettingsConfirm;
 // Layout and actions adapted from 99chat's ArchivedConversationPage,
 // lib/src/conversation.dart at d7c3c65 (Apache License 2.0).
 // Uses the existing OpenIM conversation state and Chat organizer API.
@@ -138,21 +139,12 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
   }
 
   Future<void> _confirmDelete(ConversationInfo info) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(StrRes.delete),
-        content: Text(
-            '${StrRes.delete} "${_logic.getShowName(info)}"?\n${StrRes.confirmClearChatHistory}'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(StrRes.cancel)),
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(StrRes.delete)),
-        ],
-      ),
+    final confirmed = await showSettingsConfirm(
+      context,
+      title: StrRes.delete,
+      message: '${StrRes.delete} "${_logic.getShowName(info)}"?\n${StrRes.confirmClearChatHistory}',
+      confirmText: StrRes.delete,
+      destructive: true,
     );
     if (confirmed == true && mounted) {
       await _perform(info, () => _logic.deleteConversation(info));

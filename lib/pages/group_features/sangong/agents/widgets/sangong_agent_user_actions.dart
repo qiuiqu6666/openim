@@ -6,6 +6,9 @@ import '../../services/account_identity/sangong_account_identity_resolver.dart';
 import '../../services/authorization/sangong_operation_scope.dart';
 import '../../support/sangong_ui.dart';
 import '../data/sangong_agent_management_api.dart';
+import '../../../../contacts/select_contacts/selection/contact_single_selection.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import '../../../../contacts/select_contacts/select_contacts_logic.dart';
 
 /// Management flows stay outside the account-report and agent-detail pages.
 class SangongAgentUserActions extends StatefulWidget {
@@ -175,6 +178,36 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
     return true;
   }
 
+  Future<bool> _editAgentGroup() async {
+    if (!_current || !_runtime.canConfigure) return false;
+    Set<String> allowed = {};
+    final picked = await Navigator.of(context).push<Object>(
+      SangongPageRoute(
+        context: context,
+        builder: (_) => ContactSingleSelection(
+          title: '\u9009\u62e9\u7528\u6237\u4ee3\u7406\u7fa4',
+          kind: ContactSingleSelectionKind.groups,
+          isCurrent: () => _current && _runtime.canConfigure,
+          scopeChanges:
+              Listenable.merge([_runtime, _runtime.http.tenantIdListenable]),
+          loadGroups: () async {
+            allowed = (await _api.groups()).toSet();
+            if (!_current || !_runtime.canConfigure) return [];
+            final groups =
+                await OpenIM.iMManager.groupManager.getJoinedGroupList();
+            return groups.where((g) => allowed.contains(g.groupID)).toList();
+          },
+        ),
+      ),
+    );
+    if (!_current || picked == null) return false;
+    final groupId = SelectContactsLogic.parseID(picked) ?? '';
+    if (groupId.isEmpty || !allowed.contains(groupId)) return false;
+    if (!_current || !_runtime.canConfigure) return false;
+    await _api.setUserAgentGroup(_imUserId, groupId);
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
       listenable:
@@ -182,6 +215,22 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
       builder: (_, __) => !_current
           ? const SizedBox.shrink()
           : Wrap(children: [
+              if (!widget.agent && _runtime.canConfigure)
+                TextButton.icon(
+                    onPressed: _busy ? null : () => _run(_editAgentGroup),
+                    icon: const Icon(Icons.groups_outlined),
+                    label: const Text('设置代理群')),
+              if (!widget.agent && _runtime.canConfigure)
+                TextButton(
+                    onPressed: _busy
+                        ? null
+                        : () => _run(() async {
+                              if (!_current || !_runtime.canConfigure)
+                                return false;
+                              await _api.setUserAgentGroup(_imUserId, '');
+                              return true;
+                            }),
+                    child: const Text('清除代理群')),
               TextButton.icon(
                   onPressed: _busy ? null : () => _run(_editRate),
                   icon: const Icon(Icons.percent_outlined),

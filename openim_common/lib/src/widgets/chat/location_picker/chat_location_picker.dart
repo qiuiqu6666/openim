@@ -32,6 +32,8 @@ class _ChatLocationPickerState extends State<ChatLocationPicker>
   late final ChatLocationPickerController _controller;
   bool _mapReady = false, _autoTried = false;
   bool _visible = true, _foreground = true, _sending = false;
+  int? _settingsSelection;
+  bool _settingsResumePending = false;
   ChatLocationMapFailure? _mapFailure;
 
   bool get _active => mounted && _visible && _foreground && !_sending;
@@ -62,17 +64,40 @@ class _ChatLocationPickerState extends State<ChatLocationPicker>
     _foreground = state != AppLifecycleState.paused &&
         state != AppLifecycleState.hidden &&
         state != AppLifecycleState.detached;
+    if (state == AppLifecycleState.resumed && _settingsSelection != null) {
+      _settingsResumePending = true;
+    }
     _syncActivity();
     if (mounted) setState(() {});
   }
 
   void _syncActivity() {
     _controller.setActive(_active);
-    if (!_active || !_mapReady || _autoTried) return;
+    if (!_active || !_mapReady || _mapFailure != null) return;
+    if (_autoTried && !_settingsResumePending) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_active || _autoTried) return;
-      _autoTried = true;
-      unawaited(_controller.locate(requestPermission: false));
+      if (!_active ||
+          !_mapReady ||
+          _mapFailure != null ||
+          _controller.locating) {
+        return;
+      }
+      if (!_autoTried) {
+        // Entering the location picker is the user's request to use location.
+        // The source prompts only when permission has not already been granted.
+        _autoTried = true;
+        unawaited(_controller.locate());
+      } else if (_settingsResumePending) {
+        final selection = _settingsSelection;
+        _settingsSelection = null;
+        _settingsResumePending = false;
+        if (selection != _controller.selectionRevision) return;
+        // Service-disabled reads stop before checking permission. Continue
+        // that permission flow after settings; other returns stay silent.
+        unawaited(_controller.locate(
+            requestPermission:
+                _controller.failure == ChatLocationFailure.disabled));
+      }
     });
   }
 
@@ -88,6 +113,7 @@ class _ChatLocationPickerState extends State<ChatLocationPicker>
   void _changed() {
     if (!mounted) return;
     setState(() {});
+    _syncActivity();
   }
 
   void _select(LatLng point) {
@@ -103,16 +129,17 @@ class _ChatLocationPickerState extends State<ChatLocationPicker>
   }
 
   Future<void> _openSettings() async {
-    if (!_active) return;
+    if (!_active || _settingsSelection != null) return;
+    _settingsSelection = _controller.selectionRevision;
     final labels = ChatLocationPickerLabels.of(context);
     try {
       final opened = _controller.failure == ChatLocationFailure.disabled
           ? await Geolocator.openLocationSettings()
           : await Geolocator.openAppSettings();
-      if (opened || !_active) return;
-    } catch (_) {
-      if (!_active) return;
-    }
+      if (opened) return;
+    } catch (_) {}
+    _settingsSelection = null;
+    _settingsResumePending = false;
     if (mounted && _active) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(labels.failure(ChatLocationFailure.unavailable))));
@@ -127,7 +154,7 @@ class _ChatLocationPickerState extends State<ChatLocationPicker>
     Navigator.of(context).pop((
       latitude: point.latitude,
       longitude: point.longitude,
-      description: _description.text.trim()
+      description: _description.text
     ));
   }
 

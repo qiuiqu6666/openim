@@ -61,6 +61,19 @@ void main() {
     OpenIM.iMManager.userID = 'self';
   });
 
+  test('recall preview displays actor without sender prefix or unsupported text', () {
+    final notice = _message(MessageType.revokeMessageNotification, {
+      'notificationElem': {
+        'detail': jsonEncode({'revokerID': 'peer', 'revokerNickname': '秋666'})
+      }
+    });
+    expect(conversationLatestMessageText(_conversation(notice, group: true)),
+        '秋666撤回了一条消息');
+    notice.notificationElem!.detail = jsonEncode({'revokerID': 'self'});
+    expect(conversationLatestMessageText(_conversation(notice)),
+        '你撤回了一条消息');
+  });
+
   for (final locale in [const Locale('zh', 'CN'), const Locale('en', 'US')]) {
     test('formats supported latest message types in $locale', () {
       Get.locale = locale;

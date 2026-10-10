@@ -80,6 +80,8 @@ class AiUiTestHost {
 
   Future<void> mount(WidgetTester tester, Widget child,
       {bool settle = true}) async {
+    // The production theme controller synchronizes legacy shared chat tokens.
+    Styles.isDark = dark;
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);

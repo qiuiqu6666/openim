@@ -9,6 +9,8 @@ import 'package:openim/pages/chat/voice/voice_to_text_service.dart';
 import 'package:openim/pages/chat/voice/widgets/voice_text_preview_dialog.dart';
 import 'package:openim_common/openim_common.dart';
 
+import '../../../support/unicode/unicode_samples.dart';
+
 Finder _key(String name) => find.byKey(ValueKey('voice-text-$name'));
 
 Future<void> _openPreview(
@@ -81,6 +83,27 @@ void _expectVisibleActions(WidgetTester tester, {required double bottom}) {
 void main() {
   tearDown(Get.reset);
 
+  for (final sample in unicodeSamples) {
+    testWidgets('preview editor preserves exact ${sample.name} before sending',
+        (tester) async {
+      final recognized = ' \u0301${sample.text}\n\t ';
+      VoiceTextChoice? choice;
+      await _openPreview(
+          tester, (_) async => recognized, (value) => choice = value);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(_key('editor')).controller!.text,
+          recognized);
+      final edited = '$recognized${sample.text} ';
+      await tester.enterText(_key('editor'), edited);
+      await tester.pump();
+      expect(tester.widget<FilledButton>(_key('send')).onPressed, isNotNull);
+      await tester.tap(_key('send'));
+      await tester.pumpAndSettle();
+      expect(choice?.text, edited);
+      expect(choice!.text!.codeUnits, edited.codeUnits);
+    });
+  }
+
   testWidgets('show opens a bottom sheet and retains it during recognition',
       (tester) async {
     final pending = Completer<String>();
@@ -142,7 +165,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('edited text is trimmed and whitespace cannot be sent',
+  testWidgets('edited text is preserved and whitespace cannot be sent',
       (tester) async {
     var calls = 0;
     VoiceTextChoice? choice;
@@ -163,7 +186,7 @@ void main() {
     await tester.pump();
     await tester.tap(_key('send'));
     await tester.pumpAndSettle();
-    expect(choice?.text, '修改后的文字');
+    expect(choice?.text, '  修改后的文字  ');
     expect(choice?.sendOriginal, isFalse);
     expect(calls, 1);
   });

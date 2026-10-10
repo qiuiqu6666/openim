@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/core/notifications/message_notification_actions.dart';
 import 'package:openim/core/notifications/message_notification_target.dart';
 
+import '../../support/unicode/unicode_samples.dart';
+
 void main() {
   group('MessageNotificationTarget', () {
     for (final type in [
@@ -92,6 +94,25 @@ void main() {
   });
 
   group('MessageNotificationActions', () {
+    for (final sample in unicodeSamples) {
+      test('queued notification reply preserves ${sample.name}', () async {
+        final h = _Harness()..ready = false;
+        final raw = ' \u0301${sample.text}\n\t ';
+        final target = _target(messageID: 'unicode-message');
+        await h.reply(text: raw, target: target);
+        expect(h.actions.pendingCount, 1);
+        expect(h.sent, isEmpty);
+        h.ready = true;
+        await h.actions.processPending();
+        await h.reply(text: raw, target: target);
+        expect(h.sent, [raw]);
+        expect(h.sent.single.codeUnits, raw.codeUnits);
+        expect(h.cancelled, [7]);
+        expect(h.errors, isEmpty);
+        h.actions.close();
+      });
+    }
+
     test(
         'known notification accounts ignore stale reply but allow opening chat',
         () async {
@@ -157,7 +178,7 @@ void main() {
         () async {
       final h = _Harness();
       await h.reply(text: '  native reply\n  ');
-      expect(h.sent, ['native reply']);
+      expect(h.sent, ['  native reply\n  ']);
       expect(h.opened, isEmpty);
       expect(h.cancelled, [7]);
       expect(h.errors, isEmpty);
@@ -285,7 +306,7 @@ void main() {
       final first = _target(messageID: 'message-1');
       final second = _target(messageID: 'message-2');
       await h.reply(text: '好', target: first);
-      await h.reply(text: ' 好 ', target: first);
+      await h.reply(text: '好', target: first);
       await h.reply(text: '好', target: second);
       await h.reply(text: '好', target: second);
       expect(h.sent, ['好', '好']);

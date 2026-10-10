@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '../utils/text/unicode_text.dart';
 
 class TextWithMidEllipsis extends StatelessWidget {
   final String data;
@@ -21,16 +22,19 @@ class TextWithMidEllipsis extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraint) {
         if (constraint.maxWidth <= _textSize(data, style).width &&
-            data.length > endPartLength) {
-          var endPart = data.trim().substring(data.length - endPartLength);
+            data.characters.length > endPartLength) {
+          final endPart = graphemeSuffix(data, endPartLength);
+          final leading =
+              graphemePrefix(data, data.characters.length - endPartLength);
           return Row(
             children: [
               Flexible(
                 child: Text(
-                  data.fixOverflowEllipsis,
+                  leading,
                   style: style,
                   textAlign: textAlign,
                   overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                   textDirection: textDirection,
                 ),
               ),
@@ -68,7 +72,5 @@ class TextWithMidEllipsis extends StatelessWidget {
 }
 
 extension AppStringExtension on String {
-  String get fixOverflowEllipsis => Characters(this)
-      .replaceAll(Characters(''), Characters('\u{200B}'))
-      .toString();
+  String get fixOverflowEllipsis => this;
 }

@@ -29,7 +29,7 @@ class ResetPasswordPage extends StatelessWidget {
   Widget build(BuildContext context) => RegisterBgView(
         centeredHeader: true,
         showWaves: true,
-        toolbar: const LoginToolbar(),
+        toolbar: const LoginToolbar(onHero: false),
         title: authText('设置新密码', 'Set a new password'),
         subtitle: authText('设置完成后，使用新密码重新登录',
             'Use your new password to sign in after the reset.'),

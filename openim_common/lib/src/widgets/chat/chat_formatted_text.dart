@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
-/// Entity offsets use the SDK's string offsets. Invalid ranges are ignored.
+/// Entity offsets keep the SDK's UTF-16 units; display spans never split a
+/// grapheme cluster. Invalid protocol ranges are ignored.
 class ChatFormattedText extends StatelessWidget {
   const ChatFormattedText(
       {super.key, required this.text, required this.entities});
@@ -11,28 +12,25 @@ class ChatFormattedText extends StatelessWidget {
 
   static List<InlineSpan> spans(
       String text, List<MessageEntity> entities, TextStyle base) {
-    bool boundary(int index) =>
-        index <= 0 ||
-        index >= text.length ||
-        !(text.codeUnitAt(index) >= 0xDC00 &&
-            text.codeUnitAt(index) <= 0xDFFF &&
-            text.codeUnitAt(index - 1) >= 0xD800 &&
-            text.codeUnitAt(index - 1) <= 0xDBFF);
+    final graphemes = graphemeBoundaries(text);
     final valid = entities
         .where((e) =>
             e.offset != null &&
             e.length != null &&
             e.offset! >= 0 &&
             e.length! > 0 &&
-            e.offset! + e.length! <= text.length &&
-            boundary(e.offset!) &&
-            boundary(e.offset! + e.length!))
+            e.offset! + e.length! <= text.length)
         .take(200)
+        .map((e) => (
+              entity: e,
+              range: graphemeSafeRange(text, e.offset!, e.offset! + e.length!,
+                  boundaries: graphemes),
+            ))
         .toList();
     final boundaries = <int>{0, text.length};
     for (final e in valid) {
-      boundaries.add(e.offset!);
-      boundaries.add(e.offset! + e.length!);
+      boundaries.add(e.range.start);
+      boundaries.add(e.range.end);
     }
     final sorted = boundaries.toList()..sort();
     return [
@@ -43,9 +41,9 @@ class ChatFormattedText extends StatelessWidget {
                 base,
                 valid
                     .where((e) =>
-                        e.offset! <= sorted[i] &&
-                        e.offset! + e.length! >= sorted[i + 1])
-                    .map((e) => e.type ?? '')
+                        e.range.start <= sorted[i] &&
+                        e.range.end >= sorted[i + 1])
+                    .map((e) => e.entity.type ?? '')
                     .toSet()))
     ];
   }

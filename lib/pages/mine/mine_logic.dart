@@ -227,10 +227,9 @@ class MineLogic extends GetxController {
   void aboutUs() => AppNavigator.startAboutUs();
 
   Future<void> logout() async {
-    var confirm = await Get.dialog(CustomDialog(title: StrRes.logoutHint));
-    if (confirm == true && !isClosed) {
-      await Get.find<HomeLogic>().endSession();
-    }
+    // SettingsHomePage already confirmed with the Cupertino dialog.
+    if (isClosed) return;
+    await Get.find<HomeLogic>().endSession();
   }
 
   void kickedOffline({String? tips}) async {

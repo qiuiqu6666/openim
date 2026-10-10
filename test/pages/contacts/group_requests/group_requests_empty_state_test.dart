@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:openim/pages/contacts/group_requests/group_requests_logic.dart';
 import 'package:openim/pages/contacts/group_requests/group_requests_view.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 
 import 'support/group_requests_test_fixture.dart';
 
@@ -44,6 +45,31 @@ void main() {
 
   for (final brightness in Brightness.values) {
     testWidgets(
+        'footer appends 20 notices without moving the list ($brightness)',
+        (tester) async {
+      fixture.recipient = [for (var i = 45; i > 0; i--) request(time: i)];
+      await _open(tester, brightness);
+      await tester.pumpAndSettle();
+      final logic = Get.find<GroupRequestsLogic>();
+      expect(logic.list, hasLength(20));
+      final refresher =
+          tester.widget<SmartRefresher>(find.byType(SmartRefresher));
+      expect(refresher.enablePullUp, isTrue);
+      await tester.drag(find.byType(SmartRefresher), const Offset(0, -250));
+      await tester.pumpAndSettle();
+      final before = logic.refreshController.position!.pixels;
+      await logic.refreshController.requestLoading(needMove: false);
+      await tester.pumpAndSettle();
+      expect(logic.list, hasLength(40));
+      expect(logic.refreshController.position!.pixels, closeTo(before, .01));
+      await logic.refreshController.requestLoading(needMove: false);
+      await tester.pumpAndSettle();
+      expect(logic.list, hasLength(45));
+      expect(logic.refreshController.footerStatus, LoadStatus.noMore);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
         'empty notices wait for SDK and recover on events ($brightness)',
         (tester) async {
       fixture.holdRecipient = true;
@@ -53,6 +79,8 @@ void main() {
       fixture.recipientReplies.single.complete('[]');
       await tester.pumpAndSettle();
       expect(find.text(StrRes.emptyGroupNotification), findsOneWidget);
+      expect(tester.getCenter(find.text(StrRes.newGroupRequest)).dx,
+          closeTo(tester.view.physicalSize.width / 2, .01));
       final illustration = find.byWidgetPredicate((widget) =>
           widget is Image &&
           widget.image is AssetImage &&

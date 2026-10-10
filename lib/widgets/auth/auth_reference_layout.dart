@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'auth_copy.dart';
 import 'auth_reference_tokens.dart';
 
-/// 99chat's auth frame: blue hero, top tabs and a rounded white form surface.
+/// 99chat's auth frame: blue hero, top tabs and a themed rounded form surface.
 class AuthEntryScaffold extends StatelessWidget {
   const AuthEntryScaffold(
       {super.key,
@@ -30,39 +30,27 @@ class AuthEntryScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final current = Theme.of(context);
-    final light = ThemeData(
-        brightness: Brightness.light,
-        fontFamily: current.textTheme.bodyMedium?.fontFamily,
-        colorScheme: ColorScheme.fromSeed(
-            seedColor: AuthReferenceTokens.brand500,
-            brightness: Brightness.light),
-        scaffoldBackgroundColor: Colors.white,
-        textSelectionTheme: const TextSelectionThemeData(
-            cursorColor: AuthReferenceTokens.brand500,
-            selectionColor: Color(0x381E90FF),
-            selectionHandleColor: AuthReferenceTokens.brand500));
-    return Theme(
-        data: light,
-        child: AnnotatedRegion<SystemUiOverlayStyle>(
-          value: const SystemUiOverlayStyle(
-              statusBarColor: Colors.transparent,
-              statusBarIconBrightness: Brightness.light,
-              statusBarBrightness: Brightness.dark,
-              systemNavigationBarColor: Colors.white,
-              systemNavigationBarIconBrightness: Brightness.dark),
-          child: Scaffold(
-            backgroundColor: AuthReferenceTokens.brand500,
-            resizeToAvoidBottomInset: false,
-            body: GestureDetector(
-                onTap: () => FocusScope.of(context).unfocus(),
-                child: LayoutBuilder(
-                    builder: (context, constraints) =>
-                        constraints.maxWidth >= 900
-                            ? _wide(context, constraints)
-                            : _mobile(context, constraints))),
-          ),
-        ));
+    final dark = AuthReferenceTokens.isDark(context);
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+          systemNavigationBarColor:
+              AuthReferenceTokens.color(context, AuthReferenceTokens.surface),
+          systemNavigationBarIconBrightness:
+              dark ? Brightness.light : Brightness.dark),
+      child: Scaffold(
+        backgroundColor: AuthReferenceTokens.brand500,
+        resizeToAvoidBottomInset: false,
+        body: GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: LayoutBuilder(
+                builder: (context, constraints) => constraints.maxWidth >= 900
+                    ? _wide(context, constraints)
+                    : _mobile(context, constraints))),
+      ),
+    );
   }
 
   Widget _form(BuildContext context) => SingleChildScrollView(
@@ -106,7 +94,7 @@ class AuthEntryScaffold extends StatelessWidget {
               Text(accent, style: AuthReferenceTokens.hero),
               if (tabs != null && tabs!.isNotEmpty) ...[
                 SizedBox(height: compact ? 12 : AuthReferenceTokens.heroTabGap),
-                _tabs()
+                _tabs(context)
               ],
             ])),
         if (headerAction != null)
@@ -115,8 +103,9 @@ class AuthEntryScaffold extends StatelessWidget {
       Expanded(
           child: Container(
               width: double.infinity,
-              decoration: const BoxDecoration(
-                  color: Colors.white,
+              decoration: BoxDecoration(
+                  color: AuthReferenceTokens.color(
+                      context, AuthReferenceTokens.surface),
                   borderRadius:
                       BorderRadius.vertical(top: Radius.circular(34))),
               child: SafeArea(top: false, child: _panel(context)))),
@@ -124,7 +113,9 @@ class AuthEntryScaffold extends StatelessWidget {
   }
 
   Widget _wide(BuildContext context, BoxConstraints constraints) => Container(
-      color: const Color(0xFFF4F7FB),
+      color: AuthReferenceTokens.isDark(context)
+          ? Theme.of(context).scaffoldBackgroundColor
+          : const Color(0xFFF4F7FB),
       alignment: Alignment.center,
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -134,7 +125,8 @@ class AuthEntryScaffold extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-                color: Colors.white,
+                color: AuthReferenceTokens.color(
+                    context, AuthReferenceTokens.surface),
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: const [
                   BoxShadow(
@@ -214,7 +206,7 @@ class AuthEntryScaffold extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (tabs != null && tabs!.isNotEmpty)
-                              _tabs(wide: true),
+                              _tabs(context, wide: true),
                             const SizedBox(height: 30),
                             Expanded(child: _panel(context)),
                           ]))),
@@ -236,7 +228,7 @@ class AuthEntryScaffold extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: Colors.white, size: 16)));
 
-  Widget _tabs({bool wide = false}) => Wrap(
+  Widget _tabs(BuildContext context, {bool wide = false}) => Wrap(
       spacing: wide ? 30 : 36,
       children: List.generate(tabs!.length, (index) {
         final active = index == (activeTab ?? 0);
@@ -255,7 +247,8 @@ class AuthEntryScaffold extends StatelessWidget {
                                 bottom: BorderSide(
                                     width: AuthReferenceTokens.tabUnderline,
                                     color: wide
-                                        ? AuthReferenceTokens.brand500
+                                        ? AuthReferenceTokens.color(context,
+                                            AuthReferenceTokens.brand500)
                                         : Colors.white))
                             : null),
                     child: Text(tabs![index],
@@ -265,8 +258,10 @@ class AuthEntryScaffold extends StatelessWidget {
                                 active ? FontWeight.w700 : FontWeight.w600,
                             color: wide
                                 ? active
-                                    ? AuthReferenceTokens.ink900
-                                    : AuthReferenceTokens.ink400
+                                    ? AuthReferenceTokens.color(
+                                        context, AuthReferenceTokens.ink900)
+                                    : AuthReferenceTokens.color(
+                                        context, AuthReferenceTokens.ink400)
                                 : active
                                     ? Colors.white
                                     : const Color(0xCCFFFFFF))))));

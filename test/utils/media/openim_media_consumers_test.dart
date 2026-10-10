@@ -29,7 +29,7 @@ void main() {
     final provider = image.image as ExtendedNetworkImageProvider;
     expect(
       provider.url,
-      'http://129.226.192.93:10002$_objectPath$_thumbnailQuery',
+      'https://99imapi.99chat.vip$_objectPath$_thumbnailQuery',
     );
     expect(provider.cache, isTrue);
   });
@@ -141,7 +141,7 @@ void main() {
 
     expect(thumbnail, '$_loopbackUrl$_thumbnailQuery');
     expect((image.image as ExtendedNetworkImageProvider).url,
-        'http://129.226.192.93:10002$_objectPath$_thumbnailQuery');
+        'https://99imapi.99chat.vip$_objectPath$_thumbnailQuery');
   });
 
   test('MediaSource keeps local sources and action metadata', () {

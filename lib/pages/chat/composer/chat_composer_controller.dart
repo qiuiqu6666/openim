@@ -81,6 +81,7 @@ class ChatComposerController {
   Timer? _typingTimer;
   Future<void> _draftWrites = Future<void>.value();
   String _previousInput = '';
+  String _previousCommittedInput = '';
   bool _choosingMention = false;
   bool _restoringDraft = false;
   bool _initialized = false;
@@ -126,6 +127,7 @@ class ChatComposerController {
       inputCtrl.value = TextEditingValue(
           text: text, selection: TextSelection.collapsed(offset: text.length));
       _previousInput = text;
+      _previousCommittedInput = text;
     } finally {
       _restoringDraft = false;
     }
@@ -162,15 +164,21 @@ class ChatComposerController {
   void inputChanged() {
     if (_closed || _restoringDraft) return;
     final text = inputCtrl.text;
-    if (text == _previousInput) return;
-    final old = _previousInput;
-    _previousInput = text;
-    _inputRevision++;
+    if (text != _previousInput) {
+      _previousInput = text;
+      _inputRevision++;
+      _draftTimer?.cancel();
+      _draftTimer = Timer(const Duration(milliseconds: 400), () {
+        unawaited(saveDraft());
+      });
+    }
+    // Do not replace text while the system keyboard is composing a sequence.
+    final composing = inputCtrl.value.composing;
+    if (composing.isValid && !composing.isCollapsed) return;
     _mentions.removeWhere((id, name) => !text.contains('@$name '));
-    _draftTimer?.cancel();
-    _draftTimer = Timer(const Duration(milliseconds: 400), () {
-      unawaited(saveDraft());
-    });
+    final old = _previousCommittedInput;
+    _previousCommittedInput = text;
+    if (text == old) return;
     final cursor = inputCtrl.selection.baseOffset;
     if (isGroupChat() &&
         !_choosingMention &&
@@ -187,12 +195,24 @@ class ChatComposerController {
     if (_closed || _choosingMention || group == null) return;
     _choosingMention = true;
     focusNode.unfocus();
+    final revision = _inputRevision;
     try {
       final selected =
           await selectMembers(group, ComposerMemberSelection.mention);
-      if (_closed || selected == null || selected.isEmpty) return;
+      if (isClosed ||
+          selected == null ||
+          selected.isEmpty ||
+          revision != _inputRevision ||
+          (inputCtrl.value.composing.isValid &&
+              !inputCtrl.value.composing.isCollapsed)) {
+        return;
+      }
       final text = inputCtrl.text;
       if (start < 0 || start >= text.length || text[start] != '@') return;
+      if (graphemeBoundaryBefore(text, start) != start ||
+          graphemeBoundaryAfter(text, start + 1) != start + 1) {
+        return;
+      }
       final inserted = selected
           .where((member) => member.userID != null)
           .map((member) => '@${member.nickname ?? member.userID} ')
@@ -229,20 +249,14 @@ class ChatComposerController {
       showError(StrRes.youMuted);
       return;
     }
-    final name = message.senderNickname?.trim().isNotEmpty == true
-        ? message.senderNickname!.trim()
+    final name = message.senderNickname != null &&
+            graphemeTrim(message.senderNickname!).isNotEmpty
+        ? graphemeTrim(message.senderNickname!)
         : userID;
-    final text = inputCtrl.text;
-    final selection = inputCtrl.selection;
-    final valid = selection.isValid && selection.end <= text.length;
-    final start = valid ? selection.start : text.length;
-    final end = valid ? selection.end : text.length;
     final inserted = '@$name ';
     _choosingMention = true;
     try {
-      inputCtrl.value = TextEditingValue(
-          text: text.replaceRange(start, end, inserted),
-          selection: TextSelection.collapsed(offset: start + inserted.length));
+      inputCtrl.value = insertChatText(inputCtrl.value, inserted);
       _mentions[userID] = name;
       unawaited(saveDraft());
     } finally {
@@ -258,8 +272,8 @@ class ChatComposerController {
       showError(StrRes.youMuted);
       return;
     }
-    final content = IMUtils.safeTrim(inputCtrl.text);
-    if (content.isEmpty) return;
+    final content = inputCtrl.text;
+    if (content.trim().isEmpty) return;
     final quote = quotedMessage.value;
     final snapshot = (input: _inputRevision, quote: _quoteRevision);
     final mentions = isGroupChat()

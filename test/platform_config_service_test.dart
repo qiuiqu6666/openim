@@ -15,6 +15,7 @@ class _Adapter implements HttpClientAdapter {
       'email': 'support@example.com',
       'android': {
         'latestVersion': '3.10.0',
+        'changelog': '  修复消息显示问题\n改善连接稳定性  ',
         'downloadURL': 'https://example.com/download',
         'downloadLink': 'https://example.com/app.apk',
         'grayRatio': 30
@@ -53,12 +54,14 @@ void main() {
     expect(config.officialURL, 'https://example.com');
     expect(config.email, 'support@example.com');
     expect(config.android.latest, '3.10.0');
+    expect(config.android.changelog, '修复消息显示问题\n改善连接稳定性');
     expect(config.android.shareURL, 'https://example.com/download');
     expect(config.android.installURL, 'https://example.com/app.apk');
     expect(config.ios.latest, '4.0.0');
   });
   test('empty configuration and failed response are distinct', () async {
     expect(PlatformConfig({}).android.latest, isEmpty);
+    expect(PlatformConfig({}).android.changelog, isEmpty);
     final adapter = _Adapter()..body = {'errCode': 1001, 'data': {}};
     await expectLater(
         PlatformConfigService.fetch(client: Dio()..httpClientAdapter = adapter),

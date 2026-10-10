@@ -19,6 +19,7 @@ import '../official_account/models/official_account.dart';
 import '../official_account/presentation/official_account_timeline_policy.dart';
 import '../ai_assistant/streaming/assistant_stream_chunk.dart';
 import '../ai_assistant/streaming/assistant_stream_state.dart';
+import '../ai_assistant/streaming/diagnostics/assistant_stream_log.dart';
 import '../group_features/data/group_feature_runtime.dart';
 import '../group_features/models/group_feature_context.dart';
 import 'composer/chat_composer_controller.dart';
@@ -39,6 +40,7 @@ import 'history/date_jump/widgets/chat_date_picker_dialog.dart';
 import 'media/chat_media_controller.dart';
 import 'messages/chat_delivery_controller.dart';
 import 'messages/chat_message_actions.dart';
+import 'messages/revocation/chat_message_revocation.dart';
 import 'messages/arrival/chat_message_arrival_controller.dart';
 import 'messages/presentation/chat_message_presentation.dart';
 import 'messages/forwarding/chat_forwarding_controller.dart';
@@ -114,6 +116,18 @@ class ChatLogic extends SuperController {
     groupStatus: () => groupInfo?.status,
     scrollBottom: scrollBottom,
     resetInput: (message) => _composer.resetAfterSend(message),
+    onDeliveryStarted: (message, target) =>
+        !_sessionInactive &&
+                isSingleChat &&
+                userID == 'assistant' &&
+                target.userID == 'assistant'
+            ? assistantStreams.beginReply()
+            : null,
+    onDeliveryFinished: (waiting, message) {
+      if (_sessionInactive || message.status != MessageStatus.succeeded) {
+        assistantStreams.cancelReply(waiting as int?);
+      }
+    },
   );
   late final _receipts = ChatReadReceipts(
     messageList: messageList,
@@ -195,6 +209,25 @@ class ChatLogic extends SuperController {
     conversationID: () => conversationInfo.conversationID,
     removeMessage: _removeMessageByID,
     isClosed: () => _sessionInactive || isOfficialNotificationChat,
+  );
+  late final _revocation = ChatMessageRevocation(
+    conversationID: () => conversationInfo.conversationID,
+    currentUserID: () => OpenIM.iMManager.userID,
+    groupID: () => groupID,
+    groupInfo: () => groupInfo,
+    memberRole: _group.memberRoleFor,
+    isJoined: () => isInGroup.value,
+    groupRevision: () => _group.memberActionRevision,
+    isCurrentMessage: (message) =>
+        isCurrentChat(message) &&
+        !_removedMessageIDs.contains(message.clientMsgID),
+    isClosed: () => _sessionInactive || isOfficialNotificationChat,
+    onRevoked: (id) => _revokeMessageNotice(RevokedInfo(
+      clientMsgID: id,
+      revokerID: OpenIM.iMManager.userID,
+      revokerNickname: senderName,
+    )),
+    showFeedback: IMViews.showToast,
   );
   late final ChatForwardingController _forwarding = ChatForwardingController(
     delivery: _delivery,
@@ -329,6 +362,16 @@ class ChatLogic extends SuperController {
     if (messageList.isEmpty && scrollingCacheMessageList.isEmpty) {
       newMessages.reset();
     }
+    _voice.removeMessage(id);
+    copyTextMap.remove(id);
+    if (quotedMessage.value?.clientMsgID == id) clearReply();
+  }
+
+  void _revokeMessageNotice(RevokedInfo info) {
+    final id = info.clientMsgID;
+    if (id == null || _sessionInactive) return;
+    newMessages.remove(id);
+    _timeline.revoke(info);
     _voice.removeMessage(id);
     copyTextMap.remove(id);
     if (quotedMessage.value?.clientMsgID == id) clearReply();
@@ -609,15 +652,22 @@ class ChatLogic extends SuperController {
         if (chunk != null) {
           _typingExpiry?.cancel();
           peerTyping.value = false;
-          if (assistantStreams.accept(chunk) != null) {
+          final snapshot = assistantStreams.accept(chunk);
+          AssistantStreamLog.accepted(chunk, snapshot,
+              buffering: bufferingLiveMessages,
+              finalized: assistantStreams.isFinalized(chunk.streamID));
+          if (snapshot != null) {
             scrollBottom(force: false);
           }
+        } else {
+          AssistantStreamLog.invalid(message);
         }
       }
       return;
     }
     if (!_sessionInactive && _isAssistantReply(message)) {
-      assistantStreams.markFinalMessage(message);
+      AssistantStreamLog.finalReply(message);
+      assistantStreams.receivedReply(message);
     }
     if (!_sessionInactive && isSingleChat && message.sendID == userID) {
       if (message.contentType == MessageType.typing) {
@@ -716,8 +766,7 @@ class ChatLogic extends SuperController {
         isOfficialNotificationChat ? null : conversationInfo.draftText);
     scrollController.addListener(_onChatScrolled);
     _messageSubscriptions.addAll([
-      imLogic.revokedMessages
-          .listen((event) => _removeMessageByID(event.clientMsgID)),
+      imLogic.revokedMessages.listen(_revokeMessageNotice),
       imLogic.deletedMessages
           .listen((event) => _removeMessageByID(event.clientMsgID)),
       imLogic.inputStateChangedSubject.listen((event) {
@@ -756,7 +805,14 @@ class ChatLogic extends SuperController {
     });
 
     _ownedMessageCallback = (Message message) {
-      if (!_sessionInactive && isCurrentChat(message)) {
+      final active = !_sessionInactive;
+      final currentChat = active && isCurrentChat(message);
+      AssistantStreamLog.routed(message,
+          active: active,
+          currentChat: currentChat,
+          assistantChat: isSingleChat && userID == 'assistant',
+          buffering: bufferingLiveMessages);
+      if (currentChat) {
         _appendLiveMessage(message);
       }
     };
@@ -833,10 +889,10 @@ class ChatLogic extends SuperController {
 
   void clearReply() => _composer.clearReply();
   bool canRevoke(Message message) =>
-      !isOfficialNotificationChat && _actions.canRevoke(message);
+      !isOfficialNotificationChat && _revocation.canRevoke(message);
   Future<void> revokeMessage(Message message) => isOfficialNotificationChat
       ? Future<void>.value()
-      : _actions.revokeMessage(message);
+      : _revocation.revokeMessage(message);
   bool canForward(Message message) =>
       !isOfficialNotificationChat && _actions.canForward(message);
   bool canFavorite(Message message) =>

@@ -302,12 +302,10 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     final controller = Get.find<IMController>();
-    _subscriptions.add(controller.friendAddSubject.stream
-        .skip(controller.friendAddSubject.hasValue ? 1 : 0)
-        .listen((_) => _relationChanged()));
-    _subscriptions.add(controller.friendDelSubject.stream
-        .skip(controller.friendDelSubject.hasValue ? 1 : 0)
-        .listen((_) => _relationChanged()));
+    _subscriptions
+        .add(controller.friendAddSubject.listen((_) => _relationChanged()));
+    _subscriptions
+        .add(controller.friendDelSubject.listen((_) => _relationChanged()));
     _subscriptions.add(
         controller.friendInfoChangedSubject.listen((_) => _relationChanged()));
     _subscriptions.add(

@@ -156,7 +156,7 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
     try {
       final page = await _source.load(
         conversationID: widget.conversationID,
-        query: _search.text.trim(),
+        query: graphemeTrim(_search.text),
         offset: _offset,
         count: _pageSize,
       );

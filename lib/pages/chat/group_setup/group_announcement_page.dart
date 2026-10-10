@@ -29,7 +29,7 @@ class _GroupAnnouncementPageState extends State<GroupAnnouncementPage> {
 
   Future<void> publish() async {
     if (saving || !logic.isOwnerOrAdmin) return;
-    final text = controller.text.trim();
+    final text = graphemeTrim(controller.text);
     if (text.characters.length > 600) return;
     final groupID = logic.groupInfo.value.groupID;
     FocusManager.instance.primaryFocus?.unfocus();
@@ -125,10 +125,10 @@ class _GroupAnnouncementPageState extends State<GroupAnnouncementPage> {
                             height: 44,
                             child: FilledButton(
                               onPressed: saving ||
-                                      controller.text.trim() ==
-                                          (logic.groupInfo.value.notification ??
-                                                  '')
-                                              .trim() ||
+                                      graphemeTrim(controller.text) ==
+                                          graphemeTrim(logic.groupInfo.value
+                                                  .notification ??
+                                              '') ||
                                       controller.text.characters.length > 600
                                   ? null
                                   : publish,

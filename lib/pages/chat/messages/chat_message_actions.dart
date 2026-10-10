@@ -7,7 +7,7 @@ typedef LocalMessageDeletion = Future<void> Function({
   required String clientMsgID,
 });
 
-/// Message menu policies and SDK deletion/revocation.
+/// Message forwarding policies and SDK local deletion.
 class ChatMessageActions {
   ChatMessageActions({
     required String Function() conversationID,
@@ -35,32 +35,6 @@ class ChatMessageActions {
   bool _isFundMessage(Message message) =>
       message.contentType == MessageType.custom &&
       FundMessageData.tryParse(message.customElem?.data) != null;
-
-  bool canRevoke(Message message) {
-    // Recalling an IM record cannot cancel a posted funds order. Preserve the
-    // server-created financial card so recall never suggests a refund.
-    if (_isFundMessage(message)) return false;
-    final sentAt = message.sendTime;
-    return message.sendID == OpenIM.iMManager.userID &&
-        message.status == MessageStatus.succeeded &&
-        sentAt != null &&
-        DateTime.now().millisecondsSinceEpoch - sentAt <
-            const Duration(minutes: 2).inMilliseconds;
-  }
-
-  Future<void> revokeMessage(Message message) async {
-    final clientMsgID = message.clientMsgID;
-    if (clientMsgID == null || !canRevoke(message)) return;
-    try {
-      await OpenIM.iMManager.messageManager.revokeMessage(
-        conversationID: _conversationID(),
-        clientMsgID: clientMsgID,
-      );
-      if (!_isClosed()) _removeMessageByID(clientMsgID);
-    } catch (error) {
-      IMViews.showToast(error.toString());
-    }
-  }
 
   bool canForward(Message message) =>
       message.status == MessageStatus.succeeded &&

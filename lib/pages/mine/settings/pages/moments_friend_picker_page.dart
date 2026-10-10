@@ -93,7 +93,7 @@ class _MomentsFriendPickerPageState extends State<MomentsFriendPickerPage> {
     final items = _filtered;
     final showIndexBar = _keyword.trim().isEmpty;
     final line = AppTokens.border(dark: dark);
-    const pickerNameColor = AppTokens.ink600;
+    final pickerNameColor = dark ? AppTokens.textPrimaryDark : AppTokens.ink600;
 
     return Scaffold(
       backgroundColor: AppTokens.surface(dark: dark),
@@ -174,9 +174,25 @@ class _MomentsFriendPickerPageState extends State<MomentsFriendPickerPage> {
                             : const [],
                         indexBarOptions: IndexBarOptions(
                           needRebuild: true,
-                          selectTextStyle: const TextStyle(color: Colors.white),
+                          textStyle: TextStyle(
+                            fontSize: 12,
+                            color: AppTokens.textSecondary(dark: dark),
+                          ),
+                          downTextStyle: TextStyle(
+                            fontSize: 12,
+                            color: AppTokens.surface(dark: dark),
+                          ),
+                          downItemDecoration: BoxDecoration(
+                            color: pickerNameColor,
+                            shape: BoxShape.circle,
+                          ),
                           indexHintWidth: 64,
                           indexHintHeight: 64,
+                          indexHintDecoration: BoxDecoration(
+                            color: AppTokens.surfaceAlt(dark: dark),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: line),
+                          ),
                           indexHintTextStyle: TextStyle(
                             color: AppTokens.textPrimary(dark: dark),
                             fontSize: 20,

@@ -34,8 +34,12 @@ void main() {
       {'streamID': 'x', 'index': -1, 'text': '', 'end': false},
       {'streamID': 'x', 'index': 0.5, 'text': '', 'end': false},
       {'streamID': 'x', 'index': '0', 'text': '', 'end': false},
+      {'streamID': 'x', 'index': null, 'text': '', 'end': false},
+      {'streamID': 'x', 'index': 0, 'end': false},
       {'streamID': 'x', 'index': 0, 'text': null, 'end': false},
       {'streamID': 'x', 'index': 0, 'text': '', 'end': 1},
+      {'streamID': 'x', 'index': 0, 'text': '', 'end': null},
+      {'index': 0, 'text': '', 'end': false},
     ]) {
       expect(AssistantStreamChunk.tryParse(_message(payload)), isNull);
     }
@@ -52,6 +56,41 @@ void main() {
             contentType: MessageType.custom,
             customElem: CustomElem(description: 'assistantStream', data: '{'))),
         isNull);
+  });
+
+  test('Go omitted zero values still assemble a live incremental reply', () {
+    final state = AssistantStreamState();
+    addTearDown(state.dispose);
+    final first = AssistantStreamChunk.tryParse(_message({
+      'streamID': 'go-turn',
+      'text': '第一段',
+    }));
+    expect(first, isNotNull);
+    expect(first!.index, 0);
+    expect(first.end, isFalse);
+    state.accept(first);
+    expect(state.snapshots.single.text, '第一段');
+    expect(state.snapshots.single.ended, isFalse);
+
+    final next = AssistantStreamChunk.tryParse(_message({
+      'streamID': 'go-turn',
+      'index': 1,
+      'text': '，第二段',
+    }));
+    expect(next, isNotNull);
+    expect(next!.index, 1);
+    expect(next.end, isFalse);
+    state.accept(next);
+    expect(state.snapshots.single.text, '第一段，第二段');
+    expect(state.snapshots.single.ended, isFalse);
+
+    expect(
+        AssistantStreamChunk.tryParse(_message({
+          'streamID': 'another-turn',
+          'text': '单独省略索引',
+          'end': false,
+        }))?.index,
+        0);
   });
 
   test(

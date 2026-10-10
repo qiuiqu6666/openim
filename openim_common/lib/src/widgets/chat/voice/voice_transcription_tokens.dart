@@ -8,6 +8,9 @@ class VoiceTranscriptionTokens {
   static const double statusSize = AppTokens.captionFontSize;
   static const double textLineHeight = 1.5;
   static const double statusLineHeight = 1.4;
+  static const double sectionGap = AppTokens.s3;
+  static const double sectionPadding = AppTokens.s3;
+  static const double feedbackActionGap = AppTokens.s3;
   static const int collapsedLines = 3;
   static const double progressRadius = AppTokens.s3;
   static const double actionIconSize = AppTokens.profileQrIconSize;

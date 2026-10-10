@@ -80,6 +80,7 @@ bool _previewFontsLoaded = false;
 Widget _host({
   required bool dark,
   bool groupChats = false,
+  bool liveUpdatesActive = true,
   double textScale = 1,
   GlobalKey? boundaryKey,
 }) =>
@@ -106,7 +107,8 @@ Widget _host({
               padding: const EdgeInsets.only(top: 24),
               textScaler: TextScaler.linear(textScale),
             ),
-            child: ConversationPage(groupChats: groupChats),
+            child: ConversationPage(
+                groupChats: groupChats, liveUpdatesActive: liveUpdatesActive),
           ),
         ),
       ),
@@ -226,6 +228,27 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
+
+  testWidgets('returning to a cached feed uses the latest connection state',
+      (tester) async {
+    _configureView(tester);
+    final logic = Get.put<ConversationLogic>(_ConversationLogic())
+        as _ConversationLogic;
+    logic.connection.value = 'connecting';
+    await tester.pumpWidget(_host(dark: false));
+    await tester.pump();
+    expect(find.text('正在连接'), findsOneWidget);
+
+    await tester.pumpWidget(_host(dark: false, liveUpdatesActive: false));
+    logic.connection.value = 'ready';
+    await tester.pump();
+    await tester.pumpWidget(_host(dark: false));
+    await tester.pumpAndSettle();
+
+    expect(find.text('正在连接'), findsNothing);
+    expect(find.byType(FadingArcSpinner), findsNothing);
+    expect(find.text('消息'), findsOneWidget);
+  });
 
   testWidgets('group tab uses its own title and keeps reference decoration',
       (tester) async {

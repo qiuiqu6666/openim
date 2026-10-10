@@ -92,18 +92,19 @@ class UserProfileIdentity extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: UserProfileTokens.identityGap),
-                  SizedBox(
-                    height: MediaQuery.textScalerOf(context)
-                            .scale(AppTokens.captionFontSize) *
-                        UserProfileTokens.signatureLineHeight *
-                        UserProfileTokens.signatureMaxLines,
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: MediaQuery.textScalerOf(context)
+                              .scale(AppTokens.captionFontSize) *
+                          UserProfileTokens.signatureLineHeight *
+                          UserProfileTokens.signatureMaxLines,
+                    ),
                     child: Text(signature,
                         maxLines: UserProfileTokens.signatureMaxLines,
                         overflow: TextOverflow.ellipsis,
                         strutStyle: const StrutStyle(
                             fontSize: AppTokens.captionFontSize,
-                            height: UserProfileTokens.signatureLineHeight,
-                            forceStrutHeight: true),
+                            height: UserProfileTokens.signatureLineHeight),
                         style: TextStyle(
                             color: UserProfileTokens.muted(context),
                             fontSize: AppTokens.captionFontSize,

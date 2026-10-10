@@ -1,3 +1,4 @@
+import '../mine/settings/widgets/settings_widgets.dart' show showSettingsConfirm;
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -12,6 +13,8 @@ import 'folders/conversation_folder_bar.dart';
 import 'folders/conversation_folder_controller.dart';
 import 'folders/conversation_folder_swipe_region.dart';
 import '../home/home_quick_actions.dart';
+import '../home/quick_actions/home_contact_actions.dart';
+import '../contacts/contacts_logic.dart';
 import '../customer_service/customer_service.dart';
 import '../group_features/live/widgets/live_list_scope.dart';
 import 'widgets/conversation_feed_style.dart';
@@ -67,29 +70,19 @@ class _ConversationPageState extends State<ConversationPage> {
     if (_quickMenuOpen) return;
     _quickMenuOpen = true;
     setState(() => _plusTurns += .125);
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
     try {
       await showHomeQuickActions(
           context: context,
           anchor: _plusActionKey,
-          actions: [
-            HomeQuickAction(
-                id: 'addFriend',
-                title: StrRes.addFriend,
-                subtitle:
-                    zh ? '通过账号/手机号搜索好友' : 'Find friends by account or phone',
-                onTap: logic.addFriend),
-            HomeQuickAction(
-                id: 'addGroup',
-                title: StrRes.addGroup,
-                subtitle: zh ? '通过群号搜索群聊' : 'Find a group by its ID',
-                onTap: logic.addGroup),
-            HomeQuickAction(
-                id: 'createGroup',
-                title: StrRes.createGroup,
-                subtitle: zh ? '发起多人聊天' : 'Start a group conversation',
-                onTap: logic.createGroup),
-          ]);
+          actions: homeContactActions(
+              context: context,
+              onSearchAdd: logic.addFriend,
+              onCreateGroup: logic.createGroup,
+              onScan: () {
+                if (logic.isSessionActive) {
+                  Get.find<ContactsLogic>().scanContacts();
+                }
+              }));
     } finally {
       _quickMenuOpen = false;
       if (mounted) setState(() => _plusTurns += .125);
@@ -183,23 +176,12 @@ class _ConversationPageState extends State<ConversationPage> {
 
   Future<void> _confirmDeleteConversation(
       BuildContext context, ConversationInfo info) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(StrRes.delete),
-        content: Text(
-            '${StrRes.delete} "${logic.getShowName(info)}"?\n${StrRes.confirmClearChatHistory}'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(StrRes.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(StrRes.delete),
-          ),
-        ],
-      ),
+    final confirmed = await showSettingsConfirm(
+      context,
+      title: StrRes.delete,
+      message: '${StrRes.delete} "${logic.getShowName(info)}"?\n${StrRes.confirmClearChatHistory}',
+      confirmText: StrRes.delete,
+      destructive: true,
     );
     if (confirmed == true && mounted && logic.isSessionActive) {
       await logic.deleteConversation(info);

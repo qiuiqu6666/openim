@@ -99,8 +99,8 @@ class _CommentEditorState extends State<_CommentEditor> {
     if (!widget.repository.isSessionCurrent(_scope) || _permissionUnavailable) {
       return;
     }
-    final text = _submittedText ?? _text.text.trim();
-    if (text.isEmpty || text.runes.length > 500 || _sending) return;
+    final text = _submittedText ?? graphemeTrim(_text.text);
+    if (text.isEmpty || text.characters.length > 500 || _sending) return;
     var confirmingUnknown = _unknown;
     setState(() {
       _sending = true;
@@ -230,8 +230,9 @@ class _CommentEditorState extends State<_CommentEditor> {
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(AppTokens.rSm),
                         borderSide: BorderSide.none),
-                    counterText: '${_text.text.trim().runes.length}/500',
-                    errorText: _text.text.trim().runes.length > 500
+                    counterText:
+                        '${graphemeTrim(_text.text).characters.length}/500',
+                    errorText: graphemeTrim(_text.text).characters.length > 500
                         ? momentsText(context,
                             zh: '评论最多 500 个字符',
                             en: 'Use at most 500 characters')
@@ -249,8 +250,8 @@ class _CommentEditorState extends State<_CommentEditor> {
                     alignment: Alignment.centerRight,
                     child: FilledButton(
                       onPressed: _sending ||
-                              _text.text.trim().isEmpty ||
-                              _text.text.trim().runes.length > 500
+                              graphemeTrim(_text.text).isEmpty ||
+                              graphemeTrim(_text.text).characters.length > 500
                           ? null
                           : _send,
                       child: _sending

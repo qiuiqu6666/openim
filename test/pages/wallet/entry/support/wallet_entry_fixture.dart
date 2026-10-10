@@ -73,6 +73,10 @@ class WalletEntryFixture {
       context = entryContext;
       return Scaffold(
         body: Column(children: [
+          ListenableBuilder(
+            listenable: coordinator,
+            builder: (_, __) => Text(coordinator.message ?? ''),
+          ),
           TextButton(
             key: const ValueKey('entry-wallet-tab'),
             onPressed: () => unawaited(enter()),

@@ -2,10 +2,14 @@ import 'dart:convert';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
+import 'chat_draw_report_text.dart';
+import 'chat_agent_report_text.dart';
 
 /// Generated report separators are literal text, not Markdown headings.
 /// Use the server's report marker so ordinary chat keeps Markdown support.
 bool chatMessageAllowsMarkdown(Message message) {
+  final text = chatMessageTextSource(message);
+  if (isChatDrawReportText(text) || isChatAgentReportText(text)) return false;
   final ex = message.ex;
   if (ex == null || ex.isEmpty) return true;
   try {

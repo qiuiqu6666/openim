@@ -315,8 +315,8 @@ class CustomerServiceController extends ChangeNotifier {
   }
 
   Future<void> sendText(String raw) async {
-    final text = raw.trim();
-    if (!_live || text.isEmpty) return;
+    final text = raw;
+    if (!_live || text.trim().isEmpty) return;
     final entry = CustomerServiceChatEntry(
         echoId: const Uuid().v4(),
         text: text,

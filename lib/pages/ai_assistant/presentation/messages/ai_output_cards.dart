@@ -294,10 +294,12 @@ class AiCodeCard extends StatelessWidget {
 }
 
 class AiThinkingCard extends StatefulWidget {
-  const AiThinkingCard({super.key, required this.dark, required this.i18n});
+  const AiThinkingCard(
+      {super.key, required this.dark, required this.i18n, this.label});
 
   final bool dark;
   final AiAssistantI18n i18n;
+  final String? label;
 
   @override
   State<AiThinkingCard> createState() => AiThinkingCardState();
@@ -366,13 +368,14 @@ class AiThinkingCardState extends State<AiThinkingCard>
         );
       },
       child: Text(
-        widget.i18n.t(
-          zhHans: '思考中',
-          zhHant: '思考中',
-          en: 'Thinking',
-          ja: '考え中',
-          ko: '생각 중',
-        ),
+        widget.label ??
+            widget.i18n.t(
+              zhHans: '思考中',
+              zhHant: '思考中',
+              en: 'Thinking',
+              ja: '考え中',
+              ko: '생각 중',
+            ),
         style: TextStyle(
           color: AiPalette.primary(widget.dark),
           fontSize: AiMetrics.font15,

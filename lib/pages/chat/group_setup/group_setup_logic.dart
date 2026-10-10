@@ -107,9 +107,8 @@ class GroupSetupLogic extends GetxController {
       }
     });
 
-    final selfInfo = imLogic.selfInfoUpdatedSubject;
-    _selfInfoSubscription = (selfInfo.hasValue ? selfInfo.skip(1) : selfInfo)
-        .listen(onSelfInfoUpdated);
+    _selfInfoSubscription =
+        imLogic.selfInfoUpdatedSubject.listen(onSelfInfoUpdated);
 
     _jasSub = imLogic.joinedGroupAddedSubject.listen((value) {
       if (_isCurrentGroupSession && value.groupID == groupInfo.value.groupID) {
@@ -232,10 +231,8 @@ class GroupSetupLogic extends GetxController {
 
   bool get isPinned => conversationInfo.value.isPinned == true;
   String? get myGroupNickname {
-    final nickname = myGroupMembersInfo.value.nickname?.trim();
-    if (nickname == null ||
-        nickname.isEmpty ||
-        nickname == OpenIM.iMManager.userInfo.nickname) {
+    final nickname = graphemeTrim(myGroupMembersInfo.value.nickname ?? '');
+    if (nickname.isEmpty || nickname == OpenIM.iMManager.userInfo.nickname) {
       return null;
     }
     return nickname;
@@ -507,10 +504,9 @@ class GroupSetupLogic extends GetxController {
   Future<void> _removeConversation() async {
     final conversationID = conversationInfo.value.conversationID;
     final accountID = OpenIM.iMManager.userID;
-    await OpenIM.iMManager.conversationManager
-        .deleteConversationAndDeleteAllMsg(
-      conversationID: conversationID,
-    );
+    await conversationLogic.deleteConversation(conversationInfo.value,
+        propagateError: true);
+    if (!_isCurrentGroupSession) return;
     if (!chatLogic.isClosed &&
         chatLogic.conversationInfo.conversationID == conversationID) {
       chatLogic.clearAllMessage();
@@ -518,38 +514,45 @@ class GroupSetupLogic extends GetxController {
     ChatHistoryCache.removeConversation(accountID, conversationID);
   }
 
-  void quitGroup() async {
-    if (isJoinedGroup.value) {
-      if (isOwner) {
-        var confirm = await Get.dialog(CustomDialog(
-          title: StrRes.dismissGroupHint,
-        ));
-        if (confirm == true) {
-          await OpenIM.iMManager.groupManager.dismissGroup(
-            groupID: groupInfo.value.groupID,
-          );
+  Future<void> quitGroup() async {
+    try {
+      if (!_isCurrentGroupSession) return;
+      if (isJoinedGroup.value) {
+        if (isOwner) {
+          var confirm = await Get.dialog(CustomDialog(
+            title: StrRes.dismissGroupHint,
+          ));
+          if (!_isCurrentGroupSession) return;
+          if (confirm == true) {
+            await OpenIM.iMManager.groupManager.dismissGroup(
+              groupID: groupInfo.value.groupID,
+            );
+          } else {
+            return;
+          }
         } else {
-          return;
-        }
-      } else {
-        var confirm = await Get.dialog(CustomDialog(
-          title: StrRes.quitGroupHint,
-        ));
-        if (confirm == true) {
-          await observeUserActivity(
-              'group_leave',
-              () => OpenIM.iMManager.groupManager.quitGroup(
-                    groupID: groupInfo.value.groupID,
-                  ));
-        } else {
-          return;
+          var confirm = await Get.dialog(CustomDialog(
+            title: StrRes.quitGroupHint,
+          ));
+          if (!_isCurrentGroupSession) return;
+          if (confirm == true) {
+            await observeUserActivity(
+                'group_leave',
+                () => OpenIM.iMManager.groupManager.quitGroup(
+                      groupID: groupInfo.value.groupID,
+                    ));
+          } else {
+            return;
+          }
         }
       }
-    } else {
+      if (!_isCurrentGroupSession) return;
       await _removeConversation();
+      if (!_isCurrentGroupSession) return;
+      AppNavigator.startBackMain();
+    } catch (error) {
+      if (_isCurrentGroupSession) IMViews.showToast(error.toString());
     }
-
-    AppNavigator.startBackMain();
   }
 
   void copyGroupID() {

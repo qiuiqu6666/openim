@@ -1,37 +1,36 @@
 import 'package:flutter/material.dart';
-import 'package:openim_common/openim_common.dart';
 
 import '../../../routes/app_navigator.dart';
 import '../../../widgets/auth/auth_copy.dart';
 import '../../../widgets/auth/auth_reference_tokens.dart';
 import '../../customer_service/customer_service.dart';
+import '../../mine/settings/pages/node_switch_page.dart';
+import '../../mine/settings/settings_draft_store.dart';
+import '../../mine/settings/settings_navigation.dart';
+import '../../mine/settings/settings_service.dart';
 
 /// Public entry points remain available before an account is signed in.
 class LoginToolbar extends StatelessWidget {
-  const LoginToolbar({super.key, this.customerServiceOnly = false});
+  const LoginToolbar(
+      {super.key, this.customerServiceOnly = false, this.onHero = true});
   final bool customerServiceOnly;
+
+  /// Blue entry heroes keep white actions; plain forms use theme foregrounds.
+  final bool onHero;
 
   Future<void> _showNodes(BuildContext context) async {
     FocusScope.of(context).unfocus();
-    // The settings page's node labels are not endpoint configurations. Expose
-    // only the active configuration until the backend supplies alternatives.
-    await showAppActionSheet<String>(
-      context,
-      title: authText(
-        '切换节点 · 当前仅配置了一个节点',
-        'Switch node · One node is currently configured',
-      ),
-      actions: [
-        AppAction(
-          authText('当前节点', 'Current node'),
-          'current',
-          selected: true,
-          subtitle: 'Chat API: ${Config.appAuthUrl}\n'
-              'OpenIM API: ${Config.imApiUrl}\n'
-              'OpenIM WebSocket: ${Config.imWsUrl}',
-        ),
-      ],
-    );
+    final store = SettingsDraftStore();
+    try {
+      await openSettingsPage(
+          context,
+          NodeSwitchPage(
+            store: store,
+            service: const StubSettingsService(),
+          ));
+    } finally {
+      store.dispose();
+    }
   }
 
   @override
@@ -43,6 +42,7 @@ class LoginToolbar extends StatelessWidget {
             _ToolbarAction(
               actionKey: const ValueKey('login-customer-service'),
               icon: Icons.headset_mic_outlined,
+              onHero: onHero,
               label: authText('在线客服', 'Customer service'),
               onPressed: () => showCustomerServiceSheet(context, guest: true),
             ),
@@ -51,6 +51,7 @@ class LoginToolbar extends StatelessWidget {
               _ToolbarAction(
                 actionKey: const ValueKey('login-nodes'),
                 icon: Icons.dns_outlined,
+                onHero: onHero,
                 label: authText('节点切换', 'Switch node'),
                 onPressed: () => _showNodes(context),
               ),
@@ -58,6 +59,7 @@ class LoginToolbar extends StatelessWidget {
               _ToolbarAction(
                 actionKey: const ValueKey('login-language'),
                 icon: Icons.language_outlined,
+                onHero: onHero,
                 label: authText('切换语言', 'Switch language'),
                 onPressed: () {
                   FocusScope.of(context).unfocus();
@@ -76,23 +78,27 @@ class _ToolbarAction extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
+    required this.onHero,
   });
 
   final Key actionKey;
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
+  final bool onHero;
 
   @override
   Widget build(BuildContext context) => IconButton(
         key: actionKey,
         onPressed: onPressed,
         tooltip: label,
-        color: Colors.white,
+        color: onHero ? Colors.white : Theme.of(context).colorScheme.onSurface,
         iconSize: AuthReferenceTokens.toolbarIcon,
         padding: EdgeInsets.zero,
         style: IconButton.styleFrom(
-          backgroundColor: Colors.white.withValues(alpha: .08),
+          backgroundColor: onHero
+              ? Colors.white.withValues(alpha: .08)
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: .05),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AuthReferenceTokens.rLg)),
         ),

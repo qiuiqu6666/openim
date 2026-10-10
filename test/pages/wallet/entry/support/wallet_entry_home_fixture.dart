@@ -22,6 +22,9 @@ class _Home extends GetxController implements HomeLogic {
   final unhandledCount = 0.obs;
 
   @override
+  void switchTab(dynamic index) {}
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -36,6 +39,8 @@ class _Account extends GetxController implements IMController {
 class _Conversations extends GetxController
     with ConversationLiveFixture
     implements ConversationLogic {
+  _Conversations(this.connectionStatus);
+  final String? connectionStatus;
   @override
   final list = <ConversationInfo>[].obs;
   @override
@@ -49,7 +54,7 @@ class _Conversations extends GetxController
   @override
   bool get isSessionActive => true;
   @override
-  String? get imSdkStatus => null;
+  String? get imSdkStatus => connectionStatus;
   @override
   bool get isFailedSdkStatus => false;
   @override
@@ -82,7 +87,9 @@ class _Conversations extends GetxController
 }
 
 Future<void> mountWalletEntryHome(WidgetTester tester,
-    {required WalletEntryCoordinator coordinator, bool dark = false}) async {
+    {required WalletEntryCoordinator coordinator,
+    bool dark = false,
+    String? connectionStatus}) async {
   Get.testMode = true;
   SharedPreferences.setMockInitialValues({});
   await SpUtil().init();
@@ -97,7 +104,7 @@ Future<void> mountWalletEntryHome(WidgetTester tester,
   addTearDown(tester.view.reset);
   Get.put<HomeLogic>(_Home());
   Get.put<IMController>(_Account());
-  Get.put<ConversationLogic>(_Conversations());
+  Get.put<ConversationLogic>(_Conversations(connectionStatus));
   Get.put<MineLogic>(MineLogic());
   await tester.pumpWidget(ScreenUtilInit(
     designSize: const Size(375, 812),
@@ -111,7 +118,13 @@ Future<void> mountWalletEntryHome(WidgetTester tester,
       home: HomePage(walletEntry: coordinator),
     ),
   ));
-  await tester.pumpAndSettle();
+  if (connectionStatus == null) {
+    await tester.pumpAndSettle();
+  } else {
+    // The connection indicator intentionally keeps animating.
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+  }
 }
 
 Finder walletEntryTab(String label) => find.descendant(

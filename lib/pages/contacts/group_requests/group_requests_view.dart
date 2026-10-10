@@ -3,9 +3,11 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 import 'package:sprintf/sprintf.dart';
 
 import 'group_requests_logic.dart';
+import 'pagination/group_application_footer.dart';
 import 'widgets/group_request_handler_label.dart';
 import '../empty/contact_list_placeholder.dart';
 
@@ -18,7 +20,10 @@ class GroupRequestsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: TitleBar.back(
-          title: StrRes.newGroupRequest, backIconColor: Styles.c_0089FF),
+        title: StrRes.newGroupRequest,
+        backIconColor: Styles.c_0089FF,
+        right: SizedBox(width: 24.w),
+      ),
       backgroundColor: Styles.c_F8F9FA,
       body: Obx(() {
         if (logic.list.isEmpty) {
@@ -34,10 +39,19 @@ class GroupRequestsPage extends StatelessWidget {
             ),
           );
         }
-        return ListView.builder(
-          padding: EdgeInsets.only(top: 10.h),
-          itemCount: logic.list.length,
-          itemBuilder: (_, index) => _buildItemView(logic.list[index]),
+        return SmartRefresher(
+          controller: logic.refreshController,
+          header: IMViews.buildHeader(30),
+          footer: groupApplicationFooter(context),
+          enablePullDown: true,
+          enablePullUp: logic.hasMore.value && logic.applicationsLoaded.value,
+          onRefresh: logic.reloadApplications,
+          onLoading: logic.loadMore,
+          child: ListView.builder(
+            padding: EdgeInsets.only(top: 10.h),
+            itemCount: logic.list.length,
+            itemBuilder: (_, index) => _buildItemView(logic.list[index]),
+          ),
         );
       }),
     );

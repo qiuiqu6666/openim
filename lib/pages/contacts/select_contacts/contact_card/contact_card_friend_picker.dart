@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../contacts_logic.dart';
+import '../../empty/contact_list_placeholder.dart';
 import '../friend_list/friend_list_logic.dart';
 import '../select_contacts_logic.dart';
 import 'contact_card_friend_directory.dart';
@@ -18,10 +19,12 @@ class ContactCardFriendPicker extends StatefulWidget {
     super.key,
     required this.friends,
     required this.selection,
+    this.title,
   });
 
   final SelectContactsFromFriendsLogic friends;
   final SelectContactsLogic selection;
+  final String? title;
 
   @override
   State<ContactCardFriendPicker> createState() =>
@@ -129,7 +132,7 @@ class _ContactCardFriendPickerState extends State<ContactCardFriendPicker>
           appBar: GlassAppBar(
             backgroundColor: ContactCardPickerTokens.pageBackground(context),
             centerTitle: true,
-            title: Text('contactCardChooseFriend'.tr,
+            title: Text(widget.title ?? 'contactCardChooseFriend'.tr,
                 style: ContactCardPickerTokens.headingStyle(context)),
             leading: IconButton(
               tooltip: MaterialLocalizations.of(context).backButtonTooltip,
@@ -191,14 +194,33 @@ class _ContactCardFriendPickerState extends State<ContactCardFriendPicker>
       );
 
   Widget _buildDirectory(BuildContext context) {
+    if (widget.selection.isSingleSelection &&
+        (widget.friends.loading.value || widget.friends.loadFailed.value)) {
+      return contactListPlaceholder(context,
+          title: '',
+          loading: widget.friends.loading.value,
+          failed: widget.friends.loadFailed.value,
+          onRetry: widget.friends.reloadFriends);
+    }
     final starredAt = <String, int>{
       if (_contacts != null)
         for (final entry in _contacts.stars.records.entries)
           if (entry.value.starred) entry.key: entry.value.updatedAt,
     };
     final data = buildContactCardFriendDirectory(widget.friends.friendList,
-        query: _query, starredAt: starredAt);
+        query: _query,
+        starredAt: starredAt,
+        allows: widget.selection.allowsSelection);
     if (data.isEmpty) {
+      if (widget.selection.isSingleSelection) {
+        return contactListPlaceholder(context,
+            title: Localizations.localeOf(context).languageCode == 'zh'
+                ? (_query.isEmpty ? '暂无联系人' : '未找到相关联系人')
+                : (_query.isEmpty ? 'No contacts yet' : 'No matching contacts'),
+            loading: false,
+            failed: false,
+            onRetry: widget.friends.reloadFriends);
+      }
       return Center(
         key: const ValueKey('contact-card-empty'),
         child: Text(

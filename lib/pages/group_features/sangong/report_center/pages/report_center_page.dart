@@ -3,6 +3,7 @@ import 'package:openim_common/openim_common.dart'
 import '../../services/account_identity/sangong_account_identity_resolver.dart';
 import '../../identity/widgets/sangong_identity_view.dart';
 import 'dart:async';
+import '../../widgets/app_back_button.dart';
 import 'package:flutter/material.dart';
 import '../../sangong_scope.dart';
 import '../../models/sangong_admin_models.dart';
@@ -376,12 +377,16 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
       animation:
           Listenable.merge([_summary, _sessions, if (_list != null) _list!]),
       builder: (_, __) => Scaffold(
-            appBar: AppBar(title: const Text('报表中心'), actions: [
-              IconButton(
-                  tooltip: '刷新报表',
-                  onPressed: _summary.busy ? null : _refresh,
-                  icon: const Icon(Icons.refresh))
-            ]),
+            appBar: AppBar(
+                centerTitle: true,
+                leading: const AppBackButton(),
+                title: const Text('报表中心'),
+                actions: [
+                  IconButton(
+                      tooltip: '刷新报表',
+                      onPressed: _summary.busy ? null : _refresh,
+                      icon: const Icon(Icons.refresh))
+                ]),
             body: !_summary.current
                 ? const Center(child: Text('当前群或管理权限已变化，请重新进入'))
                 : Column(children: [

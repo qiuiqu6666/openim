@@ -120,7 +120,8 @@ class RegisterPage extends StatelessWidget {
                 onFocusChanged: (focused) {
                   if (!focused) logic.touchField(RegistrationField.password);
                 },
-                suffix: _visibility(logic.obscurePassword, enabled: !busy),
+                suffix:
+                    _visibility(context, logic.obscurePassword, enabled: !busy),
                 textInputAction: TextInputAction.next,
                 onFieldSubmitted: (_) => logic.pwdAgainFocus.requestFocus(),
               ),
@@ -150,8 +151,8 @@ class RegisterPage extends StatelessWidget {
                     logic.touchField(RegistrationField.confirmation);
                   }
                 },
-                suffix:
-                    _visibility(logic.obscureConfirmPassword, enabled: !busy),
+                suffix: _visibility(context, logic.obscureConfirmPassword,
+                    enabled: !busy),
                 textInputAction: TextInputAction.done,
                 onFieldSubmitted: (_) => _submit(context),
               ),
@@ -191,7 +192,9 @@ class RegisterPage extends StatelessWidget {
     );
   }
 
-  Widget _visibility(RxBool obscured, {required bool enabled}) => IconButton(
+  Widget _visibility(BuildContext context, RxBool obscured,
+          {required bool enabled}) =>
+      IconButton(
         tooltip: obscured.value
             ? authText('显示密码', 'Show password')
             : authText('隐藏密码', 'Hide password'),
@@ -207,7 +210,7 @@ class RegisterPage extends StatelessWidget {
               ? Icons.visibility_off_outlined
               : Icons.visibility_outlined,
           size: 20,
-          color: AuthReferenceTokens.ink300,
+          color: AuthReferenceTokens.color(context, AuthReferenceTokens.ink300),
         ),
       );
 }

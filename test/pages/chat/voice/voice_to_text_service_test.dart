@@ -9,6 +9,8 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/voice/voice_to_text_service.dart';
 
+import '../../../support/unicode/unicode_samples.dart';
+
 const _m4a = <int>[
   0,
   0,
@@ -89,6 +91,25 @@ void main() {
   List<Map<String, dynamic>> events(List<String> lines) => lines
       .map((line) => Map<String, dynamic>.from(jsonDecode(line.substring(6))))
       .toList();
+
+  for (final sample in unicodeSamples) {
+    test('ASR response preserves exact ${sample.name} with edge whitespace',
+        () async {
+      final raw = ' \u0301${sample.text}\n\t ';
+      final client = Dio();
+      client.interceptors
+          .add(InterceptorsWrapper(onRequest: (request, handler) {
+        handler.resolve(Response(requestOptions: request, data: {
+          'errCode': 0,
+          'data': {'text': raw},
+        }));
+      }));
+      final text = await service(client: client, logSink: (_) {})
+          .transcribeFile(await audio());
+      expect(text, raw);
+      expect(text.codeUnits, raw.codeUnits);
+    });
+  }
 
   test('default diagnostics reach Flutter stdout for success and HTTP failure',
       () async {
@@ -235,7 +256,7 @@ void main() {
   test('success logs metadata without recording recognized words', () async {
     final lines = <String>[];
     final value = service(client: successClient(), logSink: lines.add);
-    expect(await value.transcribeFile(await audio(), duration: 7), '识别结果');
+    expect(await value.transcribeFile(await audio(), duration: 7), ' 识别结果 ');
     final entries = events(lines);
     expect(entries.map((entry) => entry['event']),
         ['start', 'request', 'response', 'success']);
@@ -276,7 +297,7 @@ void main() {
       client: successClient(),
       logSink: (_) => throw StateError('logging unavailable'),
     );
-    expect(await value.transcribeFile(await audio()), '识别结果');
+    expect(await value.transcribeFile(await audio()), ' 识别结果 ');
   });
 
   test('remote download logs correlate with upload without exposing signed URL',
@@ -302,7 +323,7 @@ void main() {
           duration: 7,
         ),
       )),
-      '识别结果',
+      ' 识别结果 ',
     );
     final entries = events(lines);
     expect(entries.map((entry) => entry['event']), [
@@ -327,7 +348,7 @@ void main() {
     late RequestOptions request;
     final client = successClient(inspect: (value) => request = value);
     expect(await service(client: client).transcribeFile(file, duration: 7),
-        '识别结果');
+        ' 识别结果 ');
     expect(request.path, 'https://chat.example/chat/asr/transcribe');
     expect(request.method, 'POST');
     expect(request.queryParameters, {'voiceFormat': 'm4a', 'duration': 7});
@@ -459,12 +480,12 @@ void main() {
     final requests = <RequestOptions>[];
     final value = service(client: successClient(inspect: requests.add));
     final file = await audio();
-    expect(await value.transcribeFile(file), '识别结果');
+    expect(await value.transcribeFile(file), ' 识别结果 ');
     for (final duration in [null, 0]) {
       expect(
           await value.transcribeMessage(Message(
               soundElem: SoundElem(soundPath: file.path, duration: duration))),
-          '识别结果');
+          ' 识别结果 ');
     }
     expect(requests, hasLength(3));
     for (final request in requests) {
@@ -493,7 +514,7 @@ void main() {
     expect(
         await service(client: successClient(), downloadClient: downloadClient)
             .transcribeMessage(message),
-        '识别结果');
+        ' 识别结果 ');
     expect(downloads, 0);
     expect(await file.exists(), isTrue);
   });
@@ -518,7 +539,7 @@ void main() {
     expect(
         await service(client: successClient(), downloadClient: downloadClient)
             .transcribeMessage(message),
-        '识别结果');
+        ' 识别结果 ');
     expect(remoteRequest.headers.keys.map((key) => key.toLowerCase()),
         isNot(contains('token')));
     expect(remoteRequest.headers.keys.map((key) => key.toLowerCase()),
@@ -548,7 +569,7 @@ void main() {
     await expectLater(
         value.transcribeMessage(message), _failure('voiceToTextNetworkFailed'));
     expect(await directory.list().toList(), isEmpty);
-    expect(await value.transcribeMessage(message), '识别结果');
+    expect(await value.transcribeMessage(message), ' 识别结果 ');
     expect(attempts, 2);
     expect(await directory.list().toList(), isEmpty);
   });

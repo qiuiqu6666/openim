@@ -7,7 +7,7 @@ import '../sangong_scope.dart';
 import '../services/authorization/sangong_operation_scope.dart';
 import '../support/sangong_ui.dart' show DioErrorMessage, ToastUtils;
 import '../utils/sangong_banker_setup_input.dart';
-import '../widgets/authorization/privilege_route_guard.dart';
+
 import 'sangong_profile_admin_layout.dart';
 import 'sangong_profile_config_draft.dart';
 
@@ -179,29 +179,6 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     }
   }
 
-  Future<bool> _confirm(String action, String message, SangongRuntime runtime,
-      bool Function() current) async {
-    final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialog) => SangongPrivilegeRouteGuard(
-            featureContext: runtime.featureContext,
-            scopeChanges: runtime,
-            refreshOnEntry: false,
-            isCurrent: current,
-            builder: (_) => AlertDialog(
-                    title: Text('确认$action'),
-                    content: Text(message),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(dialog, false),
-                          child: const Text('取消')),
-                      TextButton(
-                          onPressed: () => Navigator.pop(dialog, true),
-                          child: const Text('确认')),
-                    ])));
-    return confirmed == true && current();
-  }
-
   /// A failed write is never repeated by retry; retry only reads current state.
   Future<void> _submit(String action, String message,
       Future<void> Function(SangongRuntime, bool Function()) write,
@@ -219,14 +196,13 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
         scope.matches(runtime.featureContext, runtime.http.tenantId);
     setState(() => _writing = true);
     try {
-      if (!await _confirm(action, message, runtime, current)) return;
       if (!current()) return;
       await write(runtime, current);
       if (!current()) return;
       clear?.clear();
       await _load();
     } catch (error) {
-      if (current()) setState(() => _error = DioErrorMessage.forApp(error));
+      if (current()) ToastUtils.toast(DioErrorMessage.forApp(error));
     } finally {
       if (mounted && generation == _writeGeneration) {
         setState(() => _writing = false);
@@ -235,7 +211,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
   }
 
   void _invalid(String message) {
-    if (_current) ToastUtils.toast(message, context: context);
+    if (_current) ToastUtils.toast(message);
   }
 
   int? _positiveAmount(TextEditingController controller, String label) {

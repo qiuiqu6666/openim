@@ -23,6 +23,14 @@ class CustomerServiceAttachment {
       return '';
     }
 
+    String firstText(List<String> keys) {
+      for (final key in keys) {
+        final text = json[key]?.toString() ?? '';
+        if (text.trim().isNotEmpty) return text;
+      }
+      return '';
+    }
+
     final rawType = json['file_type'] ?? json['fileType'];
     final type = switch (rawType?.toString().trim().toLowerCase()) {
       '0' || 'image' => 'image',
@@ -31,7 +39,7 @@ class CustomerServiceAttachment {
       final String value when value.isNotEmpty => value,
       _ => 'file',
     };
-    final name = first(['file_name', 'filename', 'name']);
+    final name = firstText(['file_name', 'filename', 'name']);
     final extension = first(['extension']);
     return CustomerServiceAttachment(
       fileType: type,

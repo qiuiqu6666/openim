@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import '../../services/fund/diagnostics/wallet_load_log.dart';
 
 import 'data/wallet_session_source.dart';
 import 'order/wallet_order_events.dart';
@@ -146,6 +147,9 @@ class WalletController extends ChangeNotifier {
   /// Returns whether activation consumed a pending refresh (bypassing tab TTL).
   bool setActive(bool active) {
     if (_dead) return false;
+    if (_active != active) {
+      WalletLoadLog.note('assets', 'active_changed', {'active': active});
+    }
     _active = active;
     if (!active) endTrendInspection();
     if (active && _paintPending) {
@@ -173,22 +177,31 @@ class WalletController extends ChangeNotifier {
   }
 
   Future<void> load({bool force = false}) async {
-    if (_dead) return;
+    if (_dead) {
+      WalletLoadLog.note('assets', 'skipped', {'reason': 'disposed'});
+      return;
+    }
     if (!_sameAccount) {
+      WalletLoadLog.note('assets', 'skipped', {'reason': 'account_changed'});
       _clearAccountSnapshot();
       if (_active) notifyListeners();
       return;
     }
     if (!_active) {
+      WalletLoadLog.note('assets', 'deferred', {'reason': 'inactive'});
       _dirty = true;
       return;
     }
     if (_busy) {
+      WalletLoadLog.note('assets', 'coalesced', {'force': force});
       _refreshAgain = _refreshAgain || force;
       return;
     }
 
     _busy = true;
+    final trace = WalletLoadLog.start('assets',
+        watchPending: true,
+        details: {'force': force, 'hasSnapshot': _hasSnapshot});
     loading = !_hasSnapshot;
     loadFailed = false;
     lastError = null;
@@ -196,19 +209,25 @@ class WalletController extends ChangeNotifier {
 
     try {
       final data = await _repo.getWallet().timeout(const Duration(seconds: 6));
-      if (_dead) return;
+      if (_dead) {
+        trace?.event('ignored', {'reason': 'disposed'});
+        return;
+      }
       if (!_sameAccount) {
+        trace?.event('ignored', {'reason': 'account_changed'});
         _clearAccountSnapshot();
         return;
       }
       _applySnapshot(data);
+      trace?.event('snapshot_applied', {'coinCount': coins.length});
       if (_trendEnabled) unawaited(loadTrend());
       if (!_active) _paintPending = true;
       loadFailed = false;
       lastError = null;
       loading = false;
       if (_active) notifyListeners();
-    } catch (e, st) {
+    } catch (e) {
+      trace?.error(e);
       if (_dead) return;
       if (!_sameAccount) {
         _clearAccountSnapshot();
@@ -221,12 +240,16 @@ class WalletController extends ChangeNotifier {
         // Balance/fiat/rate/address all stay unknown until a real backend exists.
         coins = List<CoinDto>.from(walletUnavailableProductCoins);
       }
-      if (kDebugMode) {
-        debugPrint('load wallet error: $e\n$st');
-      }
     } finally {
       _busy = false;
       loading = false;
+      trace?.finish('end', {
+        'loading': loading,
+        'loadFailed': loadFailed,
+        'hasSnapshot': _hasSnapshot,
+        'active': _active,
+        'disposed': _dead,
+      });
       if (!_dead && _active) notifyListeners();
       if (_refreshAgain && !_dead) {
         _refreshAgain = false;

@@ -12,7 +12,8 @@ import 'package:openim_live/openim_live.dart';
 import 'package:openim_live/src/pages/single/widgets/call_state.dart';
 import 'package:openim_live/src/pages/single/widgets/controls.dart';
 import 'package:openim_live/src/session/single_call_session.dart';
-import 'package:openim_live/src/widgets/incoming_call/incoming_call_quick_answer_sheet.dart';
+import 'package:openim_live/src/widgets/incoming_call/incoming_call_view.dart';
+import 'package:openim_live/src/widgets/call_surface/call_full_screen_surface.dart';
 import 'package:rxdart/rxdart.dart';
 
 class _Probe {
@@ -25,11 +26,11 @@ class _IncomingView extends SignalView {
     required PublishSubject<CallEvent> events,
     required ValueNotifier<IncomingCallPreferences> preferences,
     required this.probe,
-    CallType callType = CallType.audio,
+    super.callType = CallType.audio,
+    Future<UserInfo?> Function(String)? profile,
     Duration deadline = const Duration(seconds: 30),
   }) : super(
           key: key,
-          callType: callType,
           initState: CallState.beCalled,
           roomID: 'quick-answer-room',
           userID: 'peer',
@@ -48,10 +49,11 @@ class _IncomingView extends SignalView {
           onTapReject: () async => probe.rejects++,
           onTimeout: () async => probe.timeouts++,
           onClose: () => probe.closes++,
-          onSyncUserInfo: (_) async => UserInfo(
-            userID: 'peer',
-            nickname: '真实来电联系人以及需要正确换行的超长联系人名称',
-          ),
+          onSyncUserInfo: profile ??
+              (_) async => UserInfo(
+                    userID: 'peer',
+                    nickname: '真实来电联系人以及需要正确换行的超长联系人名称',
+                  ),
         );
   final _Probe probe;
 
@@ -143,7 +145,10 @@ void main() {
     Get.reset();
   });
 
-  Widget view({CallType type = CallType.audio, Duration? deadline}) =>
+  Widget view(
+          {CallType type = CallType.audio,
+          Duration? deadline,
+          Future<UserInfo?> Function(String)? profile}) =>
       _IncomingView(
         key: callKey,
         events: events,
@@ -151,10 +156,12 @@ void main() {
         probe: probe,
         callType: type,
         deadline: deadline ?? const Duration(seconds: 30),
+        profile: profile,
       );
 
   for (final dark in [false, true]) {
-    testWidgets('quick answer fits narrow safe area and large text, dark=$dark',
+    testWidgets(
+        'fullscreen invitation fits narrow safe area and large text, dark=$dark',
         (tester) async {
       tester.view.physicalSize = const Size(320, 640);
       tester.view.devicePixelRatio = 1;
@@ -163,9 +170,11 @@ void main() {
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_host(view(), dark: dark, scale: 2));
       await tester.pump();
-      expect(find.byType(IncomingCallQuickAnswerSheet), findsOneWidget);
-      expect(find.byType(ControlsView), findsNothing);
-      for (final text in [StrRes.pickUp, StrRes.reject, '打开通话']) {
+      expect(find.byType(IncomingCallView), findsOneWidget);
+      expect(find.byType(CallFullScreenSurface), findsOneWidget);
+      expect(find.byType(BottomSheetView), findsNothing);
+      expect(find.text('打开通话'), findsNothing);
+      for (final text in [StrRes.pickUp, StrRes.hangUp]) {
         final action = find.text(text);
         expect(action, findsOneWidget);
         final rect = tester.getRect(action);
@@ -186,13 +195,12 @@ void main() {
     await tester.pump();
     final session = callKey.currentState!.session;
     expect(find.byType(ControlsView), findsOneWidget);
-    expect(find.byType(IncomingCallQuickAnswerSheet), findsNothing);
+    expect(find.byType(IncomingCallView), findsOneWidget);
     preferences.value = const IncomingCallPreferences();
     await tester.pump();
-    expect(find.byType(IncomingCallQuickAnswerSheet), findsOneWidget);
-    expect(identical(callKey.currentState!.session, session), isTrue);
-    await tester.tap(find.text('打开通话'));
-    await tester.pump();
+    expect(find.byType(IncomingCallView), findsOneWidget);
+    expect(find.byType(BottomSheetView), findsNothing);
+    expect(find.text('打开通话'), findsNothing);
     expect(find.byType(ControlsView), findsOneWidget);
     expect(identical(callKey.currentState!.session, session), isTrue);
     expect(probe.credentials, 0);
@@ -203,7 +211,8 @@ void main() {
   });
 
   for (final type in [CallType.audio, CallType.video]) {
-    testWidgets('$type quick answer enters the existing session exactly once',
+    testWidgets(
+        '$type fullscreen answer enters the existing session exactly once',
         (tester) async {
       await tester.pumpWidget(_host(view(type: type)));
       await tester.pump();
@@ -215,7 +224,7 @@ void main() {
       expect(probe.credentials, 1);
       expect(probe.connections, 1);
       expect(identical(callKey.currentState!.session, session), isTrue);
-      expect(find.byType(IncomingCallQuickAnswerSheet), findsNothing);
+      expect(find.byType(IncomingCallView), findsNothing);
       expect(find.byType(ControlsView), findsOneWidget);
       expect(session.connected, isTrue);
       final ending = session.end(CallState.hangup, notifyPeer: false);
@@ -225,11 +234,46 @@ void main() {
     });
   }
 
-  testWidgets('quick reject produces one terminal operation', (tester) async {
+  for (final type in CallType.values) {
+    testWidgets(
+        '$type cancellation cannot resurrect the invitation after profile loading',
+        (tester) async {
+      final profile = Completer<UserInfo?>();
+      await tester
+          .pumpWidget(_host(view(type: type, profile: (_) => profile.future)));
+      await tester.pump();
+      expect(find.text('peer'), findsOneWidget,
+          reason: 'Call remains identifiable while the profile is loading');
+      expect(find.byType(IncomingCallView), findsOneWidget);
+      events.add(CallEvent(
+          CallState.beCanceled,
+          SignalingInfo(
+            userID: 'peer',
+            invitation: InvitationInfo(roomID: 'quick-answer-room'),
+          )));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(CallFullScreenSurface), findsNothing);
+      expect(probe.closes, 1);
+      profile.complete(UserInfo(userID: 'peer', nickname: 'late name'));
+      preferences.value =
+          const IncomingCallPreferences(quickAnswerPopup: false);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(IncomingCallView), findsNothing);
+      expect(find.text('existing conversation'), findsOneWidget);
+      expect(probe.credentials, 0);
+      expect(probe.rejects, 0);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  testWidgets('incoming hangup rejects exactly once without accepting',
+      (tester) async {
     await tester.pumpWidget(_host(view()));
     await tester.pump();
-    await tester.tap(find.text(StrRes.reject));
-    await tester.tap(find.text(StrRes.reject));
+    await tester.tap(find.text(StrRes.hangUp));
+    await tester.tap(find.text(StrRes.hangUp));
     await tester.pump();
     expect(probe.rejects, 1);
     expect(probe.closes, 1);
@@ -237,13 +281,17 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('expanding quick answer keeps the original ringing deadline',
+  testWidgets('minimizing and restoring keeps the original ringing deadline',
       (tester) async {
     await tester.pumpWidget(_host(view(deadline: const Duration(seconds: 2))));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    await tester.tap(find.text('打开通话'));
+    await tester.tap(find.byTooltip('最小化'));
     await tester.pump();
+    expect(find.byType(IncomingCallView), findsNothing);
+    callKey.currentState!.onTapMaximize();
+    await tester.pump();
+    expect(find.byType(IncomingCallView), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
     await tester.pump();
     expect(probe.timeouts, 1);

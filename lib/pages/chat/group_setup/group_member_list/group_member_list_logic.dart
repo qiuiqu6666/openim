@@ -101,7 +101,7 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
     if (!identity.isCurrentSession || isClosed) return;
     _searchTimer?.cancel();
     _searchVersion++;
-    query.value = value.trim();
+    query.value = graphemeTrim(value);
     searchResults.clear();
     _searchOffset = 0;
     searchFailed.value = false;
@@ -229,9 +229,8 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
         imLogic.memberDeletedSubject.listen(onGroupMemberDeleted);
     _groupDeletedSubscription =
         imLogic.joinedGroupDeletedSubject.listen(onJoinedGroupDeleted);
-    final selfInfo = imLogic.selfInfoUpdatedSubject;
-    _selfInfoSubscription = (selfInfo.hasValue ? selfInfo.skip(1) : selfInfo)
-        .listen(onSelfInfoUpdated);
+    _selfInfoSubscription =
+        imLogic.selfInfoUpdatedSubject.listen(onSelfInfoUpdated);
     _presenceSubscription = imLogic.userStatusChangedSubject.listen((event) {
       if (_visibleIDs.contains(event.userID)) {
         unawaited(_refreshPresence());

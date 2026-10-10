@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart'
-    show AppSystemBars, GlassAppBar, Styles;
+    show AppSystemBars, AppTokens, GlassAppBar;
 
 import 'personal_sticker_store.dart';
 
@@ -90,16 +90,19 @@ class _PersonalStickerManagementPageState
                 maxHeight: MediaQuery.sizeOf(context).height * .65,
               ),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
               ),
               clipBehavior: Clip.antiAlias,
               child: Image.network(
                 item.previewURL,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const SizedBox(
+                errorBuilder: (context, _, __) => SizedBox(
                   height: 200,
-                  child: Center(child: Icon(Icons.broken_image_outlined)),
+                  child: Center(
+                    child: Icon(Icons.broken_image_outlined,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
                 ),
               ),
             ),
@@ -197,6 +200,8 @@ class _PersonalStickerManagementPageState
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final background = AppTokens.background(
+        dark: Theme.of(context).brightness == Brightness.dark);
     return AnimatedBuilder(
       animation: widget.store,
       builder: (context, _) {
@@ -209,11 +214,11 @@ class _PersonalStickerManagementPageState
                   if (byID[id] != null) byID[id]!,
               ];
         return Scaffold(
-          backgroundColor: Styles.c_F4F5F7,
+          backgroundColor: background,
           appBar: GlassAppBar(
             toolbarHeight: kToolbarHeight,
-            backgroundColor: Styles.c_F4F5F7,
-            systemOverlayStyle: AppSystemBars.styleFor(Styles.c_F4F5F7),
+            backgroundColor: background,
+            systemOverlayStyle: AppSystemBars.styleFor(background),
             elevation: 0,
             centerTitle: true,
             leadingWidth: 72,
@@ -329,7 +334,9 @@ class _PersonalStickerManagementPageState
                                 selected
                                     ? Icons.check_circle
                                     : Icons.circle_outlined,
-                                color: selected ? colors.primary : Colors.grey,
+                                color: selected
+                                    ? colors.primary
+                                    : colors.onSurfaceVariant,
                                 size: 24,
                               ),
                             ),
@@ -424,7 +431,7 @@ class _PersonalStickerManagementPageState
           widthFactor: .84,
           heightFactor: .84,
           child: Material(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(8),
             clipBehavior: Clip.antiAlias,
             child: child,

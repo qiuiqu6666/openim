@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 
 import '../../../models/contact_card/contact_card_identity.dart';
 import '../../../services/contact_card/contact_card_profile_resolver.dart';
+import '../../../utils/text/unicode_text.dart';
 import '../../contact_card.dart';
 
 /// Keeps public card identity separate from the native target used on tap.
@@ -89,7 +90,7 @@ class _ContactCardIdentityViewState extends State<ContactCardIdentityView> {
 
   @override
   Widget build(BuildContext context) {
-    final nickname = widget.card.nickname?.trim() ?? '';
+    final nickname = graphemeTrim(widget.card.nickname ?? '');
     final name = nickname.isNotEmpty && nickname != _target
         ? nickname
         : _account ?? 'personalContactCard'.tr;

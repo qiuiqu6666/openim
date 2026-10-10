@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:characters/characters.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:uuid/uuid.dart';
 
@@ -68,10 +69,10 @@ class MomentsApi {
       List<String> audienceUserIds = const []}) async {
     _id(clientRequestID);
     _validateAudience(visibility, audienceUserIds);
-    if (text.trim().isEmpty && mediaIds.isEmpty) {
+    if (graphemeTrim(text).isEmpty && mediaIds.isEmpty) {
       throw const MomentsException('请填写文字或选择图片');
     }
-    if (text.trim().runes.length > 2000 || mediaIds.length > 9) {
+    if (graphemeTrim(text).characters.length > 2000 || mediaIds.length > 9) {
       throw const MomentsException('发布内容超过限制');
     }
     for (final id in mediaIds) {
@@ -83,7 +84,7 @@ class MomentsApi {
         idempotencyKey: clientRequestID,
         data: {
           'clientRequestID': clientRequestID,
-          'text': text.trim(),
+          'text': graphemeTrim(text),
           'mediaIDs': mediaIds,
           'visibility': visibility,
           'audienceUserIds': audienceUserIds,
@@ -118,7 +119,8 @@ class MomentsApi {
       required String clientRequestId,
       String? replyToCommentId}) async {
     _id(clientRequestId);
-    if (text.trim().isEmpty || text.trim().runes.length > 500) {
+    if (graphemeTrim(text).isEmpty ||
+        graphemeTrim(text).characters.length > 500) {
       throw const MomentsException('评论需为 1～500 个字');
     }
     if (replyToCommentId != null && replyToCommentId.isNotEmpty) {
@@ -130,7 +132,7 @@ class MomentsApi {
         idempotencyKey: clientRequestId,
         data: {
           'clientRequestID': clientRequestId,
-          'text': text.trim(),
+          'text': graphemeTrim(text),
           'replyToCommentID': replyToCommentId ?? ''
         });
     try {

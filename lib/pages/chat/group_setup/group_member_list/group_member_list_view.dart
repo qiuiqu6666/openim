@@ -182,13 +182,6 @@ class GroupMemberListPage extends StatelessWidget {
                             style: Styles.ts_0C1C33_17sp,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis),
-                        if (logic.displayedAccount(membersInfo).isNotEmpty) ...[
-                          4.verticalSpace,
-                          Text(logic.displayedAccount(membersInfo),
-                              style: Styles.ts_8E9AB0_14sp,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
-                        ],
                         if (ContactPresencePolicy.resolve(
                           userID: membersInfo.userID,
                           ex: membersInfo.ex,

@@ -19,6 +19,7 @@ class EditMyInfoPage extends StatelessWidget {
             avatarURL: logic.imLogic.userInfo.value.faceURL,
             avatarName: logic.imLogic.userInfo.value.nickname,
             maxLength: logic.maxLength,
+            showClearButton: true,
             keyboardType: logic.keyboardType,
             onSave: logic.save,
             onAvatarTap: logic.openPhotoSheet,

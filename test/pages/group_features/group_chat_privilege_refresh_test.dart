@@ -121,7 +121,7 @@ void main() {
       await tester.pumpWidget(_app(store, dark: dark));
       await flushSangong(tester);
       expect(reads, 2);
-      expect(find.text('三公运营'), findsOneWidget);
+      expect(find.text('三公运营'), findsNothing);
       expect(find.text('三公代理'), findsOneWidget);
       expect(api.count('/feature-capabilities'), 1);
       await tester.pumpWidget(_app(store, dark: dark));
@@ -169,7 +169,9 @@ void main() {
           return UserFullInfo(userID: 'owner', isPrivileged: true);
         });
     final api = _api();
-    final store = _store(api, privilege);
+    final store = _store(api, privilege)
+      ..seed(GroupInfo(groupID: 'first', ex: '{"gameType":1}'))
+      ..seed(GroupInfo(groupID: 'second', ex: '{"gameType":4}'));
     addTearDown(() async {
       await _unmount(tester);
       store.dispose();
@@ -177,11 +179,14 @@ void main() {
     });
     await tester.pumpWidget(_app(store, groupID: 'first'));
     await flushSangong(tester);
+    expect(find.text('三公运营'), findsOneWidget);
+    expect(find.text('三公代理'), findsNothing);
     await tester.pumpWidget(_app(store, groupID: 'second'));
     await flushSangong(tester);
     expect(reads, 2);
     expect(api.count('/feature-capabilities'), 2);
-    expect(find.text('三公运营'), findsOneWidget);
+    expect(find.text('三公运营'), findsNothing);
+    expect(find.text('三公代理'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -214,6 +219,7 @@ void main() {
         userID: 'new-owner',
         chatToken: 'new-chat-token',
         baseUrl: 'https://fixture.example');
+    newStore.seed(GroupInfo(groupID: 'new-group', ex: '{"gameType":1}'));
     await tester
         .pumpWidget(_app(newStore, groupID: 'new-group', userID: 'new-owner'));
     await flushSangong(tester);
@@ -255,7 +261,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(reads, 2);
       expect(find.text('群功能'), findsOneWidget);
-      expect(find.text('三公运营'), failed ? findsNothing : findsOneWidget);
+      expect(find.text('三公运营'), findsNothing);
       expect(find.text('三公代理'), failed ? findsNothing : findsOneWidget);
       expect(tester.takeException(), isNull);
     });

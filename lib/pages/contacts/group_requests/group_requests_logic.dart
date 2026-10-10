@@ -4,9 +4,11 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim/routes/app_navigator.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 
 import '../../../core/controller/im_controller.dart';
 import '../../home/home_logic.dart';
+import 'pagination/group_application_pager.dart';
 
 class GroupRequestsLogic extends GetxController {
   final imLogic = Get.find<IMController>();
@@ -15,6 +17,11 @@ class GroupRequestsLogic extends GetxController {
   // An empty list is conclusive only after the latest SDK read succeeds.
   final applicationsLoaded = false.obs;
   final applicationsLoadFailed = false.obs;
+  final hasMore = true.obs;
+  final loadingMore = false.obs;
+  final refreshController = RefreshController();
+  GroupApplicationPager _pager = GroupApplicationPager();
+  bool _loading = false;
   final groupList = <String, GroupInfo>{}.obs;
   final memberList = <GroupMembersInfo>[].obs;
   final userInfoList = <UserInfo>[].obs;
@@ -48,6 +55,7 @@ class GroupRequestsLogic extends GetxController {
   void onClose() {
     _loadGeneration++;
     _applicationSubscription?.cancel();
+    refreshController.dispose();
     homeLogic.getUnhandledGroupApplicationCount();
     super.onClose();
   }
@@ -68,11 +76,28 @@ class GroupRequestsLogic extends GetxController {
     }
   }
 
-  Future<void> getApplicationList() async {
-    if (!isSessionActive) return;
+  Future<void> loadMore() async {
+    if (_loading || !hasMore.value || !applicationsLoaded.value) return;
+    try {
+      await getApplicationList(loadMore: true);
+    } catch (_) {
+      // The existing refresh footer offers retry; keep the loaded rows.
+    }
+  }
+
+  Future<void> getApplicationList({bool loadMore = false}) async {
+    if (!isSessionActive || (loadMore && (_loading || !hasMore.value))) return;
     final generation = ++_loadGeneration;
-    applicationsLoaded.value = false;
+    _loading = true;
+    loadingMore.value = loadMore;
+    if (!loadMore) applicationsLoaded.value = false;
     applicationsLoadFailed.value = false;
+    final candidate = loadMore ? _pager.fork() : GroupApplicationPager();
+    final targetCount = loadMore
+        ? GroupApplicationPager.pageSize
+        : (this.list.length > GroupApplicationPager.pageSize
+            ? this.list.length
+            : GroupApplicationPager.pageSize);
     final account = OpenIM.iMManager.userID;
     final token = DataSp.chatToken;
     var profileLookup = 'not_needed';
@@ -83,94 +108,125 @@ class GroupRequestsLogic extends GetxController {
         token == DataSp.chatToken;
     late final List<GroupApplicationInfo> list;
     try {
-      list = await LoadingView.singleton.wrap(
-          showing: this.list.isNotEmpty,
-          asyncFunction: () async {
-            if (!isCurrent()) return <GroupApplicationInfo>[];
-            final list = await Future.wait([
-              OpenIM.iMManager.groupManager
-                  .getGroupApplicationListAsRecipient(),
-              OpenIM.iMManager.groupManager
-                  .getGroupApplicationListAsApplicant(),
-            ]);
+      Future<List<GroupApplicationInfo>> fetchApplications() async {
+        if (!isCurrent()) return <GroupApplicationInfo>[];
+        final allList = <GroupApplicationInfo>[];
+        do {
+          allList.addAll(await candidate.nextPage());
+          if (!isCurrent()) return allList;
+        } while (allList.length < targetCount && candidate.hasMore);
 
-            final allList = <GroupApplicationInfo>[];
-            allList
-              ..addAll(list[0])
-              ..addAll(list[1]);
+        if (!isCurrent()) return allList;
+        allList.sort((a, b) => (b.reqTime ?? 0).compareTo(a.reqTime ?? 0));
 
-            if (!isCurrent()) return allList;
-            allList.sort((a, b) => (b.reqTime ?? 0).compareTo(a.reqTime ?? 0));
+        var map = <String, List<String>>{};
+        final profileIDs = <String>{};
 
-            var map = <String, List<String>>{};
-            final profileIDs = <String>{};
+        var haveReadList = DataSp.getHaveReadUnHandleGroupApplication();
+        haveReadList ??= <String>[];
+        for (var a in candidate.receivedIn(allList)) {
+          var id = IMUtils.buildGroupApplicationID(a);
+          if (!haveReadList.contains(id)) {
+            haveReadList.add(id);
+          }
+        }
+        DataSp.putHaveReadUnHandleGroupApplication(haveReadList);
 
-            var haveReadList = DataSp.getHaveReadUnHandleGroupApplication();
-            haveReadList ??= <String>[];
-            for (var a in list[0]) {
-              var id = IMUtils.buildGroupApplicationID(a);
-              if (!haveReadList.contains(id)) {
-                haveReadList.add(id);
+        for (var a in allList) {
+          final handlerID = _handlerUserID(a);
+          if (handlerID != null) profileIDs.add(handlerID);
+          if (isInvite(a) && IMUtils.isNotNullEmptyStr(a.groupID)) {
+            if (!map.containsKey(a.groupID)) {
+              map[a.groupID!] = [a.inviterUserID!];
+            } else {
+              if (!map[a.groupID!]!.contains(a.inviterUserID!)) {
+                map[a.groupID!]!.add(a.inviterUserID!);
               }
             }
-            DataSp.putHaveReadUnHandleGroupApplication(haveReadList);
+            profileIDs.add(a.inviterUserID!);
+          }
+        }
 
-            for (var a in allList) {
-              final handlerID = _handlerUserID(a);
-              if (handlerID != null) profileIDs.add(handlerID);
-              if (isInvite(a) && IMUtils.isNotNullEmptyStr(a.groupID)) {
-                if (!map.containsKey(a.groupID)) {
-                  map[a.groupID!] = [a.inviterUserID!];
-                } else {
-                  if (!map[a.groupID!]!.contains(a.inviterUserID!)) {
-                    map[a.groupID!]!.add(a.inviterUserID!);
-                  }
-                }
-                profileIDs.add(a.inviterUserID!);
+        if (map.isNotEmpty) {
+          try {
+            final members = await Future.wait(map.entries.map((e) => OpenIM
+                .iMManager.groupManager
+                .getGroupMembersInfo(groupID: e.key, userIDList: e.value)));
+            if (isCurrent()) {
+              if (!loadMore) memberList.clear();
+              for (final member in members.expand((group) => group)) {
+                memberList.removeWhere((old) =>
+                    old.groupID == member.groupID &&
+                    old.userID == member.userID);
+                memberList.add(member);
               }
             }
+          } catch (error) {
+            Logger.print(
+                'Group application member lookup failed: ${error.runtimeType}');
+          }
+        }
 
-            if (map.isNotEmpty) {
-              try {
-                final members = await Future.wait(map.entries.map((e) => OpenIM
-                    .iMManager.groupManager
-                    .getGroupMembersInfo(groupID: e.key, userIDList: e.value)));
-                if (isCurrent()) {
-                  memberList.assignAll(members.expand((group) => group));
-                }
-              } catch (error) {
-                Logger.print(
-                    'Group application member lookup failed: ${error.runtimeType}');
+        if (!isCurrent()) return allList;
+        if (profileIDs.isNotEmpty) {
+          try {
+            final profiles = await OpenIM.iMManager.userManager
+                .getUsersInfo(userIDList: profileIDs.toList());
+            profileLookup = 'succeeded';
+            if (isCurrent()) {
+              if (!loadMore) userInfoList.clear();
+              for (final profile in profiles.map((e) => e.simpleUserInfo)) {
+                userInfoList.removeWhere((old) => old.userID == profile.userID);
+                userInfoList.add(profile);
               }
             }
+          } catch (error) {
+            profileLookup = 'failed';
+            // Profile availability must not hide the application's actual result.
+            Logger.print(
+                'Group application user lookup failed: ${error.runtimeType}');
+          }
+        }
 
-            if (!isCurrent()) return allList;
-            if (profileIDs.isNotEmpty) {
-              try {
-                final profiles = await OpenIM.iMManager.userManager
-                    .getUsersInfo(userIDList: profileIDs.toList());
-                profileLookup = 'succeeded';
-                if (isCurrent()) {
-                  userInfoList.assignAll(profiles.map((e) => e.simpleUserInfo));
-                }
-              } catch (error) {
-                profileLookup = 'failed';
-                // Profile availability must not hide the application's actual result.
-                Logger.print(
-                    'Group application user lookup failed: ${error.runtimeType}');
-              }
-            }
+        return allList;
+      }
 
-            return allList;
-          });
+      list = loadMore
+          ? await fetchApplications()
+          : await LoadingView.singleton.wrap(
+              showing: this.list.isNotEmpty, asyncFunction: fetchApplications);
     } catch (_) {
-      if (isCurrent()) applicationsLoadFailed.value = true;
+      if (isCurrent()) {
+        if (loadMore) {
+          refreshController.loadFailed();
+        } else {
+          applicationsLoadFailed.value = true;
+          refreshController.refreshFailed();
+        }
+      }
       rethrow;
+    } finally {
+      if (isCurrent()) {
+        _loading = false;
+        loadingMore.value = false;
+      }
     }
 
     if (isCurrent()) {
-      this.list.assignAll(list);
+      _pager = candidate;
+      if (loadMore) {
+        this.list.addAll(list);
+      } else {
+        this.list.assignAll(list);
+        refreshController.refreshCompleted(resetFooterState: true);
+      }
       applicationsLoaded.value = true;
+      hasMore.value = candidate.hasMore;
+      if (hasMore.value) {
+        refreshController.loadComplete();
+      } else {
+        refreshController.loadNoData();
+      }
       final processed = list
           .where((item) => item.handleResult == 1 || item.handleResult == -1);
       final namedIDs = userInfoList

@@ -13,7 +13,7 @@ void main() {
 
   for (final entrance in [
     (input: '13800138000', key: 'phoneNumber', value: '13800138000'),
-    (input: '@12345678', key: 'account', value: '12345678'),
+    (input: '@12345678', key: 'account', value: '@12345678'),
     (input: 'user@example.com', key: 'email', value: 'user@example.com'),
   ]) {
     testWidgets('${entrance.key} challenge authenticates only after SMS proof',
@@ -71,7 +71,7 @@ void main() {
       expect(f.logic.verificationCodeCtrl.text, isEmpty);
       expect(f.credentials.saves.single.password, isNull);
       expect(f.credentials.saves.single.remember, isFalse);
-      expect(f.credentials.saves.single.account, entrance.value);
+      expect(f.credentials.saves.single.account, entrance.input);
       expect(
           f.adapter.requests.every((r) => r.headers['token'] == null), isTrue);
       expect(f.adapter.requests.map((r) => r.headers['operationID']).toSet(),

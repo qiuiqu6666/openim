@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../services/platform_config_service.dart';
+import '../update/platform_update_dialog.dart';
 import 'settings_widgets.dart';
 
 Future<void> checkPlatformUpdate(BuildContext context,
@@ -56,22 +57,36 @@ Future<void> checkPlatformUpdate(BuildContext context,
       }
       return;
     }
-    final confirmed = await showSettingsConfirm(context,
-        title: settingsText(context,
-            zh: '发现新版本 $target', en: 'New version $target'),
-        message: settingsText(context,
-            zh: force ? '当前版本低于最低支持版本，请更新应用。' : '有新版本可用，是否前往下载？',
-            en: force
-                ? 'Please update to a supported version.'
-                : 'Download the new version?'),
-        confirmText: settingsText(context, zh: '前往更新', en: 'Update'));
-    if (!confirmed || !context.mounted) return;
     final uri = Uri.tryParse(release.installURL);
     if (uri == null ||
         !['http', 'https'].contains(uri.scheme) ||
-        !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      throw StateError('无法打开下载地址');
+        uri.host.isEmpty) {
+      if (!automatic) {
+        showSettingsMessage(
+            context,
+            settingsText(context,
+                zh: '新版本下载地址暂不可用，请稍后重试',
+                en: 'The update download link is unavailable. Please retry later.'));
+      }
+      return;
     }
+    await showPlatformUpdateDialog(
+      context,
+      title: settingsText(context,
+          zh: force ? '发现新版本！' : '发现新版本',
+          en: force ? 'Update Required' : 'Update Available'),
+      message: release.changelog.isNotEmpty
+          ? release.changelog
+          : settingsText(context,
+              zh: '发现新版本 v$target，是否立即更新？',
+              en: 'Version $target is available. Update now?'),
+      force: force,
+      onUpdate: () async {
+        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+          throw StateError('无法打开下载地址');
+        }
+      },
+    );
   } catch (_) {
     if (context.mounted && !automatic) {
       showSettingsMessage(

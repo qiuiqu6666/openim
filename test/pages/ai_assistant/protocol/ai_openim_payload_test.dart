@@ -31,9 +31,9 @@ void main() {
   });
 
   test('image payload keeps an empty prompt and encodes multiline text', () {
-    expect(jsonDecode(AiOpenimPayload.image('  ')), {'prompt': ''});
+    expect(jsonDecode(AiOpenimPayload.image('  ')), {'prompt': '  '});
     expect(jsonDecode(AiOpenimPayload.image('  湖边\n"小屋"  ')),
-        {'prompt': '湖边\n"小屋"'});
+        {'prompt': '  湖边\n"小屋"  '});
   });
 
   test('group card contains server field names without a separate chat API',

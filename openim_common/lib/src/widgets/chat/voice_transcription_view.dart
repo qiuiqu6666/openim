@@ -38,15 +38,17 @@ class VoiceTranscriptionView extends StatelessWidget {
       fontSize: VoiceTranscriptionTokens.statusSize,
       height: VoiceTranscriptionTokens.statusLineHeight,
     );
-    final text = state.text?.trim() ?? '';
+    final text = state.text ?? '';
     final error = state.error?.trim();
     final failed = error != null && error.isNotEmpty;
+    final feedback = failed ? error.tr : 'voiceToTextEmpty'.tr;
 
     return Container(
       key: const ValueKey('voice-transcription-view'),
       width: double.infinity,
-      margin: const EdgeInsets.only(top: AppTokens.s3),
-      padding: const EdgeInsets.only(top: AppTokens.s4),
+      margin: const EdgeInsets.only(top: VoiceTranscriptionTokens.sectionGap),
+      padding:
+          const EdgeInsets.only(top: VoiceTranscriptionTokens.sectionPadding),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: palette.border)),
       ),
@@ -118,40 +120,27 @@ class VoiceTranscriptionView extends StatelessWidget {
                   onPressed: onToggle!,
                   trailingIcon: true,
                 ),
-            ] else ...[
-              Semantics(
-                key: const ValueKey('voice-transcription-feedback'),
-                liveRegion: true,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      failed ? 'voiceToTextFailed'.tr : 'voiceToTextEmpty'.tr,
-                      style: statusStyle.copyWith(
-                        color: failed ? palette.text : palette.secondary,
-                        fontWeight: failed ? FontWeight.w500 : FontWeight.w400,
-                      ),
+            ] else
+              Wrap(
+                spacing: VoiceTranscriptionTokens.feedbackActionGap,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Semantics(
+                    key: const ValueKey('voice-transcription-feedback'),
+                    liveRegion: true,
+                    child: Text(feedback, style: statusStyle),
+                  ),
+                  if (onRetry != null)
+                    _action(
+                      key: const ValueKey('voice-transcription-retry'),
+                      palette: palette,
+                      style: statusStyle,
+                      icon: Icons.refresh_rounded,
+                      label: 'voiceToTextRetry'.tr,
+                      onPressed: onRetry!,
                     ),
-                    if (error != null &&
-                        error.isNotEmpty &&
-                        error.tr != 'voiceToTextFailed'.tr) ...[
-                      const SizedBox(height: AppTokens.s2),
-                      Text(error.tr, style: statusStyle),
-                    ],
-                  ],
-                ),
+                ],
               ),
-              if (onRetry != null)
-                _action(
-                  key: const ValueKey('voice-transcription-retry'),
-                  palette: palette,
-                  style: statusStyle,
-                  icon: Icons.refresh_rounded,
-                  label: 'voiceToTextRetry'.tr,
-                  onPressed: onRetry!,
-                ),
-            ],
           ],
         );
       }),

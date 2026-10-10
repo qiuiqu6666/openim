@@ -282,9 +282,11 @@ void main() {
       addTearDown(() => clearDevicePage(tester));
       await mountDevicePage(tester, const DeviceVerificationPage(), dark: dark);
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
-      expect(scaffold.backgroundColor, AuthReferenceTokens.surface);
+      expect(scaffold.backgroundColor,
+          dark ? AppTokens.surfaceDark : AuthReferenceTokens.surface);
       final context = tester.element(deviceCodeField);
-      expect(Theme.of(context).brightness, Brightness.light);
+      expect(Theme.of(context).brightness,
+          dark ? Brightness.dark : Brightness.light);
       expect(tester.takeException(), isNull);
     });
   }

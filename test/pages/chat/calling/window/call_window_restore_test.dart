@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -289,6 +292,7 @@ void main() {
     });
   });
   tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
     _messenger.setMockMethodCallHandler(_permissions, null);
     _messenger.setMockMethodCallHandler(_pip, null);
     _messenger.setMockMethodCallHandler(_rtc, null);
@@ -298,6 +302,92 @@ void main() {
     textures.clear();
     Get.reset();
   });
+
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    for (final video in [false, true]) {
+      testWidgets(
+          '$platform ${video ? 'video' : 'audio'} small-window button stays in app until native background PiP',
+          (tester) async {
+        debugDefaultTargetPlatformOverride = platform;
+        final nativeMethods = <String>[];
+        String? nativeSession;
+        _messenger.setMockMethodCallHandler(_pip, (call) async {
+          nativeMethods.add(call.method);
+          if (call.method == 'configure') {
+            nativeSession = (call.arguments as Map)['session'] as String;
+            return {
+              'supported': true,
+              'ready': true,
+              'backgroundCameraSupported': true
+            };
+          }
+          return true;
+        });
+        Future<void> nativeState(String phase) async {
+          final reply = Completer<void>();
+          _messenger.handlePlatformMessage(
+              _pip.name,
+              _pip.codec.encodeMethodCall(MethodCall('state', {
+                'session': nativeSession,
+                'phase': phase,
+              })),
+              (_) => reply.complete());
+          await reply.future;
+          await _frames(tester);
+        }
+
+        final probe = _CallProbe();
+        final state =
+            await _mount(tester, video: video, connected: true, probe: probe);
+        try {
+          final originalSession = state.session;
+          expect(nativeSession, isNotNull);
+          expect(state.pictureInPicture.supported, isTrue);
+          await tester.tap(find.byTooltip('小窗'));
+          await _frames(tester);
+          expect(state.minimize, isTrue);
+          expect(find.byType(CallFullScreenSurface), findsNothing);
+          expect(find.byType(CallCompactSurface), findsOneWidget);
+          expect(state.pictureInPicture.active, isFalse);
+          expect(state.pictureInPicture.entering, isFalse);
+          expect(nativeMethods, ['configure'],
+              reason:
+                  'The UI must neither enter native PiP nor disarm home auto-entry');
+          await tester.tapAt(const Offset(20, 700));
+          expect(probe.underlyingTaps, 1);
+          // Inactive alone (notification shade / a system dialog) is not home.
+          state.didChangeAppLifecycleState(AppLifecycleState.inactive);
+          await _frames(tester);
+          expect(nativeMethods, ['configure']);
+          expect(state.minimize, isTrue);
+
+          // OS-owned home auto-entry replaces the in-app float with PiP content.
+          state.didChangeAppLifecycleState(AppLifecycleState.paused);
+          await nativeState('entering');
+          expect(
+              tester
+                  .widget<CallCompactSurface>(find.byType(CallCompactSurface))
+                  .systemPip,
+              isTrue);
+          await nativeState('active');
+          expect(state.pictureInPicture.active, isTrue);
+          expect(tester.getSize(find.byType(CallCompactSurface)),
+              const Size(375, 812));
+          state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+          await nativeState('restored');
+          expect(state.pictureInPicture.active, isFalse);
+          expect(state.minimize, isFalse);
+          expect(find.byType(CallFullScreenSurface), findsOneWidget);
+          expect(state.session, same(originalSession));
+          _expectNoCallMutation(probe, connected: true);
+          expect(tester.takeException(), isNull);
+        } finally {
+          await _disposeFixture(tester, state);
+          debugDefaultTargetPlatformOverride = null;
+        }
+      });
+    }
+  }
 
   for (final video in [false, true]) {
     for (final connected in [false, true]) {

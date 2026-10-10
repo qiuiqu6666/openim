@@ -28,6 +28,8 @@
 
 ## 数据与依赖边界
 
+群主/管理员消息撤回位于 [messages/revocation](messages/revocation/README.md)，主控制器仅连接群角色、会话生命周期和原有消息清理回调。消息菜单及 SDK 同步链路继续复用。
+
 - 消息、群状态和回执仍来自 OpenIM SDK；本次不替换消息链路或 GetX。
 - 功能控制器只接收所需的列表、只读 getter、事件源或回调，不依赖整个 `ChatLogic`，不通过 `part` 或扩展共享私有状态。
 - 消息行 Widget 使用 `ChatLogic` 的公开页面接口。主逻辑不反向依赖该 Widget。

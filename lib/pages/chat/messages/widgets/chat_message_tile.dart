@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../chat_logic.dart';
+import '../../../../services/chat_revocation_notice.dart';
 import '../selection/message_selection_controller.dart';
 import '../custom/chat_custom_message.dart';
 import '../../../fund/notifications/fund_claim_notice.dart';
@@ -39,6 +40,19 @@ class ChatMessageTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message.contentType == MessageType.revokeMessageNotification) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        child: Center(
+          child: Text(
+            ChatRevocationNotice.text(message, OpenIM.iMManager.userID),
+            textAlign: TextAlign.center,
+            style: Styles.ts_8E9AB0_12sp.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
     final notice = FundClaimNotice.parse(message);
     if (notice != null) {
       return Obx(() {

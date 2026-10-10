@@ -4,8 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart' hide Response;
 import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/pages/mine/settings/openim_profile_service.dart';
+import 'package:openim/pages/mine/settings/pages/trade_password_page.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/wallet_entry_fixture.dart';
 
 class _Account extends GetxController implements IMController {
   @override
@@ -65,8 +68,34 @@ void main() {
     });
   }
 
-  final malformed = <String, Map<String, dynamic>>{
-    'missing set': {},
+  test('server omits the default false field and returns an empty object',
+      () async {
+    response['data'] = <String, dynamic>{};
+    expect(await service.hasTradePassword(), isFalse);
+  });
+
+  testWidgets('omitted false reaches password setup instead of a failed gate',
+      (tester) async {
+    response['data'] = <String, dynamic>{};
+    final settings = WalletEntrySettings()
+      ..check = (_) => service.hasTradePassword();
+    final fixture = WalletEntryFixture(settings);
+    await fixture.mount(tester);
+    final pending = fixture.enter();
+    await tester.pumpAndSettle();
+    expect(find.byType(TradePasswordPage), findsOneWidget);
+    expect(fixture.allowed, isEmpty);
+    expect(requests.single.method, 'GET');
+    fixture.rootNavigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(await pending, isFalse);
+  });
+
+  final malformed = <String, dynamic>{
+    'unknown fields without set': {'ready': true},
+    'null data': null,
+    'list data': <dynamic>[],
+    'string data': '{}',
     'string set': {'set': 'true'},
     'integer set': {'set': 1},
     'null set': {'set': null},
@@ -91,5 +120,12 @@ void main() {
       throwsA((20037, 'status unavailable')),
     );
     expect(requests, hasLength(1));
+  });
+
+  test('business failure with empty data never becomes an unset password',
+      () async {
+    response = {'errCode': 20037, 'errMsg': 'unavailable', 'data': {}};
+    await expectLater(
+        service.hasTradePassword(), throwsA((20037, 'unavailable')));
   });
 }

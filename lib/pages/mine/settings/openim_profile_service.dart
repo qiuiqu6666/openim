@@ -11,6 +11,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:path/path.dart' as p;
 import '../../../core/controller/im_controller.dart';
 import '../../../core/session/local_session_exit.dart';
+import '../../../services/fund/diagnostics/wallet_load_log.dart';
 import '../../group_features/data/group_feature_runtime.dart';
 import 'settings_service.dart';
 import 'verification_code_result.dart';
@@ -209,26 +210,45 @@ class OpenIMProfileService extends StubSettingsService {
 
   Future<dynamic> _security(String path,
       {String method = 'POST', Map<String, dynamic>? data}) async {
-    final response = await dio.request<Map<String, dynamic>>(
-      '${Config.appAuthUrl}$path',
-      data: data,
-      options: Options(
-          method: method,
-          headers: {
-            'token': DataSp.chatToken,
-            'operationID': const Uuid().v4(),
-            'Content-Type': 'application/json',
-          },
-          sendTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 30)),
-    );
-    final body = response.data;
-    if (body == null) throw StateError('Empty response');
-    final resp = ApiResp.fromJson(body);
-    if (resp.errCode != 0) {
-      throw (resp.errCode, resp.errDlt.isNotEmpty ? resp.errDlt : resp.errMsg);
+    final url = '${Config.appAuthUrl}$path';
+    final operationID = const Uuid().v4();
+    final trace = WalletLoadLog.request(
+        method: method,
+        url: url,
+        path: path,
+        operationID: operationID,
+        hasToken: (DataSp.chatToken ?? '').isNotEmpty);
+    try {
+      final response = await dio.request<Map<String, dynamic>>(
+        url,
+        data: data,
+        options: Options(
+            method: method,
+            headers: {
+              'token': DataSp.chatToken,
+              'operationID': operationID,
+              'Content-Type': 'application/json',
+            },
+            sendTimeout: const Duration(seconds: 30),
+            receiveTimeout: const Duration(seconds: 30)),
+      );
+      trace?.response(response);
+      final body = response.data;
+      if (body == null) throw StateError('Empty response');
+      final resp = ApiResp.fromJson(body);
+      if (resp.errCode != 0) {
+        throw (
+          resp.errCode,
+          resp.errDlt.isNotEmpty ? resp.errDlt : resp.errMsg
+        );
+      }
+      return resp.data;
+    } catch (error) {
+      trace?.error(error);
+      rethrow;
+    } finally {
+      trace?.finish('end');
     }
-    return resp.data;
   }
 
   Future<void> _changeLoginPassword(Map<String, dynamic> data) async {
@@ -369,6 +389,13 @@ class OpenIMProfileService extends StubSettingsService {
   @override
   Future<bool> hasTradePassword() async {
     final data = await _security('/chat/fund/pay-password', method: 'GET');
+    if (data is! Map) {
+      throw const FormatException('Invalid payment password status');
+    }
+    // The server serializes GetFundPayPasswordResp via encoding/json with
+    // `json:"set,omitempty"`: an unset password is the successful payload {}.
+    // Only that exact default shape means false; malformed values still fail.
+    if (data.isEmpty) return false;
     final set = data['set'];
     if (set is! bool) {
       throw const FormatException('Invalid payment password status');

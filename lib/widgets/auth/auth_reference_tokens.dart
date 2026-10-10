@@ -1,9 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart' show AppTokens;
 
-/// Fixed authentication palette from reference-99chat/src/ui/app_tokens.dart.
-/// Product surfaces continue to use the application's semantic theme tokens.
+/// Reference authentication dimensions and light palette.
+/// Use [color] and [style] when applying these colors to a themed surface.
 abstract final class AuthReferenceTokens {
+  static bool isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+
+  /// Preserves the reference light colors and resolves their dark semantics.
+  /// Brand hero/button foregrounds deliberately stay white on the blue surface.
+  static Color color(BuildContext context, Color reference) {
+    if (!isDark(context)) return reference;
+    final colors = Theme.of(context).colorScheme;
+    if (reference == surface) return AppTokens.surfaceDark;
+    if (reference == fieldFill || reference == ink100 || reference == ink50) {
+      return AppTokens.surfaceAltDark;
+    }
+    if (reference == fieldBorder ||
+        reference == ink150 ||
+        reference == divider) {
+      return AppTokens.borderDark;
+    }
+    if (reference == ink900 || reference == ink800) return colors.onSurface;
+    if (reference == ink600 || reference == ink400 || reference == hint) {
+      return colors.onSurfaceVariant;
+    }
+    if (reference == ink300) return AppTokens.textSecondaryDark;
+    if (reference == link || reference == brand500) return colors.primary;
+    if (reference == error) return colors.error;
+    if (reference == brand50) return colors.primary.withValues(alpha: .12);
+    if (reference == brand100) return colors.primary.withValues(alpha: .3);
+    return reference;
+  }
+
+  static TextStyle style(BuildContext context, TextStyle reference) =>
+      reference.copyWith(
+        color:
+            reference.color == null ? null : color(context, reference.color!),
+      );
+
   static const brand500 = AppTokens.accent;
   static const link = Color(0xFF176AC2);
   static const surface = AppTokens.surfaceLight;

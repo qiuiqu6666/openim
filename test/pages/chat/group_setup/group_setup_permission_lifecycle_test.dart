@@ -202,6 +202,19 @@ void main() {
     expect(setup.isOwnerOrAdmin, isFalse);
   });
 
+  test('an old account cannot leave or delete the new account conversation',
+      () async {
+    OpenIM.iMManager.userID = 'another-account';
+    await _login(account: 'another-account', token: 'another-token');
+    await setup.quitGroup();
+    expect(
+        nativeCalls.where((call) =>
+            call.method == 'quitGroup' ||
+            call.method == 'dismissGroup' ||
+            call.method == 'deleteConversationAndDeleteAllMsg'),
+        isEmpty);
+  });
+
   test('an app manager change invalidates an older same-role reply', () async {
     setup.myGroupMembersInfo.value
       ..roleLevel = GroupRoleLevel.member

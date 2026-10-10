@@ -4,6 +4,7 @@ import 'auth_reference_tokens.dart';
 
 /// Lets Material animate the label and cut its gap in the field outline.
 InputDecoration authReferenceInputDecoration({
+  required BuildContext context,
   required String hint,
   required TextStyle hintStyle,
   required bool focused,
@@ -24,19 +25,21 @@ InputDecoration authReferenceInputDecoration({
         )
       : InputBorder.none;
   final normalBorder = border(
-    invalid ? AuthReferenceTokens.error : AuthReferenceTokens.fieldBorder,
+    AuthReferenceTokens.color(context,
+        invalid ? AuthReferenceTokens.error : AuthReferenceTokens.fieldBorder),
     AuthReferenceTokens.fieldBorderWidth,
   );
   return InputDecoration(
     filled: label != null,
-    fillColor: AuthReferenceTokens.fieldFill,
+    fillColor:
+        AuthReferenceTokens.color(context, AuthReferenceTokens.fieldFill),
     labelText: label,
     labelStyle: hintStyle,
     floatingLabelStyle: hintStyle.copyWith(
       color: invalid
-          ? AuthReferenceTokens.error
+          ? AuthReferenceTokens.color(context, AuthReferenceTokens.error)
           : focused && enabled
-              ? AuthReferenceTokens.brand500
+              ? AuthReferenceTokens.color(context, AuthReferenceTokens.brand500)
               : hintStyle.color,
     ),
     floatingLabelBehavior: FloatingLabelBehavior.auto,
@@ -46,7 +49,8 @@ InputDecoration authReferenceInputDecoration({
     enabledBorder: normalBorder,
     disabledBorder: normalBorder,
     focusedBorder: border(
-      invalid ? AuthReferenceTokens.error : AuthReferenceTokens.brand500,
+      AuthReferenceTokens.color(context,
+          invalid ? AuthReferenceTokens.error : AuthReferenceTokens.brand500),
       AuthReferenceTokens.focusedFieldBorderWidth,
     ),
     counterText: '',

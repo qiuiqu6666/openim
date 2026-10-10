@@ -70,9 +70,9 @@ class _VoiceTextPreviewDialogState extends State<VoiceTextPreviewDialog> {
       _error = null;
     });
     try {
-      final text = (await widget.transcribe(request)).trim();
+      final text = await widget.transcribe(request);
       if (!mounted || request.isCancelled || request != _request) return;
-      if (text.isEmpty) {
+      if (text.trim().isEmpty) {
         _error = 'voiceToTextEmpty'.tr;
       } else {
         _text.value = TextEditingValue(
@@ -306,7 +306,7 @@ class _VoiceTextPreviewDialogState extends State<VoiceTextPreviewDialog> {
       onPressed:
           _finishing || _loading || _error != null || _text.text.trim().isEmpty
               ? null
-              : () => _finish(VoiceTextChoice.text(_text.text.trim())),
+              : () => _finish(VoiceTextChoice.text(_text.text)),
       style: FilledButton.styleFrom(
           backgroundColor: palette.accent,
           foregroundColor: palette.onAccent,

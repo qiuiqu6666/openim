@@ -142,6 +142,7 @@ void main() {
               tester.element(find.text('群聊正文')), fixture.context)
           .map((item) => item.text);
       expect(labels.contains('三公代理'), agentVisible);
+      expect(labels.contains('三公运营'), visible);
       expect(fixture.store.cachedGroupInfo(_groupID)?.ex, ex);
       expect(fixture.businessCalls, isEmpty);
       expect(fixture.api.calls.where((c) => c.path.endsWith('/config')).length,
@@ -167,6 +168,11 @@ void main() {
     await tester.pump();
     expect(find.byType(GroupGameFloatingEntry), findsNothing);
     expect(find.byType(SangongAgentFloatingEntry), findsNothing);
+    expect(
+        GroupFeatureActions.items(
+                tester.element(find.text('群聊正文')), fixture.context)
+            .any((item) => item.text == '三公运营'),
+        isFalse);
     expect(fixture.store.cachedGroupInfo(_groupID)?.ex, markSixEx);
     expect(fixture.store.features(_groupID).revision, 5);
     expect(originalContext.capabilitiesCurrent(), isTrue);
@@ -186,6 +192,11 @@ void main() {
     await flushSangong(tester);
     expect(find.byType(GroupGameFloatingEntry), findsOneWidget);
     expect(find.byType(SangongAgentFloatingEntry), findsNothing);
+    expect(
+        GroupFeatureActions.items(
+                tester.element(find.text('群聊正文')), fixture.context)
+            .any((item) => item.text == '三公运营'),
+        isTrue);
     expect(
         GroupFeatureActions.items(
                 tester.element(find.text('群聊正文')), fixture.context)
@@ -209,9 +220,15 @@ void main() {
     await _pumpChat(tester, fixture);
     expect(find.byType(GroupGameFloatingEntry), findsNothing);
 
+    bool hasOperator() => GroupFeatureActions.items(
+            tester.element(find.text('群聊正文')), fixture.context)
+        .any((item) => item.text == '三公运营');
+    expect(hasOperator(), isFalse);
+
     fixture.api.privilege.setAllowed(true);
     await flushSangong(tester);
     expect(find.byType(GroupGameFloatingEntry), findsOneWidget);
+    expect(hasOperator(), isTrue);
     final runtime = fixture.runtime!;
     expect(runtime.canConfigure, isFalse);
     expect(runtime.canManage, isFalse);
@@ -225,6 +242,7 @@ void main() {
     fixture.api.privilege.setAllowed(false);
     await flushSangong(tester);
     expect(find.byType(GroupGameFloatingEntry), findsNothing);
+    expect(hasOperator(), isFalse);
     expect(tester.takeException(), isNull);
   });
 

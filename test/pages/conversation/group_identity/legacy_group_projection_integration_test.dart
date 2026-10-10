@@ -8,7 +8,6 @@ import 'package:openim/core/controller/app_controller.dart';
 import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/core/im_callback.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
-import 'package:openim/pages/conversation/group_identity/legacy_group_conversation_migration.dart';
 import 'package:openim/pages/home/home_logic.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,24 +36,12 @@ class _Home extends GetxController implements HomeLogic {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-// A failed old-history read makes cleanup return without hiding anything. List
-// deduplication must not depend on that optional cleanup succeeding.
-class _UnavailableHistory extends LegacyGroupConversationMigration {
-  var attempts = 0;
-  @override
-  Future<void> run(
-      {required bool Function() isActive,
-      required void Function(ConversationInfo) onHidden}) async {
-    attempts++;
-  }
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const sdk = MethodChannel('flutter_openim_sdk');
   late _Home home;
   late List<ConversationInfo> local;
-  late _UnavailableHistory migration;
+  late List<String> sdkMethods;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -66,10 +53,11 @@ void main() {
     home = _Home();
     Get.put<HomeLogic>(home);
     local = [fixture.row(fixture.group), fixture.row('@${fixture.group}')];
-    migration = _UnavailableHistory();
+    sdkMethods = [];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdk, (call) async {
       expect(call.method, 'getConversationListSplit');
+      sdkMethods.add(call.method);
       return jsonEncode(local.map((e) => e.toJson()).toList());
     });
   });
@@ -80,20 +68,23 @@ void main() {
     Get.reset();
   });
 
-  test('refresh deduplicates while old history remains unavailable', () async {
-    final logic = ConversationLogic(groupMigration: migration);
+  test('refresh deduplicates without reading or hiding old group history',
+      () async {
+    final logic = ConversationLogic();
     await logic.onRefresh();
     expect(logic.list.map((e) => e.conversationID), ['sg_@${fixture.group}']);
-    expect(migration.attempts, 1);
     // Local storage is untouched. Repeated stale snapshots remain collapsed.
     expect(local, hasLength(2));
     await logic.onRefresh();
     expect(logic.list, hasLength(1));
+    expect(sdkMethods, everyElement('getConversationListSplit'));
+    expect(sdkMethods, isNot(contains('getAdvancedHistoryMessageList')));
+    expect(sdkMethods, isNot(contains('hideConversation')));
     logic.onClose();
   });
 
   test('cached first page is deduplicated on login', () async {
-    final logic = ConversationLogic(groupMigration: migration);
+    final logic = ConversationLogic();
     home.conversationsAtFirstPage.addAll(local);
     await logic.getFirstPage();
     expect(logic.list.map((e) => e.conversationID), ['sg_@${fixture.group}']);
@@ -103,7 +94,7 @@ void main() {
 
   test('replacement arriving after first page immediately collapses old row',
       () async {
-    final logic = ConversationLogic(groupMigration: migration);
+    final logic = ConversationLogic();
     home.conversationsAtFirstPage.add(local.first);
     await logic.getFirstPage();
     expect(logic.list.single.conversationID, 'sg_${fixture.group}');
@@ -115,12 +106,27 @@ void main() {
   });
 
   test('restart reconstructs projection from persistent SDK rows', () async {
-    var logic = ConversationLogic(groupMigration: migration);
+    var logic = ConversationLogic();
     await logic.onRefresh();
     logic.onClose();
-    logic = ConversationLogic(groupMigration: migration);
+    logic = ConversationLogic();
     await logic.onRefresh();
     expect(logic.list.single.conversationID, 'sg_@${fixture.group}');
+    logic.onClose();
+  });
+
+  test(
+      'repeated stale native snapshots remain collapsed without maintenance writes',
+      () async {
+    final logic = ConversationLogic();
+    for (var i = 0; i < 10; i++) {
+      await logic.onRefresh();
+      expect(logic.list.map((row) => row.conversationID),
+          ['sg_@${fixture.group}']);
+      expect(local, hasLength(2));
+    }
+    expect(sdkMethods, hasLength(10));
+    expect(sdkMethods, everyElement('getConversationListSplit'));
     logic.onClose();
   });
 }

@@ -17,7 +17,9 @@ class AuthFieldLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: padding,
-        child: Text(text, style: style ?? AuthReferenceTokens.label),
+        child: Text(text,
+            style: AuthReferenceTokens.style(
+                context, style ?? AuthReferenceTokens.label)),
       );
 }
 
@@ -44,9 +46,13 @@ class AuthPrimaryButton extends StatelessWidget {
         child: FilledButton(
           style: FilledButton.styleFrom(
             backgroundColor: AuthReferenceTokens.brand500,
-            disabledBackgroundColor: AuthReferenceTokens.ink100,
+            disabledBackgroundColor:
+                AuthReferenceTokens.color(context, AuthReferenceTokens.ink100),
             foregroundColor: Colors.white,
-            disabledForegroundColor: disabledForegroundColor,
+            disabledForegroundColor: disabledForegroundColor ==
+                    AuthReferenceTokens.surface
+                ? Colors.white
+                : AuthReferenceTokens.color(context, disabledForegroundColor),
             minimumSize: const Size(0, AuthReferenceTokens.fieldHeight),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             shape: RoundedRectangleBorder(
@@ -88,14 +94,17 @@ class AuthCountryCode extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Text(code,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: AuthReferenceTokens.inputFontSize,
-                          color: AuthReferenceTokens.link,
+                          color: AuthReferenceTokens.color(
+                              context, AuthReferenceTokens.link),
                           fontWeight: FontWeight.w600,
                           height: 1.2)),
                   const SizedBox(width: 4),
-                  const Icon(Icons.keyboard_arrow_down_rounded,
-                      size: 18, color: AuthReferenceTokens.ink400),
+                  Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                      color: AuthReferenceTokens.color(
+                          context, AuthReferenceTokens.ink400)),
                 ]))),
       );
 }
@@ -144,7 +153,11 @@ class _AuthCodeActionState extends State<AuthCodeAction> {
         style: TextButton.styleFrom(
             padding: EdgeInsets.zero,
             minimumSize: const Size(0, 48),
-            foregroundColor: AuthReferenceTokens.link,
+            foregroundColor:
+                AuthReferenceTokens.color(context, AuthReferenceTokens.link),
+            disabledForegroundColor: AuthReferenceTokens.isDark(context)
+                ? AuthReferenceTokens.color(context, AuthReferenceTokens.ink400)
+                : null,
             textStyle: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -170,5 +183,6 @@ class AuthVersionFooter extends StatelessWidget {
   final String version;
   @override
   Widget build(BuildContext context) => Text('Version $version',
-      textAlign: TextAlign.center, style: AuthReferenceTokens.caption);
+      textAlign: TextAlign.center,
+      style: AuthReferenceTokens.style(context, AuthReferenceTokens.caption));
 }

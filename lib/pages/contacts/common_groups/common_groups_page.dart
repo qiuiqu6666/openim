@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../group_features/identity/group_name_label.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -102,7 +104,9 @@ class _CommonGroupsPageState extends State<CommonGroupsPage> {
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Styles.c_F8F9FA,
         appBar: TitleBar.back(
-            title: 'profileCommonGroups'.tr, backIconColor: Styles.c_0089FF),
+            title: 'profileCommonGroups'.tr,
+            backIconColor: Styles.c_0089FF,
+            right: SizedBox(width: 24.w)),
         body: SafeArea(
             top: false,
             child: Column(children: [
@@ -177,7 +181,9 @@ class _CommonGroupsPageState extends State<CommonGroupsPage> {
                                   height: AppTokens.s7 + AppTokens.s6,
                                   isCircle: true,
                                   isGroup: true),
-                              title: Text(group.groupName ?? group.groupID,
+                              title: GroupNameLabel(
+                                  name: group.groupName ?? group.groupID,
+                                  ex: group.ex,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: Styles.ts_0C1C33_17sp

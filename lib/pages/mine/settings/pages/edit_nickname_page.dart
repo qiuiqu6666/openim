@@ -257,6 +257,7 @@ class _EditNicknamePageState extends State<EditNicknamePage>
         avatarName: widget.initialNickname,
         avatarBytes: widget.store.profileAvatarPreviewBytes,
         maxLength: 22,
+        showClearButton: true,
         saving: _saving || _changingAvatar,
         onAvatarTap: _saving || _changingAvatar || widget.onChangeAvatar == null
             ? null

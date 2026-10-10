@@ -75,7 +75,7 @@ class _WalletTrendChartState extends State<WalletTrendChart> {
         final geometry =
             WalletTrendGeometry(_display.points, size, evenlySpaced: true);
         return Semantics(
-          label: '人民币总可用余额趋势，${_display.points.length}个滑动点，按住横向滑动查看余额，松开恢复当前余额',
+          label: '资产余额趋势，按住图表左右滑动查看历史余额，松开后显示当前余额',
           value: selected == null ? null : _pointLabel(selected),
           increasedValue: selected == null
               ? null

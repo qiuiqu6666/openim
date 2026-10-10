@@ -100,7 +100,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
       queryParameters: {'inviteCode': code, 'source': source}).toString();
 
   String get _displayName {
-    final nickname = widget.nickname.trim();
+    final nickname = graphemeTrim(widget.nickname);
     if (nickname.isNotEmpty) return nickname;
     final account = widget.account.trim();
     return account.isEmpty ? '99Chat' : account;

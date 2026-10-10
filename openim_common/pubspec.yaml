@@ -12,6 +12,7 @@ dependencies:
   liquid_glass_widgets: 0.5.0
   flutter:
     sdk: flutter
+  characters: ^1.4.1
   flutter_screenutil: ^5.7.0
   flutter_svg: 2.2.3
   flutter_markdown: ^0.7.7

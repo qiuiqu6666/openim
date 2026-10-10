@@ -68,6 +68,61 @@ class GroupManageLogic extends GetxController {
     }
   }
 
+  Future<void> setMemberPrivacy(bool protect) async {
+    final context = groupSetupLogic.capturePermissionContext();
+    bool current() =>
+        !_closed &&
+        !isClosed &&
+        groupSetupLogic.isPermissionContextCurrent(context);
+    if (!current() ||
+        busy.value ||
+        friendProtection.busy.value ||
+        !groupSetupLogic.isOwner ||
+        !friendProtection.canManage.value ||
+        !friendProtection.ready.value) {
+      return;
+    }
+    busy.value = true;
+    try {
+      await friendProtection.setProtected(protect);
+      if (!current()) return;
+      if (!friendProtection.ready.value ||
+          friendProtection.protect.value != protect) {
+        return;
+      }
+      await OpenIM.iMManager.groupManager.setGroupInfo(
+          GroupInfo(groupID: context.groupID, lookMemberInfo: protect ? 1 : 0));
+      if (!current()) return;
+      GroupInfo? group;
+      // SetGroupInfo completes before the native group cache synchronizes.
+      // Allow that bounded sync window before treating old cached data as a
+      // failed write. Every await still fences account/role changes.
+      for (var attempt = 0; attempt < 5; attempt++) {
+        if (attempt > 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+          if (!current()) return;
+        }
+        final groups = await OpenIM.iMManager.groupManager
+            .getGroupsInfo(groupIDList: [context.groupID]);
+        if (!current()) return;
+        group = groups.firstWhereOrNull((g) => g.groupID == context.groupID);
+        if (group?.lookMemberInfo == (protect ? 1 : 0)) break;
+      }
+      if (group == null || group.lookMemberInfo != (protect ? 1 : 0)) {
+        throw StateError('群成员隐私设置未完成，请重试');
+      }
+      groupSetupLogic.applyGroupInfo(group);
+      groupSetupLogic.imLogic.groupInfoUpdatedSubject.add(group);
+    } catch (_) {
+      if (current()) {
+        await groupSetupLogic.getGroupInfo();
+        if (current()) IMViews.showToast('群成员隐私设置未完成，请重试');
+      }
+    } finally {
+      if (!_closed && !isClosed) busy.value = false;
+    }
+  }
+
   void admins() => Get.to(() => GroupMemberPermissionsPage(
       groupID: groupInfo.value.groupID,
       owner: groupSetupLogic.isOwner,

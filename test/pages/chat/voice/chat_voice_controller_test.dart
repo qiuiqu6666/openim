@@ -9,6 +9,8 @@ import 'package:openim/pages/chat/voice/chat_voice_controller.dart';
 import 'package:openim/pages/chat/voice/voice_to_text_service.dart';
 import 'package:openim/pages/chat/voice/widgets/voice_text_preview_dialog.dart';
 
+import '../../../support/unicode/unicode_samples.dart';
+
 class _VoiceService extends VoiceToTextService {
   final answer = Completer<String>();
   final tokens = <CancelToken?>[];
@@ -116,6 +118,25 @@ void main() {
 
   setUp(() => fixture = _VoiceFixture());
   tearDown(() => fixture.voice.dispose());
+
+  for (final sample in unicodeSamples) {
+    test('voice preview sends exact ${sample.name} text to the message sender',
+        () async {
+      final directory = await Directory.systemTemp.createTemp('voice-unicode-');
+      addTearDown(() => directory.delete(recursive: true));
+      final file =
+          await File('${directory.path}/recording.wav').writeAsBytes([1]);
+      final raw = ' \u0301${sample.text}\n\t ';
+      final pending = fixture.voice.previewAndSendVoice(file, 4);
+      fixture.previewGate.complete(VoiceTextChoice.text(raw));
+      await pending;
+      expect(fixture.sent.single.message.textElem!.content, raw);
+      expect(fixture.sent.single.message.textElem!.content!.codeUnits,
+          raw.codeUnits);
+      expect(fixture.sent.single.resetInput, isFalse);
+      expect(await file.exists(), isFalse);
+    });
+  }
 
   test('playback and recognition serialize local writes and merge both patches',
       () async {
@@ -262,7 +283,7 @@ void main() {
     expect(fixture.voice.previewOpen, isTrue);
     fixture.previewGate.complete(const VoiceTextChoice.text(' edited words '));
     await pending;
-    expect(fixture.sent.single.message.textElem!.content, 'edited words');
+    expect(fixture.sent.single.message.textElem!.content, ' edited words ');
     expect(fixture.sent.single.resetInput, isFalse);
     expect(await file.exists(), isFalse);
     expect(fixture.voice.previewOpen, isFalse);

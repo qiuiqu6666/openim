@@ -10,9 +10,24 @@ import 'package:openim/pages/group_features/live/models/live_tip_currency.dart';
 import 'package:openim/services/fund_pending_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'live_test_support.dart';
+import '../../../support/unicode/unicode_samples.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('live names and descriptions count visible graphemes in received DTOs',
+      () {
+    final family =
+        unicodeSamples.firstWhere((sample) => sample.name == 'family').text;
+    final session = LiveSession.fromJson({
+      ...liveDTO(),
+      'roomName': family * 10,
+      'description': family * 30,
+    });
+    expect(session.roomName, family * 10);
+    expect(session.description, family * 30);
+    expect(() => LiveSession.fromJson({...liveDTO(), 'roomName': family * 11}),
+        throwsFormatException);
+  });
   final invalidSummaries = <Object?>[
     null,
     {'schemaVersion': 2, 'revision': 8},

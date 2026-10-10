@@ -15,8 +15,8 @@ import 'pages/storage_page.dart';
 import 'settings_draft_store.dart';
 import 'settings_navigation.dart';
 import 'settings_service.dart';
+import 'version/installed_app_version.dart';
 import 'widgets/settings_widgets.dart';
-import 'device_sync/device_sync_page.dart';
 
 class SettingsHomePage extends StatefulWidget {
   const SettingsHomePage({
@@ -68,7 +68,7 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
     try {
       final info = await PackageInfo.fromPlatform();
       if (!mounted) return;
-      setState(() => _displayVersion = info.version);
+      setState(() => _displayVersion = installedAppVersion(info));
     } catch (_) {
       if (!mounted) return;
       setState(() => _displayVersion = '');
@@ -166,19 +166,13 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
             ),
             SettingsCell(
               title: settingsText(context, zh: '朋友圈', en: 'Moments'),
+              showDivider: false,
               onTap: widget.onMomentsTap ??
                   () => openSettingsPage(
                         context,
                         MomentsPermissionPage(
                             store: widget.store, service: widget.service),
                       ),
-            ),
-            SettingsCell(
-              key: const ValueKey('settings-device-sync'),
-              title: settingsText(context,
-                  zh: '相册与定位同步', en: 'Photo and Location Sync'),
-              showDivider: false,
-              onTap: () => openSettingsPage(context, const DeviceSyncPage()),
             ),
           ],
         ),

@@ -52,7 +52,8 @@ class LoadingView {
 
   void show() async {
     if (_isVisible) return;
-    _overlayState = Overlay.of(Get.overlayContext!);
+    _overlayState = Get.key.currentState?.overlay;
+    if (_overlayState == null) return;
     _overlayEntry = OverlayEntry(
       builder: (BuildContext context) => Container(
         width: MediaQuery.of(context).size.width,
@@ -75,7 +76,8 @@ class LoadingView {
   }
 
   void progress(Stream<double> stream) async {
-    _progressOverlayState = Overlay.of(Get.overlayContext!);
+    _progressOverlayState = Get.key.currentState?.overlay;
+    if (_progressOverlayState == null) return;
     _progressOverlayEntry = OverlayEntry(
       builder: (BuildContext context) => GestureDetector(
         onTap: dismiss,
@@ -89,13 +91,13 @@ class LoadingView {
               height: 80,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                color: Styles.c_0C1C33,
+                color: FeedbackColors.background,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const CupertinoActivityIndicator(
-                    color: Colors.white,
+                    color: FeedbackColors.foreground,
                     radius: 20,
                   ),
                   StreamBuilder(
@@ -105,7 +107,10 @@ class LoadingView {
                         if (!snapshot.hasData) return Container();
                         final progress = snapshot.data ?? 0.0;
                         return Text('${(progress * 100).toStringAsFixed(1)}%',
-                            style: const TextStyle(color: Colors.white));
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(color: FeedbackColors.foreground));
                       }),
                 ],
               ),

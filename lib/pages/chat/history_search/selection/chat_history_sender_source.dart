@@ -1,4 +1,5 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'package:openim_common/openim_common.dart';
 
 class ChatHistorySender {
   const ChatHistorySender({
@@ -15,8 +16,9 @@ class ChatHistorySender {
   final String? faceURL;
   final String? ex;
 
-  String get name =>
-      nickname?.trim().isNotEmpty == true ? nickname!.trim() : displayName;
+  String get name => graphemeTrim(nickname ?? '').isNotEmpty
+      ? graphemeTrim(nickname!)
+      : displayName;
 }
 
 class ChatHistorySenderPageData {
@@ -73,7 +75,7 @@ class OpenIMChatHistorySenderSource implements ChatHistorySenderSource {
     if (matches.length != 1) throw StateError('Conversation unavailable');
     final conversation = matches.single;
     final groupID = conversation.groupID?.trim() ?? '';
-    final keyword = query.trim();
+    final keyword = graphemeTrim(query);
     if (groupID.isNotEmpty) {
       if (conversation.isNotInGroup == true) {
         throw StateError('Conversation membership unavailable');
@@ -172,5 +174,5 @@ class OpenIMChatHistorySenderSource implements ChatHistorySenderSource {
   }
 
   static String _name(String? value, String fallback) =>
-      value?.trim().isNotEmpty == true ? value!.trim() : fallback;
+      graphemeTrim(value ?? '').isNotEmpty ? graphemeTrim(value!) : fallback;
 }

@@ -2,6 +2,7 @@
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import '../../models/group_feature_context.dart';
 import '../models/mark_six_json.dart';
+import 'diagnostics/mark_six_api_debug_log.dart';
 
 class MarkSixSessionEnded implements Exception {
   const MarkSixSessionEnded();
@@ -51,15 +52,20 @@ class MarkSixRepository {
     final key =
         '$path|${query.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     final existing = _pending[key];
-    if (existing != null) return existing;
+    if (existing != null) {
+      MarkSixApiDebugLog.event('合并正在进行的请求', {'path': path});
+      return existing;
+    }
     final stamp = _cachedAt[key];
     if (!force && stamp != null && _now().difference(stamp) < cacheTTL) {
+      MarkSixApiDebugLog.event('使用缓存未发送请求', {'path': path});
       return Future.value(_cache[key]);
     }
     late final Future<Map<String, dynamic>> work;
-    final response = path.startsWith('/api/v1/lotteries/')
-        ? context.api.getEnvelope(path, query: query, headers: headers)
-        : context.api.get(path, query: query, headers: headers);
+    final response = MarkSixApiDebugLog.trace(() =>
+        path.startsWith('/api/v1/lotteries/')
+            ? context.api.getEnvelope(path, query: query, headers: headers)
+            : context.api.get(path, query: query, headers: headers));
     work = response.then((result) {
       guard(private: private);
       // Group headers are always scoped; explicit response IDs must agree.
@@ -103,7 +109,14 @@ class MarkSixRepository {
 
   Future<Map<String, dynamic>> lottery(String resource,
       {Map<String, dynamic> query = const {}, bool force = false}) {
-    if (machineCode.isEmpty) throw StateError('本群尚未配置六合彩机器码');
+    if (machineCode.isEmpty) {
+      MarkSixApiDebugLog.event('开奖请求跳过', {
+        'groupId': context.groupID,
+        'resource': resource,
+        'reason': '未配置机器码',
+      });
+      throw StateError('本群尚未配置六合彩机器码');
+    }
     return read('/api/v1/lotteries/mark-six-demo/$resource',
         query: {'machineCode': machineCode, ...query}, force: force);
   }
@@ -111,7 +124,8 @@ class MarkSixRepository {
   Future<Map<String, dynamic>> post(String path,
       {Map<String, dynamic> body = const {}}) async {
     guard(private: path.startsWith('/me/'));
-    final result = await context.api.post(path, body: body, headers: headers);
+    final result = await MarkSixApiDebugLog.trace(
+        () => context.api.post(path, body: body, headers: headers));
     guard(private: path.startsWith('/me/'));
     invalidate();
     return result;
@@ -120,7 +134,8 @@ class MarkSixRepository {
   Future<Map<String, dynamic>> update(
       String path, Map<String, dynamic> body) async {
     guard(private: path.startsWith('/me/'));
-    final result = await context.api.put(path, body: body, headers: headers);
+    final result = await MarkSixApiDebugLog.trace(
+        () => context.api.put(path, body: body, headers: headers));
     guard(private: path.startsWith('/me/'));
     invalidate();
     return result;

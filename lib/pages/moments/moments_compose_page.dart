@@ -76,7 +76,7 @@ class _MomentsComposePageState extends State<MomentsComposePage>
       _store.persistenceError == null &&
       _capabilities?.publishEnabled == true &&
       _store.hasContent &&
-      _text.text.trim().runes.length <= _maxText &&
+      graphemeTrim(_text.text).characters.length <= _maxText &&
       (!_store.visibility.requiresAudience ||
           _store.visibility.audienceUserIds.isNotEmpty);
 

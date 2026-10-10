@@ -84,12 +84,7 @@ class ChatIdFormat {
 class ToastUtils {
   static void toast(String message, {BuildContext? context}) {
     if (context != null && !context.mounted) return;
-    if (context != null) {
-      ScaffoldMessenger.maybeOf(context)
-          ?.showSnackBar(SnackBar(content: Text(message)));
-    } else {
-      IMViews.showToast(message);
-    }
+    IMViews.showToast(message);
   }
 }
 

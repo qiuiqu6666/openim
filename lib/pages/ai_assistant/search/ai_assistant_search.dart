@@ -1,11 +1,13 @@
 import 'package:flutter/painting.dart';
+import 'package:characters/characters.dart';
 import 'package:openim/pages/ai_assistant/models/ai_assistant_models.dart';
+import 'package:openim_common/openim_common.dart';
 
 class AiAssistantSearch {
   AiAssistantSearch._();
 
   static String normalize(String raw) {
-    return raw.trim().toLowerCase();
+    return graphemeTrim(raw).toLowerCase();
   }
 
   static String haystack(AiAssistantMessage message) {
@@ -13,7 +15,7 @@ class AiAssistantSearch {
   }
 
   static String copyText(AiAssistantMessage message) {
-    return _plainParts(message).join('\n').trim();
+    return _plainParts(message).join('\n');
   }
 
   static List<String> _plainParts(AiAssistantMessage message) {
@@ -21,8 +23,8 @@ class AiAssistantSearch {
       return const <String>[];
     }
     final parts = <String>[];
-    final text = message.text?.trim() ?? '';
-    if (text.isNotEmpty) {
+    final text = message.text ?? '';
+    if (graphemeTrim(text).isNotEmpty) {
       parts.add(text);
     }
     for (final file in message.files) {
@@ -90,7 +92,21 @@ class AiAssistantSearch {
     if (needle.isEmpty || source.isEmpty) {
       return <InlineSpan>[TextSpan(text: source, style: base)];
     }
-    final lower = source.toLowerCase();
+    // Search folding is temporary. Map folded positions back to complete
+    // source graphemes before assigning styles, including partial matches.
+    final folded = StringBuffer();
+    final sourceOffsets = <int, int>{0: 0};
+    var sourceOffset = 0;
+    var foldedOffset = 0;
+    for (final character in source.characters) {
+      final lower = character.toLowerCase();
+      folded.write(lower);
+      sourceOffset += character.length;
+      foldedOffset += lower.length;
+      sourceOffsets[foldedOffset] = sourceOffset;
+    }
+    final lower = folded.toString();
+    final boundaries = sourceOffsets.keys.toList(growable: false);
     final spans = <InlineSpan>[];
     var start = 0;
     var from = 0;
@@ -102,17 +118,24 @@ class AiAssistantSearch {
         }
         break;
       }
-      if (index > start) {
-        spans.add(TextSpan(text: source.substring(start, index), style: base));
+      final matchStart = sourceOffsets[
+          graphemeBoundaryBefore(lower, index, boundaries: boundaries)]!;
+      final matchEnd = sourceOffsets[graphemeBoundaryAfter(
+          lower, index + needle.length,
+          boundaries: boundaries)]!;
+      from = index + needle.length;
+      if (matchStart < start) continue;
+      if (matchStart > start) {
+        spans.add(
+            TextSpan(text: source.substring(start, matchStart), style: base));
       }
       spans.add(
         TextSpan(
-          text: source.substring(index, index + needle.length),
+          text: source.substring(matchStart, matchEnd),
           style: hit,
         ),
       );
-      start = index + needle.length;
-      from = start;
+      start = matchEnd;
     }
     if (spans.isEmpty) {
       return <InlineSpan>[TextSpan(text: source, style: base)];

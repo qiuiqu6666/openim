@@ -16,9 +16,14 @@ import '../contacts/presence/contact_presence_policy.dart';
 import '../official_account/official_account_page.dart';
 import '../group_features/widgets/group_chat_feature_surface.dart';
 import '../group_features/widgets/group_feature_actions.dart';
+import '../group_features/identity/group_name_label.dart';
 
 class ChatPage extends StatelessWidget {
   final logic = Get.find<ChatLogic>(tag: GetTags.chat);
+  // Membership/feature changes move the timeline between wrapper branches.
+  // Reparent its existing state instead of attaching a second viewport before
+  // the old one is disposed at the end of the frame.
+  final _messageListKey = GlobalKey();
 
   ChatPage({super.key});
 
@@ -62,36 +67,43 @@ class ChatPage extends StatelessWidget {
               builder: (context, child) => logic.messageSelection.active
                   ? MessageSelectionToolbar(controller: logic.messageSelection)
                   : child!,
-              child: Obx(() {
-                final cachedPresence =
-                    logic.isSingleChat && Get.isRegistered<ContactsLogic>()
-                        ? Get.find<ContactsLogic>().presence.users[logic.userID]
-                        : null;
-                final presence = logic.isSingleChat
-                    ? ContactPresencePolicy.resolve(
-                        userID: logic.userID,
-                        ex: logic.conversationInfo.ex,
-                        presence: cachedPresence)
-                    : null;
-                return TitleBar.chat(
-                  toolbarHeight: headerHeight,
-                  title: logic.nickname.value,
-                  avatarUrl: logic.faceUrl.value,
-                  presenceText: logic.peerTyping.value
-                      ? StrRes.typing
-                      : (FriendDisplayPreferences.showOnlineStatus
-                          ? presence?.label
-                          : null),
-                  isOnline: FriendDisplayPreferences.showOnlineStatus &&
-                      (presence?.displayOnline ?? false),
-                  isSingleChat: logic.isSingleChat,
-                  member: logic.memberStr,
-                  onCloseMultiModel: logic.exit,
-                  onClickMoreBtn: logic.chatSetup,
-                  onClickCallBtn: logic.isGroupChat ? null : logic.callAudio,
-                  onClickVideoBtn: logic.isGroupChat ? null : logic.callVideo,
-                );
-              }),
+              child: ListenableBuilder(
+                listenable: logic.groupFeatures,
+                builder: (context, _) => Obx(() {
+                  final cachedPresence = logic.isSingleChat &&
+                          Get.isRegistered<ContactsLogic>()
+                      ? Get.find<ContactsLogic>().presence.users[logic.userID]
+                      : null;
+                  final presence = logic.isSingleChat
+                      ? ContactPresencePolicy.resolve(
+                          userID: logic.userID,
+                          ex: logic.conversationInfo.ex,
+                          presence: cachedPresence)
+                      : null;
+                  return TitleBar.chat(
+                    toolbarHeight: headerHeight,
+                    title: logic.nickname.value,
+                    titleColor: logic.isGroupChat
+                        ? groupNameColor(context,
+                            logic.groupFeatures.gameType(logic.groupID!))
+                        : null,
+                    avatarUrl: logic.faceUrl.value,
+                    presenceText: logic.peerTyping.value
+                        ? StrRes.typing
+                        : (FriendDisplayPreferences.showOnlineStatus
+                            ? presence?.label
+                            : null),
+                    isOnline: FriendDisplayPreferences.showOnlineStatus &&
+                        (presence?.displayOnline ?? false),
+                    isSingleChat: logic.isSingleChat,
+                    member: logic.memberStr,
+                    onCloseMultiModel: logic.exit,
+                    onClickMoreBtn: logic.chatSetup,
+                    onClickCallBtn: logic.isGroupChat ? null : logic.callAudio,
+                    onClickVideoBtn: logic.isGroupChat ? null : logic.callVideo,
+                  );
+                }),
+              ),
             ),
           ),
           body: SafeArea(
@@ -218,5 +230,6 @@ class ChatPage extends StatelessWidget {
         ],
       ));
 
-  Widget _buildMessages() => ChatMessageList(logic: logic);
+  Widget _buildMessages() =>
+      ChatMessageList(key: _messageListKey, logic: logic);
 }

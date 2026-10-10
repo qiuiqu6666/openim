@@ -13,6 +13,7 @@ import 'package:get/get.dart';
 import 'package:openim/pages/global_search/global_search_logic.dart';
 import 'package:openim/pages/global_search/global_search_view.dart';
 import 'package:openim/pages/official_account/widgets/official_account_name_label.dart';
+import 'package:openim/pages/group_features/identity/group_name_label.dart';
 import 'package:openim_common/openim_common.dart';
 
 const _previewOutput = String.fromEnvironment('GLOBAL_SEARCH_PREVIEW');
@@ -93,7 +94,9 @@ Finder _row(String title) => find.byWidgetPredicate((widget) =>
     widget is ListTile &&
     (widget.title is Text && (widget.title! as Text).data == title ||
         widget.title is OfficialAccountNameLabel &&
-            (widget.title! as OfficialAccountNameLabel).name == title));
+            (widget.title! as OfficialAccountNameLabel).name == title ||
+        widget.title is GroupNameLabel &&
+            (widget.title! as GroupNameLabel).name == title));
 Finder _chip(String label) => find.byWidgetPredicate((widget) =>
     widget is ChoiceChip &&
     widget.label is Text &&

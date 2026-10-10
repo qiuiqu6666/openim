@@ -246,8 +246,8 @@ void main() {
     expect(find.text('sdk-internal-peer-id'), findsNothing);
     expect(find.text('profileChatID'.tr), findsOneWidget);
     expect(find.byIcon(Icons.copy_outlined), findsOneWidget);
-    await _tap(tester, find.text(StrRes.addFriend));
-    expect(fixture.actions, ['add']);
+    expect(find.text(StrRes.addFriend), findsNothing);
+    expect(fixture.actions, isEmpty);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

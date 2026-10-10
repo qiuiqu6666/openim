@@ -50,7 +50,7 @@ class SangongMyConfig {
     return SangongMyConfig(
       configured: configured,
       tenantId: tenantId,
-      name: json['name']?.toString().trim() ?? '',
+      name: json['name']?.toString() ?? '',
       imGroupGameId: imGroupGameId,
       imGroupAdminStatsId:
           (json['imGroupAdminStatsId'] ?? json['im_group_admin_stats_id'] ?? '')
@@ -75,7 +75,7 @@ class SangongMyConfig {
 
   Map<String, dynamic> toSaveBody() {
     return <String, dynamic>{
-      'name': name.trim(),
+      'name': name,
       'imGroupGameId': imGroupGameId.trim(),
       'imGroupAdminStatsId': imGroupAdminStatsId.trim(),
       'imGroupLedgerId': imGroupLedgerId.trim(),

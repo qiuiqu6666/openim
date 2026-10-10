@@ -1,4 +1,5 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'package:openim_common/openim_common.dart';
 
 /// Filters for one conversation's local message history.
 class ChatHistorySearchQuery {
@@ -35,7 +36,7 @@ class ChatHistorySearchQuery {
   /// Never submit an empty keyword list together with an empty type list.
   List<int> get sdkMessageTypes => messageTypes.isNotEmpty
       ? messageTypes
-      : keyword.trim().isEmpty
+      : graphemeTrim(keyword).isEmpty
           ? searchableMessageTypes
           : const [];
 
@@ -63,7 +64,7 @@ class ChatHistorySearchQuery {
       throw ArgumentError('The end date must not precede the start date.');
     }
     return ChatHistorySearchQuery(
-      keyword: keyword.trim(),
+      keyword: graphemeTrim(keyword),
       messageTypes: List.unmodifiable(messageTypes.toSet()),
       senderIDs: List.unmodifiable(
         senderIDs.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet(),

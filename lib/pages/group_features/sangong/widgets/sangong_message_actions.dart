@@ -30,8 +30,7 @@ class SangongMessageActions {
         await action();
       } catch (error) {
         if (context.mounted && runtime.isCurrent) {
-          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-              SnackBar(content: Text(DioErrorMessage.forApp(error))));
+          IMViews.showToast(DioErrorMessage.forApp(error));
         }
       }
     }

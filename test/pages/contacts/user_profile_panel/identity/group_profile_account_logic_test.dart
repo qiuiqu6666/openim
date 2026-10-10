@@ -664,7 +664,7 @@ void main() {
     expect(logic.displayedUserID, isEmpty);
   });
 
-  testWidgets('friend protection and member visibility remain separate',
+  testWidgets('friend protection or hidden profiles both block adding friends',
       (tester) async {
     await open(tester);
     protection.protect.value = true;
@@ -677,8 +677,12 @@ void main() {
     await tester.pump();
     protection.protect.value = false;
     await tester.pump();
-    expect(logic.notAllowAddGroupMemberFriend.value, isFalse);
+    expect(logic.notAllowAddGroupMemberFriend.value, isTrue);
     expect(logic.notAllowLookGroupMemberProfiles.value, isTrue);
+    im.groupInfoUpdatedSubject
+        .add(GroupInfo(groupID: _group)..lookMemberInfo = 0);
+    await tester.pump();
+    expect(logic.notAllowAddGroupMemberFriend.value, isFalse);
   });
 
   for (final viewer in [
@@ -691,48 +695,53 @@ void main() {
       GroupRoleLevel.admin,
       GroupRoleLevel.owner
     ]) {
-      testWidgets('protected group add entry and application $viewer/$target',
-          (tester) async {
-        await open(tester);
-        logic.userInfo.update((user) => user?.allowAddFriend = 1);
-        protection.protect.value = true;
-        await protection.refresh();
-        im.memberInfoChangedSubject.add(GroupMembersInfo(
-            groupID: _group, userID: 'im_me', roleLevel: viewer));
-        im.memberInfoChangedSubject.add(GroupMembersInfo(
-            groupID: _group, userID: _peer, roleLevel: target));
-        await tester.pump();
-        final allowed =
-            viewer != GroupRoleLevel.member || target != GroupRoleLevel.member;
-        expect(logic.showFriendAddEntry, allowed);
-        expect(logic.notAllowAddGroupMemberFriend.value, !allowed);
-        logic.addFriend();
-        await tester.pumpAndSettle();
-        if (allowed) {
-          expect(applications.single['userID'], _peer);
-          expect(applications.single['friendGroupID'], _group);
-          expect(
-              applications.single['addSource'],
-              viewer == GroupRoleLevel.member
-                  ? FriendAddSource.group
-                  : FriendAddSource.manage);
-        } else {
-          expect(applications, isEmpty);
-        }
-      });
+      for (final protected in [false, true]) {
+        testWidgets(
+            'group add entry and application $viewer/$target protected=$protected',
+            (tester) async {
+          await open(tester);
+          logic.userInfo.update((user) => user?.allowAddFriend = 1);
+          im.groupInfoUpdatedSubject
+              .add(GroupInfo(groupID: _group)..lookMemberInfo = 0);
+          protection.protect.value = protected;
+          await protection.refresh();
+          im.memberInfoChangedSubject.add(GroupMembersInfo(
+              groupID: _group, userID: 'im_me', roleLevel: viewer));
+          im.memberInfoChangedSubject.add(GroupMembersInfo(
+              groupID: _group, userID: _peer, roleLevel: target));
+          await tester.pump();
+          expect(logic.showFriendAddEntry, !protected);
+          expect(logic.notAllowAddGroupMemberFriend.value, protected);
+          logic.addFriend();
+          await tester.pumpAndSettle();
+          if (protected) {
+            expect(applications, isEmpty);
+          } else {
+            expect(applications.single['userID'], _peer);
+            expect(applications.single['friendGroupID'], _group);
+            expect(
+                applications.single['addSource'],
+                viewer == GroupRoleLevel.member
+                    ? FriendAddSource.group
+                    : FriendAddSource.manage);
+          }
+        });
+      }
     }
   }
 
-  testWidgets('target demotion revokes entry while profile stays open',
+  testWidgets('target role changes cannot bypass active group protection',
       (tester) async {
     await open(tester);
     logic.userInfo.update((user) => user?.allowAddFriend = 1);
+    im.groupInfoUpdatedSubject
+        .add(GroupInfo(groupID: _group)..lookMemberInfo = 0);
     protection.protect.value = true;
     await protection.refresh();
     im.memberInfoChangedSubject.add(GroupMembersInfo(
         groupID: _group, userID: _peer, roleLevel: GroupRoleLevel.admin));
     await tester.pump();
-    expect(logic.showFriendAddEntry, isTrue);
+    expect(logic.showFriendAddEntry, isFalse);
     im.memberInfoChangedSubject.add(GroupMembersInfo(
         groupID: _group, userID: _peer, roleLevel: GroupRoleLevel.member));
     await tester.pump();
@@ -740,13 +749,19 @@ void main() {
     logic.addFriend();
     await tester.pumpAndSettle();
     expect(applications, isEmpty);
+    protection.protect.value = false;
+    await tester.pump();
+    expect(logic.showFriendAddEntry, isTrue);
   });
 
-  testWidgets('confirmed manager can add before SDK role cache loads',
+  testWidgets(
+      'unprotected confirmed manager can add before SDK role cache loads',
       (tester) async {
     await open(tester);
-    logic.userInfo.update((user) => user?.allowAddFriend = 1);
-    protection.protect.value = true;
+    logic.userInfo.update((user) => user?.allowAddFriend = 2);
+    im.groupInfoUpdatedSubject
+        .add(GroupInfo(groupID: _group)..lookMemberInfo = 0);
+    protection.protect.value = false;
     protection.canManage.value = true;
     await protection.refresh();
     expect(logic.showFriendAddEntry, isTrue);
@@ -758,6 +773,31 @@ void main() {
     expect(logic.showFriendAddEntry, isFalse);
     expect(logic.friendAddRequestSource, FriendAddSource.group);
   });
+
+  for (final viewer in [
+    GroupRoleLevel.member,
+    GroupRoleLevel.admin,
+    GroupRoleLevel.owner
+  ]) {
+    testWidgets('hidden member profiles block adding friends for role $viewer',
+        (tester) async {
+      await open(tester);
+      logic.userInfo.update((user) => user?.allowAddFriend = 1);
+      logic.forceCanAdd = true;
+      protection.protect.value = false;
+      await protection.refresh();
+      im.groupInfoUpdatedSubject
+          .add(GroupInfo(groupID: _group)..lookMemberInfo = 1);
+      im.memberInfoChangedSubject.add(GroupMembersInfo(
+          groupID: _group, userID: 'im_me', roleLevel: viewer));
+      await tester.pump();
+      expect(logic.notAllowAddGroupMemberFriend.value, isTrue);
+      expect(logic.showFriendAddEntry, isFalse);
+      logic.addFriend();
+      await tester.pumpAndSettle();
+      expect(applications, isEmpty);
+    });
+  }
 
   testWidgets('privacy update clears account without a member version change',
       (tester) async {
@@ -951,6 +991,6 @@ void main() {
     expect(methods, containsAll(['getGroupsInfo', 'getGroupMembersInfo']));
     expect(logic.groupInfo?.lookMemberInfo, 1);
     expect(logic.iHaveAdminOrOwnerPermission.value, isTrue);
-    expect(logic.notAllowAddGroupMemberFriend.value, isFalse);
+    expect(logic.notAllowAddGroupMemberFriend.value, isTrue);
   });
 }

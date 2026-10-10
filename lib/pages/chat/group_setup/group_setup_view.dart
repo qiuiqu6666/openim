@@ -8,6 +8,7 @@ import 'package:openim_common/openim_common.dart';
 import 'group_setup_logic.dart';
 import 'group_announcement_page.dart';
 import '../group/announcements/group_announcement_banner.dart';
+import '../../group_features/identity/group_name_label.dart';
 
 class GroupSetupPage extends StatelessWidget {
   final GroupSetupLogic logic;
@@ -191,7 +192,9 @@ class GroupSetupPage extends StatelessWidget {
                         ? () =>
                             logic.modifyGroupName(logic.groupInfo.value.faceURL)
                         : null,
-                    child: Text(logic.groupInfo.value.groupName ?? '',
+                    child: GroupNameLabel(
+                        name: logic.groupInfo.value.groupName ?? '',
+                        ex: logic.groupInfo.value.ex,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Styles.ts_0C1C33_17sp_semibold),

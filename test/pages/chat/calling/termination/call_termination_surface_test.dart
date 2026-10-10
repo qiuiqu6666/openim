@@ -7,14 +7,14 @@ import 'package:openim_live/src/models/call_types.dart';
 import 'package:openim_live/src/pages/single/widgets/controls.dart';
 import 'package:openim_live/src/widgets/call_compact_surface.dart';
 import 'package:openim_live/src/widgets/call_surface/call_full_screen_surface.dart';
-import 'package:openim_live/src/widgets/incoming_call/incoming_call_quick_answer_sheet.dart';
+import 'package:openim_live/src/widgets/incoming_call/incoming_call_view.dart';
 
 import 'support/call_termination_fixture.dart';
 
 void expectNoCallSurface() {
   expect(find.byType(CallFullScreenSurface), findsNothing);
   expect(find.byType(CallCompactSurface), findsNothing);
-  expect(find.byType(IncomingCallQuickAnswerSheet), findsNothing);
+  expect(find.byType(IncomingCallView), findsNothing);
   expect(find.byType(ControlsView), findsNothing);
   expect(find.byWidgetPredicate((widget) => widget is PopScope), findsNothing);
 }
@@ -107,11 +107,11 @@ void main() {
     'compact',
     'entering PiP',
     'active PiP',
-    'quick answer'
+    'incoming fullscreen'
   ]) {
     testWidgets('$surface disappears on termination without an inert overlay',
         (tester) async {
-      final incoming = surface == 'quick answer';
+      final incoming = surface == 'incoming fullscreen';
       final fixture = TerminationFixture(
           initial: incoming ? CallState.beCalled : CallState.call,
           quickAnswer: incoming);
@@ -119,15 +119,16 @@ void main() {
       final owner = fixture.state;
       try {
         if (incoming) {
-          expect(find.byType(IncomingCallQuickAnswerSheet), findsOneWidget);
-          await tester.tap(find.text(StrRes.reject));
+          expect(find.byType(IncomingCallView), findsOneWidget);
+          await tester.tap(find.text(StrRes.hangUp));
         } else {
           owner.session.peerConnected();
           await frames(tester);
           if (surface == 'compact') {
             await tester.tap(find.byTooltip('最小化'));
           } else {
-            await tester.tap(find.byTooltip('桌面画中画'));
+            // Native auto-entry after leaving the app, not an in-app button.
+            await native.nativePipState('entering');
           }
           await frames(tester);
           if (surface == 'active PiP') {

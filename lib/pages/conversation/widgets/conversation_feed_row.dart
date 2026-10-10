@@ -10,6 +10,7 @@ import '../summary/conversation_latest_message_text.dart';
 import '../../official_account/widgets/official_account_name_label.dart';
 import 'conversation_feed_style.dart';
 import '../../group_features/widgets/group_live_avatar.dart';
+import '../../group_features/identity/group_name_label.dart';
 
 /// Shared conversation presentation for the main feed and archived feed.
 ///
@@ -42,6 +43,30 @@ class ConversationFeedRow extends StatelessWidget {
 
   bool _dark(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;
+
+  Widget _name(BuildContext context) {
+    final style = TextStyle(
+      fontSize: 16,
+      height: ConversationFeedStyle.lineHeight,
+      fontWeight: FontWeight.w500,
+      color: AppTokens.textPrimary(dark: _dark(context)),
+    );
+    if (info.isGroupChat) {
+      return GroupNameLabel(
+        name: logic.getShowName(info),
+        groupID: info.groupID,
+        store: logic.groupFeatures,
+        style: style,
+      );
+    }
+    return OfficialAccountNameLabel(
+      name: logic.getShowName(info),
+      userID: info.userID,
+      ex: info.ex,
+      isSingleChat: info.isSingleChat,
+      style: style,
+    );
+  }
 
   Color _background(BuildContext context) {
     if (!archivedLayout) {
@@ -176,24 +201,7 @@ class ConversationFeedRow extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Flexible(
-                              child: OfficialAccountNameLabel(
-                                name: logic.getShowName(info),
-                                userID: info.userID,
-                                ex: info.ex,
-                                isSingleChat: info.isSingleChat,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  height: ConversationFeedStyle.lineHeight,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppTokens.textPrimary(
-                                      dark: Theme.of(context).brightness ==
-                                          Brightness.dark),
-                                ),
-                              ),
-                            ),
+                            Flexible(child: _name(context)),
                             if (logic.isNotDisturb(info)) ...[
                               SizedBox(width: _spacing(6)),
                               SizedBox(

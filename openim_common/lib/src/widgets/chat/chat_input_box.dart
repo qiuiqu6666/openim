@@ -364,38 +364,14 @@ class _ChatInputBoxState
     if (_inputBlocked) return;
     final controller = widget.controller;
     if (controller == null) return;
-    final text = controller.text;
-    final selection = controller.selection;
-    final start = selection.isValid ? selection.start : text.length;
-    final end = selection.isValid ? selection.end : text.length;
-    controller.value = TextEditingValue(
-      text: text.replaceRange(start, end, emoji),
-      selection: TextSelection.collapsed(offset: start + emoji.length),
-    );
+    controller.value = insertChatText(controller.value, emoji);
   }
 
   void _deleteEmoji() {
     if (_inputBlocked) return;
     final controller = widget.controller;
     if (controller == null || controller.text.isEmpty) return;
-    final text = controller.text;
-    final selection = controller.selection;
-    final start = selection.isValid ? selection.start : text.length;
-    final end = selection.isValid ? selection.end : text.length;
-    if (start != end) {
-      controller.value = TextEditingValue(
-        text: text.replaceRange(start, end, ''),
-        selection: TextSelection.collapsed(offset: start),
-      );
-      return;
-    }
-    if (start == 0) return;
-    final before = text.substring(0, start);
-    final removed = before.characters.last.length;
-    controller.value = TextEditingValue(
-      text: text.replaceRange(start - removed, start, ''),
-      selection: TextSelection.collapsed(offset: start - removed),
-    );
+    controller.value = deleteChatTextBackward(controller.value);
   }
 
   Widget get _textFiled => TextSelectionTheme(
@@ -453,8 +429,8 @@ class _ChatInputBoxState
   void send() {
     if (_inputBlocked) return;
     if (null != widget.onSend && null != widget.controller) {
-      final text = widget.controller!.text.trim();
-      if (text.isNotEmpty) widget.onSend!(text);
+      final text = widget.controller!.text;
+      if (text.trim().isNotEmpty) widget.onSend!(text);
     }
   }
 

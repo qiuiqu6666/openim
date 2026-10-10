@@ -138,7 +138,11 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
       PersistentTabConfig(
-        screen: WalletTabShell(activeTabIndexListenable: _activeTabIndex),
+        screen: WalletTabShell(
+          activeTabIndexListenable: _activeTabIndex,
+          entry: _walletEntry,
+          onRetryEntry: () => _enterWallet(() {}),
+        ),
         item: ItemConfig(
           icon: _walletNavIcon(selectedColor),
           inactiveIcon: _walletNavIcon(inactiveColor),
@@ -177,11 +181,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _enterWallet(VoidCallback select) async {
-    final origin = _activeTabIndex.value;
+    select();
     await _walletEntry.enter(
       context,
-      isActive: () => mounted && _activeTabIndex.value == origin,
-      onAllowed: select,
+      isActive: () => mounted && _activeTabIndex.value == 3,
+      onAllowed: () {},
     );
   }
 

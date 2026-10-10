@@ -7,6 +7,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/customer_service/data/data.dart';
 
+import '../../support/unicode/unicode_samples.dart';
+
 void main() {
   const config = CustomerServiceConfig(
       baseUrl: 'https://support.example/kefu', inboxIdentifier: 'inbox /');
@@ -23,6 +25,57 @@ void main() {
   tearDown(() {
     api.dispose();
     dio.close(force: true);
+  });
+
+  for (final sample in unicodeSamples) {
+    test('attachment history keeps exact ${sample.name} filename and body',
+        () async {
+      final raw = ' \u0301${sample.text}\n\t ';
+      final fileName = ' \u0301${sample.text}.pdf\t ';
+      adapter.responses.add({
+        'payload': [
+          {
+            'id': 9,
+            'content': raw,
+            'attachments': [
+              {
+                'file_type': ' file ',
+                'data_url': ' /kefu/uploads/document.pdf ',
+                'file_name': fileName,
+              },
+            ],
+          },
+        ],
+      });
+      final message =
+          (await api.listMessages(contactId: 's', conversationId: '42')).single;
+      final attachment = message.attachments.single;
+      expect(message.content, raw);
+      expect(attachment.fileName.codeUnits, fileName.codeUnits);
+      expect(attachment.fileType, 'file');
+      expect(attachment.dataUrl,
+          'https://support.example/kefu/uploads/document.pdf');
+    });
+  }
+
+  test(
+      'attachment filename aliases keep raw text and blank names use extension',
+      () {
+    const rawName = ' \u0301\u{1F469}\u200D\u{1F680}.pdf ';
+    for (final alias in ['file_name', 'filename', 'name']) {
+      final attachment = CustomerServiceAttachment.fromJson({
+        'file_name': ' \t ',
+        alias: rawName,
+        'extension': ' pdf ',
+      });
+      expect(attachment.fileName, rawName, reason: alias);
+    }
+    expect(
+        CustomerServiceAttachment.fromJson({
+          'file_name': ' \t ',
+          'extension': ' pdf ',
+        }).fileName,
+        'file.pdf');
   });
 
   test('uses the approved deployment and permits explicit configuration', () {

@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../settings_navigation.dart';
+import '../version/installed_app_version.dart';
 import '../widgets/settings_widgets.dart';
 import 'legal_document_page.dart';
 
@@ -52,7 +53,7 @@ class _AboutUsPageState extends State<AboutUsPage> {
   Future<void> _loadVersion() async {
     try {
       final info = await PackageInfo.fromPlatform();
-      if (mounted) setState(() => _version = info.version);
+      if (mounted) setState(() => _version = installedAppVersion(info));
     } catch (_) {
       if (mounted) setState(() => _version = '');
     }

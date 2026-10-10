@@ -34,9 +34,8 @@ class ChatHistoryResultTile extends StatelessWidget {
     final avatarSize = desktop
         ? ChatHistorySearchTokens.desktopAvatarSize
         : ChatHistorySearchTokens.avatarSize;
-    final name = message.senderNickname?.trim();
-    final sender =
-        name?.isNotEmpty == true ? name! : message.sendID?.trim() ?? '';
+    final name = graphemeTrim(message.senderNickname ?? '');
+    final sender = name.isNotEmpty ? name : message.sendID?.trim() ?? '';
     final time = message.sendTime;
     final stamp = time == null ? '' : formatChatMessageTime(context, time);
     final summary = IMUtils.parseMsg(message);
@@ -190,9 +189,8 @@ class ChatHistoryResultTile extends StatelessWidget {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     final duration = message.soundElem?.duration;
-    final name = message.senderNickname?.trim();
-    final sender =
-        name?.isNotEmpty == true ? name! : message.sendID?.trim() ?? '';
+    final name = graphemeTrim(message.senderNickname ?? '');
+    final sender = name.isNotEmpty ? name : message.sendID?.trim() ?? '';
     final time = message.sendTime;
     final stamp = time == null ? '' : formatChatMessageTime(context, time);
     final tile = Material(

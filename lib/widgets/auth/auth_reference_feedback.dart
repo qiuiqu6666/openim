@@ -26,8 +26,9 @@ class AuthFieldMessage extends StatelessWidget {
               ? Semantics(
                   liveRegion: true,
                   child: Text(message,
-                      style: AuthReferenceTokens.caption
-                          .copyWith(color: AuthReferenceTokens.error)),
+                      style: AuthReferenceTokens.caption.copyWith(
+                          color: AuthReferenceTokens.color(
+                              context, AuthReferenceTokens.error))),
                 )
               : const SizedBox.shrink(),
         ),
@@ -51,19 +52,25 @@ class AuthFormMessage extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AuthReferenceTokens.error.withValues(alpha: .05),
+          color: AuthReferenceTokens.color(context, AuthReferenceTokens.error)
+              .withValues(alpha: .05),
           borderRadius: BorderRadius.circular(AuthReferenceTokens.rLg),
           border: Border.all(
-              color: AuthReferenceTokens.error.withValues(alpha: .15)),
+              color:
+                  AuthReferenceTokens.color(context, AuthReferenceTokens.error)
+                      .withValues(alpha: .15)),
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Icon(Icons.error_outline,
-              size: 18, color: AuthReferenceTokens.error),
+          Icon(Icons.error_outline,
+              size: 18,
+              color: AuthReferenceTokens.color(
+                  context, AuthReferenceTokens.error)),
           const SizedBox(width: 8),
           Expanded(
               child: Text(message,
                   style: AuthReferenceTokens.label.copyWith(
-                      color: AuthReferenceTokens.error,
+                      color: AuthReferenceTokens.color(
+                          context, AuthReferenceTokens.error),
                       fontWeight: FontWeight.w400,
                       height: 1.4))),
         ]),

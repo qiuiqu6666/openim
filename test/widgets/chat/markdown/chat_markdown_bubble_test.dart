@@ -112,6 +112,35 @@ void main() {
     }
   });
 
+  for (final brightness in Brightness.values) {
+    for (final summary in [false, true]) {
+      testWidgets('legacy draw report stays literal ($brightness, $summary)',
+          (tester) async {
+        const header = '[第010期]\n================\n--开奖号码为--\n'
+            '开:（10)(猴)(小)(双)(蓝)\n倍(48)(2)(2.1)(2)(2)\n'
+            '开(1头)(0尾)(合单)(金)\n倍(2)倍(2)倍(2)倍(2)\n结算如下↓↓↓↓';
+        final source = header +
+            (summary ? '\n本局总注：600\n本局中奖：0\n本局输赢：-600\n下注人数：1\n管理费：0' : '');
+        String? copied;
+        final message = markdownMessage(source);
+        await mountMarkdown(
+            tester, bubble(message, copied: (value) => copied = value),
+            brightness: brightness);
+        expect(find.byType(ChatMarkdownText), findsNothing);
+        expect(tester.widget<MatchTextView>(find.byType(MatchTextView)).text,
+            source);
+        expect(copied, source);
+        expect(message.textElem!.content, source);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('ordinary Setext headings still use Markdown', (tester) async {
+    await mountMarkdown(tester, bubble(markdownMessage('标题\n========')));
+    expect(find.byType(ChatMarkdownText), findsOneWidget);
+  });
+
   testWidgets('custom text bubble keeps Markdown footer outside code and table',
       (tester) async {
     const source = '```dart\nfinal x = 1;\n```\n\n'

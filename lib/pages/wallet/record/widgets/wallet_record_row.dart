@@ -63,6 +63,8 @@ class WalletRecordRow extends StatelessWidget {
     final identity =
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style:
               TextStyle(color: colors.text, fontSize: WalletRecordTokens.body)),
       const SizedBox(height: AppTokens.s3),
@@ -107,15 +109,10 @@ class WalletRecordRow extends StatelessWidget {
                   _textWidth(context, balanceLabel, captionStyle);
               final valueWidth =
                   amountWidth > balanceWidth ? amountWidth : balanceWidth;
-              // Give each side enough room for its complete values at large text sizes.
-              final titleWidth = _textWidth(
-                  context,
-                  title,
-                  TextStyle(
-                      color: colors.text, fontSize: WalletRecordTokens.body));
+              // Long names truncate; only the date and numeric values need
+              // complete space before falling back to a stacked layout.
               final timeWidth = _textWidth(context, time, captionStyle);
-              final identityWidth =
-                  titleWidth > timeWidth ? titleWidth : timeWidth;
+              final identityWidth = timeWidth;
               const chrome =
                   WalletRecordTokens.avatar + AppTokens.s4 + AppTokens.s4;
               if (valueWidth + identityWidth + chrome > constraints.maxWidth) {

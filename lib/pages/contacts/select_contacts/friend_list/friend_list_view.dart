@@ -20,10 +20,16 @@ import '../../../official_account/widgets/official_account_name_label.dart';
 import '../selection/contact_selection_policy.dart';
 
 class SelectContactsFromFriendsPage extends StatefulWidget {
-  final logic = Get.find<SelectContactsFromFriendsLogic>();
-  final selectContactsLogic = Get.find<SelectContactsLogic>();
+  final SelectContactsFromFriendsLogic logic;
+  final SelectContactsLogic selectContactsLogic;
 
-  SelectContactsFromFriendsPage({super.key, this.title});
+  SelectContactsFromFriendsPage(
+      {super.key,
+      this.title,
+      SelectContactsFromFriendsLogic? logic,
+      SelectContactsLogic? selection})
+      : logic = logic ?? Get.find<SelectContactsFromFriendsLogic>(),
+        selectContactsLogic = selection ?? Get.find<SelectContactsLogic>();
 
   final String? title;
 
@@ -120,6 +126,7 @@ class _SelectContactsFromFriendsPageState
   Widget build(BuildContext context) {
     if (selectContactsLogic.action == SelAction.carte) {
       return ContactCardFriendPicker(
+        title: widget.title,
         friends: logic,
         selection: selectContactsLogic,
       );

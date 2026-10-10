@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:openim_common/openim_common.dart' show PlatformTextFonts;
 
 /// Wallet-local mirror of 99chat `lib/src/ui/app_tokens.dart` at
 /// d7c3c655b20dd06458d1882b114e68c1c24133e3.
@@ -115,27 +116,16 @@ class AppTokens {
 
   static List<BoxShadow> get shadowBrand => const [];
 
-  static String? get fontFamily => kIsWeb ? 'NotoSansSC' : null;
+  static String? get fontFamily =>
+      PlatformTextFonts.familyFor(defaultTargetPlatform);
 
   static String? get desktopUiFontFamily {
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.windows:
-        return 'Microsoft YaHei UI';
-      case TargetPlatform.macOS:
-        return 'PingFang SC';
-      case TargetPlatform.linux:
-        return 'Noto Sans CJK SC';
-      case TargetPlatform.iOS:
-        return kIsWeb ? 'PingFang SC' : null;
-      case TargetPlatform.android:
-        return kIsWeb ? 'sans-serif' : null;
-      default:
-        return null;
-    }
+    return PlatformTextFonts.familyFor(defaultTargetPlatform);
   }
 
   static String? fontFamilyOf(BuildContext context) =>
-      desktopUiFontFamily ?? fontFamily;
+      PlatformTextFonts.familyOf(context);
 
-  static List<String>? fontFamilyFallbackOf(BuildContext context) => null;
+  static List<String>? fontFamilyFallbackOf(BuildContext context) =>
+      PlatformTextFonts.fallbackOf(context);
 }

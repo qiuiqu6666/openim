@@ -26,7 +26,7 @@ class EditGroupNameLogic extends GetxController {
           ? groupSetupLogic.groupInfo.value.groupName
           : groupSetupLogic.myGroupNickname,
     );
-    _originalName = inputCtrl.text.trim();
+    _originalName = graphemeTrim(inputCtrl.text);
     super.onInit();
   }
 
@@ -42,7 +42,7 @@ class EditGroupNameLogic extends GetxController {
 
   Future<void> save() async {
     if (isClosed || saving.value) return;
-    final name = inputCtrl.text.trim();
+    final name = graphemeTrim(inputCtrl.text);
     if (name.characters.length > 30) {
       return IMViews.showToast(StrRes.createGroupTips);
     }

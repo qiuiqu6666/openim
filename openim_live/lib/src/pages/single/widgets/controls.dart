@@ -11,6 +11,7 @@ import '../../../models/call_types.dart';
 import '../../../widgets/live_button.dart';
 import '../../../widgets/call_surface/call_full_screen_surface.dart';
 import '../../../widgets/loading_view.dart';
+import '../../../widgets/incoming_call/incoming_call_view.dart';
 
 class ControlsView extends StatefulWidget {
   const ControlsView(
@@ -20,6 +21,7 @@ class ControlsView extends StatefulWidget {
       required this.callStateStream,
       required this.roomDidUpdateStream,
       this.userInfo,
+      this.userID = '',
       this.onMinimize,
       this.onEnabledMicrophone,
       this.onEnabledSpeaker,
@@ -27,7 +29,6 @@ class ControlsView extends StatefulWidget {
       this.onHangUp,
       this.onPickUp,
       this.onReject,
-      this.onPictureInPicture,
       this.onSetMicrophone,
       this.onSetSpeaker,
       this.onSetCamera,
@@ -40,9 +41,10 @@ class ControlsView extends StatefulWidget {
   final CallState initState;
   final CallType callType;
   final UserInfo? userInfo;
+  final String userID;
   final int duration;
   final bool active, connected;
-  final VoidCallback? onMinimize, onPictureInPicture;
+  final VoidCallback? onMinimize;
   final void Function(bool enabled)? onEnabledMicrophone, onEnabledSpeaker;
   final Future<void> Function(bool)? onSetMicrophone, onSetSpeaker, onSetCamera;
   final Future<void> Function()? onSwitchCamera;
@@ -143,6 +145,16 @@ class _ControlsViewState extends State<ControlsView> {
 
   @override
   Widget build(BuildContext context) {
+    if (_state == CallState.beCalled && !widget.connected) {
+      return IncomingCallView(
+        userID: widget.userID,
+        userInfo: widget.userInfo,
+        callType: widget.callType,
+        onMinimize: widget.active ? widget.onMinimize : null,
+        onAccept: widget.active ? widget.onPickUp : null,
+        onReject: widget.active ? widget.onReject : null,
+      );
+    }
     final video = widget.callType == CallType.video && widget.connected;
     const foreground = CallSurfaceTokens.foreground;
     final secondary = CallSurfaceTokens.secondary;
@@ -178,10 +190,10 @@ class _ControlsViewState extends State<ControlsView> {
           const Spacer(),
           if (widget.connected)
             IconButton(
-                onPressed: widget.active ? widget.onPictureInPicture : null,
+                onPressed: widget.active ? widget.onMinimize : null,
                 tooltip: Localizations.localeOf(context).languageCode == 'zh'
-                    ? '桌面画中画'
-                    : 'Picture in Picture',
+                    ? '小窗'
+                    : 'Minimize call',
                 color: foreground,
                 icon: const Icon(Icons.picture_in_picture_alt_rounded)),
           if (video)

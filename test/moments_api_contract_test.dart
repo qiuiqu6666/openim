@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/services/moments_api.dart';
+import 'support/unicode/unicode_samples.dart';
 
 const me = MomentUser(userId: 'me', nickname: 'Me');
 MomentPost post(String id) => MomentPost(
@@ -43,6 +44,35 @@ void main() {
           tokenProvider: () => token);
     });
     tearDown(() => client.close(force: true));
+    test(
+        'post length counts graphemes and preserves their complete request data',
+        () async {
+      final family =
+          unicodeSamples.firstWhere((sample) => sample.name == 'family').text;
+      final text = family * 2000;
+      payload = {
+        'errCode': 0,
+        'data': {...post('created').toJson(), 'text': text}
+      };
+      final result =
+          await api.createPost(clientRequestID: 'unicode-post', text: text);
+      expect(requests.single.data['text'], text);
+      expect(result.text, text);
+      await expectLater(
+          api.createPost(clientRequestID: 'too-long', text: '$text甲'),
+          throwsA(isA<MomentsException>()));
+      expect(requests, hasLength(1));
+    });
+    test('post whitespace with combining mark survives request normalization',
+        () async {
+      const text = ' \u0301正文';
+      payload = {
+        'errCode': 0,
+        'data': {...post('created').toJson(), 'text': text}
+      };
+      await api.createPost(clientRequestID: 'unicode-combining', text: text);
+      expect(requests.single.data['text'], text);
+    });
     test('uses chat token and stable body/header key with a new request trace',
         () async {
       for (var i = 0; i < 2; i++) {

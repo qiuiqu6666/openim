@@ -4,8 +4,13 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import '../conversation/conversation_logic.dart';
+import '../group_features/data/group_feature_store.dart';
 
 class GlobalSearchSource {
+  GroupFeatureStore? get groupFeatures => Get.isRegistered<ConversationLogic>()
+      ? Get.find<ConversationLogic>().groupFeatures
+      : null;
+
   /// Reuses the home owner's projection without another SDK listener.
   Stream<List<ConversationInfo>>? get conversationUpdates =>
       Get.isRegistered<ConversationLogic>()
@@ -27,9 +32,16 @@ class GlobalSearchSource {
           isSearchUserID: true,
           isSearchNickname: true,
           isSearchRemark: true);
-  Future<List<GroupInfo>> groups(String query) =>
-      OpenIM.iMManager.groupManager.searchGroups(
-          keywordList: [query], isSearchGroupName: true, isSearchGroupID: true);
+  Future<List<GroupInfo>> groups(String query) async {
+    final store = groupFeatures;
+    final groups = await OpenIM.iMManager.groupManager.searchGroups(
+        keywordList: [query], isSearchGroupName: true, isSearchGroupID: true);
+    for (final group in groups) {
+      store?.seed(group);
+    }
+    return groups;
+  }
+
   Future<List<ConversationInfo>> conversations(String query) async {
     return matchConversations(Get.find<ConversationLogic>().list, query);
   }
@@ -188,7 +200,7 @@ abstract class CommonSearchLogic extends GetxController {
     }
   }
 
-  String get searchKey => searchCtrl.text.trim();
+  String get searchKey => graphemeTrim(searchCtrl.text);
 
   Future<List<FriendInfo>> searchFriend() =>
       Apis.searchFriendInfo(searchCtrl.text.trim()).then(

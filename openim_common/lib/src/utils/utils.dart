@@ -312,10 +312,12 @@ class IMUtils {
     int? lastShowTimeStamp;
     for (final message in list) {
       final milliseconds = message.sendTime;
-      message.exMap = Map<String, dynamic>.of(message.exMap)..remove('showTime');
+      message.exMap = Map<String, dynamic>.of(message.exMap)
+        ..remove('showTime');
       if (milliseconds == null) continue;
       if (lastShowTimeStamp == null ||
-          milliseconds - lastShowTimeStamp >= const Duration(minutes: 6).inMilliseconds) {
+          milliseconds - lastShowTimeStamp >=
+              const Duration(minutes: 6).inMilliseconds) {
         message.exMap['showTime'] = true;
         lastShowTimeStamp = milliseconds;
       }
@@ -469,13 +471,14 @@ class IMUtils {
     }
     var index = content.indexOf(key);
     if (index == -1 || index > content.length - 1) return content;
-    var start = content.substring(0, index);
-    var end = content.substring(index);
+    final safeIndex = graphemeBoundaryBefore(content, index);
+    final start = content.substring(0, safeIndex);
+    final end = content.substring(safeIndex);
     var startSize = calculateTextSize(start, style);
     var keySize = calculateTextSize(key, style);
     if (startSize.width + keySize.width > lave) {
-      if (index - 4 > 0) {
-        return "...${content.substring(index - 4)}";
+      if (start.characters.length > 4) {
+        return '...${graphemeSuffix(start, 4)}$end';
       } else {
         return "...$end";
       }
@@ -529,6 +532,8 @@ class IMUtils {
   }
 
   static String getGroupMemberShowName(GroupMembersInfo membersInfo) {
+    if (membersInfo.userID == 'imAdmin' ||
+        membersInfo.nickname?.trim() == 'imAdmin') return '管理员';
     return membersInfo.userID == OpenIM.iMManager.userID
         ? StrRes.you
         : membersInfo.nickname!;

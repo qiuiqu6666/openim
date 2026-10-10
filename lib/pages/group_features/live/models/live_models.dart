@@ -1,3 +1,6 @@
+import 'package:characters/characters.dart';
+import 'package:openim_common/openim_common.dart';
+
 enum LiveStatus {
   scheduled,
   authorized,
@@ -28,7 +31,7 @@ String _text(Map<String, dynamic> json, String key, {bool required = false}) {
   if (value != null && value is! String) {
     throw FormatException('直播接口的 $key 格式不正确');
   }
-  final text = (value as String? ?? '').trim();
+  final text = graphemeTrim(value as String? ?? '');
   if (required && text.isEmpty) {
     throw FormatException('直播接口未返回 $key');
   }
@@ -79,8 +82,8 @@ class LiveSession {
     if (status == LiveStatus.unknown ||
         version is! int ||
         version < 1 ||
-        name.runes.length > 10 ||
-        description.runes.length > 30 ||
+        name.characters.length > 10 ||
+        description.characters.length > 30 ||
         (status == LiveStatus.scheduled && scheduled == null) ||
         (sync.isNotEmpty && sync != 'synced' && sync != 'pending')) {
       throw const FormatException('直播接口返回的场次信息不完整或格式不正确');

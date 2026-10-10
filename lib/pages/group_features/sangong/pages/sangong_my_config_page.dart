@@ -9,6 +9,11 @@ import 'package:openim/pages/group_features/sangong/models/sangong_my_config.dar
 import 'package:openim/pages/group_features/sangong/support/settings_exports.dart';
 import 'package:openim/pages/group_features/sangong/pages/sangong_members_page.dart';
 import '../../../contacts/search/contact_search_source.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'package:openim_common/openim_common.dart' show ISUserInfo;
+import '../../../contacts/select_contacts/selection/contact_single_selection.dart';
+import '../../../contacts/select_contacts/select_contacts_logic.dart';
+import '../configuration/sangong_config_selection_cell.dart';
 import '../services/account_identity/sangong_account_identity_resolver.dart';
 import '../services/authorization/sangong_operation_scope.dart';
 import '../models/binding/sangong_group_tenant_state.dart';
@@ -23,6 +28,8 @@ class SangongMyConfigPage extends StatefulWidget {
     this.initialGameGroupId = '',
     this.onSaved,
     this.accountSearchSource,
+    this.loadGroups,
+    this.loadContacts,
     this.groupScoped = false,
   });
 
@@ -30,6 +37,8 @@ class SangongMyConfigPage extends StatefulWidget {
   final String initialGameGroupId;
   final ValueChanged<SangongMyConfig>? onSaved;
   final ContactSearchSource? accountSearchSource;
+  final Future<List<GroupInfo>> Function()? loadGroups;
+  final Future<List<ISUserInfo>> Function()? loadContacts;
   final bool groupScoped;
 
   static Future<SangongMyConfig?> open(
@@ -58,6 +67,8 @@ class SangongMyConfigPage extends StatefulWidget {
 class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
   bool _loading = true;
   bool _saving = false;
+  bool _picking = false;
+  final _selections = <TextEditingController, SangongConfigSelection>{};
   String? _errorMessage;
   SangongMyConfig _config = const SangongMyConfig();
   late final SangongRuntime _runtime;
@@ -157,6 +168,7 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
     _scopeInvalid = true;
     _loadGeneration++;
     _identity.cancel();
+    _selections.clear();
     _nameController.clear();
     _gameGroupController.clear();
     _statsGroupController.clear();
@@ -299,7 +311,7 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
       return;
     }
     final i18n = AppI18n.of(context);
-    final name = _nameController.text.trim();
+    final name = _nameController.text;
     final gameGroup =
         ChatIdFormat.normalizeGroupId(_gameGroupController.text.trim());
     final statsGroup =
@@ -308,7 +320,7 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
         ChatIdFormat.normalizeGroupId(_ledgerGroupController.text.trim());
     final bot = _botController.text.trim();
 
-    if (!widget.groupScoped && name.isEmpty) {
+    if (!widget.groupScoped && name.trim().isEmpty) {
       ToastUtils.toast(
         i18n.t(zhHans: '请填写厅名', zhHant: '請填寫廳名', en: 'Enter a name'),
       );
@@ -347,9 +359,12 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
 
     setState(() => _saving = true);
     try {
+      final pickedBot = _selections[_botController];
       final botUserId = bot.isEmpty
           ? _config.imBotUserId
-          : await _identity.resolve(bot, knownUserId: _config.imBotUserId);
+          : await _identity.resolve(bot,
+              knownUserId:
+                  bot == pickedBot?.id ? pickedBot!.id : _config.imBotUserId);
       if (botUserId == null || !_matches(scope) || !_runtime.canConfigure) {
         return;
       }
@@ -438,7 +453,7 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
       throw StateError('当前账号不能修改该群的三公配置');
     }
     final body = <String, dynamic>{
-      if (!initialize || name.isNotEmpty) 'name': name,
+      if (!initialize || name.trim().isNotEmpty) 'name': name,
       if (initialize) 'imGroupGameId': gameGroup,
       'imBotUserId': botUserId,
       'imGroupAdminStatsId': statsGroup,
@@ -493,6 +508,41 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
     setState(() => _gameGroupController.text = preset);
   }
 
+  Future<void> _pick(TextEditingController controller,
+      ContactSingleSelectionKind kind, String title) async {
+    if (_saving || _picking || !_canEdit) return;
+    final scope = _captureScope();
+    FocusManager.instance.primaryFocus?.unfocus();
+    _picking = true;
+    try {
+      final selected = await Navigator.of(context).push<Object>(
+        SangongPageRoute(
+          context: context,
+          settings: const RouteSettings(name: 'sangong_config_directory'),
+          builder: (_) => ContactSingleSelection(
+            title: title,
+            kind: kind,
+            loadGroups: widget.loadGroups,
+            loadContacts: widget.loadContacts,
+            scopeChanges: _runtime,
+            isCurrent: () => _matches(scope) && _canEdit,
+          ),
+        ),
+      );
+      if (selected == null || !_matches(scope) || !_canEdit) return;
+      setState(() {
+        final id = SelectContactsLogic.parseID(selected)!;
+        final name = selected is ISUserInfo
+            ? selected.showName
+            : SelectContactsLogic.parseName(selected) ?? id;
+        _selections[controller] = SangongConfigSelection(id: id, name: name);
+        controller.text = id;
+      });
+    } finally {
+      _picking = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_matches(_pageScope)) {
@@ -537,7 +587,7 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
       );
     }
 
-    final readOnly = !_canEdit;
+    final readOnly = !_canEdit || _saving;
     return SettingsScaffold(
       title: title,
       dismissKeyboardOnOutsideTap: true,
@@ -600,19 +650,45 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
               controller: _nameController,
               readOnly: readOnly,
             ),
-            SettingsInputCell(
+            SangongConfigSelectionCell(
               label: i18n.t(zhHans: '下注群', zhHant: '下注群', en: 'Game group'),
               hint: i18n.t(zhHans: '群 ID', zhHant: '群 ID', en: 'Group ID'),
               controller: _gameGroupController,
               readOnly: readOnly || _config.configured || widget.groupScoped,
+              kind: ContactSingleSelectionKind.groups,
+              selection: _selections[_gameGroupController] ??
+                  (_gameGroupController.text == _runtime.featureContext.groupID
+                      ? SangongConfigSelection(
+                          id: _runtime.featureContext.groupID,
+                          name: _runtime.featureContext.groupName,
+                        )
+                      : null),
+              onSelect: _config.configured || widget.groupScoped
+                  ? null
+                  : () => _pick(
+                      _gameGroupController,
+                      ContactSingleSelectionKind.groups,
+                      i18n.t(
+                          zhHans: '选择下注群',
+                          zhHant: '選擇下注群',
+                          en: 'Select game group')),
             ),
-            SettingsInputCell(
+            SangongConfigSelectionCell(
               label: i18n.t(zhHans: '报表群', zhHant: '報表群', en: 'Report group'),
               hint: i18n.t(zhHans: '群 ID', zhHant: '群 ID', en: 'Group ID'),
               controller: _statsGroupController,
               readOnly: readOnly,
+              kind: ContactSingleSelectionKind.groups,
+              selection: _selections[_statsGroupController],
+              onSelect: () => _pick(
+                  _statsGroupController,
+                  ContactSingleSelectionKind.groups,
+                  i18n.t(
+                      zhHans: '选择结账群',
+                      zhHant: '選擇結賬群',
+                      en: 'Select settle group')),
             ),
-            SettingsInputCell(
+            SangongConfigSelectionCell(
               label: i18n.t(
                 zhHans: '上下分通知群',
                 zhHant: '上下分通知群',
@@ -621,8 +697,17 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
               hint: i18n.t(zhHans: '群 ID', zhHant: '群 ID', en: 'Group ID'),
               controller: _ledgerGroupController,
               readOnly: readOnly,
+              kind: ContactSingleSelectionKind.groups,
+              selection: _selections[_ledgerGroupController],
+              onSelect: () => _pick(
+                  _ledgerGroupController,
+                  ContactSingleSelectionKind.groups,
+                  i18n.t(
+                      zhHans: '选择上下分通知群',
+                      zhHant: '選擇上下分通知群',
+                      en: 'Select credit/debit notice group')),
             ),
-            SettingsInputCell(
+            SangongConfigSelectionCell(
               label: i18n.t(zhHans: '机器人', zhHant: '機器人', en: 'Bot'),
               hint: i18n.t(
                 zhHans: '公开账号名（可带 @）',
@@ -631,6 +716,12 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
               ),
               controller: _botController,
               readOnly: readOnly,
+              kind: ContactSingleSelectionKind.contacts,
+              selection: _selections[_botController],
+              onSelect: () => _pick(
+                  _botController,
+                  ContactSingleSelectionKind.contacts,
+                  i18n.t(zhHans: '选择机器人', zhHant: '選擇機器人', en: 'Select bot')),
             ),
           ],
         ),

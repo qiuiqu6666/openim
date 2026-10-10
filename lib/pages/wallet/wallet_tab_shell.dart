@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../mine/mine_logic.dart';
+import 'entry/wallet_entry_coordinator.dart';
+import 'entry/wallet_entry_gate.dart';
 import 'host/wallet_i18n.dart';
 import 'host/wallet_navigation.dart';
 import 'host/wallet_qr_scanner.dart';
@@ -17,11 +19,15 @@ class WalletTabShell extends StatelessWidget {
     required this.activeTabIndexListenable,
     this.mainTabIndex = 3,
     this.repository,
-  });
+    this.entry,
+    this.onRetryEntry,
+  }) : assert(entry == null || onRetryEntry != null);
 
   final ValueListenable<int> activeTabIndexListenable;
   final int mainTabIndex;
   final WalletRepository? repository;
+  final WalletEntryCoordinator? entry;
+  final Future<void> Function()? onRetryEntry;
 
   Future<void> _openScanner(BuildContext context) async {
     final code = await openWalletPage<String>(
@@ -43,6 +49,14 @@ class WalletTabShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (entry == null) return _buildShell(context);
+    return ListenableBuilder(
+      listenable: entry!,
+      builder: (context, _) => _buildShell(context),
+    );
+  }
+
+  Widget _buildShell(BuildContext context) {
     final colors = WalletPageColors.of(context);
     final title = AppI18n.of(context).t(
       zhHans: '钱包',
@@ -58,28 +72,39 @@ class WalletTabShell extends StatelessWidget {
       appBar: _WalletMainTabHeader(
         onScan: () => _openScanner(context),
         title: title,
+        enabled: entry?.isReady ?? true,
       ),
       body: SafeArea(
         top: false,
         bottom: true,
-        child: WalletScreen(
-          key: const ValueKey('wallet-main-tab'),
-          embeddedInMainTab: true,
-          activeTabIndexListenable: activeTabIndexListenable,
-          mainTabIndex: mainTabIndex,
-          repository: repository,
-        ),
+        child: entry == null
+            ? _wallet()
+            : WalletEntryGate(
+                entry: entry!,
+                onRetry: onRetryEntry!,
+                child: _wallet(),
+              ),
       ),
     );
   }
+
+  Widget _wallet() => WalletScreen(
+        key: const ValueKey('wallet-main-tab'),
+        embeddedInMainTab: true,
+        activeTabIndexListenable: activeTabIndexListenable,
+        mainTabIndex: mainTabIndex,
+        repository: repository,
+      );
 }
 
 class _WalletMainTabHeader extends StatelessWidget
     implements PreferredSizeWidget {
-  const _WalletMainTabHeader({required this.onScan, required this.title});
+  const _WalletMainTabHeader(
+      {required this.onScan, required this.title, required this.enabled});
 
   final VoidCallback onScan;
   final String title;
+  final bool enabled;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -89,6 +114,7 @@ class _WalletMainTabHeader extends StatelessWidget
     final colors = WalletPageColors.of(context);
     final theme = Theme.of(context);
     final titleColor = colors.text;
+    final iconColor = enabled ? colors.text : colors.line;
     final screenWidth = MediaQuery.sizeOf(context).width;
 
     return AppBar(
@@ -118,10 +144,10 @@ class _WalletMainTabHeader extends StatelessWidget
             ja: 'QRコードをスキャン',
             ko: 'QR 코드 스캔',
           ),
-          onPressed: onScan,
+          onPressed: enabled ? onScan : null,
           child: _WalletScanIcon(
             size: 24,
-            color: titleColor,
+            color: iconColor,
           ),
         ),
         _WalletHeaderIconButton(
@@ -132,10 +158,12 @@ class _WalletMainTabHeader extends StatelessWidget
             ja: '通知',
             ko: '알림',
           ),
-          onPressed: () => Get.find<MineLogic>().openNotifications(context),
+          onPressed: enabled
+              ? () => Get.find<MineLogic>().openNotifications(context)
+              : null,
           child: CustomPaint(
             size: const Size.square(24),
-            painter: _WalletBellIconPainter(titleColor),
+            painter: _WalletBellIconPainter(iconColor),
           ),
         ),
         SizedBox(width: screenWidth * 0.020),
@@ -148,7 +176,7 @@ class _WalletHeaderIconButton extends StatelessWidget {
   const _WalletHeaderIconButton(
       {required this.onPressed, required this.child, required this.tooltip});
 
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final Widget child;
   final String tooltip;
 

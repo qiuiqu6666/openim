@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/group_setup/group_setup_logic.dart';
@@ -10,6 +11,7 @@ import '../../../contacts/group_profile_panel/group_profile_panel_logic.dart';
 import '../../../../routes/app_navigator.dart';
 import '../../../contacts/group_profile_panel/group_profile_panel_logic.dart'
     show JoinGroupMethod;
+import 'group_qrcode_background.dart';
 
 class GroupQrcodeLogic extends GetxController {
   final groupSetupLogic = Get.find<GroupSetupLogic>();
@@ -17,11 +19,26 @@ class GroupQrcodeLogic extends GetxController {
   final saving = false.obs;
   final scanning = false.obs;
 
+  String get displayGroupId {
+    final id = groupSetupLogic.groupInfo.value.groupID.trim();
+    if (id.isEmpty) return '';
+    return id.startsWith('@') ? id : '@$id';
+  }
+
+  Future<void> copyGroupId() async {
+    if (displayGroupId.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: displayGroupId));
+    if (!isClosed) IMViews.showToast(StrRes.copySuccessfully);
+  }
+
   Future<void> saveToAlbum() async {
     if (saving.value) return;
     saving.value = true;
     ui.Image? image;
     try {
+      final context = cardKey.currentContext;
+      if (context == null) throw StateError('QR card not ready');
+      await precacheImage(groupQrcodeWatermarkImage, context);
       await WidgetsBinding.instance.endOfFrame;
       final boundary = cardKey.currentContext?.findRenderObject();
       if (boundary is! RenderRepaintBoundary || boundary.debugNeedsPaint) {

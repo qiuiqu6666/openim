@@ -53,6 +53,7 @@ class GroupFeatureStore extends ChangeNotifier {
   final Future<List<GroupInfo>> Function(List<String>) fetchGroups;
   final DateTime Function() _clock;
   final _groups = <String, GroupInfo>{};
+  final _gameTypes = <String, GroupGameType>{};
   final _features = <String, GroupFeatures>{};
   final _liveStates =
       <String, ({GroupLiveFeature feature, int groupRevision})>{};
@@ -85,6 +86,9 @@ class GroupFeatureStore extends ChangeNotifier {
   }
 
   bool get active => !_closed && !_invalidated && sessionCurrent();
+  GroupGameType gameType(String id) => active && !_left.contains(id)
+      ? _gameTypes[id] ?? GroupGameType.ordinary
+      : GroupGameType.ordinary;
   GroupFeatures features(String id) => _features[id] ?? const GroupFeatures();
   GroupLiveFeature liveFeature(String id) =>
       _liveStates[id]?.feature ?? features(id).live;
@@ -168,9 +172,10 @@ class GroupFeatureStore extends ChangeNotifier {
       _queued.remove(id);
       return;
     }
-    final gameTypeChanged =
-        GroupGameType.fromEx(_groups[id]?.ex) != GroupGameType.fromEx(info.ex);
+    final nextGameType = GroupGameType.fromEx(info.ex);
+    final gameTypeChanged = gameType(id) != nextGameType;
     _groups[id] = GroupInfo.fromJson(info.toJson());
+    _gameTypes[id] = nextGameType;
     _requested.add(id);
     _queued.remove(id);
     final summary = GroupFeatures.fromEx(info.ex);
@@ -535,7 +540,7 @@ class GroupFeatureStore extends ChangeNotifier {
         currentUserID: userID,
         api: api,
         accountPrivilege: accountPrivilege,
-        gameType: GroupGameType.fromEx(_groups[id]?.ex),
+        gameType: gameType(id),
         features: features(id),
         liveState: liveFeature(id),
         capabilities: capabilities(id),
@@ -585,6 +590,7 @@ class GroupFeatureStore extends ChangeNotifier {
     invalidateCapabilities(id);
     _left.add(id);
     _groups.remove(id);
+    _gameTypes.remove(id);
     _features.remove(id);
     _liveStates.remove(id);
     _pendingMirrors.remove(id);
@@ -611,6 +617,7 @@ class GroupFeatureStore extends ChangeNotifier {
       token.cancel();
     }
     _groups.clear();
+    _gameTypes.clear();
     _features.clear();
     _liveStates.clear();
     _pendingMirrors.clear();

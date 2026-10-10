@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../res/strings.dart';
+import '../utils/text/unicode_text.dart';
 
 /// A server-created funds message is an order reference, never proof of funds
 /// received or permission to claim. Opening it must load the actual order.
@@ -52,8 +53,10 @@ class FundMessageData {
   /// an otherwise valid legacy order reference or expand custom recognition.
   static String normalizeRemark(Object? value) {
     if (value is! String) return '';
-    final text = value.trim();
-    return text.runes.length <= 12 ? text : '';
+    // The send API owns its scalar limit. Received optional display text is
+    // already Unicode and must not disappear because a grapheme has many
+    // scalars (for example a family or a flag tag sequence).
+    return graphemeTrim(value);
   }
 
   static const _businesses = {

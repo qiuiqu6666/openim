@@ -107,6 +107,71 @@ class _GroupHarness {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('message roles wait for a complete admin list and respect live changes',
+      () async {
+    final admins = Completer<List<GroupMembersInfo>>();
+    final h = _GroupHarness(admins: (_) => admins.future);
+    h.controller.initialize();
+    final pending = h.controller.loadAfterHistory();
+    await Future<void>.delayed(Duration.zero);
+    expect(h.controller.memberRoleFor('member'), isNull);
+    expect(h.controller.memberRoleFor('me'), GroupRoleLevel.owner);
+    admins.complete([
+      ...List.generate(
+          25,
+          (i) => GroupMembersInfo(
+                groupID: 'group',
+                userID: 'admin-$i',
+                roleLevel: GroupRoleLevel.admin,
+              )),
+      GroupMembersInfo(groupID: 'group', userID: 'unknown-role')
+    ]);
+    await pending;
+    expect(h.controller.memberRoleFor('member'), GroupRoleLevel.member);
+    expect(h.controller.memberRoleFor('admin-24'), GroupRoleLevel.admin);
+    expect(h.controller.memberRoleFor('unknown-role'), isNull);
+    h.added.add(GroupMembersInfo(groupID: 'group', userID: 'admin-24'));
+    expect(h.controller.memberRoleFor('admin-24'), GroupRoleLevel.admin);
+    h.changed.add(GroupMembersInfo(
+        groupID: 'group', userID: 'member', roleLevel: GroupRoleLevel.admin));
+    expect(h.controller.memberRoleFor('member'), GroupRoleLevel.admin);
+    h.changed.add(GroupMembersInfo(
+        groupID: 'group',
+        userID: 'admin-24',
+        roleLevel: GroupRoleLevel.member));
+    expect(h.controller.memberRoleFor('admin-24'), GroupRoleLevel.member);
+    h.deleted.add(GroupMembersInfo(groupID: 'group', userID: 'member'));
+    expect(h.controller.memberRoleFor('member'), isNull);
+    h.left.add(GroupInfo(groupID: 'group'));
+    expect(h.controller.memberRoleFor('me'), isNull);
+  });
+
+  test(
+      'failed admin lookup does not classify unknown senders as ordinary members',
+      () async {
+    final h = _GroupHarness(admins: (_) async => throw StateError('offline'));
+    h.controller.initialize();
+    await h.controller.loadAfterHistory();
+    expect(h.controller.memberRoleFor('member'), isNull);
+  });
+
+  testWidgets('sender roles react to promotion without a new message',
+      (tester) async {
+    final h = _GroupHarness();
+    h.controller.initialize();
+    await h.controller.loadAfterHistory();
+    await tester.pumpWidget(MaterialApp(
+        home: Obx(() => Text(
+              '${h.controller.memberRoleFor('member')}',
+            ))));
+    expect(find.text('${GroupRoleLevel.member}'), findsOneWidget);
+    h.changed.add(GroupMembersInfo(
+        groupID: 'group', userID: 'member', roleLevel: GroupRoleLevel.admin));
+    await tester.pump();
+    expect(find.text('${GroupRoleLevel.admin}'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   test('cached metadata is synchronous and does not replace fresh SDK roles',
       () async {
     final membership = Completer<bool>();

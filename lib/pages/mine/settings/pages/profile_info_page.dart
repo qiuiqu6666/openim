@@ -33,8 +33,10 @@ class ProfileInfoPage extends StatefulWidget {
   });
 
   final String nickname;
+
   /// SDK identity used in QR invitation links.
   final String userId;
+
   /// Public 99Chat account displayed and copied by the profile.
   final String account;
   final String avatarUrl;
@@ -390,7 +392,7 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
   Widget build(BuildContext context) => AnimatedBuilder(
         animation: widget.store,
         builder: (context, _) {
-          final signature = widget.store.profileSignature.trim();
+          final signature = graphemeTrim(widget.store.profileSignature);
           return SettingsScaffold(
             title: settingsText(context, zh: '个人资料', en: 'Profile'),
             children: [

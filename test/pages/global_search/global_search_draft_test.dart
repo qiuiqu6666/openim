@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/global_search/global_search_logic.dart';
 import 'package:openim/pages/global_search/global_search_view.dart';
+import 'package:openim/pages/global_search/widgets/global_search_conversation_subtitle.dart';
 import 'package:openim_common/openim_common.dart';
 
 class _SearchSource extends GlobalSearchSource {
@@ -47,17 +48,26 @@ ConversationInfo _conversation(String name,
     );
 
 String _subtitle(WidgetTester tester, String name) {
-  final row = _row(name);
-  final subtitle = tester
-      .widgetList<Text>(find.descendant(of: row, matching: find.byType(Text)))
-      .last;
+  final subtitle = _subtitleText(tester, name);
   return subtitle.data ?? subtitle.textSpan!.toPlainText();
 }
 
-Finder _row(String name) => find.byWidgetPredicate((widget) =>
-    widget is ListTile &&
-    widget.title is Text &&
-    (widget.title! as Text).data == name);
+Finder _row(String name) => find.ancestor(
+      of: find.byWidgetPredicate((widget) =>
+          widget is GlobalSearchConversationSubtitle &&
+          widget.conversation.showName == name),
+      matching: find.byType(ListTile),
+    );
+
+Text _subtitleText(WidgetTester tester, String name) => tester.widget<Text>(
+      find.descendant(
+        of: find.descendant(
+          of: _row(name),
+          matching: find.byType(GlobalSearchConversationSubtitle),
+        ),
+        matching: find.byType(Text),
+      ),
+    );
 
 const _previewOutput = String.fromEnvironment('GLOBAL_SEARCH_PREVIEW');
 bool _fontsLoaded = false;
@@ -122,6 +132,13 @@ void main() {
   tearDown(() {
     Styles.isDark = false;
     Get.reset();
+  });
+
+  testWidgets('draft subtitle preserves whitespace-base combining text',
+      (tester) async {
+    const raw = ' \u0301这条草稿';
+    await _mount(tester, items: [_conversation('冬', draft: raw)]);
+    expect(_subtitle(tester, '冬'), '[${StrRes.draftText}] $raw');
   });
 
   for (final dark in [false, true]) {
@@ -197,10 +214,7 @@ void main() {
         size: const Size(320, 720),
         textScale: 1.6,
         items: [_conversation('冬', draft: List.filled(50, '这是一条长草稿').join())]);
-    final row = _row('冬');
-    final subtitle = tester
-        .widgetList<Text>(find.descendant(of: row, matching: find.byType(Text)))
-        .last;
+    final subtitle = _subtitleText(tester, '冬');
     expect(subtitle.maxLines, inInclusiveRange(1, 2));
     expect(subtitle.overflow, TextOverflow.ellipsis);
     expect(tester.takeException(), isNull);

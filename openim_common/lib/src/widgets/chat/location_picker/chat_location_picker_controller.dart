@@ -54,7 +54,7 @@ class ChatLocationPickerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Automatic reads never ask for permission and fail without an error banner.
+  /// Permission-free reads fail silently, for example after visiting settings.
   Future<void> locate({bool requestPermission = true}) async {
     if (_disposed || !_active || _locating) return;
     final activation = _activation;

@@ -13,6 +13,7 @@ import '../../../mine/settings/widgets/settings_widgets.dart';
 import '../../attachments/ai_assistant_attachments.dart';
 import '../../localization/ai_assistant_composer_hint.dart';
 import '../../localization/ai_assistant_i18n.dart';
+import '../../streaming/diagnostics/assistant_stream_log.dart';
 import '../../models/ai_assistant_models.dart';
 import '../../picking/ai_assistant_picker.dart';
 import '../../protocol/ai_openim_payload.dart';
@@ -204,74 +205,92 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
       return;
     }
     await _perform(() async {
-      for (final card in List<AiAssistantCardRef>.of(_cards)) {
-        if (!_current) return;
-        void recorded() => setState(() => _cards.remove(card));
-        if (card.kind == AiAssistantCardKind.friend) {
-          if (_assistant) {
-            // Assistant references need only SDK profile metadata. Do not
-            // create a business friend invitation or authenticate with chatToken.
-            final message = await OpenIM.iMManager.messageManager
-                .createCardMessage(
-                    userID: card.id,
-                    nickname: card.name,
-                    faceURL: card.faceUrl,
-                    ex: '');
-            if (!_current) return;
-            await _sendPrepared(message, onRecorded: recorded);
+      if (_assistant) AssistantStreamLog.submitted(input.text.length);
+      final waiting = _assistant ? _logic.assistantStreams.beginReply() : null;
+      if (waiting != null) _logic.scrollBottom();
+      var sentAny = false;
+      try {
+        for (final card in List<AiAssistantCardRef>.of(_cards)) {
+          if (!_current) return;
+          void recorded() => setState(() => _cards.remove(card));
+          if (card.kind == AiAssistantCardKind.friend) {
+            if (_assistant) {
+              // Assistant references need only SDK profile metadata. Do not
+              // create a business friend invitation or authenticate with chatToken.
+              final message = await OpenIM.iMManager.messageManager
+                  .createCardMessage(
+                      userID: card.id,
+                      nickname: card.name,
+                      faceURL: card.faceUrl,
+                      ex: '');
+              if (!_current) return;
+              await _sendPrepared(message, onRecorded: recorded);
+            } else {
+              await _checkedSend(
+                  MessageType.card,
+                  () => _logic.sendCarte(
+                      userID: card.id,
+                      nickname: card.name,
+                      faceURL: card.faceUrl),
+                  onRecorded: recorded);
+            }
           } else {
             await _checkedSend(
-                MessageType.card,
-                () => _logic.sendCarte(
-                    userID: card.id,
-                    nickname: card.name,
-                    faceURL: card.faceUrl),
+                MessageType.custom,
+                () => _logic.sendCustomMsg(
+                      data: AiOpenimPayload.groupCard(
+                          groupID: card.id,
+                          groupName: card.name,
+                          faceURL: card.faceUrl),
+                      extension: '',
+                      description: 'groupCard',
+                    ),
                 onRecorded: recorded);
           }
-        } else {
+          sentAny = true;
+        }
+        for (final file in List<AiAssistantFileRef>.of(_files)) {
+          if (!_current) return;
+          void recorded() => setState(() => _files.remove(file));
+          final path = file.localPath;
+          if (path == null || path.isEmpty) {
+            throw StateError('File unavailable');
+          }
+          if (file.kind == AiAssistantFileKind.image) {
+            await _checkedSend(
+                MessageType.picture, () => _logic.sendPicture(path: path),
+                onRecorded: recorded);
+          } else {
+            final message = await OpenIM.iMManager.messageManager
+                .createFileMessageFromFullPath(
+                    filePath: path, fileName: file.name);
+            if (!_current) return;
+            await _sendPrepared(message, onRecorded: recorded);
+          }
+          sentAny = true;
+        }
+        if (!_current) return;
+        _restoreInput(input);
+        if (_tool == 'image') {
           await _checkedSend(
               MessageType.custom,
               () => _logic.sendCustomMsg(
-                    data: AiOpenimPayload.groupCard(
-                        groupID: card.id,
-                        groupName: card.name,
-                        faceURL: card.faceUrl),
+                    data: AiOpenimPayload.image(input.text),
                     extension: '',
-                    description: 'groupCard',
-                  ),
-              onRecorded: recorded);
+                    description: 'image',
+                  ));
+          sentAny = true;
+          if (_current) _logic.inputCtrl.clear();
+        } else if (input.text.trim().isNotEmpty) {
+          await _checkedSend(null, _logic.sendTextMsg);
+          sentAny = true;
         }
-      }
-      for (final file in List<AiAssistantFileRef>.of(_files)) {
-        if (!_current) return;
-        void recorded() => setState(() => _files.remove(file));
-        final path = file.localPath;
-        if (path == null || path.isEmpty) throw StateError('File unavailable');
-        if (file.kind == AiAssistantFileKind.image) {
-          await _checkedSend(
-              MessageType.picture, () => _logic.sendPicture(path: path),
-              onRecorded: recorded);
-        } else {
-          final message = await OpenIM.iMManager.messageManager
-              .createFileMessageFromFullPath(
-                  filePath: path, fileName: file.name);
-          if (!_current) return;
-          await _sendPrepared(message, onRecorded: recorded);
-        }
-      }
-      if (!_current) return;
-      _restoreInput(input);
-      if (_tool == 'image') {
-        await _checkedSend(
-            MessageType.custom,
-            () => _logic.sendCustomMsg(
-                  data: AiOpenimPayload.image(input.text),
-                  extension: '',
-                  description: 'image',
-                ));
-        if (_current) _logic.inputCtrl.clear();
-      } else if (input.text.trim().isNotEmpty) {
-        await _checkedSend(null, _logic.sendTextMsg);
+      } catch (_) {
+        // Earlier attachments may already be awaiting a valid assistant reply.
+        if (!sentAny) _logic.assistantStreams.cancelReply(waiting);
+        rethrow;
+      } finally {
+        if (!_current) _logic.assistantStreams.cancelReply(waiting);
       }
     });
   }

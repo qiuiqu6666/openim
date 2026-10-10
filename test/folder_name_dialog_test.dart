@@ -56,8 +56,8 @@ Future<_DialogResult> _openDialog(
     home: nestedPage
         ? Scaffold(body: Builder(builder: (context) {
             return TextButton(
-              onPressed: () => Navigator.of(context).push<void>(
-                  MaterialPageRoute(builder: (_) => launcher)),
+              onPressed: () => Navigator.of(context)
+                  .push<void>(MaterialPageRoute(builder: (_) => launcher)),
               child: const Text('进入分组页'),
             );
           }))
@@ -79,21 +79,40 @@ Future<void> _disposeHost(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('folder name retains whitespace bases and whole grapheme limits',
+      (tester) async {
+    final result = await _openDialog(tester);
+    const cluster = '\u{1F469}\u{1F3FD}\u200D\u{1F4BB}';
+    final raw = ' \u0301${List.filled(15, cluster).join()}';
+    await tester.enterText(find.byType(CupertinoTextField), '${raw}Z');
+    final input =
+        tester.widget<CupertinoTextField>(find.byType(CupertinoTextField));
+    expect(input.controller!.text, raw);
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(result.value, raw);
+    await _disposeHost(tester);
+  });
+
   for (final trigger in ['confirm twice', 'IME then confirm', 'cancel twice']) {
     testWidgets('queued $trigger only pops the dialog above a nested page',
         (tester) async {
       final observer = _PopObserver();
-      final result = await _openDialog(tester,
-          nestedPage: true, observers: [observer]);
+      final result =
+          await _openDialog(tester, nestedPage: true, observers: [observer]);
       await tester.enterText(find.byType(CupertinoTextField), '  测试分组  ');
-      final confirm = tester.widget<CupertinoDialogAction>(find.ancestor(
-        of: find.text('确定'),
-        matching: find.byType(CupertinoDialogAction),
-      )).onPressed!;
-      final cancel = tester.widget<CupertinoDialogAction>(find.ancestor(
-        of: find.text('取消'),
-        matching: find.byType(CupertinoDialogAction),
-      )).onPressed!;
+      final confirm = tester
+          .widget<CupertinoDialogAction>(find.ancestor(
+            of: find.text('确定'),
+            matching: find.byType(CupertinoDialogAction),
+          ))
+          .onPressed!;
+      final cancel = tester
+          .widget<CupertinoDialogAction>(find.ancestor(
+            of: find.text('取消'),
+            matching: find.byType(CupertinoDialogAction),
+          ))
+          .onPressed!;
       // Deliver queued events before the closing animation rebuilds the page.
       if (trigger == 'IME then confirm') {
         await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -121,9 +140,9 @@ void main() {
         'folder dialog closes cleanly when ${confirm ? 'confirmed' : 'cancelled'}',
         (tester) async {
       final result = await _openDialog(tester);
-      final controller =
-          tester.widget<CupertinoTextField>(find.byType(CupertinoTextField))
-              .controller!;
+      final controller = tester
+          .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+          .controller!;
       expect(find.byType(CupertinoAlertDialog), findsOneWidget);
       expect(find.byType(AlertDialog), findsNothing);
       expect(find.text('新建分组'), findsOneWidget);
@@ -146,8 +165,8 @@ void main() {
   testWidgets('whitespace names keep the dialog open without validation',
       (tester) async {
     final validated = <String>[];
-    final result = await _openDialog(tester,
-        dialog: FolderNameDialog(validator: (name) {
+    final result =
+        await _openDialog(tester, dialog: FolderNameDialog(validator: (name) {
       validated.add(name);
       return null;
     }));
@@ -195,7 +214,8 @@ void main() {
     expect(input.maxLength, 16);
     expect(input.autofocus, isTrue);
     expect(input.placeholder, '分组名称');
-    await tester.enterText(find.byType(CupertinoTextField), '12345678901234567');
+    await tester.enterText(
+        find.byType(CupertinoTextField), '12345678901234567');
     expect(input.controller!.text, '1234567890123456');
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
@@ -204,11 +224,12 @@ void main() {
   });
 
   for (final dark in [false, true]) {
-    testWidgets('Cupertino folder dialog follows ${dark ? 'dark' : 'light'} theme',
+    testWidgets(
+        'Cupertino folder dialog follows ${dark ? 'dark' : 'light'} theme',
         (tester) async {
       await _openDialog(tester, dark: dark);
-      final dialog = tester.widget<CupertinoAlertDialog>(
-          find.byType(CupertinoAlertDialog));
+      final dialog = tester
+          .widget<CupertinoAlertDialog>(find.byType(CupertinoAlertDialog));
       final content = dialog.content! as Padding;
       expect(content.padding, const EdgeInsets.only(top: 12));
       final inputContext = tester.element(find.byType(CupertinoTextField));
@@ -227,14 +248,19 @@ void main() {
   }
 
   for (final rename in [false, true]) {
-    testWidgets('folder dialog uses English labels (${rename ? 'rename' : 'new'})',
+    testWidgets(
+        'folder dialog uses English labels (${rename ? 'rename' : 'new'})',
         (tester) async {
       final result = await _openDialog(tester,
           locale: const Locale('en', 'US'),
           dialog: FolderNameDialog(initialName: rename ? 'Friends' : null));
-      expect(find.text(rename ? 'Rename folder' : 'New folder'), findsOneWidget);
-      expect(tester.widget<CupertinoTextField>(find.byType(CupertinoTextField))
-          .placeholder, 'Folder name');
+      expect(
+          find.text(rename ? 'Rename folder' : 'New folder'), findsOneWidget);
+      expect(
+          tester
+              .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+              .placeholder,
+          'Folder name');
       expect(find.text('OK'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
@@ -248,14 +274,14 @@ void main() {
   testWidgets('validator receives a trimmed name and rejection preserves input',
       (tester) async {
     final validated = <String>[];
-    final result = await _openDialog(tester,
-        dialog: FolderNameDialog(validator: (name) {
+    final result =
+        await _openDialog(tester, dialog: FolderNameDialog(validator: (name) {
       validated.add(name);
       return name == '朋友' ? '分组名称已存在' : null;
     }));
-    final controller =
-        tester.widget<CupertinoTextField>(find.byType(CupertinoTextField))
-            .controller!;
+    final controller = tester
+        .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+        .controller!;
     await tester.enterText(find.byType(CupertinoTextField), '  朋友  ');
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
@@ -264,8 +290,11 @@ void main() {
     expect(find.byType(FolderNameDialog), findsOneWidget);
     expect(find.text('分组名称已存在'), findsOneWidget);
     expect(controller.text, '  朋友  ');
-    expect(tester.widget<CupertinoTextField>(find.byType(CupertinoTextField))
-        .controller, same(controller));
+    expect(
+        tester
+            .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+            .controller,
+        same(controller));
 
     await tester.enterText(find.byType(CupertinoTextField), '同事');
     await tester.pumpAndSettle();
@@ -281,9 +310,9 @@ void main() {
       (tester) async {
     final result = await _openDialog(tester,
         dialog: FolderNameDialog(validator: (_) => '分组名称已存在'));
-    final controller =
-        tester.widget<CupertinoTextField>(find.byType(CupertinoTextField))
-            .controller!;
+    final controller = tester
+        .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+        .controller!;
     await tester.enterText(find.byType(CupertinoTextField), '朋友');
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();

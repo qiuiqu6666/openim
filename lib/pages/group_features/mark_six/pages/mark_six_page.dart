@@ -62,8 +62,7 @@ class _MarkSixPageState extends State<MarkSixPage> {
     final style = MarkSixStyle.of(context);
     return Scaffold(
         backgroundColor: style.lotteryBackground,
-        appBar: markSixLotteryAppBar(context,
-            '${widget.featureContext.features.markSix.raw['brandName'] ?? widget.featureContext.groupName}'),
+        appBar: markSixLotteryAppBar(context),
         body: SafeArea(
             top: false,
             child: !_allowed

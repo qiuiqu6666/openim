@@ -165,6 +165,30 @@ void main() {
     expect(f.hidden, isEmpty);
   });
 
+  test('simultaneous migration requests share a pending history read',
+      () async {
+    final f = Fixture();
+    final historyStarted = Completer<void>();
+    final pending = Completer<AdvancedMessage>();
+    var reads = 0;
+    f.history = () {
+      reads++;
+      if (!historyStarted.isCompleted) historyStarted.complete();
+      return pending.future;
+    };
+    final first = f.run();
+    await historyStarted.future;
+    final second = f.run();
+    final third = f.run();
+    expect(reads, 1);
+    expect(f.hidden, isEmpty);
+    pending.complete(AdvancedMessage(messageList: [], isEnd: true));
+    await Future.wait([first, second, third]);
+    expect(reads, 1);
+    expect(f.hidden, [oldID]);
+    expect(f.notified, [oldID]);
+  });
+
   test('server reintroducing old conversation cancels cleanup', () async {
     final f = Fixture();
     var calls = 0;

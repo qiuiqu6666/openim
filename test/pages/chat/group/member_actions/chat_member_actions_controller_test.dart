@@ -116,6 +116,19 @@ class _Harness {
 }
 
 void main() {
+  test('member names retain combining whitespace in menus and destinations',
+      () async {
+    const raw = ' \u0301\u{1F469}\u{1F3FD}\u200D\u{1F4BB}';
+    final h = _Harness();
+    h.target!.nickname = raw;
+    await h.open();
+    expect(h.names.single, raw);
+    expect(h.mentions.single.senderNickname, raw);
+    h.action = ChatMemberAction.exclusiveRedPacket;
+    await h.open();
+    expect(h.packets.single.nickname, raw);
+  });
+
   test(
       'admin avatar menu resolves real member name and mentions through composer',
       () async {

@@ -1,3 +1,4 @@
+import '../../mine/settings/widgets/settings_widgets.dart' show showSettingsConfirm;
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
@@ -69,22 +70,14 @@ class ConversationEditActions {
         .length;
     if (count == 0 || editor.busy) return;
     final zh = Localizations.localeOf(context).languageCode == 'zh';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(zh ? '删除会话' : 'Delete conversations'),
-        content: Text(zh
-            ? '删除选中的 $count 个会话及聊天记录？'
-            : 'Delete the $count selected conversations and their messages?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(StrRes.cancel)),
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(StrRes.delete)),
-        ],
-      ),
+    final confirmed = await showSettingsConfirm(
+      context,
+      title: zh ? '删除会话' : 'Delete conversations',
+      message: zh
+          ? '删除选中的 $count 个会话及聊天记录？'
+          : 'Delete the $count selected conversations and their messages?',
+      confirmText: StrRes.delete,
+      destructive: true,
     );
     if (confirmed == true && isMounted() && editor.editing) {
       await _run(conversations, logic.deleteConversation);

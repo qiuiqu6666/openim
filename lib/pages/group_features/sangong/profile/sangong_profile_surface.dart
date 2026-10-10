@@ -47,6 +47,7 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
   bool _discovering = false;
   bool _lastPrivileged = false;
   bool _ledgerOpen = false;
+  bool _recoveringCapabilities = false;
   final _ledgerScopeChanges = ValueNotifier<int>(0);
 
   bool get _privileged {
@@ -225,10 +226,42 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
     if (runtime != null && !_loading) {
       runtime.updateContext(runtime.featureContext.readCurrentContext());
       if (!runtime.canManage) {
-        _error = '当前群的三公业务权限已变化，请重试';
+        if (!runtime.featureContext.capabilitiesCurrent()) {
+          unawaited(_recoverCapabilities(runtime));
+        } else {
+          _error = '当前群的三公业务权限已变化，请重试';
+        }
+      } else {
+        _error = null;
       }
     }
     setState(() {});
+  }
+
+  Future<void> _recoverCapabilities(SangongRuntime runtime) async {
+    if (_recoveringCapabilities) return;
+    _recoveringCapabilities = true;
+    final generation = _generation;
+    bool current() =>
+        mounted &&
+        generation == _generation &&
+        identical(runtime, _runtime) &&
+        _privileged;
+    try {
+      final updated =
+          await runtime.featureContext.refreshCapabilities(force: true);
+      if (!current()) return;
+      runtime.updateContext(updated);
+      await runtime.ensureManageBinding();
+      if (!current()) return;
+      setState(() {
+        _error = runtime.canManage ? null : '当前群的三公业务权限已变化，请重试';
+      });
+    } catch (error) {
+      if (current()) setState(() => _error = DioErrorMessage.forApp(error));
+    } finally {
+      _recoveringCapabilities = false;
+    }
   }
 
   Future<void> _select(String id, {bool refreshPrivilege = true}) async {

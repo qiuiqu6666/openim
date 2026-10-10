@@ -93,12 +93,12 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
     _token = OpenIM.iMManager.token;
     _messageNavigation =
         widget.messageNavigation ?? ChatHistoryMessageNavigation();
-    if (!_isKeyword || _input.text.trim().isNotEmpty) _search();
+    if (!_isKeyword || graphemeTrim(_input.text).isNotEmpty) _search();
   }
 
   void _queryChanged(String value) {
     _debounce?.cancel();
-    final keyword = value.trim();
+    final keyword = graphemeTrim(value);
     if (keyword == _controller.query.keyword && _controller.hasSearched) {
       setState(() => _waiting = false);
       return;
@@ -139,7 +139,8 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
           category: category,
           date: date,
           sender: sender,
-          initialQuery: category.supportsKeyword ? _input.text.trim() : '',
+          initialQuery:
+              category.supportsKeyword ? graphemeTrim(_input.text) : '',
           messageNavigation: _messageNavigation,
           source: widget.source));
     } finally {
@@ -215,13 +216,14 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
     _debounce?.cancel();
     if (!mounted || !_sameSession) return;
     if (_waiting) setState(() => _waiting = false);
-    if (_isKeyword && _input.text.trim().isEmpty) {
+    if (_isKeyword && graphemeTrim(_input.text).isEmpty) {
       _controller.clear();
       return;
     }
     await _controller.search(ChatHistorySearchQuery(
-      keyword:
-          widget.category?.supportsKeyword == false ? '' : _input.text.trim(),
+      keyword: widget.category?.supportsKeyword == false
+          ? ''
+          : graphemeTrim(_input.text),
       messageTypes: widget.category?.messageTypes ?? const [],
       startDate: widget.date,
       endDate: widget.date,

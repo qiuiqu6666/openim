@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:characters/characters.dart';
+import 'package:openim_common/openim_common.dart';
 import '../../models/group_feature_context.dart';
 import '../../data/group_feature_api.dart';
 import '../models/live_errors.dart';
@@ -52,8 +54,8 @@ class LiveApi {
   }
 
   String _name(String value) {
-    final name = value.trim();
-    if (name.isEmpty || name.runes.length > 10) {
+    final name = graphemeTrim(value);
+    if (name.isEmpty || name.characters.length > 10) {
       throw const FormatException('直播间名称不能为空，且最多 10 个字');
     }
     return name;
@@ -220,8 +222,9 @@ class LiveApi {
     checkPermissionSession();
     if (!context.capabilities.live.canConfigure) throw StateError('没有配置直播的权限');
     final roomName = _name(name);
-    final details = description.trim();
-    if (details.runes.length > 30) throw const FormatException('直播描述最多 30 个字');
+    final details = graphemeTrim(description);
+    if (details.characters.length > 30)
+      throw const FormatException('直播描述最多 30 个字');
     if (anchorID.trim().isEmpty) throw const FormatException('请选择主播');
     if (scheduledAt != null &&
         scheduledAt.isBefore(DateTime.now().add(const Duration(minutes: 1)))) {
@@ -277,12 +280,12 @@ class LiveApi {
             (value) => value.code == currency && value.decimals == decimals)) {
       throw const FormatException('该直播暂不支持此打赏币种，请刷新可用币种');
     }
-    final remark = memo.trim();
+    final remark = graphemeTrim(memo);
     if (amount <= 0 ||
         amount > maxTipAmount ||
         !RegExp(r'^\d{6}$').hasMatch(password) ||
         orderID.trim().isEmpty ||
-        remark.runes.length > 50) {
+        remark.characters.length > 50) {
       throw const FormatException('打赏金额、备注或支付密码不正确');
     }
     final json =

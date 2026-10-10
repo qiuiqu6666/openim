@@ -1,6 +1,8 @@
 library openim_common;
 
 export 'src/widgets/feedback/easy_loading_interactions.dart';
+export 'src/widgets/feedback/easy_loading_appearance.dart';
+export 'src/widgets/feedback/feedback_colors.dart';
 export 'src/widgets/action_sheet/app_action_sheet.dart';
 
 export 'src/apis.dart';
@@ -27,6 +29,7 @@ export 'src/res/images.dart';
 export 'src/res/strings.dart';
 export 'src/res/app_tokens.dart';
 export 'src/res/qr_scanner_tokens.dart';
+export 'src/res/typography/platform_text_fonts.dart';
 export 'src/res/styles.dart';
 export 'src/urls.dart';
 export 'src/utils/data_sp.dart';
@@ -135,6 +138,8 @@ export 'src/widgets/chat/voice_transcription_view.dart';
 export 'src/widgets/chat/voice/chat_voice_palette.dart';
 
 export 'src/utils/friend_display_preferences.dart';
+export 'src/utils/text/unicode_text.dart';
+export 'src/widgets/chat/editing/chat_text_editing.dart';
 export 'src/widgets/app_switch.dart';
 export 'src/utils/friend_add_source.dart';
 export 'src/widgets/voice_capture_dialog.dart';

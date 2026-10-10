@@ -68,7 +68,7 @@ class AiAssistantHistoryItem {
     return AiAssistantHistoryItem(
       id: _asString(json['id']),
       role: _asString(json['role']),
-      content: json['content']?.toString() ?? '',
+      content: _asText(json['content']),
       capability: _asString(json['capability']),
       analyzeType: _asString(json['analyzeType']),
       analyzePeerUserId: _asString(json['analyzePeerUserId']),
@@ -138,7 +138,7 @@ class AiAssistantUploadedFile {
       fileId: _asString(json['fileId']),
       contentType: _asString(json['contentType']),
       sizeBytes: _asInt(json['sizeBytes']),
-      fileName: _asString(json['fileName']),
+      fileName: _asText(json['fileName']),
     );
   }
 }
@@ -194,7 +194,7 @@ class AiAssistantStreamEvent {
         return AiAssistantStreamEvent(
           kind: AiAssistantStreamKind.delta,
           // Delta boundaries are transport boundaries, not word boundaries.
-          text: json['text']?.toString() ?? '',
+          text: _asText(json['text']),
         );
       case 'done':
         return AiAssistantStreamEvent(
@@ -208,7 +208,7 @@ class AiAssistantStreamEvent {
         return AiAssistantStreamEvent(
           kind: AiAssistantStreamKind.error,
           code: _asString(json['code']),
-          message: _asString(json['message']),
+          message: _asText(json['message']),
         );
       default:
         return null;
@@ -217,6 +217,9 @@ class AiAssistantStreamEvent {
 }
 
 String _asString(dynamic value) => value?.toString().trim() ?? '';
+
+// Protocol identifiers may be trimmed; user text must retain its exact sequence.
+String _asText(dynamic value) => value?.toString() ?? '';
 
 int _asInt(dynamic value) {
   if (value is int) {

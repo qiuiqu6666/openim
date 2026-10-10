@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../res/app_tokens.dart';
 import 'chat_composer_palette.dart';
+import 'emoji/chat_emoji_compatibility.dart';
 
 enum _EmojiSection { all, favorites, gestures, builtin }
 
@@ -37,100 +38,28 @@ class ChatEmojiPanel extends StatefulWidget {
 class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
   static const _recentKey = 'chat_recent_emoji';
   static const _favoriteKey = 'chat_favorite_emoji';
-  static const _fallbackEmoji = {
-    '😀',
-    '😁',
-    '😂',
-    '😊',
-    '😍',
-    '😎',
-    '😭',
-    '👍',
-    '❤️'
-  };
-  static const _suggested = [
-    '😂',
-    '🤣',
-    '😊',
-    '😁',
-    '😅',
-    '🤭',
-    '🤦',
-    '🥹',
-    '😭',
-    '🥰',
-    '😍',
-    '😘',
-    '😎',
-    '🤔',
-    '🙄',
-    '😏',
-    '👍',
-    '🙏',
-    '👏',
-    '💪',
-    '❤️',
-    '🌹',
-    '🎉',
-    '🔥',
-    '🤝',
-    '👀',
-    '👋',
-    '💯',
-    '🍉',
-    '🧧',
-    '🐶',
-    '✨',
-  ];
-  static const _gestures = [
-    '👍',
-    '👎',
-    '👏',
-    '🙏',
-    '🤝',
-    '💪',
-    '👋',
-    '👌',
-    '✌️',
-    '🤞',
-    '🫰',
-    '🤟',
-    '🤘',
-    '👊',
-    '✊',
-    '🙌',
-    '👐',
-    '🤲',
-    '👉',
-    '👈',
-    '👆',
-    '👇',
-    '🫶',
-    '🤦',
-  ];
+  // The package's catalog only populates the picker. It is never a validator
+  // for text received from the system keyboard, clipboard or saved favorites.
   static final _all = <emoji_picker.Emoji>[
-    for (final glyph in _suggested)
-      emoji_picker.emojiSetChinese
-              .expand((section) => section.emoji)
-              .where((emoji) => emoji.emoji == glyph)
-              .firstOrNull ??
-          emoji_picker.Emoji(glyph, glyph),
     for (final section in emoji_picker.emojiSetChinese)
-      for (final emoji in section.emoji)
-        if (!_suggested.contains(emoji.emoji)) emoji,
+      ...section.emoji
+          .where((emoji) => isChatPickerEmojiCompatible(emoji.emoji)),
   ];
+  static final _suggested = _all.take(8).map((emoji) => emoji.emoji).toList();
+  static final _gestures = _all
+      .where((emoji) => emoji.hasSkinTone)
+      .map((emoji) => emoji.emoji)
+      .toList();
 
   SharedPreferences? _prefs;
   List<String> _recent = [];
   List<String> _favorites = [];
   _EmojiSection _section = _EmojiSection.all;
-  Set<String>? _supportedEmoji;
 
   @override
   void initState() {
     super.initState();
     _loadPrefs();
-    _loadSupportedEmoji();
   }
 
   @override
@@ -139,24 +68,6 @@ class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
     if (_section == _EmojiSection.builtin &&
         widget.builtinStickerPanel == null) {
       _section = _EmojiSection.all;
-    }
-  }
-
-  Future<void> _loadSupportedEmoji() async {
-    try {
-      final categories = await emoji_picker.EmojiPickerUtils()
-          .filterUnsupported(emoji_picker.emojiSetChinese);
-      if (!mounted) return;
-      setState(() {
-        _supportedEmoji = {
-          for (final category in categories)
-            for (final emoji in category.emoji) emoji.emoji,
-        };
-      });
-    } catch (_) {
-      // Keep the panel usable if the platform compatibility channel fails.
-      if (!mounted) return;
-      setState(() => _supportedEmoji = _fallbackEmoji);
     }
   }
 
@@ -193,15 +104,13 @@ class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
   }
 
   List<String> get _visibleEmoji {
-    final supported = _supportedEmoji;
-    if (supported == null) return [];
     if (_section == _EmojiSection.favorites) {
-      return _favorites.where(supported.contains).toList();
+      return _favorites.where(isChatPickerEmojiCompatible).toList();
     }
     if (_section == _EmojiSection.gestures) {
-      return _gestures.where(supported.contains).toList();
+      return _gestures;
     }
-    return _all.map((emoji) => emoji.emoji).where(supported.contains).toList();
+    return _all.map((emoji) => emoji.emoji).toList();
   }
 
   Widget _emojiCell(String emoji) => InkWell(
@@ -215,7 +124,7 @@ class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
   Widget build(BuildContext context) {
     final visible = _visibleEmoji;
     final recent = (_recent.isEmpty ? _suggested : _recent)
-        .where((emoji) => _supportedEmoji?.contains(emoji) ?? false)
+        .where(isChatPickerEmojiCompatible)
         .take(_recent.isEmpty ? 8 : 24)
         .toList();
     final colors = Theme.of(context).colorScheme;
@@ -293,12 +202,7 @@ class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
                   ),
                 ),
               ],
-              if (_supportedEmoji == null)
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (visible.isEmpty)
+              if (visible.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(

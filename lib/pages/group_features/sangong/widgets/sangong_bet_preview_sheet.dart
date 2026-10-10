@@ -379,7 +379,7 @@ class _SangongBetPreviewSheetState extends State<SangongBetPreviewSheet> {
                       Text(
                         excludeSummary,
                         style: TextStyle(
-                          color: AppColors.primaryRed,
+                          color: AppTokens.paymentError(dark: dark),
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -399,7 +399,7 @@ class _SangongBetPreviewSheetState extends State<SangongBetPreviewSheet> {
                           },
                         ),
                         style: TextStyle(
-                          color: AppColors.primaryRed,
+                          color: AppTokens.paymentError(dark: dark),
                           fontSize: 12,
                         ),
                       ),
@@ -725,8 +725,11 @@ class _BetEntryTile extends StatelessWidget {
                       const SizedBox(width: 6),
                       _EntryBadge(
                         label: statusLabel,
-                        color:
-                            entry.isPlaced ? const Color(0xFF2E7D32) : subColor,
+                        color: entry.isPlaced
+                            ? Theme.of(context).brightness == Brightness.dark
+                                ? AppTokens.statusSuccess(dark: true)
+                                : const Color(0xFF2E7D32)
+                            : subColor,
                       ),
                     ],
                   ],

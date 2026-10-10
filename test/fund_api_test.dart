@@ -101,6 +101,7 @@ void main() {
       expect(FundRemark.normalize(' \t$twelveEmoji\n '), twelveEmoji);
       expect(FundRemark.normalize('  中，文! \n'), '中，文!');
       expect(FundRemark.normalize(' \t\n '), '');
+      expect(FundRemark.normalize(' \u0301备注'), ' \u0301备注');
       expect(FundRemark.maxCodePoints, 12);
       expect(FundRemark.defaultPacket, '恭喜发财，大吉大利');
     });

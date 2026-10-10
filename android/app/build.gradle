@@ -70,6 +70,13 @@ android {
     }
 
     buildTypes {
+        // Flutter 3.41 adds all supported ABIs to each build type. Those
+        // override defaultConfig and can package plugins for an ABI whose
+        // Flutter engine was not built. Let defaultConfig (or ABI splits)
+        // select exactly the architectures requested by this build.
+        configureEach {
+            ndk.abiFilters.clear()
+        }
         debug { signingConfig signingConfigs.release }
         profile { signingConfig signingConfigs.release }
         release {

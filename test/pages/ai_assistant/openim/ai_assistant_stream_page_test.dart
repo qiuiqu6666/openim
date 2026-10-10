@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -101,6 +103,62 @@ void main() {
           ChatHistoryCache.read('self', aiOpenimConversationID)
               .map((message) => message.clientMsgID),
           ['durable-reply']);
+      expect(tester.takeException(), isNull);
+    });
+
+    streamTest(
+        'Go omitted zero values render and grow before the final reply ($dark)',
+        (tester) async {
+      final logic = await mount(tester, dark: dark);
+      Message packet(String id, Map<String, Object> data) => Message(
+            clientMsgID: id,
+            sendID: 'assistant',
+            recvID: 'self',
+            sessionType: ConversationType.single,
+            contentType: MessageType.custom,
+            customElem: CustomElem(
+                description: 'assistantStream', data: jsonEncode(data)),
+          );
+
+      fixture.im.recvNewMessage(packet('go-chunk-0', {
+        'streamID': 'go-reply',
+        'text': '首段立即显示',
+      }));
+      await tester.pump();
+      expect(stream('go-reply'), findsOneWidget);
+      expect(textContaining('首段立即显示'), findsWidgets);
+      expect(logic.assistantStreams.snapshots.single.text, '首段立即显示');
+      expect(logic.assistantStreams.snapshots.single.ended, isFalse);
+      expect(logic.messageList, isEmpty,
+          reason: 'The bubble is visible before any durable 101 reply.');
+
+      fixture.im.recvNewMessage(packet('go-chunk-1', {
+        'streamID': 'go-reply',
+        'index': 1,
+        'text': '，后续实时追加',
+      }));
+      await tester.pump();
+      expect(stream('go-reply'), findsOneWidget);
+      expect(textContaining('首段立即显示，后续实时追加'), findsWidgets);
+      expect(logic.assistantStreams.snapshots.single.text, '首段立即显示，后续实时追加');
+      expect(logic.assistantStreams.snapshots.single.ended, isFalse);
+      expect(logic.messageList, isEmpty);
+      expect(logic.scrollingCacheMessageList, isEmpty);
+      expect(logic.newMessages.unseenCount.value, 0);
+      expect(fixture.app.notifications, isEmpty);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(ChatHistoryCache.read('self', aiOpenimConversationID), isEmpty);
+
+      fixture.im.recvNewMessage(
+          aiOpenimStreamFinal('go-final', '最终保存的完整回复', 'go-reply'));
+      await tester.pumpAndSettle();
+      expect(stream('go-reply'), findsNothing);
+      expect(logic.assistantStreams.snapshots, isEmpty);
+      expect(textContaining('最终保存的完整回复'), findsWidgets);
+      expect(logic.messageList.single.clientMsgID, 'go-final');
+      expect(logic.messageList.single.contentType, MessageType.text);
+      expect(fixture.app.notifications.map((message) => message.clientMsgID),
+          ['go-final']);
       expect(tester.takeException(), isNull);
     });
   }
@@ -256,7 +314,7 @@ void main() {
   });
 
   streamTest(
-      'malformed online stream packets do not become saved custom messages',
+      'malformed and explicitly null stream packets never become saved messages',
       (tester) async {
     final logic = await mount(tester);
     final malformed = aiOpenimStreamFragment('invalid',
@@ -267,6 +325,25 @@ void main() {
     expect(logic.assistantStreams.snapshots, isEmpty);
     expect(logic.messageList, isEmpty);
     expect(fixture.app.notifications, isEmpty);
+    for (final field in ['index', 'end']) {
+      final invalid = aiOpenimStreamFragment('null-$field',
+          streamID: 'null-$field', index: 0, text: '不能把显式空值当作省略字段');
+      invalid.customElem!.data = jsonEncode({
+        'streamID': 'null-$field',
+        'index': 0,
+        'text': '不能把显式空值当作省略字段',
+        'end': false,
+        field: null,
+      });
+      fixture.im.recvNewMessage(invalid);
+      await tester.pump();
+      expect(logic.assistantStreams.snapshots, isEmpty);
+      expect(stream('null-$field'), findsNothing);
+      expect(logic.messageList, isEmpty);
+      expect(logic.scrollingCacheMessageList, isEmpty);
+      expect(logic.newMessages.unseenCount.value, 0);
+      expect(fixture.app.notifications, isEmpty);
+    }
     expect(tester.takeException(), isNull);
   });
 
@@ -389,7 +466,8 @@ void main() {
     expect(
         logic.messageList.map((message) => message.clientMsgID), historicalIDs);
     fixture.im.recvNewMessage(aiOpenimStreamFinal(
-        'dated-buffered-final', '回到最新才能看到的完整回复', 'while-dated'));
+        'dated-buffered-final', '回到最新才能看到的完整回复', 'while-dated',
+        time: 1030));
     await tester.pump();
     expect(
         logic.messageList.map((message) => message.clientMsgID), historicalIDs);

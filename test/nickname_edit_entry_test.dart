@@ -10,6 +10,9 @@ import 'package:openim/pages/mine/mine_view.dart';
 import 'package:openim/pages/contacts/user_profile_panel/set_remark/set_remark_view.dart';
 import 'package:openim/pages/mine/my_info/my_info_logic.dart';
 import 'package:openim/pages/mine/my_info/my_info_view.dart';
+import 'package:openim/pages/mine/settings/pages/edit_nickname_page.dart';
+import 'package:openim/pages/mine/settings/pages/profile_info_page.dart';
+import 'package:openim/pages/mine/settings/settings_draft_store.dart';
 import 'package:openim/routes/app_navigator.dart';
 import 'package:openim/routes/app_pages.dart';
 import 'package:openim_common/openim_common.dart';
@@ -25,6 +28,23 @@ class NicknameMineFixture extends GetxController implements MineLogic {
   NicknameMineFixture(this.imLogic);
   @override
   final IMController imLogic;
+  @override
+  final settingsStore = SettingsDraftStore();
+  @override
+  Future<void> openProfileInfo(BuildContext context) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => ProfileInfoPage(
+                nickname: imLogic.userInfo.value.nickname!,
+                userId: imLogic.userInfo.value.userID!,
+                avatarUrl: '',
+                store: settingsStore,
+              )));
+  @override
+  void onClose() {
+    settingsStore.dispose();
+    super.onClose();
+  }
+
   @override
   void editMyName() => AppNavigator.startEditMyInfo();
   @override
@@ -63,27 +83,41 @@ void main() {
           locale: const Locale('zh', 'CN'),
           supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
-          home: fromMyInfo ? MyInfoPage() : MinePage(),
+          home: fromMyInfo ? MyInfoPage() : MinePage(onWalletTap: () {}),
           getPages: AppPages.routes,
         ),
       ));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byType(AvatarView).first);
-      await tester.pumpAndSettle();
-      expect(find.text(StrRes.toolboxAlbum), findsOneWidget);
-      expect(find.text(StrRes.toolboxCamera), findsOneWidget);
-      Get.back();
-      await tester.pumpAndSettle();
+      // The current Mine header owns a continuous decorative animation.
+      if (fromMyInfo) {
+        await tester.pumpAndSettle();
+      } else {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      if (fromMyInfo) {
+        await tester.tap(find.byType(AvatarView).first);
+        await tester.pumpAndSettle();
+        expect(find.text(StrRes.toolboxAlbum), findsOneWidget);
+        expect(find.text(StrRes.toolboxCamera), findsOneWidget);
+        Get.back();
+        await tester.pumpAndSettle();
+      } else {
+        await tester.tap(find.byKey(const ValueKey('mine-profile-header')));
+        await tester.pumpAndSettle();
+        expect(find.byType(ProfileInfoPage), findsOneWidget);
+      }
       await tester.tap(find.text('Original name'));
       await tester.pumpAndSettle();
-      expect(find.byType(SetFriendRemarkPage), findsOneWidget);
-      expect(find.text('13/16'), findsOneWidget);
-      await tester.tap(find.byType(AvatarView));
-      await tester.pumpAndSettle();
-      expect(find.text(StrRes.toolboxAlbum), findsOneWidget);
-      expect(find.text(StrRes.toolboxCamera), findsOneWidget);
-      Get.back();
-      await tester.pumpAndSettle();
+      expect(find.byType(fromMyInfo ? SetFriendRemarkPage : EditNicknamePage),
+          findsOneWidget);
+      expect(find.text(fromMyInfo ? '13/16' : '13/22'), findsOneWidget);
+      if (fromMyInfo) {
+        await tester.tap(find.byType(AvatarView));
+        await tester.pumpAndSettle();
+        expect(find.text(StrRes.toolboxAlbum), findsOneWidget);
+        expect(find.text(StrRes.toolboxCamera), findsOneWidget);
+        Get.back();
+        await tester.pumpAndSettle();
+      }
       expect(find.byType(TextField), findsOneWidget);
       final input = tester.widget<TextField>(find.byType(TextField));
       expect(input.controller!.text, 'Original name');
@@ -92,6 +126,11 @@ void main() {
       expect(im.userInfo.value.nickname, 'Original name');
       Get.back();
       await tester.pumpAndSettle();
+      if (!fromMyInfo) {
+        expect(find.byType(ProfileInfoPage), findsOneWidget);
+        Get.back();
+        await tester.pump(const Duration(milliseconds: 500));
+      }
       expect(find.byType(fromMyInfo ? MyInfoPage : MinePage), findsOneWidget);
       expect(im.userInfo.value.nickname, 'Original name');
       expect(tester.takeException(), isNull);

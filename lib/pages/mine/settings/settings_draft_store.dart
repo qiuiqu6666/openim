@@ -157,7 +157,7 @@ class SettingsDraftStore extends ChangeNotifier {
 
   void seedProfile({required String nickname, String signature = ''}) {
     final nextNickname = nickname;
-    final nextSignature = signature.trim();
+    final nextSignature = signature;
 
     // The OpenIM profile arrives asynchronously. Keep following each server
     // field independently until the user edits that specific field locally.

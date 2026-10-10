@@ -90,8 +90,8 @@ class ChatHistoryFileTile extends StatelessWidget {
     final dark = theme.brightness == Brightness.dark;
     final time = message.sendTime;
     final stamp = time == null ? '' : formatChatMessageTime(context, time);
-    final name = message.fileElem?.fileName?.trim();
-    final fileName = name?.isNotEmpty == true ? name! : 'attachmentFile'.tr;
+    final name = graphemeTrim(message.fileElem?.fileName ?? '');
+    final fileName = name.isNotEmpty ? name : 'attachmentFile'.tr;
     final action = failed
         ? 'attachmentRetry'.tr
         : downloaded

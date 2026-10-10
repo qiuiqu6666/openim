@@ -1,7 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
-import 'package:openim_common/openim_common.dart' show IMUtils, StrRes;
+import 'package:openim_common/openim_common.dart'
+    show IMUtils, StrRes, graphemeTrim;
 
 import '../../pages/official_account/models/official_account.dart';
 import 'message_notification_preferences.dart';
@@ -171,5 +172,5 @@ abstract final class MessageNotificationPolicy {
   }
 
   static String _oneLine(String value) =>
-      value.replaceAll(RegExp(r'[\x00-\x1f\x7f]'), ' ').trim();
+      graphemeTrim(value.replaceAll(RegExp(r'[\x00-\x1f\x7f]'), ' '));
 }

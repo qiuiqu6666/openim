@@ -1,6 +1,7 @@
 import 'package:markdown/markdown.dart' as md;
 
 import '../../text_view.dart';
+import '../../../utils/text/unicode_text.dart';
 
 /// Adds existing chat matches to Markdown's AST without rewriting message data.
 /// A dedicated tag avoids nested Markdown links and cannot be injected by a URI.
@@ -9,13 +10,28 @@ class ChatMarkdownPatternSyntax extends md.InlineSyntax {
 
   static const tag = 'chat-match';
   final int index;
+  String? _boundarySource;
+  List<int>? _boundaries;
+
+  @override
+  bool tryMatch(md.InlineParser parser, [int? startMatchPos]) {
+    final match =
+        pattern.matchAsPrefix(parser.source, startMatchPos ?? parser.pos);
+    if (match == null || match.start == match.end) return false;
+    if (_boundarySource != parser.source) {
+      _boundarySource = parser.source;
+      _boundaries = graphemeBoundaries(parser.source);
+    }
+    final range = graphemeSafeRange(parser.source, match.start, match.end,
+        boundaries: _boundaries);
+    if (range.start != match.start || range.end != match.end) return false;
+    return super.tryMatch(parser, startMatchPos);
+  }
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
     final value = match[0] ?? '';
     if (value.isEmpty) {
-      // A caller-provided zero-width expression must still advance the parser.
-      parser.advanceBy(1);
       return false;
     }
     parser.addNode(

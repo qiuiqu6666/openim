@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../group_features/identity/group_name_label.dart';
 import '../../group_features/widgets/group_live_avatar.dart';
 import '../../group_features/models/group_features.dart';
 import '../../group_features/live/widgets/live_list_scope.dart';
@@ -153,8 +154,11 @@ class GroupListPage extends StatelessWidget {
                 height: AppTokens.s7 + AppTokens.s6,
               ),
             ),
-            title: Text(
-              (info.groupName ?? '').trim().isEmpty
+            title: GroupNameLabel(
+              groupID: info.groupID,
+              ex: info.ex,
+              store: logic.groupFeatures,
+              name: (info.groupName ?? '').trim().isEmpty
                   ? (onSelected == null ? info.groupID : '未命名群聊')
                   : info.groupName!,
               maxLines: 2,

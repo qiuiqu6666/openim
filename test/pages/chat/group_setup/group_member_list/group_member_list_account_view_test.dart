@@ -21,7 +21,7 @@ void main() {
 
   for (final brightness in Brightness.values) {
     testWidgets(
-        '${brightness.name} rows show permitted accounts without IM fallback',
+        '${brightness.name} rows hide accounts and retain member selection',
         (tester) async {
       tester.view.physicalSize = const Size(320, 700);
       tester.view.devicePixelRatio = 1;
@@ -59,7 +59,8 @@ void main() {
         ),
       ));
       await tester.pump();
-      expect(find.text('@abcdefgh12'), findsOneWidget);
+      expect(find.text('@abcdefgh12'), findsNothing);
+      expect(find.text('Public peer'), findsOneWidget);
       for (final id in ['im_visible_peer', 'im_hidden_peer', 'im_sdk_peer']) {
         expect(find.text(id), findsNothing);
       }

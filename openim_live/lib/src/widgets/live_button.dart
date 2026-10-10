@@ -9,11 +9,19 @@ class LiveButton extends StatelessWidget {
     required this.icon,
     this.onTap,
     this.foreground,
+    this.iconSize,
+    this.labelWidth,
+    this.labelStyle,
+    this.contentPadding = const EdgeInsets.all(4),
+    this.labelSpacing,
   });
   final String text;
   final String icon;
   final Function()? onTap;
   final Color? foreground;
+  final double? iconSize, labelWidth, labelSpacing;
+  final TextStyle? labelStyle;
+  final EdgeInsets contentPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -25,72 +33,98 @@ class LiveButton extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(16),
             child: Padding(
-                padding: const EdgeInsets.all(4),
+                padding: contentPadding,
                 child: Opacity(
                     opacity: onTap == null ? .4 : 1,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         icon.toImage
-                          ..width = 62.w
-                          ..height = 62.w,
-                        10.verticalSpace,
-                        Text(text,
-                            maxLines: 2,
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelMedium
-                                ?.copyWith(
-                                    color: foreground ??
-                                        Theme.of(context)
-                                            .colorScheme
-                                            .onSurface)),
+                          ..width = iconSize ?? 62.w
+                          ..height = iconSize ?? 62.w,
+                        SizedBox(height: labelSpacing ?? 10.h),
+                        SizedBox(
+                          width: labelWidth,
+                          child: Text(text,
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
+                              style: (labelStyle ??
+                                      Theme.of(context).textTheme.labelMedium)
+                                  ?.copyWith(
+                                      color: foreground ??
+                                          Theme.of(context)
+                                              .colorScheme
+                                              .onSurface)),
+                        ),
                       ],
                     )))));
   }
 
   LiveButton.microphone({
-    super.key,
-    this.foreground,
-    this.onTap,
+    Key? key,
+    Color? foreground,
+    VoidCallback? onTap,
     bool on = true,
-  })  : text = StrRes.microphone,
-        icon = on ? ImageRes.liveMicOn : ImageRes.liveMicOff;
+  }) : this(
+            key: key,
+            foreground: foreground,
+            onTap: onTap,
+            text: StrRes.microphone,
+            icon: on ? ImageRes.liveMicOn : ImageRes.liveMicOff);
 
   LiveButton.speaker({
-    super.key,
-    this.foreground,
-    this.onTap,
+    Key? key,
+    Color? foreground,
+    VoidCallback? onTap,
     bool on = true,
-  })  : text = StrRes.speaker,
-        icon = on ? ImageRes.liveSpeakerOn : ImageRes.liveSpeakerOff;
+  }) : this(
+            key: key,
+            foreground: foreground,
+            onTap: onTap,
+            text: StrRes.speaker,
+            icon: on ? ImageRes.liveSpeakerOn : ImageRes.liveSpeakerOff);
 
   LiveButton.hungUp({
-    super.key,
-    this.foreground,
-    this.onTap,
-  })  : text = StrRes.hangUp,
-        icon = ImageRes.liveHangUp;
+    Key? key,
+    Color? foreground,
+    VoidCallback? onTap,
+  }) : this(
+            key: key,
+            foreground: foreground,
+            onTap: onTap,
+            text: StrRes.hangUp,
+            icon: ImageRes.liveHangUp);
 
   LiveButton.reject({
-    super.key,
-    this.foreground,
-    this.onTap,
-  })  : text = StrRes.reject,
-        icon = ImageRes.liveHangUp;
+    Key? key,
+    Color? foreground,
+    VoidCallback? onTap,
+  }) : this(
+            key: key,
+            foreground: foreground,
+            onTap: onTap,
+            text: StrRes.reject,
+            icon: ImageRes.liveHangUp);
 
   LiveButton.cancel({
-    super.key,
-    this.foreground,
-    this.onTap,
-  })  : text = StrRes.cancel,
-        icon = ImageRes.liveHangUp;
+    Key? key,
+    Color? foreground,
+    VoidCallback? onTap,
+  }) : this(
+            key: key,
+            foreground: foreground,
+            onTap: onTap,
+            text: StrRes.cancel,
+            icon: ImageRes.liveHangUp);
 
   LiveButton.pickUp({
-    super.key,
-    this.foreground,
-    this.onTap,
-  })  : text = StrRes.pickUp,
-        icon = ImageRes.livePicUp;
+    Key? key,
+    Color? foreground,
+    VoidCallback? onTap,
+  }) : this(
+            key: key,
+            foreground: foreground,
+            onTap: onTap,
+            text: StrRes.pickUp,
+            icon: ImageRes.livePicUp);
 }

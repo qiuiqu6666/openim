@@ -16,7 +16,7 @@ class AiOpenimPayload {
   }
 
   /// Empty prompts are valid protocol input; the assistant supplies guidance.
-  static String image(String prompt) => jsonEncode({'prompt': prompt.trim()});
+  static String image(String prompt) => jsonEncode({'prompt': prompt});
 
   static String groupCard({
     required String groupID,

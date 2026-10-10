@@ -22,7 +22,7 @@ class ChatLocationException implements Exception {
 }
 
 abstract interface class ChatLocationSource {
-  /// Returns null when automatic lookup does not already have permission.
+  /// Returns null when a permission-free lookup does not already have a grant.
   Future<LatLng?> locate({required bool requestPermission});
 }
 

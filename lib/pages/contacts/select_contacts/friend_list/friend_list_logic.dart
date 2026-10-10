@@ -8,7 +8,12 @@ import '../select_contacts_logic.dart';
 import '../../contacts_logic.dart';
 
 class SelectContactsFromFriendsLogic extends FriendListLogic {
-  final selectContactsLogic = Get.find<SelectContactsLogic>();
+  SelectContactsFromFriendsLogic({
+    SelectContactsLogic? selection,
+    super.loadDirectory,
+  }) : selectContactsLogic = selection ?? Get.find<SelectContactsLogic>();
+
+  final SelectContactsLogic selectContactsLogic;
   final searchController = TextEditingController();
   final searchQuery = ''.obs;
 

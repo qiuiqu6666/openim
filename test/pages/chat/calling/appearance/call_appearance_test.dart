@@ -74,7 +74,6 @@ ControlsView _controls({
       onCancel: () {},
       onHangUp: (_) {},
       onMinimize: minimize ?? () {},
-      onPictureInPicture: () {},
       onSetMicrophone: microphone,
       onSetSpeaker: speaker,
     );
@@ -90,7 +89,8 @@ Future<void> _decodeControls(WidgetTester tester) async {
     await Future.wait(
         images.map((image) => precacheImage(image.image, context)));
   });
-  await tester.pump(const Duration(milliseconds: 100));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
   final rawImages = tester.widgetList<RawImage>(find.byType(RawImage)).toList();
   expect(rawImages.length, greaterThanOrEqualTo(images.length));
   expect(rawImages.every((image) => image.image != null), isTrue);
@@ -300,12 +300,13 @@ void main() {
         final status = switch (state) {
           CallState.call => StrRes.waitingVoiceCallHint,
           CallState.connecting => StrRes.connecting,
-          CallState.beCalled => StrRes.invitedVoiceCallHint,
+          CallState.beCalled => '邀请你语音通话',
           _ => IMUtils.seconds2HMS(73),
         };
         expect(find.text(status), findsOneWidget);
         final secondary = tester.widget<Text>(find.text(status)).style!.color!;
-        expect((secondary.a - .72).abs(), lessThan(.01));
+        expect((secondary.a - (state == CallState.beCalled ? 1 : .72)).abs(),
+            lessThan(.01));
         final blended = Color.alphaBlend(secondary, _background);
         expect(
             (blended.computeLuminance() + .05) /

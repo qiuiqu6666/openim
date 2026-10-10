@@ -47,7 +47,7 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
       icon: Icon(
         obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
         size: 20,
-        color: AuthReferenceTokens.ink300,
+        color: AuthReferenceTokens.color(context, AuthReferenceTokens.ink300),
       ),
     );
   }

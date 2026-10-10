@@ -59,15 +59,15 @@ class MineProfileView extends StatelessWidget {
           ? AppTokens.profileSectionDarkOpacity
           : AppTokens.profileSectionLightOpacity,
     );
-    final displayName = nickname.trim().isNotEmpty
-        ? nickname.trim()
+    final displayName = graphemeTrim(nickname).isNotEmpty
+        ? graphemeTrim(nickname)
         : (userId.trim().isNotEmpty
             ? userId.trim()
             : mineText(context, zh: '未设置', en: 'Not set'));
     final displayUserId = userId.trim().isEmpty ? '--' : userId.trim();
-    final displaySignature = signature.trim().isEmpty
+    final displaySignature = graphemeTrim(signature).isEmpty
         ? mineText(context, zh: '未设置', en: 'Not set')
-        : signature.trim();
+        : graphemeTrim(signature);
     final overlay = AppSystemBars.styleFor(AppTokens.background(dark: dark));
     final screenWidth = MediaQuery.sizeOf(context).width;
 

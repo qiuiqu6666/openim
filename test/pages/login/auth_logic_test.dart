@@ -204,7 +204,7 @@ void main() {
     expect(login.loginType.value, LoginType.account);
     login.phoneCtrl.text = '@13800138000';
     expect(login.loginType.value, LoginType.account);
-    expect(login.account, '13800138000');
+    expect(login.account, '@13800138000');
     login.phoneCtrl.text = ' user@example.com ';
     expect(login.loginType.value, LoginType.email);
     expect(login.email, 'user@example.com');

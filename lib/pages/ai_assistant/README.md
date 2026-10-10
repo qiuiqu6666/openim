@@ -10,8 +10,8 @@
 - 稳定 ID `assistant` 在 SDK `ex` 尚未返回时也显示官方认证图标；生产对话
   标题复用 `OfficialAccountNameLabel` 和共享 18dp 认证资源，与联系人、会话
   列表使用同一身份规则，普通同名好友不显示认证。助理保持现有交互能力。
-- 登录沿用 `userID` / `imToken` 和现有 SDK，API `http://8.217.191.236:10002`、
-  WebSocket `ws://8.217.191.236:10001`。助理入口、名片选择、附件和出图均不调用
+- 登录沿用 `userID` / `imToken` 和现有 SDK，API 和 WebSocket 分别读取当前节点的
+  `Config.imApiUrl`、`Config.imWsUrl`。助理入口、名片选择、附件和出图均不调用
   Chat HTTP 接口，不用 `chatToken` 认证助理。
 - 「我的」入口通过 SDK `getOneConversation(sourceID: 'assistant', sessionType: 1)`
   打开会话，SDK 决定会话 ID（例如 `si_assistant_im_a`）。好友关系仍由服务端补齐，
@@ -32,6 +32,52 @@
 - 收到的 101 原文／失败提示、102 图片复用普通消息渲染。AI 文本使用已有
   Markdown 展示，图片预览、长按复制、收藏、引用、多选、已读和失败重试继续由
   共用消息组件处理。服务端的记忆隔离、消息合并和 60 秒出图超时不在客户端重做。
+
+## SDK 流式回复与诊断
+
+- 主输入区点击发送后，先在消息列表显示临时「正在回复…」气泡，再创建或发送
+  SDK 消息；文本、暂存名片、附件及生成图片指令共用这一发送流程。连续尚未收到
+  回复的发送合并为一个等待气泡，每次发送拥有独立取消 token。首个新流继承气泡
+  的稳定 `presentationID`，首段连续非空正文到达后原气泡切换为 Markdown；首片
+  为空或乱序时继续显示等待。等待和在线正文不写入 SDK 消息历史或本地历史缓存。
+- 普通完整文本或图片回复也结束本地等待，typing 不结束。已知旧流的后续分片或
+  最终回复、历史同步均不会清除较新的等待。发送未成功时只取消本次 token；同批
+  已有附件成功发出或较早发送仍在等回复时保留有效等待。失败 SDK 消息和可编辑
+  输入沿用现有恢复能力，页面关闭释放全部等待和分片，账号失效后的异步发送不再
+  修改新账号。存在等待或分片气泡时抑制页底重复的思考提示。
+- 这是即时发送反馈，不缩短模型首段生成或上游推送等待，不人为延迟真实分片或
+  制造逐字播放。表情、收藏确认发送及失败重试开始实际 SDK 投递到助理时，也通过
+  共享 `ChatDeliveryController` 创建等待 token，与主输入区提前创建的等待合并，
+  不增加重复气泡。完成钩子在投递失败或账号失效时取消对应 token；当前会话及
+  真实投递目标必须同时为 `assistant`，转发到其他用户或群不创建助理等待。
+- 分片使用 `contentType=110`、`customElem.description='assistantStream'`、
+  `isOnlineOnly=true`；`customElem.data` 是 JSON 字符串，包含非空 `streamID`、
+  从 0 连续递增的整数 `index`、新增文字 `text` 和布尔 `end`。末片 `end=true`。
+  兼容 Go `omitempty` 省略零值：缺少 `index` 视为 0，缺少 `end` 视为 false；
+  显式 null、错误类型、负索引以及缺少 `streamID` 或 `text` 仍拒绝解析。
+  这是协议兼容处理，不代表已经确认线上后端省略字段或确定了真机等待完整回复的原因。
+- SDK 的在线回调将分片转给当前助理单聊。接收前检查 `sessionType=1`、发送者
+  `assistant`、当前 IM 收件人及路由所属账号和登录凭据。分片按索引拼接并去重，
+  不等待末片就更新非空气泡，不进入 SDK 消息历史、未读数或通知。
+- 最终回复为正常保存历史的 `contentType=101` 消息，`ex` 是携带同一 `streamID`
+  的 JSON 字符串。最终消息替换临时气泡并屏蔽迟到分片；重连后同步到的最终历史
+  也会执行替换。在线分片不重放，丢失前片时后片等待连续索引，完整最终消息负责
+  恢复正文。日期定位或最新窗口加载中发送时，本地请求的等待与实时正文即时显示
+  在历史列表下方的受限反馈区，仍不写入历史或改写 SDK 历史窗口。
+  未由本地请求产生的旧流在该窗口继续隐藏，回到最新后恢复正常流式列表。
+- `streaming/diagnostics/assistant_stream_log.dart` 输出 `[AI流式]` 阶段摘要：
+  `submit`（发起发送）、`receive`（SDK 接收）、`route`（路由过滤）、`invalid`
+  （载荷拒绝）、`accept`（状态接收）、`bubble_build`（非空气泡构建）、`final`
+  （完整消息）。摘要仅记录时间、类型、字段存在性、索引、字符长度、身份匹配
+  布尔值和流 ID 摘要，不输出正文、原始载荷、账号 ID 或 Token。SDK 账号尚不可读时
+  收件人匹配记录为 null，不阻断消息投递。接收日志也覆盖来自助理但消息类型或
+  description 不匹配的外壳，仅记录是否匹配，不输出 description 原文。
+  接收、路由分别记录每条流在该阶段的首次到达，包括先收到非零索引的情况；
+  后续与状态日志一样抽样记录索引 0、每 10 片及末片。气泡构建日志按字符长度
+  档位去重。默认仅调试构建开启，`AI_STREAM_DIAGNOSTICS` 可显式控制。
+- 单元和页面测试验证的是客户端协议及展示逻辑。真实模型 → 助理服务 → OpenIM
+  → 手机的逐段回复效果仍需对照同一轮分片和最终消息日志联调，不能由测试通过
+  推定真机流式已生效。
 
 ## 参考与当前范围
 
@@ -57,6 +103,7 @@ OpenIM 的主题、生命周期和数据入口适配；使用 Apache-2.0，完�
 | `ai_assistant_chat_page.dart` | 生产 SDK 会话组合、对话内搜索、焦点与页面布局 |
 | `navigation/official_account_resolver.dart` | 官方账号识别，供所有聊天入口统一路由 |
 | `protocol/ai_openim_payload.dart` | SDK 自定义消息载荷和文档限制 |
+| `streaming/` | 本地发送等待、在线分片拼接、最终回复替换和阶段诊断 |
 | `presentation/composer/ai_openim_composer.dart` | SDK 发送、工具、附件暂存、收藏与表情入口 |
 | `presentation/messages/ai_openim_message_tile.dart` | SDK 消息的 AI 头像、Markdown 和指令显示 |
 | `ai_assistant_page.dart` | 旧视觉预览页，不由生产入口创建 |
@@ -108,6 +155,12 @@ ValueNotifier，每 32ms 合并发布，普通流式更新只重建当前回复�
 - `test/pages/ai_assistant/navigation/`：官方账号识别、所有聊天入口、账号切换保护
 - `test/pages/ai_assistant/openim/`：真实 ChatLogic 的 SDK 收发、正在输入、普通图片、
   亮暗主题、大字体、键盘和安全区；可通过 `AI_ASSISTANT_PREVIEW_DIR` 导出预览
+- `test/pages/ai_assistant/openim/ai_assistant_reply_wait_page_test.dart`：主发送按钮
+  即时等待、首段原气泡切换、失败恢复、普通结果以及关闭和账号隔离
+- `test/pages/ai_assistant/streaming/`：分片顺序与去重、零值兼容、等待 token 隔离、
+  稳定显示 ID、历史不消除新等待、清理与诊断摘要
+- `test/pages/chat/messages/chat_delivery_controller_test.dart`：共享 SDK 投递、
+  转发目标、成功失败状态及关闭/账号切换后的完成处理
 - `test/pages/ai_assistant/protocol/`：出图／群名片载荷和 20 MiB 文档限制
 - `test/pages/ai_assistant/data/`：协议、上传、输入校验和流解析
 - `test/pages/ai_assistant/controller/`：服务关闭、停止、迟到响应和生命周期

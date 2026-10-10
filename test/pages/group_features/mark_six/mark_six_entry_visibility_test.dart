@@ -149,7 +149,9 @@ void main() {
     seed(2);
     await tester.pumpAndSettle();
     expect(find.byKey(_handle), findsNothing);
-    expect(api.calls, isEmpty);
+    expect(api.calls, hasLength(1));
+    expect(api.calls.single.path, '/me/robot/groups/group-test');
+    expect(api.calls.single.headers, isEmpty);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();

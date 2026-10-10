@@ -257,8 +257,9 @@ class UserProfilePanelPage extends StatelessWidget {
 
   Widget _header(BuildContext context, {bool compact = false}) {
     final user = logic.userInfo.value;
-    final signature = OpenIMProfileService.signatureFromEx(user.ex).trim();
-    final nickname = (user.nickname ?? '').trim();
+    final signature =
+        graphemeTrim(OpenIMProfileService.signatureFromEx(user.ex));
+    final nickname = graphemeTrim(user.nickname ?? '');
     return UserProfileIdentity(
       key: const ValueKey('user_profile_identity'),
       compact: compact,

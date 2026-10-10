@@ -608,6 +608,7 @@ void main() {
       (size: const Size(375, 812), dark: true, scale: 1.0, keyboard: 0.0),
       (size: const Size(844, 390), dark: false, scale: 1.0, keyboard: 0.0),
       (size: const Size(1000, 800), dark: false, scale: 1.0, keyboard: 0.0),
+      (size: const Size(1000, 800), dark: true, scale: 1.0, keyboard: 0.0),
       (size: const Size(375, 812), dark: true, scale: 2.0, keyboard: 280.0),
     ];
     for (final scenario in scenarios) {
@@ -626,7 +627,8 @@ void main() {
         expect(rect.bottom,
             lessThanOrEqualTo(scenario.size.height - scenario.keyboard + 1));
         final field = find.byType(EditableText).first;
-        expect(Theme.of(tester.element(field)).brightness, Brightness.light);
+        expect(Theme.of(tester.element(field)).brightness,
+            scenario.dark ? Brightness.dark : Brightness.light);
         expect(tester.takeException(), isNull);
       }
     }

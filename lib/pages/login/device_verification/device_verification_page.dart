@@ -289,8 +289,10 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
               key: const ValueKey('device-verification-send'),
               onPressed: _canSend ? _sendCode : null,
               style: TextButton.styleFrom(
-                foregroundColor: AuthReferenceTokens.brand500,
-                disabledForegroundColor: AuthReferenceTokens.ink300,
+                foregroundColor: AuthReferenceTokens.color(
+                    context, AuthReferenceTokens.brand500),
+                disabledForegroundColor: AuthReferenceTokens.color(
+                    context, AuthReferenceTokens.ink300),
                 padding: EdgeInsets.zero,
                 minimumSize: const Size(0, AuthReferenceTokens.tapTarget),
                 textStyle: AuthReferenceTokens.codeAction.copyWith(

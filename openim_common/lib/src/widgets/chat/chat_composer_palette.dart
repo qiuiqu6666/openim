@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import '../../res/app_tokens.dart';
+import '../../res/typography/platform_text_fonts.dart';
 
 /// Colors from 99chat's production DefTheme, resolved with the active theme.
 Color chatComposerSurface(BuildContext context) => ChatComposerTokens.surface(
@@ -22,25 +22,10 @@ Color chatComposerHint(BuildContext context) => AppTokens.textSecondary(
 /// 99chat's input typography does not inherit Material body/label spacing.
 /// Mobile uses the system font; desktop uses the same CJK UI font fallbacks.
 TextStyle chatComposerTextStyle(BuildContext context, {bool hint = false}) {
-  final platform = Theme.of(context).platform;
-  final fontFamily = kIsWeb
-      ? 'NotoSansSC'
-      : switch (platform) {
-          TargetPlatform.windows => 'Microsoft YaHei UI',
-          TargetPlatform.macOS => 'PingFang SC',
-          TargetPlatform.linux => 'Noto Sans CJK SC',
-          _ => null,
-        };
-  final fallback = switch (platform) {
-    TargetPlatform.windows => const ['Microsoft YaHei', 'Segoe UI'],
-    TargetPlatform.macOS => const ['PingFang TC', 'Hiragino Sans GB'],
-    TargetPlatform.linux => const ['Noto Sans CJK TC', 'WenQuanYi Micro Hei'],
-    _ => null,
-  };
   return TextStyle(
     inherit: false,
-    fontFamily: fontFamily,
-    fontFamilyFallback: kIsWeb ? null : fallback,
+    fontFamily: PlatformTextFonts.familyOf(context),
+    fontFamilyFallback: PlatformTextFonts.fallbackOf(context),
     fontSize: ChatComposerTokens.fontSize,
     height: ChatComposerTokens.lineHeight,
     fontWeight: FontWeight.w400,

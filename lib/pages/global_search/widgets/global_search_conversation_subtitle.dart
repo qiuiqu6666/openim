@@ -14,8 +14,8 @@ class GlobalSearchConversationSubtitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final draft = conversationDraftText(conversation.draftText)?.trim();
-    if (draft == null || draft.isEmpty) {
+    final draft = conversationDraftText(conversation.draftText) ?? '';
+    if (graphemeTrim(draft).isEmpty) {
       return Text(
         conversation.isGroupChat ? StrRes.globalSearchGroup : StrRes.singleChat,
         maxLines: 2,

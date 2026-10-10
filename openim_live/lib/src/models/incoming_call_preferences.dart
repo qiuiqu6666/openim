@@ -6,6 +6,8 @@ class IncomingCallPreferences {
     this.ringtoneEnabled = true,
   });
 
+  /// Retained for settings compatibility with 99chat. In-app invitations always
+  /// open the full-screen call surface; this value never selects a sheet.
   final bool quickAnswerPopup;
   final bool ringtoneEnabled;
 

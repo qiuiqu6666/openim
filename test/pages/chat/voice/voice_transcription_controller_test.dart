@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/voice/voice_to_text_service.dart';
 import 'package:openim/pages/chat/voice/voice_transcription_controller.dart';
 
+import '../../../support/unicode/unicode_samples.dart';
+
 void main() {
   Message message([String id = 'voice']) => Message(
       clientMsgID: id,
@@ -21,6 +23,30 @@ void main() {
       hasReadTime: readTime,
       burnDuration: burnDuration,
     );
+
+  for (final sample in unicodeSamples) {
+    test('transcription cache preserves ${sample.name} across hydration',
+        () async {
+      final raw = ' \u0301${sample.text}\n\t ';
+      final value = message();
+      final controller = VoiceTranscriptionController(
+          transcribe: (Message _, {CancelToken? cancelToken}) async => raw);
+      addTearDown(controller.dispose);
+      await controller.transcribe(value);
+      expect(controller.stateFor(value).text, raw);
+      expect(jsonDecode(value.localEx!)['voiceToText'], raw);
+      final restored = VoiceTranscriptionController(
+          transcribe: (Message _, {CancelToken? cancelToken}) async =>
+              throw StateError('Cached text must not be transcribed again'));
+      addTearDown(restored.dispose);
+      expect(restored.stateFor(value).text, raw);
+      await restored.toggle(value);
+      expect(restored.stateFor(value).expanded, isFalse);
+      expect(restored.stateFor(value).text!.codeUnits, raw.codeUnits);
+      expect(jsonDecode(value.localEx!)['voiceToText'], raw);
+      expect(jsonDecode(value.localEx!)['unrelated'], 42);
+    });
+  }
 
   test('cached successful text is hydrated and toggles without recognition',
       () async {
@@ -67,12 +93,12 @@ void main() {
     answer.complete(' result ');
     await first;
     expect(requests, 1);
-    expect(controller.stateFor(value).text, 'result');
+    expect(controller.stateFor(value).text, ' result ');
     expect(controller.stateFor(value).loading, isFalse);
     expect(jsonDecode(value.localEx!), {
       'voiceHeard': true,
       'unrelated': 43,
-      'voiceToText': 'result',
+      'voiceToText': ' result ',
       'voiceToTextDisplayState': 'expanded',
     });
     expect(value.isRead, isFalse);

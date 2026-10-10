@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:openim_live/openim_live.dart';
 
 import '../im_callback.dart';
@@ -18,6 +16,7 @@ import '../../services/account_privilege/account_privilege_runtime.dart';
 import '../session/session_request_errors.dart';
 import '../device_sync/device_sync_runtime.dart';
 import '../../services/favorite_runtime.dart';
+import '../../pages/ai_assistant/streaming/diagnostics/assistant_stream_log.dart';
 import '../../pages/mine/secondary/calls/data/call_records_runtime.dart';
 import '../../pages/chat/calling/preferences/call_notification_preferences.dart';
 import '../../pages/chat/calling/preferences/call_notification_preference_binding.dart';
@@ -139,18 +138,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       ..setUploadLogsListener(
           OnUploadLogsListener(onUploadProgress: uploadLogsProgress))
       ..userManager.setUserListener(OnUserListener(
-          onSelfInfoUpdated: (u) {
-            selfInfoUpdated(u);
-
-            userInfo.update((val) {
-              val?.nickname = u.nickname;
-              val?.faceURL = u.faceURL;
-
-              val?.remark = u.remark;
-              val?.ex = u.ex;
-              val?.globalRecvMsgOpt = u.globalRecvMsgOpt;
-            });
-          },
+          onSelfInfoUpdated: selfInfoUpdated,
           onUserStatusChanged: userStausChanged))
       ..messageManager.setAdvancedMsgListener(OnAdvancedMsgListener(
         onMsgDeleted: messageDeleted,
@@ -159,6 +147,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
         onNewRecvMessageRevoked: recvMessageRevoked,
         onRecvOfflineNewMessage: recvOfflineMessage,
         onRecvOnlineOnlyMessage: (msg) {
+          AssistantStreamLog.received(msg,
+              source: 'online', hasReceiver: onRecvNewMessage != null);
           if (msg.contentType == MessageType.custom &&
               msg.customElem?.description == 'assistantStream') {
             // Stream deltas are transient SDK data, never business notices.
@@ -223,9 +213,6 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
           },
           onSyncServerFinish: (reInstall) {
             imSdkStatus(IMSdkStatus.syncEnded, reInstall: reInstall ?? false);
-            if (Platform.isAndroid) {
-              Permissions.request([Permission.systemAlertWindow]);
-            }
           },
           onSyncServerStart: (reInstall) {
             imSdkStatus(IMSdkStatus.syncStart, reInstall: reInstall ?? false);
@@ -269,6 +256,21 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   }
 
   Future login(String userID, String token) async {
+    // The SDK reuses an already logged-in session without another connection
+    // callback. Do not replace that session's last real connection/sync state.
+    // Logged-in alone is not proof of a live socket: preserve failures too.
+    final activeGeneration = _profileSessionGeneration;
+    final reusingSession = activeGeneration != null &&
+        _sessionQueue.isCurrent(activeGeneration) &&
+        _pendingLogout == null &&
+        _hasUserInfo &&
+        userInfo.value.userID == userID &&
+        OpenIM.iMManager.isLogined &&
+        OpenIM.iMManager.userID == userID &&
+        OpenIM.iMManager.token == token &&
+        DataSp.userID == userID &&
+        DataSp.imToken == token;
+    if (!reusingSession) imSdkStatus(IMSdkStatus.connecting);
     AccountPrivilegeRuntime.store.reset();
     _profileSessionGeneration = null;
     _notificationProfileGeneration = null;
@@ -291,10 +293,13 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
           startTimeout: _loginStartTimeout,
           prepare: () async {
             // Include retrying a failed native cleanup in the preparation deadline.
-            // The SDK otherwise reuses an already logged-in native session.
-            if (OpenIM.iMManager.isLogined &&
-                (OpenIM.iMManager.userID != userID ||
-                    OpenIM.iMManager.token != token)) {
+            // Hot restart clears Dart login/connection state while the native
+            // SDK can remain logged in. Replace that orphaned session so login
+            // produces real connection/sync callbacks for the new Dart owner.
+            // _logoutSafely skips logout when the native SDK is already out.
+            if (!OpenIM.iMManager.isLogined ||
+                OpenIM.iMManager.userID != userID ||
+                OpenIM.iMManager.token != token) {
               await _logoutSafely();
             }
           });
@@ -328,6 +333,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   Future<void>? _pendingLogout;
 
   Future<void> logout() {
+    imSdkStatus(IMSdkStatus.connecting);
     ActivityRuntime.instance.resetConnection();
     AccountPrivilegeRuntime.store.reset();
     _profileSessionGeneration = null;
@@ -369,6 +375,29 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
 
   void _queryAtAllTag() async {
     atAllTag = OpenIM.iMManager.conversationManager.atAllTag;
+  }
+
+  @override
+  void selfInfoUpdated(UserInfo user) {
+    final generation = _profileSessionGeneration;
+    if (isClosed ||
+        !_hasUserInfo ||
+        generation == null ||
+        !_sessionQueue.isCurrent(generation) ||
+        user.userID?.isNotEmpty != true ||
+        user.userID != OpenIM.iMManager.userID ||
+        user.userID != DataSp.userID ||
+        user.userID != userInfo.value.userID) {
+      return;
+    }
+    super.selfInfoUpdated(user);
+    userInfo.update((value) {
+      value?.nickname = user.nickname;
+      value?.faceURL = user.faceURL;
+      value?.remark = user.remark;
+      value?.ex = user.ex;
+      value?.globalRecvMsgOpt = user.globalRecvMsgOpt;
+    });
   }
 
   /// Login, foreground and feature entries share the authenticated full profile.

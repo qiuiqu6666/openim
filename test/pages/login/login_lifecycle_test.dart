@@ -309,70 +309,128 @@ void main() {
     logic.onClose();
   });
 
-  for (final remember in [true, false]) {
-    testWidgets(
-        'successful login then local logout restores account and respects remember=$remember',
-        (tester) async {
-      await tester.pumpWidget(_app());
-      final first = await _initLogin(tester);
-      first.phoneCtrl.text = '13800138000';
-      first.pwdCtrl.text = 'remembered-password';
-      await tester.runAsync(() async {
-        await first.toggleRememberPassword(remember);
-        final login = first.login();
-        await _flushUntil(() => adapter.requests == 1);
-        adapter.success();
-        await login;
-      });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(im.logins, 1);
-      expect(find.text('main ready'), findsOneWidget);
-      expect(DataSp.userID, 'self');
-      first.onClose();
+  for (final target in [
+    (input: '13800138000', identity: '13800138000', type: LoginType.phone),
+    (
+      input: 'user@example.com',
+      identity: 'user@example.com',
+      type: LoginType.email
+    ),
+    (input: '@q14gkm5swv', identity: '@q14gkm5swv', type: LoginType.account),
+    (input: '@13800138000', identity: '@13800138000', type: LoginType.account),
+    (input: 'username', identity: 'username', type: LoginType.account),
+  ]) {
+    for (final remember in [true, false]) {
+      testWidgets(
+          'successful login then local logout restores ${target.input} and respects remember=$remember',
+          (tester) async {
+        await tester.pumpWidget(_app());
+        final first = await _initLogin(tester);
+        first.phoneCtrl.text = target.input;
+        first.pwdCtrl.text = 'remembered-password';
+        await tester.runAsync(() async {
+          await first.toggleRememberPassword(remember);
+          final login = first.login();
+          await _flushUntil(() => adapter.requests == 1);
+          final payload = adapter.lastRequest!.data as Map;
+          final identityKey = switch (target.type) {
+            LoginType.phone => 'phoneNumber',
+            LoginType.email => 'email',
+            LoginType.account => 'account',
+          };
+          expect(payload[identityKey], target.identity);
+          adapter.success();
+          await login;
+        });
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(im.logins, 1);
+        expect(find.text('main ready'), findsOneWidget);
+        expect(DataSp.userID, 'self');
+        first.onClose();
 
-      // Local logout clears session tokens, while the remembered-login store
-      // survives both the old controller and the new login-page lifetime.
-      await tester.runAsync(() async {
-        await DataSp.removeLoginCertificate();
+        // Local logout clears session tokens, while the remembered-login store
+        // survives both the old controller and the new login-page lifetime.
+        await tester.runAsync(() async {
+          await DataSp.removeLoginCertificate();
+        });
+        OpenIM.iMManager.userID = '';
+        expect(DataSp.userID, isNull);
+        expect(DataSp.chatToken, isNull);
+        expect(DataSp.imToken, isNull);
+        final returned = await _initLogin(tester);
+        await tester.runAsync(() => _flushUntil(() => remember
+            ? returned.pwdCtrl.text == 'remembered-password'
+            : returned.rememberPassword.value == false));
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: Column(children: [
+              TextField(
+                  key: const ValueKey('returned-login-account'),
+                  controller: returned.phoneCtrl),
+              TextField(
+                  key: const ValueKey('returned-login-password'),
+                  controller: returned.pwdCtrl,
+                  obscureText: true),
+            ]),
+          ),
+        ));
+        expect(returned.phoneCtrl.text, target.input);
+        expect(returned.loginType.value, target.type);
+        if (target.type == LoginType.account) {
+          expect(returned.account, target.identity);
+        }
+        expect(
+            returned.pwdCtrl.text, remember ? 'remembered-password' : isEmpty);
+        expect(returned.rememberPassword.value, remember);
+        expect(returned.enabled.value, remember);
+        final passwordField = tester.widget<TextField>(
+            find.byKey(const ValueKey('returned-login-password')));
+        expect(passwordField.controller!.text,
+            remember ? 'remembered-password' : isEmpty);
+        expect(passwordField.obscureText, isTrue);
+        final stored = await _loadCredentials(tester);
+        expect(stored.account, target.input);
+        expect(stored.password, remember ? 'remembered-password' : isNull);
+        expect(stored.rememberPassword, remember);
+        await tester.pumpWidget(const SizedBox.shrink());
+        returned.onClose();
       });
-      OpenIM.iMManager.userID = '';
-      expect(DataSp.userID, isNull);
-      expect(DataSp.chatToken, isNull);
-      expect(DataSp.imToken, isNull);
-      final returned = await _initLogin(tester);
-      await tester.runAsync(() => _flushUntil(() => remember
-          ? returned.pwdCtrl.text == 'remembered-password'
-          : returned.rememberPassword.value == false));
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: Column(children: [
-            TextField(
-                key: const ValueKey('returned-login-account'),
-                controller: returned.phoneCtrl),
-            TextField(
-                key: const ValueKey('returned-login-password'),
-                controller: returned.pwdCtrl,
-                obscureText: true),
-          ]),
-        ),
-      ));
-      expect(returned.phoneCtrl.text, '13800138000');
-      expect(returned.loginType.value, LoginType.phone);
-      expect(returned.pwdCtrl.text, remember ? 'remembered-password' : isEmpty);
-      expect(returned.rememberPassword.value, remember);
-      expect(returned.enabled.value, remember);
-      final passwordField = tester.widget<TextField>(
-          find.byKey(const ValueKey('returned-login-password')));
-      expect(passwordField.controller!.text,
-          remember ? 'remembered-password' : isEmpty);
-      expect(passwordField.obscureText, isTrue);
-      final stored = await _loadCredentials(tester);
-      expect(stored.account, '13800138000');
-      expect(stored.password, remember ? 'remembered-password' : isNull);
-      expect(stored.rememberPassword, remember);
-      await tester.pumpWidget(const SizedBox.shrink());
-      returned.onClose();
+    }
+  }
+
+  for (final record in [
+    (saved: 'q14gkm5swv', original: '@q14gkm5swv', display: '@q14gkm5swv'),
+    (saved: 'q14gkm5swv', original: '@other-account', display: 'q14gkm5swv'),
+    (saved: '@q14gkm5swv', original: '@q14gkm5swv', display: '@q14gkm5swv'),
+    (saved: '13800138000', original: '', display: '@13800138000'),
+    (saved: 'user@example.com', original: '', display: '@user@example.com'),
+  ]) {
+    testWidgets(
+        'restores account ${record.saved} with local input ${record.original}',
+        (tester) async {
+      FlutterSecureStorage.setMockInitialValues({
+        AuthCredentialsStore.credentialsKey: jsonEncode({
+          'account': record.saved,
+          'areaCode': '+86',
+          'loginType': LoginType.account.rawValue,
+          'password': 'remembered-password',
+        }),
+      });
+      await tester.runAsync(() async {
+        await DataSp.putLoginAccount({
+          'phoneNumber': record.original,
+          'areaCode': '+86',
+          'loginType': LoginType.account.rawValue,
+        });
+      });
+      final logic = await _initLogin(tester);
+      await tester.runAsync(
+          () => _flushUntil(() => logic.pwdCtrl.text == 'remembered-password'));
+      expect(logic.phoneCtrl.text, record.display);
+      expect(logic.loginType.value, LoginType.account);
+      expect(logic.account, record.display);
+      logic.onClose();
     });
   }
 
@@ -510,10 +568,10 @@ void main() {
     (value: 'user@example.com', identity: 'user@example.com', key: 'email'),
     (value: '12345', identity: '12345', key: 'account'),
     (value: 'username', identity: 'username', key: 'account'),
-    (value: ' @username ', identity: 'username', key: 'account'),
-    (value: '@ username', identity: 'username', key: 'account'),
-    (value: '@@123456', identity: '123456', key: 'account'),
-    (value: '@13800138000', identity: '13800138000', key: 'account'),
+    (value: ' @username ', identity: '@username', key: 'account'),
+    (value: '@ username', identity: '@ username', key: 'account'),
+    (value: '@@123456', identity: '@@123456', key: 'account'),
+    (value: '@13800138000', identity: '@13800138000', key: 'account'),
   ]) {
     testWidgets('password login dispatches ${target.key} for ${target.value}',
         (tester) async {
@@ -533,7 +591,8 @@ void main() {
         adapter.success();
         await login;
         expect(logic.phoneCtrl.text, target.value);
-        expect((await AuthCredentialsStore().load()).account, target.identity);
+        expect(
+            (await AuthCredentialsStore().load()).account, target.value.trim());
       });
       logic.onClose();
     });

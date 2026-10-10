@@ -21,6 +21,8 @@ class ChatDeliveryController {
     String? accountID,
     String Function()? currentAccountID,
     Future<Message> Function(Message, FavoriteTarget)? sendRaw,
+    this.onDeliveryStarted,
+    this.onDeliveryFinished,
   })  : _conversation = conversation,
         _isClosed = isClosed,
         _groupStatus = groupStatus,
@@ -38,6 +40,9 @@ class ChatDeliveryController {
   final String _accountID;
   final String Function() _currentAccountID;
   final Future<Message> Function(Message, FavoriteTarget) _sendRaw;
+  // Presentation hooks share delivery across text, attachments and retry.
+  final Object? Function(Message, FavoriteTarget)? onDeliveryStarted;
+  final void Function(Object?, Message)? onDeliveryFinished;
   final sendStatusSub = PublishSubject<MsgStreamEv<bool>>();
   bool _closed = false;
   bool get isClosed =>
@@ -120,14 +125,13 @@ class ChatDeliveryController {
 
     final recvUserID = useOuterValue ? userId : userID;
     message.recvID = recvUserID;
-
-    return _sendRaw(
-        message,
-        FavoriteTarget(
-          conversationID: conversationInfo.conversationID,
-          userID: recvUserID,
-          groupID: useOuterValue ? groupId : groupID,
-        )).then((value) {
+    final target = FavoriteTarget(
+      conversationID: conversationInfo.conversationID,
+      userID: recvUserID,
+      groupID: useOuterValue ? groupId : groupID,
+    );
+    final presentation = onDeliveryStarted?.call(message, target);
+    return _sendRaw(message, target).then((value) {
       if (favoriteResult != null && value.clientMsgID != message.clientMsgID) {
         favoriteResult(FavoriteSendResult(
           status: FavoriteSendStatus.unknown,
@@ -156,6 +160,7 @@ class ChatDeliveryController {
       }
       favoriteResult?.call(result);
     }).whenComplete(() {
+      onDeliveryFinished?.call(presentation, message);
       if (!isClosed && account == _currentAccountID()) _completed();
     });
   }

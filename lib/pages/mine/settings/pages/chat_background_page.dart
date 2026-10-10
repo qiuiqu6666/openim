@@ -336,6 +336,7 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
           ),
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
           child: GridView.count(
+            padding: EdgeInsets.zero,
             crossAxisCount: 3,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -360,6 +361,7 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
           ),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
           child: GridView.builder(
+            padding: EdgeInsets.zero,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: _recommended.length,

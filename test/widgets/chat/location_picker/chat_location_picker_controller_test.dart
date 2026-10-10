@@ -33,7 +33,7 @@ class _PermissionPlatform extends GeolocatorPlatform {
 
 void main() {
   test(
-      'automatic reads never request permission; the 20s native failure and manual retry stay explicit',
+      'silent reads never request permission; the 20s native failure and explicit retry remain',
       () async {
     final previous = GeolocatorPlatform.instance;
     final platform = _PermissionPlatform();

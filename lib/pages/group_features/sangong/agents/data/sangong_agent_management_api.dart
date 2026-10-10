@@ -1,6 +1,7 @@
 import '../../../data/group_feature_api.dart';
 import '../../api/sangong_game_http.dart';
 import '../../api/sangong_v2_api.dart';
+import '../../utils/api_response_util.dart';
 
 /// Percentages remain decimal strings until the Go engine parses fixed units.
 String sangongRebateRate(String input) {
@@ -21,6 +22,23 @@ class SangongAgentManagementApi {
   final SangongGameHttp http;
   final bool agent;
   final SangongV2Api _api;
+
+  Future<String?> userAgentGroup(String imUserId) async {
+    final response = await http.requests.get(_api.path('user-agent-group'),
+        queryParameters: {'imUserId': imUserId});
+    final data = unwrapApiPayload(response.data);
+    if (data == null) return null;
+    final value = data is Map ? data['agentGroupId'] : data;
+    if (value == null) return null;
+    if (value is! String) throw const FormatException('用户代理群数据无效');
+    return value.isEmpty ? null : value;
+  }
+
+  Future<void> setUserAgentGroup(String imUserId, String groupId) async {
+    if (imUserId.trim().isEmpty) throw StateError('用户资料尚未确认');
+    await _api.command(
+        'user.agent_group', {'imUserId': imUserId, 'agentGroupId': groupId});
+  }
 
   Future<List<String>> groups() async {
     final data = await _api.read('agent-groups');

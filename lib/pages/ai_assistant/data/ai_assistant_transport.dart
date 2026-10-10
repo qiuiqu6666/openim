@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:characters/characters.dart';
 import 'package:dio/dio.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:uuid/uuid.dart';
@@ -101,8 +102,8 @@ class AiAssistantTransport {
     if (status == 403) return const AiAssistantException('FORBIDDEN', '你没有使用该功能的权限');
     if (status == 409) return const AiAssistantException('CHAT_BUSY', '上一条回复还在生成中');
     final resolvedCode = code != null && '$code' != '0' ? '$code' : status == 400 ? 'INVALID_INPUT' : 'MAIN_UNAVAILABLE';
-    final message = text is String && text.length <= 200 && !text.contains(RegExp(r'(https?://|goroutine|/tmp/|Bearer\s)'))
-        ? text.trim() : '';
-    return AiAssistantException(resolvedCode, message.isEmpty ? '助手暂时不可用，请稍后重试' : message);
+    final message = text is String && text.characters.length <= 200 && !text.contains(RegExp(r'(https?://|goroutine|/tmp/|Bearer\s)'))
+        ? text : '';
+    return AiAssistantException(resolvedCode, message.trim().isEmpty ? '助手暂时不可用，请稍后重试' : message);
   }
 }

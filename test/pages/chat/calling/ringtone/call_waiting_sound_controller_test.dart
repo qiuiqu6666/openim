@@ -14,7 +14,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:openim_common/src/utils/http_util.dart' as http;
 import 'package:openim_live/openim_live.dart';
 import 'package:openim_live/src/signaling/call_ringtone.dart';
-import 'package:openim_live/src/widgets/incoming_call/incoming_call_quick_answer_sheet.dart';
+import 'package:openim_live/src/widgets/incoming_call/incoming_call_view.dart';
 import 'package:openim_live/src/pages/single/widgets/controls.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -504,10 +504,9 @@ void main() {
       await tester.pump();
       expect(OpenIMLiveClient().isBusy, isTrue);
       await tester.pump();
-      expect(find.byType(IncomingCallQuickAnswerSheet),
-          quickAnswer ? findsOneWidget : findsNothing);
-      expect(find.byType(ControlsView),
-          quickAnswer ? findsNothing : findsOneWidget);
+      expect(find.byType(IncomingCallView), findsOneWidget);
+      expect(find.byType(BottomSheetView), findsNothing);
+      expect(find.byType(ControlsView), findsOneWidget);
       expect(player.starts, 0);
       live.invitationCancelled(_signal());
       await tester.pumpAndSettle();

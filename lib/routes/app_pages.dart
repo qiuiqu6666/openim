@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:openim_common/openim_common.dart';
 
 import '../widgets/theme_aware_page.dart';
 import '../pages/ai_assistant/ai_assistant_chat_page.dart';
@@ -7,6 +8,7 @@ import '../pages/mine/edit_my_info/edit_my_info_binding.dart';
 import '../pages/mine/edit_my_info/edit_my_info_view.dart';
 
 import '../pages/chat/chat_binding.dart';
+import '../pages/chat/chat_logic.dart';
 import '../pages/chat/chat_setup/chat_setup_binding.dart';
 import '../pages/chat/chat_setup/chat_setup_view.dart';
 import '../pages/chat/chat_view.dart';
@@ -101,7 +103,17 @@ class AppPages {
   }) =>
       GetPage(
         name: name,
-        page: () => ThemeAwarePage(builder: (_) => page()),
+        page: () {
+          if (name != AppRoutes.chat &&
+              name != AppRoutes.aiAssistantChat &&
+              name != AppRoutes.officialAccountChat) {
+            return ThemeAwarePage(builder: (_) => page());
+          }
+          // Resolve route-owned controllers once. An older route can rebuild
+          // after another chat/account has become the global current route.
+          final child = page();
+          return ThemeAwarePage(builder: (_) => child);
+        },
         binding: binding,
         preventDuplicates: preventDuplicates,
         transition: Transition.cupertino,
@@ -132,13 +144,15 @@ class AppPages {
     ),
     _pageBuilder(
       name: AppRoutes.aiAssistantChat,
-      page: () => const AiAssistantChatPage(),
+      page: () =>
+          AiAssistantChatPage(logic: Get.find<ChatLogic>(tag: GetTags.chat)),
       binding: ChatBinding(),
       preventDuplicates: false,
     ),
     _pageBuilder(
       name: AppRoutes.officialAccountChat,
-      page: () => const OfficialAccountPage(),
+      page: () =>
+          OfficialAccountPage(logic: Get.find<ChatLogic>(tag: GetTags.chat)),
       binding: ChatBinding(),
       preventDuplicates: false,
     ),

@@ -3,7 +3,6 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:search_keyword_text/search_keyword_text.dart';
 
 import '../select_contacts_logic.dart';
 import '../contact_card/contact_card_picker_tokens.dart';
@@ -96,11 +95,19 @@ class SelectContactsFromSearchPage extends StatelessWidget {
                             style: Styles.ts_0C1C33_17sp,
                           )
                         else
-                          SearchKeywordText(
+                          MatchTextView(
                             text: logic.parseNickname(info) ?? '',
-                            keyText: logic.searchCtrl.text.trim(),
-                            style: Styles.ts_0C1C33_17sp,
-                            keyStyle: Styles.ts_0089FF_17sp,
+                            textStyle: Styles.ts_0C1C33_17sp,
+                            matchTextStyle: Styles.ts_0089FF_17sp,
+                            patterns: [
+                              if (graphemeTrim(logic.searchCtrl.text)
+                                  .isNotEmpty)
+                                MatchPattern(
+                                  type: PatternType.custom,
+                                  pattern: RegExp.escape(
+                                      graphemeTrim(logic.searchCtrl.text)),
+                                ),
+                            ],
                           ),
                         if (readOnly) ...[
                           const SizedBox(

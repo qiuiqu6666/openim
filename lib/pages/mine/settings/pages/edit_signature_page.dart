@@ -45,7 +45,7 @@ class _EditSignaturePageState extends State<EditSignaturePage> {
   Future<void> _save() async {
     if (_saving) return;
     FocusManager.instance.primaryFocus?.unfocus();
-    final value = _controller.text.trim();
+    final value = graphemeTrim(_controller.text);
     if (!widget.service.isProfileBackendAvailable) {
       showUnavailableSettingsAction(
         context,
@@ -77,7 +77,8 @@ class _EditSignaturePageState extends State<EditSignaturePage> {
     final fill = AppTokens.surface(dark: dark);
     final text = AppTokens.textPrimary(dark: dark);
     final hint = AppTokens.textSecondary(dark: dark);
-    final changed = _controller.text.trim() != widget.store.profileSignature;
+    final changed =
+        graphemeTrim(_controller.text) != widget.store.profileSignature;
 
     return SettingsScaffold(
       title: settingsText(context, zh: '个性签名', en: 'Bio'),

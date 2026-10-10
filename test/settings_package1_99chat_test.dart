@@ -233,7 +233,7 @@ void main() {
   testWidgets('about page uses 99chat branding and supports embedded mode',
       (tester) async {
     await tester.pumpWidget(_host(const AboutUsPage(embedded: true)));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('99chat'), findsOneWidget);
     expect(find.text('© 2026 99chat'), findsOneWidget);
@@ -266,7 +266,7 @@ void main() {
   });
 
   testWidgets(
-      'node page keeps the two 99chat catalog entries without fake status',
+      'node page displays the configured endpoint without fake nodes',
       (tester) async {
     final store = SettingsDraftStore();
     addTearDown(store.dispose);
@@ -274,9 +274,12 @@ void main() {
       store: store,
       service: const StubSettingsService(),
     )));
-    expect(find.text('节点01(CN)'), findsOneWidget);
-    expect(find.text('节点02(US)'), findsOneWidget);
-    expect(find.text('未知'), findsNWidgets(2));
+    expect(find.text('节点01'), findsOneWidget);
+    expect(find.textContaining(Config.appAuthUrl), findsNothing);
+    expect(find.textContaining(Config.imApiUrl), findsNothing);
+    expect(find.textContaining(Config.imWsUrl), findsNothing);
+    expect(find.text('尚未测速'), findsOneWidget);
+    expect(find.text('未知'), findsOneWidget);
   });
 
   testWidgets(
@@ -464,8 +467,8 @@ void main() {
       embedded: true,
     )));
     expect(find.byType(AppBar), findsNothing);
-    expect(find.text('节点01(CN)'), findsOneWidget);
-    expect(find.text('节点02(US)'), findsOneWidget);
+    expect(find.text('节点01'), findsOneWidget);
+    expect(find.textContaining(Config.appAuthUrl), findsNothing);
   });
 
   test('message sound picker previews selected 99chat sound asset', () {

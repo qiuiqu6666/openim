@@ -75,6 +75,7 @@ class ProfilePanelFixture extends GetxController
       !isMyself &&
       !isFriendship &&
       hasActiveGroupMemberContext &&
+      (!isGroupMemberPage || !notAllowAddGroupMemberFriend.value) &&
       ((isGroupMemberPage &&
               (iAmOwner.value || iHaveAdminOrOwnerPermission.value)) ||
           (isAllowAddFriend &&

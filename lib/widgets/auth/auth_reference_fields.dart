@@ -14,19 +14,20 @@ EdgeInsets authFieldScrollPadding(BuildContext context) {
 /// The auth theme supplies the platform's font; field sizes share one token.
 TextStyle authFieldInputStyle(
   BuildContext context, {
-  Color color = AuthReferenceTokens.ink800,
+  Color? color,
 }) {
   return TextStyle(
     fontSize: AuthReferenceTokens.inputFontSize,
     fontWeight: FontWeight.w500,
-    color: color,
+    color:
+        color ?? AuthReferenceTokens.color(context, AuthReferenceTokens.ink800),
     height: 1.2,
   );
 }
 
 TextStyle authFieldHintStyle(BuildContext context) {
   return authFieldInputStyle(context).copyWith(
-    color: AuthReferenceTokens.hint,
+    color: AuthReferenceTokens.color(context, AuthReferenceTokens.hint),
     fontWeight: FontWeight.w400,
   );
 }
@@ -165,10 +166,11 @@ class _AuthTextFieldState extends State<AuthTextField> {
             constraints: const BoxConstraints(
                 minWidth: AuthReferenceTokens.tapTarget,
                 minHeight: AuthReferenceTokens.tapTarget),
-            icon: const Icon(
+            icon: Icon(
               Icons.cancel,
               size: 18,
-              color: AuthReferenceTokens.ink300,
+              color: AuthReferenceTokens.color(
+                  context, AuthReferenceTokens.ink300),
             ),
           )
         : null;
@@ -222,8 +224,10 @@ class _AuthTextFieldState extends State<AuthTextField> {
         onSubmitted: widget.onFieldSubmitted,
         scrollPadding: scrollPadding,
         style: inputStyle,
-        cursorColor: AuthReferenceTokens.brand500,
+        cursorColor:
+            AuthReferenceTokens.color(context, AuthReferenceTokens.brand500),
         decoration: authReferenceInputDecoration(
+          context: context,
           label: widget.label,
           hint: widget.hint,
           hintStyle: authFieldHintStyle(context),
@@ -376,7 +380,9 @@ class _AuthCompoundFieldState extends State<AuthCompoundField> {
 
   @override
   Widget build(BuildContext context) {
-    final inputStyle = widget.inputStyle ?? authFieldInputStyle(context);
+    final inputStyle = widget.inputStyle == null
+        ? authFieldInputStyle(context)
+        : AuthReferenceTokens.style(context, widget.inputStyle!);
     final scrollPadding = authFieldScrollPadding(context);
     return AuthFieldFrame(
       focused: _focusNode.hasFocus,
@@ -406,11 +412,15 @@ class _AuthCompoundFieldState extends State<AuthCompoundField> {
         onSubmitted: widget.onFieldSubmitted,
         scrollPadding: scrollPadding,
         style: inputStyle,
-        cursorColor: AuthReferenceTokens.brand500,
+        cursorColor:
+            AuthReferenceTokens.color(context, AuthReferenceTokens.brand500),
         decoration: authReferenceInputDecoration(
+          context: context,
           label: widget.label,
           hint: widget.hint,
-          hintStyle: widget.hintStyle ?? authFieldHintStyle(context),
+          hintStyle: widget.hintStyle == null
+              ? authFieldHintStyle(context)
+              : AuthReferenceTokens.style(context, widget.hintStyle!),
           focused: _focusNode.hasFocus,
           enabled: widget.enabled,
           errorText: widget.errorText,
@@ -426,7 +436,7 @@ class _AuthCompoundFieldState extends State<AuthCompoundField> {
                       child: widget.leading,
                     ),
                   ),
-                  _divider(),
+                  _divider(context),
                   const SizedBox(width: 12),
                 ]),
           suffix: !_showClear && widget.trailing == null
@@ -441,11 +451,13 @@ class _AuthCompoundFieldState extends State<AuthCompoundField> {
                         minWidth: AuthReferenceTokens.tapTarget,
                         minHeight: AuthReferenceTokens.tapTarget,
                       ),
-                      icon: const Icon(Icons.cancel,
-                          size: 18, color: AuthReferenceTokens.ink300),
+                      icon: Icon(Icons.cancel,
+                          size: 18,
+                          color: AuthReferenceTokens.color(
+                              context, AuthReferenceTokens.ink300)),
                     ),
                   if (widget.trailing != null) ...[
-                    _divider(),
+                    _divider(context),
                     SizedBox(
                       width: widget.trailingWidth ?? 120,
                       child: Padding(
@@ -460,9 +472,9 @@ class _AuthCompoundFieldState extends State<AuthCompoundField> {
     );
   }
 
-  Widget _divider() => Container(
+  Widget _divider(BuildContext context) => Container(
         width: 1,
         height: 22,
-        color: AuthReferenceTokens.ink150,
+        color: AuthReferenceTokens.color(context, AuthReferenceTokens.ink150),
       );
 }

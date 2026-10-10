@@ -193,19 +193,25 @@ class _AiAssistantChatPageState extends State<AiAssistantChatPage> {
                           ],
                         ),
                       ),
-                      Obx(() => _logic.peerTyping.value
-                          ? Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: AiMetrics.space16,
-                                  vertical: AiMetrics.space8),
-                              child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Semantics(
-                                      liveRegion: true,
-                                      child: AiThinkingCard(
-                                          dark: dark,
-                                          i18n: AiAssistantI18n.of(context)))))
-                          : const SizedBox.shrink()),
+                      ListenableBuilder(
+                        listenable: _logic.assistantStreams,
+                        builder: (context, _) => Obx(() => _logic
+                                    .peerTyping.value &&
+                                _logic.assistantStreams.snapshots.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AiMetrics.space16,
+                                    vertical: AiMetrics.space8),
+                                child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Semantics(
+                                        liveRegion: true,
+                                        child: AiThinkingCard(
+                                            dark: dark,
+                                            i18n:
+                                                AiAssistantI18n.of(context)))))
+                            : const SizedBox.shrink()),
+                      ),
                       if (_logic.messageSelection.active)
                         MessageSelectionActionBar(
                             controller: _logic.messageSelection),

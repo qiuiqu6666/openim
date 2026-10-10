@@ -9,7 +9,9 @@ import '../conversation/conversation_logic.dart';
 import '../chat/chat_setup/chat_history_search_page.dart';
 import 'global_search_logic.dart';
 import 'widgets/global_search_conversation_subtitle.dart';
+import 'widgets/global_search_contact_account.dart';
 import '../official_account/widgets/official_account_name_label.dart';
+import '../group_features/identity/group_name_label.dart';
 
 class GlobalSearchPage extends StatelessWidget {
   GlobalSearchPage({super.key});
@@ -109,12 +111,15 @@ class GlobalSearchPage extends StatelessWidget {
                       final name = friend.remark?.isNotEmpty == true
                           ? friend.remark!
                           : friend.nickname ?? friend.userID ?? '';
-                      return _row(
-                          name, friend.userID ?? '', friend.faceURL, false, () {
+                      return _row(name, '', friend.faceURL, false, () {
                         if (friend.userID == null) return;
                         Get.find<ConversationLogic>()
                             .toChat(userID: friend.userID, offUntilHome: false);
                       },
+                          subtitleWidget: GlobalSearchContactAccount(
+                            key: ValueKey(friend.userID),
+                            userID: friend.userID ?? '',
+                          ),
                           titleWidget: OfficialAccountNameLabel(
                             name: name,
                             userID: friend.userID,
@@ -130,7 +135,12 @@ class GlobalSearchPage extends StatelessWidget {
                                   groupID: group.groupID,
                                   sessionType: group.sessionType,
                                   offUntilHome: false);
-                            }))
+                            },
+                                titleWidget: GroupNameLabel(
+                                    name: group.groupName ?? group.groupID,
+                                    groupID: group.groupID,
+                                    ex: group.ex,
+                                    store: logic.source.groupFeatures)))
                         .toList());
                 section(
                     3,
@@ -144,12 +154,17 @@ class GlobalSearchPage extends StatelessWidget {
                             item.isGroupChat,
                             () => Get.find<ConversationLogic>().toChat(
                                 conversationInfo: item, offUntilHome: false),
-                            titleWidget: OfficialAccountNameLabel(
-                                name: item.showName ?? '',
-                                userID: item.userID,
-                                ex: item.ex,
-                                isSingleChat: item.conversationType ==
-                                    ConversationType.single),
+                            titleWidget: item.isGroupChat
+                                ? GroupNameLabel(
+                                    name: item.showName ?? '',
+                                    groupID: item.groupID,
+                                    store: logic.source.groupFeatures)
+                                : OfficialAccountNameLabel(
+                                    name: item.showName ?? '',
+                                    userID: item.userID,
+                                    ex: item.ex,
+                                    isSingleChat: item.conversationType ==
+                                        ConversationType.single),
                             subtitleWidget: GlobalSearchConversationSubtitle(
                                 conversation: item)))
                         .toList());

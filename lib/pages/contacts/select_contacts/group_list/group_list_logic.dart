@@ -1,13 +1,41 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
+import 'package:flutter/material.dart';
 
 import '../select_contacts_logic.dart';
 
 class SelectContactsFromGroupLogic extends GetxController {
-  final selectContactsLogic = Get.find<SelectContactsLogic>();
+  SelectContactsFromGroupLogic({
+    SelectContactsLogic? selection,
+    Future<List<GroupInfo>> Function()? loadGroups,
+  })  : selectContactsLogic = selection ?? Get.find<SelectContactsLogic>(),
+        _loadGroups =
+            loadGroups ?? OpenIM.iMManager.groupManager.getJoinedGroupList;
+
+  final SelectContactsLogic selectContactsLogic;
+  final Future<List<GroupInfo>> Function() _loadGroups;
   final allList = <GroupInfo>[].obs;
+  final searchController = TextEditingController();
+  final searchQuery = ''.obs;
   final loading = true.obs;
   final loadFailed = false.obs;
+  int _generation = 0;
+
+  List<GroupInfo> get visibleGroups => allList
+      .where((group) => '${group.groupName ?? ''} ${group.groupID}'
+          .toLowerCase()
+          .contains(searchQuery.value))
+      .toList(growable: false);
+
+  void searchGroups(String query) =>
+      searchQuery.value = query.trim().toLowerCase();
+
+  @override
+  void onClose() {
+    ++_generation;
+    searchController.dispose();
+    super.onClose();
+  }
 
   @override
   void onReady() {
@@ -16,16 +44,25 @@ class SelectContactsFromGroupLogic extends GetxController {
   }
 
   Future<void> loadGroups() async {
+    if (!selectContactsLogic.selectionCurrent) return;
+    final generation = ++_generation;
     loading.value = true;
     loadFailed.value = false;
     try {
-      final list = await OpenIM.iMManager.groupManager.getJoinedGroupList();
-      if (isClosed) return;
-      allList.assignAll(list);
+      final list = await _loadGroups();
+      if (isClosed ||
+          generation != _generation ||
+          !selectContactsLogic.selectionCurrent) {
+        return;
+      }
+      allList.assignAll({
+        for (final group in list)
+          if (group.groupID.isNotEmpty) group.groupID: group
+      }.values);
     } catch (_) {
-      if (!isClosed) loadFailed.value = true;
+      if (!isClosed && generation == _generation) loadFailed.value = true;
     } finally {
-      if (!isClosed) loading.value = false;
+      if (!isClosed && generation == _generation) loading.value = false;
     }
   }
 

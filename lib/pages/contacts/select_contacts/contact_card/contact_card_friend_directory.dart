@@ -8,13 +8,16 @@ List<ISUserInfo> buildContactCardFriendDirectory(
   Iterable<ISUserInfo> source, {
   String query = '',
   Map<String, int> starredAt = const {},
+  bool Function(ISUserInfo)? allows,
 }) {
   final keyword = query.trim().toLowerCase();
   final starred = <ISUserInfo>[];
   final regular = <ISUserInfo>[];
   final order = <String, int>{};
   for (final friend in source) {
-    if (!ContactSelectionPolicy.allows(friend)) continue;
+    if (!(allows?.call(friend) ?? ContactSelectionPolicy.allows(friend))) {
+      continue;
+    }
     final id = friend.userID ?? '';
     if (id.trim().isEmpty || order.containsKey(id)) continue;
     order[id] = order.length;

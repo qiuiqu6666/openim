@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:rxdart/rxdart.dart';
@@ -11,22 +9,6 @@ extension SubjectExt<T> on Subject<T> {
     if (!isClosed) sink.add(data);
 
     return data;
-  }
-}
-
-extension TextEdCtrlExt on TextEditingController {
-  void fixed63Length() {
-    addListener(() {
-      if (text.length == 63 && Platform.isAndroid) {
-        text += " ";
-        selection = TextSelection.fromPosition(
-          TextPosition(
-            affinity: TextAffinity.downstream,
-            offset: text.length - 1,
-          ),
-        );
-      }
-    });
   }
 }
 
@@ -44,7 +26,8 @@ extension StrExt on String {
   }
 
   String fixAutoLines() {
-    return Characters(this).join('\u{200B}');
+    // Flutter wraps text without modifying the user's Unicode sequence.
+    return this;
   }
 
   String get thumbnailAbsoluteString =>
@@ -105,7 +88,7 @@ class TextView extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.translucent,
         child: Text(
-          wordEllipsis ? data : data.replaceAll('', '\u200B'),
+          data,
           style: style,
           textAlign: textAlign,
           overflow: overflow,
@@ -171,10 +154,19 @@ extension IntExt on int {
 
 extension StringExt on String {
   String splitStringEveryNChars({int n = 3, String separator = ' '}) {
-    RegExp regExp = RegExp('.{1,$n}');
-    Iterable<Match> matches = regExp.allMatches(this);
-    List<String> parts = matches.map((match) => match.group(0)!).toList();
-
+    if (n <= 0) throw ArgumentError.value(n, 'n', 'Must be positive');
+    final parts = <String>[];
+    final group = StringBuffer();
+    var count = 0;
+    for (final character in characters) {
+      group.write(character);
+      if (++count == n) {
+        parts.add(group.toString());
+        group.clear();
+        count = 0;
+      }
+    }
+    if (count != 0) parts.add(group.toString());
     return parts.join(separator);
   }
 }

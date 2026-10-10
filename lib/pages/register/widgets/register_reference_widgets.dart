@@ -34,7 +34,8 @@ class RegistrationStepHeading extends StatelessWidget {
         child: Text(
           authText('$label · 第 $step/2 步', '$label · Step $step of 2'),
           key: ValueKey('registration-step-$step'),
-          style: AuthReferenceTokens.caption,
+          style:
+              AuthReferenceTokens.style(context, AuthReferenceTokens.caption),
         ),
       );
 }
@@ -50,21 +51,24 @@ class RegisterPasswordChecklist extends StatelessWidget {
         constraints: const BoxConstraints(
             minHeight: RegistrationReferenceTokens.ruleAreaMinHeight),
         child: Wrap(spacing: 10, runSpacing: 4, children: [
-          _rule(authText('8 位以上', '8+ characters'),
+          _rule(context, authText('8 位以上', '8+ characters'),
               RegisterPasswordRules.hasMinimumLength(password)),
-          _rule(authText('英文字母', 'Letters'),
+          _rule(context, authText('英文字母', 'Letters'),
               RegisterPasswordRules.hasLetter(password)),
-          _rule(authText('数字', 'Numbers'),
+          _rule(context, authText('数字', 'Numbers'),
               RegisterPasswordRules.hasDigit(password)),
         ]),
       );
 
-  Widget _rule(String text, bool ok) {
+  Widget _rule(BuildContext context, String text, bool ok) {
     final color = ok
-        ? RegistrationReferenceTokens.success
+        ? AuthReferenceTokens.isDark(context)
+            ? Color.lerp(RegistrationReferenceTokens.success,
+                Theme.of(context).colorScheme.onSurface, .25)!
+            : RegistrationReferenceTokens.success
         : showInvalid
-            ? AuthReferenceTokens.error
-            : AuthReferenceTokens.ink400;
+            ? AuthReferenceTokens.color(context, AuthReferenceTokens.error)
+            : AuthReferenceTokens.color(context, AuthReferenceTokens.ink400);
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(
         ok ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
@@ -84,10 +88,10 @@ class RegisterAgreement extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const style = TextStyle(
+    final style = TextStyle(
       fontSize: 13,
       height: 1.5,
-      color: AuthReferenceTokens.ink400,
+      color: AuthReferenceTokens.color(context, AuthReferenceTokens.ink400),
     );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -106,7 +110,8 @@ class RegisterAgreement extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 2),
                 child: Text(authText('《用户协议》', '《User Agreement》'),
                     style: style.copyWith(
-                      color: AuthReferenceTokens.link,
+                      color: AuthReferenceTokens.color(
+                          context, AuthReferenceTokens.link),
                       fontWeight: FontWeight.w600,
                     )),
               ),

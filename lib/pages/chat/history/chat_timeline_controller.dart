@@ -115,7 +115,7 @@ class ChatTimelineController {
           latest.contentType != MessageType.typing &&
           !ChatHistoryCache.isRemoved(accountID, latest.clientMsgID) &&
           !cached.any((m) => m.clientMsgID == latest.clientMsgID)) {
-        cached.add(latest);
+        cached.add(ChatHistoryCache.applyRevocation(accountID, latest));
       }
       if (cached.isNotEmpty) {
         messageList.value = ChatHistoryLoader.merge(cached);
@@ -138,7 +138,9 @@ class ChatTimelineController {
   void _replaceHistory(List<Message> messages, bool firstPage, bool refresh) {
     if (_closed) return;
     final offset = captureOffset();
-    messageList.value = messages;
+    messageList.value = messages
+        .map((m) => ChatHistoryCache.applyRevocation(accountID, m))
+        .toList();
     final visibleIDs = messages.map((m) => m.clientMsgID).toSet();
     final latest = messages
         .where((m) =>
@@ -231,6 +233,18 @@ class ChatTimelineController {
     removedIDs.add(id);
     messageList.removeWhere((m) => m.clientMsgID == id);
     scrollingCacheMessageList.removeWhere((m) => m.clientMsgID == id);
+  }
+
+  void revoke(RevokedInfo info) {
+    if (_closed || info.clientMsgID == null) return;
+    ChatHistoryCache.revokeMessage(accountID, info);
+    for (final list in [messageList, scrollingCacheMessageList]) {
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].clientMsgID == info.clientMsgID) {
+          list[i] = ChatHistoryCache.applyRevocation(accountID, list[i]);
+        }
+      }
+    }
   }
 
   /// Invalidates pending/queued history. The route clears voice/reply state for

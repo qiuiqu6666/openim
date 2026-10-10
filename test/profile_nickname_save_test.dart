@@ -119,11 +119,11 @@ void main() {
     (20018, 'NicknameAlreadyUsed'): '昵称已被占用，请换一个昵称',
     (20019, 'NicknameUpdateTooFrequent'): '7天内只能修改一次昵称，请稍后再试',
     (1001, 'nickname can not be empty'): '昵称不能为空',
-    (1001, 'Nickname rejected by server'): 'Nickname rejected by server',
+    (1001, 'Nickname rejected by server'): '参数错误，需检查 body 参数及 header 参数是否正确',
     (
       1001,
       'Error: json: cannot unmarshal object into Go value of type string /tmp/server/stack'
-    ): '服务器处理失败，请稍后重试（错误码：1001）',
+    ): '参数错误，需检查 body 参数及 header 参数是否正确',
   };
   for (final entry in cases.entries) {
     testWidgets('nickname failure preserves input and shows ${entry.key}',
@@ -155,6 +155,10 @@ void main() {
       expect(store.profileNickname, '原昵称');
       expect(find.text('秋啦啦啦啦'), findsOneWidget);
       expect(find.text(entry.value), findsOneWidget);
+      final responseError = entry.key as (int, String);
+      expect(find.text(responseError.$2), findsNothing,
+          reason: 'Business error details must not replace localized feedback');
+      expect(find.textContaining('/tmp/server/stack'), findsNothing);
       expect(find.text('保存失败，请稍后重试'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pump(const Duration(seconds: 3));

@@ -83,8 +83,9 @@ class ChatHistorySearchBar extends StatelessWidget {
                         textAlignVertical: TextAlignVertical.center,
                         style: style,
                         cursorColor: AppTokens.accent,
-                        onChanged: (value) => onChanged(value.trim()),
-                        onSubmitted: (value) => onSubmitted(value.trim()),
+                        onChanged: (value) => onChanged(graphemeTrim(value)),
+                        onSubmitted: (value) =>
+                            onSubmitted(graphemeTrim(value)),
                         decoration: InputDecoration(
                           hintText: chatHistorySearchText(context, 'search'),
                           hintStyle: style.copyWith(color: secondaryText),
@@ -99,7 +100,7 @@ class ChatHistorySearchBar extends StatelessWidget {
                             minHeight:
                                 ChatHistorySearchTokens.searchIconMinHeight,
                           ),
-                          suffixIcon: value.text.trim().isNotEmpty
+                          suffixIcon: graphemeTrim(value.text).isNotEmpty
                               ? IconButton(
                                   key: const ValueKey(
                                       'chat-history-search-clear'),

@@ -87,78 +87,71 @@ class MatchTextView extends StatelessWidget {
         mappingMap[regexTel] = e;
       } else if (e.type == PatternType.url) {
         mappingMap[regexUrl] = e;
-      } else {
+      } else if (e.pattern?.isNotEmpty ?? false) {
         mappingMap[e.pattern!] = e;
       }
     }
 
-    var regexEmoji = emojiFaces.keys
-        .toList()
-        .join('|')
-        .replaceAll('[', '\\[')
-        .replaceAll(']', '\\]');
-
-    mappingMap[regexEmoji] = MatchPattern(type: PatternType.email);
-
-    String pattern;
-
-    if (mappingMap.length > 1) {
-      pattern = '(${mappingMap.keys.toList().join('|')})';
-    } else {
-      pattern = regexEmoji;
+    final expressions = <(RegExp, MatchPattern)>[];
+    for (final entry in mappingMap.entries) {
+      if (entry.key.isEmpty) continue;
+      try {
+        expressions.add((RegExp(entry.key, unicode: true), entry.value));
+      } on FormatException {
+        // Optional custom expressions cannot prevent a message from rendering.
+      }
     }
-
-    stripHtmlIfNeeded(text).splitMapJoin(
-      RegExp(pattern),
-      onMatch: (Match match) {
-        var matchText = match[0]!;
-        InlineSpan inlineSpan;
-        final mapping = mappingMap[matchText] ??
-            mappingMap[mappingMap.keys.firstWhere((element) {
-              final reg = RegExp(element);
-              return reg.hasMatch(matchText);
-            }, orElse: () {
-              return '';
-            })];
-        if (mapping != null) {
-          inlineSpan = TextSpan(
-            text: matchText.split('').join('\u200B'),
-            style: mapping.style ?? matchTextStyle ?? textStyle,
-            recognizer: mapping.onTap == null
-                ? null
-                : (TapGestureRecognizer()
-                  ..onTap = () => mapping.onTap!(
-                      _getUrl(matchText, mapping.type), mapping.type)),
-          );
-        } else {
-          inlineSpan = TextSpan(text: matchText, style: textStyle);
-        }
-        children.add(inlineSpan);
-        return '';
-      },
-      onNonMatch: (text) {
-        children.add(TextSpan(text: text, style: textStyle));
-        return '';
-      },
-    );
+    final matches = <(Match, MatchPattern)>[
+      for (final (expression, pattern) in expressions)
+        for (final match in expression.allMatches(text))
+          if (match.start < match.end) (match, pattern),
+    ]..sort((a, b) => a.$1.start == b.$1.start
+        ? b.$1.end.compareTo(a.$1.end)
+        : a.$1.start.compareTo(b.$1.start));
+    final boundaries = matches.isEmpty ? null : graphemeBoundaries(text);
+    var cursor = 0;
+    for (final (match, mapping) in matches) {
+      final range = graphemeSafeRange(text, match.start, match.end,
+          boundaries: boundaries);
+      if (range.start < cursor) continue;
+      if (range.start > cursor) {
+        children.add(TextSpan(
+            text: text.substring(cursor, range.start), style: textStyle));
+      }
+      final matchedText = match[0]!;
+      children.add(TextSpan(
+        text: text.substring(range.start, range.end),
+        style: mapping.style ?? matchTextStyle ?? textStyle,
+        recognizer: mapping.onTap == null
+            ? null
+            : (TapGestureRecognizer()
+              ..onTap = () => mapping.onTap!(
+                  _getUrl(matchedText, mapping.type), mapping.type)),
+      ));
+      cursor = range.end;
+    }
+    if (cursor < text.length || matches.isEmpty) {
+      children.add(TextSpan(text: text.substring(cursor), style: textStyle));
+    }
   }
 
   _getUrl(String text, PatternType type) {
     switch (type) {
       case PatternType.url:
-        return text.substring(0, 4) == 'http' ? text : 'http://$text';
+        return text.startsWith('http') ? text : 'http://$text';
       case PatternType.email:
-        return text.substring(0, 7) == 'mailto:' ? text : 'mailto:$text';
+        return text.startsWith('mailto:') ? text : 'mailto:$text';
       case PatternType.tel:
       case PatternType.mobile:
-        return text.substring(0, 4) == 'tel:' ? text : 'tel:$text';
+        return text.startsWith('tel:') ? text : 'tel:$text';
       default:
         return text;
     }
   }
 
   static String stripHtmlIfNeeded(String text) {
-    return text.replaceAll(RegExp(r'<[^>]*>|&[^;]+;|[]'), ' ');
+    // Plain IM text is not HTML. Preserve brackets, entities and Unicode data.
+    return text;
   }
 }
 
@@ -185,5 +178,3 @@ const String regexMobile =
     '^(\\+?86)?((13[0-9])|(14[57])|(15[0-35-9])|(16[2567])|(17[01235-8])|(18[0-9])|(19[1589]))\\d{8}\$';
 
 const String regexTel = '^0\\d{2,3}[-]?\\d{7,8}';
-
-const emojiFaces = <String, String>{'[]': '[]'};

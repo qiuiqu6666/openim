@@ -3,17 +3,18 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../core/controller/im_controller.dart';
+import '../../../services/fund/diagnostics/wallet_load_log.dart';
 import '../../mine/settings/openim_profile_service.dart';
 import '../../mine/settings/pages/trade_password_page.dart';
 import '../../mine/settings/settings_service.dart';
 import '../host/wallet_i18n.dart';
 import '../host/wallet_navigation.dart';
 import '../order/wallet_order_events.dart';
-import '../widgets/wallet_tip.dart';
 
-/// Checks both wallet entry points before changing the selected main tab.
-/// Each attempt belongs to its originating route, tab and login session.
-class WalletEntryCoordinator {
+enum WalletEntryPhase { idle, checking, needsPassword, ready, failed }
+
+/// The wallet tab opens immediately; only a verified session reveals its body.
+class WalletEntryCoordinator extends ChangeNotifier {
   WalletEntryCoordinator({
     SettingsService Function()? settingsFactory,
     String Function()? sessionKey,
@@ -25,6 +26,25 @@ class WalletEntryCoordinator {
   int _revision = 0;
   int? _pending;
   bool _disposed = false;
+  WalletEntryPhase _phase = WalletEntryPhase.idle;
+  String? _message;
+  String? _owner;
+  int _contentEpoch = 0;
+  WalletLoadLog? _trace;
+
+  WalletEntryPhase get phase => _phase;
+  String? get message => _message;
+  int get contentEpoch => _contentEpoch;
+  bool get isReady =>
+      _phase == WalletEntryPhase.ready && _owner == _sessionKey();
+
+  void _publish(WalletEntryPhase phase, [String? message]) {
+    if (_disposed) return;
+    _phase = phase;
+    _message = message;
+    _trace?.event('phase', {'phase': phase.name});
+    notifyListeners();
+  }
 
   static SettingsService _settings() {
     final controller = Get.find<IMController>();
@@ -40,13 +60,19 @@ class WalletEntryCoordinator {
   /// Cancel pending navigation when a different tab is selected. This does
   /// not cancel password saves already owned by the settings page.
   void cancel() {
+    _trace?.finish('cancelled', {'phase': _phase.name, 'disposed': _disposed});
+    _trace = null;
     _revision++;
     _pending = null;
+    _publish(WalletEntryPhase.idle);
   }
 
+  @override
   void dispose() {
+    if (_disposed) return;
     _disposed = true;
     cancel();
+    super.dispose();
   }
 
   Future<bool> enter(
@@ -55,11 +81,24 @@ class WalletEntryCoordinator {
     required VoidCallback onAllowed,
   }) async {
     if (_disposed || _pending != null || !context.mounted || !isActive()) {
+      WalletLoadLog.note('entry', 'skipped', {
+        'phase': _phase.name,
+        'disposed': _disposed,
+        'pending': _pending != null,
+        'mounted': context.mounted,
+        'active': !_disposed && context.mounted && isActive(),
+      });
       return false;
     }
     final request = ++_revision;
     final owner = _sessionKey();
+    if (_owner != owner) _contentEpoch++;
+    _owner = owner;
     _pending = request;
+    final trace = _trace = WalletLoadLog.start('entry',
+        details: {'request': request, 'contentEpoch': _contentEpoch},
+        watchPending: true);
+    _publish(WalletEntryPhase.checking);
 
     bool ownsSession() =>
         !_disposed &&
@@ -68,48 +107,79 @@ class WalletEntryCoordinator {
         isActive() &&
         _sessionKey() == owner;
 
-    bool current() =>
-        ownsSession() &&
-        ModalRoute.of(context)?.isCurrent != false &&
-        (WidgetsBinding.instance.lifecycleState == null ||
-            WidgetsBinding.instance.lifecycleState ==
-                AppLifecycleState.resumed);
+    bool current() {
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      final valid = ownsSession() &&
+          ModalRoute.of(context)?.isCurrent != false &&
+          (lifecycle == null || lifecycle == AppLifecycleState.resumed);
+      if (!valid) {
+        trace?.event('ignored', {
+          'disposed': _disposed,
+          'requestCurrent': request == _revision,
+          'mounted': context.mounted,
+          'active': context.mounted && isActive(),
+          'sessionCurrent': _sessionKey() == owner,
+          'routeCurrent':
+              context.mounted ? ModalRoute.of(context)?.isCurrent : null,
+          'lifecycle': lifecycle?.name,
+        });
+      }
+      return valid;
+    }
 
     try {
       if (!current()) return false;
       final settings = _WalletEntrySettings(_settingsFactory(), ownsSession);
+      trace?.event('password_check_start');
       var ready = await settings.hasTradePassword();
+      trace?.event('password_check_result', {'passwordSet': ready});
       if (!context.mounted || !current()) return false;
       if (!ready) {
+        _publish(WalletEntryPhase.needsPassword, _notSet(context));
+        trace?.event('password_setup_open');
         final saved = await openWalletPage<bool>(
           context,
           TradePasswordPage(service: settings),
           activityPage: 'pay_password',
         );
-        // The parent route must have resumed before reading status or opening
-        // the wallet. A canceled setup never continues into the wallet.
+        trace?.event('password_setup_closed', {'saved': saved == true});
+        // Wait for the parent route to resume before checking again.
         await WidgetsBinding.instance.endOfFrame;
         if (saved != true || !context.mounted || !current()) return false;
+        _publish(WalletEntryPhase.checking);
+        trace?.event('password_recheck_start');
         ready = await settings.hasTradePassword();
+        trace?.event('password_check_result', {'passwordSet': ready});
         if (!context.mounted || !current()) return false;
         if (!ready) {
-          WalletTip.show(context, _notSet(context));
+          _publish(WalletEntryPhase.needsPassword, _notSet(context));
           return false;
         }
       }
+      _publish(WalletEntryPhase.ready);
       onAllowed();
       return true;
     } catch (error) {
+      trace?.error(error);
       if (context.mounted && current()) {
-        WalletTip.show(
-          context,
+        _publish(
+          WalletEntryPhase.failed,
           HttpUtil.errorMessage(error,
               path: '/chat/fund/pay-password', fallback: _checkFailed(context)),
         );
       }
       return false;
     } finally {
-      if (_pending == request) _pending = null;
+      if (_pending == request) {
+        _pending = null;
+        // A response rejected while covered/backgrounded must not leave an
+        // endless skeleton when the user returns. Retrying starts a new check.
+        if (context.mounted && _phase == WalletEntryPhase.checking) {
+          _publish(WalletEntryPhase.failed, _checkFailed(context));
+        }
+      }
+      trace?.finish('end', {'phase': _phase.name, 'disposed': _disposed});
+      if (identical(_trace, trace)) _trace = null;
     }
   }
 

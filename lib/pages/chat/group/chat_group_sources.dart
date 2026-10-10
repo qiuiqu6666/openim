@@ -43,8 +43,8 @@ class ChatGroupQueries {
             OpenIM.iMManager.groupManager.getGroupsInfo(groupIDList: [id]),
         selfMember: (id, userID) => OpenIM.iMManager.groupManager
             .getGroupMembersInfo(groupID: id, userIDList: [userID]),
-        ownerAndAdmin: (id) => OpenIM.iMManager.groupManager
-            .getGroupMemberList(groupID: id, filter: 5, count: 20),
+        ownerAndAdmin: (id) =>
+            OpenIM.iMManager.groupManager.getGroupOwnerAndAdmin(groupID: id),
       );
 
   final Future<bool> Function(String groupID) isJoined;

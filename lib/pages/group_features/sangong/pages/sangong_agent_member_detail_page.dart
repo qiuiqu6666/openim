@@ -167,6 +167,7 @@ class _State extends State<SangongAgentMemberDetailPage> {
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
+          centerTitle: true,
           leading: const AppBackButton(),
           title: Text(name),
           actions: [

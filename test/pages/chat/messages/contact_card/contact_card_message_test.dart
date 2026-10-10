@@ -191,6 +191,85 @@ void main() {
   });
   tearDown(Get.reset);
 
+  testWidgets('nickname trim keeps whitespace combining bases intact',
+      (tester) async {
+    const nickname = ' \u0301阿里\u{1F469}\u200D\u{1F4BB} ';
+    const visible = ' \u0301阿里\u{1F469}\u200D\u{1F4BB}';
+    final message = _message(name: nickname);
+    await _mount(tester, _item(message));
+    final card = tester.widget<ContactCardView>(find.byType(ContactCardView));
+    expect(card.name.codeUnits, visible.codeUnits);
+    expect(find.text(visible), findsOneWidget);
+    expect(message.cardElem!.nickname!.codeUnits, nickname.codeUnits);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final brightness in Brightness.values) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets(
+          '${brightness.name} scale $scale account placeholder keeps its minimum height',
+          (tester) async {
+        var account = '';
+        late StateSetter rebuild;
+        await _mount(tester, StatefulBuilder(builder: (_, setState) {
+          rebuild = setState;
+          return ContactCardView(
+            userID: account,
+            name: 'Alice',
+            reserveUserIDLine: true,
+            isSelf: true,
+            time: '18:29',
+          );
+        }), brightness: brightness, textScale: scale);
+        final card = find.byType(ContactCardView);
+        final line = find.byKey(const ValueKey('contact-card-account-line'));
+        final reservedCardHeight = tester.getSize(card).height;
+        final reservedLineHeight = tester.getSize(line).height;
+        for (final value in ['2138014845', '@ASCII-account']) {
+          rebuild(() => account = value);
+          await tester.pumpAndSettle();
+          expect(find.text(value), findsOneWidget);
+          expect(tester.getSize(line).height, closeTo(reservedLineHeight, .01));
+          expect(tester.getSize(card).height, closeTo(reservedCardHeight, .01));
+          expect(tester.takeException(), isNull);
+        }
+      });
+    }
+
+    testWidgets(
+        '${brightness.name} Unicode public account keeps natural height',
+        (tester) async {
+      const account = '@A\u0301\u{1F469}\u{1F3FD}\u200D\u{1F4BB}';
+      final message = _message(account: account, read: true);
+      await _mount(tester, _item(message),
+          brightness: brightness, size: const Size(320, 568), textScale: 2);
+      final label = find.text(account);
+      expect(label, findsOneWidget);
+      final text = tester.widget<Text>(label);
+      expect(text.strutStyle?.forceStrutHeight, isNot(true));
+      final paragraph = tester.renderObject<RenderParagraph>(
+          find.descendant(of: label, matching: find.byType(RichText)));
+      expect(paragraph.text.toPlainText().codeUnits, account.codeUnits);
+      final context = tester.element(label);
+      final natural = TextPainter(
+        text: TextSpan(
+            text: account,
+            style: DefaultTextStyle.of(context).style.merge(text.style)),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+        maxLines: 1,
+        ellipsis: '…',
+      )..layout(maxWidth: tester.getSize(label).width);
+      addTearDown(natural.dispose);
+      expect(tester.getSize(label).height,
+          greaterThanOrEqualTo(natural.height - .01));
+      _within(
+          tester.getRect(label), tester.getRect(find.byType(ContactCardView)));
+      _statusInsideFooter(tester, message, ChatReadReceiptIcon);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final brightness in Brightness.values) {
     testWidgets(
         '${brightness.name} read and unread receipts stay in the card footer while received cards have none',
@@ -288,6 +367,39 @@ void main() {
   testWidgets(
       'snapshot updates and a sender account switch preserve SDK-target profile navigation and invite tokens',
       (tester) async {
+    const sdkChannel = MethodChannel('flutter_openim_sdk');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final profileCalls = <MethodCall>[];
+    final profileReplies = <Completer<String>>[];
+    messenger.setMockMethodCallHandler(sdkChannel, (call) {
+      expect(call.method, 'getUsersInfo');
+      profileCalls.add(call);
+      final reply = Completer<String>();
+      profileReplies.add(reply);
+      return reply.future;
+    });
+    addTearDown(() {
+      for (final reply in profileReplies) {
+        if (!reply.isCompleted) reply.complete('[]');
+      }
+      messenger.setMockMethodCallHandler(sdkChannel, null);
+    });
+
+    void completeOrdinaryProfile(int index) {
+      expect(profileCalls, hasLength(index + 1));
+      expect((profileCalls[index].arguments as Map)['userIDList'],
+          ['im_target-routing']);
+      // Exercise the real official-account guard using ordinary SDK metadata.
+      profileReplies[index].complete(jsonEncode([
+        {
+          'userID': 'im_target-routing',
+          'nickname': '卡片联系人',
+          'ex': '{}',
+        },
+      ]));
+    }
+
     final message = _message();
     late StateSetter rebuild;
     final opened = <Map<String, dynamic>>[];
@@ -307,8 +419,17 @@ void main() {
       rebuild = setState;
       return _item(message, onTap: tapCard);
     }), openedProfiles: opened);
+    addTearDown(() {
+      // The fixture page has no production profile controller to release tags.
+      for (var index = 0; index < opened.length; index++) {
+        GetTags.destroyUserProfileTag();
+      }
+    });
     expect(find.text('2138014845'), findsOneWidget);
     await tester.tap(find.byType(ContactCardView));
+    await tester.pump();
+    expect(opened, isEmpty);
+    completeOrdinaryProfile(0);
     await tester.pumpAndSettle();
     expect(opened.single['userID'], 'im_target-routing');
     expect(opened.single['addSource'], FriendAddSource.card);
@@ -336,6 +457,9 @@ void main() {
     expect(find.text('im_target-routing'), findsNothing);
     expect(find.byType(ChatReadReceiptIcon), findsNothing);
     await tester.tap(find.byType(ContactCardView));
+    await tester.pump();
+    expect(opened, hasLength(1));
+    completeOrdinaryProfile(1);
     await tester.pumpAndSettle();
     expect(opened, hasLength(2));
     expect(opened.last['userID'], 'im_target-routing');

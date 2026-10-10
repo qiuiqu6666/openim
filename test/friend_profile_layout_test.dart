@@ -68,6 +68,7 @@ class ProfileFixture extends GetxController implements UserProfilePanelLogic {
   @override
   bool get showFriendAddEntry =>
       !isFriendship &&
+      (!group || !notAllowAddGroupMemberFriend.value) &&
       (allowAdd ||
           (group && (iAmOwner.value || iHaveAdminOrOwnerPermission.value)));
   @override
@@ -168,27 +169,34 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
   }
-  testWidgets(
-      'group owner can open friend request when member disallows adding',
-      (tester) async {
-    addTearDown(Get.reset);
-    final fixture = ProfileFixture(friend: false, allowAdd: false, group: true);
-    fixture.iAmOwner.value = true;
-    fixture.notAllowAddGroupMemberFriend.value = true;
-    GetTags.createUserProfileTag();
-    addTearDown(GetTags.destroyUserProfileTag);
-    Get.put<UserProfilePanelLogic>(fixture, tag: GetTags.userProfile);
-    await tester.pumpWidget(ScreenUtilInit(
-        designSize: const Size(375, 812),
-        builder: (_, __) => GetMaterialApp(
-            home: UserProfilePanelPage(momentsRepository: fixture.moments))));
-    await tester.pumpAndSettle();
-    expect(find.textContaining(fixture.userInfo.value.userID!), findsNothing);
-    await tester.tap(find.text(StrRes.addFriend));
-    expect(fixture.action, 'add');
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
+  for (final protected in [false, true]) {
+    testWidgets('group owner friend request respects protection ($protected)',
+        (tester) async {
+      addTearDown(Get.reset);
+      final fixture =
+          ProfileFixture(friend: false, allowAdd: false, group: true);
+      fixture.iAmOwner.value = true;
+      fixture.notAllowAddGroupMemberFriend.value = protected;
+      GetTags.createUserProfileTag();
+      addTearDown(GetTags.destroyUserProfileTag);
+      Get.put<UserProfilePanelLogic>(fixture, tag: GetTags.userProfile);
+      await tester.pumpWidget(ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (_, __) => GetMaterialApp(
+              home: UserProfilePanelPage(momentsRepository: fixture.moments))));
+      await tester.pumpAndSettle();
+      expect(find.textContaining(fixture.userInfo.value.userID!), findsNothing);
+      if (protected) {
+        expect(find.text(StrRes.addFriend), findsNothing);
+        expect(fixture.action, isNull);
+      } else {
+        await tester.tap(find.text(StrRes.addFriend));
+        expect(fixture.action, 'add');
+      }
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
 
   testWidgets('friend profile fits narrow screens and connects primary actions',
       (tester) async {

@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/core/controller/app_controller.dart';
 import 'package:openim/core/controller/im_controller.dart';
+import 'package:openim/core/im_callback.dart';
 import 'package:openim/core/session/local_session_exit.dart';
 import 'package:openim/core/session/sdk_session_queue.dart';
 import 'package:openim/services/account_privilege/account_privilege_runtime.dart';
@@ -514,6 +515,46 @@ void main() {
       expect(nativeCalls, ['login:first', 'logout:first', 'login:second']);
       profiles.complete(0, 'second', 'Second');
       await _flush();
+      logic.onClose();
+    });
+  });
+
+  testWidgets('account switch rejects old native self profile updates',
+      (tester) async {
+    await tester.pumpWidget(GetMaterialApp(home: const Scaffold()));
+    await tester.runAsync(() async {
+      final logic = IMController();
+      await _credentials('first');
+      await logic.login('first', 'first-im');
+      await _flush();
+      profiles.complete(0, 'first', 'First');
+      await _flush();
+      logic.imSdkStatus(IMSdkStatus.syncEnded);
+      await logic.logout();
+      expect(logic.currentSdkStatus, IMSdkStatus.connecting);
+      await _credentials('second');
+      await logic.login('second', 'second-im');
+      await _flush();
+      profiles.complete(1, 'second', 'Second');
+      await _flush();
+      final events = <String?>[];
+      final subscription = logic.selfInfoUpdatedSubject
+          .listen((user) => events.add(user.userID));
+      logic.selfInfoUpdated(UserInfo(userID: 'first', nickname: 'Old account'));
+      await _flush();
+      expect(logic.userInfo.value.nickname, 'Second');
+      expect(events, isEmpty);
+      logic.selfInfoUpdated(UserInfo(userID: 'second', nickname: 'Current'));
+      await _flush();
+      expect(logic.userInfo.value.nickname, 'Current');
+      expect(events, ['second']);
+      await logic.logout();
+      logic.selfInfoUpdated(
+          UserInfo(userID: 'second', nickname: 'After logout'));
+      await _flush();
+      expect(logic.userInfo.value.nickname, 'Current');
+      expect(events, ['second']);
+      await subscription.cancel();
       logic.onClose();
     });
   });

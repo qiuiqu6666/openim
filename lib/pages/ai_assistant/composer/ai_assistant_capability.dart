@@ -1,3 +1,5 @@
+import 'package:characters/characters.dart';
+
 import '../data/ai_assistant_api.dart';
 import '../data/ai_assistant_upload_mime.dart';
 import '../models/ai_assistant_models.dart';
@@ -46,8 +48,9 @@ class AiAssistantSendPlanner {
 
   static Object plan({required String? tool, required String text,
     required List<AiAssistantCardRef> cards, required List<AiAssistantFileRef> files}) {
-    final content = text.trim();
-    if (content.runes.length > AiAssistantUploadMime.maxContentChars) return _error('内容最多8000字', 'Message can be at most 8000 characters.');
+    final content = text;
+    final hasContent = content.trim().isNotEmpty;
+    if (content.characters.length > AiAssistantUploadMime.maxContentChars) return _error('内容最多8000字', 'Message can be at most 8000 characters.');
     final capability = resolveCapability(tool: tool, hasCards: cards.isNotEmpty, files: files);
     if (capability == summarize) {
       if (files.isNotEmpty) return _error('总结聊天记录不能附带文件', 'Summarize cannot include files.');
@@ -55,14 +58,14 @@ class AiAssistantSendPlanner {
       final card = cards.single;
       if (card.id.trim().isEmpty) return _error('所选对话不可用', 'The selected chat is unavailable.');
       return AiAssistantSendPlan(capability: summarize, content: content,
-        displayText: content.isEmpty ? '[分析聊天记录]' : content,
+        displayText: hasContent ? content : '[分析聊天记录]',
         analyze: card.kind == AiAssistantCardKind.group ? AiAssistantAnalyze.group(card.id) : AiAssistantAnalyze.c2c(card.id),
         cards: List.unmodifiable(cards));
     }
     if (cards.isNotEmpty) return _error('该功能不能附带名片', 'This tool cannot include contact cards.');
     if (capability == copy) {
       if (files.isNotEmpty) return _error('写文案只需文字', 'Copywriting only needs text.');
-      if (content.isEmpty) return _error('请输入文案主题或要求', 'Enter the topic or requirements.');
+      if (!hasContent) return _error('请输入文案主题或要求', 'Enter the topic or requirements.');
     } else {
       if (files.length > AiAssistantUploadMime.maxFileCount) return _error('一次最多3个附件', 'You can attach up to 3 files.');
       if (capability == file && files.isEmpty) return _error('请添加要分析的文件', 'Add a file to analyze.');
@@ -70,12 +73,12 @@ class AiAssistantSendPlanner {
       if (error != null) return error;
       final duplicate = validateNoDuplicateFiles(files);
       if (duplicate != null) return duplicate;
-      if ((capability == chat || capability == image) && content.isEmpty) {
+      if ((capability == chat || capability == image) && !hasContent) {
         return capability == image ? _error('请描述你想生成的图片', 'Describe the image you want.') : _error('请输入文字或添加附件', 'Type a message or add an attachment.');
       }
     }
     return AiAssistantSendPlan(capability: capability, content: content,
-      displayText: content.isEmpty ? '[分析文件]' : content, files: List.unmodifiable(files));
+      displayText: hasContent ? content : '[分析文件]', files: List.unmodifiable(files));
   }
 
   static AiAssistantSendError? validateImageFiles(List<AiAssistantFileRef> files) =>

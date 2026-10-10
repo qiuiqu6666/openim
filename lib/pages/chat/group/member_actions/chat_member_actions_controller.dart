@@ -1,4 +1,5 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'package:openim_common/openim_common.dart' show graphemeTrim;
 
 import 'chat_member_action_policy.dart';
 import 'chat_member_action_sources.dart';
@@ -162,9 +163,9 @@ class ChatMemberActionsController {
         return;
       }
       final name = snapshot.target?.nickname?.trim().isNotEmpty == true
-          ? snapshot.target!.nickname!.trim()
+          ? graphemeTrim(snapshot.target!.nickname!)
           : message.senderNickname?.trim().isNotEmpty == true
-              ? message.senderNickname!.trim()
+              ? graphemeTrim(message.senderNickname!)
               : targetID;
       final menuRevision = groupRevision();
       final action = await showMenu(actions, name);
@@ -213,7 +214,7 @@ class ChatMemberActionsController {
         mention(Message()
           ..sendID = targetID
           ..senderNickname = target.nickname?.trim().isNotEmpty == true
-              ? target.nickname!.trim()
+              ? graphemeTrim(target.nickname!)
               : name);
         return;
       }
@@ -221,7 +222,7 @@ class ChatMemberActionsController {
         // Dismiss loading before navigation; payment remains on the send page.
         await sendExclusiveRedPacket(GroupMembersInfo.fromJson(target.toJson())
           ..nickname = target.nickname?.trim().isNotEmpty == true
-              ? target.nickname!.trim()
+              ? graphemeTrim(target.nickname!)
               : name);
         return;
       }

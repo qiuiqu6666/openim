@@ -34,6 +34,8 @@
 
 发送页的红包祝福语、转账备注共用 `remark` 字段。公开校验入口为 `lib/services/fund_models.dart` 中的 `FundRemark.normalize`：先 trim，再用 `String.runes` 限制最多 12 个 Unicode 码点；不按 UTF-16 长度或视觉字符数截断。空红包由服务端保存默认祝福「恭喜发财，大吉大利」，空转账保存空字符串。
 
+接收端 `FundMessageData.normalizeRemark` 只校验文本类型并保留完整 Unicode grapheme cluster，不重复按发送接口的码点限制丢弃已收到的备注。发送协议上限继续由 `FundRemark` 校验；接收显示和复制不拆分或隐藏复杂 Emoji 序列。
+
 `FundApi.sendPacket` 和 `sendTransfer` 接收可选 `String? remark`。新请求提交实际归一化内容；待确认后备注随原单号、金额与收款对象冻结，不能在重试时编辑。旧待确认记录缺少该字段时继续原请求体，`null` 不会补字段；显式空字符串仍提交空字符串。按当前接口文档，同单号修改备注或其他业务参数返回 `20062`；客户端提示查询并核对原订单，不以新单号自动重付。
 
 `FundOrder.remark` 缺省为空字符串，兼容旧 GET；已有字段须为字符串。OpenIM `contentType=110` 自定义资金消息新增第六个 `remark` 字段，旧消息仍能解析。详情与卡片以 GET 返回的订单备注为权威，空红包使用默认祝福，空转账不新增备注行；备注不参与金额或收款人身份校验。

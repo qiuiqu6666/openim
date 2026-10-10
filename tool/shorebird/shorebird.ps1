@@ -2,7 +2,7 @@
 .SYNOPSIS
 Project Shorebird entry point. Release and patch validate without publishing unless -Publish is supplied.
 .EXAMPLE
-./tool/shorebird/shorebird.ps1 patch -ReleaseVersion '3.8.3+235' -DryRun
+./tool/shorebird/shorebird.ps1 patch -ReleaseVersion '3.0.1+22' -DryRun
 #>
 [CmdletBinding()]
 param(
@@ -90,7 +90,7 @@ if ($PSBoundParameters.ContainsKey('Track') -and $Command -notin @('patch', 'pre
 }
 if ($Command -in @('patch', 'preview')) {
     if ($ReleaseVersion -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\+\d+$') {
-        throw 'Specify an exact base -ReleaseVersion such as 3.8.3+235. latest and inferred versions are not allowed.'
+        throw 'Specify an exact base -ReleaseVersion such as 3.0.1+22. latest and inferred versions are not allowed.'
     }
 }
 if ($FlutterArgs.Count -gt 0 -and $Command -notin @('release', 'patch')) {

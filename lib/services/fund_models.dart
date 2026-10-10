@@ -1,3 +1,5 @@
+import 'package:openim_common/openim_common.dart';
+
 /// API currency codes and their smallest accounting units.
 enum FundCurrency {
   usdt('USDT', 'USDT', 6),
@@ -24,7 +26,7 @@ abstract final class FundRemark {
   static const defaultPacket = '恭喜发财，大吉大利';
 
   static String normalize(String value) {
-    final normalized = value.trim();
+    final normalized = graphemeTrim(value);
     if (normalized.runes.length > maxCodePoints) {
       throw const FormatException('备注最多支持 12 个 Unicode 码点');
     }

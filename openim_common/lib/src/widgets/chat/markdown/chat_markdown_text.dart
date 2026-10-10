@@ -215,8 +215,7 @@ class _MatchBuilder extends MarkdownElementBuilder {
     final text = element.textContent;
     return Text.rich(
       TextSpan(
-        // The invisible breaks match the existing chat URL wrapping behavior.
-        text: text.split('').join('\u200B'),
+        text: text,
         style: (parentStyle ?? const TextStyle()).merge(
           pattern.style ??
               TextStyle(

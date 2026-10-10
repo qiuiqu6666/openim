@@ -71,8 +71,8 @@ class MessageNotificationActions {
       reportError('通知操作无法识别。');
       return;
     }
-    final text = action == replyAction ? input?.trim() : null;
-    if (action == replyAction && (text == null || text.isEmpty)) return;
+    final text = action == replyAction ? input : null;
+    if (action == replyAction && (text == null || text.trim().isEmpty)) return;
     if (action == replyAction &&
         target.isSingleChat &&
         OfficialAccount.from(userID: target.sourceID) != null) {

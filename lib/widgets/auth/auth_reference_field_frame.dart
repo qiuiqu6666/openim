@@ -31,11 +31,13 @@ class AuthFieldFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final invalid = errorText?.trim().isNotEmpty ?? false;
-    final border = invalid
-        ? AuthReferenceTokens.error
-        : focused && enabled
-            ? AuthReferenceTokens.brand500
-            : AuthReferenceTokens.fieldBorder;
+    final border = AuthReferenceTokens.color(
+        context,
+        invalid
+            ? AuthReferenceTokens.error
+            : focused && enabled
+                ? AuthReferenceTokens.brand500
+                : AuthReferenceTokens.fieldBorder);
     final inputHeight =
         MediaQuery.textScalerOf(context).scale(inputFontSize) * 1.2;
     final height = (inputHeight + 28)
@@ -47,7 +49,10 @@ class AuthFieldFrame extends StatelessWidget {
             : const Duration(milliseconds: 150),
         height: height,
         decoration: BoxDecoration(
-          color: showFill ? AuthReferenceTokens.fieldFill : null,
+          color: showFill
+              ? AuthReferenceTokens.color(
+                  context, AuthReferenceTokens.fieldFill)
+              : null,
           borderRadius: BorderRadius.circular(AuthReferenceTokens.rLg),
         ),
         foregroundDecoration: !showBorder

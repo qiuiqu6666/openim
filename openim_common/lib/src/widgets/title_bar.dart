@@ -151,6 +151,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     double? toolbarHeight,
     String? title,
+    Color? titleColor,
     String? avatarUrl,
     String? presenceText,
     bool isOnline = false,
@@ -200,10 +201,11 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title?.trim() ?? '',
+                      Text(graphemeTrim(title ?? ''),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Styles.ts_0C1C33_17sp),
+                          style: Styles.ts_0C1C33_17sp
+                              .copyWith(color: titleColor)),
                       // Keep one status line while presence loads or is hidden.
                       // Empty text preserves its geometry without inventing a
                       // status or retaining the previous label in semantics.
@@ -284,10 +286,11 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
     String? result,
     Color? backgroundColor,
     Color? backIconColor,
-    this.right,
+    Widget? right,
     this.showUnderline = false,
     Function()? onTap,
-  })  : height = NavigationGlassTokens.toolbarHeight,
+  })  : right = right ?? SizedBox(width: 24.w),
+        height = NavigationGlassTokens.toolbarHeight,
         backgroundColor = backgroundColor,
         center = Expanded(
             child: (title ?? '').toText

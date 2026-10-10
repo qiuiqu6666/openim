@@ -213,6 +213,7 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
       session: _accountSession,
       child: Scaffold(
         appBar: AppBar(
+          centerTitle: true,
           leading: const AppBackButton(),
           title: const Text('查询下级'),
           actions: [

@@ -6,6 +6,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:uuid/uuid.dart';
 
 import 'fund_models.dart';
+import 'fund/diagnostics/wallet_load_log.dart';
 
 export 'fund_models.dart';
 
@@ -331,6 +332,13 @@ class FundApi {
     }
     final baseUrl =
         (_baseUrl ?? Config.appAuthUrl).replaceFirst(RegExp(r'/+$'), '');
+    final operationID = const Uuid().v4();
+    final trace = WalletLoadLog.request(
+        method: method,
+        url: '$baseUrl$path',
+        path: path,
+        operationID: operationID,
+        hasToken: token.isNotEmpty);
     Response<dynamic> response;
     try {
       response = await (_client ?? dio).request<dynamic>(
@@ -341,12 +349,14 @@ class FundApi {
           method: method,
           headers: {
             'token': token,
-            'operationID': const Uuid().v4(),
+            'operationID': operationID,
           },
           contentType: data == null ? null : Headers.jsonContentType,
         ),
       );
+      trace?.response(response);
     } on DioException catch (error) {
+      trace?.error(error);
       final status = error.response?.statusCode;
       if (walletContract && status == 401) {
         throw const FundApiException(401, '登录状态已失效，请重新登录');
@@ -357,6 +367,8 @@ class FundApi {
       // Avoid exposing raw requests containing a payment password in errors.
       throw FundApiException(-1, 'Fund request unavailable',
           isUncertain: mutation);
+    } finally {
+      trace?.finish('end');
     }
     if (walletContract && response.statusCode == 401) {
       throw const FundApiException(401, '登录状态已失效，请重新登录');

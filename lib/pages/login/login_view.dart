@@ -35,12 +35,13 @@ class LoginPage extends StatelessWidget {
           headerAction: const LoginToolbar(),
           footer: AuthVersionFooter(version: logic.displayVersion.value),
           child: AutofillGroup(
-              child:
-                  logic.isPasswordLogin.value ? _passwordForm() : _smsForm()),
+              child: logic.isPasswordLogin.value
+                  ? _passwordForm(context)
+                  : _smsForm()),
         ));
   }
 
-  Widget _passwordForm() => Column(
+  Widget _passwordForm(BuildContext context) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           key: const ValueKey('login-password-form'),
           children: [
@@ -84,9 +85,10 @@ class LoginPage extends StatelessWidget {
                             ? Icons.visibility_off_outlined
                             : Icons.visibility_outlined,
                         size: 20,
-                        color: AuthReferenceTokens.ink300))),
+                        color: AuthReferenceTokens.color(
+                            context, AuthReferenceTokens.ink300)))),
             const SizedBox(height: 8),
-            _passwordOptions(),
+            _passwordOptions(context),
             _submission(),
           ]);
 
@@ -145,7 +147,7 @@ class LoginPage extends StatelessWidget {
       loading: logic.submitting.value,
       onPressed: logic.enabled.value ? _submit : null);
 
-  Widget _passwordOptions() => SizedBox(
+  Widget _passwordOptions(BuildContext context) => SizedBox(
       width: double.infinity,
       child: Wrap(
           alignment: WrapAlignment.spaceBetween,
@@ -179,7 +181,8 @@ class LoginPage extends StatelessWidget {
                           child: Text(authText('记住密码', 'Remember password'),
                               style: AuthReferenceTokens.label.copyWith(
                                   fontWeight: FontWeight.w400,
-                                  color: AuthReferenceTokens.ink400))),
+                                  color: AuthReferenceTokens.color(
+                                      context, AuthReferenceTokens.ink400)))),
                     ]))),
             _action(authText('忘记密码', 'Forgot password'), logic.forgetPassword,
                 key: const ValueKey('login-forgot-password')),
@@ -208,7 +211,8 @@ class LoginPage extends StatelessWidget {
           style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
               minimumSize: const Size(0, 48),
-              foregroundColor: AuthReferenceTokens.link,
+              foregroundColor:
+                  AuthReferenceTokens.color(context, AuthReferenceTokens.link),
               textStyle: AuthReferenceTokens.label.copyWith(
                   fontWeight: FontWeight.w400,
                   fontFamily:

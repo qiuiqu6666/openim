@@ -386,6 +386,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
             length: 3,
             child: Scaffold(
               appBar: AppBar(
+                  centerTitle: true,
                   leading: const AppBackButton(),
                   title: const Text('用户详情'),
                   actions: [

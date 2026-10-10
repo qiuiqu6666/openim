@@ -183,7 +183,7 @@ class AiAssistantUploadMime {
   }
 
   static String ensureFileName(String fileName, String? mimeType) {
-    final name = fileName.trim().isEmpty ? 'file' : fileName.trim();
+    final name = fileName.trim().isEmpty ? 'file' : fileName;
     if (fromName(name) != null) {
       return name;
     }

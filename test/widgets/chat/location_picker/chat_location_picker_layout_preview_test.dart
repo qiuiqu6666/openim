@@ -28,7 +28,7 @@ void main() {
             brightness: variant.dark ? Brightness.dark : Brightness.light);
         await tester.pumpAndSettle();
         expect(find.byType(LocationStreetMapFixture), findsOneWidget);
-        expect(source.requests, [false]);
+        expect(source.requests, [true]);
         expect(Theme.of(tester.element(locationKey('name'))).brightness,
             variant.dark ? Brightness.dark : Brightness.light);
         final name = tester.widget<TextField>(locationKey('name'));

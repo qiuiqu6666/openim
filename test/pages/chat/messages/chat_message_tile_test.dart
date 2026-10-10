@@ -44,6 +44,8 @@ class _TileLogic extends GetxController implements ChatLogic {
   Message? collectedSticker;
   Message? collectedFavorite;
   bool showCollectionActions = false;
+  bool showRevoke = false;
+  Message? revokedMessage;
   final readVisibility = <bool>[];
 
   @override
@@ -92,7 +94,9 @@ class _TileLogic extends GetxController implements ChatLogic {
   Future<void> favoriteMessage(Message message) async =>
       collectedFavorite = message;
   @override
-  bool canRevoke(Message message) => false;
+  bool canRevoke(Message message) => showRevoke;
+  @override
+  Future<void> revokeMessage(Message message) async => revokedMessage = message;
   @override
   bool canTranscribeVoice(Message message) =>
       voiceTranscriptions.canTranscribe(message);
@@ -274,6 +278,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(logic.repliedMessage, same(message));
     expect(find.text(StrRes.menuReply), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('revoke menu uses the chat facade and closes after selection',
+      (tester) async {
+    final message = _message();
+    final logic = _TileLogic(message)..showRevoke = true;
+    addTearDown(logic.disposeFixture);
+    await _mount(tester, logic, message);
+    await tester.longPress(find.text('A real message tile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(StrRes.menuRevoke));
+    await tester.pumpAndSettle();
+    expect(logic.revokedMessage, same(message));
+    expect(find.text(StrRes.menuRevoke), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

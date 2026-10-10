@@ -236,8 +236,8 @@ class ChatVoiceController {
         keepForMessage = true;
         await _sendMessage(message, resetInput: true);
       } else {
-        final text = choice.text?.trim() ?? '';
-        if (text.isEmpty) return;
+        final text = choice.text ?? '';
+        if (text.trim().isEmpty) return;
         final message = await _createTextMessage(text);
         if (_active(accountID, token) && _canSend()) {
           await _sendMessage(message, resetInput: false);

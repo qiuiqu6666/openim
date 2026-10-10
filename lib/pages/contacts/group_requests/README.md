@@ -1,5 +1,13 @@
 # 群申请与处理人
 
+## 每批 20 条与继续加载
+
+2026-10-10 首屏和每次底部加载最多展示 20 条，复用已有刷新组件；列表顶部下拉刷新，滑到底部继续加载，失败可重试。收到与发出的申请采用独立 SDK offset 后合并，详见 [分页模块](pagination/README.md)。审批、处理人和 SDK 事件刷新保留，刷新重新填充已加载范围。
+
+## 群通知标题
+
+2026-10-10 标题继续复用 `TitleBar.back`，右侧保留与左侧返回图标等宽的占位，让标题按页面宽度居中。保留现有返回、主题和 SDK 数据流程；亮暗主题空状态回归同时验证标题中心位置。对照 99chat `all_group_application_list.dart` 的 `centerTitle: true`。
+
 ## 群通知空状态
 
 2026-10-07 群通知复用联系人模块 `empty/contact_list_placeholder.dart` 和公共 `IllustratedEmptyState`，成功空列表居中显示现有 `empty_99chat.webp` 与“暂无群通知”，支持亮暗主题、小屏滚动和英文。对照 99chat `all_group_application_list.dart:_buildNoticeList` 的状态语义，按用户要求升级为与“新的朋友”等页面相同的插画。

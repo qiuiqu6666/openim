@@ -125,6 +125,9 @@ void main() {
       expect(received.last.typingElem?.msgTips, 'yes');
 
       await receiveOnline(Message(
+          sendID: 'caller',
+          recvID: 'self',
+          sessionType: ConversationType.single,
           contentType: MessageType.custom,
           customElem: CustomElem(
               data: jsonEncode({

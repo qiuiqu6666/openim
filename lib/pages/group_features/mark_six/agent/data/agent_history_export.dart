@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import '../../data/mark_six_repository.dart';
+import '../../data/diagnostics/mark_six_api_debug_log.dart';
 import '../models/agent_date_range.dart';
 
 class AgentHistoryExport extends ChangeNotifier with WidgetsBindingObserver {
@@ -59,8 +60,8 @@ class AgentHistoryExport extends ChangeNotifier with WidgetsBindingObserver {
           .contains('${task['status']}'.toUpperCase())) {
         throw StateError('${task['errorMessage'] ?? '导出尚未完成，请稍后重试'}');
       }
-      final bytes = await repository.context.api
-          .getBytes('$path/download', headers: repository.headers);
+      final bytes = await MarkSixApiDebugLog.trace(() => repository.context.api
+          .getBytes('$path/download', headers: repository.headers));
       if (!_current(generation)) return false;
       if (bytes.isEmpty) throw const FormatException('导出文件为空');
       final rawName =

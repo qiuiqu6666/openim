@@ -66,7 +66,7 @@ Windows 实际调用 CLI 时，入口会临时追加进程级 Git 配置 core.lo
 
 默认构建验证完成后，先用 -Publish 注册云端基础版本，再分发该次正式发布生成的产物；不要直接把未注册基础版本的验证产物投放到用户渠道。
 
-脚本固定 Android ABI 为 android-arm64,android-x64，对齐 android/app/build.gradle 的 arm64-v8a、x86_64。release 使用 Shorebird 的 --target-platform 参数，patch 则在 -- 后转发同一参数给 Flutter。调整 ABI 时必须同时修改 Gradle 和本脚本，并发布新基础包。
+脚本固定 Android ABI 为 android-arm64,android-x64，对齐 android/app/build.gradle 的 arm64-v8a、x86_64。release 使用 Shorebird 的 --target-platform 参数，patch 则在 -- 后转发同一参数给 Flutter。Gradle 清除 Flutter 3.41 注入到 buildTypes 的默认过滤列表，再由 defaultConfig 根据目标架构过滤；否则插件的 32 位库会混入仅编译 64 位 Flutter 运行库的包。分 ABI 构建仍交由 Flutter 的 splits 配置处理。调整 ABI 时必须同时修改 Gradle 和本脚本，并发布新基础包。
 
 现有构建需要的 Dart 定义可以通过数组传入；基础包和它的补丁必须使用一致的构建参数：
 
@@ -76,7 +76,7 @@ Windows 实际调用 CLI 时，入口会临时追加进程级 Git 配置 core.lo
 
 正式基础包先按现有渠道发布。用户必须安装这个新基础包，才能接收对应补丁；先前使用普通 flutter build 生成的旧安装包不会因服务端上传补丁而获得热更新能力。每个仍需维护的基础版本分别发布补丁。版本号、签名、原生依赖与分发渠道沿用本项目现有流程。
 
-首次上线前核对商店和现网的 build number / Android versionCode。若已上线版本是 3.8.3+235，新 Shorebird 整包必须使用更高的 build number（例如 3.8.4+236，实际以发布渠道为准），重新注册该基础版本，并同步现有版本接口的最新版、下载地址及最低版本策略。后续补丁与预览的 ReleaseVersion 填实际分发的新基础版本；本次没有自动修改产品版本或服务端配置。
+当前准备上线版本为 3.0.1+22。用户已于 2026-10-11 确认，历史 3.8.3+235 仅用于内部测试，没有向正式用户或商店发布。内部测试设备若已安装构建号 235，不能按正常覆盖升级方式安装构建号 22；不要自动卸载或清除测试设备数据。正式分发前仍需核对渠道版本记录，并同步现有版本接口的最新版、下载地址及最低版本策略。
 
 ## Mac iOS
 
@@ -92,24 +92,24 @@ shorebird release ios --flutter-version "$(cat .flutter-version)" --dry-run
 
 ## 补丁与 staging 验收
 
-ReleaseVersion 必须填写控制台中已经发布的准确基础版本，包含 build number。下面的 3.8.3+235 只是当前项目版本示例，只有控制台确实存在对应 release 时才能使用。脚本不允许 latest 或自动推断，避免补错基础版本。
+ReleaseVersion 必须填写控制台中已经发布的准确基础版本，包含 build number。下面的 3.0.1+22 是本次准备上线的版本，只有对应平台的基础包已经登记成功并实际分发后才能用于补丁。脚本不允许 latest 或自动推断，避免补错基础版本。历史内部测试版本 3.8.3+235 的登记记录不能代替新版本登记。
 
 ~~~powershell
 # 参数预览、真实构建验证、上传到 staging，按需逐步执行。
-.\tool\shorebird\shorebird.ps1 patch -ReleaseVersion '3.8.3+235' -DryRun
-.\tool\shorebird\shorebird.ps1 patch -ReleaseVersion '3.8.3+235'
-.\tool\shorebird\shorebird.ps1 patch -ReleaseVersion '3.8.3+235' -Publish
+.\tool\shorebird\shorebird.ps1 patch -ReleaseVersion '3.0.1+22' -DryRun
+.\tool\shorebird\shorebird.ps1 patch -ReleaseVersion '3.0.1+22'
+.\tool\shorebird\shorebird.ps1 patch -ReleaseVersion '3.0.1+22' -Publish
 
 # 默认 staging；可用 -DeviceId 指定测试设备。
-.\tool\shorebird\shorebird.ps1 preview -ReleaseVersion '3.8.3+235'
+.\tool\shorebird\shorebird.ps1 preview -ReleaseVersion '3.0.1+22'
 ~~~
 
 Mac iOS 的等价流程：
 
 ~~~bash
-shorebird patch ios --release-version 3.8.3+235 --track staging --dry-run
-shorebird patch ios --release-version 3.8.3+235 --track staging
-shorebird preview --platform ios --release-version 3.8.3+235 --track staging
+shorebird patch ios --release-version 3.0.1+22 --track staging --dry-run
+shorebird patch ios --release-version 3.0.1+22 --track staging
+shorebird preview --platform ios --release-version 3.0.1+22 --track staging
 ~~~
 
 preview 会下载、安装并启动该基础版本，通过指定 track 验证补丁。**Android preview 会重装应用并清除其本地数据，包括登录状态和本地聊天数据，必须使用测试设备与测试账号。** 它不能代替对已安装生产包原位升级、保留数据的验收；该部分用正常渠道安装的基础包另测。生产设备内置更新默认接收 stable，上传 staging 不会推给全部用户。先启动并等待下载，完全结束进程后重新打开，确认补丁已生效；切到后台再返回不等于冷启动。Android 预览生产签名包需要额外的 keystore 参数时，用 [官方 preview 命令](https://docs.shorebird.dev/code-push/preview/) 配置。
@@ -121,9 +121,9 @@ preview 会下载、安装并启动该基础版本，通过指定 track 验证�
 验收后在 [Shorebird 控制台](https://console.shorebird.dev/) 将已验证补丁的 track 改为 stable，或在项目根目录使用以下官方命令。先用 list 确认版本和补丁编号；set-track 与 rollback 会修改线上分发状态：
 
 ~~~bash
-shorebird patches list --release-version 3.8.3+235
-shorebird patches set-track --release 3.8.3+235 --patch 1 --track stable
-shorebird patches rollback --release-version 3.8.3+235 --patch-number 1
+shorebird patches list --release-version 3.0.1+22
+shorebird patches set-track --release 3.0.1+22 --patch 1 --track stable
+shorebird patches rollback --release-version 3.0.1+22 --patch-number 1
 ~~~
 
 把示例编号 1 替换为本次真实补丁编号。发布后观察现有崩溃监控与核心业务；发现问题时回滚对应补丁，设备在后续联网检查与重新启动后恢复先前可用补丁或基础版本。回滚不是强制立即重启在线会话。见 [staging 流程](https://docs.shorebird.dev/code-push/guides/staging-patches/)、[tracks](https://docs.shorebird.dev/code-push/tracks/) 和 [回滚](https://docs.shorebird.dev/code-push/rollback/)。
@@ -136,7 +136,20 @@ shorebird patches rollback --release-version 3.8.3+235 --patch-number 1
 
 本地检查可使用 PowerShell 语法解析和 -DryRun 参数预览；真实云端初始化、Android / iOS 构建、设备补丁生效和回滚必须另外记录实际结果。参数预览成功不能替代这些验证。
 
-## 本次接入验证（2026-10-05）
+## 3.0.1+22 上线准备（2026-10-11）
+
+- 用户确认 Android 通过官网或链接分发 APK，iOS 同时准备；历史构建号 235 仅用于内部测试。
+- Android 已使用 Flutter 3.41.6、Shorebird CLI 1.6.124 完成真实 release --dry-run。用户随后明确确认正式登记，已执行 release -Artifact apk -Publish，云端 release ID 为 889704，回查状态为 android: active。尚未发布补丁、安装设备或上传官网/商店。
+- 正式发布产物归档在 E:\openim\release-artifacts\shorebird\android\3.0.1+22，含 APK、AAB、release-manifest.json、SHA256SUMS.txt、云端查询记录和 APK 签名/元数据。已复核最终产物的签名、版本、图标、引擎、配置与归档 SHA-256。官网应使用此目录的 app-release.apk；带 -validation 后缀的目录仅保留先前构建验证记录。
+- APK 名称 99chat、版本 3.0.1+22、包名 chat.chat99.chatpro，签名 v2 验证通过。APK/AAB 均检查了自动更新配置、两个架构的完整 Shorebird 引擎，以及五种密度新图标与源图逐像素一致。
+- 修复了打包时混入缺少 Flutter 运行库的 armeabi-v7a 插件库问题，最终只包含 arm64-v8a、x86_64；APK 从约 315 MiB 降至 254 MiB。32 位设备不属于本次支持范围。
+- 发布配置和验证码桥接相关 6 项现有测试通过。未执行真机安装、补丁下载与冷启动、推送、通话和钱包实机验收，构建通过不能替代这些验收。
+- iOS 主应用 Bundle ID 已按用户指定改为 vip.99chat.ios2，通知扩展同步为 vip.99chat.ios2.NotificationService，三个构建配置一致。清除了旧 Bundle ID 的固定 provisioning profile。用户表示稍后提供 Apple Team ID 和 Mac 信息；发布证书和新 profile 仍待配置。
+- iOS 图标已从 launcher_icon/app-icon.png 重新生成，图标目录 19 项引用的尺寸和无 alpha 通道检查通过。当前原图为 254×254，1024×1024 商店图标为放大生成，正式提交前需验收清晰度。
+- iOS Firebase 配置仍绑定旧应用：ios/Runner/GoogleService-Info.plist 的 BUNDLE_ID 为 io.openim.flutter.base，openim_common/lib/src/controller/firebase_options.dart 的 iosBundleId 为 io.openim.flutter.full.NotificationService。必须用注册 vip.99chat.ios2 后取得的真实配置同步两处，不能只改字符串冒充注册完成。
+- 当前执行环境为 Windows，iOS 尚未构建。需在 Mac 上完成签名配置、Shorebird 基础版本登记和 IPA/设备验收。
+
+## 历史接入验证（2026-10-05）
 
 - 已通过已有账号完成真实登录和初始化。应用为 OpenIM Flutter，app_id 为 cd009261-2d7d-4e4d-9fdc-dc9d3d16b6ec，auto_update 为 true，配置已加入应用资产。
 - Shorebird CLI 1.6.124，应用构建使用 Flutter 3.41.6；版本文件已与现有代码使用的 SDK 对齐，保留接入前的依赖包版本。

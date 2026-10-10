@@ -211,9 +211,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
     }
 
     // The directory and initial SDK read own the starting relationship.
-    final friendAdds = imLogic.friendAddSubject;
-    _friendAddedSub =
-        friendAdds.skip(friendAdds.hasValue ? 1 : 0).listen((user) {
+    _friendAddedSub = imLogic.friendAddSubject.listen((user) {
       if (user.userID == userInfo.value.userID) {
         _userInfoRequest++;
         userInfo.update((val) {
@@ -224,9 +222,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
       }
     });
 
-    final friendDeletes = imLogic.friendDelSubject;
-    _friendDeletedSub =
-        friendDeletes.skip(friendDeletes.hasValue ? 1 : 0).listen((user) {
+    _friendDeletedSub = imLogic.friendDelSubject.listen((user) {
       if (user.userID == userInfo.value.userID) {
         _profileRequest++;
         userInfo.update((value) {
@@ -249,10 +245,8 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
       }
     });
 
-    final selfInfoUpdates = imLogic.selfInfoUpdatedSubject;
-    // onReady owns the first lookup; the subject may replay an older profile.
-    _selfInfoUpdatedSub =
-        selfInfoUpdates.skip(selfInfoUpdates.hasValue ? 1 : 0).listen((value) {
+    // onReady owns the first lookup; this stream only carries live updates.
+    _selfInfoUpdatedSub = imLogic.selfInfoUpdatedSubject.listen((value) {
       if (isClosed ||
           !isGroupMemberPage ||
           _groupContextClosed.value ||
@@ -597,12 +591,10 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
     final exempt = iHaveAdminOrOwnerPermission.value;
     notAllowLookGroupMemberProfiles.value =
         !exempt && groupInfo?.lookMemberInfo == 1;
-    final targetManager = _targetRole == GroupRoleLevel.owner ||
-        _targetRole == GroupRoleLevel.admin;
-    notAllowAddGroupMemberFriend.value = !canManageGroupFriendAdd &&
-        !targetManager &&
-        _groupFriendProtection?.ready.value == true &&
-        _groupFriendProtection?.protect.value == true;
+    notAllowAddGroupMemberFriend.value = isGroupMemberPage &&
+        (groupInfo?.lookMemberInfo != 0 ||
+            _groupFriendProtection?.ready.value != true ||
+            _groupFriendProtection?.protect.value != false);
   }
 
   void _refreshGroupAccount() {
@@ -872,6 +864,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
       !isMyself &&
       !isFriendship &&
       hasActiveGroupMemberContext &&
+      (!isGroupMemberPage || !notAllowAddGroupMemberFriend.value) &&
       ((isGroupMemberPage && canManageGroupFriendAdd) ||
           (isAllowAddFriend &&
               (!isGroupMemberPage ||

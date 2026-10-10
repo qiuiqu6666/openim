@@ -3,6 +3,7 @@ import 'package:openim_common/openim_common.dart';
 
 import '../../../core/im_callback.dart';
 import '../../home/home_quick_actions.dart';
+import '../../home/quick_actions/home_contact_actions.dart';
 
 /// Main contacts navigation from 99chat's home_page.dart, using SDK status.
 class ContactsHeader extends StatefulWidget implements PreferredSizeWidget {
@@ -39,30 +40,15 @@ class _ContactsHeaderState extends State<ContactsHeader> {
     if (_menuOpen) return;
     _menuOpen = true;
     setState(() => _plusTurns += .125);
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
     try {
-      await showHomeQuickActions(context: context, anchor: _plusKey, actions: [
-        HomeQuickAction(
-            id: 'searchAdd',
-            title: zh ? '搜索添加' : 'Search & Add',
-            subtitle: zh ? '通过账号/手机号搜索好友' : 'Find friends by account or phone',
-            onTap: widget.onSearchAdd),
-        HomeQuickAction(
-            id: 'createGroup',
-            title: StrRes.createGroup,
-            subtitle: zh ? '发起多人聊天' : 'Start a group conversation',
-            onTap: widget.onCreateGroup),
-        HomeQuickAction(
-            id: 'createChannel',
-            title: zh ? '创建频道' : 'Create Channel',
-            subtitle: zh ? '暂未开放' : 'Coming soon',
-            enabled: false),
-        HomeQuickAction(
-            id: 'scanQRCode',
-            title: StrRes.scan,
-            subtitle: zh ? '扫描二维码添加好友' : 'Scan a QR code to add friends',
-            onTap: widget.onScan),
-      ]);
+      await showHomeQuickActions(
+          context: context,
+          anchor: _plusKey,
+          actions: homeContactActions(
+              context: context,
+              onSearchAdd: widget.onSearchAdd,
+              onCreateGroup: widget.onCreateGroup,
+              onScan: widget.onScan));
     } finally {
       _menuOpen = false;
       if (mounted) setState(() => _plusTurns += .125);

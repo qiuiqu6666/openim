@@ -3,6 +3,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import '../../../../routes/app_navigator.dart';
 import '../../../contacts/group_profile_panel/group_profile_panel_logic.dart';
+import '../../../contacts/search/contact_search_source.dart';
 
 class AnnouncementMentionLink {
   static bool _resolvingMention = false;
@@ -11,16 +12,25 @@ class AnnouncementMentionLink {
       {bool dismissSheet = false}) async {
     if (_resolvingMention) return;
     _resolvingMention = true;
+    final owner = (OpenIM.iMManager.userID, DataSp.chatToken);
+    bool current() =>
+        sheetContext.mounted &&
+        owner == (OpenIM.iMManager.userID, DataSp.chatToken);
     try {
       final name = mention.substring(1);
-      final users =
-          (await Apis.searchUserFullInfo(content: name, showNumber: 100) ?? [])
-              .where((user) =>
-                  user.userID?.isNotEmpty == true &&
-                  (user.userID == name ||
-                      user.account == name ||
-                      user.nickname == name))
-              .toList();
+      final account = normalizePublicAccountSearch(mention);
+      final users = (await ContactSearchSource()
+                  .users(account == null ? name : '@$account', 1) ??
+              [])
+          .where((user) =>
+              user.userID?.isNotEmpty == true &&
+              (user.userID == name ||
+                  (account != null &&
+                      normalizePublicAccountSearch(user.account ?? '') ==
+                          account) ||
+                  user.nickname == name))
+          .toList();
+      if (!sheetContext.mounted || !current()) return;
       final groups = <GroupInfo>[];
       try {
         groups.addAll((await OpenIM.iMManager.groupManager.getGroupsInfo(
@@ -30,7 +40,7 @@ class AnnouncementMentionLink {
       } catch (_) {
         // A user mention need not be a valid group ID.
       }
-      if (!sheetContext.mounted) return;
+      if (!sheetContext.mounted || !current()) return;
       final options = <({String label, VoidCallback open})>[
         for (final user in users)
           (
@@ -70,11 +80,11 @@ class AnnouncementMentionLink {
         if (selected == null) return;
         index = selected;
       }
-      if (!sheetContext.mounted) return;
+      if (!sheetContext.mounted || !current()) return;
       if (dismissSheet) Navigator.pop(sheetContext);
       options[index].open();
     } catch (error) {
-      if (sheetContext.mounted) IMViews.showToast('暂时无法打开资料，请稍后重试');
+      if (current()) IMViews.showToast('暂时无法打开资料，请稍后重试');
     } finally {
       _resolvingMention = false;
     }

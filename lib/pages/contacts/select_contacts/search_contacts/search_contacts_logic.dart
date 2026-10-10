@@ -39,7 +39,7 @@ class SelectContactsFromSearchLogic extends CommonSearchLogic {
   }
 
   bool get isSearchNotResult =>
-      searchCtrl.text.trim().isNotEmpty && resultList.isEmpty;
+      graphemeTrim(searchCtrl.text).isNotEmpty && resultList.isEmpty;
 
   @override
   void clearList() {

@@ -235,9 +235,7 @@ void main() {
     await tester.pumpWidget(
         host(const GroupMemberPermissionsPage(groupID: 'g', owner: true)));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(PopupMenuButton<int>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('取消管理员'));
+    await tester.tap(find.byTooltip('移除管理员'));
     await tester.pumpAndSettle();
     expect(
         calls.any((c) =>
@@ -276,9 +274,7 @@ void main() {
     await tester.pumpWidget(host(const GroupMemberPermissionsPage(
         groupID: 'g', owner: true, mode: MemberPermissionMode.muted)));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(PopupMenuButton<int>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('解除禁言'));
+    await tester.tap(find.byTooltip('解除禁言'));
     await tester.pumpAndSettle();
     expect(find.text('已禁言'), findsNothing);
     expect(durations, [0]);

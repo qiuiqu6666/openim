@@ -22,7 +22,7 @@ class VerifyPhonePage extends StatelessWidget {
   Widget build(BuildContext context) => RegisterBgView(
         centeredHeader: true,
         showWaves: true,
-        toolbar: const LoginToolbar(),
+        toolbar: const LoginToolbar(onHero: false),
         title: authText('验证你的账号', 'Verify your account'),
         subtitle:
             authText('输入发送至以下账号的验证码', 'Enter the code sent to this account.'),

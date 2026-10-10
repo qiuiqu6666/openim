@@ -72,17 +72,7 @@ class ContactCardView extends StatelessWidget {
                     if (reserveUserIDLine ||
                         (userID.isNotEmpty && userID != name)) ...[
                       SizedBox(height: 4.w),
-                      Text(userID,
-                          strutStyle: StrutStyle(
-                              fontSize: 11.sp,
-                              height: ContactCardTokens.identityLineHeight,
-                              forceStrutHeight: true),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: ContactCardTokens.subtitle,
-                              fontSize: 11.sp,
-                              height: ContactCardTokens.identityLineHeight)),
+                      _accountLine(),
                     ],
                   ],
                 )),
@@ -118,6 +108,35 @@ class ContactCardView extends StatelessWidget {
           ]),
         ),
       ),
+    );
+  }
+
+  Widget _accountLine() {
+    final style = TextStyle(
+        color: ContactCardTokens.subtitle,
+        fontSize: 11.sp,
+        height: ContactCardTokens.identityLineHeight);
+    final strut = StrutStyle(
+        fontSize: 11.sp, height: ContactCardTokens.identityLineHeight);
+    return Stack(
+      key: const ValueKey('contact-card-account-line'),
+      alignment: AlignmentDirectional.topStart,
+      children: [
+        // Empty and populated paragraphs can have different font metrics.
+        // Reserve the same empty line through Text's actual inherited styling,
+        // while letting fallback glyphs grow beyond that minimum naturally.
+        ExcludeSemantics(
+            child: Text('',
+                style: style,
+                strutStyle: strut,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis)),
+        Text(userID,
+            style: style,
+            strutStyle: strut,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis),
+      ],
     );
   }
 }
