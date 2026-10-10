@@ -310,6 +310,9 @@ class _ConversationPageState extends State<ConversationPage> {
                       ? '消息'
                       : 'Messages'),
               busy: logic.imSdkStatus != null && !logic.isFailedSdkStatus,
+              busyLabel: logic.imSdkStatus == StrRes.synchronizing
+                  ? StrRes.synchronizing
+                  : null,
               failed: logic.isFailedSdkStatus,
             ),
           ),

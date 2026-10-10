@@ -273,8 +273,6 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     final merged = _groupProjection.project(currentByID.values);
     OpenIM.iMManager.conversationManager.simpleSort(merged);
     list.value = merged;
-    groupFeatures.hydrate(
-        merged.where((info) => info.isGroupChat).map((info) => info.groupID));
   }
 
   String getConversationID(ConversationInfo info) {
@@ -464,9 +462,9 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   Future<void> onRefresh() async {
     final clearing = _clearGeneration;
-    await _cleanupLegacyConversations();
+    await _loadConversationList(firstPageOnly: false);
     if (_sessionActive && clearing == _clearGeneration) {
-      await _loadConversationList(firstPageOnly: false);
+      await _cleanupLegacyConversations();
     }
   }
 
@@ -524,14 +522,13 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       final currentByID = {
         for (final info in list) info.conversationID: info,
       };
-      final merged = _groupProjection.project(byID.values)
+      final merged = _groupProjection
+          .project(byID.values)
           .map((info) => _readProjection.project(info,
               current: currentByID[info.conversationID]))
           .toList();
       OpenIM.iMManager.conversationManager.simpleSort(merged);
       list.value = merged;
-      groupFeatures.hydrate(
-          merged.where((info) => info.isGroupChat).map((info) => info.groupID));
 
       if (snapshot.length < pageSize) {
         refreshController.loadNoData();
@@ -565,22 +562,25 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   Future<void> getFirstPage() async {
     final clearing = _clearGeneration;
-    await _cleanupLegacyConversations();
     if (!_sessionActive || clearing != _clearGeneration) return;
     final result = homeLogic.conversationsAtFirstPage;
     if (result.isNotEmpty) {
       final currentByID = {
         for (final info in list) info.conversationID: info,
       };
-      list.value = _groupProjection.project(result)
+      list.value = _groupProjection
+          .project(result)
           .map((info) => _readProjection.project(info,
               current: currentByID[info.conversationID]))
           .toList();
-      groupFeatures.hydrate(
-          list.where((info) => info.isGroupChat).map((info) => info.groupID));
       _sortConversationList();
     } else {
       await _loadConversationList(firstPageOnly: true);
+    }
+    // Publish local rows before maintenance scans/history/network checks. The
+    // deletion guard still rejects stale SDK snapshots after cleanup finishes.
+    if (_sessionActive && clearing == _clearGeneration) {
+      await _cleanupLegacyConversations();
     }
   }
 

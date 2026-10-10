@@ -136,6 +136,9 @@ class GroupLiveListSync {
 
   void _enqueue(String id, {bool force = false}) {
     if (!_active || !_visible(id)) return;
+    // Hydrate list metadata only when its avatar enters the active viewport.
+    // The SDK remains responsible for syncing the complete account in the back.
+    store.hydrate([id]);
     final now = _clock();
     if (_retryAfter[id]?.isAfter(now) == true ||
         (!force && _freshUntil[id]?.isAfter(now) == true)) {

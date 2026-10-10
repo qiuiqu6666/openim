@@ -65,6 +65,9 @@ class GroupFeatureStore extends ChangeNotifier {
   final _capabilityErrors = <String, GroupFeatureException>{};
   final _capabilityTokens = <String, CancelToken>{};
   final _requested = <String>{}, _queued = <String>{}, _left = <String>{};
+  // SDK pushes may seed thousands of groups. Only UI consumers need additional
+  // lookups on reconnect; receiving a push does not create a refresh request.
+  final _hydrationTargets = <String>{};
   final _seenEvents = <String>{};
   final _events = StreamController<Map<String, dynamic>>.broadcast();
   final _groupEvents = <String, Stream<Map<String, dynamic>>>{};
@@ -98,8 +101,15 @@ class GroupFeatureStore extends ChangeNotifier {
       _capabilities[id] ?? const GroupFeatureCapabilities();
   GroupFeatureException? capabilityError(String id) => _capabilityErrors[id];
   bool capabilitiesLoading(String id) => _pendingCapabilities.containsKey(id);
-  Stream<Map<String, dynamic>> events(String id) => _groupEvents.putIfAbsent(id,
-      () => _events.stream.where((event) => active && event['groupID'] == id));
+  Stream<Map<String, dynamic>> events(String id) {
+    if (active && id.isNotEmpty && !_left.contains(id)) {
+      _hydrationTargets.add(id);
+    }
+    return _groupEvents.putIfAbsent(
+        id,
+        () =>
+            _events.stream.where((event) => active && event['groupID'] == id));
+  }
 
   void bindSources(
       {required Stream<GroupInfo> groupChanged,
@@ -135,7 +145,7 @@ class GroupFeatureStore extends ChangeNotifier {
       messages.listen(receiveMessage),
       synced.listen((_) {
         refreshKnownGroups();
-        for (final id in _groups.keys) {
+        for (final id in _hydrationTargets) {
           if (active && !_left.contains(id)) {
             _events.add({'key': 'imReconnected', 'groupID': id});
           }
@@ -185,11 +195,15 @@ class GroupFeatureStore extends ChangeNotifier {
     // cannot erase a verified current-session projection that has never had a
     // summary; explicit corruption and a previously valid summary still fail
     // closed, including after a pending mirror catches up.
-    if (summary.valid || old.valid || !_sdkSummaryMissing(info.ex)) {
+    final summaryChanged =
+        summary.valid || old.valid || !_sdkSummaryMissing(info.ex);
+    if (summaryChanged) {
       _clearLiveStateForSummary(id, summary);
     }
     _updateAuthorizationScope(id, old, summary);
-    _publishSummary(id, summary);
+    // An initial ordinary-group snapshot contains no feature change. Publishing
+    // it would make visible rows repeat their already-running live/current read.
+    if (summaryChanged) _publishSummary(id, summary);
     notifyListeners();
   }
 
@@ -272,12 +286,11 @@ class GroupFeatureStore extends ChangeNotifier {
   void hydrate(Iterable<String?> ids) {
     if (!active) return;
     for (final id in ids) {
-      if (id == null ||
-          id.isEmpty ||
-          _left.contains(id) ||
-          _requested.contains(id)) {
+      if (id == null || id.isEmpty || _left.contains(id)) {
         continue;
       }
+      _hydrationTargets.add(id);
+      if (_requested.contains(id)) continue;
       _queued.add(id);
     }
     if (_queued.isEmpty || _scheduled) return;
@@ -323,8 +336,8 @@ class GroupFeatureStore extends ChangeNotifier {
 
   void refreshKnownGroups() {
     if (!active) return;
-    final ids = _requested.toList();
-    _requested.clear();
+    final ids = _hydrationTargets.toList();
+    _requested.removeAll(ids);
     hydrate(ids);
   }
 
@@ -577,6 +590,7 @@ class GroupFeatureStore extends ChangeNotifier {
     _pendingMirrors.remove(id);
     _queued.remove(id);
     _requested.remove(id);
+    _hydrationTargets.remove(id);
     _events.add({
       'key': 'groupFeaturesChanged',
       'groupID': id,
@@ -609,6 +623,7 @@ class GroupFeatureStore extends ChangeNotifier {
     _capabilityMinimumVersion.clear();
     _queued.clear();
     _requested.clear();
+    _hydrationTargets.clear();
     _seenEvents.clear();
     _left.clear();
     if (!_closed) notifyListeners();

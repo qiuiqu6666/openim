@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/group_features/data/group_feature_store.dart';
 import 'package:openim/pages/group_features/live/widgets/live_list_scope.dart';
@@ -33,7 +34,10 @@ class _Fixture {
     store = GroupFeatureStore(
       api: transport.api(),
       sessionCurrent: () => accountCurrent,
-      fetchGroups: (_) async => [],
+      fetchGroups: (ids) async {
+        metadataReads.addAll(ids);
+        return [for (final id in ids) GroupInfo(groupID: id)];
+      },
     );
   }
 
@@ -43,6 +47,7 @@ class _Fixture {
   final showAvatar = ValueNotifier(true);
   final pending = <String, Completer<Map<String, dynamic>>>{};
   final replies = <String, Map<String, dynamic>>{};
+  final metadataReads = <String>[];
   final navigator = GlobalKey<NavigatorState>();
   bool accountCurrent = true;
 
@@ -83,7 +88,7 @@ class _Fixture {
                           key: const ValueKey('groups'),
                           cacheExtent: 1000,
                           itemExtent: 100,
-                          itemCount: 80,
+                          itemCount: 3115,
                           itemBuilder: (_, index) =>
                               Center(child: avatar('group-$index')),
                         ),
@@ -262,12 +267,15 @@ void main() {
     expect(find.byType(GroupLiveAvatar, skipOffstage: false).evaluate().length,
         greaterThan(2));
     expect(fixture.reads.toSet(), {'group-0', 'group-1'});
+    expect(fixture.metadataReads.toSet(), {'group-0', 'group-1'});
     final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
     scrollable.position.jumpTo(1000);
     await _frames(tester);
     expect(
         fixture.reads.toSet(), {'group-0', 'group-1', 'group-10', 'group-11'});
     expect(fixture.reads.length, 4);
+    expect(fixture.metadataReads.toSet(),
+        {'group-0', 'group-1', 'group-10', 'group-11'});
     expect(tester.takeException(), isNull);
     await unmount(tester);
   });

@@ -95,6 +95,13 @@ class _ContactsHeaderState extends State<ContactsHeader> {
               IMSdkStatus.synchronizing,
               IMSdkStatus.syncProgress,
             }.contains(status),
+            busyLabel: const {
+              IMSdkStatus.syncStart,
+              IMSdkStatus.synchronizing,
+              IMSdkStatus.syncProgress,
+            }.contains(status)
+                ? StrRes.synchronizing
+                : null,
             failed: status == IMSdkStatus.connectionFailed ||
                 status == IMSdkStatus.syncFailed,
           );

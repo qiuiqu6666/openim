@@ -82,19 +82,33 @@ class LegacyServiceConversationCleanup {
     bool current() => isActive() && _session() == session;
     if (!current()) return;
     try {
-      // Freeze the entire paginated snapshot before any deletion can shift it.
       final local = <String, ConversationInfo>{};
-      var offset = 0;
-      while (current()) {
-        final page = await _readPage(offset, _pageSize);
-        if (!current()) return;
-        for (final item in page) {
-          // Duplicate pages indicate a changing or invalid snapshot; retry later.
-          if (local.containsKey(item.conversationID)) return;
-          local[item.conversationID] = item;
+      if (!peers.contains(session.owner)) {
+        // Ordinary accounts can only have two affected private conversations.
+        // Read their exact IDs instead of scanning thousands of unrelated rows.
+        for (final peer in peers) {
+          final pair = [session.owner, peer]..sort();
+          final id = 'si_${pair.join('_')}';
+          final rows = await _readConversation(id);
+          if (!current()) return;
+          if (rows.isEmpty) continue;
+          if (rows.length != 1 || rows.single.conversationID != id) return;
+          local[id] = rows.single;
         }
-        if (page.length < _pageSize) break;
-        offset += page.length;
+      } else {
+        // Legacy service accounts may have affected chats with any user. Freeze
+        // all pages before deletion can shift their pagination offsets.
+        var offset = 0;
+        while (current()) {
+          final page = await _readPage(offset, _pageSize);
+          if (!current()) return;
+          for (final item in page) {
+            if (local.containsKey(item.conversationID)) return;
+            local[item.conversationID] = item;
+          }
+          if (page.length < _pageSize) break;
+          offset += page.length;
+        }
       }
       final candidates = local.values
           .where((item) => _eligible(session.owner, item))

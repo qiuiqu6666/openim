@@ -117,7 +117,10 @@ void main() {
     ]) {
       statuses.add(status);
       await tester.pump();
-      expect(find.text('正在连接'), findsOneWidget);
+      expect(
+          find.text(
+              status == IMSdkStatus.connecting ? '正在连接' : StrRes.synchronizing),
+          findsOneWidget);
       expect(find.byType(FadingArcSpinner), findsOneWidget);
       expect(_line, findsNothing);
       expect(_dot, findsNothing);

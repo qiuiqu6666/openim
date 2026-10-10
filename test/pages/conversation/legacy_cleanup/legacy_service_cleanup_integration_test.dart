@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -50,6 +51,7 @@ void main() {
   late bool serverPresent;
   late int deleteCalls;
   late List<ConversationInfo> local;
+  Completer<void>? serverGate;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -80,6 +82,7 @@ void main() {
     local = [legacy, ordinary];
     serverPresent = false;
     deleteCalls = 0;
+    serverGate = null;
     cleanup = LegacyServiceConversationCleanup(
       session: () =>
           (owner: 'self', token: 'test', server: 'http://129.226.192.93:10002'),
@@ -94,12 +97,15 @@ void main() {
         deleteCalls++;
         local.removeWhere((item) => item.conversationID == id);
       },
-      post: (_, __, ___) async => {
-        'errCode': 0,
-        'data': {
-          'versionID': 'v',
-          'conversationIDs': [if (serverPresent) legacy.conversationID],
-        },
+      post: (_, __, ___) async {
+        await serverGate?.future;
+        return {
+          'errCode': 0,
+          'data': {
+            'versionID': 'v',
+            'conversationIDs': [if (serverPresent) legacy.conversationID],
+          },
+        };
       },
       isCompleted: (_) async => false,
       markCompleted: (_) async {},
@@ -138,7 +144,7 @@ void main() {
     logic.onClose();
   });
 
-  test('first page runs cleanup before reusing its cached first page',
+  test('first page still removes authorized legacy rows from the cached page',
       () async {
     final logic = ConversationLogic(legacyCleanup: cleanup);
     home.conversationsAtFirstPage.addAll([legacy, ordinary]);
@@ -147,6 +153,30 @@ void main() {
     expect(logic.list.map((item) => item.conversationID), ['ordinary']);
     logic.onClose();
   });
+
+  for (final source in ['cache', 'sdk', 'refresh']) {
+    test('$source rows are visible while cleanup waits on the server',
+        () async {
+      serverGate = Completer<void>();
+      final logic = ConversationLogic(legacyCleanup: cleanup);
+      if (source == 'cache') {
+        home.conversationsAtFirstPage.addAll([legacy, ordinary]);
+      }
+      final pending =
+          source == 'refresh' ? logic.onRefresh() : logic.getFirstPage();
+      for (var i = 0; i < 10; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(deleteCalls, 0);
+      expect(logic.list.map((item) => item.conversationID),
+          contains(ordinary.conversationID));
+      serverGate!.complete();
+      await pending;
+      expect(deleteCalls, 1);
+      expect(logic.list.map((item) => item.conversationID), ['ordinary']);
+      logic.onClose();
+    });
+  }
 
   test('ordinary reconnect sync completion retries without requiring reinstall',
       () async {

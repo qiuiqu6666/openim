@@ -47,6 +47,38 @@ Map<String, dynamic> _summary(int version,
       }
     };
 void main() {
+  test('SDK sync of 3115 groups only refreshes metadata used by UI consumers',
+      () async {
+    final reads = <String>[];
+    final store = GroupFeatureStore(
+        api: GroupFeatureApi(),
+        sessionCurrent: () => true,
+        fetchGroups: (ids) async {
+          reads.addAll(ids);
+          return [for (final id in ids) GroupInfo(groupID: id, ex: '')];
+        });
+    for (var i = 0; i < 3115; i++) {
+      store.seed(GroupInfo(groupID: 'g$i', ex: ''));
+    }
+    store.hydrate(['g0']);
+    final subscription = store.events('g1').listen((_) {});
+    store.refreshKnownGroups();
+    await Future<void>.delayed(Duration.zero);
+    expect(reads.toSet(), {'g0', 'g1'});
+    expect(reads, hasLength(2));
+    // Background groups still accept SDK changes, without additional lookups.
+    store.seed(GroupInfo(
+        groupID: 'g3000', ex: jsonEncode({'groupFeatures': _summary(2)})));
+    expect(store.features('g3000').revision, 2);
+    reads.clear();
+    store.remove('g0');
+    store.refreshKnownGroups();
+    await Future<void>.delayed(Duration.zero);
+    expect(reads, ['g1']);
+    await subscription.cancel();
+    store.dispose();
+  });
+
   test(
       '10000 ordinary groups publish once per batch and unchanged refresh stays quiet',
       () async {

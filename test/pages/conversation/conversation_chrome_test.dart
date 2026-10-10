@@ -197,6 +197,12 @@ void main() {
       expect(spinner.size, closeTo(15.84, .001));
       expect(spinner.color, AppTokens.accent);
 
+      logic.connection.value = StrRes.synchronizing;
+      await tester.pump();
+      expect(find.text(StrRes.synchronizing), findsOneWidget);
+      expect(find.text('正在连接'), findsNothing);
+      expect(find.byType(FadingArcSpinner), findsOneWidget);
+
       logic.connection.value = 'failed';
       await tester.pumpAndSettle();
       expect(find.text('消息'), findsOneWidget);

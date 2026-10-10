@@ -44,6 +44,7 @@ class _Fixture {
   final completed = <String>{};
   final notified = <String>[];
   final events = <String>[];
+  final reads = <String>[];
   final requests = <Map<String, dynamic>>[];
   Future<dynamic> Function()? reply;
   Future<List<ConversationInfo>> Function(String)? reread;
@@ -56,9 +57,12 @@ class _Fixture {
       events.add('page:$offset');
       return rows.skip(offset).take(count).toList();
     },
-    readConversation: (id) async => reread != null
-        ? reread!(id)
-        : rows.where((item) => item.conversationID == id).toList(),
+    readConversation: (id) async {
+      reads.add(id);
+      return reread != null
+          ? reread!(id)
+          : rows.where((item) => item.conversationID == id).toList();
+    },
     readHistory: (id, start) async => history != null
         ? await history!(id, start)
         : AdvancedMessage(messageList: [], isEnd: true),
@@ -271,13 +275,37 @@ void main() {
   test('all pages are read before deletion can shift the pagination offsets',
       () async {
     final f = _Fixture();
-    f.rows.addAll(
-        List.generate(399, (index) => _conversation(peer: 'ordinary-$index')));
-    f.rows.add(_conversation(peer: _otherPeer));
+    f.session = (owner: _peer, token: 'test-token', server: f.session.server);
+    f.rows
+      ..clear()
+      ..add(_conversation(owner: _peer, peer: 'first'))
+      ..addAll(List.generate(
+          399,
+          (index) => _conversation(owner: _peer, peer: 'ordinary-$index')
+            ..conversationType = ConversationType.superGroup))
+      ..add(_conversation(owner: _peer, peer: 'last'));
     await f.run();
     expect(f.events, ['page:0', 'page:400', 'delete', 'delete']);
     expect(f.deleted, hasLength(2));
     expect(f.rows, hasLength(399));
+  });
+
+  test('large ordinary accounts only query the two affected conversation IDs',
+      () async {
+    final f = _Fixture();
+    f.rows
+      ..clear()
+      ..addAll(List.generate(
+          3753, (index) => _conversation(peer: 'ordinary-$index')));
+    await f.run();
+    expect(f.events, isEmpty);
+    expect(f.requests, isEmpty);
+    expect(f.reads.toSet(), {
+      _conversation().conversationID,
+      _conversation(peer: _otherPeer).conversationID,
+    });
+    expect(f.reads, hasLength(2));
+    expect(f.rows, hasLength(3753));
   });
 
   test('failed SDK deletion is not acknowledged and retries on the next run',
