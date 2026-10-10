@@ -34,6 +34,8 @@ class ControlsView extends StatefulWidget {
       this.onSetCamera,
       this.onSwitchCamera,
       this.duration = 0,
+      this.microphoneEnabled,
+      this.speakerEnabled,
       this.active = true,
       this.connected = false});
   final Stream<Room> roomDidUpdateStream;
@@ -44,6 +46,7 @@ class ControlsView extends StatefulWidget {
   final String userID;
   final int duration;
   final bool active, connected;
+  final bool? microphoneEnabled, speakerEnabled;
   final VoidCallback? onMinimize;
   final void Function(bool enabled)? onEnabledMicrophone, onEnabledSpeaker;
   final Future<void> Function(bool)? onSetMicrophone, onSetSpeaker, onSetCamera;
@@ -86,10 +89,12 @@ class _ControlsViewState extends State<ControlsView> {
   }
 
   bool get _operable => mounted && widget.active;
+  bool get _currentMicrophone => widget.microphoneEnabled ?? _microphone;
+  bool get _currentSpeaker => widget.speakerEnabled ?? _speaker;
 
   Future<void> _toggleAudio() => _audioLock.synchronized(() async {
         if (!_operable) return;
-        final enabled = !_microphone;
+        final enabled = !_currentMicrophone;
         try {
           await widget.onSetMicrophone?.call(enabled);
           if (!_operable) return;
@@ -102,7 +107,7 @@ class _ControlsViewState extends State<ControlsView> {
 
   Future<void> _toggleSpeaker() => _speakerLock.synchronized(() async {
         if (!_operable) return;
-        final enabled = !_speaker;
+        final enabled = !_currentSpeaker;
         try {
           await widget.onSetSpeaker?.call(enabled);
           if (!_operable) return;
@@ -281,7 +286,7 @@ class _ControlsViewState extends State<ControlsView> {
     }
     return [
       LiveButton.microphone(
-          on: _microphone,
+          on: _currentMicrophone,
           foreground: foreground,
           onTap: enabled ? () => unawaited(_toggleAudio()) : null),
       widget.connected
@@ -291,7 +296,7 @@ class _ControlsViewState extends State<ControlsView> {
           : LiveButton.cancel(
               foreground: foreground, onTap: enabled ? widget.onCancel : null),
       LiveButton.speaker(
-          on: _speaker,
+          on: _currentSpeaker,
           foreground: foreground,
           onTap: enabled ? () => unawaited(_toggleSpeaker()) : null),
     ];

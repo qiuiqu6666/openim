@@ -14,6 +14,7 @@ import '../../../models/call_errors.dart';
 import '../../../models/incoming_call_preferences.dart';
 import '../../../platform/call_picture_in_picture.dart';
 import '../../../session/single_call_session.dart';
+import '../../../session/single_call_owner.dart';
 import '../../../widgets/call_compact_surface.dart';
 import '../../../widgets/call_surface/call_full_screen_surface.dart';
 import 'controls.dart';
@@ -47,6 +48,7 @@ abstract class SignalView extends StatefulWidget {
       this.onError,
       this.onRoomDisconnected,
       this.onTimeout,
+      this.owner,
       this.ringingTimeout = const Duration(seconds: 30)});
   final CallType callType;
   final CallState initState;
@@ -66,6 +68,7 @@ abstract class SignalView extends StatefulWidget {
   final void Function(EndCall end)? onBindEnd;
   final Function(dynamic error, dynamic stack)? onError;
   final Future<UserInfo?> Function(String userID)? onSyncUserInfo;
+  final SingleCallOwner? owner;
 }
 
 abstract class SignalState<T extends SignalView> extends State<T>
@@ -101,31 +104,40 @@ abstract class SignalState<T extends SignalView> extends State<T>
       onClosed: () =>
           unawaited(endActive(notifyPeer: true, reason: 'pipClosed')),
     )..addListener(_onPipChanged);
-    session = SingleCallSession(
-      initialState: widget.initState,
-      connect: _connectAttempt,
-      release: () async {
-        try {
-          await pictureInPicture.stop();
-        } finally {
-          await releaseMedia();
-        }
-      },
-      onTerminated: _onTerminated,
-      onClosed: () => widget.onClose?.call(),
-      ringingTimeout: widget.ringingTimeout,
-    )..addListener(_onSessionChanged);
+    session = widget.owner?.session ??
+        SingleCallSession(
+          initialState: widget.initState,
+          connect: _connectAttempt,
+          release: () async {
+            try {
+              await pictureInPicture.stop();
+            } finally {
+              await releaseMedia();
+            }
+          },
+          onTerminated: _onTerminated,
+          onClosed: () => widget.onClose?.call(),
+          ringingTimeout: widget.ringingTimeout,
+        );
+    session.addListener(_onSessionChanged);
+    widget.owner?.addReleaseHook(pictureInPicture.stop);
     callStateSubject.add(callState);
     enabledSpeaker = widget.callType == CallType.video;
     widget.onBindEnd?.call(endActive);
-    _signalSubscription = widget.callEventSubject.stream
-        .where((event) => event.data.invitation?.roomID == roomID)
-        .listen(_onSignal);
+    if (widget.owner == null) {
+      _signalSubscription = widget.callEventSubject.stream
+          .where((event) => event.data.invitation?.roomID == roomID)
+          .listen(_onSignal);
+    }
     WidgetsBinding.instance.addObserver(this);
     unawaited(_syncUser());
-    session.armDeadline();
-    if (widget.initState == CallState.call) unawaited(session.dial());
-    if (widget.autoPickup) unawaited(session.accept());
+    if (widget.owner == null) {
+      session.armDeadline();
+      if (widget.initState == CallState.call) unawaited(session.dial());
+      if (widget.autoPickup) unawaited(session.accept());
+    } else if (widget.owner!.systemCalls == null) {
+      unawaited(widget.owner!.start(autoPickup: widget.autoPickup));
+    }
   }
 
   Future<void> _syncUser() async {
@@ -166,12 +178,12 @@ abstract class SignalState<T extends SignalView> extends State<T>
         callState != CallState.beCalled &&
         !_incomingWaitingEnded) {
       _incomingWaitingEnded = true;
-      widget.onIncomingWaitingEnded?.call();
+      if (widget.owner == null) widget.onIncomingWaitingEnded?.call();
     }
     if (!callStateSubject.isClosed) callStateSubject.add(callState);
     if (session.connected && !_startedCalling) {
       _startedCalling = true;
-      widget.onStartCalling?.call();
+      if (widget.owner == null) widget.onStartCalling?.call();
     }
     syncPictureInPicture();
     _updateBackgroundCamera();
@@ -241,7 +253,8 @@ abstract class SignalState<T extends SignalView> extends State<T>
                   ? CallState.cancel
                   : CallState.reject,
           notifyPeer: notifyPeer);
-  Future<void> onTapPickup() => session.accept();
+  Future<void> onTapPickup() =>
+      widget.owner?.acceptFromUI() ?? session.accept();
   Future<void> onTapCancel() => session.end(CallState.cancel);
   Future<void> onTapReject() => session.end(CallState.reject);
   Future<void> onTapHangup(bool positive) =>
@@ -329,7 +342,14 @@ abstract class SignalState<T extends SignalView> extends State<T>
     // Session disposal stops PiP synchronously; detach before that stop can
     // notify a full-screen element which is already being unmounted.
     pictureInPicture.removeListener(_onPipChanged);
-    session.dispose();
+    widget.owner?.removeReleaseHook(pictureInPicture.stop);
+    if (widget.owner == null) {
+      session.dispose();
+    } else if (widget.owner!.systemCalls == null) {
+      // System calls may keep running with no mounted surface; other platforms
+      // retain the original behavior when the only call surface is disposed.
+      unawaited(widget.owner!.end(notifyPeer: false));
+    }
     pictureInPicture.dispose();
     callStateSubject.close();
     roomDidUpdateSubject.close();
@@ -382,6 +402,8 @@ abstract class SignalState<T extends SignalView> extends State<T>
                 duration: duration,
                 active: session.active,
                 connected: session.connected,
+                microphoneEnabled: widget.owner?.microphoneEnabled,
+                speakerEnabled: widget.owner?.speakerEnabled,
                 onMinimize: onTapMinimize,
                 onEnabledMicrophone: (enabled) => enabledMicrophone = enabled,
                 onEnabledSpeaker: (enabled) => enabledSpeaker = enabled,

@@ -214,8 +214,8 @@ class ChatForwardingController {
       return false;
     }
 
-    Future<bool> send(
-        Message message, ({String? userID, String? groupID}) target) async {
+    Future<bool> send(Message message,
+        ({String? userID, String? groupID, int? sessionType}) target) async {
       final receipt = await _sendForwarded(message, target);
       if (isClosed) return false;
       if (receipt?.isSuccess == true) {
@@ -238,14 +238,18 @@ class ChatForwardingController {
       if (result == null || result is! Map) return false;
       final checked = result['checkedList'];
       if (checked is! Iterable || checked.isEmpty) return false;
-      final targets = <({String? userID, String? groupID})>[];
+      final targets = <({String? userID, String? groupID, int? sessionType})>[];
       for (final contact in checked) {
         final userID =
             IMUtils.emptyStrToNull(IMUtils.convertCheckedToUserID(contact));
         final groupID =
             IMUtils.emptyStrToNull(IMUtils.convertCheckedToGroupID(contact));
         if ((userID != null) == (groupID != null)) return false;
-        targets.add((userID: userID, groupID: groupID));
+        targets.add((
+          userID: userID,
+          groupID: groupID,
+          sessionType: APNsOfflinePushInfo.sessionTypeForSelection(contact),
+        ));
       }
       final orderedIDs =
           messages.map((message) => message.clientMsgID!).toList();
@@ -283,13 +287,14 @@ class ChatForwardingController {
     }
   }
 
-  Future<FavoriteSendResult?> _sendForwarded(
-      Message message, ({String? userID, String? groupID}) target) async {
+  Future<FavoriteSendResult?> _sendForwarded(Message message,
+      ({String? userID, String? groupID, int? sessionType}) target) async {
     if (isClosed) return null;
     FavoriteSendResult? result;
     await _delivery.send(message,
         userId: target.userID,
         groupId: target.groupID,
+        destinationSessionType: target.sessionType,
         resetInput: false,
         favoriteResult: (value) => result = value);
     return result;

@@ -10,3 +10,7 @@ class CallBusy implements Exception {
 class InvalidCallCertificate implements Exception {
   const InvalidCallCertificate();
 }
+
+class CallRequestCancelled implements Exception {
+  const CallRequestCancelled();
+}

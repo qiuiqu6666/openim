@@ -36,6 +36,8 @@ class PushController extends GetxService {
   ///   - onTokenRefresh: A callback function that is invoked with the refreshed
   ///     token when using FCM. Required if the push type is FCM.
   static void login(String alias, {void Function(String token)? onTokenRefresh}) {
+    // iOS uses the app-owned direct APNs registration and account binding.
+    if (Platform.isIOS) return;
     if (PushController().pushType == PushType.FCM) {
       assert((PushController().pushType == PushType.FCM && onTokenRefresh != null));
 
@@ -47,6 +49,7 @@ class PushController extends GetxService {
   }
 
   static void logout() {
+    if (Platform.isIOS) return;
     if (PushController().pushType == PushType.FCM) {
       FCMPushController()._deleteToken();
     }

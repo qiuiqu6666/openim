@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -49,6 +50,11 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   @override
   IncomingCallPreferences preferencesForIncomingCall(String accountID) =>
       CallNotificationPreferences.read(accountID);
+
+  @override
+  SystemCallAdapter? get systemCallAdapter => Get.isRegistered<AppController>()
+      ? Get.find<AppController>().iosSystemCallAdapter
+      : null;
 
   @override
   void onCallWaitingStarted() {
@@ -356,6 +362,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   Future<void> _logoutSafely() async {
     // Login preparation can call this directly when replacing a native account.
     DeviceSyncRuntime.instance.resetSession();
+    if (Platform.isIOS) await initLogic.endRemotePushSession(logout: false);
     // End media/signaling while the old SDK account still owns the call.
     // The session queue prevents a new account from logging in during cleanup.
     try {

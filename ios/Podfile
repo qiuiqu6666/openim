@@ -26,6 +26,7 @@ end
 require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
 
 flutter_ios_podfile_setup
+require_relative 'scripts/apns_only_plugins'
 
 target 'Runner' do
   use_frameworks!
@@ -35,6 +36,7 @@ target 'Runner' do
 end
 
 post_install do |installer|
+  IOSAPNsPlugins.remove_fcm_registration!(File.join(__dir__, 'Runner', 'GeneratedPluginRegistrant.m'))
     
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)

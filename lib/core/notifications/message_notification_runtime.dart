@@ -14,6 +14,7 @@ import 'message_notification_target.dart';
 import 'notification_lookup_pool.dart';
 import 'system_message_notifier.dart';
 import '../../services/fund/fund_deposit_notice.dart';
+import '../push/apns/apns_notification_target.dart';
 
 typedef MessageNotificationSession = ({String accountID, String sessionKey});
 typedef ForegroundNotificationAlert = Future<void> Function({
@@ -39,6 +40,7 @@ class MessageNotificationRuntime {
     required Future<sdk.ConversationInfo> Function(MessageNotificationTarget)
         loadConversation,
     required Future<void> Function(sdk.ConversationInfo) openConversation,
+    this.openMessageList,
     required Future<void> Function(String, sdk.ConversationInfo) sendReply,
     required void Function(String) reportError,
     MessageNotificationAvatarCache? avatars,
@@ -63,6 +65,9 @@ class MessageNotificationRuntime {
   }
 
   final SystemMessageNotifier notifier;
+
+  /// The callback must check this guard again after any navigation await.
+  final Future<void> Function(bool Function() isCurrent)? openMessageList;
   final MessageNotificationSession? Function() currentSession;
   final bool Function() sdkReady;
   final bool Function() isForeground;
@@ -77,6 +82,13 @@ class MessageNotificationRuntime {
   late final StreamSubscription<String> _preferencesSubscription;
   late final NotificationLookupPool _lookups;
   final Set<String> _seen = <String>{};
+  final _remoteTaps =
+      <String, ({ApnsNotificationTarget target, int version})>{};
+  final _acceptedRemoteTaps = <String>{};
+  ({MessageNotificationSession session, int version})? _remoteFallback;
+  int _remoteTapVersion = 0;
+  String? _remoteTapSession;
+  Future<void>? _processingRemoteTaps;
   final _versions = <int, int>{};
   final _targets = <int, MessageNotificationTarget>{};
   final _operations = <int, Future<void>>{};
@@ -114,6 +126,135 @@ class MessageNotificationRuntime {
         actionId: response.actionId,
         input: response.input,
         notificationID: response.id));
+  }
+
+  /// APNs actions reuse local notification validation, queuing and navigation.
+  Future<void> handleRemoteTap(Map<String, dynamic> payload) async {
+    final session = currentSession();
+    if (_closed ||
+        session == null ||
+        _blockedSessionKey == session.sessionKey) {
+      return;
+    }
+    final target = apnsNotificationTarget(payload,
+        accountID: session.accountID, sessionKey: session.sessionKey);
+    if (target == null) {
+      if (apnsNotificationBelongsToAccount(payload,
+          accountID: session.accountID)) {
+        _queueRemoteFallback(session, ++_remoteTapVersion);
+        await _processRemoteTaps();
+      }
+      return;
+    }
+    if (!_owns(target.lookup)) return;
+    if (target.conversationID != null) {
+      final version = ++_remoteTapVersion;
+      _remoteFallback = null;
+      await _openRemoteTarget(target.lookup, epoch: _epoch, version: version);
+      return;
+    }
+    if (_remoteTapSession != session.sessionKey) {
+      _remoteTaps.clear();
+      _acceptedRemoteTaps.clear();
+      _remoteTapSession = session.sessionKey;
+    }
+    final key = jsonEncode([
+      target.accountID,
+      target.messageID ??
+          [target.conversationID, target.sessionType, target.sourceID],
+    ]);
+    if (_acceptedRemoteTaps.contains(key) || _remoteTaps.length >= 32) return;
+    _acceptedRemoteTaps.add(key);
+    _remoteFallback = null;
+    _remoteTaps[key] = (target: target, version: ++_remoteTapVersion);
+    await _processRemoteTaps();
+  }
+
+  bool get _remoteTapReady =>
+      !_closed &&
+      _ready &&
+      _allowed &&
+      sdkReady() &&
+      _sessionKey == currentSession()?.sessionKey;
+
+  Future<void> _processRemoteTaps() {
+    if (!_remoteTapReady) return Future<void>.value();
+    final pending = _processingRemoteTaps;
+    if (pending != null) return pending;
+    late final Future<void> processing;
+    processing = _drainRemoteTaps(_epoch).whenComplete(() {
+      if (identical(_processingRemoteTaps, processing)) {
+        _processingRemoteTaps = null;
+        if (_remoteTapReady &&
+            (_remoteTaps.isNotEmpty || _remoteFallback != null)) {
+          unawaited(_safe(_processRemoteTaps));
+        }
+      }
+    });
+    return _processingRemoteTaps = processing;
+  }
+
+  Future<void> _drainRemoteTaps(int epoch) async {
+    while (_epoch == epoch && _remoteTapReady && _remoteTaps.isNotEmpty) {
+      final entry = _remoteTaps.entries.first;
+      final remote = entry.value.target;
+      _remoteTaps.remove(entry.key);
+      if (!_owns(remote.lookup)) continue;
+      final conversation = await _lookups.read(remote.lookup);
+      if (_epoch != epoch || !_owns(remote.lookup)) return;
+      if (!_remoteTapReady) {
+        _remoteTaps[entry.key] = entry.value;
+        return;
+      }
+      if (conversation == null) {
+        _acceptedRemoteTaps.remove(entry.key);
+        _queueRemoteFallback(
+            (accountID: remote.accountID, sessionKey: remote.sessionKey),
+            entry.value.version);
+        continue;
+      }
+      final target = remote.resolve(conversation);
+      if (target != null) {
+        await _openRemoteTarget(target,
+            epoch: epoch, version: entry.value.version, remoteKey: entry.key);
+      } else {
+        _acceptedRemoteTaps.remove(entry.key);
+        _queueRemoteFallback(
+            (accountID: remote.accountID, sessionKey: remote.sessionKey),
+            entry.value.version);
+      }
+    }
+    final fallback = _remoteFallback;
+    if (fallback == null || _epoch != epoch || !_remoteTapReady) return;
+    _remoteFallback = null;
+    bool isCurrent() =>
+        _epoch == epoch &&
+        _remoteTapReady &&
+        currentSession() == fallback.session &&
+        _blockedSessionKey != fallback.session.sessionKey &&
+        _remoteTapVersion == fallback.version;
+    if (isCurrent()) await openMessageList?.call(isCurrent);
+  }
+
+  Future<void> _openRemoteTarget(MessageNotificationTarget target,
+          {required int epoch, required int version, String? remoteKey}) =>
+      _actions.handle(target.encode(), onOpenFailure: () {
+        if (_epoch != epoch || !_owns(target)) return;
+        if (remoteKey != null) _acceptedRemoteTaps.remove(remoteKey);
+        _queueRemoteFallback(
+            (accountID: target.accountID, sessionKey: target.sessionKey),
+            version);
+        // The action can complete in the remote drain or after a later SDK-ready
+        // trigger. Do not await the drain that may itself be awaiting this action.
+        unawaited(_safe(_processRemoteTaps));
+      });
+
+  void _queueRemoteFallback(MessageNotificationSession session, int version) {
+    if (openMessageList != null &&
+        currentSession() == session &&
+        version == _remoteTapVersion) {
+      _remoteFallback = (session: session, version: version);
+    }
   }
 
   bool _owns(MessageNotificationTarget target) {
@@ -186,6 +327,7 @@ class MessageNotificationRuntime {
     }
     if (_sessionCurrent(session, epoch)) {
       await _actions.processPending();
+      await _processRemoteTaps();
     }
   }
 
@@ -404,6 +546,9 @@ class MessageNotificationRuntime {
 
   void _preferencesChanged(String accountID) {
     if (_closed || currentSession()?.accountID != accountID) return;
+    // Profile preference hydration can finish after SDK sync/home navigation.
+    // Its same-account event must also resume clicks waiting on that readiness.
+    unawaited(_safe(() => onSessionReady()));
     if (stopForegroundAlerts != null) unawaited(_safe(stopForegroundAlerts!));
     for (final entry in _targets.entries.toList()) {
       if (!_owns(entry.value)) continue;
@@ -445,6 +590,12 @@ class MessageNotificationRuntime {
     _preparingSession = null;
     _allowed = false;
     _seen.clear();
+    _remoteTaps.clear();
+    _acceptedRemoteTaps.clear();
+    _remoteFallback = null;
+    _remoteTapVersion++;
+    _remoteTapSession = null;
+    _processingRemoteTaps = null;
     _versions.clear();
     _targets.clear();
     _arrivals.clear();

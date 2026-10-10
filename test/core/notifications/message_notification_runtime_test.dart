@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -26,6 +27,507 @@ void main() {
     await SpUtil().init();
   });
   tearDown(Get.reset);
+
+  Map<String, dynamic> apns({
+    String account = 'self',
+    String message = 'apns-message',
+    String sender = 'peer',
+    String group = '',
+    int type = 1,
+  }) =>
+      {
+        'openimAPNS': true,
+        'accountID': account,
+        'clientMsgID': message,
+        'ex': jsonEncode({
+          'version': 1,
+          'type': 'chat_message',
+          'sessionType': type,
+          'sendID': sender,
+          'groupID': group,
+        }),
+      };
+
+  test('OpenIM APNs tap waits for SDK and opens the SDK conversation ID',
+      () async {
+    final h = _Harness()..ready = false;
+    h.lookup = (target) async =>
+        h.conversation(target)..conversationID = 'actual-sdk-id';
+    final payload = apns()..['sessionKey'] = 'untrusted-server-session';
+    await h.runtime.handleRemoteTap(payload);
+    await h.runtime.handleRemoteTap(payload);
+    expect(h.lookups, 0);
+    expect(h.opened, isEmpty);
+    h.ready = true;
+    await h.start();
+    expect(h.opened.single.conversationID, 'actual-sdk-id');
+    expect(h.opened.single.userID, 'peer');
+    expect(h.lookups, 2,
+        reason: 'Resolve the real ID, then existing actions revalidate it');
+    await h.runtime.handleRemoteTap(payload);
+    expect(h.opened, hasLength(1));
+    expect(h.lookups, 2);
+  });
+
+  for (final type in [2, 3]) {
+    test('OpenIM APNs group $type opens groupID rather than sender', () async {
+      final h = _Harness();
+      await h.start();
+      await h.runtime.handleRemoteTap(
+          apns(type: type, group: 'team', sender: 'different-group-sender'));
+      expect(h.opened.single.groupID, 'team');
+      expect(h.opened.single.userID, isNull);
+      expect(h.opened.single.conversationType, type);
+    });
+  }
+
+  test('OpenIM APNs deduplicates account/clientMsgID even if source changes',
+      () async {
+    final h = _Harness();
+    final lookup = Completer<sdk.ConversationInfo>();
+    h.lookup = (target) =>
+        h.lookups == 1 ? lookup.future : Future.value(h.conversation(target));
+    await h.start();
+    final first = h.runtime.handleRemoteTap(apns());
+    await _flush();
+    final repeated = h.runtime.handleRemoteTap(apns(sender: 'another-peer'));
+    lookup.complete(h.conversation(h.target('apns-message')));
+    await Future.wait([first, repeated]);
+    expect(h.opened.single.userID, 'peer');
+    expect(h.lookups, 2);
+    await h.runtime.handleRemoteTap(apns(message: 'next-message'));
+    expect(h.opened, hasLength(2));
+  });
+
+  test('OpenIM APNs mismatched first lookup falls back and may retry safely',
+      () async {
+    final h = _Harness();
+    h.lookup = (target) async => h.conversation(target)..userID = 'other-peer';
+    await h.start();
+    await h.runtime.handleRemoteTap(apns());
+    expect(h.opened, isEmpty);
+    expect(h.lookups, 1);
+    expect(h.messageLists, 1);
+    h.lookup = null;
+    await h.runtime.handleRemoteTap(apns());
+    expect(h.opened.single.userID, 'peer');
+    expect(h.lookups, 3);
+    expect(h.messageLists, 1);
+  });
+
+  test('OpenIM APNs pending lookup is fenced by account/session change',
+      () async {
+    final h = _Harness();
+    final lookup = Completer<sdk.ConversationInfo>();
+    h.lookup = (_) => lookup.future;
+    await h.start();
+    final pending = h.runtime.handleRemoteTap(apns());
+    await _flush();
+    h.session = (accountID: 'different-account', sessionKey: 'session-2');
+    lookup.complete(h.conversation(h.target('apns-message')));
+    await pending;
+    expect(h.opened, isEmpty);
+  });
+
+  test('OpenIM APNs logout clears queued taps and ignores old recipients',
+      () async {
+    final h = _Harness()..ready = false;
+    await h.runtime.handleRemoteTap(apns());
+    h.runtime.invalidateSession();
+    h.session = (accountID: 'different-account', sessionKey: 'session-2');
+    h.ready = true;
+    await h.runtime.onSessionReady(authenticated: true);
+    await h.runtime.handleRemoteTap(apns());
+    expect(h.opened, isEmpty);
+    expect(h.lookups, 0);
+    await h.runtime.handleRemoteTap(apns(account: 'different-account'));
+    expect(h.opened.single.userID, 'peer');
+  });
+
+  test('old OpenIM APNs without ex never queries or navigates', () async {
+    final h = _Harness();
+    await h.start();
+    await h.runtime.handleRemoteTap(apns()..remove('ex'));
+    await h.runtime.handleRemoteTap({...apns(), 'ex': '{invalid'});
+    await h.runtime.handleRemoteTap(apns(account: 'another-account'));
+    expect(h.lookups, 0);
+    expect(h.opened, isEmpty);
+  });
+
+  test('SDK sync changing during APNs lookup preserves tap until ready',
+      () async {
+    final h = _Harness();
+    final lookup = Completer<sdk.ConversationInfo>();
+    h.lookup = (target) =>
+        h.lookups == 1 ? lookup.future : Future.value(h.conversation(target));
+    await h.start();
+    final pending = h.runtime.handleRemoteTap(apns());
+    await _flush();
+    h.ready = false;
+    lookup.complete(h.conversation(h.target('apns-message')));
+    await pending;
+    expect(h.opened, isEmpty);
+    h.ready = true;
+    await h.start();
+    expect(h.opened.single.conversationID, 'single-peer');
+  });
+
+  test('failed SDK APNs lookup may retry without fabricating a conversation',
+      () async {
+    final h = _Harness();
+    h.lookup = (_) async => throw StateError('SDK unavailable');
+    await h.start();
+    await h.runtime.handleRemoteTap(apns());
+    expect(h.opened, isEmpty);
+    h.lookup = null;
+    await h.runtime.handleRemoteTap(apns());
+    expect(h.opened.single.conversationID, 'single-peer');
+  });
+
+  for (final failure in ['exception', 'mismatch']) {
+    test('APNs second SDK lookup $failure falls back and safely permits retry',
+        () async {
+      final h = _Harness();
+      h.lookup = (target) async {
+        if (h.lookups == 2) {
+          if (failure == 'exception') throw StateError('second lookup failed');
+          return h.conversation(target)..conversationID = 'different-sdk-id';
+        }
+        return h.conversation(target);
+      };
+      await h.start();
+      final payload = apns();
+      await h.runtime.handleRemoteTap(payload);
+      expect(h.lookups, 2);
+      expect(h.opened, isEmpty);
+      expect(h.messageLists, 1);
+      expect(h.errors, hasLength(1));
+      await h.runtime.handleRemoteTap(payload);
+      expect(h.lookups, 4,
+          reason: 'A failed open releases both deduplication keys for retry');
+      expect(h.opened.single.conversationID, 'single-peer');
+      expect(h.messageLists, 1);
+      await h.runtime.handleRemoteTap(payload);
+      expect(h.lookups, 4);
+      expect(h.opened, hasLength(1),
+          reason:
+              'A successfully opened account/message pair stays deduplicated');
+    });
+  }
+
+  test('a full action queue falls back for APNs and permits that tap to retry',
+      () async {
+    final h = _Harness();
+    final firstLookup = Completer<sdk.ConversationInfo>();
+    h.lookup = (target) => h.lookups == 1
+        ? firstLookup.future
+        : Future.value(h.conversation(target));
+    await h.start();
+    final pending = <Future<void>>[];
+    for (var i = 0; i < 32; i++) {
+      pending.add(h.runtime.handleRemoteTap({
+        'accountID': 'self',
+        'conversationID': 'single-peer',
+        'sourceID': 'peer',
+        'sessionType': 1,
+        'clientMsgID': 'pending-local-format-$i',
+      }));
+    }
+    final payload = apns(sender: 'overflow-peer');
+    await h.runtime.handleRemoteTap(payload);
+    expect(h.messageLists, 1);
+    expect(h.opened, isEmpty);
+    expect(h.lookups, 2,
+        reason:
+            'The verified APNs destination cannot enter the full action queue');
+    firstLookup.complete(h.conversation(h.target('pending-local-format-0')));
+    await Future.wait(pending);
+    expect(h.opened, hasLength(32));
+    await h.runtime.handleRemoteTap(payload);
+    expect(h.opened, hasLength(33));
+    expect(h.opened.last.userID, 'overflow-peer');
+    expect(h.messageLists, 1);
+    expect(h.errors, hasLength(1));
+  });
+
+  for (final change in ['account', 'token', 'logout', 'close']) {
+    test(
+        'APNs second lookup failure after $change cannot open the message list',
+        () async {
+      final h = _Harness();
+      final secondLookup = Completer<sdk.ConversationInfo>();
+      final secondStarted = Completer<void>();
+      h.lookup = (target) {
+        if (h.lookups == 2) {
+          secondStarted.complete();
+          return secondLookup.future;
+        }
+        return Future.value(h.conversation(target));
+      };
+      await h.start();
+      final pending = h.runtime.handleRemoteTap(apns());
+      await secondStarted.future;
+      switch (change) {
+        case 'account':
+          h.session = (accountID: 'another-account', sessionKey: 'session-2');
+        case 'token':
+          h.session = (accountID: 'self', sessionKey: 'renewed-session');
+        case 'logout':
+          h.runtime.invalidateSession();
+        case 'close':
+          h.runtime.close();
+      }
+      secondLookup.completeError(StateError('late second lookup failure'));
+      await pending;
+      await _flush();
+      expect(h.messageLists, 0);
+      expect(h.opened, isEmpty);
+      expect(h.errors, isEmpty);
+    });
+  }
+
+  test('a newer APNs tap prevents an older second lookup failure from fallback',
+      () async {
+    final h = _Harness();
+    final secondLookup = Completer<sdk.ConversationInfo>();
+    final secondStarted = Completer<void>();
+    h.lookup = (target) {
+      if (h.lookups == 2) {
+        secondStarted.complete();
+        return secondLookup.future;
+      }
+      return Future.value(h.conversation(target));
+    };
+    await h.start();
+    final older = h.runtime.handleRemoteTap(apns(message: 'older'));
+    await secondStarted.future;
+    final newer = h.runtime
+        .handleRemoteTap(apns(message: 'newer', sender: 'new-destination'));
+    secondLookup.completeError(StateError('old second lookup failed'));
+    await Future.wait([older, newer]);
+    expect(h.messageLists, 0);
+    expect(h.opened.single.userID, 'new-destination');
+  });
+
+  test('second lookup failure fallback waits for SDK readiness', () async {
+    final h = _Harness();
+    final secondLookup = Completer<sdk.ConversationInfo>();
+    final secondStarted = Completer<void>();
+    h.lookup = (target) {
+      if (h.lookups == 2) {
+        secondStarted.complete();
+        return secondLookup.future;
+      }
+      return Future.value(h.conversation(target));
+    };
+    await h.start();
+    final pending = h.runtime.handleRemoteTap(apns());
+    await secondStarted.future;
+    h.ready = false;
+    secondLookup.completeError(StateError('SDK sync restarted'));
+    await pending;
+    expect(h.messageLists, 0);
+    h.ready = true;
+    await h.start();
+    expect(h.messageLists, 1);
+    expect(h.lookups, 2);
+    expect(h.opened, isEmpty);
+  });
+
+  test(
+      'logout cancels delayed fallback navigation after the second lookup fails',
+      () async {
+    final h = _Harness();
+    final navigation = Completer<void>();
+    h.beforeMessageList = navigation.future;
+    h.lookup = (target) async {
+      if (h.lookups == 2) throw StateError('second lookup failed');
+      return h.conversation(target);
+    };
+    await h.start();
+    final pending = h.runtime.handleRemoteTap(apns());
+    await h.messageListStarted.future;
+    h.runtime.invalidateSession();
+    navigation.complete();
+    await pending;
+    expect(h.messageLists, 0);
+    expect(h.opened, isEmpty);
+  });
+
+  test('same-account preference readiness resumes queued APNs without routing',
+      () async {
+    final h = _Harness()..ready = false;
+    await h.runtime.handleRemoteTap(apns());
+    // SDK sync/home has already fired; preference hydration was the last gate.
+    await h.runtime.onSessionReady(authenticated: true);
+    expect(h.opened, isEmpty);
+    h.ready = true;
+    MessageNotificationPreferences.notifyChanged('another-account');
+    await _flush();
+    expect(h.lookups, 0);
+    MessageNotificationPreferences.notifyChanged('self');
+    await _flush();
+    expect(h.opened.single.conversationID, 'single-peer');
+    expect(h.lookups, 2);
+  });
+
+  test('preference readiness cannot reopen a logged-out queued APNs session',
+      () async {
+    final h = _Harness()..ready = false;
+    await h.runtime.handleRemoteTap(apns());
+    h.runtime.invalidateSession();
+    h.ready = true;
+    MessageNotificationPreferences.notifyChanged('self');
+    await _flush();
+    expect(h.opened, isEmpty);
+    expect(h.lookups, 0);
+  });
+
+  test('missing or invalid OpenIM ex returns a warm app to message list',
+      () async {
+    final h = _Harness();
+    await h.start();
+    for (final payload in [
+      apns()..remove('ex'),
+      {...apns(), 'ex': '{invalid'},
+      {
+        ...apns(),
+        'ex': jsonEncode({'version': 2, 'type': 'chat_message'})
+      },
+    ]) {
+      await h.runtime.handleRemoteTap(payload);
+    }
+    expect(h.messageLists, 3);
+    expect(h.lookups, 0);
+    expect(h.opened, isEmpty);
+  });
+
+  test('unavailable or mismatched SDK APNs chat falls back to message list',
+      () async {
+    final h = _Harness();
+    await h.start();
+    h.lookup = (_) async => throw StateError('conversation unavailable');
+    await h.runtime.handleRemoteTap(apns());
+    expect(h.messageLists, 1);
+    h.lookup = (target) async => h.conversation(target)..userID = 'wrong-peer';
+    await h.runtime.handleRemoteTap(apns(message: 'different-message'));
+    expect(h.messageLists, 2);
+    expect(h.opened, isEmpty);
+    expect(h.lookups, 2);
+  });
+
+  test(
+      'APNs fallback waits for late preferences then resumes without SDK query',
+      () async {
+    final h = _Harness()..ready = false;
+    await h.runtime.handleRemoteTap(apns()..remove('ex'));
+    await h.runtime.onSessionReady(authenticated: true);
+    expect(h.messageLists, 0);
+    h.ready = true;
+    MessageNotificationPreferences.notifyChanged('self');
+    await _flush();
+    expect(h.messageLists, 1);
+    expect(h.lookups, 0);
+  });
+
+  test('a later valid APNs destination replaces an older queued fallback',
+      () async {
+    final h = _Harness()..ready = false;
+    await h.runtime.handleRemoteTap(apns()..remove('ex'));
+    await h.runtime.handleRemoteTap(apns(message: 'new-valid-click'));
+    h.ready = true;
+    await h.start();
+    expect(h.messageLists, 0);
+    expect(h.opened.single.conversationID, 'single-peer');
+  });
+
+  test('late failure of an older APNs lookup cannot replace a newer valid tap',
+      () async {
+    final h = _Harness();
+    final firstLookup = Completer<sdk.ConversationInfo>();
+    h.lookup = (target) => h.lookups == 1
+        ? firstLookup.future
+        : Future.value(h.conversation(target));
+    await h.start();
+    final older = h.runtime.handleRemoteTap(apns(message: 'older'));
+    await _flush();
+    final newer = h.runtime.handleRemoteTap(apns(message: 'newer'));
+    firstLookup.completeError(StateError('old conversation unavailable'));
+    await Future.wait([older, newer]);
+    expect(h.messageLists, 0);
+    expect(h.opened.single.conversationID, 'single-peer');
+  });
+
+  test('queued APNs fallback is cleared by logout/account replacement',
+      () async {
+    final h = _Harness()..ready = false;
+    await h.runtime.handleRemoteTap(apns()..remove('ex'));
+    h.runtime.invalidateSession();
+    h.session = (accountID: 'another-account', sessionKey: 'session-2');
+    h.ready = true;
+    await h.runtime.onSessionReady(authenticated: true);
+    expect(h.messageLists, 0);
+    expect(h.lookups, 0);
+    await h.runtime.handleRemoteTap(apns()..remove('ex'));
+    expect(h.messageLists, 0,
+        reason: 'The old recipient never navigates the new account');
+  });
+
+  test(
+      'fallback callback guard invalidates before delayed navigation on logout',
+      () async {
+    final h = _Harness();
+    final navigation = Completer<void>();
+    h.beforeMessageList = navigation.future;
+    await h.start();
+    final pending = h.runtime.handleRemoteTap(apns()..remove('ex'));
+    await h.messageListStarted.future;
+    h.runtime.invalidateSession();
+    navigation.complete();
+    await pending;
+    expect(h.messageLists, 0);
+  });
+
+  test('remote tap waits for SDK readiness and opens its verified chat once',
+      () async {
+    final h = _Harness()..ready = false;
+    final payload = {
+      'accountID': 'self',
+      'conversationID': 'single-peer',
+      'sourceID': 'peer',
+      'sessionType': 1,
+      'clientMsgID': 'remote-1',
+    };
+    await h.runtime.handleRemoteTap(payload);
+    await h.runtime.handleRemoteTap(payload);
+    expect(h.opened, isEmpty);
+    h.ready = true;
+    await h.start();
+    expect(h.opened.single.conversationID, 'single-peer');
+    expect(h.lookups, 1);
+  });
+
+  test('remote tap for another account or a mismatched SDK chat never opens',
+      () async {
+    final h = _Harness();
+    await h.start();
+    final payload = {
+      'accountID': 'other',
+      'conversationID': 'single-peer',
+      'sourceID': 'peer',
+      'sessionType': 1,
+      'clientMsgID': 'remote-other',
+    };
+    await h.runtime.handleRemoteTap(payload);
+    expect(h.lookups, 0);
+    await h.runtime.handleRemoteTap({
+      ...payload,
+      'accountID': 'self',
+      'conversationID': 'forged-conversation',
+    });
+    expect(h.opened, isEmpty);
+    expect(h.lookups, 1);
+  });
 
   test('first native notification is shown before its avatar becomes available',
       () async {
@@ -577,6 +1079,11 @@ class _Harness {
         return lookup?.call(target) ?? Future.value(conversation(target));
       },
       openConversation: (conversation) async => opened.add(conversation),
+      openMessageList: (isCurrent) async {
+        if (!messageListStarted.isCompleted) messageListStarted.complete();
+        await beforeMessageList;
+        if (isCurrent()) messageLists++;
+      },
       sendReply: (text, conversation) async {
         sent.add(text);
         if (!sendStarted.isCompleted) sendStarted.complete();
@@ -611,6 +1118,9 @@ class _Harness {
   String? activeConversationID;
   String? avatarURL;
   int lookups = 0;
+  int messageLists = 0;
+  final messageListStarted = Completer<void>();
+  Future<void>? beforeMessageList;
   final opened = <sdk.ConversationInfo>[];
   final sent = <String>[];
   final errors = <String>[];

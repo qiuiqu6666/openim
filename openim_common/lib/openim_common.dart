@@ -8,6 +8,7 @@ export 'src/widgets/action_sheet/app_action_sheet.dart';
 export 'src/apis.dart';
 export 'src/bridge/package_bridge.dart';
 export 'src/config.dart';
+export 'src/push/apns/apns_offline_push_info.dart';
 export 'src/controller/cache_controller.dart';
 export 'src/extension/custom_ext.dart';
 export 'src/extension/message_manager.dart';

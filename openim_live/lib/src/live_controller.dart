@@ -9,6 +9,7 @@ import 'package:rxdart/rxdart.dart';
 import 'package:uuid/uuid.dart';
 
 import 'live_client.dart';
+import 'models/call_errors.dart';
 import 'models/incoming_call_preferences.dart';
 import 'signaling/call_error_message.dart';
 import 'signaling/call_history_event.dart';
@@ -16,9 +17,11 @@ import 'signaling/call_record_writer.dart';
 import 'signaling/call_ringtone.dart';
 import 'signaling/call_signaling_protocol.dart';
 import 'signaling/call_signaling_transport.dart';
+import 'platform/system_call_adapter.dart';
 
 export 'signaling/call_signaling_protocol.dart';
 export 'signaling/call_history_event.dart';
+export 'models/call_errors.dart' show CallRequestCancelled;
 
 mixin OpenIMLive {
   final signalingSubject = PublishSubject<CallEvent>();
@@ -53,6 +56,16 @@ mixin OpenIMLive {
   Future<void>? _closeLiveRequest;
 
   bool get isBusy => OpenIMLiveClient().isBusy || _guard.activeRoomID != null;
+
+  @protected
+  SystemCallAdapter? get systemCallAdapter => null;
+
+  SystemCallDescriptor? get currentSystemCall =>
+      OpenIMLiveClient().currentSystemCall;
+
+  /// The application must verify a pushed invitation before calling this.
+  /// Online SDK invitations already use the same admission checks below.
+  bool restoreIncomingCall(SignalingInfo verified) => _admitIncoming(verified);
 
   /// Applications supply account-local storage through this package boundary.
   @protected
@@ -95,35 +108,44 @@ mixin OpenIMLive {
       _receive(CallState.beRejected, info);
   void beHangup(SignalingInfo info) => _receive(CallState.beHangup, info);
 
-  void receiveNewInvitation(SignalingInfo info) {
+  void receiveNewInvitation(SignalingInfo info) => _admitIncoming(info);
+
+  bool _admitIncoming(SignalingInfo info) {
     if (_liveClosed || _liveClosing || !validCallInvitation(info.invitation)) {
-      return;
+      return false;
     }
     final owner = OpenIM.iMManager.userID;
     final invitation = info.invitation!;
     if (owner.isEmpty ||
         !invitation.inviteeUserIDList!.contains(owner) ||
         info.userID != invitation.inviterUserID) {
-      return;
+      return false;
     }
     _bindAccount(owner);
     final room = invitation.roomID!;
-    if (_guard.isEnded(room) || _guard.activeRoomID == room) {
-      return;
+    if (_guard.isEnded(room)) return false;
+    if (_guard.activeRoomID == room) {
+      final active = _activeSignal?.invitation;
+      return active != null &&
+          active.inviterUserID == invitation.inviterUserID &&
+          active.mediaType == invitation.mediaType &&
+          active.sessionType == invitation.sessionType &&
+          const ListEquality<String>()
+              .equals(active.inviteeUserIDList, invitation.inviteeUserIDList);
     }
     if (invitation.sessionType != ConversationType.single || isBusy) {
       _roomAccounts[room] = owner;
       _run(_declineUnavailable(info));
-      return;
+      return false;
     }
     final deadline = callInviteDeadline(invitation);
     if (deadline != null && !deadline.isAfter(DateTime.now())) {
       _roomAccounts[room] = owner;
       _run(onTimeoutCancelled(info, requireActive: false));
-      return;
+      return false;
     }
     if (!_guard.begin(room, owner)) {
-      return;
+      return false;
     }
     _roomAccounts[room] = owner;
     _activeSignal = info;
@@ -131,7 +153,11 @@ mixin OpenIMLive {
     _incomingWaitingStoppedRoomID = null;
     _incomingCallPreferences.value = preferencesForIncomingCall(owner);
     onCallWaitingStarted();
+    // System actions can arrive before the next frame or stream delivery.
+    // Establish the shared owner synchronously, even without a call surface.
+    if (systemCallAdapter != null) _run(_openIncoming(info));
     signalingSubject.add(CallEvent(CallState.beCalled, info));
+    return true;
   }
 
   void _receive(CallState state, SignalingInfo info) {
@@ -182,6 +208,9 @@ mixin OpenIMLive {
         _pendingTimeout?.cancel();
         _pendingTimeout = null;
         _run(_openIncoming(invitation));
+      } else if (!background && systemCallAdapter != null) {
+        final context = Get.overlayContext;
+        if (context != null) OpenIMLiveClient().showActiveCall(context);
       }
     }));
     _subscriptions.add(roomParticipantDisconnectedSubject.listen((info) {
@@ -199,7 +228,7 @@ mixin OpenIMLive {
     if (event.state == CallState.beCalled) {
       if (!_isCurrent(event.data)) return;
       _run(_playSound(event.data));
-      if (_isRunningBackground) {
+      if (_isRunningBackground && systemCallAdapter == null) {
         _pendingInvitation = event.data;
         final deadline = callInviteDeadline(event.data.invitation) ??
             DateTime.now().add(const Duration(seconds: 30));
@@ -244,8 +273,14 @@ mixin OpenIMLive {
       return;
     }
     final owner = _owner(signal)!;
-    final context = Get.overlayContext;
-    if (context == null) {
+    final context = _isRunningBackground && systemCallAdapter != null
+        ? null
+        : Get.overlayContext;
+    if (OpenIMLiveClient().currentRoomID == signal.invitation!.roomID) {
+      if (context != null) OpenIMLiveClient().showActiveCall(context);
+      return;
+    }
+    if (context == null && systemCallAdapter == null) {
       await _declineUnavailable(signal);
       _releaseRoom(signal);
       await _stopSound();
@@ -276,6 +311,8 @@ mixin OpenIMLive {
       onError: (error, stack) => _onCallError(signal, owner, error, stack),
       onRoomDisconnected: () => onRoomDisconnected(signal),
       onClose: () => _releaseRoom(signal),
+      systemCall: _systemCall(signal),
+      systemCalls: systemCallAdapter,
     );
     if (!started) {
       await _declineUnavailable(signal);
@@ -360,6 +397,8 @@ mixin OpenIMLive {
       onError: (error, stack) => _onCallError(signal, owner, error, stack),
       onRoomDisconnected: () => onRoomDisconnected(signal),
       onClose: () => _releaseRoom(signal),
+      systemCall: _systemCall(signal),
+      systemCalls: systemCallAdapter,
     );
     if (!started) _releaseRoom(signal);
   }
@@ -603,7 +642,8 @@ mixin OpenIMLive {
   }
 
   Future<void> _playSound(SignalingInfo signal, {bool outgoing = false}) async {
-    if (_liveClosed ||
+    if (systemCallAdapter != null ||
+        _liveClosed ||
         _liveClosing ||
         _activeSignal?.invitation?.roomID != signal.invitation?.roomID ||
         !_isCurrent(signal) ||
@@ -646,6 +686,27 @@ mixin OpenIMLive {
 
   String? _owner(SignalingInfo signal) =>
       _roomAccounts[signal.invitation?.roomID];
+
+  SystemCallDescriptor _systemCall(SignalingInfo signal) {
+    final invitation = signal.invitation!;
+    final owner = _owner(signal)!;
+    final incoming = invitation.inviterUserID != owner;
+    final peer = incoming
+        ? invitation.inviterUserID!
+        : invitation.inviteeUserIDList!.first;
+    return SystemCallDescriptor(
+      accountID: owner,
+      roomID: invitation.roomID!,
+      peerUserID: peer,
+      callType:
+          invitation.mediaType == 'audio' ? CallType.audio : CallType.video,
+      incoming: incoming,
+      invitation: invitation,
+      deadline: callInviteDeadline(invitation),
+      peerName: _peerProfiles[peer]?.nickname,
+    );
+  }
+
   bool _isCurrent(SignalingInfo signal) =>
       !_liveClosed &&
       _guard.matches(signal.invitation?.roomID, OpenIM.iMManager.userID);
@@ -735,8 +796,4 @@ mixin OpenIMLive {
     onCallRecord = null;
     onSignalingMessage = null;
   }
-}
-
-class CallRequestCancelled implements Exception {
-  const CallRequestCancelled();
 }

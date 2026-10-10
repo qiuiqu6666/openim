@@ -148,6 +148,7 @@ class ChatFavoritesController {
       conversationID: conversationInfo.conversationID,
       userID: IMUtils.emptyStrToNull(userID),
       groupID: IMUtils.emptyStrToNull(groupID),
+      sessionType: conversationInfo.conversationType,
       displayName: _displayName(),
     );
     final scope = _repository.sessionScope;

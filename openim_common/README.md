@@ -14,6 +14,8 @@ and the Flutter guide for
 TODO: Put a short description of the package here that helps potential users
 know whether this package might be useful for them.
 
+共享离线消息推送协议位于 `lib/src/push/apns/apns_offline_push_info.dart`，通过 `openim_common.dart` 导出 `APNsOfflinePushInfo`。工厂只接收真实 SDK 发送者和目标会话类型，生成通用 APNs 提示及导航扩展；不读取应用状态、不请求服务、不包含消息正文。应用发送入口负责查询未知目标群类型与校验会话所有权，契约及回归测试见 [iOS APNs](../docs/ios-apns-push.md) 和 `test/core/push/apns/apns_offline_push_info_test.dart`。
+
 ## Features
 
 TODO: List what your package can do. Maybe include images, gifs, or videos.

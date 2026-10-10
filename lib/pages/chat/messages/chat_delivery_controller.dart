@@ -77,6 +77,7 @@ class ChatDeliveryController {
     Message message, {
     String? userId,
     String? groupId,
+    int? destinationSessionType,
     bool addToUI = true,
     bool resetInput = true,
     void Function(FavoriteSendResult)? favoriteResult,
@@ -129,6 +130,12 @@ class ChatDeliveryController {
       conversationID: conversationInfo.conversationID,
       userID: recvUserID,
       groupID: useOuterValue ? groupId : groupID,
+      sessionType: destinationSessionType ??
+          (!useOuterValue ||
+                  (groupId != null && groupId == groupID) ||
+                  (userId != null && userId == userID)
+              ? conversationInfo.conversationType
+              : null),
     );
     final presentation = onDeliveryStarted?.call(message, target);
     return _sendRaw(message, target).then((value) {

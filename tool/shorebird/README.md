@@ -82,6 +82,8 @@ Windows 实际调用 CLI 时，入口会临时追加进程级 Git 配置 core.lo
 
 在同一项目、同一配置和锁定依赖下直接使用官方 CLI。以下验证命令不上传：
 
+iOS 整包与 Shorebird 的 iOS 基础包、补丁构建共用 `ios/Runner.xcodeproj`：主应用 Bundle ID 为 `vip.99chat.ios`，通知扩展为 `vip.99chat.ios.NotificationService`，Debug / Release / Profile 一致。`shorebird.yaml` 的 `app_id` 继续使用已注册的云端应用 ID。包名变更须先在 Mac 上使用对应签名构建新基础包，后续补丁使用该基础版本。
+
 ~~~bash
 shorebird login
 shorebird doctor
@@ -144,9 +146,9 @@ shorebird patches rollback --release-version 3.0.1+22 --patch-number 1
 - APK 名称 99chat、版本 3.0.1+22、包名 chat.chat99.chatpro，签名 v2 验证通过。APK/AAB 均检查了自动更新配置、两个架构的完整 Shorebird 引擎，以及五种密度新图标与源图逐像素一致。
 - 修复了打包时混入缺少 Flutter 运行库的 armeabi-v7a 插件库问题，最终只包含 arm64-v8a、x86_64；APK 从约 315 MiB 降至 254 MiB。32 位设备不属于本次支持范围。
 - 发布配置和验证码桥接相关 6 项现有测试通过。未执行真机安装、补丁下载与冷启动、推送、通话和钱包实机验收，构建通过不能替代这些验收。
-- iOS 主应用 Bundle ID 已按用户指定改为 vip.99chat.ios2，通知扩展同步为 vip.99chat.ios2.NotificationService，三个构建配置一致。清除了旧 Bundle ID 的固定 provisioning profile。用户表示稍后提供 Apple Team ID 和 Mac 信息；发布证书和新 profile 仍待配置。
+- iOS 主应用 Bundle ID 已按用户指定改为 vip.99chat.ios，通知扩展同步为 vip.99chat.ios.NotificationService，三个构建配置一致。清除了旧 Bundle ID 的固定 provisioning profile。发布证书和新 profile 仍待配置；Shorebird iOS 基础包与补丁构建使用同一工程标识。
 - iOS 图标已从 launcher_icon/app-icon.png 重新生成，图标目录 19 项引用的尺寸和无 alpha 通道检查通过。当前原图为 254×254，1024×1024 商店图标为放大生成，正式提交前需验收清晰度。
-- iOS Firebase 配置仍绑定旧应用：ios/Runner/GoogleService-Info.plist 的 BUNDLE_ID 为 io.openim.flutter.base，openim_common/lib/src/controller/firebase_options.dart 的 iosBundleId 为 io.openim.flutter.full.NotificationService。必须用注册 vip.99chat.ios2 后取得的真实配置同步两处，不能只改字符串冒充注册完成。
+- iOS Firebase 配置仍绑定旧应用：ios/Runner/GoogleService-Info.plist 的 BUNDLE_ID 为 io.openim.flutter.base，openim_common/lib/src/controller/firebase_options.dart 的 iosBundleId 为 io.openim.flutter.full.NotificationService。必须用注册 vip.99chat.ios 后取得的真实配置同步两处，不能只改字符串冒充注册完成。
 - 当前执行环境为 Windows，iOS 尚未构建。需在 Mac 上完成签名配置、Shorebird 基础版本登记和 IPA/设备验收。
 
 ## 历史接入验证（2026-10-05）

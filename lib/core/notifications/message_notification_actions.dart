@@ -58,6 +58,7 @@ class MessageNotificationActions {
     String? actionId,
     String? input,
     int? notificationID,
+    void Function()? onOpenFailure,
   }) async {
     if (_closed) return;
     final target = MessageNotificationTarget.decode(payload);
@@ -95,11 +96,15 @@ class MessageNotificationActions {
     if (_accepted.contains(key)) return;
     if (_pending.length + (_processing == null ? 0 : 1) >= maxPending) {
       reportError('通知操作暂时过多，请稍后重试。');
+      _notifyOpenFailure(
+          _NotificationAction(
+              key, target, action, text, notificationID, onOpenFailure),
+          _generation);
       return;
     }
     _accepted.add(key);
-    _pending
-        .add(_NotificationAction(key, target, action, text, notificationID));
+    _pending.add(_NotificationAction(
+        key, target, action, text, notificationID, onOpenFailure));
     await processPending();
   }
 
@@ -132,6 +137,7 @@ class MessageNotificationActions {
         if (!_active(request.target, generation)) continue;
         if (!request.target.matches(conversation)) {
           reportError('通知对应的聊天已失效。');
+          _notifyOpenFailure(request, generation);
           continue;
         }
         // Readiness can change during the lookup. Preserve the accepted action
@@ -167,6 +173,7 @@ class MessageNotificationActions {
         // A failed lookup/navigation can be retried. Once send has begun its
         // outcome may be unknown, so native redelivery must not send again.
         if (!replyStarted) _accepted.remove(request.key);
+        if (!conversationOpened) _notifyOpenFailure(request, generation);
         reportError(request.action == openAction
             ? conversationOpened
                 ? '聊天已打开，但通知未能移除。'
@@ -180,6 +187,23 @@ class MessageNotificationActions {
 
   bool _active(MessageNotificationTarget target, int generation) =>
       !_closed && generation == _generation && isCurrentSession(target);
+
+  /// Remote taps may recover to the message list when opening fails. Local
+  /// actions keep their existing retry behavior when no observer is supplied.
+  void _notifyOpenFailure(_NotificationAction request, int generation) {
+    final callback = request.onOpenFailure;
+    if (request.action != openAction ||
+        callback == null ||
+        !_active(request.target, generation)) {
+      return;
+    }
+    _accepted.remove(request.key);
+    try {
+      callback();
+    } catch (_) {
+      // An optional recovery observer must not affect notification processing.
+    }
+  }
 
   /// Cancels queued work and invalidates continuations already awaiting SDK IO.
   void clearPending() {
@@ -198,12 +222,13 @@ class MessageNotificationActions {
 }
 
 class _NotificationAction {
-  const _NotificationAction(
-      this.key, this.target, this.action, this.text, this.notificationID);
+  const _NotificationAction(this.key, this.target, this.action, this.text,
+      this.notificationID, this.onOpenFailure);
 
   final String key;
   final MessageNotificationTarget target;
   final String action;
   final String? text;
   final int? notificationID;
+  final void Function()? onOpenFailure;
 }

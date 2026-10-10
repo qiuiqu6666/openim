@@ -26,6 +26,8 @@ import '../notifications/foreground_message_alert.dart';
 import '../notifications/notification_sound_activity.dart';
 import '../device_sync/device_sync_runtime.dart';
 import '../user_activity/activity_runtime.dart';
+import '../push/apns/apns_push_runtime.dart';
+import '../calling/ios/ios_callkit_runtime.dart';
 import 'im_controller.dart';
 
 class AppController extends GetxController with UpgradeManger {
@@ -33,6 +35,20 @@ class AppController extends GetxController with UpgradeManger {
 
   final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   MessageNotificationRuntime? _messageNotifications;
+  APNsPushRuntime? _apnsPush;
+  StreamSubscription<String>? _pushPreferenceChanges;
+  IOSCallKitRuntime? _iosCallKit;
+  VoidCallback? _messageListNavigation;
+  SystemCallAdapter? get iosSystemCallAdapter =>
+      Platform.isIOS ? _iosCallKit : null;
+
+  void registerMessageListNavigation(VoidCallback navigate) =>
+      _messageListNavigation = navigate;
+
+  void unregisterMessageListNavigation(VoidCallback navigate) {
+    if (_messageListNavigation == navigate) _messageListNavigation = null;
+  }
+
   int _notificationGeneration = 0;
 
   final initializationSettingsAndroid =
@@ -63,7 +79,7 @@ class AppController extends GetxController with UpgradeManger {
     if (_closed) return;
     Logger.print('-----App running background : $run-------------');
 
-    if (isRunningBackground && !run) {}
+    final resumed = isRunningBackground && !run;
     isRunningBackground = run;
     if (run) await _foregroundMessageAlerts.stop();
     DeviceSyncRuntime.instance.setForeground(!run);
@@ -76,6 +92,7 @@ class AppController extends GetxController with UpgradeManger {
       if (!run) unawaited(controller.refreshMyFullInfo());
     }
     if (!run) unawaited(onApplicationSessionReady());
+    if (resumed) unawaited(_apnsPush?.onForeground());
   }
 
   @override
@@ -133,9 +150,49 @@ class AppController extends GetxController with UpgradeManger {
         // A route future completes on page exit; dispatch navigation only.
         unawaited(AppNavigator.startChat(conversationInfo: conversation));
       },
+      openMessageList: (isCurrent) async {
+        if (!isCurrent()) return;
+        AppNavigator.startBackMain();
+        if (isCurrent()) _messageListNavigation?.call();
+      },
       sendReply: _sendNotificationReply,
       reportError: IMViews.showToast,
     );
+    _apnsPush = APNsPushRuntime(
+      sessionReady: _notificationSdkReady,
+      notificationsEnabled: (accountID) =>
+          MessageNotificationPreferences.read(accountID).notifyWhenClosed,
+      onNotificationTap: (payload) async {
+        await _messageNotifications?.handleRemoteTap(payload);
+      },
+    );
+    _pushPreferenceChanges = MessageNotificationPreferences.changes.listen(
+      (accountID) {
+        unawaited(_apnsPush?.onPreferencesChanged(accountID));
+      },
+    );
+    if (Platform.isIOS) {
+      _iosCallKit = IOSCallKitRuntime(
+        sessionReady: () =>
+            !_closed &&
+            Get.isRegistered<IMController>() &&
+            Get.find<IMController>().currentSdkStatus ==
+                IMSdkStatus.syncEnded &&
+            DataSp.userID == OpenIM.iMManager.userID,
+        acceptCall: OpenIMLiveClient().acceptActiveCall,
+        endCall: (room) => OpenIMLiveClient().currentRoomID == room
+            ? OpenIMLiveClient().endActiveCall()
+            : Future.value(),
+        setMicrophone: OpenIMLiveClient().setActiveMicrophone,
+        endLiveSession: () => Get.isRegistered<IMController>()
+            ? Get.find<IMController>().endLiveSession()
+            : Future.value(),
+      );
+      unawaited(_iosCallKit!.initialize().catchError((Object error) {
+        Logger.print('CallKit initialization unavailable: ${error.runtimeType}',
+            onlyConsole: true);
+      }));
+    }
     try {
       await _messageNotifications!.initialize();
     } catch (error) {
@@ -190,6 +247,8 @@ class AppController extends GetxController with UpgradeManger {
     if (_closed) return;
     // Each optional background service owns its errors and never delays login.
     unawaited(onNotificationSessionReady(authenticated: authenticated));
+    unawaited(_apnsPush?.onSessionReady(authenticated: authenticated));
+    unawaited(_iosCallKit?.onSessionReady(authenticated: authenticated));
     ActivityRuntime.instance.sessionReadyNow(authenticated: authenticated);
     try {
       await DeviceSyncRuntime.instance
@@ -212,6 +271,14 @@ class AppController extends GetxController with UpgradeManger {
     NotificationSoundActivity.interruptPreviews();
     _notificationGeneration++;
     _messageNotifications?.invalidateSession();
+    unawaited(endRemotePushSession());
+  }
+
+  Future<void> endRemotePushSession({bool logout = true}) async {
+    await Future.wait([
+      if (_apnsPush != null) _apnsPush!.endSession(logout: logout),
+      if (_iosCallKit != null) _iosCallKit!.endSession(logout: logout),
+    ]);
   }
 
   Future<void> _sendNotificationReply(
@@ -236,6 +303,7 @@ class AppController extends GetxController with UpgradeManger {
         message,
         FavoriteTarget(
           conversationID: conversation.conversationID,
+          sessionType: conversation.conversationType,
           userID: conversation.conversationType == ConversationType.single
               ? conversation.userID
               : null,
@@ -289,6 +357,10 @@ class AppController extends GetxController with UpgradeManger {
       ActivityRuntime.instance.dispose();
     }
     _messageNotifications?.close();
+    _messageListNavigation = null;
+    unawaited(_apnsPush?.dispose());
+    unawaited(_pushPreferenceChanges?.cancel());
+    unawaited(_iosCallKit?.dispose());
     closeSubject();
     unawaited(_foregroundMessageAlerts.dispose());
     super.onClose();

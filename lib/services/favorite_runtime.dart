@@ -142,6 +142,7 @@ class FavoriteRuntime {
           conversationID: conversation.conversationID,
           userID: user,
           groupID: group,
+          sessionType: conversation.conversationType,
           displayName: SelectContactsLogic.parseName(contact),
         );
         targets.add(target);

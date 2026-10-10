@@ -18,10 +18,12 @@ class FavoriteTarget {
       {required this.conversationID,
       this.userID,
       this.groupID,
+      this.sessionType,
       this.displayName});
   final String conversationID;
   final String? userID;
   final String? groupID;
+  final int? sessionType;
   final String? displayName;
   bool get isValid =>
       conversationID.trim().isNotEmpty &&
@@ -32,12 +34,15 @@ class FavoriteTarget {
         'conversationID': conversationID,
         if (userID != null) 'userID': userID,
         if (groupID != null) 'groupID': groupID,
+        if (sessionType != null) 'sessionType': sessionType,
         if (displayName != null) 'displayName': displayName
       };
   factory FavoriteTarget.fromJson(Map<String, dynamic> json) => FavoriteTarget(
       conversationID: json['conversationID'] as String,
       userID: json['userID'] as String?,
       groupID: json['groupID'] as String?,
+      sessionType:
+          json['sessionType'] is int ? json['sessionType'] as int : null,
       displayName: json['displayName'] as String?);
 }
 

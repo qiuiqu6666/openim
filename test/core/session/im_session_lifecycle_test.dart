@@ -25,6 +25,9 @@ class _App extends GetxController implements AppController {
   void clearMessageNotificationSession() {}
 
   @override
+  Future<void> endRemotePushSession({bool logout = true}) async {}
+
+  @override
   Future<void> onApplicationSessionReady({bool authenticated = false}) async {}
 
   @override

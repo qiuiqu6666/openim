@@ -1,6 +1,5 @@
 import UIKit
 import Flutter
-import FirebaseCore
 import UserNotifications
 
 @main
@@ -14,17 +13,21 @@ import UserNotifications
     var chatNotifications: ChatCommunicationNotificationBridge?
     var callPictureInPicture: CallPictureInPictureBridge?
     var deviceSyncOriginals: DeviceSyncOriginalsBridge?
+    private let apnsPush = IOSAPNsPushBridge()
+    private let voipCalls = IOSVoIPCallBridge()
     
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        voipCalls.start()
         guard let controller = window?.rootViewController as? FlutterViewController else {
             return super.application(application, didFinishLaunchingWithOptions: launchOptions)
         }
 
-        FirebaseApp.configure()
+        apnsPush.attach(messenger: controller.binaryMessenger)
+        voipCalls.attach(messenger: controller.binaryMessenger)
         pendingInvite = (launchOptions?[.url] as? URL)?.absoluteString
         inviteChannel = FlutterMethodChannel(name: "openim_friend_invites", binaryMessenger: controller.binaryMessenger)
         inviteChannel?.setMethodCallHandler { [weak self] call, result in
@@ -53,6 +56,49 @@ import UserNotifications
         chatNotifications = ChatCommunicationNotificationBridge(
             messenger: controller.binaryMessenger)
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    override func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        apnsPush.didRegister(deviceToken: deviceToken)
+        super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+    }
+
+    override func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        apnsPush.didFailToRegister(error: error)
+        super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
+    }
+
+    override func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        if notification.request.trigger is UNPushNotificationTrigger {
+            // The OpenIM message runtime owns foreground notifications.
+            completionHandler([])
+            return
+        }
+        super.userNotificationCenter(center, willPresent: notification, withCompletionHandler: completionHandler)
+    }
+
+    override func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if response.notification.request.trigger is UNPushNotificationTrigger {
+            apnsPush.didReceive(response: response)
+            completionHandler()
+            return
+        }
+        // Local chat notifications retain their plugin payload/click delivery.
+        super.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
     }
     
     override func application(_ app: UIApplication, open url: URL,

@@ -11,6 +11,8 @@ import 'models/call_types.dart';
 import 'models/incoming_call_preferences.dart';
 import 'pages/single/room.dart';
 import 'pages/single/widgets/call_state.dart';
+import 'platform/system_call_adapter.dart';
+import 'session/single_call_owner.dart';
 
 export 'models/call_types.dart';
 
@@ -37,6 +39,22 @@ class OpenIMLiveClient implements RTCBridge {
   Future<void>? _enablingWakelock;
   Future Function()? _cancelBeforeMount;
   VoidCallback? _onClose;
+  SingleCallOwner? _owner;
+  WidgetBuilder? _surface;
+
+  SystemCallDescriptor? get currentSystemCall => _owner?.call;
+
+  Future<bool> acceptActiveCall(String roomID) async {
+    final owner = _owner;
+    if (!isBusy || currentRoomID != roomID || owner == null) return false;
+    return owner.acceptFromSystem();
+  }
+
+  Future<bool> setActiveMicrophone(String roomID, bool enabled) async {
+    final owner = _owner;
+    if (!isBusy || currentRoomID != roomID || owner == null) return false;
+    return owner.setMicrophone(enabled);
+  }
 
   Future<void> quitClose(String roomID) =>
       currentRoomID == roomID ? endActiveCall(reason: 'quit') : Future.value();
@@ -87,6 +105,10 @@ class OpenIMLiveClient implements RTCBridge {
     _holder = null;
     _end = null;
     _cancelBeforeMount = null;
+    final owner = _owner;
+    _owner = null;
+    _surface = null;
+    owner?.dispose();
     final onClose = _onClose;
     _onClose = null;
     final enablingWakelock = _enablingWakelock;
@@ -116,7 +138,7 @@ class OpenIMLiveClient implements RTCBridge {
   }
 
   bool start(
-    BuildContext ctx, {
+    BuildContext? ctx, {
     required PublishSubject<CallEvent> callEventSubject,
     String? roomID,
     CallState initState = CallState.call,
@@ -148,6 +170,8 @@ class OpenIMLiveClient implements RTCBridge {
     Function(dynamic error, dynamic stack)? onError,
     VoidCallback? onRoomDisconnected,
     Duration ringingTimeout = const Duration(seconds: 30),
+    SystemCallDescriptor? systemCall,
+    SystemCallAdapter? systemCalls,
   }) {
     if (isBusy || _ending != null) return false;
     if (callObj != CallObj.single ||
@@ -157,11 +181,16 @@ class OpenIMLiveClient implements RTCBridge {
         inviterUserID.isEmpty) {
       return false;
     }
+    // A native call must retain a verified original invitation. The legacy
+    // widget-only entry may derive its local descriptor from existing inputs.
+    if (systemCalls != null && systemCall == null) return false;
     // Get 4.x can supply the Navigator's overlay theater context, outside an
     // OverlayEntry. Newer Flutter only resolves Overlay.maybeOf inside an
     // entry marker; use this same context's Navigator, never another window.
-    final overlay = Overlay.maybeOf(ctx) ?? Navigator.maybeOf(ctx)?.overlay;
-    if (overlay == null) return false;
+    final overlay = ctx == null
+        ? null
+        : Overlay.maybeOf(ctx) ?? Navigator.maybeOf(ctx)?.overlay;
+    if (overlay == null && systemCalls == null) return false;
     final generation = ++_generation;
     _finishing = null;
     isBusy = true;
@@ -169,50 +198,119 @@ class OpenIMLiveClient implements RTCBridge {
     _onClose = onClose;
     _cancelBeforeMount =
         initState == CallState.call ? onTapCancel : onTapReject;
-    FocusScope.of(ctx).unfocus();
-    _holder = OverlayEntry(
-        builder: (_) => SingleRoomView(
-              callType: callType,
-              initState: initState,
-              callEventSubject: callEventSubject,
-              roomID: roomID,
-              userID: initState == CallState.call
-                  ? inviteeUserIDList.first
-                  : inviterUserID,
-              onDial: onDialSingle,
-              onTapCancel: onTapCancel,
-              onTapHangup: onTapHangup,
-              onTapReject: onTapReject,
-              onTapPickup: onTapPickup,
-              onTimeout: onTimeout,
-              onSyncUserInfo: onSyncUserInfo,
-              autoPickup: autoPickup,
-              incomingCallPreferences: incomingCallPreferences,
-              onIncomingWaitingEnded: onIncomingWaitingEnded,
-              ringingTimeout: ringingTimeout,
-              onBindRoomID: (id) {
-                if (generation == _generation && isBusy) currentRoomID = id;
-              },
-              onBindEnd: (end) {
-                if (generation == _generation && isBusy) {
-                  _end = end;
-                } else {
-                  unawaited(end(notifyPeer: false, reason: 'stale'));
-                }
-              },
-              onWaitingAccept: onWaitingAccept,
-              onBusyLine: onBusyLine,
-              onStartCalling: onStartCalling,
-              onError: onError,
-              onRoomDisconnected: onRoomDisconnected,
-              onClose: () => unawaited(_finish(generation)),
-            ));
-    overlay.insert(_holder!);
+    final incoming = initState != CallState.call;
+    final account = systemCall?.accountID ??
+        (incoming ? inviteeUserIDList.first : inviterUserID);
+    final descriptor = systemCall ??
+        SystemCallDescriptor(
+          accountID: account,
+          roomID: roomID,
+          peerUserID: incoming ? inviterUserID : inviteeUserIDList.first,
+          callType: callType,
+          incoming: incoming,
+          invitation: InvitationInfo(
+            inviterUserID: inviterUserID,
+            inviteeUserIDList: inviteeUserIDList,
+            roomID: roomID,
+            mediaType: callType == CallType.audio ? 'audio' : 'video',
+            initiateTime: DateTime.now().millisecondsSinceEpoch,
+            timeout: ringingTimeout.inSeconds,
+            sessionType: ConversationType.single,
+          ),
+          deadline: DateTime.now().add(ringingTimeout),
+        );
+    final owner = SingleCallOwner(
+      call: descriptor,
+      initialState: initState,
+      events: callEventSubject,
+      systemCalls: systemCalls,
+      isCurrentAccount: () =>
+          generation == _generation &&
+          isBusy &&
+          (systemCall == null ||
+              descriptor.accountID == OpenIM.iMManager.userID),
+      certificate: (outgoing) => outgoing ? onDialSingle!() : onTapPickup!(),
+      onWaitingAccept: onWaitingAccept,
+      onStartCalling: onStartCalling,
+      onIncomingWaitingEnded: onIncomingWaitingEnded,
+      onClosed: () => unawaited(_finish(generation)),
+      onTerminated: (result) async {
+        switch (result.state) {
+          case CallState.networkError:
+            await onError?.call(result.error ?? StateError('Call disconnected'),
+                result.stackTrace);
+            break;
+          case CallState.timeout:
+            await onTimeout?.call();
+            break;
+          case CallState.cancel:
+            if (result.notifyPeer) await onTapCancel?.call();
+            break;
+          case CallState.reject:
+            if (result.notifyPeer) await onTapReject?.call();
+            break;
+          case CallState.hangup:
+          case CallState.beHangup:
+            await onTapHangup?.call(result.duration, result.notifyPeer);
+            break;
+          default:
+            break;
+        }
+      },
+    );
+    _owner = owner;
+    _end = owner.end;
+    _surface = (_) => SingleRoomView(
+          owner: owner,
+          callType: callType,
+          initState: initState,
+          callEventSubject: callEventSubject,
+          roomID: roomID,
+          userID: initState == CallState.call
+              ? inviteeUserIDList.first
+              : inviterUserID,
+          onDial: onDialSingle,
+          onTapCancel: onTapCancel,
+          onTapHangup: onTapHangup,
+          onTapReject: onTapReject,
+          onTapPickup: onTapPickup,
+          onTimeout: onTimeout,
+          onSyncUserInfo: onSyncUserInfo,
+          autoPickup: autoPickup,
+          incomingCallPreferences: incomingCallPreferences,
+          onIncomingWaitingEnded: onIncomingWaitingEnded,
+          ringingTimeout: ringingTimeout,
+          onBindRoomID: (id) {
+            if (generation == _generation && isBusy) currentRoomID = id;
+          },
+          onWaitingAccept: onWaitingAccept,
+          onBusyLine: onBusyLine,
+          onStartCalling: onStartCalling,
+          onError: onError,
+          onRoomDisconnected: onRoomDisconnected,
+        );
+    if (overlay != null) showActiveCall(ctx!);
     _enablingWakelock =
         Future<void>.sync(WakelockPlus.enable).catchError((Object e) {
       Logger.print('Call wakelock: ${e.runtimeType}');
     });
     unawaited(_enablingWakelock!);
+    if (systemCalls != null) {
+      unawaited(owner.start(autoPickup: autoPickup));
+    }
+    return true;
+  }
+
+  /// Foreground rendering borrows the already-running session and room.
+  bool showActiveCall(BuildContext context) {
+    if (!isBusy || _owner?.current != true || _surface == null) return false;
+    if (_holder != null) return true;
+    final overlay =
+        Overlay.maybeOf(context) ?? Navigator.maybeOf(context)?.overlay;
+    if (overlay == null) return false;
+    FocusScope.of(context).unfocus();
+    _holder = OverlayEntry(builder: _surface!);
+    overlay.insert(_holder!);
     return true;
   }
 }

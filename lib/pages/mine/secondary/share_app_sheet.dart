@@ -7,6 +7,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../routes/app_navigator.dart';
+import '../../../services/chat_message_sender.dart';
+import '../../../services/favorite_send_coordinator.dart';
+import '../../../services/messaging/message_send_session.dart';
 import '../../contacts/select_contacts/select_contacts_logic.dart';
 import '../settings/widgets/settings_widgets.dart';
 
@@ -122,33 +125,40 @@ class _ShareAppSheetState extends State<ShareAppSheet> {
     final text = _shareText(context);
     final sharedText = settingsText(context, zh: '已分享', en: 'Shared');
     final failedText = settingsText(context, zh: '分享失败', en: 'Share failed');
+    final sendSession = MessageSendSession.capture();
     Navigator.of(context).pop();
     final result = await AppNavigator.startSelectContacts(
       action: SelAction.forward,
       ex: text,
     );
-    if (result == null) return;
+    if (result == null || !sendSession.current) return;
 
     try {
       final checkedList = result['checkedList'];
       if (checkedList is! Iterable) return;
       var sent = 0;
       for (final info in checkedList) {
+        if (!sendSession.current) return;
         final userID = IMUtils.convertCheckedToUserID(info);
         final groupID = IMUtils.convertCheckedToGroupID(info);
         final message =
             await OpenIM.iMManager.messageManager.createTextMessage(text: text);
-        await OpenIM.iMManager.messageManager.sendMessage(
-          message: message,
-          userID: userID,
-          groupID: groupID,
-          offlinePushInfo: Config.offlinePushInfo,
-        );
+        if (!sendSession.current) return;
+        await ChatMessageSender().sendRaw(
+            message,
+            FavoriteTarget(
+              conversationID: '',
+              userID: userID,
+              groupID: groupID,
+              sessionType: APNsOfflinePushInfo.sessionTypeForSelection(info),
+            ));
         sent++;
       }
-      if (sent > 0) _toast(sharedText);
+      if (sent > 0 && sendSession.current) _toast(sharedText);
+    } on MessageSendSessionChanged {
+      return;
     } catch (_) {
-      _toast(failedText);
+      if (sendSession.current) _toast(failedText);
     }
   }
 

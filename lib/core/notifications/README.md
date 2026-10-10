@@ -37,7 +37,7 @@
 
 Android 使用 FLN 18.0.1，Manifest 包含通知权限和动作接收器。iOS 头像采用通信通知，配置包含 Communication Notifications entitlement、INSendMessageIntent activity 与原生桥接文件；完整契约见 [iOS 说明](../../../ios/Runner/Notifications/README.md)。Mac 上仍需编译、确认 Apple 签名 capability，并在真机验收头像、横幅与文本回复；Windows 无法验证这些环节。
 
-本模块不提供应用被完全终止后的远程消息接收。该场景继续由现有推送链路负责；远程通知头像与回复需要推送服务及 iOS Notification Service Extension 另行联动。
+应用被完全终止后的 iOS 消息提醒由 [APNs 推送模块](../push/apns/README.md) 接入 Apple 远程推送；点击后复用本模块的会话就绪队列、收件人校验与 SDK 目的会话验证。接口、点击 payload 和签名要求见 [APNs 接入说明](../../../docs/ios-apns-push.md)。远程通知头像与回复仍需推送服务及 iOS Notification Service Extension 联动。
 
 测试位于 `test/core/notifications/`，覆盖展示策略、严格目标校验、重复回调、账号切换、乱序查询、隐私变化、初始化并发、回复在途的新消息与原生平台参数。聊天入口的集成回归仍在 `test/integration/chat/chat_entry_performance_test.dart`。
 

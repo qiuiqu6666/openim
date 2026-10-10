@@ -4,6 +4,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'favorite_send_coordinator.dart';
+import 'messaging/message_send_session.dart';
 
 typedef FavoriteSdkTransport = Future<Message> Function(
     Message message, FavoriteTarget target);
@@ -41,14 +42,45 @@ class ChatMessageSender {
           'Create a new message before sending');
     }
     if (_transport != null) return _transport(message, target);
+    final session = MessageSendSession.capture();
+    final push =
+        await _offlinePush(session.accountID, target, hasGroup ? group : null);
+    session.check();
     return observeUserActivity(
         messageActivity(message.contentType),
         () => OpenIM.iMManager.messageManager.sendMessage(
               message: message,
               userID: hasUser ? user : null,
               groupID: hasGroup ? group : null,
-              offlinePushInfo: Config.offlinePushInfo,
+              offlinePushInfo: push,
+              isOnlineOnly: false,
             ));
+  }
+
+  Future<OfflinePushInfo> _offlinePush(
+      String owner, FavoriteTarget target, String? groupID) async {
+    try {
+      var type = groupID == null ? ConversationType.single : target.sessionType;
+      if (groupID != null && type == null) {
+        final groups = await OpenIM.iMManager.groupManager.getGroupsInfo(
+            groupIDList: [groupID]).timeout(const Duration(seconds: 2));
+        for (final group in groups) {
+          if (group.groupID == groupID) {
+            type = APNsOfflinePushInfo.sessionTypeForGroup(group);
+            break;
+          }
+        }
+      }
+      if (type == null) {
+        throw const FormatException('Unknown SDK destination type');
+      }
+      return APNsOfflinePushInfo.chatMessage(
+          sendID: owner, sessionType: type, groupID: groupID);
+    } catch (error) {
+      // Metadata failure cannot fail ordinary delivery or guess another chat.
+      Logger.print('Message APNs metadata unavailable: ${error.runtimeType}');
+      return APNsOfflinePushInfo.generic();
+    }
   }
 
   Future<FavoriteSendResult> send(

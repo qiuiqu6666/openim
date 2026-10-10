@@ -270,6 +270,33 @@ void main() {
       expect(h.cancelled, [1, 2, 3]);
     });
 
+    test(
+        'a full queue reports failed open without changing local reply behavior',
+        () async {
+      final h = _Harness(maxPending: 1)..ready = false;
+      var failures = 0;
+      await h.reply(id: 1);
+      final target = _target(messageID: 'queue-overflow');
+      await h.actions.handle(target.encode(),
+          notificationID: 2, onOpenFailure: () => failures++);
+      await h.actions.handle(target.encode(),
+          actionId: MessageNotificationActions.replyAction,
+          input: 'queued reply',
+          onOpenFailure: () => failures++);
+      expect(failures, 1);
+      expect(h.actions.pendingCount, 1);
+      expect(h.lookups, 0);
+      expect(h.errors, hasLength(2));
+      h.ready = true;
+      await h.actions.processPending();
+      await h.actions.handle(target.encode(),
+          notificationID: 2, onOpenFailure: () => failures++);
+      expect(failures, 1);
+      expect(h.sent, ['reply']);
+      expect(h.opened, ['conversation']);
+      expect(h.cancelled, [1, 2]);
+    });
+
     test('duplicates during lookup, send and after receipt cannot send twice',
         () async {
       final h = _Harness();
@@ -475,6 +502,99 @@ void main() {
       await h.actions.handle(_target().encode(), notificationID: 1);
       expect(h.opened, ['conversation', 'conversation']);
       expect(h.cancelled, [1]);
+      expect(h.errors, hasLength(1));
+    });
+
+    for (final failure in ['lookup', 'mismatch', 'navigation']) {
+      test('open failure observer reports $failure and allows a later tap',
+          () async {
+        final h = _Harness();
+        var failures = 0;
+        if (failure == 'lookup') {
+          h.lookup = (_) async => throw StateError('SDK lookup failed');
+        } else if (failure == 'mismatch') {
+          h.lookup = (target) async =>
+              _conversation(target)..userID = 'different-peer';
+        } else {
+          h.onOpen = (_) async => throw StateError('navigation failed');
+        }
+        final target = _target(messageID: 'observed-open');
+        await h.actions.handle(target.encode(),
+            notificationID: 7, onOpenFailure: () => failures++);
+        expect(failures, 1);
+        expect(h.cancelled, isEmpty);
+        h.lookup = null;
+        h.onOpen = null;
+        await h.actions.handle(target.encode(),
+            notificationID: 7, onOpenFailure: () => failures++);
+        expect(failures, 1);
+        expect(h.cancelled, [7]);
+        expect(h.errors, hasLength(1));
+      });
+    }
+
+    test(
+        'failure to remove an opened chat notification never reports open failure',
+        () async {
+      final h = _Harness();
+      var failures = 0;
+      h.onCancel = (_) async => throw StateError('native cancel failed');
+      await h.actions.handle(_target().encode(),
+          notificationID: 7, onOpenFailure: () => failures++);
+      expect(h.opened, ['conversation']);
+      expect(failures, 0);
+      expect(h.errors.single, contains('聊天已打开'));
+    });
+
+    for (final change in ['account', 'token', 'close', 'clear']) {
+      test('$change fences the open failure observer after a delayed lookup',
+          () async {
+        final h = _Harness();
+        final lookup = Completer<ConversationInfo>();
+        var failures = 0;
+        h.lookup = (_) => lookup.future;
+        final pending = h.actions
+            .handle(_target().encode(), onOpenFailure: () => failures++);
+        switch (change) {
+          case 'account':
+            h.accountID = 'other';
+          case 'token':
+            h.sessionKey = 'renewed-session';
+          case 'close':
+            h.actions.close();
+          case 'clear':
+            h.actions.clearPending();
+        }
+        lookup.completeError(StateError('late SDK failure'));
+        await pending;
+        expect(failures, 0);
+        expect(h.opened, isEmpty);
+        expect(h.errors, isEmpty);
+      });
+    }
+
+    test('an open failure observer cannot affect notification processing',
+        () async {
+      final h = _Harness();
+      h.lookup = (_) async => throw StateError('SDK lookup failed');
+      await h.actions.handle(_target().encode(),
+          onOpenFailure: () => throw StateError('recovery failed'));
+      expect(h.errors.single, contains('无法打开'));
+      h.lookup = null;
+      await h.actions.handle(_target().encode());
+      expect(h.opened, ['conversation']);
+    });
+
+    test('reply failure never invokes an open failure observer', () async {
+      final h = _Harness();
+      var failures = 0;
+      h.lookup = (_) async => throw StateError('SDK lookup failed');
+      await h.actions.handle(_target().encode(),
+          actionId: MessageNotificationActions.replyAction,
+          input: 'reply',
+          onOpenFailure: () => failures++);
+      expect(failures, 0);
+      expect(h.sent, isEmpty);
       expect(h.errors, hasLength(1));
     });
 

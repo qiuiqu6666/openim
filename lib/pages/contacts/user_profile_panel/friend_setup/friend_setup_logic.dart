@@ -5,6 +5,9 @@ import 'package:openim_common/openim_common.dart';
 
 import '../../../../routes/app_navigator.dart';
 import '../../../../services/chat_history_cache.dart';
+import '../../../../services/chat_message_sender.dart';
+import '../../../../services/favorite_send_coordinator.dart';
+import '../../../../services/messaging/message_send_session.dart';
 import '../../../chat/chat_logic.dart';
 import '../../../conversation/conversation_logic.dart';
 import '../../select_contacts/select_contacts_logic.dart';
@@ -100,7 +103,7 @@ class FriendSetupLogic extends GetxController {
     }
   }
 
-  recommendToFriend() async {
+  Future<void> recommendToFriend() async {
     final isRegistered = Get.isRegistered<ChatLogic>(tag: GetTags.chat);
     if (isRegistered) {
       final logic = Get.find<ChatLogic>(tag: GetTags.chat);
@@ -108,16 +111,19 @@ class FriendSetupLogic extends GetxController {
           UserInfo.fromJson(userProfilesLogic.userInfo.value.toJson()));
       return;
     }
+    final sendSession = MessageSendSession.capture();
     final result = await AppNavigator.startSelectContacts(
       action: SelAction.recommend,
       sharedContact:
           UserInfo.fromJson(userProfilesLogic.userInfo.value.toJson()),
       ex: '[${StrRes.carte}]${userProfilesLogic.userInfo.value.nickname}',
     );
+    if (!sendSession.current) return;
     if (null != result) {
       final customEx = result['customEx'];
       final checkedList = result['checkedList'];
       for (var info in checkedList) {
+        if (!sendSession.current) return;
         final userID = IMUtils.convertCheckedToUserID(info);
         final groupID = IMUtils.convertCheckedToGroupID(info);
         final String extension;
@@ -128,28 +134,32 @@ class FriendSetupLogic extends GetxController {
           if (isSilentFriendRisk(error)) return;
           rethrow;
         }
-        if (customEx is String && customEx.isNotEmpty) {
-          OpenIM.iMManager.messageManager.sendMessage(
-            message: await OpenIM.iMManager.messageManager.createTextMessage(
-              text: customEx,
-            ),
-            userID: userID,
-            groupID: groupID,
-            offlinePushInfo: Config.offlinePushInfo,
-          );
-        }
-
-        OpenIM.iMManager.messageManager.sendMessage(
-          message: await OpenIM.iMManager.messageManager.createCardMessage(
+        if (!sendSession.current) return;
+        final target = FavoriteTarget(
+          conversationID: '',
+          userID: userID,
+          groupID: groupID,
+          sessionType: APNsOfflinePushInfo.sessionTypeForSelection(info),
+        );
+        try {
+          if (customEx is String && customEx.isNotEmpty) {
+            final message = await OpenIM.iMManager.messageManager
+                .createTextMessage(text: customEx);
+            if (!sendSession.current) return;
+            await ChatMessageSender().sendRaw(message, target);
+          }
+          if (!sendSession.current) return;
+          final card = await OpenIM.iMManager.messageManager.createCardMessage(
             userID: userProfilesLogic.userInfo.value.userID!,
             ex: extension,
             nickname: userProfilesLogic.userInfo.value.showName,
             faceURL: userProfilesLogic.userInfo.value.faceURL,
-          ),
-          userID: userID,
-          groupID: groupID,
-          offlinePushInfo: Config.offlinePushInfo,
-        );
+          );
+          if (!sendSession.current) return;
+          await ChatMessageSender().sendRaw(card, target);
+        } on MessageSendSessionChanged {
+          return;
+        }
       }
     }
   }

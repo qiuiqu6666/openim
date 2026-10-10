@@ -14,6 +14,7 @@ import 'home_logic.dart';
 import 'glass_bottom_nav_bar.dart';
 import '../../widgets/theme_aware_page.dart';
 import '../../core/controller/im_controller.dart';
+import '../../core/controller/app_controller.dart';
 import 'package:persistent_bottom_nav_bar_v2/persistent_bottom_nav_bar_v2.dart';
 
 enum _MainTab { messages, groups, contacts, wallet, me }
@@ -41,6 +42,20 @@ class _HomePageState extends State<HomePage> {
   String? _warmedAvatarUrl;
   final _conversationEditBars = <bool, Widget?>{};
   final _editBarRevision = ValueNotifier<int>(0);
+  AppController? _notificationNavigation;
+
+  @override
+  void initState() {
+    super.initState();
+    if (Get.isRegistered<AppController>()) {
+      _notificationNavigation = Get.find<AppController>();
+      _notificationNavigation!.registerMessageListNavigation(_showMessageList);
+    }
+  }
+
+  void _showMessageList() {
+    if (mounted) _tabController.jumpToTab(0);
+  }
 
   void _setConversationEditBar(bool groupChats, Widget? bar) {
     if (!mounted) return;
@@ -59,6 +74,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    _notificationNavigation?.unregisterMessageListNavigation(_showMessageList);
     _walletEntry.dispose();
     _avatarWorker?.dispose();
     _activeTabIndex.dispose();
