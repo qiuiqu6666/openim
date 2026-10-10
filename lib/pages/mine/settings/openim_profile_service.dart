@@ -274,7 +274,6 @@ class OpenIMProfileService extends StubSettingsService {
       clearLocal: () async {
         GroupFeatureRuntime.reset();
         await DataSp.removeLoginCertificate();
-        PushController.logout();
       },
       navigate: AppNavigator.startLogin,
       onCleanupError: (error, _) =>

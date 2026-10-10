@@ -60,7 +60,6 @@ class HomeLogic extends SuperController {
             await DataSp.closeBiometric();
           }
           conversationsAtFirstPage.clear();
-          PushController.logout();
         },
         navigate: () {
           if (_closed) return;

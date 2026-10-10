@@ -354,6 +354,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   }
 
   Future<void> _logoutSafely() async {
+    // Unbind while the old login token is still valid, before SDK logout.
+    await PushController.logout();
     // Login preparation can call this directly when replacing a native account.
     DeviceSyncRuntime.instance.resetSession();
     // End media/signaling while the old SDK account still owns the call.

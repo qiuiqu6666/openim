@@ -1,6 +1,5 @@
 import UIKit
 import Flutter
-import FirebaseCore
 import UserNotifications
 
 @main
@@ -14,6 +13,7 @@ import UserNotifications
     var chatNotifications: ChatCommunicationNotificationBridge?
     var callPictureInPicture: CallPictureInPictureBridge?
     var deviceSyncOriginals: DeviceSyncOriginalsBridge?
+    var apnsPush: APNSPushBridge?
     
     override func application(
         _ application: UIApplication,
@@ -24,7 +24,7 @@ import UserNotifications
             return super.application(application, didFinishLaunchingWithOptions: launchOptions)
         }
 
-        FirebaseApp.configure()
+        apnsPush = APNSPushBridge(messenger: controller.binaryMessenger)
         pendingInvite = (launchOptions?[.url] as? URL)?.absoluteString
         inviteChannel = FlutterMethodChannel(name: "openim_friend_invites", binaryMessenger: controller.binaryMessenger)
         inviteChannel?.setMethodCallHandler { [weak self] call, result in
@@ -55,6 +55,16 @@ import UserNotifications
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
     
+    override func application(_ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        apnsPush?.didRegister(deviceToken)
+    }
+
+    override func application(_ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        apnsPush?.didFail()
+    }
+
     override func application(_ app: UIApplication, open url: URL,
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         guard url.scheme == "openim", url.host == "user" else {
