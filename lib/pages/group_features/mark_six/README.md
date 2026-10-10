@@ -2,7 +2,7 @@
 
 公开入口：`mark_six.dart` 导出 `MarkSixFeatureHost`、`MarkSixModule`。Host 的 builder 参数为 `(BuildContext, Widget entry, Widget overlay)`；entry 当前为空，overlay 放入有界聊天 body Stack。Module 的 `openDrawHistory / openAgent / openCurrentRebate / openRebateHistory` 都接收 `(BuildContext, GroupFeatureContext)`，使用当前应用导航与认证传输。
 
-群类型按 `ex.gameType` 数字区分：0 普通群、1 三公游戏、2六合彩代理、3六合彩开奖、4 三公代理。类型为 3 时，右侧开奖把手与工具箱「开奖记录」直接显示，不要求 `enabled`、`drawHistoryEntry` 或机器码先配置。缺少机器码时允许进入页面并显示配置缺失，不发送无绑定请求；绑定存在时仍使用该群真实机器码。其他类型保留既有显式开奖开关，代理与反水权限仍由原权限链判断。群类型更新会重建 Host 上下文并关闭旧预览，回归见 `mark_six_entry_visibility_test.dart`。
+群类型按 `ex.gameType` 数字区分：0 普通群、1 三公游戏、2六合彩代理、3六合彩开奖、4 三公代理。类型为 3 时，右侧开奖把手与工具箱「开奖记录」直接显示，不要求 `enabled`、`drawHistoryEntry` 或机器码先配置。公开开奖统一使用代码内固定机器码 `GZKH-DJ3M-VKSB`，不依赖群绑定中的机器码。其他类型保留既有显式开奖开关，代理与反水权限仍由原权限链判断。群类型更新会重建 Host 上下文并关闭旧预览，回归见 `mark_six_entry_visibility_test.dart`。
 
 类型为 2 的六合彩代理群进群时读取 `GET /me/robot/groups/{URL编码groupId}`。服务端成功外壳的 `data` 为 `groupId/bound/enabled/machineCodeMasked`；未绑定同样返回成功且 `bound=false`。浮动入口只按当前会话的 `bound=true` 显示，`enabled=false` 不覆盖这个入口条件，也不受旧公开功能开关影响。查／反、历仍分别使用有效个人能力 `canOpenAgent`、`canViewRebateHistory`；没有业务权限时点击入口提示「暂无代理功能权限」。遮蔽机器码只记录显示信息，不作为真实开奖机器码或私人授权。
 
@@ -22,6 +22,10 @@
 | 当前反水、历史、下级、详情 | `agent_rebate_*_page.dart`、`agent_rebate_summary_card.dart` | 页面内边距 16，卡片圆角 16，指标两列、标签 12 / 数值 15，详情高亮数值 18；日期采用参考的预设选项 |
 
 球红/蓝/绿分别 `EF2F4E / 007AFF / 00B25E`。暗色基底使用现有 AppTokens，加载、头像复用 LoadingView / AvatarView。文字放大时表格自动增高并缩放单元格，狭窄窗口允许内容滚动。
+
+「综合预测 · 全部属性」复用公共包 `AppSwitch`，与聊天设置、群管理及好友权限的蓝色开关一致；开关和整行均可点击切换，预测筛选逻辑不变。
+
+`MarkSixEmpty` 在开奖预览及展开过渡中使用紧凑样式，保留完整提示与重试按钮，省略装饰图标并缩小留白；长提示或大字体在有界高度内可滚动，避免固定 160 高卡片及动画中间帧发生溢出。完整页面继续使用常规空状态。回归覆盖 `widgets/mark_six_empty_layout_test.dart` 和预览展开失败状态。
 
 ## 接口适配
 
@@ -45,7 +49,7 @@
 | POST `/me/agent/rebate/history/export` | `startDate,endDate,fileType=CSV,includeDetail=true`，创建导出任务 |
 | GET `/me/agent/rebate/history/export/{taskNo}`、`/{taskNo}/download` | 前者按需查询完成后才下载 binary；后者不将 token 写入 URL，采用现有文件保存/打开插件 |
 
-代理请求固定 `X-Group-Id` 当前群，不用群列表中其他群的绑定。机器码只能来自群公开 ex/capabilities 的已确认绑定，无机器码时不发送请求。
+代理请求固定 `X-Group-Id` 当前群，不用群列表中其他群的绑定。公开配置、开奖记录和预测统一由 `MarkSixRepository.machineCode` 提供硬编码的 `GZKH-DJ3M-VKSB`，群配置和调用参数不能覆盖它；仍请求后端真实数据。固定机器码不替代代理群绑定及私人接口权限检查。
 
 ## 数据与生命周期
 
@@ -55,7 +59,7 @@
 
 当前级差汇总进入时合并查询汇总与上次申请状态，恢复结束前禁止申请；同页重复初始化合并正在执行的请求，不额外读取无可见按钮的个人申请状态。GET 状态缺失、未知或失败保持申请锁定，只允许重新查询；POST 返回 NONE 也视为结果未知。关闭后重新进入恢复到 PENDING/PROCESSING 时不会再次 POST，已确认 SUCCESS 保持申请禁用；只有服务端新状态回到 NONE/FAILED 且汇总的 `agentPendingRebate` 为有限正数才允许新申请。服务端仍须核验待结算金额、权限和申请幂等，客户端状态不能替代结算合同。
 
-宣言来自配置，不复制参考营销文案；缺少配置显示空态。后台权限仍需由真实业务接口核验，前端隐藏按钮不能替代服务端鉴权。代理身份编辑/邀请绑定等管理员能力属于三公模块；本模块不以无效 JWT 或成功提示占位。
+本群宣言按产品要求复用 99chat 的固定文案、标语、引号装饰与下载区域样式，由 `declaration/MarkSixDeclarationPanel` 独立维护，不再读取配置中的 `declaration`。下载链接仍通过 `/chat/platform` 获取，复用现有仓储、缓存与账号保护，支持失败重试和复制。后台权限仍需由真实业务接口核验，前端隐藏按钮不能替代服务端鉴权。代理身份编辑/邀请绑定等管理员能力属于三公模块；本模块不以无效 JWT 或成功提示占位。
 
 独立打开的开奖页也监听完整 `groupFeaturesChanged` 快照：仅自己的 Mark Six 开关、开奖入口、机器/租户绑定改变时清空旧数据、禁止旧请求并移除旧 route；其他游戏/直播变更与私人权限撤销不影响公开开奖。日期选择复用应用现有 `showSettingsActionSheet`，移动端与参考一致的 Cupertino 样式；参考桌面居中 ActionSheet 暂沿用应用已有移动 sheet。
 

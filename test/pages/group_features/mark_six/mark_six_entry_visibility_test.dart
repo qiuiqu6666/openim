@@ -94,22 +94,28 @@ void main() {
       if (viaHandle) {
         await tester.tap(find.byKey(_handle));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('lottery-preview-open')));
+        await tester.tap(find.text('点击卡片 · 全屏查看开奖记录'));
       } else {
         await tester.tap(find.text('开奖记录'));
       }
       await tester.pumpAndSettle();
       expect(find.byType(MarkSixPage), findsOneWidget);
-      expect(find.textContaining('本群尚未配置六合彩机器码'), findsOneWidget);
+      expect(find.textContaining('本群尚未配置六合彩机器码'), findsNothing);
+      expect(find.text('开奖历史'), findsOneWidget);
       expect(find.text('本群尚未开放六合彩'), findsNothing);
-      expect(api.calls, isEmpty);
+      expect(api.calls, hasLength(2));
+      expect(
+          api.calls.every((call) =>
+              call.query['machineCode'] == 'GZKH-DJ3M-VKSB' &&
+              call.headers['X-Group-Id'] == 'group-test'),
+          isTrue);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
     });
   }
 
-  testWidgets('type 3 reads its configured draw data with feature flags off',
+  testWidgets('type 3 uses fixed machine despite group binding and flags off',
       (tester) async {
     seed(3, machine: 'current-group-machine');
     await tester.pumpWidget(chat());
@@ -120,7 +126,7 @@ void main() {
     expect(api.calls, hasLength(2));
     expect(
         api.calls.every((call) =>
-            call.query['machineCode'] == 'current-group-machine' &&
+            call.query['machineCode'] == 'GZKH-DJ3M-VKSB' &&
             call.headers['X-Group-Id'] == 'group-test'),
         isTrue);
     expect(tester.takeException(), isNull);
@@ -149,9 +155,12 @@ void main() {
     seed(2);
     await tester.pumpAndSettle();
     expect(find.byKey(_handle), findsNothing);
-    expect(api.calls, hasLength(1));
-    expect(api.calls.single.path, '/me/robot/groups/group-test');
-    expect(api.calls.single.headers, isEmpty);
+    expect(api.calls, hasLength(3));
+    final bindingCalls =
+        api.calls.where((call) => call.path == '/me/robot/groups/group-test');
+    expect(bindingCalls, hasLength(1));
+    expect(bindingCalls.single.headers, isEmpty);
+    expect(bindingCalls.single.useBearerAuth, isTrue);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();

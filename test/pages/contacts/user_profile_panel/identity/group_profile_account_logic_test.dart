@@ -710,11 +710,12 @@ void main() {
           im.memberInfoChangedSubject.add(GroupMembersInfo(
               groupID: _group, userID: _peer, roleLevel: target));
           await tester.pump();
-          expect(logic.showFriendAddEntry, !protected);
-          expect(logic.notAllowAddGroupMemberFriend.value, protected);
+          final blocked = protected && viewer == GroupRoleLevel.member;
+          expect(logic.showFriendAddEntry, !blocked);
+          expect(logic.notAllowAddGroupMemberFriend.value, blocked);
           logic.addFriend();
           await tester.pumpAndSettle();
-          if (protected) {
+          if (blocked) {
             expect(applications, isEmpty);
           } else {
             expect(applications.single['userID'], _peer);
@@ -754,32 +755,39 @@ void main() {
     expect(logic.showFriendAddEntry, isTrue);
   });
 
-  testWidgets(
-      'unprotected confirmed manager can add before SDK role cache loads',
-      (tester) async {
-    await open(tester);
-    logic.userInfo.update((user) => user?.allowAddFriend = 2);
-    im.groupInfoUpdatedSubject
-        .add(GroupInfo(groupID: _group)..lookMemberInfo = 0);
-    protection.protect.value = false;
-    protection.canManage.value = true;
-    await protection.refresh();
-    expect(logic.showFriendAddEntry, isTrue);
-    expect(logic.friendAddRequestSource, FriendAddSource.manage);
-    // An explicit, newer SDK downgrade overrides an older HTTP response.
-    im.memberInfoChangedSubject.add(GroupMembersInfo(
-        groupID: _group, userID: 'im_me', roleLevel: GroupRoleLevel.member));
-    await tester.pump();
-    expect(logic.showFriendAddEntry, isFalse);
-    expect(logic.friendAddRequestSource, FriendAddSource.group);
-  });
+  for (final protected in [false, true]) {
+    testWidgets(
+        'confirmed manager can add before SDK role cache loads protected=$protected',
+        (tester) async {
+      await open(tester);
+      logic.userInfo.update((user) => user?.allowAddFriend = 2);
+      im.groupInfoUpdatedSubject
+          .add(GroupInfo(groupID: _group)..lookMemberInfo = protected ? 1 : 0);
+      protection.protect.value = protected;
+      protection.canManage.value = true;
+      // A management flag alone is insufficient until the read is confirmed.
+      expect(logic.showFriendAddEntry, isFalse);
+      await protection.refresh();
+      expect(logic.showFriendAddEntry, isTrue);
+      expect(logic.friendAddRequestSource, FriendAddSource.manage);
+      // An explicit, newer SDK downgrade overrides an older HTTP response.
+      im.memberInfoChangedSubject.add(GroupMembersInfo(
+          groupID: _group, userID: 'im_me', roleLevel: GroupRoleLevel.member));
+      await tester.pump();
+      expect(logic.showFriendAddEntry, isFalse);
+      expect(logic.friendAddRequestSource, FriendAddSource.group);
+      logic.addFriend();
+      await tester.pumpAndSettle();
+      expect(applications, isEmpty);
+    });
+  }
 
   for (final viewer in [
     GroupRoleLevel.member,
     GroupRoleLevel.admin,
     GroupRoleLevel.owner
   ]) {
-    testWidgets('hidden member profiles block adding friends for role $viewer',
+    testWidgets('hidden member profiles respect viewer management role $viewer',
         (tester) async {
       await open(tester);
       logic.userInfo.update((user) => user?.allowAddFriend = 1);
@@ -791,11 +799,75 @@ void main() {
       im.memberInfoChangedSubject.add(GroupMembersInfo(
           groupID: _group, userID: 'im_me', roleLevel: viewer));
       await tester.pump();
-      expect(logic.notAllowAddGroupMemberFriend.value, isTrue);
+      final blocked = viewer == GroupRoleLevel.member;
+      expect(logic.notAllowAddGroupMemberFriend.value, blocked);
+      expect(logic.showFriendAddEntry, !blocked);
+      logic.addFriend();
+      await tester.pumpAndSettle();
+      if (blocked) {
+        expect(applications, isEmpty);
+      } else {
+        expect(applications.single['userID'], _peer);
+        expect(applications.single['friendGroupID'], _group);
+        expect(applications.single['addSource'], FriendAddSource.manage);
+      }
+    });
+  }
+
+  for (final viewer in [GroupRoleLevel.admin, GroupRoleLevel.owner]) {
+    testWidgets('protected group updates add permission with role $viewer',
+        (tester) async {
+      await open(tester);
+      logic.userInfo.update((user) => user?.allowAddFriend = 1);
+      im.groupInfoUpdatedSubject
+          .add(GroupInfo(groupID: _group)..lookMemberInfo = 1);
+      protection.protect.value = true;
+      await protection.refresh();
+      await tester.pump();
       expect(logic.showFriendAddEntry, isFalse);
+
+      im.memberInfoChangedSubject.add(GroupMembersInfo(
+          groupID: _group, userID: 'im_me', roleLevel: viewer));
+      await tester.pump();
+      expect(logic.showFriendAddEntry, isTrue);
+      expect(logic.notAllowAddGroupMemberFriend.value, isFalse);
+      expect(logic.friendAddRequestSource, FriendAddSource.manage);
+
+      protection.canManage.value = true;
+      im.memberInfoChangedSubject.add(GroupMembersInfo(
+          groupID: _group, userID: 'im_me', roleLevel: GroupRoleLevel.member));
+      await tester.pump();
+      expect(logic.showFriendAddEntry, isFalse);
+      expect(logic.notAllowAddGroupMemberFriend.value, isTrue);
       logic.addFriend();
       await tester.pumpAndSettle();
       expect(applications, isEmpty);
+
+      im.memberInfoChangedSubject.add(GroupMembersInfo(
+          groupID: _group, userID: 'im_me', roleLevel: viewer));
+      await tester.pump();
+      logic.addFriend();
+      await tester.pumpAndSettle();
+      expect(applications.single['userID'], _peer);
+      expect(applications.single['friendGroupID'], _group);
+      expect(applications.single['addSource'], FriendAddSource.manage);
+    });
+
+    testWidgets('SDK manager $viewer can add while protection is unconfirmed',
+        (tester) async {
+      await open(tester);
+      logic.userInfo.update((user) => user?.allowAddFriend = 1);
+      im.groupInfoUpdatedSubject
+          .add(GroupInfo(groupID: _group)..lookMemberInfo = 1);
+      protection.protect.value = true;
+      im.memberInfoChangedSubject.add(GroupMembersInfo(
+          groupID: _group, userID: 'im_me', roleLevel: viewer));
+      await tester.pump();
+      expect(protection.ready.value, isFalse);
+      expect(logic.showFriendAddEntry, isTrue);
+      logic.addFriend();
+      await tester.pumpAndSettle();
+      expect(applications.single['addSource'], FriendAddSource.manage);
     });
   }
 
@@ -991,6 +1063,7 @@ void main() {
     expect(methods, containsAll(['getGroupsInfo', 'getGroupMembersInfo']));
     expect(logic.groupInfo?.lookMemberInfo, 1);
     expect(logic.iHaveAdminOrOwnerPermission.value, isTrue);
-    expect(logic.notAllowAddGroupMemberFriend.value, isTrue);
+    expect(logic.notAllowAddGroupMemberFriend.value, isFalse);
+    expect(logic.showFriendAddEntry, isTrue);
   });
 }

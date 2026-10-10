@@ -32,13 +32,39 @@ void main() {
     await repo.read('/me/agent/rebate/current');
     expect(api.calls, hasLength(2));
   });
-  test('missing machine binding never requests demonstration data', () {
-    final api = MarkSixFakeApi();
-    final repo = MarkSixRepository(markSixContext(api, machine: ''));
-    addTearDown(repo.close);
-    expect(() => repo.lottery('draws'), throwsStateError);
-    expect(api.calls, isEmpty);
-  });
+  for (final machine in ['', 'current-group-machine']) {
+    test('public lottery uses fixed machine with group binding "$machine"',
+        () async {
+      final api = MarkSixFakeApi();
+      final repo = MarkSixRepository(markSixContext(api, machine: machine));
+      addTearDown(repo.close);
+      await repo.lottery('config');
+      await repo.lottery('draws', query: {'limit': 100});
+      await repo.lottery('predictions', query: {
+        'machineCode': 'query-override',
+        'window': 10,
+        'page': 1,
+        'limit': 20,
+      });
+      expect(api.calls.map((call) => call.path), [
+        '/api/v1/lotteries/mark-six-demo/config',
+        '/api/v1/lotteries/mark-six-demo/draws',
+        '/api/v1/lotteries/mark-six-demo/predictions',
+      ]);
+      expect(
+          api.calls.every((call) =>
+              call.query['machineCode'] == 'GZKH-DJ3M-VKSB' &&
+              call.headers['X-Group-Id'] == 'group-test'),
+          isTrue);
+      expect(api.calls[1].query['limit'], 100);
+      expect(api.calls.last.query, {
+        'machineCode': 'GZKH-DJ3M-VKSB',
+        'window': 10,
+        'page': 1,
+        'limit': 20,
+      });
+    });
+  }
   test('account switch rejects late read and never caches the old response',
       () async {
     var current = true;

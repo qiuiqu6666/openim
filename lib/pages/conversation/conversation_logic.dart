@@ -110,14 +110,16 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     _subscriptions.add(imLogic.conversationReadRequestSubject
         .listen(onConversationReadRequested));
     _subscriptions.add(imLogic.imSdkStatusSubject.listen((value) {
-      if (_closed) return;
+      if (!_sessionActive) return;
       final status = value.status;
+      final previousStatus = imStatus.value;
       final appReInstall = value.reInstall;
       final progress = value.progress;
       imStatus.value = status;
 
       if (status == IMSdkStatus.connectionSucceeded) {
         refreshOrganizer();
+        _retryFailedList();
       }
 
       if (status == IMSdkStatus.syncStart ||
@@ -140,12 +142,15 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
           status == IMSdkStatus.syncFailed) {
         _updates.flush();
         EasyLoading.dismiss();
-        if (reInstall) {
-          onRefresh();
-          reInstall = false;
-        } else if (status == IMSdkStatus.syncEnded) {
-          unawaited(_cleanupLegacyConversations());
+        // A normal login also needs a snapshot after sync: the first local
+        // read may have been empty or failed before the SDK became ready.
+        // Ignore repeated finish callbacks so a query cannot start a read loop.
+        if (reInstall ||
+            (status == IMSdkStatus.syncEnded &&
+                previousStatus != IMSdkStatus.syncEnded)) {
+          unawaited(onRefresh());
         }
+        reInstall = false;
       }
     }));
     super.onInit();
@@ -179,9 +184,16 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (_sessionActive && state == AppLifecycleState.resumed) {
       refreshOrganizer();
       groupFeatures.refreshKnownGroups();
+      _retryFailedList();
+    }
+  }
+
+  void _retryFailedList() {
+    if (_sessionActive && _listFailed.value && !_readingList) {
+      unawaited(onRefresh());
     }
   }
 

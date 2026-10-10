@@ -237,7 +237,6 @@ void main() {
       (tester) async {
     final fixture = ProfilePanelFixture(friend: false, group: true);
     fixture.userInfo.update((user) => user?.allowAddFriend = 2);
-    fixture.iAmOwner.value = true;
     fixture.notAllowAddGroupMemberFriend.value = true;
     final moments = profileMomentsRepository();
     addTearDown(moments.dispose);

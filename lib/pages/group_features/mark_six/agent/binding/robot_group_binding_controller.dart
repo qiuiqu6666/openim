@@ -66,14 +66,18 @@ class RobotGroupBindingController extends ChangeNotifier
 
   Future<void> _load(int generation, CancelToken token) async {
     try {
-      // The group is in the path. Unlike /me/agent/** this needs no group header.
-      final data = await MarkSixApiDebugLog.trace(() => context.api.get(
+      // This Chat endpoint requires Bearer auth; the group is already in the path.
+      final data = await MarkSixApiDebugLog.trace(() => context.api.requestData(
             '/me/robot/groups/${Uri.encodeComponent(context.groupID)}',
+            useBearerAuth: true,
             cancelToken: token,
           ));
       if (!_valid(generation)) {
         MarkSixApiDebugLog.event('忽略旧绑定响应', {'groupId': context.groupID});
         return;
+      }
+      if (data is! Map<String, dynamic>) {
+        throw const FormatException('群绑定状态格式错误');
       }
       binding =
           RobotGroupBinding.fromJson(data, expectedGroupID: context.groupID);

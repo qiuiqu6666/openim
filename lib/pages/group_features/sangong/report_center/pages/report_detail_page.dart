@@ -2,6 +2,7 @@ import '../../identity/widgets/sangong_identity_view.dart';
 import 'dart:async';
 import '../../widgets/app_back_button.dart';
 import 'package:flutter/material.dart';
+import 'package:openim_common/openim_common.dart' show AppSwitch;
 import '../../sangong_scope.dart';
 import '../../models/sangong_admin_models.dart';
 import '../../pages/sangong_user_detail_page.dart';
@@ -67,18 +68,23 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
   Widget _team(Map<String, dynamic> data) {
     final summary = data['teamSummary'];
     final root = data['self'];
+    final ValueChanged<bool>? onDirectChanged = _controller.busy
+        ? null
+        : (value) {
+            setState(() => _direct = value);
+            unawaited(
+                _controller.replaceQuery({...widget.query, 'direct': value}));
+          };
     return Column(children: [
-      SwitchListTile(
-          title: const Text('只看直属成员'),
-          subtitle: Text(_direct ? '当前只查询直接下级' : '当前查询所有层级下级'),
-          value: _direct,
-          onChanged: _controller.busy
-              ? null
-              : (value) {
-                  setState(() => _direct = value);
-                  unawaited(_controller
-                      .replaceQuery({...widget.query, 'direct': value}));
-                }),
+      MergeSemantics(
+          child: ListTile(
+              title: const Text('只看直属成员'),
+              subtitle: Text(_direct ? '当前只查询直接下级' : '当前查询所有层级下级'),
+              enabled: onDirectChanged != null,
+              onTap: onDirectChanged == null
+                  ? null
+                  : () => onDirectChanged(!_direct),
+              trailing: AppSwitch(value: _direct, onChanged: onDirectChanged))),
       const ReportSection('下级团队汇总',
           icon: Icons.groups_outlined, description: '统计当前筛选范围内的下级，不包含负责人本人。'),
       const ReportNotice('同一成员可能属于多个上级团队，多个团队的金额不能直接相加作为全群总额。'),

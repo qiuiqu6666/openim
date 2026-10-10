@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:openim/pages/group_features/data/diagnostics/group_feature_api_diagnostics.dart';
 import 'package:openim/pages/group_features/data/group_feature_api.dart';
 import 'package:openim/pages/group_features/models/group_feature_context.dart';
 
@@ -15,26 +16,42 @@ class MarkSixFakeApi extends GroupFeatureApi {
     String path,
     Map<String, dynamic> query,
     Map<String, dynamic> body,
-    Map<String, dynamic> headers
+    Map<String, dynamic> headers,
+    bool useBearerAuth
   })>[];
   Future<Map<String, dynamic>> _call(
       String method,
       String path,
       Map<String, dynamic>? query,
       Map<String, dynamic>? body,
-      Map<String, dynamic>? headers) async {
+      Map<String, dynamic>? headers,
+      {bool useBearerAuth = false}) async {
     final q = {...?query}, b = {...?body};
     calls.add((
       method: method,
       path: path,
       query: q,
       body: b,
-      headers: {...?headers}
+      headers: {...?headers},
+      useBearerAuth: useBearerAuth
     ));
     return respond == null
         ? markSixFixtureResponse(path, q)
         : await respond!(method, path, q, b);
   }
+
+  @override
+  Future<dynamic> requestData(String path,
+          {String method = 'GET',
+          Map<String, dynamic>? body,
+          Map<String, dynamic>? query,
+          Map<String, dynamic>? headers,
+          CancelToken? cancelToken,
+          String? baseUrlOverride,
+          bool useBearerAuth = false,
+          GroupFeatureApiDiagnostics? diagnostics,
+          bool preserveEnvelope = false}) =>
+      _call(method, path, query, body, headers, useBearerAuth: useBearerAuth);
 
   @override
   Future<Map<String, dynamic>> get(String path,

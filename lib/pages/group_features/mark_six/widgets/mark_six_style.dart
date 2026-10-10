@@ -20,6 +20,19 @@ class MarkSixStyle {
   Color get lotteryPanel => dark ? surface : const Color(0xFFFAFCFF);
   Color get lotteryAlt => dark ? alternate : const Color(0xFFF0F6FF);
   Color get lotteryBorder => dark ? divider : const Color(0xFFD8E6FC);
+  Color get declarationText => dark ? text : const Color(0xFF17243D);
+  Color get declarationAlt => dark ? alternate : const Color(0xFFF2F8FF);
+  Color get declarationBorder => dark ? alternate : const Color(0xFFE7EDF5);
+  Color get declarationDivider => dark ? divider : const Color(0xFFE5EEFC);
+  Color get declarationMuted => dark ? secondary : const Color(0xFF8291A8);
+  Color get declarationQuote =>
+      dark ? const Color(0xFF34506E) : const Color(0xFFDDEBFF);
+  Color get declarationCopyIcon => dark ? secondary : const Color(0xFF6B84A8);
+  Color get declarationFooter => dark ? secondary : const Color(0xFF8B9BB2);
+  Color get declarationRule => dark ? divider : const Color(0xFFB7C9E4);
+  static const declarationShadow = [
+    BoxShadow(color: Color(0x050F274D), blurRadius: 12, offset: Offset(0, 3))
+  ];
   static const radius = 16.0;
   static const inset = 16.0;
   static const red = Color(0xFFEF2F4E);
@@ -31,22 +44,27 @@ class MarkSixStyle {
 }
 
 class MarkSixEmpty extends StatelessWidget {
-  const MarkSixEmpty({super.key, required this.message, this.onRetry});
+  const MarkSixEmpty(
+      {super.key, required this.message, this.onRetry, this.compact = false});
   final String message;
   final VoidCallback? onRetry;
+  final bool compact;
   @override
   Widget build(BuildContext context) => Center(
-      child: Padding(
-          padding: const EdgeInsets.all(24),
+      child: SingleChildScrollView(
+          primary: false,
+          padding: EdgeInsets.all(compact ? 12 : 24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(onRetry == null ? Icons.inbox_outlined : Icons.error_outline,
-                size: 42, color: MarkSixStyle.of(context).secondary),
-            const SizedBox(height: 12),
+            if (!compact) ...[
+              Icon(onRetry == null ? Icons.inbox_outlined : Icons.error_outline,
+                  size: 42, color: MarkSixStyle.of(context).secondary),
+              const SizedBox(height: 12),
+            ],
             Text(message,
                 textAlign: TextAlign.center,
                 style: TextStyle(color: MarkSixStyle.of(context).secondary)),
             if (onRetry != null) ...[
-              const SizedBox(height: 16),
+              SizedBox(height: compact ? 8 : 16),
               FilledButton(onPressed: onRetry, child: const Text('重试')),
             ],
           ])));

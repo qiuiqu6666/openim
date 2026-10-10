@@ -186,11 +186,11 @@ void main() {
     expect(request.uri.fragment, isEmpty);
     expect(request.uri.query, isEmpty);
     expect(request.method, 'GET');
-    expect(request.headers['token'], _chatToken);
+    expect(request.headers['Authorization'], 'Bearer $_chatToken');
     expect(request.headers['operationID'], isNotEmpty);
     expect(request.headers.keys.map((key) => key.toLowerCase()),
         isNot(contains('x-group-id')));
-    expect(request.headers.containsKey('Authorization'), isFalse);
+    expect(request.headers.containsKey('token'), isFalse);
     expect(request.cancelToken, isNotNull);
     expect(request.contentType, Headers.jsonContentType);
     expect(request.followRedirects, isFalse);
@@ -212,6 +212,33 @@ void main() {
       expect(value.controller.error, isNull);
     });
   }
+
+  test('binding service accepts Bearer auth and refreshed Chat tokens',
+      () async {
+    final value = fixture();
+    value.transport.respond = (request) =>
+        request.headers['Authorization'] == 'Bearer ${value.token}'
+            ? _json(_envelope(_binding()))
+            : _json({'code': 'UNAUTHORIZED'}, status: 401);
+    await value.controller.load();
+    expect(value.controller.bound, isTrue);
+    expect(value.controller.error, isNull);
+
+    value.token = 'refreshed-chat-token';
+    await value.controller.load();
+    expect(value.transport.requests.last.headers['Authorization'],
+        'Bearer refreshed-chat-token');
+    expect(value.controller.bound, isTrue);
+    expect(value.controller.error, isNull);
+  });
+
+  test('missing Chat token never sends a binding request', () async {
+    final value = fixture()..token = null;
+    await value.controller.load();
+    expect(value.transport.requests, isEmpty);
+    expect(value.controller.binding, isNull);
+    expect(value.controller.error, isNotEmpty);
+  });
 
   test('concurrent loads share the pending request', () async {
     final value = fixture();
@@ -292,8 +319,11 @@ void main() {
       _binding(groupID: 'other-group'),
       {..._binding(), 'bound': 'true'},
       {..._binding(), 'enabled': 1},
+      null,
+      [],
+      'invalid binding',
     ]) {
-      value.transport.body = _envelope(data);
+      value.transport.body = {'code': 0, 'data': data};
       await value.controller.load();
       expect(value.controller.binding, isNull);
       expect(value.controller.bound, isFalse);

@@ -29,6 +29,7 @@ class MarkSixPredictions extends StatefulWidget {
 class _MarkSixPredictionsState extends State<MarkSixPredictions> {
   String _attribute = 'special';
   bool _combined = true;
+  void _setCombined(bool value) => setState(() => _combined = value);
   @override
   Widget build(BuildContext context) {
     final style = MarkSixStyle.of(context);
@@ -55,14 +56,15 @@ class _MarkSixPredictionsState extends State<MarkSixPredictions> {
                       onSelected: (_) =>
                           setState(() => _attribute = attribute.key))),
           ])),
-      SwitchListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          title: const Text('综合预测 · 全部属性',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-          subtitle: Text('基于历史数据，AI智能分析仅供参考',
-              style: TextStyle(fontSize: 10, color: style.secondary)),
-          value: _combined,
-          onChanged: (v) => setState(() => _combined = v)),
+      MergeSemantics(
+          child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              title: const Text('综合预测 · 全部属性',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              subtitle: Text('基于历史数据，AI智能分析仅供参考',
+                  style: TextStyle(fontSize: 10, color: style.secondary)),
+              onTap: () => _setCombined(!_combined),
+              trailing: AppSwitch(value: _combined, onChanged: _setCombined))),
       for (final row in c.predictions)
         Container(
             key: ValueKey('prediction-issue-${row['issue']}'),

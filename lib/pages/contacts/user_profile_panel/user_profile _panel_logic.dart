@@ -591,7 +591,10 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
     final exempt = iHaveAdminOrOwnerPermission.value;
     notAllowLookGroupMemberProfiles.value =
         !exempt && groupInfo?.lookMemberInfo == 1;
+    // Managers retain the group friend-add entry; submission still validates
+    // their current group role through the existing manage-source flow.
     notAllowAddGroupMemberFriend.value = isGroupMemberPage &&
+        !canManageGroupFriendAdd &&
         (groupInfo?.lookMemberInfo != 0 ||
             _groupFriendProtection?.ready.value != true ||
             _groupFriendProtection?.protect.value != false);

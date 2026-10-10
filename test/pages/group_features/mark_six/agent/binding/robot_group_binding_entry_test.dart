@@ -115,6 +115,7 @@ void main() {
       expect(bindingCall.path, _robotPath);
       expect(bindingCall.query, isEmpty);
       expect(bindingCall.headers, isEmpty);
+      expect(bindingCall.useBearerAuth, isTrue);
 
       await tester.tap(find.text('显'));
       await tester.pumpAndSettle();

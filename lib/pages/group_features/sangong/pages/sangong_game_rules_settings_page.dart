@@ -4,6 +4,7 @@ import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
+import 'package:openim_common/openim_common.dart' show AppSwitch;
 import 'sangong_my_config_page.dart';
 import 'sangong_members_page.dart';
 import 'sangong_all_users_page.dart';
@@ -586,7 +587,7 @@ class _SangongGameRulesSettingsPageState
                   ),
                   showArrow: false,
                   showDivider: false,
-                  trailing: SettingsPlatformSwitch(
+                  trailing: AppSwitch(
                     value: _floatVisible,
                     onChanged: _onFloatVisibleChanged,
                   ),

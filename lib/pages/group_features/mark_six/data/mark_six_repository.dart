@@ -24,19 +24,8 @@ class MarkSixRepository {
   bool _closed = false;
   bool get current => !_closed && context.sessionCurrent();
   bool get privateCurrent => current && context.capabilitiesCurrent();
-  String get machineCode {
-    final cap = context.capabilities.markSix;
-    final feature = context.features.markSix;
-    for (final value in [
-      cap.machineCode,
-      feature.machineCode,
-      cap.gameID,
-      feature.gameID
-    ]) {
-      if (value.trim().isNotEmpty) return value.trim();
-    }
-    return '';
-  }
+  // Shared machine for public lottery data; private agent access stays scoped.
+  String get machineCode => 'GZKH-DJ3M-VKSB';
 
   Map<String, dynamic> get headers => {'X-Group-Id': context.groupID};
   void guard({bool private = false}) {
@@ -109,16 +98,8 @@ class MarkSixRepository {
 
   Future<Map<String, dynamic>> lottery(String resource,
       {Map<String, dynamic> query = const {}, bool force = false}) {
-    if (machineCode.isEmpty) {
-      MarkSixApiDebugLog.event('开奖请求跳过', {
-        'groupId': context.groupID,
-        'resource': resource,
-        'reason': '未配置机器码',
-      });
-      throw StateError('本群尚未配置六合彩机器码');
-    }
     return read('/api/v1/lotteries/mark-six-demo/$resource',
-        query: {'machineCode': machineCode, ...query}, force: force);
+        query: {...query, 'machineCode': machineCode}, force: force);
   }
 
   Future<Map<String, dynamic>> post(String path,

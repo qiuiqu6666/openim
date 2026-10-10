@@ -99,13 +99,17 @@ class _MarkSixLatestCardState extends State<MarkSixLatestCard> {
   Widget build(BuildContext context) {
     final c = widget.controller;
     final style = MarkSixStyle.of(context);
-    if (!c.current) return const MarkSixEmpty(message: '登录状态已变更');
+    if (!c.current) {
+      return MarkSixEmpty(message: '登录状态已变更', compact: widget.preview);
+    }
     if (!c.ready && c.loading) {
       return Center(child: LoadingView.indicator());
     }
     if (!c.ready) {
       return MarkSixEmpty(
-          message: c.error ?? '暂无开奖数据', onRetry: () => c.refresh(force: true));
+          message: c.error ?? '暂无开奖数据',
+          compact: widget.preview,
+          onRetry: () => c.refresh(force: true));
     }
     final latest = c.latest;
     final now = c.now().add(const Duration(hours: 8));

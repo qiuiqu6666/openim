@@ -31,6 +31,11 @@ class MarkSixApiDebugLog implements GroupFeatureApiDiagnostics {
         'method': request.method,
         'url': _url(request),
         'queryKeys': request.queryParameters.keys.toList(),
+        'hasBearerToken': request.headers.entries.any((entry) =>
+            entry.key.toLowerCase() == 'authorization' &&
+            entry.value is String &&
+            RegExp(r'^Bearer\s+\S+$', caseSensitive: false)
+                .hasMatch(entry.value as String)),
       };
 
   @override

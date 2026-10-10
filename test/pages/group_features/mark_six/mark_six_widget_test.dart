@@ -75,13 +75,25 @@ void main() {
           expect(find.text('逐期预测'), findsOneWidget);
           expect(api.calls.where((c) => c.path.endsWith('/predictions')),
               hasLength(1));
+          await tester.tap(find.text('生肖'));
+          await tester.tap(find.byType(AppSwitch));
+          await tester.pumpAndSettle();
+          expect(find.text('08 12 23'), findsNothing);
+          await tester.tap(find.text('综合预测 · 全部属性'));
+          await tester.pumpAndSettle();
+          expect(find.text('08 12 23'), findsOneWidget);
           await tester.tap(find.text('已开统计'));
           await tester.pumpAndSettle();
           expect(api.calls, hasLength(3));
           expect(tester.takeException(), isNull);
           await tester.tap(find.text('本群宣言'));
           await tester.pumpAndSettle();
-          expect(find.textContaining('本群信息以实际开奖结果为准'), findsOneWidget);
+          expect(find.textContaining('全天候直播开奖(用户实时亲眼所见)！'), findsOneWidget);
+          expect(find.text('十一年口碑！诚信经营！安全稳定！'), findsOneWidget);
+          expect(find.text('真实 · 公平 · 安全 · 稳定'), findsOneWidget);
+          expect(find.text('公平公开 · 真实可靠'), findsOneWidget);
+          expect(find.textContaining('本群信息以实际开奖结果为准'), findsNothing);
+          expect(find.text('暂无本群宣言'), findsNothing);
           expect(api.calls.last.path, '/chat/platform');
           expect(tester.takeException(), isNull);
           await tester.pumpWidget(const SizedBox.shrink());
@@ -150,6 +162,40 @@ void main() {
     expect(
         find.byKey(const ValueKey('lottery-preview-card-shell')), findsNothing);
     expect(find.byKey(const ValueKey('lottery-edge-handle')), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+  testWidgets(
+      'failed preview expands without overflow and full-page retry works',
+      (tester) async {
+    var fail = true;
+    final api = MarkSixFakeApi(respond: (_, path, query, __) {
+      if (fail) throw StateError('返回数据格式无效，请重试');
+      return markSixFixtureResponse(path, query);
+    });
+    await _mount(tester, _host(api));
+    await tester.tap(find.byKey(const ValueKey('lottery-edge-handle')));
+    await tester.pumpAndSettle();
+    expect(find.text('重试').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    final beforeRetry = api.calls.length;
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(api.calls.length, greaterThan(beforeRetry));
+    expect(find.byType(MarkSixPage), findsNothing);
+    final shell = find.byKey(const ValueKey('lottery-preview-card-shell'));
+    await tester.tapAt(tester.getTopLeft(shell) + const Offset(16, 16));
+    await tester.pump();
+    for (var frame = 0; frame < 50; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(tester.takeException(), isNull, reason: 'transition frame $frame');
+    }
+    expect(find.byType(MarkSixPage), findsOneWidget);
+    fail = false;
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(find.byType(MarkSixNumberBall), findsWidgets);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();

@@ -13,7 +13,10 @@ void main() {
     addTearDown(() => debugPrint = originalPrint);
     final request = RequestOptions(
       path: 'https://user:private-password@example.com/me/robot/groups/g',
-      headers: {'token': 'private-token', 'operationID': 'operation-test'},
+      headers: {
+        'Authorization': 'Bearer private-token',
+        'operationID': 'operation-test'
+      },
       queryParameters: {'token': 'private-query-token'},
       data: {'password': 'private-body-password'},
     );
@@ -40,12 +43,31 @@ void main() {
     expect(log, contains('[六合彩API][请求]'));
     expect(log, contains('https://example.com/me/robot/groups/g'));
     expect(log, contains('operation-test'));
+    expect(log, contains('"hasBearerToken":true'));
     expect(log, contains('"bound":true'));
     expect(log, contains('"enabled":false'));
     expect(log, contains('connectionTimeout'));
     expect(log, isNot(contains('private-')));
-    expect(request.headers['token'], 'private-token');
+    expect(request.headers['Authorization'], 'Bearer private-token');
     expect(data['message'], 'private-token');
+  });
+
+  test('does not report token-only or empty authorization as Bearer auth', () {
+    final output = <String>[];
+    final originalPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) => output.add(message ?? '');
+    addTearDown(() => debugPrint = originalPrint);
+    for (final headers in [
+      {'token': 'private-token'},
+      {'Authorization': 'Bearer '},
+      {'Authorization': 'Basic private-token'},
+      <String, String>{},
+    ]) {
+      MarkSixApiDebugLog()
+          .onRequest(RequestOptions(path: '/g', headers: headers));
+      expect(output.last, contains('"hasBearerToken":false'));
+      expect(output.last, isNot(contains('private-')));
+    }
   });
 
   test(
