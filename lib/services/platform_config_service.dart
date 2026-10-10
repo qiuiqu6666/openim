@@ -71,5 +71,15 @@ int compareAppVersions(String a, String b) {
         .compareTo(i < right.length ? right[i] : 0);
     if (result != 0) return result;
   }
-  return 0;
+  // Old configuration without a build number compares the release only.
+  // When both sides include a build, a newer build is an actual update.
+  int? build(String value) {
+    final segments = value.trim().split('+');
+    return segments.length == 2 ? int.tryParse(segments.last) : null;
+  }
+
+  final leftBuild = build(a), rightBuild = build(b);
+  return leftBuild != null && rightBuild != null
+      ? leftBuild.compareTo(rightBuild)
+      : 0;
 }

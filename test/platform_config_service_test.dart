@@ -14,7 +14,7 @@ class _Adapter implements HttpClientAdapter {
       'officialURL': 'https://example.com',
       'email': 'support@example.com',
       'android': {
-        'latestVersion': '3.10.0',
+        'latestVersion': '3.10.0+18',
         'downloadURL': 'https://example.com/download',
         'downloadLink': 'https://example.com/app.apk',
         'grayRatio': 30
@@ -52,7 +52,7 @@ void main() {
     expect(adapter.request!.headers.containsKey('token'), false);
     expect(config.officialURL, 'https://example.com');
     expect(config.email, 'support@example.com');
-    expect(config.android.latest, '3.10.0');
+    expect(config.android.latest, '3.10.0+18');
     expect(config.android.shareURL, 'https://example.com/download');
     expect(config.android.installURL, 'https://example.com/app.apk');
     expect(config.ios.latest, '4.0.0');
@@ -69,5 +69,12 @@ void main() {
     expect(compareAppVersions('3.8.3+12', '3.8.3'), 0);
     expect(compareAppVersions('3.8', '3.8.0'), 0);
     expect(compareAppVersions('3.8.3', '4.0'), lessThan(0));
+  });
+  test('full versions compare numeric builds after release numbers', () {
+    expect(compareAppVersions('3.0.1+17', '3.0.1+18'), lessThan(0));
+    expect(compareAppVersions('3.0.1+18', '3.0.1+18'), 0);
+    expect(compareAppVersions('3.0.1+100', '3.0.1+18'), greaterThan(0));
+    expect(compareAppVersions('3.0.2+1', '3.0.1+100'), greaterThan(0));
+    expect(compareAppVersions('3.0.1', '3.0.1+18'), 0);
   });
 }
