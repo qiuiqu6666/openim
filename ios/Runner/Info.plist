@@ -2,15 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>NSUserActivityTypes</key>
-    <array>
-        <string>INSendMessageIntent</string>
-    </array>
-    <key>FlutterDeepLinkingEnabled</key><false/>
-    <key>CFBundleURLTypes</key><array><dict>
-        <key>CFBundleURLSchemes</key><array><string>openim</string></array>
-        <key>CFBundleURLName</key><string>openim.friend.invites</string>
-    </dict></array>
+	<key>APNsEnvironment</key>
+	<string>$(APNS_ENVIRONMENT)</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -18,14 +11,14 @@
 		<string>zh-CN</string>
 		<string>en-US</string>
 	</array>
+	<key>CFBundleDisplayName</key>
+	<string>99chat</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
-	<key>CFBundleDisplayName</key>
-	<string>99chat</string>
 	<key>CFBundleName</key>
 	<string>99chat</string>
 	<key>CFBundlePackageType</key>
@@ -34,8 +27,25 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>openim.friend.invites</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>openim</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+	<key>FirebaseMessagingAutoInitEnabled</key>
+	<false/>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSApplicationQueriesSchemes</key>
@@ -56,8 +66,6 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
-	<true/>
-	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
@@ -86,6 +94,12 @@
 	<string>请点击“好”以允许访问。若不允许，你将无法给好友发送或者上传本地相册图片及视频内容。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>请点击“好”以允许访问。若不允许，你将无法给好友发送或者上传本地相册图片及视频内容。</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INSendMessageIntent</string>
+	</array>
+	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
+	<true/>
 	<key>RTCAppGroupIdentifier</key>
 	<string>group.cn.rentsoft.openim.flutter.rtc</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
@@ -96,12 +110,6 @@
 		<string>remote-notification</string>
 		<string>voip</string>
 	</array>
-	<key>FirebaseMessagingAutoInitEnabled</key>
-	<false/>
-	<key>FirebaseAppDelegateProxyEnabled</key>
-	<false/>
-	<key>APNsEnvironment</key>
-	<string>$(APNS_ENVIRONMENT)</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
