@@ -91,6 +91,8 @@ class ChatMessageTile extends StatelessWidget {
         onTapTimeline: () => logic.onTapTimeline(context, message),
         timelineSemanticLabel: 'chatJumpToDate'.tr,
         sendStatusSubject: logic.sendStatusSub,
+        transferStatus: logic.transferStatus(message),
+        onCheckDelivery: () => logic.checkDelivery(message),
         leftNickname: logic.getNewestNickname(message),
         leftFaceUrl: logic.isOfficialNotificationChat &&
                 message.sendID == logic.userID &&

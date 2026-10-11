@@ -61,7 +61,15 @@ class ChatPicturePreview extends StatelessWidget {
       );
 
   Widget _networkGestureImage(MediaSource source) => AdaptiveMediaImage(
-        image: ExtendedNetworkImageProvider(source.url ?? source.thumbnail),
+        image: ExtendedNetworkImageProvider(
+          OpenIMMediaUrl.resolve(source.url ?? source.thumbnail,
+              imApiUrl: Config.imApiUrl),
+          cache: true,
+          timeLimit: const Duration(seconds: 20),
+          retries: 1,
+          timeRetry: const Duration(seconds: 1),
+          printError: false,
+        ),
         clearMemoryCacheWhenDispose: true,
         loadStateChanged: (ExtendedImageState state) {
           switch (state.extendedImageLoadState) {
@@ -84,7 +92,7 @@ class ChatPicturePreview extends StatelessWidget {
                     child: CircularProgressIndicator(
                       color: Styles.c_0089FF,
                       strokeWidth: 1.5,
-                      value: progress ?? 0,
+                      value: progress,
                     ),
                   ),
                 );
@@ -92,8 +100,11 @@ class ChatPicturePreview extends StatelessWidget {
             case LoadState.completed:
               return null;
             case LoadState.failed:
-              state.imageProvider.evict();
-              return ImageRes.pictureError.toImage;
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: state.reLoadImage,
+                child: ImageRes.pictureError.toImage,
+              );
           }
         },
       );

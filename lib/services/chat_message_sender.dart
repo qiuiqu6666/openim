@@ -41,14 +41,30 @@ class ChatMessageSender {
           'Create a new message before sending');
     }
     if (_transport != null) return _transport(message, target);
+    final remote = message.contentType == MessageType.picture
+        ? _remoteURL(message.pictureElem?.sourcePicture?.url) &&
+            _remoteURL(message.pictureElem?.bigPicture?.url) &&
+            _remoteURL(message.pictureElem?.snapshotPicture?.url)
+        : message.contentType == MessageType.video &&
+            _remoteURL(message.videoElem?.videoUrl) &&
+            _remoteURL(message.videoElem?.snapshotUrl);
     return observeUserActivity(
         messageActivity(message.contentType),
-        () => OpenIM.iMManager.messageManager.sendMessage(
+        () => (remote
+                ? OpenIM.iMManager.messageManager.sendMessageNotOss
+                : OpenIM.iMManager.messageManager.sendMessage)(
               message: message,
               userID: hasUser ? user : null,
               groupID: hasGroup ? group : null,
               offlinePushInfo: Config.offlinePushInfo,
             ));
+  }
+
+  static bool _remoteURL(String? value) {
+    final uri = value == null ? null : Uri.tryParse(value);
+    return uri != null &&
+        {'http', 'https'}.contains(uri.scheme) &&
+        uri.host.isNotEmpty;
   }
 
   Future<FavoriteSendResult> send(

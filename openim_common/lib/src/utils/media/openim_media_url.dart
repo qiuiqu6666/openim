@@ -7,12 +7,10 @@ class OpenIMMediaUrl {
 
   static String resolve(String value, {required String imApiUrl}) {
     final source = _HttpUrl.read(value);
-    if (source == null ||
-        !_isLoopback(source.uri) ||
-        hasSignedQuery(value) ||
-        _unsafePath(source.path)) {
+    if (source == null || hasSignedQuery(value) || _unsafePath(source.path)) {
       return value;
     }
+
     final base = _HttpUrl.read(imApiUrl.trim());
     if (base == null ||
         _isLoopback(base.uri) ||
@@ -22,6 +20,23 @@ class OpenIMMediaUrl {
       return value;
     }
 
+    // Historical public object links used HTTP. Only upgrade our configured
+    // HTTPS origin and object path; signed grants and external hosts are intact.
+    if (!_isLoopback(source.uri)) {
+      final prefix = base.path.replaceFirst(RegExp(r'/+$'), '');
+      final objectPath = prefix.isNotEmpty && source.path.startsWith(prefix)
+          ? source.path.substring(prefix.length)
+          : source.path;
+      if (source.uri.scheme == 'http' &&
+          base.uri.scheme == 'https' &&
+          source.uri.host == base.uri.host &&
+          source.uri.port == 80 &&
+          base.uri.port == 443 &&
+          _isObjectPath(objectPath)) {
+        return '${base.origin}${source.path}${source.query}${source.fragment}';
+      }
+      return value;
+    }
     final prefix = base.path.replaceFirst(RegExp(r'/+$'), '');
     String path;
     if (_isObjectPath(source.path)) {

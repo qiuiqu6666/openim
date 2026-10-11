@@ -962,4 +962,11 @@ const Map<String, String> errorMessages = {
   '200003': '没有权限',
   '200004': '会议已结束',
   '100010': '登录状态已失效，需要重新登录',
+  'chatMediaQueued': '等待上传',
+  'chatMediaUploading': '上传中',
+  'chatSendConfirming': '等待确认',
+  'chatSendCheck': '待确认·点击查询',
+  'chatVideoStandard': '标准画质（发送更快）',
+  'chatVideoOriginal': '原画（文件较大）',
+  'chatVideoPreparing': '正在处理视频…',
 };

@@ -48,6 +48,10 @@ class ImageUtil {
           ExtendedNetworkImageProvider(
               OpenIMMediaUrl.resolve(url, imApiUrl: Config.imApiUrl),
               cache: true,
+              timeLimit: const Duration(seconds: 20),
+              retries: 1,
+              timeRetry: const Duration(seconds: 1),
+              printError: false,
               cacheRawData: cacheRawData),
           _calculateCacheWidth(width, cacheWidth, lowMemory),
           _calculateCacheHeight(height, cacheHeight, lowMemory),
@@ -96,11 +100,14 @@ class ImageUtil {
             case LoadState.completed:
               return null;
             case LoadState.failed:
-              state.imageProvider.evict();
-              return errorWidget ??
-                  (ImageRes.pictureError.toImage
-                    ..width = width
-                    ..height = height);
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: state.reLoadImage,
+                child: errorWidget ??
+                    (ImageRes.pictureError.toImage
+                      ..width = width
+                      ..height = height),
+              );
           }
         },
       );
