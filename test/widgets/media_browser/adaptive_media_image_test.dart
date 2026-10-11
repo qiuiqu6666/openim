@@ -178,7 +178,7 @@ void main() {
       onPageChanged: pages.add,
     )));
     await _settle(tester);
-    await tester.timedDragFrom(const Offset(180, 500), const Offset(0, -280),
+    await tester.timedDragFrom(const Offset(300, 500), const Offset(-180, -280),
         const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
     expect(find.byType(MediaBrowser), findsOneWidget);

@@ -2,6 +2,7 @@ import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
+import '../media_browser/media_page_gesture.dart';
 
 class ChatPicturePreview extends StatelessWidget {
   ChatPicturePreview({
@@ -52,6 +53,7 @@ class ChatPicturePreview extends StatelessWidget {
   }
 
   Widget get _pageView => ExtendedImageGesturePageView.builder(
+        shouldAccpetHorizontalOrVerticalDrag: acceptMediaPageDrag,
         controller: controller,
         onPageChanged: (int index) {},
         itemCount: images.length,

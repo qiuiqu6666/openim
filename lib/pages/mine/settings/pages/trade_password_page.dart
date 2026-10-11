@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
+import '../../../../services/fund/diagnostics/wallet_load_log.dart';
 import '../settings_service.dart';
 import '../widgets/settings_widgets.dart';
 import '../widgets/trade_password_pin_cells.dart';
@@ -26,6 +27,13 @@ class _TradePasswordPageState extends State<TradePasswordPage> {
   String? _firstPin;
   String _error = '';
   bool _submitting = false;
+  WalletLoadLog? _submissionLog;
+
+  @override
+  void dispose() {
+    _submissionLog?.finish('view_closed');
+    super.dispose();
+  }
 
   String _stepHint(BuildContext context) => _step == _SetupStep.create
       ? settingsText(
@@ -79,7 +87,11 @@ class _TradePasswordPageState extends State<TradePasswordPage> {
       });
       return;
     }
+    final trace = WalletLoadLog.passwordSetup();
+    _submissionLog = trace;
     if (!widget.service.isSecurityBackendAvailable) {
+      trace.finish('backend_unavailable');
+      _submissionLog = null;
       setState(() => _input = '');
       showUnavailableSettingsAction(
         context,
@@ -93,6 +105,7 @@ class _TradePasswordPageState extends State<TradePasswordPage> {
     });
     try {
       await widget.service.setTradePassword(pin);
+      trace.finish('success');
       if (!mounted) return;
       showSettingsMessage(
         context,
@@ -101,6 +114,8 @@ class _TradePasswordPageState extends State<TradePasswordPage> {
       );
       Navigator.of(context).pop(true);
     } catch (error) {
+      trace.error(error);
+      trace.finish('failed');
       if (!mounted) return;
       setState(() {
         _submitting = false;
@@ -112,6 +127,8 @@ class _TradePasswordPageState extends State<TradePasswordPage> {
               en: 'Failed to set the password. Please try again later.',
             ));
       });
+    } finally {
+      if (identical(_submissionLog, trace)) _submissionLog = null;
     }
   }
 

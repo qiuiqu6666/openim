@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -211,5 +212,42 @@ void main() {
     service.pending!.complete();
     await tester.pump();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('unavailable service reports safe diagnostics and keeps retry',
+      (tester) async {
+    _screen(tester, const Size(375, 812));
+    final lines = <String>[];
+    final original = debugPrint;
+    debugPrint =
+        (String? message, {int? wrapWidth}) => lines.add(message ?? '');
+    addTearDown(() => debugPrint = original);
+    final request = RequestOptions(
+        path: '/chat/fund/pay-password',
+        data: {'password': '938274'},
+        headers: {'token': 'private-token'});
+    final service = _PasswordService()
+      ..failure = DioException(
+          requestOptions: request,
+          type: DioExceptionType.badResponse,
+          response: Response(
+              requestOptions: request,
+              statusCode: 503,
+              data: {'errCode': 20030, 'errMsg': 'private-error'}));
+    await tester.pumpWidget(_host(TradePasswordPage(service: service)));
+    await _enter(tester, '938274');
+    expect(lines.where((line) => line.contains('[TradePassword]')), isEmpty);
+    await _enter(tester, '938274');
+    expect(find.text('服务暂时不可用，请稍后重试'), findsOneWidget);
+    expect(find.text('0').hitTestable(), findsOneWidget);
+    final output = lines.join('\n');
+    expect(output, contains('[TradePassword]'));
+    expect(output, contains('"httpStatus":503'));
+    expect(output, contains('"event":"failed"'));
+    expect(output, isNot(contains('938274')));
+    expect(output, isNot(contains('private-')));
+    await tester.pump(const Duration(seconds: 6));
+    expect(lines.join('\n'), isNot(contains('"event":"pending"')));
+    debugPrint = original;
   });
 }

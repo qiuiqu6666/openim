@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/services/fund/diagnostics/wallet_load_log.dart';
+import 'package:openim_common/src/utils/logger.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late List<String> lines;
   late DebugPrintCallback original;
   setUp(() {
@@ -114,12 +117,14 @@ void main() {
     });
   });
 
-  test('writes are excluded and a failing console never breaks callers', () {
+  test(
+      'unrelated writes are excluded and a failing console never breaks callers',
+      () {
     expect(
         WalletLoadLog.request(
             method: 'PUT',
             url: 'https://chat.test',
-            path: '/chat/fund/pay-password',
+            path: '/chat/fund/orders',
             operationID: 'write',
             hasToken: true),
         isNull);
@@ -129,5 +134,107 @@ void main() {
     final trace = WalletLoadLog.start('entry')!;
     expect(() => trace.error(StateError('private data')), returnsNormally);
     expect(() => trace.finish('end'), returnsNormally);
+    final password = WalletLoadLog.passwordSetup();
+    expect(() => password.error(StateError('secret-pin')), returnsNormally);
+    expect(() => password.finish('failed'), returnsNormally);
+  });
+
+  test('password write logs HTTP failure without password, token, or raw body',
+      () {
+    final trace = WalletLoadLog.request(
+      method: 'PUT',
+      path: '/chat/fund/pay-password',
+      url:
+          'https://secret-user:secret-pass@chat.test/chat/fund/pay-password?token=secret-token',
+      operationID: 'payment-operation',
+      hasToken: true,
+    )!;
+    final request = RequestOptions(
+        path: '/chat/fund/pay-password',
+        data: {'password': 'secret-pin', 'verifyCode': 'secret-code'},
+        headers: {'token': 'secret-token'});
+    trace.error(DioException(
+        requestOptions: request,
+        type: DioExceptionType.badResponse,
+        message: 'secret-native-error',
+        response: Response(
+            requestOptions: request,
+            statusCode: 503,
+            data: {'errCode': 20030, 'errMsg': 'secret-response'})));
+    trace.finish('end');
+    final output = lines.join('\n');
+    expect(lines.every((line) => line.startsWith('[TradePassword]')), isTrue);
+    expect(output, contains('"httpStatus":503'));
+    expect(output, contains('"errCode":20030'));
+    expect(output, contains('"networkType":"badResponse"'));
+    expect(output, contains('"operationID":"payment-operation"'));
+    expect(output, contains('"server":"https://chat.test:443"'));
+    expect(output, contains('"elapsedMs":'));
+    expect(output, isNot(contains('secret-')));
+  });
+
+  test('password response parsing errors remain visible after HTTP success',
+      () {
+    final trace = WalletLoadLog.request(
+        method: 'PUT',
+        url: 'https://chat.test',
+        path: '/chat/fund/pay-password',
+        operationID: 'parse',
+        hasToken: false)!;
+    trace.response(Response(
+        requestOptions: RequestOptions(),
+        statusCode: 200,
+        data: {'unexpected': 'secret-response'}));
+    trace.error(const FormatException('secret-body'));
+    trace.finish('end');
+    expect(lines.join('\n'), contains('"errorType":"FormatException"'));
+    expect(lines.join('\n'), isNot(contains('secret-')));
+    expect(lines, hasLength(4));
+  });
+
+  test('closing password setup stops pending diagnostics', () {
+    fakeAsync((clock) {
+      final trace = WalletLoadLog.passwordSetup();
+      clock.elapse(const Duration(seconds: 5));
+      trace.finish('view_closed');
+      final count = lines.length;
+      trace.finish('success');
+      clock.elapse(const Duration(seconds: 30));
+      expect(lines, hasLength(count));
+      expect(lines.where((line) => line.contains('"event":"pending"')),
+          hasLength(1));
+      expect(clock.pendingTimers, isEmpty);
+    });
+  });
+
+  test('password diagnostics reach SDK logs and tolerate SDK failures',
+      () async {
+    const channel = MethodChannel('flutter_openim_sdk');
+    final calls = <MethodCall>[];
+    final wasInitialized = Logger().sdkIsInited;
+    Logger().sdkIsInited = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      throw PlatformException(code: 'logger unavailable');
+    });
+    addTearDown(() {
+      Logger().sdkIsInited = wasInitialized;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+    final trace = WalletLoadLog.passwordSetup();
+    trace.error((20030, 'secret-backend-message'));
+    trace.finish('failed');
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, hasLength(3));
+    expect(calls.every((call) => call.method == 'logs'), isTrue);
+    for (final call in calls) {
+      expect(jsonDecode(call.arguments['keyAndValue'] as String), isEmpty);
+    }
+    expect(calls.map((call) => call.arguments).toString(),
+        contains('[TradePassword]'));
+    expect(calls.map((call) => call.arguments).toString(),
+        isNot(contains('secret-')));
   });
 }

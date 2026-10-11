@@ -1,5 +1,7 @@
 # 媒体预览子组件
 
+`media_page_gesture.dart` 统一新旧图库的翻页方向判定：仅单指横向位移大于纵向位移的 1.5 倍时接受翻页，斜向阅读和双指手势留给图片处理。复用 ExtendedImage 的手势竞争机制；参考 99chat 长图优先纵向阅读的交互。回归覆盖斜向长图滚动后继续横向翻页。
+
 `../photo_browser.dart` 保留公开 `MediaBrowser`/`VideoPlayerView` 入口，并兼容导出 `media_source.dart` 中的 `MediaSource`。
 
 - `local_media_availability.dart` 是每个浏览路由独有的异步文件存在性缓存，原图和网格共用一次检查；来源更新重新检查缺失或未完成的文件，已失效请求不能写入新缓存；关闭页面释放缓存，异步结果不直接写页面状态。

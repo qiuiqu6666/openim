@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'media_browser/media_page_gesture.dart';
 
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/cupertino.dart';
@@ -207,6 +208,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
                       ? null
                       : () => widget.onLongPress!(currentIndex),
               child: ExtendedImageGesturePageView.builder(
+                shouldAccpetHorizontalOrVerticalDrag: acceptMediaPageDrag,
                 controller: _pageController,
                 itemCount: widget.sources.length,
                 onPageChanged: (int page) {
