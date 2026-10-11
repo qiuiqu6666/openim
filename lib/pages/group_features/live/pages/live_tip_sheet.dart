@@ -177,19 +177,12 @@ class _LiveTipFormState extends State<_LiveTipForm>
     if (await service.hasTradePassword()) return current;
     if (!mounted) return false;
     if (!current) return false;
-    final configure = await showDialog<bool>(
-        context: context,
-        builder: (dialog) => AlertDialog(
-                title: const Text('请先设置支付密码'),
-                content: const Text('设置支付密码后即可打赏主播。'),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(dialog, false),
-                      child: const Text('取消')),
-                  TextButton(
-                      onPressed: () => Navigator.pop(dialog, true),
-                      child: const Text('去设置'))
-                ]));
+    final configure = await showAppConfirm(context,
+        barrierDismissible: true,
+        title: '请先设置支付密码',
+        message: '设置支付密码后即可打赏主播。',
+        cancelText: '取消',
+        confirmText: '去设置');
     if (!mounted) return false;
     if (configure != true || !current) return false;
     await Navigator.of(context).push(AppMaterialPageRoute<void>(

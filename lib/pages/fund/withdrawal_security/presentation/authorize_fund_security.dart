@@ -30,22 +30,13 @@ Future<FundSecurityProof?> authorizeFundSecurity(
   }
   if (!context.mounted || !isCurrent()) return null;
   if (check.blockedUntil > 0) {
-    final colors = FundPageColors.of(context);
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: colors.card,
-        title: Text('暂时无法转出', style: TextStyle(color: colors.text)),
-        content: Text(
+    await showAppAlert<void>(
+      context,
+      barrierDismissible: true,
+      title: '暂时无法转出',
+      message:
           '手机号或密码变更后需等待24小时。\n允许转出时间：${fundSecurityAllowedTime(check.blockedUntil)}',
-          style: TextStyle(color: colors.text),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('知道了')),
-        ],
-      ),
+      actions: const [AppAction('知道了', null)],
     );
     return null;
   }

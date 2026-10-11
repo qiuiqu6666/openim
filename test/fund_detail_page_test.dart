@@ -250,7 +250,7 @@ void main() {
               matching: find.byKey(
                   const ValueKey('fund-detail-avatar-fixture-recipient'))),
           findsOneWidget);
-      expect(find.descendant(of: recipient, matching: find.text('10.00 99BI')),
+      expect(find.descendant(of: recipient, matching: find.text('10.00 元')),
           findsOneWidget);
       expect(
           find.descendant(
@@ -353,7 +353,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(transport.claims, hasLength(1));
     expect(transport.claims.single.data, isNull);
-    expect(find.text('5.00 99BI'), findsWidgets);
+    expect(find.text('5.00 元'), findsWidgets);
     expect(find.text('小林的红包'), findsOneWidget);
     await _refreshDetails(tester);
     expect(transport.claims, hasLength(1));

@@ -39,6 +39,9 @@ class _IM extends GetxController with IMCallback implements IMController {
 
 class _Chat extends GetxController implements ChatLogic {
   @override
+  GroupInfo? get groupInfo => null;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -407,6 +410,7 @@ void main() {
 
   test('an older joined check cannot revive membership after a leave event',
       () async {
+    setup.isJoinedGroup.value = false;
     setup.onReady();
     await _drain();
     im.joinedGroupDeleted(GroupInfo(groupID: _groupID));

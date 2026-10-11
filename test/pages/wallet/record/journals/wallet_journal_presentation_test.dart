@@ -138,12 +138,12 @@ void main() {
           brightness: brightness,
           child: Scaffold(
               body: WalletRecordRow(item: _record(entry), onTap: () {})));
-      expect(_text(tester, 'wallet-record-amount-event-id'), '+10.01 99币');
-      expect(_text(tester, 'wallet-record-balance-event-id'), '可用余额 111 99币');
+      expect(_text(tester, 'wallet-record-amount-event-id'), '+10.01 元');
+      expect(_text(tester, 'wallet-record-balance-event-id'), '可用余额 111 元');
       await _pump(tester,
           brightness: brightness,
           child: WalletRecordDetailScreen(item: _record(entry)));
-      expect(_text(tester, 'wallet-record-detail-amount'), '+10.01 99币');
+      expect(_text(tester, 'wallet-record-detail-amount'), '+10.01 元');
       expectCompactJournalDetail();
       expect(tester.takeException(), isNull);
     });

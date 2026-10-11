@@ -3,7 +3,7 @@ import '../wallet_record_amount.dart';
 import 'wallet_journal_entry.dart';
 
 String walletJournalCoin(String currency) =>
-    currency.toUpperCase() == 'BI99' ? '99币' : currency.toUpperCase();
+    currency.toUpperCase() == 'BI99' ? '元' : currency.toUpperCase();
 
 String walletJournalAmount(String? raw, String currency,
     {bool signed = false}) {

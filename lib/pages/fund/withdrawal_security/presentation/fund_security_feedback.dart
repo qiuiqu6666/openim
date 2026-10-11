@@ -1,13 +1,13 @@
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:openim_common/openim_common.dart';
 
 import '../../../../core/controller/im_controller.dart';
 import '../../../../services/fund_api.dart';
 import '../../../home/home_logic.dart';
 import '../../../mine/settings/openim_profile_service.dart';
 import '../../../mine/settings/pages/change_phone_page.dart';
-import '../../widgets/fund_page_colors.dart';
 
 String fundSecurityErrorMessage(Object error) {
   if (error is FundApiException) {
@@ -30,32 +30,18 @@ Future<void> showFundSecurityFailure(BuildContext context, Object error,
     {required bool Function() isCurrent}) async {
   if (!context.mounted || !isCurrent()) return;
   final code = error is FundApiException ? error.code : null;
-  final colors = FundPageColors.of(context);
-  final recovery = await showDialog<_Recovery>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      backgroundColor: colors.card,
-      title: Text('交易安全验证', style: TextStyle(color: colors.text)),
-      content: Text(fundSecurityErrorMessage(error),
-          style: TextStyle(color: colors.text)),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('知道了'),
-        ),
-        if (code == 20038 && Get.isRegistered<IMController>())
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(_Recovery.bindPhone),
-            child: const Text('绑定手机号'),
-          ),
-        if (code == 20079 && Get.isRegistered<HomeLogic>())
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(_Recovery.signIn),
-            child: const Text('重新登录'),
-          ),
-      ],
-    ),
+  final recovery = await showAppAlert<_Recovery?>(
+    context,
+    barrierDismissible: true,
+    title: '交易安全验证',
+    message: fundSecurityErrorMessage(error),
+    actions: [
+      const AppAction('知道了', null),
+      if (code == 20038 && Get.isRegistered<IMController>())
+        const AppAction('绑定手机号', _Recovery.bindPhone),
+      if (code == 20079 && Get.isRegistered<HomeLogic>())
+        const AppAction('重新登录', _Recovery.signIn),
+    ],
   );
   if (!context.mounted || !isCurrent()) return;
   if (recovery == _Recovery.bindPhone && Get.isRegistered<IMController>()) {

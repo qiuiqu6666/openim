@@ -257,21 +257,13 @@ class _LivePushPageState extends State<LivePushPage>
   Future<void> _end() async {
     if (_busy || _loading || !_canEnd) return;
     final revoke = _session.status != LiveStatus.live;
-    final ok = await showDialog<bool>(
-        context: context,
-        builder: (dialog) => AlertDialog(
-                title: Text(revoke ? '撤销直播' : '结束直播'),
-                content:
-                    Text(revoke ? '确认撤销这场直播吗？' : '确认结束直播吗？结束后请在 OBS 中停止推流。'),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(dialog, false),
-                      child: const Text('取消')),
-                  TextButton(
-                      onPressed: () => Navigator.pop(dialog, true),
-                      child: const Text('确认',
-                          style: TextStyle(color: AppTokens.danger)))
-                ]));
+    final ok = await showAppConfirm(context,
+        barrierDismissible: true,
+        title: revoke ? '撤销直播' : '结束直播',
+        message: revoke ? '确认撤销这场直播吗？' : '确认结束直播吗？结束后请在 OBS 中停止推流。',
+        cancelText: '取消',
+        confirmText: '确认',
+        destructive: true);
     // A live update can change the action while its confirmation is open.
     // Require a fresh confirmation for the new action instead of reusing it.
     if (ok != true ||

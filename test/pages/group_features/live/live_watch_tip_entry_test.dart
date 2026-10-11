@@ -129,7 +129,7 @@ void main() {
       await tester.tap(find.byTooltip('打赏主播'));
       await frames(tester);
       expect(find.text('打赏主播'), findsOneWidget);
-      expect(find.text('99BI'), findsWidgets);
+      expect(find.text('元'), findsWidgets);
       expect(find.text('确认打赏'), findsOneWidget);
       expect(tipped, false); // Entry alone never submits or deducts.
       expect(transport.requests.where((r) => r.path.endsWith('/tip')), isEmpty);

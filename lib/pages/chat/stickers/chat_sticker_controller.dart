@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -163,18 +162,15 @@ class ChatStickerController {
     try {
       var pending = _pendingSticker;
       if (pending != null) {
-        final retry = await Get.dialog<bool>(AlertDialog(
-          title: const Text('上次收藏未完成'),
-          content: const Text('重试上次收藏，或选择新的文件？'),
-          actions: [
-            TextButton(
-                onPressed: () => Get.back(result: false),
-                child: const Text('选择新文件')),
-            TextButton(
-                onPressed: () => Get.back(result: true),
-                child: const Text('重试')),
-          ],
-        ));
+        final context = Get.context;
+        if (context == null || !context.mounted) return;
+        final retry = await showAppAlert<bool>(
+          context,
+          barrierDismissible: true,
+          title: '上次收藏未完成',
+          message: '重试上次收藏，或选择新的文件？',
+          actions: const [AppAction('选择新文件', false), AppAction('重试', true)],
+        );
         if (retry == null || isClosed) return;
         if (!retry) {
           _pendingSticker = null;

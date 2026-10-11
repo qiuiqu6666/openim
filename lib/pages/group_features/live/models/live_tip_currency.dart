@@ -26,9 +26,11 @@ class LiveTipCurrency {
           result.any((v) => v.code == code)) {
         continue;
       }
-      final label = item is Map
-          ? '${item['label'] ?? item['displayName'] ?? code}'
-          : code;
+      final label = code == FundCurrency.bi99.code
+          ? FundCurrency.bi99.displayName
+          : item is Map
+              ? '${item['label'] ?? item['displayName'] ?? code}'
+              : code;
       result.add(LiveTipCurrency(code, label, digits));
     }
     return List.unmodifiable(result);

@@ -212,6 +212,10 @@ class SangongProfileAdminLayout extends StatelessWidget {
       duration: SangongProfileAdminTokens.transition,
       switchInCurve: Curves.easeOut,
       switchOutCurve: Curves.easeIn,
+      // Let AnimatedSwitcher assign an entry key. Rapid background refreshes
+      // can repeat the same content key before an outgoing fade has finished.
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
       layoutBuilder: (current, previous) => Stack(
           alignment: alignment,
           fit: StackFit.expand,

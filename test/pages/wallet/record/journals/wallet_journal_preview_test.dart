@@ -413,7 +413,7 @@ Future<void> _export(WidgetTester tester, GlobalKey boundary, String name,
       await File('${output.path}/$name')
           .writeAsBytes(bytes!.buffer.asUint8List());
       await File('${output.path}/preview-notes.txt').writeAsString(
-          '实际 WalletRecordScreen / WalletRecordDetailScreen Flutter Widget；所有资金记录及对方用户资料均为测试夹具 fixture，未调用真实 API、真实账号或资金。提现申请、提现退回、发红包、红包退回的业务详情覆盖简体中文、繁体中文、英文、日文、韩文及亮暗主题，逻辑390×844，输出780×1688，使用 Microsoft YaHei、MS Gothic、Malgun Gothic 测试字体。后台原始标题包含冻结/解冻，用户界面仅显示本地化业务名称；数据仍保留原始方向及0资产变化。其他红包夹具同单保留申请10、实际扣款2、退回8三条独立事件，收入支出按assetDelta显示；USDT/TRX保留6位小数，BI99显示99币。详情保留原币金额、时间、业务类型、流水ID、备注和关联账单入口；不显示更多明细、商品说明、付款方式及余额。转账昵称和头像均为模拟资料，列表未知余额--。');
+          '实际 WalletRecordScreen / WalletRecordDetailScreen Flutter Widget；所有资金记录及对方用户资料均为测试夹具 fixture，未调用真实 API、真实账号或资金。提现申请、提现退回、发红包、红包退回的业务详情覆盖简体中文、繁体中文、英文、日文、韩文及亮暗主题，逻辑390×844，输出780×1688，使用 Microsoft YaHei、MS Gothic、Malgun Gothic 测试字体。后台原始标题包含冻结/解冻，用户界面仅显示本地化业务名称；数据仍保留原始方向及0资产变化。其他红包夹具同单保留申请10、实际扣款2、退回8三条独立事件，收入支出按assetDelta显示；USDT/TRX保留6位小数，BI99显示元。详情保留原币金额、时间、业务类型、流水ID、备注和关联账单入口；不显示更多明细、商品说明、付款方式及余额。转账昵称和头像均为模拟资料，列表未知余额--。');
     } finally {
       image.dispose();
     }

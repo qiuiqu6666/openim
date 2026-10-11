@@ -23,7 +23,7 @@ void main() {
     expect(controller.trxAddr, isEmpty);
 
     expect(controller.coins, hasLength(2));
-    expect(controller.coins.map((e) => e.name), containsAll(<String>['99币', 'USDT']));
+    expect(controller.coins.map((e) => e.name), containsAll(<String>['元', 'USDT']));
     for (final coin in controller.coins) {
       expect(coin.bal, '--');
       expect(coin.fiat, '--');

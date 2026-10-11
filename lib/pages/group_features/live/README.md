@@ -87,7 +87,7 @@ ID 均按 URI 组件编码；预约时间发送 UTC ISO-8601。管理只能使�
 ## 打赏与支付
 
 复用 OpenIMProfileService 的真实支付密码设置、PasswordPaymentSheet 和 FundPendingStore。
-服务在 live capabilities 明确返回 `tipCurrencies`，元素为 `{code,label,decimals}`。现有后端只接受 USDT/TRX（6 位）、BI99（2 位，显示名 99BI）；提交还校验币种在当前能力列表中。
+服务在 live capabilities 明确返回 `tipCurrencies`，元素为 `{code,label,decimals}`。现有后端只接受 USDT/TRX（6 位）、BI99（2 位，显示名 元）；提交还校验币种在当前能力列表中。
 未返回币种时显示“打赏币种尚未配置”。通用金额模型保留其他旧码解析，不代表直播接口允许这些币种；不自动互换币种码。
 金额使用 BigInt / 现有 FundAmount 转换整数单位，不使用浮点舍入，限制 JSON 安全整数范围。
 

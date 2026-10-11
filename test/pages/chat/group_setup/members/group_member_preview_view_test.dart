@@ -136,16 +136,16 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('$theme empty preview can be retried without an empty gap',
+    testWidgets('$theme first frame does not flash retry before loading starts',
         (tester) async {
       final logic = _PreviewLogic();
       await _pumpPage(tester, logic, dark: dark);
 
-      expect(find.text('暂未获取到群成员，点击重试'), findsOneWidget);
-      expect(_placeholders, findsNothing);
-      await tester.tap(_retry);
+      expect(_retry, findsNothing);
+      expect(_placeholders, findsNWidgets(6));
+      logic.membersLoading.value = true;
       await tester.pump();
-      expect(logic.retries, 1);
+      expect(logic.retries, 0);
       expect(_placeholders, findsNWidgets(6));
       expect(tester.takeException(), isNull);
     });

@@ -47,7 +47,7 @@ void main() {
         tester
             .widget<Text>(find.byKey(const ValueKey('wallet-swap-output')))
             .data,
-        '16.00 99BI');
+        '16.00 元');
     responses['1']!.complete(walletSwapTestQuote(
         FundAmount.parse('1', FundCurrency.usdt), FundCurrency.bi99,
         quoteID: 'stale-input-quote'));
@@ -57,7 +57,7 @@ void main() {
         tester
             .widget<Text>(find.byKey(const ValueKey('wallet-swap-output')))
             .data,
-        '16.00 99BI');
+        '16.00 元');
     expect(api.writes, isEmpty);
     await disposeWalletOperationPage(tester);
   });

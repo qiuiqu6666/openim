@@ -22,6 +22,7 @@ import 'edit_name/edit_name_logic.dart';
 import 'group_member_list/group_member_list_logic.dart';
 import '../group/identity/group_member_identity.dart';
 import 'members/group_member_preview_controller.dart';
+import 'loading/group_setup_membership.dart';
 
 typedef GroupSetupPermissionContext = ({
   String? account,
@@ -41,7 +42,7 @@ class GroupSetupLogic extends GetxController {
   final GroupMemberPreviewController _memberPreview;
   int _groupInfoRequest = 0;
   int _myMemberRequest = 0;
-  int _joinedRequest = 0;
+  final membership = GroupSetupMembership();
   int _permissionGeneration = 0;
   bool _closed = false;
   late final GroupSetupPermissionContext _initialPermissionContext;
@@ -71,23 +72,19 @@ class GroupSetupLogic extends GetxController {
   final avatar = Rx<File?>(null);
 
   @override
-  void onInit() async {
-    if (Get.arguments['conversationInfo'] != null) {
-      conversationInfo = Rx(Get.arguments['conversationInfo']);
-    } else {
-      final temp = await OpenIM.iMManager.conversationManager
-          .getOneConversation(
-              sourceID: chatLogic.conversationInfo.isGroupChat
-                  ? chatLogic.conversationInfo.groupID!
-                  : chatLogic.conversationInfo.userID!,
-              sessionType: chatLogic.conversationInfo.conversationType!);
-      conversationInfo = Rx(temp);
-    }
+  void onInit() {
+    final args = Get.arguments;
+    final initial =
+        (args is Map ? args['conversationInfo'] : null) as ConversationInfo?;
+    conversationInfo = Rx(ConversationInfo.fromJson(
+        (initial ?? chatLogic.conversationInfo).toJson()));
     groupInfo = Rx(_defaultGroupInfo);
     myGroupMembersInfo = Rx(_defaultMemberInfo);
     _initialPermissionContext = capturePermissionContext();
+    _seedCurrentChat();
 
     _ccSub = imLogic.conversationChangedSubject.listen((newList) {
+      if (!_isCurrentGroupSession) return;
       final newValue = newList.firstWhereOrNull((element) =>
           element.conversationID == conversationInfo.value.conversationID);
       if (newValue != null) {
@@ -112,7 +109,7 @@ class GroupSetupLogic extends GetxController {
 
     _jasSub = imLogic.joinedGroupAddedSubject.listen((value) {
       if (_isCurrentGroupSession && value.groupID == groupInfo.value.groupID) {
-        _joinedRequest++;
+        membership.accept();
         _permissionGeneration++;
         isJoinedGroup.value = true;
         _queryAllInfo();
@@ -156,7 +153,7 @@ class GroupSetupLogic extends GetxController {
     _mASub = imLogic.memberAddedSubject.listen((e) async {
       if (_isCurrentGroupSession && e.groupID == groupInfo.value.groupID) {
         if (e.userID == OpenIM.iMManager.userID) {
-          _joinedRequest++;
+          membership.accept();
           _permissionGeneration++;
           isJoinedGroup.value = true;
           _queryAllInfo();
@@ -180,7 +177,8 @@ class GroupSetupLogic extends GetxController {
 
   @override
   void onReady() {
-    _checkIsJoinedGroup();
+    _queryAllInfo();
+    refreshMembership();
     super.onReady();
   }
 
@@ -188,7 +186,7 @@ class GroupSetupLogic extends GetxController {
   void onClose() {
     _closed = true;
     _permissionGeneration++;
-    _joinedRequest++;
+    membership.dispose();
     _memberPreview.dispose();
     _guSub.cancel();
     _mASub.cancel();
@@ -210,14 +208,14 @@ class GroupSetupLogic extends GetxController {
     _queryAllInfo();
   }
 
-  get _defaultGroupInfo => GroupInfo(
+  GroupInfo get _defaultGroupInfo => GroupInfo(
         groupID: conversationInfo.value.groupID!,
         groupName: conversationInfo.value.showName,
         faceURL: conversationInfo.value.faceURL,
         memberCount: 0,
       );
 
-  get _defaultMemberInfo => GroupMembersInfo(
+  GroupMembersInfo get _defaultMemberInfo => GroupMembersInfo(
         userID: OpenIM.iMManager.userID,
         nickname: OpenIM.iMManager.userInfo.nickname,
       );
@@ -225,6 +223,7 @@ class GroupSetupLogic extends GetxController {
   bool get isOwnerOrAdmin => isOwner || isAdmin;
 
   bool get isAdmin =>
+      isJoinedGroup.value &&
       myGroupMembersInfo.value.roleLevel == GroupRoleLevel.admin;
 
   bool get isNotDisturb => conversationInfo.value.recvMsgOpt == 2;
@@ -269,8 +268,9 @@ class GroupSetupLogic extends GetxController {
       AppNavigator.startEditGroupName(type: EditNameType.myGroupMemberNickname);
 
   bool get isOwner =>
-      groupInfo.value.ownerUserID == OpenIM.iMManager.userID ||
-      myGroupMembersInfo.value.roleLevel == GroupRoleLevel.owner;
+      isJoinedGroup.value &&
+      (groupInfo.value.ownerUserID == OpenIM.iMManager.userID ||
+          myGroupMembersInfo.value.roleLevel == GroupRoleLevel.owner);
 
   String get conversationID => conversationInfo.value.conversationID;
 
@@ -306,25 +306,42 @@ class GroupSetupLogic extends GetxController {
       isJoinedGroup.value;
 
   void _leaveGroup() {
-    _joinedRequest++;
+    membership.accept();
     _permissionGeneration++;
     isJoinedGroup.value = false;
     _memberPreview.invalidate();
   }
 
-  void _checkIsJoinedGroup() async {
-    final request = ++_joinedRequest;
-    final context = capturePermissionContext();
-    if (!_isGroupContextCurrent(context)) return;
-    try {
-      final joined = await OpenIM.iMManager.groupManager.isJoinedGroup(
-        groupID: context.groupID,
+  Future<void> refreshMembership() => membership.refresh(
+        query: () => OpenIM.iMManager.groupManager
+            .isJoinedGroup(groupID: _initialPermissionContext.groupID),
+        isCurrent: () => _isCurrentGroupSession,
+        onResult: (joined) {
+          if (!joined) {
+            _leaveGroup();
+          } else if (!isJoinedGroup.value) {
+            isJoinedGroup.value = true;
+            _queryAllInfo();
+          }
+        },
       );
-      if (request != _joinedRequest || !_isGroupContextCurrent(context)) return;
-      isJoinedGroup.value = joined;
-      _queryAllInfo();
-    } catch (_) {
-      // Leave membership unchanged when the SDK check is unavailable.
+
+  void _seedCurrentChat() {
+    if (!_isCurrentGroupSession) return;
+    final cached = chatLogic.groupInfo;
+    if (cached == null || cached.groupID != groupInfo.value.groupID) return;
+    groupInfo.value = GroupInfo.fromJson(cached.toJson());
+    _hasGroupInfo = true;
+    _memberLookMemberInfo = cached.lookMemberInfo;
+    final self = chatLogic.groupMembersInfo;
+    // isInGroup initially defaults to true in ChatLogic. Require an actual
+    // matching self record before treating the chat snapshot as joined.
+    if (self?.groupID == cached.groupID &&
+        self?.userID == _initialPermissionContext.sdkAccount &&
+        chatLogic.isInGroup.value) {
+      myGroupMembersInfo.value = GroupMembersInfo.fromJson(self!.toJson());
+      isJoinedGroup.value = true;
+      membership.accept();
     }
   }
 
@@ -477,7 +494,7 @@ class GroupSetupLogic extends GetxController {
         faceUrl: faceUrl,
       );
 
-  _modifyGroupInfo({
+  Future<void> _modifyGroupInfo({
     String? groupName,
     String? notification,
     String? introduction,
@@ -594,7 +611,7 @@ class GroupSetupLogic extends GetxController {
     }
   }
 
-  addMember() async {
+  Future<void> addMember() async {
     final result = await AppNavigator.startSelectContacts(
       action: SelAction.addMember,
       groupID: groupInfo.value.groupID,
@@ -617,7 +634,7 @@ class GroupSetupLogic extends GetxController {
     }
   }
 
-  removeMember() async {
+  Future<void> removeMember() async {
     final list = await AppNavigator.startGroupMemberList(
       groupInfo: groupInfo.value,
       opType: GroupMemberOpType.del,

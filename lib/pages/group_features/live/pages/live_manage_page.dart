@@ -373,21 +373,13 @@ class _LiveManagePageState extends State<LiveManagePage>
             (_summary!.sessionID == sessionID &&
                 _summary!.isActive &&
                 (!revoke || _summary!.status != 'live')));
-    final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-                title: Text(revoke ? '撤销直播' : '结束直播'),
-                content:
-                    Text(revoke ? '确认撤销这场直播吗？' : '确认结束直播吗？结束后请在 OBS 中停止推流。'),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(false),
-                      child: const Text('取消')),
-                  TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(true),
-                      child: const Text('确认',
-                          style: TextStyle(color: AppTokens.danger)))
-                ]));
+    final confirmed = await showAppConfirm(context,
+        barrierDismissible: true,
+        title: revoke ? '撤销直播' : '结束直播',
+        message: revoke ? '确认撤销这场直播吗？' : '确认结束直播吗？结束后请在 OBS 中停止推流。',
+        cancelText: '取消',
+        confirmText: '确认',
+        destructive: true);
     if (confirmed != true || _busy || _loading || !actionCurrent()) return;
     _beginMutation();
     try {

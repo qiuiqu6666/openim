@@ -4,6 +4,7 @@ export 'src/widgets/feedback/easy_loading_interactions.dart';
 export 'src/widgets/feedback/easy_loading_appearance.dart';
 export 'src/widgets/feedback/feedback_colors.dart';
 export 'src/widgets/action_sheet/app_action_sheet.dart';
+export 'src/widgets/alert_dialog/app_alert_dialog.dart';
 
 export 'src/apis.dart';
 export 'src/bridge/package_bridge.dart';

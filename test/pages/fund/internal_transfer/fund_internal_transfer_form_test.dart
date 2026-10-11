@@ -365,9 +365,9 @@ void main() {
     fixture.amountValidator = (value) => value == '1.23' ? null : '请输入有效金额';
     await _pump(
         tester, fixture.page(currency: FundCurrency.bi99, available: '5.00'));
-    expect(find.text('提现 99币'), findsOneWidget);
+    expect(find.text('提现 元'), findsOneWidget);
     expect(find.text('最少 0.01'), findsOneWidget);
-    expect(find.text('可用：5.00 99币'), findsOneWidget);
+    expect(find.text('可用：5.00 元'), findsOneWidget);
     expect(fixture.formKey.currentState!.validate(), isFalse);
     await tester.pump();
     expect(find.text('请输入有效邮箱'), findsOneWidget);

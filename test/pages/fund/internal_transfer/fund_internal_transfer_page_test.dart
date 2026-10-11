@@ -366,7 +366,8 @@ void main() {
 
     await tester.tap(_key('internal-transfer-help'));
     await tester.pumpAndSettle();
-    final help = tester.widget<AlertDialog>(find.byType(AlertDialog));
+    final help =
+        tester.widget<CupertinoAlertDialog>(find.byType(CupertinoAlertDialog));
     expect((help.content! as Text).data, contains('99号'));
     expect((help.content! as Text).data, isNot(contains('UID')));
     await tester.tap(find.text('知道了'));
@@ -519,7 +520,7 @@ void main() {
       final api = _Api();
       final search = _Search();
       final session = _Session();
-      final display = currency == FundCurrency.bi99 ? '99币' : currency.code;
+      final display = currency == FundCurrency.bi99 ? '元' : currency.code;
       await FundPaymentPreferences(
               accountID: 'me', serverURL: Config.appAuthUrl)
           .save(currency == FundCurrency.trx

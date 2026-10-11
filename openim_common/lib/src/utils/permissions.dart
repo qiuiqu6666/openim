@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -18,7 +17,8 @@ class Permissions {
     if (await Permission.camera.request().isGranted) {
       onGranted?.call();
     }
-    if (await Permission.camera.isPermanentlyDenied || await Permission.camera.isDenied) {
+    if (await Permission.camera.isPermanentlyDenied ||
+        await Permission.camera.isDenied) {
       _showPermissionDeniedDialog(Permission.camera.title);
     }
   }
@@ -48,7 +48,8 @@ class Permissions {
     if (await Permission.manageExternalStorage.request().isGranted) {
       onGranted?.call();
     }
-    if (await Permission.storage.isPermanentlyDenied || await Permission.storage.isDenied) {
+    if (await Permission.storage.isPermanentlyDenied ||
+        await Permission.storage.isDenied) {
       _showPermissionDeniedDialog(Permission.storage.title);
     }
   }
@@ -57,7 +58,8 @@ class Permissions {
     if (await Permission.microphone.request().isGranted) {
       onGranted?.call();
     }
-    if (await Permission.microphone.isPermanentlyDenied || await Permission.microphone.isDenied) {
+    if (await Permission.microphone.isPermanentlyDenied ||
+        await Permission.microphone.isDenied) {
       _showPermissionDeniedDialog(Permission.microphone.title);
     }
   }
@@ -66,7 +68,8 @@ class Permissions {
     if (await Permission.location.request().isGranted) {
       onGranted?.call();
     }
-    if (await Permission.location.isPermanentlyDenied || await Permission.location.isDenied) {
+    if (await Permission.location.isPermanentlyDenied ||
+        await Permission.location.isDenied) {
       _showPermissionDeniedDialog(Permission.location.title);
     }
   }
@@ -75,7 +78,8 @@ class Permissions {
     if (await Permission.speech.request().isGranted) {
       onGranted?.call();
     }
-    if (await Permission.speech.isPermanentlyDenied || await Permission.speech.isDenied) {
+    if (await Permission.speech.isPermanentlyDenied ||
+        await Permission.speech.isDenied) {
       _showPermissionDeniedDialog(Permission.speech.title);
     }
   }
@@ -89,7 +93,8 @@ class Permissions {
         if (await Permission.photos.request().isGranted) {
           onGranted?.call();
         }
-        if (await Permission.photos.isPermanentlyDenied || await Permission.photos.isDenied) {
+        if (await Permission.photos.isPermanentlyDenied ||
+            await Permission.photos.isDenied) {
           _showPermissionDeniedDialog(Permission.photos.title);
         }
       }
@@ -97,7 +102,8 @@ class Permissions {
       if (await Permission.photos.request().isGranted) {
         onGranted?.call();
       }
-      if (await Permission.photos.isPermanentlyDenied || await Permission.photos.isDenied) {
+      if (await Permission.photos.isPermanentlyDenied ||
+          await Permission.photos.isDenied) {
         _showPermissionDeniedDialog(Permission.photos.title);
       }
     }
@@ -107,7 +113,8 @@ class Permissions {
     if (await Permission.notification.request().isGranted) {
       return true;
     }
-    if (await Permission.notification.isPermanentlyDenied || await Permission.notification.isDenied) {
+    if (await Permission.notification.isPermanentlyDenied ||
+        await Permission.notification.isDenied) {
       _showPermissionDeniedDialog(Permission.notification.title);
     }
 
@@ -210,41 +217,24 @@ class Permissions {
     }
   }
 
-  static Future<Map<Permission, PermissionStatus>> request(List<Permission> permissions) async {
+  static Future<Map<Permission, PermissionStatus>> request(
+      List<Permission> permissions) async {
     Map<Permission, PermissionStatus> statuses = await permissions.request();
     return statuses;
   }
 
-  static void _showPermissionDeniedDialog(String tips) {
-    showDialog(
-      context: Get.context!,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(StrRes.permissionDeniedTitle),
-          content: Text(
-            sprintf(StrRes.permissionDeniedHint, [tips]),
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8.0),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: Text(StrRes.cancel),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: Text(StrRes.determine),
-              onPressed: () {
-                Navigator.of(context).pop();
-                openAppSettings();
-              },
-            ),
-          ],
-        );
-      },
+  static void _showPermissionDeniedDialog(String tips) async {
+    final context = Get.context;
+    if (context == null || !context.mounted) return;
+    final confirmed = await showAppConfirm(
+      context,
+      barrierDismissible: true,
+      title: StrRes.permissionDeniedTitle,
+      message: sprintf(StrRes.permissionDeniedHint, [tips]),
+      cancelText: StrRes.cancel,
+      confirmText: StrRes.determine,
     );
+    if (confirmed && context.mounted) await openAppSettings();
   }
 }
 

@@ -60,7 +60,7 @@ class UnavailableWalletRepository implements WalletRepository {
 /// deliberately remain unknown (`--`) and never masquerade as a zero balance.
 const List<CoinDto> walletUnavailableProductCoins = <CoinDto>[
   CoinDto(
-    name: '99币',
+    name: '元',
     sub: '--',
     bal: '--',
     fiat: '--',

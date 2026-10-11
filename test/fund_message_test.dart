@@ -77,7 +77,7 @@ void main() {
       expect(data.status, 'open');
     }
     expect(
-        parse(payload(currency: 'BI99', amount: '0.01')).currencyLabel, '99BI');
+        parse(payload(currency: 'BI99', amount: '0.01')).currencyLabel, '元');
   });
 
   test('rejects incomplete, unrelated, and unsafe financial payloads', () {
@@ -153,7 +153,7 @@ void main() {
             imMessage(payload(
                 biz: 'group_transfer', currency: 'BI99', amount: '12.50')),
             isConversation: true),
-        '[群转账] 12.50 99BI');
+        '[群转账] 12.50 元');
     expect(IMUtils.parseMsg(imMessage(payload(biz: 'withdrawal'))),
         '[${StrRes.unsupportedMessage}]');
   });
@@ -206,7 +206,7 @@ void main() {
         final text = tester.widget<Text>(
             find.descendant(of: summary, matching: find.byType(Text)));
         expect(text.textSpan!.toPlainText(),
-            '${entry.amount} ${entry.currency == 'BI99' ? '99BI' : entry.currency} · 共${entry.count}个红包');
+            '${entry.amount} ${entry.currency == 'BI99' ? '元' : entry.currency} · 共${entry.count}个红包');
         final spans = (text.textSpan! as TextSpan).children!;
         expect(spans.first.style!.fontWeight, FontWeight.w700);
         expect(spans.first.style!.fontSize, 16);

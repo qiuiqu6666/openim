@@ -7,6 +7,7 @@ import 'package:openim_common/openim_common.dart';
 
 import 'group_setup_logic.dart';
 import 'group_announcement_page.dart';
+import 'loading/group_setup_loading.dart';
 import '../group/announcements/group_announcement_banner.dart';
 import '../../group_features/identity/group_name_label.dart';
 
@@ -38,7 +39,13 @@ class GroupSetupPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (logic.isJoinedGroup.value) _groupHeaderCard(),
+                _groupHeaderCard(),
+                if (!logic.isJoinedGroup.value &&
+                    !logic.membership.resolved.value)
+                  GroupSetupLoading(
+                    failed: logic.membership.failed.value,
+                    onRetry: logic.refreshMembership,
+                  ),
                 if (logic.isJoinedGroup.value) _membersCard(),
                 if (logic.isJoinedGroup.value) _detailsCard(),
                 if (logic.isJoinedGroup.value)
@@ -73,7 +80,9 @@ class GroupSetupPage extends StatelessWidget {
                   _section([
                     _settingRow(StrRes.groupManage, onTap: logic.groupManage)
                   ]),
-                if (!logic.isOwner)
+                if (!logic.isOwner &&
+                    (logic.isJoinedGroup.value ||
+                        logic.membership.resolved.value))
                   _section([
                     _settingRow(
                         logic.isJoinedGroup.value
@@ -272,7 +281,7 @@ class GroupSetupPage extends StatelessWidget {
         ],
       );
     }
-    if (logic.membersLoading.value) {
+    if (logic.membersLoading.value || !logic.membersFailed.value) {
       return Semantics(
         label: '正在加载群成员',
         child: ExcludeSemantics(
@@ -309,7 +318,7 @@ class GroupSetupPage extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 6.w),
           child: Text(
-            logic.membersFailed.value ? '群成员加载失败，点击重试' : '暂未获取到群成员，点击重试',
+            '群成员加载失败，点击重试',
             textAlign: TextAlign.center,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,

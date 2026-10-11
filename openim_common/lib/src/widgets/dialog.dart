@@ -27,82 +27,20 @@ class CustomDialog extends StatelessWidget {
   final Function()? onTapRight;
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Center(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8.r),
-          child: Container(
-            width: 280.w,
-            color: Styles.c_FFFFFF,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 20.w,
-                    vertical: 20.h,
-                  ),
-                  child: Text(
-                    title ?? '',
-                    style: Styles.ts_0C1C33_17sp,
-                  ),
-                ),
-                Divider(
-                  color: Styles.c_E8EAEF,
-                  height: 0.5.h,
-                ),
-                Row(
-                  children: [
-                    _button(
-                      bgColor: Styles.c_FFFFFF,
-                      text: leftText ?? StrRes.cancel,
-                      textStyle: Styles.ts_0C1C33_17sp,
-                      onTap: onTapLeft ?? () => Get.back(result: false),
-                    ),
-                    Container(
-                      color: Styles.c_E8EAEF,
-                      width: 0.5.w,
-                      height: 48.h,
-                    ),
-                    _button(
-                      bgColor: Styles.c_FFFFFF,
-                      text: rightText ?? StrRes.determine,
-                      textStyle: Styles.ts_0089FF_17sp,
-                      onTap: onTapRight ?? () => Get.back(result: true),
-                    ),
-                  ],
-                )
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _button({
-    required Color bgColor,
-    required String text,
-    required TextStyle textStyle,
-    Function()? onTap,
-  }) =>
-      Expanded(
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            decoration: BoxDecoration(
-              color: bgColor,
-            ),
-            height: 48.h,
-            alignment: Alignment.center,
-            child: Text(
-              text,
-              style: textStyle,
-            ),
-          ),
-        ),
+  Widget build(BuildContext context) => AppAlertDialog<bool>(
+        title: title ?? '',
+        message: content,
+        actions: [
+          AppAction(leftText ?? StrRes.cancel, false),
+          AppAction(rightText ?? StrRes.determine, true),
+        ],
+        onSelected: (confirmed) {
+          if (confirmed) {
+            (onTapRight ?? () => Get.back(result: true))();
+          } else {
+            (onTapLeft ?? () => Get.back(result: false))();
+          }
+        },
       );
 }
 

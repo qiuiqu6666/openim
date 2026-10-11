@@ -44,7 +44,7 @@ void main() {
       expect(bi99.multipliedBy(3).decimal, '0.87');
       expect(FundAmount.parse('9223372036854.775807', FundCurrency.usdt).units,
           BigInt.parse('9223372036854775807'));
-      expect(FundCurrency.bi99.displayName, '99BI');
+      expect(FundCurrency.bi99.displayName, '元');
     });
 
     test('rejects precision loss, signs, exponents and locale separators', () {

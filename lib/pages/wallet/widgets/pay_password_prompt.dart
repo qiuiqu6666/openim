@@ -765,7 +765,7 @@ class _PayCoinIcon extends StatelessWidget {
         size: size,
       );
     }
-    final isPlatform = const {'99', '99BI', 'BI99', '99币'}.contains(upper);
+    final isPlatform = const {'99', '99BI', 'BI99', '99币', '元'}.contains(upper);
     if (isPlatform) return PlatformCoinIcon(size: size);
     if (url.isNotEmpty && !isPlatform) {
       return ClipOval(

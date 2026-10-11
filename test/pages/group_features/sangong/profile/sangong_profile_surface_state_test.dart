@@ -323,24 +323,32 @@ void main() {
     store.dispose();
   });
 
-  testWidgets('normal entry discovers the only authorized game group automatically',
+  testWidgets(
+      'normal entry discovers the only authorized game group automatically',
       (tester) async {
-    final api = SangongTestApi()..respond = (call) {
-      if (call.path.endsWith('/admin/tenants')) {
-        return {'tenants': [
-          {'imGroupGameId': 'g', 'name': '游戏群',
-            'myRole': 'admin', 'active': true}
-        ]};
-      }
-      if (call.path.endsWith('/feature-capabilities')) {
-        return _capabilities('g', manage: true);
-      }
-      return _profileResponse(call);
-    };
+    final api = SangongTestApi()
+      ..respond = (call) {
+        if (call.path.endsWith('/admin/tenants')) {
+          return {
+            'tenants': [
+              {
+                'imGroupGameId': 'g',
+                'name': '游戏群',
+                'myRole': 'admin',
+                'active': true
+              }
+            ]
+          };
+        }
+        if (call.path.endsWith('/feature-capabilities')) {
+          return _capabilities('g', manage: true);
+        }
+        return _profileResponse(call);
+      };
     final store = _store(api, FixtureAccountPrivilege());
     SangongProfileEntryScope? entry;
-    await _mountSurface(tester, store: store, groupID: 'ordinary',
-        observe: (value) => entry = value);
+    await _mountSurface(tester,
+        store: store, groupID: 'ordinary', observe: (value) => entry = value);
     expect(entry?.selectedGroupID, 'g');
     expect(entry?.error, isNull);
     expect(api.count('/admin/tenants'), 1);
@@ -350,7 +358,8 @@ void main() {
     store.dispose();
   });
 
-  testWidgets('profile from another group uses the operator authorized game group',
+  testWidgets(
+      'profile from another group uses the operator authorized game group',
       (tester) async {
     final api = SangongTestApi()..respond = _profileResponse;
     final store = _store(api, FixtureAccountPrivilege());
@@ -363,13 +372,14 @@ void main() {
     expect(entry?.selectedGroupID, 'authorized-game');
     expect(api.calls.first.path,
         '/chat/groups/authorized-game/feature-capabilities');
-    expect(api.calls.any((call) => call.path.contains('ordinary-group')), isFalse);
+    expect(
+        api.calls.any((call) => call.path.contains('ordinary-group')), isFalse);
     await unmountSangong(tester);
     store.dispose();
   });
 
   testWidgets(
-      'business revocation keeps public services but drops private account data',
+      'capability invalidation silently restores authorized profile data',
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) => call.path.endsWith('/feature-capabilities')
@@ -381,10 +391,13 @@ void main() {
     expect(find.textContaining('当前积分 420'), findsOneWidget);
     store.invalidateCapabilities('g');
     await flushSangong(tester);
+    await tester.pumpAndSettle();
     expect(
         find.byKey(const ValueKey('sangong-profile-services')), findsOneWidget);
-    expect(find.textContaining('当前积分 420'), findsNothing);
-    expect(find.text('当前群的三公业务权限已变化，请重试'), findsOneWidget);
+    expect(find.textContaining('当前积分 420'), findsOneWidget);
+    expect(find.text('当前群的三公业务权限已变化，请重试'), findsNothing);
+    expect(find.text('重试'), findsNothing);
+    expect(api.count('/feature-capabilities'), 2);
     expect(
         tester
             .widget<SangongProfileLedgerFloatingEntry>(
@@ -394,6 +407,224 @@ void main() {
     await unmountSangong(tester);
     store.dispose();
   });
+
+  testWidgets('current game group silently revalidates binding after a change',
+      (tester) async {
+    final binding = Completer<dynamic>();
+    var configReads = 0;
+    final api = SangongTestApi()
+      ..respond = (call) {
+        if (call.path.endsWith('/feature-capabilities')) {
+          return _capabilities('g', manage: true);
+        }
+        if (call.path.endsWith('/config') && ++configReads == 2) {
+          return binding.future;
+        }
+        return _profileResponse(call);
+      };
+    final store = _store(api, FixtureAccountPrivilege());
+    await _mountSurface(tester,
+        store: store,
+        groups: () async =>
+            [GroupInfo(groupID: 'g', groupName: '游戏群', ex: '{"gameType":1}')]);
+    expect(find.textContaining('当前积分 420'), findsOneWidget);
+    store.invalidateCapabilities('g');
+    await flushSangong(tester);
+    expect(configReads, 2);
+    expect(find.text('重试'), findsNothing);
+    expect(find.textContaining('当前积分 420'), findsNothing);
+    binding.complete(sangongFixtureResponse(
+        api.calls.lastWhere((call) => call.path.endsWith('/config'))));
+    await flushSangong(tester);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('当前积分 420'), findsOneWidget);
+    expect(find.text('重试'), findsNothing);
+    expect(api.count('/feature-capabilities'), 2);
+    expect(tester.takeException(), isNull);
+    await unmountSangong(tester);
+    store.dispose();
+  });
+
+  for (final dark in [false, true]) {
+    testWidgets(
+        'pending refresh is silent and coalesces newer changes dark=$dark',
+        (tester) async {
+      final pending = Completer<dynamic>();
+      final api = SangongTestApi();
+      var reads = 0;
+      api.respond = (call) {
+        if (call.path.endsWith('/feature-capabilities')) {
+          reads++;
+          if (reads == 2) return pending.future;
+          return _capabilities('g', manage: true);
+        }
+        return _profileResponse(call);
+      };
+      final store = _store(api, FixtureAccountPrivilege());
+      await _mountSurface(tester,
+          store: store,
+          dark: dark,
+          groups: () async => [_group('g', enabled: true)]);
+      store.invalidateCapabilities('g');
+      await flushSangong(tester);
+      expect(reads, 2);
+      expect(find.textContaining('当前积分 420'), findsNothing);
+      expect(find.text('重试'), findsNothing);
+      expect(find.text('普通资料'), findsOneWidget);
+      store.invalidateCapabilities('g');
+      store.invalidateCapabilities('g');
+      await flushSangong(tester);
+      expect(reads, 2);
+      pending.complete(_capabilities('g', manage: false));
+      await flushSangong(tester);
+      expect(reads, 3);
+      expect(find.textContaining('当前积分 420'), findsOneWidget);
+      expect(find.text('重试'), findsNothing);
+      expect(api.calls.where((call) => call.method != 'GET'), isEmpty);
+      expect(tester.takeException(), isNull);
+      await unmountSangong(tester);
+      store.dispose();
+    });
+  }
+
+  testWidgets(
+      'confirmed revocation silently disables forms without private reads',
+      (tester) async {
+    var manage = true;
+    final api = SangongTestApi()
+      ..respond = (call) => call.path.endsWith('/feature-capabilities')
+          ? _capabilities('g', manage: manage)
+          : _profileResponse(call);
+    final store = _store(api, FixtureAccountPrivilege());
+    await _mountSurface(tester,
+        store: store, groups: () async => [_group('g', enabled: true)]);
+    expect(api.count('/user'), 1);
+    manage = false;
+    store.invalidateCapabilities('g');
+    await flushSangong(tester);
+    expect(api.count('/feature-capabilities'), 2);
+    expect(api.count('/user'), 1);
+    expect(find.textContaining('当前积分 420'), findsNothing);
+    expect(find.text('重试'), findsNothing);
+    expect(find.text('当前群的三公业务权限已变化，请重试'), findsNothing);
+    final credit = tester.widget<InkWell>(find
+        .ancestor(of: find.text('上分'), matching: find.byType(InkWell))
+        .first);
+    expect(credit.onTap, isNull);
+    expect(tester.takeException(), isNull);
+    await unmountSangong(tester);
+    store.dispose();
+  });
+
+  testWidgets('real refresh failure offers recovery without an automatic loop',
+      (tester) async {
+    var fail = false;
+    final api = SangongTestApi()
+      ..respond = (call) {
+        if (call.path.endsWith('/feature-capabilities')) {
+          if (fail) throw const GroupFeatureException('网络暂时不可用');
+          return _capabilities('g', manage: true);
+        }
+        return _profileResponse(call);
+      };
+    final store = _store(api, FixtureAccountPrivilege());
+    await _mountSurface(tester,
+        store: store, groups: () async => [_group('g', enabled: true)]);
+    fail = true;
+    store.invalidateCapabilities('g');
+    await flushSangong(tester);
+    expect(find.text('网络暂时不可用'), findsOneWidget);
+    expect(api.count('/feature-capabilities'), 2);
+    await tester.pump(const Duration(seconds: 5));
+    expect(api.count('/feature-capabilities'), 2);
+    fail = false;
+    await tester.tap(find.text('重试'));
+    await flushSangong(tester);
+    expect(find.textContaining('当前积分 420'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountSangong(tester);
+    store.dispose();
+  });
+
+  testWidgets('new group recovers while an old group refresh is still pending',
+      (tester) async {
+    final pending = Completer<dynamic>();
+    var aReads = 0;
+    final api = SangongTestApi()
+      ..respond = (call) {
+        if (call.path.endsWith('/feature-capabilities')) {
+          final group = call.path.split('/')[3];
+          if (group == 'a' && ++aReads == 2) return pending.future;
+          return _capabilities(group, manage: true);
+        }
+        return _profileResponse(call);
+      };
+    final store = _store(api, FixtureAccountPrivilege());
+    SangongProfileEntryScope? entry;
+    await _mountSurface(tester,
+        store: store,
+        groups: () async =>
+            [_group('a', enabled: true), _group('b', enabled: true)],
+        observe: (value) => entry = value);
+    entry!.onSelectGroup('a');
+    await flushSangong(tester);
+    store.invalidateCapabilities('a');
+    await flushSangong(tester);
+    entry!.onSelectGroup('b');
+    await flushSangong(tester);
+    store.invalidateCapabilities('b');
+    await flushSangong(tester);
+    await tester.pumpAndSettle();
+    expect(api.count('/b/feature-capabilities'), 2);
+    expect(entry!.selectedGroupID, 'b');
+    expect(find.textContaining('当前积分 420'), findsOneWidget);
+    pending.complete(_capabilities('a', manage: false));
+    await flushSangong(tester);
+    expect(entry!.selectedGroupID, 'b');
+    expect(entry!.error, isNull);
+    expect(find.textContaining('当前积分 420'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await unmountSangong(tester);
+    store.dispose();
+  });
+
+  for (final change in ['account', 'privilege', 'dispose']) {
+    testWidgets('$change rejects a late background permission result',
+        (tester) async {
+      final pending = Completer<dynamic>();
+      var reads = 0;
+      final api = SangongTestApi()
+        ..respond = (call) {
+          if (call.path.endsWith('/feature-capabilities')) {
+            return ++reads == 1
+                ? _capabilities('g', manage: true)
+                : pending.future;
+          }
+          return _profileResponse(call);
+        };
+      final privilege = FixtureAccountPrivilege();
+      final store = _store(api, privilege);
+      await _mountSurface(tester,
+          store: store, groups: () async => [_group('g', enabled: true)]);
+      store.invalidateCapabilities('g');
+      await flushSangong(tester);
+      switch (change) {
+        case 'account':
+          OpenIM.iMManager.userID = 'another';
+        case 'privilege':
+          privilege.setAllowed(false);
+        case 'dispose':
+          await unmountSangong(tester);
+      }
+      pending.complete(_capabilities('g', manage: true));
+      await flushSangong(tester);
+      expect(api.count('/user'), 1);
+      expect(find.textContaining('当前积分 420'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await unmountSangong(tester);
+      store.dispose();
+    });
+  }
 
   testWidgets(
       'dispose fences pending group discovery without affecting normal navigation',

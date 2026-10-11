@@ -78,7 +78,7 @@ class FundInternalTransferForm extends StatelessWidget {
   final VoidCallback? onRecipientSubmitted;
 
   bool get _editable => !isLocked && !isLoading;
-  String get _coin => currency == FundCurrency.bi99 ? '99币' : currency.code;
+  String get _coin => currency.displayName;
   String _text(BuildContext context, String zh, String en) =>
       settingsText(context, zh: zh, en: en);
   String _accountLabel(BuildContext context) => switch (accountType) {

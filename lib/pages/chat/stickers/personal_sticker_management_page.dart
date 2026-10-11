@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart'
-    show AppSystemBars, AppTokens, GlassAppBar;
+    show AppSystemBars, AppTokens, GlassAppBar, showAppConfirm;
 
 import 'personal_sticker_store.dart';
 
@@ -120,20 +120,14 @@ class _PersonalStickerManagementPageState
 
   Future<void> _deleteSelected() async {
     if (_selected.isEmpty || _busy) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('删除选中的 ${_selected.length} 个表情？'),
-        content: const Text('已发送的消息不会受到影响。'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('删除')),
-        ],
-      ),
+    final confirmed = await showAppConfirm(
+      context,
+      barrierDismissible: true,
+      title: '删除选中的 ${_selected.length} 个表情？',
+      message: '已发送的消息不会受到影响。',
+      cancelText: '取消',
+      confirmText: '删除',
+      destructive: true,
     );
     if (confirmed != true || !mounted) return;
     setState(() => _busy = true);

@@ -48,7 +48,9 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
   bool _discovering = false;
   bool _lastPrivileged = false;
   bool _ledgerOpen = false;
-  bool _recoveringCapabilities = false;
+  Object? _capabilityRecovery;
+  SangongRuntime? _recoveringRuntime;
+  bool _recoverCapabilitiesAgain = false;
   final _ledgerScopeChanges = ValueNotifier<int>(0);
 
   bool get _privileged {
@@ -78,6 +80,9 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
   }
 
   void _releaseRuntime() {
+    _capabilityRecovery = null;
+    _recoveringRuntime = null;
+    _recoverCapabilitiesAgain = false;
     final runtime = _runtime;
     _runtime = null;
     runtime?.dispose();
@@ -225,14 +230,23 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
     }
     final runtime = _runtime;
     if (runtime != null && !_loading) {
+      // Capture invalidation before replacing the snapshot. The latest empty
+      // snapshot has a current epoch, but is not a confirmed permission denial.
+      final invalidated = !runtime.featureContext.capabilitiesCurrent();
       runtime.updateContext(runtime.featureContext.readCurrentContext());
-      if (!runtime.canManage) {
-        if (!runtime.featureContext.capabilitiesCurrent()) {
-          unawaited(_recoverCapabilities(runtime));
-        } else {
-          _error = '当前群的三公业务权限已变化，请重试';
-        }
-      } else {
+      final needsBinding = runtime.requiresGroupTenantCheck &&
+          runtime.featureContext.capabilities.sangong.canManage &&
+          runtime.groupTenant.state == null &&
+          !runtime.groupTenant.loading &&
+          runtime.groupTenant.error == null;
+      if (invalidated || (needsBinding && _recoveringRuntime != runtime)) {
+        _error = null;
+        unawaited(_recoverCapabilities(runtime));
+      } else if (runtime.canManage ||
+          (store.capabilityError(runtime.featureContext.groupID) == null &&
+              runtime.groupTenant.error == null)) {
+        // Confirmed revocation disables the forms through canManage. Routine
+        // changes need no permission-changed error banner or manual retry.
         _error = null;
       }
     }
@@ -240,28 +254,51 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
   }
 
   Future<void> _recoverCapabilities(SangongRuntime runtime) async {
-    if (_recoveringCapabilities) return;
-    _recoveringCapabilities = true;
+    if (_recoveringRuntime == runtime) {
+      _recoverCapabilitiesAgain = true;
+      return;
+    }
+    final recovery = Object();
+    _capabilityRecovery = recovery;
+    _recoveringRuntime = runtime;
     final generation = _generation;
     bool current() =>
         mounted &&
+        identical(recovery, _capabilityRecovery) &&
         generation == _generation &&
         identical(runtime, _runtime) &&
+        runtime.isSessionCurrent &&
         _privileged;
     try {
-      final updated =
-          await runtime.featureContext.refreshCapabilities(force: true);
-      if (!current()) return;
-      runtime.updateContext(updated);
-      await runtime.ensureManageBinding();
-      if (!current()) return;
-      setState(() {
-        _error = runtime.canManage ? null : '当前群的三公业务权限已变化，请重试';
-      });
-    } catch (error) {
-      if (current()) setState(() => _error = DioErrorMessage.forApp(error));
+      do {
+        _recoverCapabilitiesAgain = false;
+        try {
+          final updated =
+              await runtime.featureContext.refreshCapabilities(force: true);
+          if (!current()) return;
+          if (_recoverCapabilitiesAgain) continue;
+          runtime.updateContext(updated);
+          if (updated.capabilities.sangong.canManage &&
+              runtime.canAccessModule) {
+            await runtime.ensureManageBinding();
+          }
+          if (!current()) return;
+          if (_recoverCapabilitiesAgain) continue;
+          setState(() => _error = null);
+        } catch (error) {
+          if (!current()) return;
+          // A newer change superseded this read. Fetch its scope instead of
+          // presenting a transient cancellation as an actionable failure.
+          if (_recoverCapabilitiesAgain) continue;
+          setState(() => _error = DioErrorMessage.forApp(error));
+        }
+      } while (_recoverCapabilitiesAgain && current());
     } finally {
-      _recoveringCapabilities = false;
+      if (identical(recovery, _capabilityRecovery)) {
+        _capabilityRecovery = null;
+        _recoveringRuntime = null;
+        _recoverCapabilitiesAgain = false;
+      }
     }
   }
 
@@ -474,7 +511,8 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
               dark: Theme.of(context).brightness == Brightness.dark),
           shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(SangongProfileLedgerTokens.sheetRadius))),
+                  top:
+                      Radius.circular(SangongProfileLedgerTokens.sheetRadius))),
           barrierColor: const Color(0xFF000000).withValues(alpha: .45),
           builder: (context) => SangongPrivilegeRouteGuard.account(
               privilege: store.accountPrivilege,

@@ -7,9 +7,19 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/group_setup/group_setup_logic.dart';
 import 'package:openim/pages/chat/group_setup/group_setup_view.dart';
+import 'package:openim/pages/chat/group_setup/loading/group_setup_membership.dart';
 import 'package:openim_common/openim_common.dart';
 
 class _FakeGroupSetupLogic implements GroupSetupLogic {
+  @override
+  final membership = GroupSetupMembership();
+  int retries = 0;
+  @override
+  Future<void> refreshMembership() async {
+    retries++;
+    membership.failed.value = false;
+  }
+
   @override
   final isJoinedGroup = true.obs;
   @override
@@ -44,6 +54,48 @@ class _FakeGroupSetupLogic implements GroupSetupLogic {
 }
 
 void main() {
+  for (final dark in [false, true]) {
+    testWidgets('unresolved membership keeps header without delete ($dark)',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      Styles.isDark = dark;
+      addTearDown(() => Styles.isDark = false);
+      final logic = _FakeGroupSetupLogic()..isJoinedGroup.value = false;
+      addTearDown(logic.membership.dispose);
+      await tester.pumpWidget(ScreenUtilInit(
+        designSize: const Size(375, 812),
+        builder: (_, __) => GetMaterialApp(
+          translations: TranslationService(),
+          locale: const Locale('zh', 'CN'),
+          theme: dark ? ThemeData.dark() : ThemeData.light(),
+          home: GroupSetupPage(logic: logic),
+        ),
+      ));
+      await tester.pump();
+      expect(find.text('测试群聊'), findsOneWidget);
+      expect(find.text('正在加载群资料'), findsOneWidget);
+      expect(find.text(StrRes.delete), findsNothing);
+      expect(find.text(StrRes.exitGroup), findsNothing);
+      logic.membership.failed.value = true;
+      await tester.pump();
+      expect(find.text('群资料加载失败'), findsOneWidget);
+      expect(find.text('测试群聊'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.refresh_rounded));
+      await tester.pump();
+      expect(logic.retries, 1);
+      expect(find.text('正在加载群资料'), findsOneWidget);
+      logic.membership.accept();
+      logic.isJoinedGroup.value = true;
+      await tester.pumpAndSettle();
+      expect(find.text('正在加载群资料'), findsNothing);
+      expect(find.text('群成员'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('group info cards fit on a narrow screen', (tester) async {
     tester.view.physicalSize = const Size(320, 700);
     tester.view.devicePixelRatio = 1;

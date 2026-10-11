@@ -40,19 +40,12 @@ class _AgentCurrentPageState extends State<AgentCurrentPage> {
     if (!allowed || !_state.canApply()) {
       return;
     }
-    final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-                title: const Text('确认级差反水'),
-                content: const Text('申请结算本人级差待结算。金额由机器人侧核算，确定继续吗？'),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('取消')),
-                  TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('确认申请'))
-                ]));
+    final confirmed = await showAppConfirm(context,
+        barrierDismissible: true,
+        title: '确认级差反水',
+        message: '申请结算本人级差待结算。金额由机器人侧核算，确定继续吗？',
+        cancelText: '取消',
+        confirmText: '确认申请');
     if (!mounted || !allowed || confirmed != true || !_state.canApply()) return;
     await _state.apply();
     if (mounted && _state.current && _state.settled) {

@@ -15,6 +15,7 @@
 - 群成员资料只确认当前群；单聊资料从当前登录账号已加入的群中准备。单群自动准备，多个群通过独立选择窗口明确选择，不跨群复用租户；成功选中单群时不额外显示群选择栏。选择时刷新群能力再校验绑定，失败显示具体原因。
 - 私人数据及写操作沿用共享 GroupFeatureStore。需要当前群租户查询的 `gameType=1` 运营分支，要求当前账号特权、定点查询确认租户 `active:true`、聚合 `canManage` 与真实逻辑绑定租户，无需 `ex.groupFeatures` 或旧公开 enabled/manageEntry。`gameType` 仅描述类型，租户 active 仅判断配置存在且启用，运营权来自当前聚合能力；公共群信息、OpenIM群主身份、对方昵称及特权字段均不单独构成业务授权。普通／legacy 运营仍保留公开 enabled/manageEntry，代理／个人报表继续沿用原 enabled、agentEntry、canOpenAgent 及私人历史条件。
 - 权限变化更新资料运行实例；已覆盖的流水与操作确认窗口也监听实例。撤权或销毁立即隐藏私人内容、清空输入；晚到请求不能重新展示。
+- 已打开资料页收到三公能力失效事件时，在替换上下文前识别旧权限版本失效，自动重新读取能力并确认当前群绑定。刷新期间不显示“业务权限已变化，请重试”；连续变化合并为当前读取完成后的最新一次校准。确认仍有权限后恢复业务数据，确认撤权后静默停用表单；真实网络/服务错误仍显示原因与重试。重试只读，不自动重新提交资金或牌局命令。恢复任务绑定当前实例和页面代次，切群、切账号、撤销特权、关闭页面后旧结果失效。资料摘要动画使用独立的过渡实例键，支持短时间内连续恢复。
 
 实际视觉来源：`E:/openim/reference-99chat/lib/src/widgets/user_profile/user_profile_game_admin_panel.dart`、`user_profile_game_ledger_floating_entry.dart`、`user_profile_game_privilege_side_column.dart`，以及 `lib/src/user_profile.dart` 的手机外卡与插入顺序（d7c3c65）。数据源和权限判断继续使用 OpenIM 与本模块接口。
 

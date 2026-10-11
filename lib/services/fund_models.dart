@@ -4,7 +4,7 @@ import 'package:openim_common/openim_common.dart';
 enum FundCurrency {
   usdt('USDT', 'USDT', 6),
   trx('TRX', 'TRX', 6),
-  bi99('BI99', '99BI', 2);
+  bi99('BI99', '元', 2);
 
   const FundCurrency(this.code, this.displayName, this.decimals);
   final String code;

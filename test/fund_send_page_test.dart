@@ -570,7 +570,7 @@ void main() {
     expect(await _preferences().read(), FundCurrency.bi99);
     expect(api.ids, isEmpty);
     await _open(tester, api, packet: true);
-    expect(find.text('100.00 99BI'), findsOneWidget);
+    expect(find.text('100.00 元'), findsOneWidget);
     await _open(tester, api);
     await tester.enterText(find.byKey(const ValueKey('fund-amount')), '1');
     await _pay(tester);
@@ -658,7 +658,7 @@ void main() {
     expect(api.ids, ['original-order']);
     expect(await _preferences().read(), FundCurrency.bi99);
     await _open(tester, api, packet: true);
-    expect(find.text('100.00 99BI'), findsOneWidget);
+    expect(find.text('100.00 元'), findsOneWidget);
   });
 
   testWidgets('another account defaults independently', (tester) async {
@@ -822,7 +822,7 @@ void main() {
     await _requestPin(tester);
     await _changePaymentCurrency(tester, FundCurrency.bi99);
     expect(find.text('100.00 USDT'), findsOneWidget);
-    expect(find.text('99BI 最多支持 2 位小数'), findsWidgets);
+    expect(find.text('元 最多支持 2 位小数'), findsWidgets);
     expect(api.ids, isEmpty);
     await _pay(tester);
     expect(api.amounts, ['1.123']);
@@ -837,7 +837,7 @@ void main() {
     await _pay(tester);
     expect(api.currencies, [FundCurrency.usdt]);
     await _changePaymentCurrency(tester, FundCurrency.bi99);
-    expect(find.text('100.00 99BI'), findsOneWidget);
+    expect(find.text('100.00 元'), findsOneWidget);
     api.errorCode = null;
     await _pay(tester);
     expect(api.currencies, [FundCurrency.usdt, FundCurrency.bi99]);

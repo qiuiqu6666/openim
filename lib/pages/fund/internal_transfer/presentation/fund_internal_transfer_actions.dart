@@ -70,19 +70,16 @@ Future<String?> chooseFundTransferAreaCode(
         builder: (_) => CountryCodePage(selectedCode: selectedCode)));
 
 Future<void> showFundInternalTransferHelp(BuildContext context) =>
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(settingsText(context, zh: '内部转账', en: 'Internal transfer')),
-        content: Text(settingsText(context,
-            zh: '通过99号、邮箱或带区号的手机号查找收款人，也可从好友中选择。内部转账手续费为0，支付成功后直接到账。请在支付弹窗核对收款人和金额。',
-            en: 'Find a recipient by 99Chat ID, email or phone number with calling code, or select a friend. Internal transfers have no fee and arrive directly after payment. Review the recipient and amount in the payment sheet.')),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(settingsText(context, zh: '知道了', en: 'Got it'))),
-        ],
-      ),
+    showAppAlert<void>(
+      context,
+      barrierDismissible: true,
+      title: settingsText(context, zh: '内部转账', en: 'Internal transfer'),
+      message: settingsText(context,
+          zh: '通过99号、邮箱或带区号的手机号查找收款人，也可从好友中选择。内部转账手续费为0，支付成功后直接到账。请在支付弹窗核对收款人和金额。',
+          en: 'Find a recipient by 99Chat ID, email or phone number with calling code, or select a friend. Internal transfers have no fee and arrive directly after payment. Review the recipient and amount in the payment sheet.'),
+      actions: [
+        AppAction(settingsText(context, zh: '知道了', en: 'Got it'), null)
+      ],
     );
 
 Future<void> openFundInternalTransferHistory(

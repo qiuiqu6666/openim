@@ -121,7 +121,7 @@ void main() {
       (tester) async {
     final api = WalletTestFundApi();
     await pumpWalletDeposit(tester, api: api, currency: FundCurrency.bi99);
-    expect(find.text('99币不支持链上充值'), findsOneWidget);
+    expect(find.text('元不支持链上充值'), findsOneWidget);
     expect(depositKey('wallet-deposit-qr'), findsNothing);
     expect(api.addressCalls, 0);
     await tester.pumpWidget(const SizedBox.shrink());

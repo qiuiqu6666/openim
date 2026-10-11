@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
@@ -55,7 +56,7 @@ class _MomentsComposePageState extends State<MomentsComposePage>
   bool _allowPop = false;
   bool _popScheduled = false;
   bool _publishing = false;
-  DialogRoute<String>? _leaveDialogRoute;
+  CupertinoDialogRoute<String>? _leaveDialogRoute;
   int get _maxImages => (_capabilities?.maxImages ?? 9).clamp(0, 9);
   int get _maxText => _capabilities?.maxTextLength ?? 2000;
   bool get _editable =>
@@ -246,8 +247,8 @@ class _MomentsComposePageState extends State<MomentsComposePage>
     }
     var selection = MomentsVisibilitySelection(mode: mode);
     if (selection.requiresAudience) {
-      final users =
-          await Navigator.of(context).push<List<MomentUser>>(AppMaterialPageRoute(
+      final users = await Navigator.of(context)
+          .push<List<MomentUser>>(AppMaterialPageRoute(
         builder: (_) => MomentsPrivacyFriendPicker(
           repository: _repository,
           title: momentsText(context,
@@ -332,12 +333,12 @@ class _MomentsComposePageState extends State<MomentsComposePage>
       _leaveError = null;
     });
     final uncertain = _store.resultUncertain;
-    final dialog = DialogRoute<String>(
+    final dialog = CupertinoDialogRoute<String>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-              title: Text(
-                  momentsText(context, zh: '离开发布页？', en: 'Leave this post?')),
-              content: Text(uncertain
+        barrierDismissible: true,
+        builder: (dialogContext) => AppAlertDialog<String>(
+              title: momentsText(context, zh: '离开发布页？', en: 'Leave this post?'),
+              message: uncertain
                   ? momentsText(context,
                       zh: '发布结果仍在确认中。任务会保留，下次回来继续核对，避免重复发布。',
                       en:
@@ -346,24 +347,19 @@ class _MomentsComposePageState extends State<MomentsComposePage>
                       zh: _store.busy ? '上传会继续进行，草稿和任务会保留。' : '可保存草稿，下次继续编辑。',
                       en: _store.busy
                           ? 'Uploads can continue. Your draft and task will be kept.'
-                          : 'Save your draft and finish it later.')),
+                          : 'Save your draft and finish it later.'),
               actions: [
-                TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop('stay'),
-                    child: Text(momentsText(context, zh: '继续编辑', en: 'Stay'))),
+                AppAction(momentsText(context, zh: '继续编辑', en: 'Stay'), 'stay'),
                 if (!uncertain)
-                  TextButton(
+                  AppAction(
+                      momentsText(context, zh: '放弃草稿', en: 'Discard draft'),
+                      'discard',
                       key: const ValueKey('moments_discard'),
-                      onPressed: () =>
-                          Navigator.of(dialogContext).pop('discard'),
-                      child: Text(
-                          momentsText(context, zh: '放弃草稿', en: 'Discard draft'),
-                          style: const TextStyle(color: AppTokens.danger))),
-                FilledButton(
-                    key: const ValueKey('moments_save_leave'),
-                    onPressed: () => Navigator.of(dialogContext).pop('save'),
-                    child: Text(momentsText(context,
-                        zh: '保存并离开', en: 'Save and leave'))),
+                      destructive: true),
+                AppAction(
+                    momentsText(context, zh: '保存并离开', en: 'Save and leave'),
+                    'save',
+                    key: const ValueKey('moments_save_leave')),
               ],
             ));
     _leaveDialogRoute = dialog;

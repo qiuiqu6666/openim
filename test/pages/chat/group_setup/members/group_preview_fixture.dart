@@ -37,6 +37,22 @@ class PreviewIM extends GetxController with IMCallback implements IMController {
 }
 
 class _Chat extends GetxController implements ChatLogic {
+  _Chat(this.groupInfo, this.groupMembersInfo);
+
+  @override
+  final GroupInfo? groupInfo;
+  @override
+  final GroupMembersInfo? groupMembersInfo;
+  @override
+  final isInGroup = true.obs;
+  @override
+  ConversationInfo get conversationInfo => ConversationInfo(
+        conversationID: 'sg_preview-group',
+        groupID: previewGroupID,
+        conversationType: ConversationType.superGroup,
+        showName: '群聊测试',
+      );
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -57,7 +73,14 @@ class GroupPreviewFixture {
   final members = <Completer<Map<String, dynamic>>>[];
   final requests = <Map<String, dynamic>>[];
 
-  Future<void> initialize({UserInfo? cachedSelfInfo}) async {
+  Future<void> initialize({
+    UserInfo? cachedSelfInfo,
+    GroupInfo? cachedGroup,
+    GroupMembersInfo? cachedMember,
+    bool chatJoined = true,
+    bool assumeJoined = true,
+    bool routeConversation = true,
+  }) async {
     Get.testMode = true;
     SharedPreferences.setMockInitialValues({});
     await DataSp.init();
@@ -68,7 +91,9 @@ class GroupPreviewFixture {
     Get.put<AppController>(_App());
     im = Get.put<IMController>(PreviewIM()) as PreviewIM;
     if (cachedSelfInfo != null) im.selfInfoUpdated(cachedSelfInfo);
-    Get.put<ChatLogic>(_Chat(), tag: GetTags.chat);
+    Get.put<ChatLogic>(
+        _Chat(cachedGroup, cachedMember)..isInGroup.value = chatJoined,
+        tag: GetTags.chat);
     Get.put<ConversationLogic>(_Conversations());
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_sdk, (call) {
@@ -85,14 +110,16 @@ class GroupPreviewFixture {
       }
       return reply.future;
     });
-    Get.routing.args = {
-      'conversationInfo': ConversationInfo(
-        conversationID: 'sg_preview-group',
-        groupID: previewGroupID,
-        conversationType: ConversationType.superGroup,
-        showName: '群聊测试',
-      ),
-    };
+    Get.routing.args = !routeConversation
+        ? null
+        : {
+            'conversationInfo': ConversationInfo(
+              conversationID: 'sg_preview-group',
+              groupID: previewGroupID,
+              conversationType: ConversationType.superGroup,
+              showName: '群聊测试',
+            ),
+          };
     setup = Get.put(GroupSetupLogic(
       memberIdentitySource: GroupMemberIdentitySource(
         poster: (_, data, __) {
@@ -103,7 +130,7 @@ class GroupPreviewFixture {
         },
       ),
     ));
-    setup.isJoinedGroup.value = true;
+    if (assumeJoined) setup.isJoinedGroup.value = true;
   }
 
   Future<void> close() async {

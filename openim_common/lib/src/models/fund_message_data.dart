@@ -24,7 +24,7 @@ class FundMessageData {
 
   bool get isPacket => biz.startsWith('packet_');
   bool get isTransfer => biz == 'transfer' || biz == 'group_transfer';
-  String get currencyLabel => currency == 'BI99' ? '99BI' : currency;
+  String get currencyLabel => currency == 'BI99' ? '元' : currency;
 
   /// Pad the displayed cents while preserving the server's full precision.
   String get displayAmount {

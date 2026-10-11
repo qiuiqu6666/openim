@@ -23,6 +23,8 @@
 
 ## UI 与验证
 
-成员列表为空时区分加载、失败和空结果；加载用现有 `CircleAvatar` 与 `Styles` 显示六个占位，失败和空结果用可点击提示重试。保留原有头像样式、加减按钮、主题色和 78.h 区域高度。
+成员列表为空时区分尚未完成加载和请求失败；加载用现有 `CircleAvatar` 与 `Styles` 显示六个占位，请求失败或空响应在自动重试耗尽后显示可点击提示。保留原有头像样式、加减按钮、主题色和 78.h 区域高度。
+
+首次空列表（包括 `onReady` 尚未启动请求的首帧）展示成员占位；只有 `failed` 才展示点击重试，避免进入页面先闪出重试文案。整页的初始资料和入群核验见 `../loading/README.md`。
 
 测试在 `test/pages/chat/group_setup/members/`；与 `test/pages/chat/group_setup/` 及 `test/pages/chat/group/identity/` 一起运行，验证回包顺序、请求合并、重试、权限和会话失效、日夜主题和窄屏布局。实际设备/网络验证范围见 `docs/group-member-preview-stability-validation.md`。

@@ -313,8 +313,8 @@ class _WalletReceiveScreenState extends State<WalletReceiveScreen>
   String _message(AppI18n i18n) {
     if (!_controller.enabled) {
       return i18n.t(
-          zhHans: '99币不支持链上充值',
-          zhHant: '99幣不支援鏈上儲值',
+          zhHans: '元不支持链上充值',
+          zhHant: '元不支援鏈上儲值',
           en: '99 does not support on-chain deposits',
           ja: '99はオンチェーン入金に対応していません',
           ko: '99는 온체인 입금을 지원하지 않습니다');

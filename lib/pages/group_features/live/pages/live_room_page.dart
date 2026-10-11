@@ -100,20 +100,13 @@ class _LiveRoomPageState extends State<LiveRoomPage>
 
   Future<void> _end() async {
     if (_busy || !canOperate) return;
-    final confirm = await showDialog<bool>(
-        context: context,
-        builder: (dialog) => AlertDialog(
-                title: const Text('结束直播'),
-                content: const Text('确认结束直播吗？结束后请在 OBS 中停止推流。'),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(dialog, false),
-                      child: const Text('取消')),
-                  TextButton(
-                      onPressed: () => Navigator.pop(dialog, true),
-                      child: const Text('确认',
-                          style: TextStyle(color: AppTokens.danger)))
-                ]));
+    final confirm = await showAppConfirm(context,
+        barrierDismissible: true,
+        title: '结束直播',
+        message: '确认结束直播吗？结束后请在 OBS 中停止推流。',
+        cancelText: '取消',
+        confirmText: '确认',
+        destructive: true);
     if (confirm != true || !canOperate) return;
     setState(() => _busy = true);
     try {

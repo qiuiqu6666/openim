@@ -692,28 +692,15 @@ Future<bool> showSettingsConfirm(
   required String message,
   required String confirmText,
   bool destructive = false,
-}) async {
-  final result = await showCupertinoDialog<bool>(
-    context: context,
-    barrierDismissible: false,
-    builder: (dialogContext) => CupertinoAlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        CupertinoDialogAction(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: Text(settingsText(context, zh: '取消', en: 'Cancel')),
-        ),
-        CupertinoDialogAction(
-          isDestructiveAction: destructive,
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: Text(confirmText),
-        ),
-      ],
-    ),
-  );
-  return result ?? false;
-}
+}) =>
+    showAppConfirm(
+      context,
+      title: title,
+      message: message,
+      confirmText: confirmText,
+      cancelText: settingsText(context, zh: '取消', en: 'Cancel'),
+      destructive: destructive,
+    );
 
 String settingsErrorMessage(BuildContext context, Object error,
         {required String fallback}) =>
