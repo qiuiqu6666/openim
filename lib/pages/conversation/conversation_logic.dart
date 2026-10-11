@@ -111,6 +111,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         }
       }
     }
+    _latestSync.conversationsUpdated(changes);
     _updates.add(changes);
   }
 

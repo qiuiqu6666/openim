@@ -14,6 +14,16 @@ class _ReadCall {
   final result = Completer<void>();
 }
 
+class _MeasuredMessages extends RxList<Message> {
+  int reads = 0;
+
+  @override
+  Message operator [](int index) {
+    reads++;
+    return super[index];
+  }
+}
+
 Message _received(String id, int sequence) => Message(
     clientMsgID: id,
     contentType: MessageType.text,
@@ -40,7 +50,7 @@ void main() {
   setUp(() {
     OpenIM.iMManager.userID = 'self';
     calls = [];
-    messages = <Message>[].obs;
+    messages = _MeasuredMessages();
     conversation = ConversationInfo(conversationID: 'chat');
     projections = [];
     active = true;
@@ -630,6 +640,65 @@ void main() {
     expect(matching.isRead, isTrue);
     expect(unrelated.isRead, isFalse);
     expect(refreshes, 1);
+    await subscription.cancel();
+  });
+
+  test('repeated history viewport frames do not scan the whole timeline',
+      () async {
+    messages.addAll(List.generate(4000, (i) => _received('history-$i', i)));
+    final measured = messages as _MeasuredMessages;
+    await receipts
+        .markVisibleMessages(['history-10', 'history-11'], atLatest: false);
+    measured.reads = 0;
+    for (var frame = 0; frame < 100; frame++) {
+      await receipts
+          .markVisibleMessages(['history-10', 'history-11'], atLatest: false);
+    }
+    expect(measured.reads, lessThan(100),
+        reason: 'Unchanged historical frames should only resolve visible IDs');
+    expect(calls, isEmpty);
+  });
+
+  test('receipt lookup follows replacement and deletion and skips no-op events',
+      () async {
+    final old = _received('same', 1);
+    messages.add(old);
+    await receipts.markVisibleMessages(['same'], atLatest: false);
+    final replacement = _received('same', 1);
+    messages[0] = replacement;
+    receipts.applyC2CReceipt([
+      ReadReceiptInfo(userID: 'peer', msgIDList: ['same'])
+    ], 'peer');
+    await _flush();
+    expect(old.isRead, isFalse);
+    expect(replacement.isRead, isTrue);
+    messages.clear();
+    var refreshes = 0;
+    final subscription = messages.listen((_) => refreshes++);
+    receipts.applyC2CReceipt([
+      ReadReceiptInfo(userID: 'peer', msgIDList: ['same'])
+    ], 'peer');
+    await _flush();
+    expect(refreshes, 0);
+    await subscription.cancel();
+  });
+
+  test('C2C receipt fills a missing read time without restarting a known time',
+      () async {
+    final message = _received('already-read', 1)..isRead = true;
+    messages.add(message);
+    final receipt =
+        ReadReceiptInfo(userID: 'peer', msgIDList: ['already-read']);
+    receipts.applyC2CReceipt([receipt], 'peer');
+    await _flush();
+    final readTime = message.hasReadTime;
+    expect(readTime, greaterThan(0));
+    var refreshes = 0;
+    final subscription = messages.listen((_) => refreshes++);
+    receipts.applyC2CReceipt([receipt], 'peer');
+    await _flush();
+    expect(message.hasReadTime, readTime);
+    expect(refreshes, 0);
     await subscription.cancel();
   });
 }

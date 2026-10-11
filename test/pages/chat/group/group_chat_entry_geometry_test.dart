@@ -211,6 +211,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() async {
     Get.testMode = true;
+    OpenIM.iMManager.userID = _userID;
     SharedPreferences.setMockInitialValues({
       'group_announcement_read:$_userID:$_groupID': _notice,
     });

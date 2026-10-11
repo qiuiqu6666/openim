@@ -9,6 +9,42 @@ import 'package:openim/pages/chat/group/member_actions/chat_member_action_source
 import 'support/revocation_fixture.dart';
 
 void main() {
+  for (final age in [121, 3600, 86400]) {
+    test('confirmed owner can recall departed sender after $age seconds',
+        () async {
+      final f = RevocationFixture()
+        ..selfRole = GroupRoleLevel.owner
+        ..senderRole = null;
+      f.group!.ownerUserID = f.account;
+      f.onRead = () async => ChatMemberActionSnapshot(
+          group: f.group, self: f.snapshot.self, target: null, isJoined: true);
+      final message = f.message(ageSeconds: age);
+      expect(f.controller.canRevoke(message), isTrue);
+      await f.controller.revokeMessage(message);
+      expect(f.requests, [('sg_group', 'message')]);
+      expect(f.removed, ['message']);
+      expect(f.feedback, isEmpty);
+    });
+  }
+  test('owner mismatch and demotion still reject a departed sender recall',
+      () async {
+    final f = RevocationFixture()
+      ..selfRole = GroupRoleLevel.owner
+      ..senderRole = null;
+    expect(f.controller.canRevoke(f.message()), isFalse);
+    f.group!.ownerUserID = f.account;
+    f.onRead = () async => ChatMemberActionSnapshot(
+        group: f.group,
+        self: GroupMembersInfo(
+            groupID: f.groupID,
+            userID: f.account,
+            roleLevel: GroupRoleLevel.member),
+        target: null,
+        isJoined: true);
+    await f.controller.revokeMessage(f.message());
+    expect(f.requests, isEmpty);
+    expect(f.removed, isEmpty);
+  });
   for (final self in [
     GroupRoleLevel.owner,
     GroupRoleLevel.admin,

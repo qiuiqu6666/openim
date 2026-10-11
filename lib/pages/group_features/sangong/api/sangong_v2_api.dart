@@ -36,6 +36,9 @@ class SangongV2Api {
   Future<Map<String, dynamic>> command(
       String action, Map<String, dynamic> input,
       {String? requestId}) async {
+    if (agent && action == 'agent.attach') {
+      throw StateError('代理入口不能修改上级');
+    }
     final key = jsonEncode([
       http.context.currentUserID,
       http.context.groupID,
@@ -49,7 +52,7 @@ class SangongV2Api {
     final response = await http.requests.post(path('commands/$action'), data: {
       'requestId': id,
       'input': input,
-      if (agent && http.hasTenant) 'expectedTenantId': http.tenantId,
+      if (http.hasTenant) 'expectedTenantId': http.tenantId,
       if (agent && http.hasTenant) 'tenantId': http.tenantId,
     });
     final envelope = response.data;

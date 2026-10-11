@@ -35,6 +35,7 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
   late final _accountSession = AgentSessionSnapshot(SangongScope.read(context));
   bool get _isCurrentSession => mounted && _accountSession.isCurrent;
 
+  int _loadRequest = 0;
   bool _loading = true;
   String? _error;
   Map<String, dynamic>? _data;
@@ -42,29 +43,43 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
   @override
   void initState() {
     super.initState();
+    _accountSession.runtime.http.agentDataRevision
+        .addListener(_onAgentDataChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _accountSession.runtime.http.agentDataRevision
+        .removeListener(_onAgentDataChanged);
+    super.dispose();
+  }
+
+  void _onAgentDataChanged() {
+    if (_isCurrentSession) _load();
   }
 
   Future<void> _load() async {
     if (!mounted || !_isCurrentSession) return;
+    final request = ++_loadRequest;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       await SangongScope.read(context).ensureAgentBinding();
-      if (!mounted || !_isCurrentSession) return;
+      if (!mounted || !_isCurrentSession || request != _loadRequest) return;
       final data =
           await SangongScope.read(context).agent.fetchSangongTeamDashboard(
                 direct: false,
               );
-      if (!mounted || !_isCurrentSession) return;
+      if (!mounted || !_isCurrentSession || request != _loadRequest) return;
       setState(() {
         _data = data;
         _loading = false;
       });
     } catch (error) {
-      if (!mounted || !_isCurrentSession) return;
+      if (!mounted || !_isCurrentSession || request != _loadRequest) return;
       setState(() {
         _error = DioErrorMessage.forApp(error);
         _loading = false;

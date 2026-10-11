@@ -123,7 +123,7 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
         context: context,
         title: '确认返水比例',
         message:
-            '将 $_name（$account）在当前下注群的返水比例设为 $rate%。\n系统会先按旧比例结清未领取的历史返水，再保存新比例。',
+            '将 $_name（$account）在当前下注群的返水比例设为 $rate%。\n修改时不发放返水。未结流水保留，之后按新比例计算；已结返水不变。',
         dialogWrapper: _dialog);
     if (!mounted || !_current || !confirmed) return false;
     await _api.setRate(_userId, rate);
@@ -131,11 +131,11 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
   }
 
   Future<bool> _attach() async {
-    if (widget.agent || widget.parentUserId > 0) return false;
+    if (widget.agent) return false;
     final input = await AppDialog.prompt(
         context: context,
-        title: '设置上级代理',
-        message: '填写上级的公开账号名。上级须属于当前下注群；已有账务或下级的成员不能改变归属。',
+        title: widget.parentUserId > 0 ? '修改上级代理' : '设置上级代理',
+        message: '填写上级的公开账号名。上级须属于当前下注群，不能是自己或自己的下级。',
         placeholder: '公开账号名',
         maxLength: 128,
         dialogWrapper: _dialog);
@@ -168,7 +168,7 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
         context: context,
         title: '确认上级代理',
         message:
-            '将 $_name（$account）挂靠到 $parentName（$parentAccount）。此关系仅适用于当前下注群。',
+            '将 $_name（$account）挂靠到 $parentName（$parentAccount）。此关系仅适用于当前下注群。\n下属团队一起迁移，未结返水流水转给新上级，已结部分保留。',
         dialogWrapper: _dialog);
     if (!mounted || !_current || !confirmed) return false;
     await _api.attach(_userId, parentId);
@@ -186,10 +186,10 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
                   onPressed: _busy ? null : () => _run(_editRate),
                   icon: const Icon(Icons.percent_outlined),
                   label: Text(_busy ? '处理中…' : '设置返水')),
-              if (!widget.agent && widget.parentUserId == 0)
+              if (!widget.agent)
                 TextButton.icon(
                     onPressed: _busy ? null : () => _run(_attach),
                     icon: const Icon(Icons.account_tree_outlined),
-                    label: const Text('设置上级')),
+                    label: Text(widget.parentUserId > 0 ? '修改上级' : '设置上级')),
             ]));
 }

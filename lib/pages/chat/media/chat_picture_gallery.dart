@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -13,6 +12,12 @@ class ChatPictureGallery {
     List<Message> messages = const [],
   })  : sources = List.unmodifiable(sources),
         _messages = List.unmodifiable(messages.map(_snapshot));
+
+  ChatPictureGallery._captured(
+      {required this.sources,
+      required this.initialIndex,
+      required List<Message> messages})
+      : _messages = List.unmodifiable(messages);
 
   final List<MediaSource> sources;
   final int initialIndex;
@@ -62,15 +67,8 @@ class ChatPictureGallery {
       if (video ? message.videoElem == null : picture == null) return;
 
       final path = video ? message.videoElem?.videoPath : picture?.sourcePath;
-      File? file;
-      if (path != null && path.isNotEmpty) {
-        final candidate = File(path);
-        try {
-          if (await candidate.exists()) file = candidate;
-        } on FileSystemException {
-          // Remote media remains available when a local attachment disappeared.
-        }
-      }
+      final file = path != null && path.isNotEmpty ? File(path) : null;
+      // The viewer validates local files only when their page is opened.
       final url = video
           ? _firstUrl([message.videoElem?.videoUrl])
           : _firstUrl([
@@ -108,8 +106,10 @@ class ChatPictureGallery {
         return ChatPictureGallery(sources: [], initialIndex: 0);
       }
     }
-    return ChatPictureGallery(
-        sources: sources, messages: mappedMessages, initialIndex: initialIndex);
+    return ChatPictureGallery._captured(
+        sources: List.unmodifiable(sources),
+        messages: mappedMessages,
+        initialIndex: initialIndex);
   }
 
   static String? _firstUrl(Iterable<String?> values) {
@@ -119,6 +119,17 @@ class ChatPictureGallery {
     return null;
   }
 
-  static Message _snapshot(Message message) => Message.fromJson(
-      jsonDecode(jsonEncode(message.toJson())) as Map<String, dynamic>);
+  static Message _snapshot(Message message) =>
+      Message.fromJson(_copy(message.toJson()) as Map<String, dynamic>);
+
+  static Object? _copy(Object? value) {
+    if (value is Map) {
+      return <String, dynamic>{
+        for (final entry in value.entries)
+          entry.key as String: _copy(entry.value),
+      };
+    }
+    if (value is List) return value.map(_copy).toList();
+    return value;
+  }
 }

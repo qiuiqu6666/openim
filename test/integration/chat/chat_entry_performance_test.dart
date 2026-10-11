@@ -115,6 +115,12 @@ void main() {
         return history.result.future;
       }
       if (call.method == 'getBlacklist') return '[]';
+      if (call.method == 'sendMessage') {
+        final message = Map<String, dynamic>.from(
+            (call.arguments as Map)['message'] as Map);
+        message['status'] = MessageStatus.succeeded;
+        return jsonEncode(message);
+      }
       if (call.method == 'setConversationDraft') {
         draftCalls.add(Map<String, dynamic>.from(call.arguments as Map));
       }
@@ -209,6 +215,46 @@ void main() {
     expect(tester.takeException(), isNull);
     logic.onDelete();
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('real chat sends trim without receiving a peer message',
+      (tester) async {
+    final logic = open();
+    await tester.idle();
+    calls.last.complete(List.generate(
+        600, (index) => _entryMessage('existing-$index', time: index + 1)));
+    await tester.pump();
+    final outgoing = _entryMessage('outgoing', time: 601)
+      ..sendID = 'self'
+      ..status = MessageStatus.sending;
+    final sending = logic.sendPreparedMessage(outgoing);
+    await tester.idle();
+    await sending;
+    expect(logic.messageList, hasLength(600));
+    expect(logic.messageList.last.clientMsgID, 'outgoing');
+    expect(logic.messageList.last.status, MessageStatus.succeeded);
+    expect(logic.messageList.first.clientMsgID, 'existing-1');
+    logic.onDelete();
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('automatic eviction waits until selection finishes',
+      (tester) async {
+    final logic = open();
+    await tester.idle();
+    calls.last.complete(List.generate(
+        600, (index) => _entryMessage('existing-$index', time: index + 1)));
+    await tester.pump();
+    logic.messageSelection.enter(logic.messageList.first);
+    im.recvNewMessage(_entryMessage('newest', time: 601));
+    expect(logic.messageList, hasLength(601));
+    expect(logic.messageSelection.selectedMessages.single.clientMsgID,
+        'existing-0');
+    logic.messageSelection.cancel();
+    logic.onChatViewportChanged(['newest'], 0);
+    expect(logic.messageList, hasLength(600));
+    expect(logic.messageList.last.clientMsgID, 'newest');
+    logic.onDelete();
+    await tester.pump(const Duration(milliseconds: 100));
   });
   testWidgets('entry starts one history query before the first route frame',
       (tester) async {

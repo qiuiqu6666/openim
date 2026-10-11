@@ -21,133 +21,135 @@ class GroupMemberListPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() => Scaffold(
-          appBar: TitleBar.back(
-            title: logic.opType == GroupMemberOpType.del
-                ? StrRes.removeGroupMember
-                : logic.groupInfo.memberCount == null
-                    ? StrRes.groupMember
-                    : 'groupMemberPageTitle'
-                        .trParams({'count': '${logic.groupInfo.memberCount}'}),
-            backIconColor: Styles.c_0089FF,
-            right: SizedBox(width: 24.w),
-          ),
-          backgroundColor: Styles.c_FFFFFF,
-          body: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 12.h),
-                child: Row(children: [
-                  Expanded(
-                      child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10.r),
-                          child: SearchBox(
-                            height: 40.h,
-                            hintText: 'groupMemberSearchHint'.tr,
-                            backgroundColor: Styles.c_F0F2F6,
-                            enabled: true,
-                            controller: logic.searchController,
-                            onChanged: logic.searchChanged,
-                            onCleared: () => logic.searchChanged(''),
-                            onSubmitted: (_) => logic.searchMembers(),
-                          ))),
-                  if (logic.isDelMember)
-                    TextButton(
-                      onPressed:
-                          logic.visibleMembers.isEmpty || logic.searching.value
-                              ? null
-                              : logic.toggleSelectAllVisible,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Styles.c_0089FF,
-                        minimumSize: Size(64.w, 48.h),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        ChatRadio(checked: logic.isAllVisibleSelected),
-                        6.horizontalSpace,
-                        Text(StrRes.selectAll),
-                      ]),
-                    ),
-                ]),
-              ),
-              if (logic.searching.value) const LinearProgressIndicator(),
-              if (logic.searchFailed.value)
-                TextButton(
-                    onPressed: () => logic.searchMembers(),
-                    child: Text('chatSearchRetry'.tr)),
-              if (logic.query.isNotEmpty &&
-                  !logic.searching.value &&
-                  !logic.searchFailed.value &&
-                  logic.visibleMembers.isEmpty)
-                Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text('chatSearchEmpty'.tr,
-                        style: Styles.ts_8E9AB0_14sp)),
-              if (logic.opType == GroupMemberOpType.at && logic.isOwnerOrAdmin)
-                GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: logic.selectEveryone,
-                  child: Container(
-                    height: 64.h,
-                    color: Styles.c_FFFFFF,
-                    margin: EdgeInsets.symmetric(vertical: 10.h),
-                    padding: EdgeInsets.symmetric(horizontal: 16.w),
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      children: [
-                        AvatarView(
-                          width: 44.w,
-                          height: 44.h,
-                          text: '@',
-                          textStyle: Styles.ts_FFFFFF_21sp,
-                        ),
-                        10.horizontalSpace,
-                        StrRes.everyone.toText..style = Styles.ts_0C1C33_17sp,
-                      ],
-                    ),
-                  ),
-                ),
-              Flexible(
-                child: SmartRefresher(
-                  controller: logic.controller,
-                  onLoading: logic.onLoad,
-                  enablePullDown: false,
-                  enablePullUp: logic.query.isEmpty,
-                  header: IMViews.buildHeader(),
-                  footer: IMViews.buildFooter(),
-                  child: ListView.separated(
-                    itemCount: logic.visibleMembers.length,
-                    separatorBuilder: (_, __) => Padding(
-                        padding: EdgeInsets.only(left: 58.w),
-                        child: Divider(
-                            height: 1, thickness: 0.5, color: Styles.c_E8EAEF)),
-                    padding: EdgeInsets.only(bottom: 16.h),
-                    itemBuilder: (_, index) {
-                      final member = logic.visibleMembers[index];
-                      return VisibilityDetector(
-                        key: ValueKey('group-member-presence-${member.userID}'),
-                        onVisibilityChanged: (info) {
-                          if (member.userID != null)
-                            logic.setPresenceVisible(
-                                member.userID!, info.visibleFraction > 0);
-                        },
-                        child: Obx(() => _buildItemView(member)),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              if (logic.query.isNotEmpty &&
-                  logic.searchMore.value &&
-                  !logic.searchFailed.value)
-                TextButton(
-                    onPressed: logic.searching.value
+    return Obx(() {
+      final members = logic.visibleMembers;
+      return Scaffold(
+        appBar: TitleBar.back(
+          title: logic.opType == GroupMemberOpType.del
+              ? StrRes.removeGroupMember
+              : logic.groupInfo.memberCount == null
+                  ? StrRes.groupMember
+                  : 'groupMemberPageTitle'
+                      .trParams({'count': '${logic.groupInfo.memberCount}'}),
+          backIconColor: Styles.c_0089FF,
+          right: SizedBox(width: 24.w),
+        ),
+        backgroundColor: Styles.c_FFFFFF,
+        body: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 12.h),
+              child: Row(children: [
+                Expanded(
+                    child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10.r),
+                        child: SearchBox(
+                          height: 40.h,
+                          hintText: 'groupMemberSearchHint'.tr,
+                          backgroundColor: Styles.c_F0F2F6,
+                          enabled: true,
+                          controller: logic.searchController,
+                          onChanged: logic.searchChanged,
+                          onCleared: () => logic.searchChanged(''),
+                          onSubmitted: (_) => logic.searchMembers(),
+                        ))),
+                if (logic.isDelMember)
+                  TextButton(
+                    onPressed: members.isEmpty || logic.searching.value
                         ? null
-                        : () => logic.searchMembers(next: true),
-                    child: Text('chatSearchMore'.tr)),
-              if (logic.isMultiSelMode) _buildCheckedConfirmView(),
-            ],
-          ),
-        ));
+                        : logic.toggleSelectAllVisible,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Styles.c_0089FF,
+                      minimumSize: Size(64.w, 48.h),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      ChatRadio(checked: logic.isAllVisibleSelected),
+                      6.horizontalSpace,
+                      Text(StrRes.selectAll),
+                    ]),
+                  ),
+              ]),
+            ),
+            if (logic.searching.value) const LinearProgressIndicator(),
+            if (logic.searchFailed.value)
+              TextButton(
+                  onPressed: () => logic.searchMembers(),
+                  child: Text('chatSearchRetry'.tr)),
+            if (logic.query.isNotEmpty &&
+                !logic.searching.value &&
+                !logic.searchFailed.value &&
+                members.isEmpty)
+              Padding(
+                  padding: const EdgeInsets.all(24),
+                  child:
+                      Text('chatSearchEmpty'.tr, style: Styles.ts_8E9AB0_14sp)),
+            if (logic.opType == GroupMemberOpType.at && logic.isOwnerOrAdmin)
+              GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: logic.selectEveryone,
+                child: Container(
+                  height: 64.h,
+                  color: Styles.c_FFFFFF,
+                  margin: EdgeInsets.symmetric(vertical: 10.h),
+                  padding: EdgeInsets.symmetric(horizontal: 16.w),
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      AvatarView(
+                        width: 44.w,
+                        height: 44.h,
+                        text: '@',
+                        textStyle: Styles.ts_FFFFFF_21sp,
+                      ),
+                      10.horizontalSpace,
+                      StrRes.everyone.toText..style = Styles.ts_0C1C33_17sp,
+                    ],
+                  ),
+                ),
+              ),
+            Flexible(
+              child: SmartRefresher(
+                controller: logic.controller,
+                onLoading: logic.onLoad,
+                enablePullDown: false,
+                enablePullUp: logic.query.isEmpty,
+                header: IMViews.buildHeader(),
+                footer: IMViews.buildFooter(),
+                child: ListView.separated(
+                  itemCount: members.length,
+                  separatorBuilder: (_, __) => Padding(
+                      padding: EdgeInsets.only(left: 58.w),
+                      child: Divider(
+                          height: 1, thickness: 0.5, color: Styles.c_E8EAEF)),
+                  padding: EdgeInsets.only(bottom: 16.h),
+                  itemBuilder: (_, index) {
+                    final member = members[index];
+                    return VisibilityDetector(
+                      key: ValueKey('group-member-presence-${member.userID}'),
+                      onVisibilityChanged: (info) {
+                        if (member.userID != null)
+                          logic.setPresenceVisible(
+                              member.userID!, info.visibleFraction > 0);
+                      },
+                      child: Obx(() => _buildItemView(member)),
+                    );
+                  },
+                ),
+              ),
+            ),
+            if (logic.query.isNotEmpty &&
+                logic.searchMore.value &&
+                !logic.searchFailed.value)
+              TextButton(
+                  onPressed: logic.searching.value
+                      ? null
+                      : () => logic.searchMembers(next: true),
+                  child: Text('chatSearchMore'.tr)),
+            if (logic.isMultiSelMode) _buildCheckedConfirmView(),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildItemView(GroupMembersInfo membersInfo) => logic

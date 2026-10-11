@@ -7,6 +7,7 @@ import 'package:openim_common/openim_common.dart';
 
 import '../../../core/controller/im_controller.dart';
 import 'chat_group_sources.dart';
+import 'identity/group_sender_avatars.dart';
 
 export 'chat_group_sources.dart';
 
@@ -70,6 +71,21 @@ class ChatGroupController {
   String? groupOwnerID;
   final ownerAndAdmin = <GroupMembersInfo>[];
   final memberUpdateInfoMap = <String, GroupMembersInfo>{};
+  late final _senderAvatars = GroupSenderAvatars(
+    isCurrent: () => _matches(groupID()) && isInGroup.value,
+    lookup: _queries.members == null
+        ? null
+        : (ids) async {
+            final id = groupID()!;
+            final members = await _queries.members!(id, ids);
+            return _matches(id)
+                ? members.where((member) => member.groupID == id).toList()
+                : <GroupMembersInfo>[];
+          },
+  );
+  String? avatarFor(Message message) => _senderAvatars.faceFor(message);
+  void updateSenderAvatar(String? id, String? face) =>
+      _senderAvatars.update(id, face);
   final _removedMemberIDs = <String>{};
   final groupMemberRoleLevel = GroupRoleLevel.member.obs;
   final _adminListLoaded = false.obs;
@@ -79,6 +95,22 @@ class ChatGroupController {
   final announcementVersion = ''.obs;
   final _muteRevision = 0.obs;
   final _subscriptions = <StreamSubscription>[];
+  Worker? _messageIndexWorker;
+  bool _messageIndexDirty = true;
+  final _memberMessages = <String, List<Message>>{};
+  List<Message> _messagesFor(String? memberID) {
+    if (_messageIndexDirty) {
+      _memberMessages.clear();
+      for (final message in messages) {
+        for (final id in {message.sendID, ...?message.atTextElem?.atUserList}) {
+          if (id != null) (_memberMessages[id] ??= []).add(message);
+        }
+      }
+      _messageIndexDirty = false;
+    }
+    return _memberMessages[memberID] ?? const [];
+  }
+
   Timer? _muteTimer;
   Future<void>? _loadRequest;
   bool _initialized = false;
@@ -130,8 +162,11 @@ class ChatGroupController {
     return isGroupChat &&
         groupInfo?.status == 3 &&
         (groupMembersInfo?.muteEndTime ?? 0) <= _nowSeconds() &&
-        !const [GroupRoleLevel.member, GroupRoleLevel.admin, GroupRoleLevel.owner]
-            .contains(groupMembersInfo?.roleLevel);
+        !const [
+          GroupRoleLevel.member,
+          GroupRoleLevel.admin,
+          GroupRoleLevel.owner
+        ].contains(groupMembersInfo?.roleLevel);
   }
 
   bool get sendingMuted {
@@ -149,6 +184,12 @@ class ChatGroupController {
   void initialize() {
     if (_closed || _initialized || !isGroupChat) return;
     _initialized = true;
+    _messageIndexWorker = ever(messages, (_) {
+      _messageIndexDirty = true;
+      _memberMessages.clear();
+      _senderAvatars.sync(messages);
+    });
+    _senderAvatars.sync(messages);
     final id = groupID()!;
     final cached = _matches(id) ? readCachedGroupInfo?.call(id) : null;
     if (cached?.groupID == id) _applyGroupInfo(cached);
@@ -176,7 +217,10 @@ class ChatGroupController {
                 .contains(info.roleLevel)) {
           _recordAdminChange(memberID, info);
         }
-        messages.refresh();
+        if (info.userID == currentUserID() ||
+            _messagesFor(info.userID).isNotEmpty) {
+          messages.refresh();
+        }
       }),
       _events.memberDeleted.listen((info) {
         if (!_matches(info.groupID)) return;
@@ -188,7 +232,10 @@ class ChatGroupController {
           memberUpdateInfoMap.remove(id);
         }
         if (info.userID == currentUserID()) _leaveGroup();
-        messages.refresh();
+        if (info.userID == currentUserID() ||
+            _messagesFor(info.userID).isNotEmpty) {
+          messages.refresh();
+        }
       }),
       _events.memberChanged.listen(_onMemberChanged),
       _events.groupChanged.listen((info) {
@@ -324,6 +371,7 @@ class ChatGroupController {
   }
 
   void _putMemberInfo(GroupMembersInfo member) {
+    _senderAvatars.update(member.userID, member.faceURL);
     final id = member.userID;
     if (id != null && id.isNotEmpty) memberUpdateInfoMap[id] = member;
   }
@@ -344,9 +392,13 @@ class ChatGroupController {
             .contains(info.roleLevel)) {
       _recordAdminChange(id, info);
     }
-    for (final message in messages) {
+    final affected = _messagesFor(info.userID);
+    var changed = affected
+        .any((m) => m.atTextElem?.atUserList?.contains(info.userID) == true);
+    for (final message in affected) {
       if (message.sendID != info.userID) continue;
       if (message.isNotificationType) {
+        changed = true;
         final detail = message.notificationElem?.detail;
         if (detail == null) continue;
         try {
@@ -358,11 +410,14 @@ class ChatGroupController {
           _report(error);
         }
       } else {
+        changed = changed ||
+            message.senderFaceUrl != info.faceURL ||
+            message.senderNickname != info.nickname;
         message.senderFaceUrl = info.faceURL;
         message.senderNickname = info.nickname;
       }
     }
-    messages.refresh();
+    if (changed) messages.refresh();
   }
 
   void _recordAdminChange(String id, GroupMembersInfo? info) {
@@ -392,11 +447,14 @@ class ChatGroupController {
     }
   }
 
-  Map<String, String> getAtMapping(Message message) =>
-      IMUtils.getAtMapping(message, {
-        for (final entry in memberUpdateInfoMap.entries)
-          if (entry.value.nickname != null) entry.key: entry.value.nickname!,
-      });
+  Map<String, String> getAtMapping(Message message) {
+    if (message.contentType != MessageType.atText) return const {};
+    return IMUtils.getAtMapping(message, {
+      for (final id in message.atTextElem?.atUserList ?? <String>[])
+        if (memberUpdateInfoMap[id]?.nickname case final String nickname)
+          id: nickname,
+    });
+  }
 
   void _report(Object error) {
     if (reportError != null) {
@@ -410,6 +468,9 @@ class ChatGroupController {
     if (_closed) return;
     _closed = true;
     _membershipRevision++;
+    _messageIndexWorker?.dispose();
+    _senderAvatars.close();
+    _memberMessages.clear();
     _muteTimer?.cancel();
     for (final subscription in _subscriptions) {
       unawaited(subscription.cancel());

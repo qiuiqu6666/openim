@@ -9,18 +9,26 @@ import 'conversation_read_coordinator.dart';
 class ChatReadReceipts {
   ChatReadReceipts({
     required this.messageList,
+    DateTime Function()? now,
     required ConversationInfo Function() conversation,
     required bool Function() isClosed,
     bool Function()? isActive,
     bool Function()? isSessionActive,
     bool Function()? canReadConversation,
     void Function(ConversationReadRequest)? onConversationRead,
-  })  : _conversation = conversation,
+  })  : _now = now ?? DateTime.now,
+        _conversation = conversation,
         _isClosed = isClosed,
         _isActive = isActive ?? (() => true),
         _canReadConversation = canReadConversation ?? (() => true),
         _isSessionActive = isSessionActive,
-        _onConversationRead = onConversationRead;
+        _onConversationRead = onConversationRead {
+    _indexWorker = ever(messageList, (_) {
+      _messageIndexDirty = true;
+      _messageIndex.clear();
+    });
+  }
+  final DateTime Function() _now;
   final RxList<Message> messageList;
   final ConversationInfo Function() _conversation;
   final bool Function() _isClosed;
@@ -33,24 +41,47 @@ class ChatReadReceipts {
   ConversationInfo get conversationInfo => _conversation();
   static int get _timestamp => DateTime.now().millisecondsSinceEpoch;
 
+  late final Worker _indexWorker;
+  bool _messageIndexDirty = true;
+  final _messageIndex = <String, Message>{};
+
+  Map<String, Message> get _messagesByID {
+    if (_messageIndexDirty) {
+      _messageIndex.clear();
+      for (final message in messageList) {
+        final id = message.clientMsgID;
+        if (id != null) _messageIndex[id] = message;
+      }
+      _messageIndexDirty = false;
+    }
+    return _messageIndex;
+  }
+
   void applyC2CReceipt(List<ReadReceiptInfo> receipts, String? peerID) {
     if (isClosed) return;
+    var changed = false;
     for (final receipt in receipts) {
       if (receipt.userID != peerID) continue;
       final ids = receipt.msgIDList?.toSet() ?? <String>{};
-      for (final message in messageList) {
-        if (ids.contains(message.clientMsgID)) {
+      for (final id in ids) {
+        final message = _messagesByID[id];
+        if (message != null &&
+            (message.isRead != true || (message.hasReadTime ?? 0) <= 0)) {
           message.isRead = true;
           message.hasReadTime = _timestamp;
+          changed = true;
         }
       }
     }
-    _refreshReadState();
+    if (changed) _refreshReadState();
   }
 
   void close() {
     _closed = true;
     _readRefreshTimer?.cancel();
+    _viewportReadTimer?.cancel();
+    _indexWorker.dispose();
+    _messageIndex.clear();
   }
 
   void markMessageAsRead(Message message, bool visible) {
@@ -67,7 +98,13 @@ class ChatReadReceipts {
   Set<String> _visibleIDs = {};
   bool _atLatest = false;
 
+  Timer? _viewportReadTimer;
+  DateTime? _lastViewportRead;
+  static const viewportReadInterval = Duration(milliseconds: 250);
+
   void invalidateViewport() {
+    _viewportReadTimer?.cancel();
+    _viewportReadTimer = null;
     _visibleIDs.clear();
     _atLatest = false;
   }
@@ -104,7 +141,10 @@ class ChatReadReceipts {
         throw const _ConversationReadCancelled();
       }
       await _sendConversationRead(fromViewport: requireVisible);
-    }, messageID: targetID, revision: _unreadRevision);
+    },
+        messageID: targetID,
+        identitySequence: newestSequence,
+        revision: _unreadRevision);
   }
 
   Future<void> _sendConversationRead({bool fromViewport = false}) async {
@@ -122,6 +162,7 @@ class ChatReadReceipts {
     _sdkInFlight[targetID] = (_sdkInFlight[targetID] ?? 0) + 1;
     _onConversationRead?.call(request);
     try {
+      if (fromViewport) _lastViewportRead = _now();
       await OpenIM.iMManager.conversationManager.markConversationMessageAsRead(
           conversationID: request.conversationID);
       final succeeded = _isSessionActive?.call() ?? !isClosed;
@@ -173,7 +214,7 @@ class ChatReadReceipts {
     final sdkLatestID = conversationInfo.latestMsg?.clientMsgID;
     return sdkLatestID == null ||
         sdkLatestID.isEmpty ||
-        messageList.any((message) => message.clientMsgID == sdkLatestID);
+        _messagesByID.containsKey(sdkLatestID);
   }
 
   bool _readContentWhenVisible(Message message) {
@@ -192,14 +233,35 @@ class ChatReadReceipts {
     // A blocked observation cannot later authorize a close-time full clear
     // merely because motion finished under a covered/background route.
     _atLatest = atLatest && _canReadConversation();
-    final visible = messageList
-        .where((message) => _visibleIDs.contains(message.clientMsgID))
+    // Scroll/layout frames usually repeat the same small visible range. The
+    // index is rebuilt only after a message-list mutation, not on each frame.
+    final index = _messagesByID;
+    final visible = _visibleIDs
+        .map((id) => index[id])
+        .whereType<Message>()
         .toList(growable: false);
     final canReadConversation = _latestIsVisible;
     if (canReadConversation &&
         (conversationInfo.unreadCount > 0 ||
             visible
                 .any((message) => message.sendID != OpenIM.iMManager.userID))) {
+      // Keep private/expiring content on its immediate visibility path.
+      final elapsed = _lastViewportRead == null
+          ? viewportReadInterval
+          : _now().difference(_lastViewportRead!);
+      if (conversationInfo.groupID?.isNotEmpty == true &&
+          conversationInfo.isPrivateChat != true &&
+          !visible.any((m) => m.attachedInfoElem?.isPrivateChat == true) &&
+          elapsed < viewportReadInterval) {
+        _viewportReadTimer ??= Timer(viewportReadInterval - elapsed, () {
+          _viewportReadTimer = null;
+          if (!isClosed && _isActive() && _latestIsVisible) {
+            unawaited(
+                markVisibleMessages(_visibleIDs.toList(), atLatest: _atLatest));
+          }
+        });
+        return;
+      }
       try {
         await _markConversationRead(0, requireVisible: true);
       } catch (error) {

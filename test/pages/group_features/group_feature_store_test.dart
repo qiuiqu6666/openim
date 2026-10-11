@@ -61,6 +61,7 @@ void main() {
       store.seed(GroupInfo(groupID: 'g$i', ex: ''));
     }
     store.hydrate(['g0']);
+    final firstSubscription = store.events('g0').listen((_) {});
     final subscription = store.events('g1').listen((_) {});
     store.refreshKnownGroups();
     await Future<void>.delayed(Duration.zero);
@@ -76,12 +77,11 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(reads, ['g1']);
     await subscription.cancel();
+    await firstSubscription.cancel();
     store.dispose();
   });
 
-  test(
-      '10000 ordinary groups publish once per batch and unchanged refresh stays quiet',
-      () async {
+  test('10000 browsed groups are not all queried again on resume', () async {
     var calls = 0, notifications = 0;
     final store = GroupFeatureStore(
         api: GroupFeatureApi(),
@@ -96,10 +96,15 @@ void main() {
     expect(calls, 100);
     expect(notifications, 100);
     calls = notifications = 0;
+    final visible = store.events('g2').listen((_) {});
     store.refreshKnownGroups();
     await Future<void>.delayed(Duration.zero);
-    expect(calls, 100);
+    expect(calls, 1);
     expect(notifications, 0);
+    await visible.cancel();
+    store.refreshKnownGroups();
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, 1);
     store.dispose();
   });
   late _HTTP http;
@@ -162,6 +167,7 @@ void main() {
   });
   test('coalesces batch requests and does not fetch again on row/list rebuild',
       () async {
+    final subscription = store.events('g').listen((_) {});
     store.hydrate(['g', 'h']);
     store.hydrate(['g', 'h']);
     await Future<void>.delayed(Duration.zero);
@@ -172,6 +178,60 @@ void main() {
     store.refreshKnownGroups();
     await Future<void>.delayed(Duration.zero);
     expect(reads, 2);
+    await subscription.cancel();
+  });
+  test('stream creation alone does not retain a group for refresh', () async {
+    store.events('never-listened');
+    store.context(
+        id: 'unused',
+        name: '',
+        userID: 'me',
+        admin: false,
+        current: () => true);
+    store.refreshKnownGroups();
+    await Future<void>.delayed(Duration.zero);
+    expect(reads, 0);
+  });
+  test('multiple consumers share refresh ownership until the last cancel',
+      () async {
+    final events = store.events('g');
+    final first = events.listen((_) {});
+    final second = events.listen((_) {});
+    store.refreshKnownGroups();
+    await Future<void>.delayed(Duration.zero);
+    expect(reads, 1);
+    await first.cancel();
+    store.refreshKnownGroups();
+    await Future<void>.delayed(Duration.zero);
+    expect(reads, 2);
+    await second.cancel();
+    store.refreshKnownGroups();
+    await Future<void>.delayed(Duration.zero);
+    expect(reads, 2);
+    final reopened = events.listen((_) {});
+    store.refreshKnownGroups();
+    await Future<void>.delayed(Duration.zero);
+    expect(reads, 3);
+    await reopened.cancel();
+  });
+  test('live consumers receive scoped events and stop querying on invalidation',
+      () async {
+    final received = <String>[];
+    var done = false;
+    final stream = store.events('g');
+    final subscription = stream.listen((event) => received.add(event['key']),
+        onDone: () => done = true);
+    store.apply('g', _summary(1));
+    store.apply('different-group', _summary(1));
+    await Future<void>.delayed(Duration.zero);
+    expect(received, ['groupFeaturesChanged']);
+    // Session invalidation stops new refresh work without replaying old events.
+    store.invalidateSession();
+    store.refreshKnownGroups();
+    await Future<void>.delayed(Duration.zero);
+    expect(reads, 0);
+    expect(done, isFalse);
+    await subscription.cancel();
   });
   test('existing SDK metadata is reused without a group lookup', () async {
     store.seed(GroupInfo(

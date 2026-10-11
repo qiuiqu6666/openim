@@ -35,6 +35,8 @@ class AppController extends GetxController with UpgradeManger {
 
   final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   MessageNotificationRuntime? _messageNotifications;
+  IMController? _notificationController;
+  final _notificationConversationSubscriptions = <StreamSubscription>[];
   APNsPushRuntime? _apnsPush;
   StreamSubscription<String>? _pushPreferenceChanges;
   IOSCallKitRuntime? _iosCallKit;
@@ -111,6 +113,7 @@ class AppController extends GetxController with UpgradeManger {
     );
     DeviceSyncRuntime.instance.setForeground(!isRunningBackground);
     _messageNotifications = MessageNotificationRuntime(
+      metadataCacheDuration: const Duration(seconds: 1),
       notifier: SystemMessageNotifier(flutterLocalNotificationsPlugin),
       currentSession: _notificationSession,
       sdkReady: () =>
@@ -246,6 +249,24 @@ class AppController extends GetxController with UpgradeManger {
 
   Future<void> onNotificationSessionReady({bool authenticated = false}) async {
     if (_closed) return;
+    if (Get.isRegistered<IMController>()) {
+      final controller = Get.find<IMController>();
+      if (!identical(controller, _notificationController)) {
+        for (final subscription in _notificationConversationSubscriptions) {
+          unawaited(subscription.cancel());
+        }
+        _notificationConversationSubscriptions.clear();
+        _notificationController = controller;
+        for (final stream in [
+          controller.conversationChangedSubject,
+          controller.conversationAddedSubject
+        ]) {
+          _notificationConversationSubscriptions.add(stream.listen((rows) {
+            _messageNotifications?.conversationsUpdated(rows);
+          }));
+        }
+      }
+    }
     try {
       await _messageNotifications?.onSessionReady(authenticated: authenticated);
     } catch (error) {
@@ -361,6 +382,11 @@ class AppController extends GetxController with UpgradeManger {
   @override
   void onClose() {
     _closed = true;
+    for (final subscription in _notificationConversationSubscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _notificationConversationSubscriptions.clear();
+    _notificationController = null;
     NotificationSoundActivity.interruptPreviews();
     if (!Get.isRegistered<AppController>() ||
         identical(Get.find<AppController>(), this)) {

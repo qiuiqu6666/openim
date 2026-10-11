@@ -2,6 +2,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 
 import 'chat_latest_scroll_tokens.dart';
+import '../messages/identity/message_sequence_history.dart';
 
 /// Tracks live messages received while the reversed chat list is away from zero.
 ///
@@ -27,7 +28,7 @@ class ChatNewMessageTracker {
   final awayFromLatest = false.obs;
   final showBackToBottom = false.obs;
 
-  final _receivedIDs = <String>{};
+  final _receivedIDs = MessageSequenceHistory();
   final _unseenIDs = <String>{};
   bool _closed = false;
 
@@ -51,8 +52,8 @@ class ChatNewMessageTracker {
     final ratio = showBackToBottom.value
         ? ChatLatestScrollTokens.hintHideViewportRatio
         : ChatLatestScrollTokens.hintShowViewportRatio;
-    showBackToBottom.value = awayFromLatest.value &&
-        (missingNewer || pixels >= extent * ratio);
+    showBackToBottom.value =
+        awayFromLatest.value && (missingNewer || pixels >= extent * ratio);
     if (!awayFromLatest.value &&
         viewportConfirmed &&
         pixels <= ChatLatestScrollTokens.distanceEpsilon) {
@@ -68,7 +69,7 @@ class ChatNewMessageTracker {
       return;
     }
     final id = message.clientMsgID;
-    if (id == null || id.isEmpty || !_receivedIDs.add(id)) return;
+    if (id == null || id.isEmpty || !_receivedIDs.add(id, message.seq)) return;
     // Remember bottom-of-list arrivals too: replayed SDK callbacks are not new.
     if (awayFromLatest.value) {
       _unseenIDs.add(id);

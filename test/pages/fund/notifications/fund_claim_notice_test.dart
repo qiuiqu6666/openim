@@ -18,6 +18,17 @@ void main() {
         })),
       );
 
+  test('cached payload still validates sender and invalidates changed content',
+      () {
+    final message = receipt();
+    expect(FundClaimNotice.parse(message), isNotNull);
+    message.sendID = 'forged';
+    expect(FundClaimNotice.parse(message), isNull);
+    message.sendID = 'receiver';
+    expect(FundClaimNotice.parse(message), isNotNull);
+    message.customElem!.data = '{}';
+    expect(FundClaimNotice.parse(message), isNull);
+  });
   test('sender sees recipient claim tip; claimant sees own tip', () {
     final message = receipt();
     final notice = FundClaimNotice.parse(message)!;

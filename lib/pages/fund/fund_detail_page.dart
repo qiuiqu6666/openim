@@ -450,6 +450,27 @@ class _FundDetailPageState extends State<FundDetailPage>
     );
   }
 
+  Future<void> _openPacket() async {
+    final order = _order;
+    if (order == null ||
+        _loading ||
+        _claiming ||
+        _opening ||
+        _serverURL != Config.appAuthUrl ||
+        _userID != _sessionUserID) {
+      return;
+    }
+    if (_canClaim(order) && (!_claimAttempted || _canRetryClaim)) {
+      await (_claimAttempted ? _retryClaim() : _claim());
+      return;
+    }
+    // Closed, expired or already handled packets still open for inspection.
+    // Refresh only: opening their status must never submit another claim.
+    if (await _load() && mounted) {
+      setState(() => _showPacketDetails = true);
+    }
+  }
+
   Future<void> _claim() async {
     final order = _order;
     if (order == null || _loading || !_canClaim(order)) return;
@@ -505,7 +526,15 @@ class _FundDetailPageState extends State<FundDetailPage>
         !identical(api, _api)) {
       return;
     }
-    setState(() => _claiming = false);
+    setState(() {
+      _claiming = false;
+      final refreshed = _order;
+      if (_loadError == null &&
+          refreshed != null &&
+          (!refreshed.isOpen || refreshed.isExpired)) {
+        _showPacketDetails = true;
+      }
+    });
     await _finishOpening(order, userID, api);
   }
 
@@ -730,10 +759,6 @@ class _FundDetailPageState extends State<FundDetailPage>
         splitting: _coverSplitting,
         loadingIndicator: _loadingIndicator(),
         onClose: () => Navigator.of(context).pop(_order),
-        onViewDetails: _claiming || _opening
-            ? null
-            : () => setState(() => _showPacketDetails = true),
-        viewDetailsLabel: _text('查看领取详情', 'View claim details'),
         closeLabel: _text('关闭红包', 'Close red packet'),
         cover: FundReferenceCover(
           type: _text(order.biz == 'packet_lucky' ? '拼手气红包' : '普通红包',
@@ -753,11 +778,9 @@ class _FundDetailPageState extends State<FundDetailPage>
           split: _splitController,
           opening: _claiming || _opening,
           splitting: _coverSplitting,
-          onOpen: !_loading &&
-                  _canClaim(order) &&
-                  (!_claimAttempted || _canRetryClaim)
-              ? () => unawaited(_claimAttempted ? _retryClaim() : _claim())
-              : null,
+          onOpen: _loading || _claiming || _opening
+              ? null
+              : () => unawaited(_openPacket()),
         ),
       );
 
@@ -934,7 +957,7 @@ class _FundDetailPageState extends State<FundDetailPage>
     if (order.claimedShareFor(_userID) != null || _claimedAmount != null) {
       return _text('红包已领取', 'Red packet claimed');
     }
-    return _text('查看领取详情', 'View claim details');
+    return _text('红包待领取', 'Red packet awaiting claim');
   }
 
   String _formatTime(DateTime value) {

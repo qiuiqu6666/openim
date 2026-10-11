@@ -55,6 +55,13 @@ class ChatMessageArrivalGeometry {
 
   void sync(Set<String> newestFirst, Set<String> movingIDs) {
     if (_closed) return;
+    if (movingIDs.isEmpty) {
+      _invalidatePaint();
+      _indices.clear();
+      _movingIDs.clear();
+      _rows.clear();
+      return;
+    }
     _indices
       ..clear()
       ..addEntries(

@@ -18,8 +18,21 @@ class FundClaimNotice {
 
   static FundClaimNotice? parse(Message message) {
     if (message.contentType != MessageType.custom) return null;
+    final raw = message.customElem?.data;
+    final cached = _parsed[message];
+    if (cached != null && cached.$1 == raw)
+      return cached.$2?.claimerID == message.sendID ? cached.$2 : null;
+    final value = _parseRaw(raw);
+    _parsed[message] = (raw, value);
+    return value?.claimerID == message.sendID ? value : null;
+  }
+
+  static final _parsed = Expando<(String?, FundClaimNotice?)>();
+
+  static FundClaimNotice? _parseRaw(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
     try {
-      final data = jsonDecode(message.customElem?.data ?? '');
+      final data = jsonDecode(raw);
       if (data is! Map || data['businessID'] != 'fund_packet_claim_notice') {
         return null;
       }
@@ -30,8 +43,7 @@ class FundClaimNotice {
           order.trim().isEmpty ||
           claimer is! String ||
           claimer.isEmpty ||
-          sender is! String ||
-          claimer != message.sendID) {
+          sender is! String) {
         return null;
       }
       return FundClaimNotice(order, claimer, sender);

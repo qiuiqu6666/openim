@@ -44,6 +44,53 @@ void main() {
     }
   });
 
+  testWidgets('1200 authoritative callbacks avoid all repair reads',
+      (tester) async {
+    for (var i = 0; i < 1200; i++) {
+      final message = _message('$i');
+      final row = ConversationInfo(
+          conversationID: 'peer',
+          userID: 'peer',
+          conversationType: ConversationType.single,
+          latestMsg: message);
+      // Exercise both SDK event orders.
+      if (i.isEven) sync.observeMessage(message);
+      sync.conversationsUpdated([row]);
+      if (i.isOdd) sync.observeMessage(message);
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pump(ConversationLatestSync.settleDelay);
+    expect(reads, isEmpty);
+  });
+  testWidgets('older callback cannot cancel latest repair or explicit refresh',
+      (tester) async {
+    sync.observeMessage(_message('new'));
+    sync.conversationsUpdated([
+      ConversationInfo(
+          conversationID: 'peer',
+          userID: 'peer',
+          conversationType: ConversationType.single,
+          latestMsg: _message('old'))
+    ]);
+    await tester.pump(ConversationLatestSync.settleDelay);
+    expect(reads, hasLength(1));
+    replies.single.complete([]);
+    await tester.pump();
+    sync.requestRefresh(
+        ConversationRefreshRequest(accountID: 'self', conversationID: 'peer'));
+    sync.conversationsUpdated([
+      ConversationInfo(
+          conversationID: 'peer',
+          userID: 'peer',
+          conversationType: ConversationType.single,
+          latestMsg: _message('new'))
+    ]);
+    await tester.pump(ConversationLatestSync.settleDelay);
+    expect(reads, hasLength(2));
+    replies.last.complete([]);
+    await tester.pump();
+  });
+
   testWidgets('message bursts batch single and group snapshot reads',
       (tester) async {
     for (var i = 0; i < 1000; i++) {

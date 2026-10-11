@@ -1,3 +1,5 @@
+import '../../support/performance/viewer_test_cache.dart';
+import 'package:openim_common/src/widgets/media_browser/viewer_image_provider.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -188,8 +190,18 @@ void main() {
             tester.element(find.byType(Scaffold)));
         await tester.pumpWidget(renderTestHost(legacy
             ? ChatPicturePreview(images: [source])
-            : MediaBrowser(initialIndex: 0, sources: [source])));
-        await precacheImage(ExtendedNetworkImageProvider(url),
+            : MediaBrowser(
+                initialIndex: 0,
+                sources: [source],
+                imageProviderFactory: (url, pixels) => ViewerImageProvider(url,
+                    maxPixels: pixels,
+                    cache: ViewerTestCache(),
+                    createClient: () => _RealHttp().createHttpClient(null)))));
+        await precacheImage(
+            tester
+                .widget<AdaptiveMediaImage>(
+                    find.byType(AdaptiveMediaImage).first)
+                .image,
             tester.element(find.byType(AdaptiveMediaImage).first));
       });
       await _settle(tester);

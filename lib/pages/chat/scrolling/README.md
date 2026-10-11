@@ -24,3 +24,5 @@
 回底模块测试位于 `test/pages/chat/scrolling/chat_latest_scroll_controller_test.dart`；输入框、真实 SDK 接线及公共列表的组合场景注册在 `test/integration/chat/chat_keyboard_scroll_cases.dart`，复用聊天入口测试环境。覆盖动画中间帧、键盘渐进展开、手势中断、新消息到达、减少动画、关闭以及显式跳转替代。
 
 2026-10-05 回底动画验证：改动文件静态检查通过，滚动、历史窗口、聊天入口、日期定位、可视已读和新消息提示的既有 85 项回归及新增 2 项行为回归，共 87 项分批通过。`test/integration/chat/chat_back_to_bottom_motion_test.dart` 挂载真实 `ChatPage` 并点击生产按钮，验证相同时间段的位移逐渐增加、中途提示保留、最终最新气泡完整可见；控制器测试覆盖真实双 sliver 最新端持续移动时不大幅跳转、不误发抵达通知。Android debug 构建成功，保留调试包 `build/app/outputs/flutter-apk/app-debug-chat-smooth-bottom-20261005-5370a16dd51f.apk`；SHA-256 为 `5370a16dd51f220112f683e0b350b9b68b1311e62a69d5aaa74d77d81b483b8f`。没有安装到设备或部署服务，真机连续滚动观感仍需复测。
+
+已接收去重使用精确连续序号区间，仅压缩实际见过的序号，不把区间空洞当成已见。无序号消息仍保留 ID 例外集合以免重复计数；离开最新位置期间未见消息 ID 保留到可见/返回最新/退出，以维持准确计数。稀疏序号和无序号例外不承诺恒定内存。

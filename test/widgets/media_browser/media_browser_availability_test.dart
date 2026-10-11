@@ -150,14 +150,15 @@ void main() {
       sources: [MediaSource(file: file, thumbnail: '', loading: true)],
     )));
     await tester.pump();
-    expect(file.checks, 1);
+    expect(file.checks, 0,
+        reason: "loading source does not start a file probe");
     file.available = Future.value(true);
     await tester.pumpWidget(renderTestHost(MediaBrowser(
       initialIndex: 0,
       sources: [MediaSource(file: file, thumbnail: '')],
     )));
     await tester.pumpAndSettle();
-    expect(file.checks, 2);
+    expect(file.checks, 1);
     final image = tester.widget<ExtendedImage>(find.byType(ExtendedImage));
     expect(image.image, isA<ExtendedFileImageProvider>());
     expect(image.image, isNot(isA<ResizeImage>()));

@@ -46,6 +46,7 @@ import 'messages/chat_message_actions.dart';
 import 'messages/revocation/chat_message_revocation.dart';
 import 'messages/arrival/chat_message_arrival_controller.dart';
 import 'messages/presentation/chat_message_presentation.dart';
+import 'messages/presentation/fund_notice_index.dart';
 import 'messages/forwarding/chat_forwarding_controller.dart';
 import 'messages/selection/message_selection_controller.dart';
 import 'navigation/chat_message_navigation.dart';
@@ -61,6 +62,7 @@ import 'voice/voice_to_text_service.dart';
 import 'voice/voice_transcription_controller.dart';
 
 class ChatLogic extends SuperController {
+  late final fundNotices = FundNoticeIndex(messageList);
   bool _chatClosing = false;
   String? _chatToken;
   String? _imToken;
@@ -124,6 +126,7 @@ class ChatLogic extends SuperController {
     groupStatus: () => groupInfo?.status,
     scrollBottom: scrollBottom,
     resetInput: (message) => _composer.resetAfterSend(message),
+    onTimelineChanged: _trimAutomaticWindow,
     onDeliveryStarted: (message, target) => !_sessionInactive &&
             isSingleChat &&
             userID == 'assistant' &&
@@ -186,6 +189,7 @@ class ChatLogic extends SuperController {
     stageMessage: (message) {
       if (_sessionInactive) return;
       messageList.add(message);
+      _trimAutomaticWindow();
       scrollBottom();
     },
     previewVoice: _voice.previewAndSendVoice,
@@ -651,6 +655,24 @@ class ChatLogic extends SuperController {
     newMessages.updateScrollOffset(distance, viewportConfirmed: false);
   }
 
+  void _trimAutomaticWindow() {
+    _automaticTrimPending =
+        messageList.length > ChatTimelineController.automaticWindowLimit;
+    if (!_automaticTrimPending) return;
+    if (_sessionInactive ||
+        messageSelection.active ||
+        newMessages.awayFromLatest.value ||
+        _dateWindow.buffering) {
+      return;
+    }
+    _timeline.trimLatestWindow();
+    // Extra sending/failed rows are intentional. Retry only on the next
+    // message/status change, rather than rescanning them on every frame.
+    _automaticTrimPending = false;
+  }
+
+  bool _automaticTrimPending = false;
+
   void onChatViewportChanged(List<String> readIDs, double distanceFromLatest) {
     if (_sessionInactive) return;
     // A size transition is a clipped slice until its final layout. Only that
@@ -658,6 +680,7 @@ class ChatLogic extends SuperController {
     readIDs = readIDs.where((id) => !messageArrivals.isEntering(id)).toList();
     newMessages
         .updateScrollOffset(_dateWindow.buffering ? 2 : distanceFromLatest);
+    if (_automaticTrimPending) _trimAutomaticWindow();
     for (final id in readIDs) {
       newMessages.markVisible(id);
     }
@@ -723,9 +746,7 @@ class ChatLogic extends SuperController {
     if (_sessionInactive ||
         message.contentType == MessageType.typing ||
         _removedMessageIDs.contains(message.clientMsgID) ||
-        messageList.any((m) => m.clientMsgID == message.clientMsgID) ||
-        scrollingCacheMessageList
-            .any((m) => m.clientMsgID == message.clientMsgID)) {
+        _timeline.containsMessage(message.clientMsgID)) {
       return;
     }
     if (scrollController.hasClients) {
@@ -758,8 +779,11 @@ class ChatLogic extends SuperController {
             !WidgetsBinding.instance.platformDispatcher.accessibilityFeatures
                 .disableAnimations);
     newMessages.recordIncoming(message);
-    messageList.add(message);
-    if (followLatest) _timeline.trimLatestWindow();
+    final trim =
+        followLatest && !messageSelection.active && !_dateWindow.buffering;
+    _timeline.appendIncoming(message, trim: trim);
+    _automaticTrimPending = !trim &&
+        messageList.length > ChatTimelineController.automaticWindowLimit;
     if (followLatest) {
       scrollBottom(force: false);
     }
@@ -865,6 +889,9 @@ class ChatLogic extends SuperController {
     _group.initialize();
 
     friendInfoChangedSub = imLogic.friendInfoChangedSubject.listen((value) {
+      if (!_sessionInactive && !isSingleChat) {
+        _group.updateSenderAvatar(value.userID, value.faceURL);
+      }
       if (userID == value.userID) {
         nickname.value = value.getShowName();
         faceUrl.value = value.faceURL ?? '';
@@ -881,6 +908,9 @@ class ChatLogic extends SuperController {
     });
 
     selfInfoUpdatedSub = imLogic.selfInfoUpdatedSubject.listen((value) {
+      if (!_sessionInactive && !isSingleChat) {
+        _group.updateSenderAvatar(value.userID, value.faceURL);
+      }
       for (var msg in messageList) {
         if (msg.sendID == value.userID) {
           msg.senderFaceUrl = value.faceURL;
@@ -1147,6 +1177,7 @@ class ChatLogic extends SuperController {
     _favorites.dispose();
     _latestScroll.close();
     newMessages.close();
+    fundNotices.close();
     _timeline.close();
     _receipts.close();
     if (identical(imLogic.onRecvNewMessage, _ownedMessageCallback)) {
@@ -1231,7 +1262,8 @@ class ChatLogic extends SuperController {
   }
 
   String? getNewestNickname(Message message) => message.senderNickname;
-  String? getNewestFaceURL(Message message) => message.senderFaceUrl;
+  String? getNewestFaceURL(Message message) =>
+      isSingleChat ? message.senderFaceUrl : _group.avatarFor(message);
 
   bool get isInvalidGroup => _group.isInvalidGroup;
 

@@ -61,6 +61,20 @@ class ChatTimelineController {
   bool _initialized = false;
   bool _disposed = false;
   bool _timelineDirty = true;
+  bool _identityDirty = true;
+  bool _appending = false;
+  final _identities = <String?>{};
+
+  bool containsMessage(String? id) {
+    if (_identityDirty || !_initialized) {
+      _identities.clear();
+      _identities.addAll(messageList.map((message) => message.clientMsgID));
+      _identityDirty = false;
+    }
+    return _identities.contains(id) ||
+        scrollingCacheMessageList.any((message) => message.clientMsgID == id);
+  }
+
   bool _groupInfoRequested = false;
   Worker? _messageListWorker;
   Timer? _cacheTimer;
@@ -97,6 +111,10 @@ class ChatTimelineController {
     _cacheRevision = ChatHistoryCache.revision(accountID, conversationID);
     _messageListWorker = ever(messageList, (_) {
       _timelineDirty = true;
+      if (!_appending) {
+        _identityDirty = true;
+        _identities.clear();
+      }
       _cacheTimer?.cancel();
       _cacheTimer = Timer(const Duration(milliseconds: 80), _cacheHistory);
     });
@@ -174,6 +192,41 @@ class ChatTimelineController {
   static const automaticWindowLimit = 600;
   static const bufferedWindowLimit = 100;
 
+  /// Publish append and automatic eviction together, retaining retry rows.
+  void appendIncoming(Message message, {required bool trim}) {
+    if (_identityDirty) containsMessage(message.clientMsgID);
+    var next = [...messageList, message];
+    var evicted = false;
+    if (trim &&
+        !_history.viewingHistory &&
+        next.length > automaticWindowLimit) {
+      final start = next.length - automaticWindowLimit;
+      final retained = <Message>[
+        for (var i = 0; i < next.length; i++)
+          if (i >= start ||
+              next[i].status == MessageStatus.sending ||
+              next[i].status == MessageStatus.failed)
+            next[i],
+      ];
+      evicted = retained.length < next.length;
+      for (var i = 0; i < start; i++) {
+        if (next[i].status != MessageStatus.sending &&
+            next[i].status != MessageStatus.failed) {
+          _identities.remove(next[i].clientMsgID);
+        }
+      }
+      next = retained;
+    }
+    _appending = true;
+    try {
+      messageList.value = next;
+    } finally {
+      _appending = false;
+    }
+    _identities.add(message.clientMsgID);
+    if (evicted) _history.didTrimLatest();
+  }
+
   bool holdForIncoming({required bool awayFromLatest}) {
     if (awayFromLatest && messageList.length >= automaticWindowLimit) {
       _history.holdCurrentWindow();
@@ -190,19 +243,21 @@ class ChatTimelineController {
   }
 
   void trimLatestWindow() {
-    if (_history.viewingHistory || messageList.length <= automaticWindowLimit) {
+    if (_closed ||
+        _history.viewingHistory ||
+        messageList.length <= automaticWindowLimit) {
       return;
     }
-    var excess = messageList.length - automaticWindowLimit;
-    final retained = messageList.where((m) {
-      if (excess > 0 &&
-          m.status != MessageStatus.sending &&
-          m.status != MessageStatus.failed) {
-        excess--;
-        return false;
-      }
-      return true;
-    }).toList();
+    final firstLatest = messageList.length - automaticWindowLimit;
+    final retained = <Message>[
+      // Pending/retry rows can outlive the automatic window. Keeping them
+      // must not evict the newest successful messages instead.
+      for (var index = 0; index < messageList.length; index++)
+        if (index >= firstLatest ||
+            messageList[index].status == MessageStatus.sending ||
+            messageList[index].status == MessageStatus.failed)
+          messageList[index],
+    ];
     if (retained.length == messageList.length) return;
     messageList.value = retained;
     _history.didTrimLatest();
@@ -318,6 +373,7 @@ class ChatTimelineController {
     _disposed = true;
     _history.close();
     _messageListWorker?.dispose();
+    _identities.clear();
     _cacheTimer?.cancel();
   }
 }

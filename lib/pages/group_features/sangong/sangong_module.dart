@@ -20,6 +20,7 @@ import 'pages/sangong_agent_dashboard_page.dart';
 import 'pages/sangong_agent_team_page.dart';
 import 'pages/sangong_agent_personal_page.dart';
 import 'services/group_game_prefs.dart';
+import 'services/realtime/sangong_realtime_scope.dart';
 import 'support/settings_exports.dart';
 import 'support/sangong_ui.dart';
 import 'widgets/group_game_status_banner.dart';
@@ -65,7 +66,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
   late SangongRuntime _runtime;
   StreamSubscription<Map<String, dynamic>>? _events;
   String? _error;
-  bool _busy = false, _floatVisible = true, _subscribed = false;
+  bool _busy = false, _floatVisible = true;
   int _loadGeneration = 0;
   Future<void>? _activeLoad;
   bool _reloadQueued = false;
@@ -105,14 +106,6 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
     if (!privileged) {
       _loadGeneration++;
       _error = null;
-    }
-    final shouldSubscribe = _runtime.canManage;
-    if (shouldSubscribe && !_subscribed) {
-      _subscribed = true;
-      _runtime.realtime.acquire();
-    } else if (!shouldSubscribe && _subscribed) {
-      _subscribed = false;
-      _runtime.realtime.release();
     }
     setState(() {});
     if (restored) unawaited(_load());
@@ -183,7 +176,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
   Future<void> _retry() async {
     if (!_runtime.groupTenantReady) _runtime.groupTenant.invalidate();
     await _load();
-    if (mounted && _runtime.canManage && _subscribed) {
+    if (mounted && _runtime.canManage) {
       await _runtime.realtime.refreshSnapshot();
     }
   }
@@ -197,7 +190,6 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
     _runtime.removeListener(_changed);
     _runtime.realtime.removeListener(_changed);
     _runtime.dispose();
-    _subscribed = false;
   }
 
   @override
@@ -425,7 +417,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
           section: section);
 
   @override
-  Widget build(BuildContext context) => SangongScope(
+  Widget build(BuildContext context) => SangongRealtimeScope(
       runtime: _runtime,
       child: Builder(builder: (scopeContext) {
         final state = _runtime.realtime.latestState;
@@ -740,7 +732,7 @@ class _SangongModulePageState extends State<_SangongModulePage> {
   }
 
   @override
-  Widget build(BuildContext context) => SangongScope(
+  Widget build(BuildContext context) => SangongRealtimeScope(
       runtime: widget.runtime,
       child: Builder(builder: (context) {
         if (_loading || _error != null) {

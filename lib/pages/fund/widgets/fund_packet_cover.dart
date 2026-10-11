@@ -315,15 +315,12 @@ class FundPacketCoverOverlay extends StatelessWidget {
       required this.splitting,
       required this.loadingIndicator,
       required this.onClose,
-      required this.onViewDetails,
-      required this.viewDetailsLabel,
       required this.closeLabel});
   final Widget cover, loadingIndicator;
   final Animation<double> split;
   final bool splitting;
   final VoidCallback onClose;
-  final VoidCallback? onViewDetails;
-  final String viewDetailsLabel, closeLabel;
+  final String closeLabel;
   @override
   Widget build(BuildContext context) {
     final cs = FundPageColors.of(context);
@@ -374,12 +371,10 @@ class FundPacketCoverOverlay extends StatelessWidget {
                               FundTokens.previewCloseSizeMax)
                           .toDouble();
                   final gap = shortest * FundTokens.previewCloseGapRatio;
-                  final detailHeight =
-                      SettingsResponsive.controlHeight(context);
                   final maxByWidth = body.maxWidth * widthFactor;
                   final maxByHeight = math.max(
                       0.0,
-                      (body.maxHeight - gap - closeSize - detailHeight) *
+                      (body.maxHeight - gap - closeSize) *
                           FundTokens.previewAspectRatio);
                   final width = math.min(maxByWidth, maxByHeight);
                   return Center(
@@ -394,17 +389,6 @@ class FundPacketCoverOverlay extends StatelessWidget {
                                     key: const ValueKey('fund-packet-cover'),
                                     aspectRatio: FundTokens.previewAspectRatio,
                                     child: cover)),
-                            SizedBox(
-                                height: detailHeight,
-                                child: TextButton(
-                                    key: const ValueKey(
-                                        'fund-detail-view-details'),
-                                    style: TextButton.styleFrom(
-                                        foregroundColor: AppTokens.onAccent),
-                                    onPressed: onViewDetails,
-                                    child: FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Text(viewDetailsLabel)))),
                             SizedBox(height: gap),
                             GestureDetector(
                                 key: const ValueKey('fund-detail-close'),

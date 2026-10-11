@@ -34,6 +34,7 @@ class ChatGroupQueries {
     required this.groupInfo,
     required this.selfMember,
     required this.ownerAndAdmin,
+    this.members,
   });
 
   factory ChatGroupQueries.sdk() => ChatGroupQueries(
@@ -45,6 +46,8 @@ class ChatGroupQueries {
             .getGroupMembersInfo(groupID: id, userIDList: [userID]),
         ownerAndAdmin: (id) =>
             OpenIM.iMManager.groupManager.getGroupOwnerAndAdmin(groupID: id),
+        members: (id, users) => OpenIM.iMManager.groupManager
+            .getGroupMembersInfo(groupID: id, userIDList: users),
       );
 
   final Future<bool> Function(String groupID) isJoined;
@@ -52,4 +55,5 @@ class ChatGroupQueries {
   final Future<List<GroupMembersInfo>> Function(String groupID, String userID)
       selfMember;
   final Future<List<GroupMembersInfo>> Function(String groupID) ownerAndAdmin;
+  final Future<List<GroupMembersInfo>> Function(String, List<String>)? members;
 }

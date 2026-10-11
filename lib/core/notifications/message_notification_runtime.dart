@@ -44,8 +44,10 @@ class MessageNotificationRuntime {
     required Future<void> Function(String, sdk.ConversationInfo) sendReply,
     required void Function(String) reportError,
     MessageNotificationAvatarCache? avatars,
+    Duration metadataCacheDuration = Duration.zero,
   }) : _avatars = avatars ?? MessageNotificationAvatarCache() {
-    _lookups = NotificationLookupPool(loadConversation);
+    _lookups = NotificationLookupPool(loadConversation,
+        cacheDuration: metadataCacheDuration);
     _actions = MessageNotificationActions(
       isCurrentSession: _owns,
       isReady: () =>
@@ -435,6 +437,14 @@ class MessageNotificationRuntime {
     } catch (error) {
       Logger.print('Message notification unavailable: ${error.runtimeType}',
           onlyConsole: true);
+    }
+  }
+
+  void conversationsUpdated(List<sdk.ConversationInfo> rows) {
+    final session = currentSession();
+    if (_closed || session == null || _sessionKey != session.sessionKey) return;
+    for (final row in rows) {
+      _lookups.seed(session.sessionKey, row);
     }
   }
 

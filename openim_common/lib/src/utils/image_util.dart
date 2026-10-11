@@ -33,7 +33,10 @@ class ImageUtil {
     int? cacheWidth,
     int? cacheHeight,
     ResizeImagePolicy resizePolicy = ResizeImagePolicy.exact,
-    bool cacheRawData = true,
+    // The extended_image raw-byte cache has no eviction limit. Display-only
+    // images use Flutter's bounded decoded cache and the existing disk cache.
+    // An editor that reads provider.rawImageData must explicitly opt in.
+    bool cacheRawData = false,
     BoxFit? fit,
     Alignment alignment = Alignment.center,
     bool loadProgress = true,
@@ -119,7 +122,7 @@ class ImageUtil {
     int? cacheWidth,
     int? cacheHeight,
     ResizeImagePolicy resizePolicy = ResizeImagePolicy.exact,
-    bool cacheRawData = true,
+    bool cacheRawData = false,
     BoxFit? fit,
     Alignment alignment = Alignment.center,
     bool loadProgress = true,

@@ -314,6 +314,9 @@ void main() {
     expect(fixture.runtime!.canManage, isFalse);
     expect(find.text(fixture.runtime!.manageUnavailableReason!), findsWidgets);
     expect(tester.takeException(), isNull);
+    // Widget-test timer invariants run before addTearDown cleanup.
+    await EasyLoading.dismiss(animation: false);
+    await tester.pump();
   });
 
   testWidgets('stats group reads its current binding instead of default config',
@@ -409,6 +412,8 @@ void main() {
     }
     expect(fixture.operations.length, 4);
     expect(tester.takeException(), isNull);
+    await EasyLoading.dismiss(animation: false);
+    await tester.pump();
   });
 
   testWidgets('authorized settle uses the current draws and round settle APIs',

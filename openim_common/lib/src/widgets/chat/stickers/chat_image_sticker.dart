@@ -26,6 +26,7 @@ class _ChatImageStickerState extends State<ChatImageSticker> {
   static final _sizes = <String, Size>{};
 
   late ImageProvider _provider;
+  int _decodeExtent = 0;
   ImageStream? _stream;
   ImageStreamListener? _listener;
   Size? _intrinsicSize;
@@ -41,8 +42,13 @@ class _ChatImageStickerState extends State<ChatImageSticker> {
   }
 
   void _updateSource() {
-    _provider = widget.imageProvider ??
+    final original = widget.imageProvider ??
         ExtendedNetworkImageProvider(widget.url, cache: true);
+    _provider = ResizeImage(original,
+        width: _decodeExtent > 0 ? _decodeExtent : 512,
+        height: _decodeExtent > 0 ? _decodeExtent : 512,
+        policy: ResizeImagePolicy.fit,
+        allowUpscaling: false);
     _decodedSize = null;
     _failed = false;
     _probeStarted = false;
@@ -62,6 +68,14 @@ class _ChatImageStickerState extends State<ChatImageSticker> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final extent =
+        (256 * MediaQuery.devicePixelRatioOf(context)).ceil().clamp(1, 1024);
+    if (_decodeExtent != extent) {
+      _detachProbe();
+      _generation++;
+      _decodeExtent = extent;
+      _updateSource();
+    }
     _probeFirstFrame();
   }
 

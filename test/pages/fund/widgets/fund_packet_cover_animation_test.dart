@@ -16,8 +16,6 @@ void main() {
       splitting: false,
       loadingIndicator: const SizedBox.shrink(),
       onClose: () {},
-      onViewDetails: null,
-      viewDetailsLabel: 'Details',
       closeLabel: 'Close',
     )));
     final blur = tester.widget<BackdropFilter>(find.byType(BackdropFilter));

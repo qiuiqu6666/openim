@@ -56,10 +56,7 @@ class ChatMessageTile extends StatelessWidget {
     final notice = FundClaimNotice.parse(message);
     if (notice != null) {
       return Obx(() {
-        final duplicates = logic.messageList
-            .where((item) => FundClaimNotice.parse(item)?.key == notice.key);
-        if (duplicates.isNotEmpty &&
-            duplicates.first.clientMsgID != message.clientMsgID) {
+        if (!logic.fundNotices.isFirst(message, notice)) {
           return const SizedBox.shrink();
         }
         return Center(

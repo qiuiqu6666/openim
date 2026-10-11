@@ -96,8 +96,9 @@ class ChatMessageRevocation {
         }
         if (snapshot.self?.groupID != group ||
             snapshot.self?.userID != account ||
-            snapshot.target?.groupID != group ||
-            snapshot.target?.userID != message.sendID ||
+            (snapshot.target != null &&
+                (snapshot.target?.groupID != group ||
+                    snapshot.target?.userID != message.sendID)) ||
             !ChatRevocationPolicy.canRevoke(
               message: message,
               currentUserID: account,

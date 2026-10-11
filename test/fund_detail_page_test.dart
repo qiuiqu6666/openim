@@ -480,7 +480,8 @@ void main() {
   testWidgets(
       'verified packet remark replaces bubble text in cover and details',
       (tester) async {
-    final api = _FakeFundApi(load: (_) async => _order(remark: '旅途愉快🚀'));
+    final api = _FakeFundApi(
+        load: (_) async => _order(status: 'done', remark: '旅途愉快🚀'));
     await tester.pumpWidget(_host(FundDetailPage(
       message: _message(remark: '卡片祝福'),
       api: api,
@@ -492,7 +493,7 @@ void main() {
     expect(find.text('卡片祝福'), findsNothing);
     expect(find.text('恭喜发财，大吉大利'), findsNothing);
     expect(api.claims, isEmpty);
-    await tester.tap(find.byKey(const ValueKey('fund-detail-view-details')));
+    await tester.tap(find.byKey(const ValueKey('fund-detail-open')));
     await tester.pumpAndSettle();
     expect(find.text('旅途愉快🚀'), findsOneWidget);
     expect(find.text('卡片祝福'), findsNothing);
@@ -559,9 +560,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('red packet cover and view details never claim without opening',
+  testWidgets('closed packet opens details from the coin without claiming',
       (tester) async {
-    final api = _FakeFundApi(load: (_) async => _order());
+    final api = _FakeFundApi(load: (_) async => _order(status: 'done'));
     await tester.pumpWidget(_host(FundDetailPage(
       message: _message(remark: '卡片祝福'),
       api: api,
@@ -573,7 +574,7 @@ void main() {
     expect(find.text('恭喜发财，大吉大利'), findsOneWidget);
     expect(find.text('卡片祝福'), findsNothing);
     expect(api.claims, isEmpty);
-    await tester.tap(find.byKey(const ValueKey('fund-detail-view-details')));
+    await tester.tap(find.byKey(const ValueKey('fund-detail-open')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('fund-packet-cover')), findsNothing);
     expect(find.byKey(const ValueKey('fund-detail-share-progress')),
@@ -944,7 +945,7 @@ void main() {
         tester
             .widget<InkWell>(find.byKey(const ValueKey('fund-detail-open')))
             .onTap,
-        isNull);
+        isNotNull);
     await tester.tap(find.byKey(const ValueKey('fund-detail-open')));
     await tester.pumpAndSettle();
     expect(api.claims, ['packet-1']);
@@ -1009,6 +1010,16 @@ void main() {
         currentUserID: 'me',
       )));
       await tester.pumpAndSettle();
+      expect(
+          find.byKey(const ValueKey('fund-detail-view-details')), findsNothing);
+      if (find
+          .byKey(const ValueKey('fund-detail-open'))
+          .evaluate()
+          .isNotEmpty) {
+        await _openCover(tester);
+        await tester.pumpAndSettle();
+      }
+      expect(find.byType(FundPacketDetail), findsOneWidget);
       expect(api.claims, isEmpty);
       expect(find.byKey(const ValueKey('fund-detail-status')), findsOneWidget);
       expect(
@@ -1028,8 +1039,7 @@ void main() {
           profileResolver: (_, __) async => {})));
       await tester.pumpAndSettle();
       expect(api.claims, isEmpty);
-      final viewDetails =
-          find.byKey(const ValueKey('fund-detail-view-details'));
+      final viewDetails = find.byKey(const ValueKey('fund-detail-open'));
       if (viewDetails.evaluate().isNotEmpty) {
         await tester.tap(viewDetails);
         await tester.pumpAndSettle();
@@ -1051,10 +1061,28 @@ void main() {
           find.byKey(const ValueKey('fund-detail-order-info')), findsNothing);
       expect(find.text('红包信息'), findsNothing);
       expect(api.claims, isEmpty);
-      expect(api.reads, ['packet-1']);
+      expect(api.reads, ['packet-1', 'packet-1']);
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('packet claimed by others while opening shows refreshed status',
+      (tester) async {
+    late _FakeFundApi api;
+    api = _FakeFundApi(
+      load: (_) async => _order(status: api.claims.isEmpty ? 'open' : 'done'),
+      claim: (_) async => throw const FundApiException(20028, 'FundClosed'),
+    );
+    await tester.pumpWidget(_host(
+        FundDetailPage(message: _message(), api: api, currentUserID: 'me')));
+    await tester.pumpAndSettle();
+    await _openCover(tester);
+    await tester.pumpAndSettle();
+    expect(find.byType(FundPacketDetail), findsOneWidget);
+    expect(api.claims, ['packet-1']);
+    expect(api.reads, ['packet-1', 'packet-1']);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('already-claimed error reloads own amount without another claim',
       (tester) async {
@@ -1154,7 +1182,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.claims, isEmpty);
     expect(find.text('未领取金额已退回'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('fund-detail-view-details')));
+    await tester.tap(find.byKey(const ValueKey('fund-detail-open')));
     await tester.pumpAndSettle();
     expect(find.text('新红包祝福'), findsOneWidget);
     expect(find.text('旧红包祝福'), findsNothing);
@@ -1224,7 +1252,7 @@ void main() {
       currentUserID: 'me',
     )));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('fund-detail-view-details')));
+    await tester.tap(find.byKey(const ValueKey('fund-detail-open')));
     await tester.pumpAndSettle();
     await tester.runAsync(() async {
       await DataSp.putServerConfig({
@@ -1233,7 +1261,7 @@ void main() {
       });
     });
     await _refreshDetails(tester);
-    expect(api.reads, ['packet-1']);
+    expect(api.reads, ['packet-1', 'packet-1']);
     expect(api.claims, isEmpty);
     await tester.pumpWidget(_host(const SizedBox()));
   });
@@ -1304,7 +1332,7 @@ void main() {
     )));
     await tester.pumpAndSettle();
     expect(nameRequests, 1);
-    await tester.tap(find.byKey(const ValueKey('fund-detail-view-details')));
+    await tester.tap(find.byKey(const ValueKey('fund-detail-open')));
     await tester.pumpAndSettle();
     expect(find.text('群成员的红包'), findsOneWidget);
     expect(find.text('sender'), findsNothing);
@@ -1381,7 +1409,8 @@ void main() {
   });
 
   for (final gestureBack in [false, true]) {
-    testWidgets('${gestureBack ? 'gesture' : 'system'} route pop returns the latest server order',
+    testWidgets(
+        '${gestureBack ? 'gesture' : 'system'} route pop returns the latest server order',
         (tester) async {
       final navigator = GlobalKey<NavigatorState>();
       final serverOrder = _order(status: 'refunded');
@@ -1406,7 +1435,6 @@ void main() {
       expect(await result, same(serverOrder));
     });
   }
-
 
   for (final closeFromScrim in [false, true]) {
     testWidgets(
@@ -1454,15 +1482,12 @@ void main() {
               envelope.height * (1 - FundTokens.previewCoinBottomRatio) -
                   coin.height / 2,
               .01));
-      final details = tester
-          .getRect(find.byKey(const ValueKey('fund-detail-view-details')));
-      expect(details.top, greaterThanOrEqualTo(envelope.bottom));
+      expect(
+          find.byKey(const ValueKey('fund-detail-view-details')), findsNothing);
       final close =
           tester.getRect(find.byKey(const ValueKey('fund-detail-close')));
-      expect(
-          close.top - envelope.bottom,
-          greaterThanOrEqualTo(
-              details.height + 375 * FundTokens.previewCloseGapRatio));
+      expect(close.top - envelope.bottom,
+          greaterThanOrEqualTo(375 * FundTokens.previewCloseGapRatio));
       expect(
           tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
           FundTokens.transparent);

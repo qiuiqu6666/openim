@@ -1,3 +1,5 @@
+import 'dart:async';
+import '../services/account_identity/sangong_team_user_search.dart';
 import 'package:openim_common/openim_common.dart'
     show normalizePublicAccountSearch;
 import '../services/account_identity/sangong_account_identity_resolver.dart';
@@ -41,11 +43,20 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
   String _searchQuery = '';
   String? _searchedUserID;
   int _searchRequest = 0;
+  int _loadRequest = 0;
+  Timer? _searchTimer;
+  final _userSearch = SangongTeamUserSearch();
+  Set<String> _friendMatches = {};
+
   late final _accountSearch =
       SangongAccountIdentityResolver(isCurrent: () => _isCurrentSession);
 
   @override
   void dispose() {
+    _accountSession.runtime.http.agentDataRevision
+        .removeListener(_onAgentDataChanged);
+    _searchTimer?.cancel();
+    _userSearch.close();
     _searchController.dispose();
     _accountSearch.close();
     super.dispose();
@@ -54,11 +65,18 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
   @override
   void initState() {
     super.initState();
+    _accountSession.runtime.http.agentDataRevision
+        .addListener(_onAgentDataChanged);
     _load();
+  }
+
+  void _onAgentDataChanged() {
+    if (_isCurrentSession) _load();
   }
 
   Future<void> _load() async {
     if (!mounted || !_isCurrentSession) return;
+    final request = ++_loadRequest;
     setState(() {
       _loading = true;
       _error = null;
@@ -68,17 +86,29 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
           await SangongScope.read(context).agent.fetchSangongTeamMembers(
                 direct: _direct,
               );
-      if (!mounted || !_isCurrentSession) return;
+      if (!mounted || !_isCurrentSession || request != _loadRequest) return;
       setState(() {
         _data = data;
         _loading = false;
       });
+      unawaited(_loadIMNames(data, request));
+      if (_searchQuery.isNotEmpty) _search(_searchQuery);
     } catch (error) {
-      if (!mounted || !_isCurrentSession) return;
+      if (!mounted || !_isCurrentSession || request != _loadRequest) return;
       setState(() {
         _error = DioErrorMessage.forApp(error);
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _loadIMNames(SangongTeamMembersDto data, int request) async {
+    try {
+      await _userSearch.load(data.members.map((m) => m.imUserId).toSet(),
+          () => _isCurrentSession && request == _loadRequest);
+      if (_isCurrentSession && request == _loadRequest) setState(() {});
+    } catch (_) {
+      // Business names and the independent friend/remark query remain usable.
     }
   }
 
@@ -167,16 +197,40 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
     }
   }
 
-  Future<void> _search(String value) async {
+  void _search(String value) {
     final request = ++_searchRequest;
+    _searchTimer?.cancel();
+    _accountSearch.cancel();
     setState(() {
       _searchQuery = value;
       _searchedUserID = null;
+      _friendMatches = {};
     });
-    if (normalizePublicAccountSearch(value) == null) {
-      _accountSearch.cancel();
-      return;
+    if (value.trim().isEmpty) return;
+    _searchTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!_isCurrentSession || request != _searchRequest) return;
+      unawaited(_searchIM(value, request));
+      if (normalizePublicAccountSearch(value) != null) {
+        unawaited(_searchAccount(value, request));
+      }
+    });
+  }
+
+  Future<void> _searchIM(String value, int request) async {
+    try {
+      final ids = await _userSearch.searchFriends(
+          value, (_data?.members ?? []).map((m) => m.imUserId).toSet());
+      if (mounted && _isCurrentSession && request == _searchRequest) {
+        setState(() => _friendMatches = ids);
+      }
+    } catch (error) {
+      if (mounted && _isCurrentSession && request == _searchRequest) {
+        ToastUtils.toast('OpenIM 昵称/备注查询失败，请重试', context: context);
+      }
     }
+  }
+
+  Future<void> _searchAccount(String value, int request) async {
     try {
       final id =
           await _accountSearch.resolve(value, allowInternalUserId: false);
@@ -199,6 +253,8 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
           (member) =>
               query.isEmpty ||
               member.imUserId == _searchedUserID ||
+              _friendMatches.contains(member.imUserId) ||
+              _userSearch.matches(member.imUserId, query) ||
               member.nickname.toLowerCase().contains(query) ||
               (SangongIdentityScope.read(context)
                           .peek(member.imUserId)
@@ -253,7 +309,7 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
                 textInputAction: TextInputAction.search,
                 onChanged: _search,
                 decoration: InputDecoration(
-                  hintText: '搜索昵称或公开账号',
+                  hintText: '搜索昵称、备注、公开账号或用户ID',
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _searchQuery.isEmpty
                       ? null

@@ -98,6 +98,7 @@ class SangongAgentManagementApi {
   }
 
   Future<void> attach(int userId, int parentId) async {
+    if (agent) throw StateError('代理入口不能修改上级');
     if (userId <= 0 || parentId <= 0 || userId == parentId) {
       throw StateError('上级用户无效');
     }
@@ -106,6 +107,7 @@ class SangongAgentManagementApi {
     if (data['userId'] != userId || data['parentUserId'] != parentId) {
       throw _unknown;
     }
+    http.agentDataChanged();
   }
 
   Future<void> setRate(int userId, String input) async {
@@ -114,6 +116,7 @@ class SangongAgentManagementApi {
     final data = await _api.command(agent ? 'agent.rate' : 'admin.rebate_rate',
         {'userId': userId, 'rate': rate});
     if (data['userId'] != userId || data['rate'] != rate) throw _unknown;
+    http.agentDataChanged();
   }
 
   static const _unknown = GroupFeatureException('操作结果尚未确认，请刷新后查看',

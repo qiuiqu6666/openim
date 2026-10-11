@@ -54,7 +54,10 @@ class ChatRevocationPolicy {
     }
     if (selfRole == GroupRoleLevel.owner) {
       if (group?.ownerUserID != currentUserID) return false;
-      return senderRole == GroupRoleLevel.member ||
+      // A departed sender has no current member record. A confirmed owner
+      // can still moderate that sender's history; the SDK/server decides.
+      return senderRole == null ||
+          senderRole == GroupRoleLevel.member ||
           senderRole == GroupRoleLevel.admin;
     }
     return selfRole == GroupRoleLevel.admin &&

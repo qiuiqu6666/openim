@@ -18,6 +18,9 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     await DataSp.init();
+    // Media resolution is tested against an explicit account endpoint, not the
+    // deployment's changing default host.
+    await DataSp.putServerConfig({'apiUrl': 'https://99imapi.99chat.vip'});
   });
 
   test('ImageUtil gives its provider the accessible OpenIM object URL', () {

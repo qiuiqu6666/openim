@@ -142,7 +142,8 @@ void main() {
         [local, missing, localOnly], localOnly);
     expect(gallery.initialIndex, 2);
     expect(gallery.sources[0].file?.path, file.path);
-    expect(gallery.sources[1].file, isNull);
+    // Existence is checked lazily by the viewer, never for the entire gallery.
+    expect(await gallery.sources[1].file!.exists(), isFalse);
     expect(gallery.sources[1].url, 'https://example.com/fallback.jpg');
     expect(gallery.sources[2].file?.path, file.path);
     expect(gallery.sources[2].url, isNull);

@@ -24,6 +24,9 @@ class ConversationLatestSync {
   final Future<String> Function(ConversationRefreshRequest) _resolveID;
   final Future<List<ConversationInfo>> Function(List<String>) _read;
   final _pending = <String, ConversationRefreshRequest>{};
+  final _pendingMessageIDs = <String, String>{};
+  final _callbackMessages = <String, String>{};
+  final _forced = <String>{};
   // Only IDs in the in-flight read need a fence; no growing revision cache.
   final _changedDuringRead = <String>{};
   Timer? _timer;
@@ -42,12 +45,18 @@ class ConversationLatestSync {
 
   void observeMessage(Message message) {
     final request = ConversationRefreshRequest.forMessage(message);
-    if (request != null) requestRefresh(request);
+    if (request == null || !_active || !request.isCurrent) return;
+    final id = message.clientMsgID;
+    if (id != null && _callbackMessages[request.key] == id) return;
+    if (id != null) _pendingMessageIDs[request.key] = id;
+    _pending[request.key] = request;
+    _schedule();
   }
 
   void requestRefresh(ConversationRefreshRequest request) {
     if (!_active || !request.isCurrent) return;
     _pending[request.key] = request;
+    _forced.add(request.key);
     _schedule();
   }
 
@@ -55,12 +64,40 @@ class ConversationLatestSync {
     if (_running) _changedDuringRead.addAll(ids);
   }
 
+  /// A matching authoritative callback already supplies this message's row.
+  void conversationsUpdated(Iterable<ConversationInfo> rows) {
+    for (final row in rows) {
+      final id = row.latestMsg?.clientMsgID;
+      if (id == null || id.isEmpty) continue;
+      final source = row.isSingleChat ? row.userID : row.groupID;
+      for (final key in [
+        row.conversationID,
+        '${row.conversationType}:$source'
+      ]) {
+        _callbackMessages.remove(key);
+        _callbackMessages[key] = id;
+        if (!_forced.contains(key) && _pendingMessageIDs[key] == id) {
+          _pending.remove(key);
+          _pendingMessageIDs.remove(key);
+        }
+      }
+    }
+    while (_callbackMessages.length > 256) {
+      _callbackMessages.remove(_callbackMessages.keys.first);
+    }
+  }
+
   void discard(ConversationInfo info) {
-    _pending.removeWhere((_, request) =>
-        request.conversationID == info.conversationID ||
-        (request.sessionType == info.conversationType &&
-            request.sourceID ==
-                (info.isSingleChat ? info.userID : info.groupID)));
+    final keys = [
+      info.conversationID,
+      '${info.conversationType}:${info.isSingleChat ? info.userID : info.groupID}'
+    ];
+    for (final key in keys) {
+      _pending.remove(key);
+      _pendingMessageIDs.remove(key);
+      _forced.remove(key);
+      _callbackMessages.remove(key);
+    }
     conversationsChanged([info.conversationID]);
   }
 
@@ -76,6 +113,8 @@ class ConversationLatestSync {
     final requests = _pending.values.take(_batchSize).toList();
     for (final request in requests) {
       _pending.remove(request.key);
+      _pendingMessageIDs.remove(request.key);
+      _forced.remove(request.key);
     }
     _changedDuringRead.clear();
     _running = true;
@@ -124,6 +163,9 @@ class ConversationLatestSync {
     _timer?.cancel();
     _timer = null;
     _pending.clear();
+    _pendingMessageIDs.clear();
+    _callbackMessages.clear();
+    _forced.clear();
     _changedDuringRead.clear();
     _running = false;
   }

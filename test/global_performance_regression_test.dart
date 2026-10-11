@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -243,12 +242,17 @@ void main() {
     final otherAccount = _message('revoked');
     ChatHistoryCache.write('other', 'chat', [otherAccount]);
     im.onRecvMessageRevoked = (_) {
-      expect(ChatHistoryCache.read('self', 'chat').map((m) => m.clientMsgID),
-          ['deleted']);
+      final cached = ChatHistoryCache.read('self', 'chat');
+      expect(cached.map((m) => m.clientMsgID), ['revoked', 'deleted']);
+      expect(cached.first.contentType, MessageType.revokeMessageNotification);
+      expect(cached.first.textElem, isNull);
     };
     im.recvMessageRevoked(RevokedInfo(clientMsgID: 'revoked'));
     im.messageDeleted(_message('deleted'));
-    expect(ChatHistoryCache.read('self', 'chat'), isEmpty);
+    final remaining = ChatHistoryCache.read('self', 'chat');
+    expect(remaining.single.clientMsgID, 'revoked');
+    expect(remaining.single.contentType, MessageType.revokeMessageNotification);
+    expect(remaining.single.textElem, isNull);
     expect(ChatHistoryCache.read('other', 'chat'), [otherAccount]);
   });
 

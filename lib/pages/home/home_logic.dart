@@ -20,6 +20,7 @@ import '../chat/fund/fund_card_state_cache.dart';
 import '../group_features/data/group_feature_runtime.dart';
 import '../mine/secondary/calls/data/call_records_runtime.dart';
 import '../contacts/request_history/data/request_history_store.dart';
+import 'application_badges/application_badge_refresh.dart';
 
 class HomeLogic extends SuperController {
   final pushLogic = Get.find<PushController>();
@@ -41,6 +42,23 @@ class HomeLogic extends SuperController {
   bool _endingSession = false;
   final _sessionAccount = OpenIM.iMManager.userID;
   final _sessionToken = DataSp.chatToken;
+  bool get _badgeSessionCurrent =>
+      !_closed &&
+      !_endingSession &&
+      _sessionAccount == OpenIM.iMManager.userID &&
+      _sessionToken == DataSp.chatToken;
+  late final _friendBadgeRefresh = ApplicationBadgeRefresh(
+    load: _loadUnhandledFriendApplicationCount,
+    isCurrent: () => _badgeSessionCurrent,
+    onError: (error) => Logger.print(
+        'Friend application badge refresh failed: ${error.runtimeType}'),
+  );
+  late final _groupBadgeRefresh = ApplicationBadgeRefresh(
+    load: _loadUnhandledGroupApplicationCount,
+    isCurrent: () => _badgeSessionCurrent,
+    onError: (error) => Logger.print(
+        'Group application badge refresh failed: ${error.runtimeType}'),
+  );
 
   Future<void> endSession(
       {bool invalid = false, bool resetScreenLock = false}) async {
@@ -94,13 +112,15 @@ class HomeLogic extends SuperController {
     });
   }
 
-  void getUnhandledFriendApplicationCount() async {
+  void getUnhandledFriendApplicationCount() => _friendBadgeRefresh.request();
+
+  Future<void> _loadUnhandledFriendApplicationCount() async {
     final owner = OpenIM.iMManager.userID;
     final token = DataSp.chatToken;
     var i = 0;
     var list = await OpenIM.iMManager.friendshipManager
         .getFriendApplicationListAsRecipient();
-    if (_closed ||
+    if (!_badgeSessionCurrent ||
         owner != OpenIM.iMManager.userID ||
         token != DataSp.chatToken) {
       return;
@@ -119,13 +139,15 @@ class HomeLogic extends SuperController {
     unhandledCount.value = unhandledGroupApplicationCount.value + i;
   }
 
-  void getUnhandledGroupApplicationCount() async {
+  void getUnhandledGroupApplicationCount() => _groupBadgeRefresh.request();
+
+  Future<void> _loadUnhandledGroupApplicationCount() async {
     final owner = OpenIM.iMManager.userID;
     final token = DataSp.chatToken;
     var i = 0;
     var list = await OpenIM.iMManager.groupManager
         .getGroupApplicationListAsRecipient();
-    if (_closed ||
+    if (!_badgeSessionCurrent ||
         owner != OpenIM.iMManager.userID ||
         token != DataSp.chatToken) {
       return;
@@ -196,6 +218,8 @@ class HomeLogic extends SuperController {
   @override
   void onClose() {
     _closed = true;
+    _friendBadgeRefresh.close();
+    _groupBadgeRefresh.close();
     ChatHistoryCache.clear();
     FundCardStateCache.shared.clear();
     for (final subscription in _subscriptions) {

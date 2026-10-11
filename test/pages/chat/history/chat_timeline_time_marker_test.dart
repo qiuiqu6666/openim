@@ -67,4 +67,33 @@ void main() {
     expect(second.exMap['showTime'], isNull);
     timeline.close();
   });
+
+  test('receipt refreshes reuse timestamp metadata and changed times repair it',
+      () {
+    final timeline = _timeline();
+    timeline.initialize(prefetch: false);
+    final first = Message(clientMsgID: 'first', sendTime: midday)
+      ..exMap = const {'unrelated': 'keep'};
+    final second = Message(clientMsgID: 'second', sendTime: midday + 360000)
+      ..exMap = const {'unrelated': 'keep'};
+    timeline.messageList.value = [first, second];
+    timeline.indexOfMessage(0);
+    final firstMetadata = first.exMap;
+    final secondMetadata = second.exMap;
+    first.isRead = true;
+    timeline.messageList.refresh();
+    timeline.indexOfMessage(0);
+    expect(identical(first.exMap, firstMetadata), isTrue);
+    expect(identical(second.exMap, secondMetadata), isTrue);
+
+    second.sendTime = midday + 1000;
+    timeline.messageList.refresh();
+    timeline.indexOfMessage(0);
+    expect(identical(first.exMap, firstMetadata), isTrue);
+    expect(second.exMap['showTime'], isNull);
+    expect(second.exMap['unrelated'], 'keep');
+    expect(secondMetadata['showTime'], isTrue,
+        reason: 'A changed divider must not mutate shared metadata snapshots');
+    timeline.close();
+  });
 }

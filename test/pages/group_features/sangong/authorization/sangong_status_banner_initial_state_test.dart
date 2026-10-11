@@ -274,8 +274,12 @@ void main() {
     fixture.snapshotResponse = _idleState;
     await completeSangongRequest(
         tester, fixture.runtime!.realtime.refreshSnapshot());
-    await _flush(tester);
     expect(fixture.api.count('/snapshot'), 2);
+    _expectUpdatedBanner(tester, fixture);
+    // The subsequent animation pumps cross the existing three-second
+    // calibration boundary. Its stale response must not roll back state either.
+    await _flush(tester);
+    expect(fixture.api.count('/snapshot'), 3);
     _expectUpdatedBanner(tester, fixture);
     expect(fixture.api.streamStarts, 0);
     expect(tester.takeException(), isNull);

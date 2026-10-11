@@ -138,12 +138,8 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
       }
       if (_closed) return;
       setState(() => _failed = !ready);
-      if (ready &&
-          hasRemote &&
-          sourceFile == null &&
-          widget.httpHeaders.isEmpty) {
-        unawaited(VideoMediaCache.remember(url));
-      }
+      // Native streaming owns playback. Do not start a second whole-file
+      // download; the iOS compatibility fallback above remains available.
     } catch (error) {
       _logFailure('initialize', error);
       if (mounted && !_closed) setState(() => _failed = true);

@@ -175,6 +175,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('muting 52 and 5 unread groups removes 57 from the retained tab',
+      (tester) async {
+    final first = _row('group-52', unread: 52);
+    final second = _row('group-5', unread: 5);
+    final conversations = _Conversations()..list.addAll([first, second]);
+    await _mountHome(tester, conversations, dark: false);
+    expect(_positiveNavCounts(tester), [57]);
+    first.recvMsgOpt = 2;
+    second.recvMsgOpt = 2;
+    conversations.list.refresh();
+    await tester.pumpAndSettle();
+    expect(_positiveNavCounts(tester), isEmpty);
+    await tester.tap(find.descendant(
+        of: find.byType(BottomNavigationBar), matching: find.text('群聊')));
+    await tester.pumpAndSettle();
+    expect(_positiveNavCounts(tester), isEmpty);
+    expect(first.unreadCount, 52);
+    expect(second.unreadCount, 5);
+    // Subsequent SDK snapshots must keep muted unread out of the badge too.
+    conversations.list.assignAll([
+      _row('group-52', receive: 2, unread: 53),
+      _row('group-5', receive: 2, unread: 6),
+    ]);
+    await tester.pumpAndSettle();
+    expect(_positiveNavCounts(tester), isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final dark in [false, true]) {
     testWidgets('home unread badges follow notification scope ($dark)',
         (tester) async {

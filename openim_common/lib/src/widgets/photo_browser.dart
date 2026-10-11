@@ -16,12 +16,12 @@ import 'package:openim_common/openim_common.dart';
 
 import 'custom_mk_controls.dart';
 import 'photo_browser_hero.dart';
-import 'native_media_video.dart';
 import 'video_media_cache.dart';
 import 'media_preview_glass.dart';
 import 'media_browser/local_media_availability.dart';
 import 'media_browser/media_action_sheet.dart';
 import 'media_browser/media_video_hero.dart';
+import 'media_browser/viewer_image_provider.dart';
 
 export 'media_browser/media_source.dart';
 import 'media_browser/media_grid_thumbnail.dart';
@@ -42,7 +42,10 @@ class MediaBrowser extends StatefulWidget {
     this.onForward,
     this.onDelete,
     this.onViewInChat,
+    this.imageProviderFactory,
   });
+  final ViewerImageProvider Function(String url, int maxPixels)?
+      imageProviderFactory;
   final int initialIndex;
   final List<MediaSource> sources;
   final bool muted;
@@ -68,7 +71,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
   GlobalKey<ExtendedImageSlidePageState> slidePagekey =
       GlobalKey<ExtendedImageSlidePageState>();
 
-  final Set<int> _cachedIndexes = {};
+  final _imageRequests = <String, ViewerImageProvider>{};
   int currentIndex = 0;
   bool _showControls = true;
   bool _showGrid = false;
@@ -95,6 +98,10 @@ class _MediaBrowserState extends State<MediaBrowser> {
     Logger.print('[MediaBrowser] dispose', fileName: 'media_browser.dart');
     _pageController.dispose();
     _localFiles.clear();
+    for (final request in _imageRequests.values) {
+      request.cancel();
+    }
+    _imageRequests.clear();
 
     final previousStyle = _previousSystemUiStyle;
     if (previousStyle != null) {
@@ -108,18 +115,11 @@ class _MediaBrowserState extends State<MediaBrowser> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    unawaited(_preloadImage(currentIndex - 1 < 0 ? 0 : currentIndex - 1));
-    unawaited(_preloadImage(currentIndex + 1));
-  }
-
-  @override
   void didUpdateWidget(covariant MediaBrowser oldWidget) {
     super.didUpdateWidget(oldWidget);
     var unchanged = widget.sources.length == oldWidget.sources.length;
-    for (var index = 0; unchanged && index < widget.sources.length; index++) {
-      unchanged = identical(widget.sources[index], oldWidget.sources[index]);
+    for (var i = 0; unchanged && i < widget.sources.length; i++) {
+      unchanged = identical(widget.sources[i], oldWidget.sources[i]);
     }
     if (unchanged) return;
     _localFiles.invalidateMissing();
@@ -128,43 +128,29 @@ class _MediaBrowserState extends State<MediaBrowser> {
       final old =
           index < oldWidget.sources.length ? oldWidget.sources[index] : null;
       if (old?.file != source.file) {
-        final oldFile = old?.file;
-        if (oldFile != null) _localFiles.invalidate(oldFile.path);
-        final file = source.file;
-        if (file != null) _localFiles.invalidate(file.path);
-      }
-      if (old?.file != source.file ||
-          old?.url != source.url ||
-          old?.thumbnail != source.thumbnail) {
-        _cachedIndexes.remove(index);
+        if (old?.file != null) _localFiles.invalidate(old!.file!.path);
+        if (source.file != null) _localFiles.invalidate(source.file!.path);
       }
     }
-    _cachedIndexes.removeWhere((index) => index >= widget.sources.length);
-    // Source bytes and thumbnails upgrade in place; keep the current page.
+    _retainCurrentRequests();
   }
 
-  Future<void> _preloadImage(int index) async {
-    if (_cachedIndexes.contains(index)) {
-      return;
-    }
-    if (0 <= index && index < widget.sources.length) {
-      final s = widget.sources[index];
-      _cachedIndexes.add(index);
-      if (s.bytes != null ||
-          !s.isVideo && s.file != null && await _localFiles.exists(s.file!)) {
-        return;
-      }
-      if (!mounted ||
-          index >= widget.sources.length ||
-          !identical(s, widget.sources[index])) {
-        return;
-      }
-      final url = s.isVideo ? s.thumbnail : s.url;
-      if (url != null && url.isNotEmpty) {
-        precacheImage(ExtendedNetworkImageProvider(url, cache: true), context);
-      }
+  void _retainCurrentRequests() {
+    final source = widget.sources[currentIndex];
+    final urls = {source.url, source.thumbnail};
+    for (final url in _imageRequests.keys.toList()) {
+      if (!urls.contains(url)) _imageRequests.remove(url)!.cancel();
     }
   }
+
+  ViewerImageProvider _image(String url, {bool thumbnail = false}) =>
+      _imageRequests.putIfAbsent(
+          url,
+          () =>
+              widget.imageProviderFactory
+                  ?.call(url, thumbnail ? 1024 * 1024 : 16 * 1024 * 1024) ??
+              ViewerImageProvider(url,
+                  maxPixels: thumbnail ? 1024 * 1024 : 16 * 1024 * 1024));
 
   @override
   Widget build(BuildContext context) {
@@ -214,13 +200,12 @@ class _MediaBrowserState extends State<MediaBrowser> {
                 onPageChanged: (int page) {
                   setState(() => currentIndex = page);
                   widget.onPageChanged?.call(page);
-                  unawaited(_preloadImage(page - 1));
-                  unawaited(_preloadImage(page + 1));
+                  _retainCurrentRequests();
                 },
                 itemBuilder: (BuildContext context, int index) {
                   final s = widget.sources[index];
 
-                  if (s.isVideo && index != currentIndex) {
+                  if (index != currentIndex) {
                     return const SizedBox.expand();
                   }
                   return s.isVideo
@@ -415,14 +400,14 @@ class _MediaBrowserState extends State<MediaBrowser> {
   }
 
   Widget _buildNetworkImage(MediaSource s) => AdaptiveMediaImage(
-        image: ExtendedNetworkImageProvider(s.url ?? s.thumbnail, cache: true),
+        image: _image(s.url ?? s.thumbnail),
         loadStateChanged: (state) {
           if (state.extendedImageLoadState == LoadState.loading) {
             return Stack(
               alignment: AlignmentDirectional.center,
               children: [
                 AdaptiveMediaImage(
-                  image: ExtendedNetworkImageProvider(s.thumbnail, cache: true),
+                  image: _image(s.thumbnail, thumbnail: true),
                 ),
                 const CupertinoActivityIndicator(
                   radius: 15,
@@ -442,6 +427,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
       currentIndex = index;
       _showGrid = false;
     });
+    _retainCurrentRequests();
     if (_pageController.hasClients) _pageController.jumpToPage(index);
   }
 
@@ -753,13 +739,6 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
       }
       await player.open(Media(source, httpHeaders: widget.httpHeaders),
           play: widget.autoPlay);
-      if (source == url &&
-          url != null &&
-          url.isNotEmpty &&
-          widget.httpHeaders.isEmpty) {
-        unawaited(Future<void>.delayed(
-            const Duration(seconds: 2), () => VideoMediaCache.remember(url)));
-      }
     } catch (_) {
       if (mounted && !_disposed) IMViews.showToast(StrRes.videoPlaybackFailed);
     }

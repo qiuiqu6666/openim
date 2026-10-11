@@ -111,9 +111,12 @@ class _ChatListViewportState extends State<ChatListViewport>
         _restoreAttempts = 0;
       }
     }
-    _updatePartition();
-    final retained = _ids.toSet();
-    _rowStateKeys.removeWhere((id, _) => !retained.contains(id));
+    if (oldWidget.controller != widget.controller ||
+        !listEquals(_ids, widget.messageIDs)) {
+      _updatePartition();
+      final retained = _ids.toSet();
+      _rowStateKeys.removeWhere((id, _) => !retained.contains(id));
+    }
     _schedule();
   }
 

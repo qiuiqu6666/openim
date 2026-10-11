@@ -90,19 +90,23 @@ class _ChatMessageListState extends State<ChatMessageList>
         final slot = anchor == null ? 0 : anchor + (row.beforeAnchor ? 1 : 0);
         (transientSlots[slot] ??= []).add(row);
       }
-      final messageIDs = [
-        for (var index = 0; index <= sdkCount; index++) ...[
-          ...?transientSlots[index]?.map((row) => row.id),
-          if (index < sdkCount) sdkIDs[index],
-        ],
-      ];
+      final messageIDs = latestRows.isEmpty
+          ? sdkIDs
+          : [
+              for (var index = 0; index <= sdkCount; index++) ...[
+                ...?transientSlots[index]?.map((row) => row.id),
+                if (index < sdkCount) sdkIDs[index],
+              ],
+            ];
       final transientByID = {for (final row in latestRows) row.id: row};
       final persistedIDs = sdkIDs.toSet();
       _arrivals.sync(persistedIDs, enabled: motionEnabled);
-      final indices = <String, int>{
-        for (var index = 0; index < count; index++)
-          if (messageIDs[index].isNotEmpty) messageIDs[index]: index,
-      };
+      final indices = latestRows.isEmpty
+          ? sdkIndices
+          : <String, int>{
+              for (var index = 0; index < count; index++)
+                if (messageIDs[index].isNotEmpty) messageIDs[index]: index,
+            };
       return NotificationListener<ScrollNotification>(
         onNotification: logic.onChatScrollNotification,
         child: MessageSelectionDragRegion(

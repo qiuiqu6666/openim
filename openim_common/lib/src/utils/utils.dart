@@ -180,15 +180,16 @@ class IMUtils {
       format = CompressFormat.webp;
     }
 
-    var targetDirectory = await getTempDirectory(name);
-
-    if (file.path == targetDirectory.path) {
-      targetDirectory = await getTempDirectory('compressed-$name');
-    }
+    // A later photo with the same basename may prepare while this one uploads.
+    final cache = await getApplicationCacheDirectory();
+    final targetDirectory = await Directory('${cache.path}/image_compression')
+        .create(recursive: true);
+    final outputDirectory = await targetDirectory.createTemp('image-');
+    final outputPath = '${outputDirectory.path}/$name';
 
     final result = await FlutterImageCompress.compressAndGetFile(
       file.absolute.path,
-      targetDirectory.path,
+      outputPath,
       quality: quality,
       minWidth: 1280,
       minHeight: 720,
@@ -312,13 +313,24 @@ class IMUtils {
     int? lastShowTimeStamp;
     for (final message in list) {
       final milliseconds = message.sendTime;
-      message.exMap = Map<String, dynamic>.of(message.exMap)
-        ..remove('showTime');
-      if (milliseconds == null) continue;
-      if (lastShowTimeStamp == null ||
-          milliseconds - lastShowTimeStamp >=
-              const Duration(minutes: 6).inMilliseconds) {
-        message.exMap['showTime'] = true;
+      final showTime = milliseconds != null &&
+          (lastShowTimeStamp == null ||
+              milliseconds - lastShowTimeStamp >=
+                  const Duration(minutes: 6).inMilliseconds);
+      // Receipts/status updates do not change timestamp boundaries. Retain
+      // their metadata maps instead of allocating one map for every row.
+      if (showTime
+          ? message.exMap['showTime'] != true
+          : message.exMap.containsKey('showTime')) {
+        final metadata = Map<String, dynamic>.of(message.exMap);
+        if (showTime) {
+          metadata['showTime'] = true;
+        } else {
+          metadata.remove('showTime');
+        }
+        message.exMap = metadata;
+      }
+      if (showTime) {
         lastShowTimeStamp = milliseconds;
       }
     }

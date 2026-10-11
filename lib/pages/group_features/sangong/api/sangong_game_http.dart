@@ -144,6 +144,13 @@ class SangongGameHttp {
   // Unconfirmed writes retain their request ID for an explicit user retry.
   // This map belongs to this account/group runtime and is cleared on disposal.
   final pendingCommandIds = <String, String>{};
+
+  /// Confirmed hierarchy/rate writes invalidate loaded team and pending totals.
+  final agentDataRevision = ValueNotifier<int>(0);
+  void agentDataChanged() {
+    if (!_closed) agentDataRevision.value++;
+  }
+
   final tenantIdListenable = ValueNotifier<String?>(null);
   String? get tenantId => tenantIdListenable.value;
   bool get hasTenant => tenantId?.trim().isNotEmpty == true;
@@ -259,5 +266,6 @@ class SangongGameHttp {
     _cancelToken.cancel('Sangong scope disposed');
     client.close(force: true);
     tenantIdListenable.dispose();
+    agentDataRevision.dispose();
   }
 }

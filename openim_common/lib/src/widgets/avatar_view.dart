@@ -84,7 +84,9 @@ class AvatarView extends StatelessWidget {
               : null),
       onLongPress: onLongPress,
       child: builder?.call() ??
-          (nineGridUrl.isNotEmpty ? _nineGridAvatar() : _normalAvatar()),
+          (nineGridUrl.isNotEmpty
+              ? _nineGridAvatar(context)
+              : _normalAvatar(context)),
     );
     return Hero(
       tag: tag,
@@ -97,7 +99,8 @@ class AvatarView extends StatelessWidget {
     );
   }
 
-  Widget _normalAvatar() => !isUrlValid ? _textAvatar() : _networkImageAvatar();
+  Widget _normalAvatar(BuildContext context) =>
+      !isUrlValid ? _textAvatar() : _networkImageAvatar(context);
 
   Widget _textAvatar() => Container(
         width: _avatarSize,
@@ -120,37 +123,47 @@ class AvatarView extends StatelessWidget {
             : Text(_showName!, style: _textStyle, textScaler: textScaler),
       );
 
-  Widget _networkImageAvatar() => file != null
-      ? ImageUtil.fileImage(
-          file: file!,
-          width: _avatarSize,
-          height: _avatarSize,
-          fit: BoxFit.cover,
-          lowMemory: lowMemory,
-          loadProgress: false,
-          errorWidget: _textAvatar(),
-        )
-      : ImageUtil.networkImage(
-          url: url!,
-          width: _avatarSize,
-          height: _avatarSize,
-          fit: BoxFit.cover,
-          lowMemory: lowMemory,
-          loadProgress: false,
-          loadingWidget: showLoadingAvatar ? _textAvatar() : null,
-          errorWidget: _textAvatar(),
-        );
+  Widget _networkImageAvatar(BuildContext context) {
+    final cacheSize = ImageUtil.decodeDimension(
+        _avatarSize, MediaQuery.devicePixelRatioOf(context));
+    return file != null
+        ? ImageUtil.fileImage(
+            file: file!,
+            width: _avatarSize,
+            height: _avatarSize,
+            cacheWidth: cacheSize,
+            cacheHeight: cacheSize,
+            resizePolicy: ResizeImagePolicy.fit,
+            fit: BoxFit.cover,
+            lowMemory: lowMemory,
+            loadProgress: false,
+            errorWidget: _textAvatar(),
+          )
+        : ImageUtil.networkImage(
+            url: url!,
+            width: _avatarSize,
+            height: _avatarSize,
+            cacheWidth: cacheSize,
+            cacheHeight: cacheSize,
+            resizePolicy: ResizeImagePolicy.fit,
+            fit: BoxFit.cover,
+            lowMemory: lowMemory,
+            loadProgress: false,
+            loadingWidget: showLoadingAvatar ? _textAvatar() : null,
+            errorWidget: _textAvatar(),
+          );
+  }
 
-  Widget _nineGridAvatar() => Container(
+  Widget _nineGridAvatar(BuildContext context) => Container(
         width: _avatarSize,
         height: _avatarSize,
         color: Colors.grey[300],
         padding: const EdgeInsets.all(2.0),
         alignment: Alignment.center,
-        child: _nineGridColumn(),
+        child: _nineGridColumn(context),
       );
 
-  Widget _nineGridColumn() {
+  Widget _nineGridColumn(BuildContext context) {
     double width = 0.0;
     double margin = 2.0;
     int row1Length = 0;
@@ -207,6 +220,7 @@ class AvatarView extends StatelessWidget {
     }
     if (row1Length > 0) {
       list.add(_nineGridRow(
+        context,
         length: row1Length,
         start: 0,
         size: width,
@@ -215,6 +229,7 @@ class AvatarView extends StatelessWidget {
     }
     if (row2Length > 0) {
       list.add(_nineGridRow(
+        context,
         length: row2Length,
         start: row1Length,
         size: width,
@@ -223,6 +238,7 @@ class AvatarView extends StatelessWidget {
     }
     if (row3Length > 0) {
       list.add(_nineGridRow(
+        context,
         length: row3Length,
         start: row1Length + row2Length,
         size: width,
@@ -234,13 +250,14 @@ class AvatarView extends StatelessWidget {
     );
   }
 
-  Widget _nineGridRow({
+  Widget _nineGridRow(
+    BuildContext context, {
     required int length,
     required int start,
     required double size,
     required double margin,
   }) {
-    Widget nineGridImage(String? url, double size) => _normalAvatar();
+    Widget nineGridImage(String? url, double size) => _normalAvatar(context);
     Widget nineGridLine({
       double? width,
       double? height,

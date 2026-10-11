@@ -1,3 +1,4 @@
+import 'package:openim_common/src/widgets/media_browser/viewer_image_provider.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -22,6 +23,15 @@ class _ReadyFile extends Fake implements File {
   Future<int> length() async => bytes.length;
   @override
   Future<Uint8List> readAsBytes() async => bytes;
+}
+
+class _ViewerImage extends ViewerImageProvider {
+  _ViewerImage(super.url, this.completer);
+  final ImageStreamCompleter completer;
+  @override
+  ImageStreamCompleter loadImage(
+          ViewerImageProvider key, ImageDecoderCallback decode) =>
+      completer;
 }
 
 void main() {
@@ -120,19 +130,17 @@ void main() {
     const thumbnailUrl = 'https://media.example.test/thumbnail.png';
     final pending = Completer<ImageInfo>();
     final originalProvider =
-        ExtendedNetworkImageProvider(originalUrl, cache: true);
-    originalProvider.imageCache.putIfAbsent(
-        originalProvider, () => OneFrameImageStreamCompleter(pending.future));
-    final thumbnailProvider =
-        ExtendedNetworkImageProvider(thumbnailUrl, cache: true);
-    thumbnailProvider.imageCache.putIfAbsent(
-        thumbnailProvider,
-        () => OneFrameImageStreamCompleter(
+        _ViewerImage(originalUrl, OneFrameImageStreamCompleter(pending.future));
+    final thumbnailProvider = _ViewerImage(
+        thumbnailUrl,
+        OneFrameImageStreamCompleter(
             SynchronousFuture(ImageInfo(image: thumb.clone()))));
 
     await tester.pumpWidget(renderTestHost(MediaBrowser(
       initialIndex: 0,
       sources: [MediaSource(url: originalUrl, thumbnail: thumbnailUrl)],
+      imageProviderFactory: (url, _) =>
+          url == originalUrl ? originalProvider : thumbnailProvider,
     )));
     await tester.pump();
     final preview = tester

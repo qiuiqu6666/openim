@@ -66,12 +66,11 @@ class GroupFeatureStore extends ChangeNotifier {
   final _capabilityErrors = <String, GroupFeatureException>{};
   final _capabilityTokens = <String, CancelToken>{};
   final _requested = <String>{}, _queued = <String>{}, _left = <String>{};
-  // SDK pushes may seed thousands of groups. Only UI consumers need additional
-  // lookups on reconnect; receiving a push does not create a refresh request.
-  final _hydrationTargets = <String>{};
+  // Only live event consumers need calibration on resume/reconnect. Merely
+  // visiting a group must not grow every later refresh for the whole session.
+  final _eventOwners = <String, int>{};
   final _seenEvents = <String>{};
   final _events = StreamController<Map<String, dynamic>>.broadcast();
-  final _groupEvents = <String, Stream<Map<String, dynamic>>>{};
   final _subscriptions = <StreamSubscription>[];
   bool _closed = false, _scheduled = false, _invalidated = false;
   bool _flushing = false, _batching = false, _batchChanged = false;
@@ -106,13 +105,29 @@ class GroupFeatureStore extends ChangeNotifier {
   GroupFeatureException? capabilityError(String id) => _capabilityErrors[id];
   bool capabilitiesLoading(String id) => _pendingCapabilities.containsKey(id);
   Stream<Map<String, dynamic>> events(String id) {
-    if (active && id.isNotEmpty && !_left.contains(id)) {
-      _hydrationTargets.add(id);
-    }
-    return _groupEvents.putIfAbsent(
-        id,
-        () =>
-            _events.stream.where((event) => active && event['groupID'] == id));
+    return Stream<Map<String, dynamic>>.multi((consumer) {
+      if (!active || id.isEmpty) {
+        consumer.close();
+        return;
+      }
+      _eventOwners.update(id, (count) => count + 1, ifAbsent: () => 1);
+      final subscription = _events.stream
+          .where((event) => active && event['groupID'] == id)
+          .listen(consumer.add,
+              onError: consumer.addError, onDone: consumer.close);
+      consumer
+        ..onPause = subscription.pause
+        ..onResume = subscription.resume
+        ..onCancel = () {
+          final count = _eventOwners[id] ?? 0;
+          if (count <= 1) {
+            _eventOwners.remove(id);
+          } else {
+            _eventOwners[id] = count - 1;
+          }
+          return subscription.cancel();
+        };
+    }, isBroadcast: true);
   }
 
   void bindSources(
@@ -149,7 +164,7 @@ class GroupFeatureStore extends ChangeNotifier {
       messages.listen(receiveMessage),
       synced.listen((_) {
         refreshKnownGroups();
-        for (final id in _hydrationTargets) {
+        for (final id in _eventOwners.keys.toList()) {
           if (active && !_left.contains(id)) {
             _events.add({'key': 'imReconnected', 'groupID': id});
           }
@@ -294,7 +309,6 @@ class GroupFeatureStore extends ChangeNotifier {
       if (id == null || id.isEmpty || _left.contains(id)) {
         continue;
       }
-      _hydrationTargets.add(id);
       if (_requested.contains(id)) continue;
       _queued.add(id);
     }
@@ -341,7 +355,7 @@ class GroupFeatureStore extends ChangeNotifier {
 
   void refreshKnownGroups() {
     if (!active) return;
-    final ids = _hydrationTargets.toList();
+    final ids = _eventOwners.keys.where((id) => !_left.contains(id)).toList();
     _requested.removeAll(ids);
     hydrate(ids);
   }
@@ -458,8 +472,10 @@ class GroupFeatureStore extends ChangeNotifier {
     if (!active) return;
     final id = message.groupID;
     if (id == null || id.isEmpty || _left.contains(id)) return;
+    final extra = message.ex;
+    if (extra == null || extra.isEmpty) return;
     try {
-      final metadata = featureMap(jsonDecode(message.ex ?? ''));
+      final metadata = featureMap(jsonDecode(extra));
       final event = featureMap(metadata['sangong']);
       if (event['type'] != 'sangong.event' ||
           event['schemaVersion'] != 2 ||
@@ -510,7 +526,9 @@ class GroupFeatureStore extends ChangeNotifier {
         // Re-delivery can have a new event ID. A version already confirmed by
         // the server does not revoke the current scope or rebuild open routes.
         final confirmed = _capabilities[id];
-        if (version is int && confirmed != null && version <= confirmed.version) {
+        if (version is int &&
+            confirmed != null &&
+            version <= confirmed.version) {
           return;
         }
         if (version is int && version < (_capabilityMinimumVersion[id] ?? 0)) {
@@ -602,7 +620,6 @@ class GroupFeatureStore extends ChangeNotifier {
     _pendingMirrors.remove(id);
     _queued.remove(id);
     _requested.remove(id);
-    _hydrationTargets.remove(id);
     _events.add({
       'key': 'groupFeaturesChanged',
       'groupID': id,
@@ -636,7 +653,6 @@ class GroupFeatureStore extends ChangeNotifier {
     _capabilityMinimumVersion.clear();
     _queued.clear();
     _requested.clear();
-    _hydrationTargets.clear();
     _seenEvents.clear();
     _left.clear();
     if (!_closed) notifyListeners();

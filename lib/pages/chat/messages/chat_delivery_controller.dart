@@ -26,6 +26,7 @@ class ChatDeliveryController {
     Future<FavoriteSendResult> Function(Message, FavoriteTarget)? lookup,
     this.onDeliveryStarted,
     this.onDeliveryFinished,
+    this.onTimelineChanged,
   })  : _conversation = conversation,
         _isClosed = isClosed,
         _groupStatus = groupStatus,
@@ -120,6 +121,8 @@ class ChatDeliveryController {
   // Presentation hooks share delivery across text, attachments and retry.
   final Object? Function(Message, FavoriteTarget)? onDeliveryStarted;
   final void Function(Object?, Message)? onDeliveryFinished;
+  // The route owns automatic-window limits and reading/selection protection.
+  final void Function()? onTimelineChanged;
   final sendStatusSub = PublishSubject<MsgStreamEv<bool>>();
   bool _closed = false;
   bool get isClosed =>
@@ -129,7 +132,10 @@ class ChatDeliveryController {
   String? get groupID => conversationInfo.groupID;
   bool get isSingleChat => userID?.trim().isNotEmpty == true;
 
-  void _completed() => messageList.refresh();
+  void _completed() {
+    onTimelineChanged?.call();
+    messageList.refresh();
+  }
 
   void close() {
     _closed = true;
@@ -207,6 +213,7 @@ class ChatDeliveryController {
             !messageList
                 .any((item) => item.clientMsgID == message.clientMsgID)) {
           messageList.add(message);
+          onTimelineChanged?.call();
         }
         scrollBottom();
       }
