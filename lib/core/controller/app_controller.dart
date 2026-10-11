@@ -173,6 +173,17 @@ class AppController extends GetxController with UpgradeManger {
     );
     if (Platform.isIOS) {
       _iosCallKit = IOSCallKitRuntime(
+        restoreInvitation: (value) =>
+            Get.isRegistered<IMController>() &&
+            Get.find<IMController>().restoreIncomingCall(
+              SignalingInfo(
+                  userID: value.invitation.inviterUserID,
+                  invitation: value.invitation),
+              callerName: value.callerName,
+            ),
+        resolvePeerName: (userID) async => Get.isRegistered<IMController>()
+            ? (await Get.find<IMController>().onSyncUserInfo(userID))?.nickname
+            : null,
         sessionReady: () =>
             !_closed &&
             Get.isRegistered<IMController>() &&

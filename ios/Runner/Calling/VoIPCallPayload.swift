@@ -38,7 +38,7 @@ struct VoIPCallPayload {
         roomID = Self.string(invitation, ["roomID"])
         callerID = Self.string(invitation, ["inviterUserID"])
         let name = Self.string(payload, ["callerName", "displayName"])
-        callerName = name.isEmpty ? callerID : name
+        callerName = name.isEmpty ? "99chat" : name
         let media = Self.string(invitation, ["mediaType"])
         hasVideo = media == "video"
         let invitees = invitation["inviteeUserIDList"] as? [String]

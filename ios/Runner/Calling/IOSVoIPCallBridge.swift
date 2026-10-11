@@ -188,6 +188,13 @@ final class IOSVoIPCallBridge: NSObject, PKPushRegistryDelegate {
             coordinator.startOutgoing(roomID: room, accountID: accountID, sessionKey: sessionKey,
                                       handle: handle, displayName: name.isEmpty ? handle : name,
                                       hasVideo: args["hasVideo"] as? Bool == true) { result(Self.resultError($0)) }
+        case "updateDisplayName":
+            guard matches(args), let room = nonemptyRoom(args),
+                  let record = coordinator.call(roomID: room, accountID: accountID),
+                  record.sessionKey == sessionKey else { result(nil); return }
+            let name = VoIPCallPayload.string(args, ["displayName"])
+            coordinator.updateDisplayName(record, name: name)
+            result(nil)
         case "completeAction":
             guard matches(args), let rawID = args["actionID"] as? String, let id = UUID(uuidString: rawID) else {
                 result(Self.error("session_changed")); return

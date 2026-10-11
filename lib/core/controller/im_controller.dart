@@ -9,6 +9,8 @@ import 'package:openim_common/openim_common.dart';
 import 'package:openim_live/openim_live.dart';
 
 import '../im_callback.dart';
+import '../calling/data/call_signal_persistence.dart';
+import '../calling/data/call_state_heartbeat.dart';
 import '../notifications/legacy_notification_preferences.dart';
 import '../notifications/message_notification_preferences.dart';
 import '../session/sdk_session_queue.dart';
@@ -48,6 +50,14 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   );
 
   @override
+  Future<void> persistSignal(int type, InvitationInfo invitation) =>
+      persistCallSignal(type, invitation);
+
+  @override
+  void onCallReleased(String roomID) =>
+      unawaited(CallStateHeartbeat.finish(roomID));
+
+  @override
   IncomingCallPreferences preferencesForIncomingCall(String accountID) =>
       CallNotificationPreferences.read(accountID);
 
@@ -72,6 +82,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     _callPreferencesBinding.close();
     if (!Get.isRegistered<IMController>() ||
         identical(Get.find<IMController>(), this)) {
+      CallStateHeartbeat.stopAll();
       DeviceSyncRuntime.instance.resetSession();
       ActivityRuntime.instance.resetConnection();
       AccountPrivilegeRuntime.store.reset();

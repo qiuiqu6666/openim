@@ -38,27 +38,50 @@ audio immediately; reactivation resumes only a prepared, still-current room.
 Ending quarantines audio, releases tracks/RTC and then restores global settings.
 Outgoing connected timing starts after the real peer joins and media is ready.
 
-## Current server limit
+## Offline calling contract
 
-The current server has no independent VoIP token binding, VoIP sending or
-authoritative live invitation state. `/me/voip-push-token` and
-`/calls/livekit/status/{callId}` return 404 and are not called. PushKit tokens
-are never uploaded to `/third/set_push_token`: that endpoint stores ordinary
-APNs and sends alert notifications. RTC credentials and completed call history
-cannot prove an invitation is still ringing. Invites use `isOnlineOnly: true`.
+The separate `calling-api` service owns `/calling/*` on the Chat API HTTPS host.
+Every request uses the existing **Chat token** in `token` and a unique
+`operationID`. It does not use the reference app's `/me/voip-push-token` or
+`/calls/livekit/*` paths. Ordinary APNs remains on `/third/set_push_token`.
 
-Online SDK calls can use CallKit, and the native PushKit receiver is installed.
-Terminated/offline incoming delivery still requires backend work. A push alone
-does not authorize RTC acceptance; the client waits briefly for the matching
-live SDK invitation and fails the system answer if none arrives. It never
-replaces missing original invite time with receipt time or replays completed
-call records.
+| Method | Path | Body / purpose |
+| --- | --- | --- |
+| POST | `/calling/voip/register` | `deviceID`, hexadecimal `token`, `bundleID`, `environment` (`production` / `development`) |
+| POST | `/calling/voip/unregister` | `deviceID`; removal is scoped to the authenticated account and session |
+| POST | `/calling/invite` | `deviceID`, original `invitation`; validates caller, friendship and blocks, persists state and queues VoIP |
+| POST | `/calling/status` | `callID`; only the two participants may read state |
+| POST | `/calling/action` | `callID`, `deviceID`, `action` (`accept`, `reject`, `cancel`, `hangup`), original `invitation` for cancellation races |
 
-To finish offline calling, add separate device/VoIP token binding and removal,
-APNs `voip` sending with the signed bundle's `.voip` topic, and participant-
-authorized call state synchronized with invite/accept/reject/cancel/hangup.
-Return original deadlines and answered/cancelled/ended state. Cold recovery
-should use that real contract after it exists.
+Responses use `{ "errCode": 0, "data": ... }`. Call data contains `state`,
+`recipientUserID`, server-resolved `callerName` / `calleeName`, `invitation`,
+`expiresAt`, `updatedAt` and `answeredDeviceID` after acceptance. States are
+`ringing`, `accepted`, `rejected`, `cancelled`, `ended`, `expired`.
+HTTP 200 alone is not success. A competing answer/terminal-state conflict uses
+`errCode: 409`; a missing legacy call uses `errCode: 404`.
+
+The existing OpenIM 200–204 signals and RTC room are retained. Updated Android
+and iOS callers persist transitions before sending their SDK signals. Active Android and iOS calls renew the server
+lease every 10 seconds; a 45-second lease releases abandoned calls after both
+processes disappear. A
+cancel-before-invite tombstone prevents late HTTP completion resurrecting a call.
+An old caller can still make an online SDK call, but cannot start offline VoIP:
+both sides must use the updated app for the complete offline flow.
+
+On iOS, native PushKit reports CallKit immediately with the pushed nickname.
+After authenticated SDK startup, `IOSVoIPBackend` queries server state and
+restores only a matching, unexpired, ringing invitation. Push JSON alone never
+authorizes answering. The existing media owner handles permissions, RTC joining,
+CallKit audio and signaling. Status polling closes cancelled/expired/answered-
+elsewhere system surfaces. Profile lookup updates the system name asynchronously;
+the placeholder is `99chat`, not an internal IM ID.
+
+Token binding is serialized against logout, tied to installation/account/session,
+and separate from ordinary APNs. The backend rechecks token revocation before
+sending, uses the actual signing environment, and never sends VoIP pushes to
+cancel calls. APNs uses the `.voip` topic, push type `voip`, priority 10 and
+expiration 0. The Redis outbox retries transient failures within the original
+ringing deadline and deduplicates successful device deliveries.
 
 The canonical invitation prepared by the client is:
 
@@ -79,9 +102,8 @@ The canonical invitation prepared by the client is:
 ```
 
 `initiateTime` is original Unix milliseconds (SDK seconds are normalized);
-`timeout` is 1–120 seconds. This is a prospective push payload contract, not a
-claim that the current server sends it. Cold acceptance still requires state
-verification.
+`timeout` is 1–120 seconds. This is the server push payload contract. Cold acceptance still requires
+participant-authorized state verification.
 
 ## Native bridge and verification
 
@@ -90,21 +112,25 @@ event draining, token/state reads, incoming/outgoing reporting, answer/mute
 transactions, action completion, connected status, speaker routing, audio gating,
 end and explicit audio release. Business operations carry `sessionKey` and
 `roomID`; completion carries real `actionID`. Token metadata includes
-`voipToken`, `bundleId`, `apsEnvironment`, `voipTopic`; no token is persisted or
-logged. Action/ringing/connection deadlines remain active without Flutter.
+`voipToken`, `bundleId`, `apsEnvironment`, `voipTopic`; the native token is kept
+in memory and bound to the backend, and is never logged. Action/ringing/connection deadlines remain active without Flutter.
 Info includes `voip`, `audio` and `remote-notification`; existing APNs signing
 entitlement remains necessary.
 
 Flutter tests cover headless connection order, failures/cancellation, media
 cleanup, account changes, action deduplication, audio gating, mute/speaker and
-ordinary APNs. Windows cannot compile/sign Runner or verify actual delivery.
+ordinary APNs. Linux cannot compile/sign Runner or verify actual iPhone delivery.
 
 On macOS, install pods and build the signed iPhone target. Verify foreground
 and locked-background online calls; answer/reject/hangup from both surfaces;
 permission denial; Bluetooth/speaker routing; audio interruption; logout/account
 switch during connection; duplicate/expired/wrong-account pushes; delayed SDK
-startup. Verify killed/offline calls after backend VoIP/state deployment using
-the signed APNs environment and `.voip` topic.
+startup. Verify killed/offline calls with the newly signed app and deployed service using
+the matching APNs environment and `.voip` topic. A previously installed app must
+log in once after upgrade to register its independent PushKit token. TestFlight
+uses production; a development-signed build needs the development environment.
+Actual delivery and launch remain subject to iOS, network and device conditions;
+server acceptance is not proof of a displayed or answered call.
 
 Apple references: [VoIP push handling](https://developer.apple.com/documentation/pushkit/responding-to-voip-notifications-from-pushkit),
 [CallKit audio activation](https://developer.apple.com/documentation/callkit/cxproviderdelegate/provider(_:didactivate:)),

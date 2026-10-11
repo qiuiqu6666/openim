@@ -8,7 +8,13 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:openim_live/openim_live.dart';
 
-class _Live extends Object with OpenIMLive {}
+class _Live extends Object with OpenIMLive {
+  Future<void> Function(int, InvitationInfo)? persist;
+  @override
+  Future<void> persistSignal(int type, InvitationInfo invitation) async {
+    await persist?.call(type, invitation);
+  }
+}
 
 SignalingInfo _signal(String room,
         {String inviter = 'alice',
@@ -155,6 +161,39 @@ void main() {
         native.where(
             (call) => call.method == 'insertSingleMessageToLocalStorage'),
         hasLength(1));
+  });
+
+  test('server transition completes before sending the OpenIM terminal signal',
+      () async {
+    final signal = _signal('room_backend');
+    live.receiveNewInvitation(signal);
+    final gate = Completer<void>();
+    live.persist = (type, invitation) async {
+      expect(type, CustomMessageType.callingReject);
+      expect(invitation.roomID, 'room_backend');
+      await gate.future;
+    };
+    final ending = live.onTapReject(signal);
+    await _flush();
+    expect(sends(), isEmpty);
+    gate.complete();
+    await ending;
+    expect(sends(), hasLength(1));
+  });
+
+  test('account change during server transition suppresses the old SDK signal',
+      () async {
+    final signal = _signal('room_backend');
+    live.receiveNewInvitation(signal);
+    final gate = Completer<void>();
+    live.persist = (_, __) => gate.future;
+    final ending = live.onTapReject(signal);
+    await _flush();
+    OpenIM.iMManager.userID = 'charlie';
+    gate.complete();
+    await ending;
+    expect(sends(), isEmpty);
+    expect(records, isEmpty);
   });
 
   test('callee timeout rejects to inviter using 202', () async {

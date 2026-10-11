@@ -74,7 +74,7 @@ final class CallKitCallCoordinator: NSObject, CXProviderDelegate {
     func reportIncoming(_ payload: VoIPCallPayload, sessionKey: String,
                         usable: Bool, mustReportDuplicate: Bool = false, completion: @escaping (Error?) -> Void) {
         if usable, let existing = call(roomID: payload.roomID, accountID: payload.accountID) {
-            if !mustReportDuplicate { completion(nil); return }
+            if !mustReportDuplicate { updateDisplayName(existing, name: payload.callerName); completion(nil); return }
             // Every legacy PushKit delivery must call report, including repeats.
             // Reusing the UUID cannot create another business call or end this one.
             let duplicate = CXCallUpdate()
@@ -157,6 +157,13 @@ final class CallKitCallCoordinator: NSObject, CXProviderDelegate {
                 completion(nil)
             }
         }
+    }
+
+    func updateDisplayName(_ record: CallKitCallRecord, name: String) {
+        guard records[record.uuid] === record, !name.isEmpty else { return }
+        let update = CXCallUpdate()
+        update.localizedCallerName = name
+        provider.reportCall(with: record.uuid, updated: update)
     }
 
     func markConnected(_ record: CallKitCallRecord) {

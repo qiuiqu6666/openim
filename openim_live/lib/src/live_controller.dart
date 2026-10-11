@@ -65,7 +65,21 @@ mixin OpenIMLive {
 
   /// The application must verify a pushed invitation before calling this.
   /// Online SDK invitations already use the same admission checks below.
-  bool restoreIncomingCall(SignalingInfo verified) => _admitIncoming(verified);
+  bool restoreIncomingCall(SignalingInfo verified, {String? callerName}) {
+    final caller = verified.invitation?.inviterUserID;
+    _bindAccount(OpenIM.iMManager.userID);
+    if (caller != null && callerName?.trim().isNotEmpty == true) {
+      _peerProfiles[caller] =
+          UserInfo(userID: caller, nickname: callerName!.trim());
+    }
+    return _admitIncoming(verified);
+  }
+
+  @protected
+  Future<void> persistSignal(int type, InvitationInfo invitation) async {}
+
+  @protected
+  void onCallReleased(String roomID) {}
 
   /// Applications supply account-local storage through this package boundary.
   @protected
@@ -519,6 +533,12 @@ mixin OpenIMLive {
     final receiver = invitation.inviterUserID == owner
         ? invitation.inviteeUserIDList!.first
         : invitation.inviterUserID!;
+    await persistSignal(type, invitation);
+    if (owner != OpenIM.iMManager.userID ||
+        _liveClosed ||
+        generation != _sessionGeneration) {
+      throw const CallRequestCancelled();
+    }
     final message = await OpenIM.iMManager.messageManager.createCustomMessage(
       data: encodeCallSignal(type, invitation, terminalState: terminalState),
       extension: '',
@@ -728,6 +748,7 @@ mixin OpenIMLive {
   void _releaseRoom(SignalingInfo signal) {
     final room = signal.invitation?.roomID;
     if (room == null) return;
+    onCallReleased(room);
     _guard.release(room);
     if (_activeSignal?.invitation?.roomID != room) return;
     _activeSignal = null;
