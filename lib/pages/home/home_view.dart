@@ -13,6 +13,7 @@ import '../wallet/wallet_tab_shell.dart';
 import '../wallet/entry/wallet_entry_coordinator.dart';
 import 'home_logic.dart';
 import 'glass_bottom_nav_bar.dart';
+import 'navigation/home_navigation_tokens.dart';
 import '../../widgets/theme_aware_page.dart';
 import '../../core/controller/im_controller.dart';
 import '../../core/controller/app_controller.dart';
@@ -307,6 +308,7 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: PersistentTabView(
         controller: _tabController,
+        navBarHeight: HomeNavigationTokens.height,
         tabs: _tabs(context),
         onTabChanged: (index) {
           _activeTabIndex.value = index;
@@ -315,15 +317,25 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         navBarBuilder: (config) => ValueListenableBuilder<int>(
             valueListenable: _editBarRevision,
-            builder: (_, __, ___) =>
-                (config.selectedIndex < 2
-                    ? _conversationEditBars[config.selectedIndex == 1]
-                    : null) ??
-                GlassBottomNavBar(
-                  config: config,
-                  onItemSelected: (index) =>
-                      _selectMainTab(index, config.onItemSelected),
-                )),
+            builder: (context, __, ___) {
+              final editBar = config.selectedIndex < 2
+                  ? _conversationEditBars[config.selectedIndex == 1]
+                  : null;
+              if (editBar != null) {
+                // Keep the same viewport when navigation becomes edit actions.
+                // The action bar itself consumes the bottom safe area once.
+                return SizedBox(
+                  height: HomeNavigationTokens.height +
+                      MediaQuery.paddingOf(context).bottom,
+                  child: editBar,
+                );
+              }
+              return GlassBottomNavBar(
+                config: config,
+                onItemSelected: (index) =>
+                    _selectMainTab(index, config.onItemSelected),
+              );
+            }),
         navBarOverlap: const NavBarOverlap.full(),
         screenTransitionAnimation: const ScreenTransitionAnimation.none(),
       ),

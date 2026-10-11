@@ -5,6 +5,7 @@ import 'package:openim_live/src/signaling/call_ringtone.dart';
 class WaitingTonePlayerProbe implements CallRingtonePlayer {
   final assets = <(String, String)>[];
   final prepared = <CallWaitingTone>[];
+  final systemAudioPreparations = <bool>[];
   final volumes = <double>[];
   final playback = <Completer<void>>[];
   Completer<void>? prepareGate, loadGate;
@@ -12,8 +13,9 @@ class WaitingTonePlayerProbe implements CallRingtonePlayer {
   bool failLoadOnce = false, failPlayback = false;
 
   @override
-  Future<void> prepare(CallWaitingTone tone) async {
+  Future<void> prepare(CallWaitingTone tone, {bool systemAudio = false}) async {
     prepared.add(tone);
+    systemAudioPreparations.add(systemAudio);
     await prepareGate?.future;
   }
 

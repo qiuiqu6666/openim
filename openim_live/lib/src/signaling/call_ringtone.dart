@@ -16,7 +16,7 @@ enum CallWaitingTone {
 
 /// A playback boundary for cancellation tests without opening native audio.
 abstract interface class CallRingtonePlayer {
-  Future<void> prepare(CallWaitingTone tone);
+  Future<void> prepare(CallWaitingTone tone, {bool systemAudio = false});
   Future<void> setAsset(String asset, {required String package});
   Future<void> setLooping();
   Future<void> setVolume(double volume);
@@ -34,7 +34,7 @@ class _NativeCallRingtonePlayer implements CallRingtonePlayer {
   );
 
   @override
-  Future<void> prepare(CallWaitingTone tone) async {
+  Future<void> prepare(CallWaitingTone tone, {bool systemAudio = false}) async {
     if (Platform.isAndroid) {
       // This affects only this player. RTC still owns focus and speaker route;
       // the OS selects the volume stream for communication signalling usage.
@@ -44,7 +44,7 @@ class _NativeCallRingtonePlayer implements CallRingtonePlayer {
             ? AndroidAudioUsage.voiceCommunicationSignalling
             : AndroidAudioUsage.notificationRingtone,
       ));
-    } else if (Platform.isIOS) {
+    } else if (Platform.isIOS && !systemAudio) {
       // Activate without configuring category/mode or deactivating on stop.
       // The room keeps ownership of its microphone, receiver and Bluetooth.
       if (!await AVAudioSession().setActive(true)) {
@@ -86,7 +86,12 @@ class CallRingtone {
   bool _disposed = false;
   CallWaitingTone? _wanted;
 
-  Future<void> play({CallWaitingTone tone = CallWaitingTone.incoming}) {
+  /// [systemAudio] means CallKit has already activated the call's session.
+  /// Playback must preserve that owner's activation, category and route.
+  Future<void> play({
+    CallWaitingTone tone = CallWaitingTone.incoming,
+    bool systemAudio = false,
+  }) {
     if (_disposed || _wanted == tone) return _operation;
     _wanted = tone;
     final generation = ++_generation;
@@ -97,7 +102,7 @@ class CallRingtone {
         final player = _player ??= _createPlayer();
         await player.stop();
         if (!_current(generation)) return;
-        await player.prepare(tone);
+        await player.prepare(tone, systemAudio: systemAudio);
         if (!_current(generation)) return;
         await player.setAsset(tone.asset, package: tone.package);
         if (!_current(generation)) return;

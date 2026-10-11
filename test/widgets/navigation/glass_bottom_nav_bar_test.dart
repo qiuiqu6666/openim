@@ -81,10 +81,10 @@ void main() {
             of: find.byType(GlassBottomNavBar),
             matching: find.byType(LiquidGlassSurface));
         expect(tester.getRect(find.byType(GlassBottomNavBar)),
-            const Rect.fromLTWH(0, 722, 375, 90));
-        expect(tester.getRect(surface), const Rect.fromLTWH(12, 722, 351, 56));
+            const Rect.fromLTWH(0, 714, 375, 98));
+        expect(tester.getRect(surface), const Rect.fromLTWH(12, 714, 351, 64));
         final material = tester.widget<LiquidGlassSurface>(surface);
-        expect(material.borderRadius, BorderRadius.circular(28));
+        expect(material.borderRadius, BorderRadius.circular(32));
         expect(material.opacity, brightness == Brightness.dark ? .40 : .44);
         expect(material.preferLiquid, isTrue);
         expect(tester.getRect(find.byType(BottomNavigationBar)).bottom, 778);
@@ -143,7 +143,7 @@ void main() {
         await tester.pump();
         expect(tester.getRect(selection), initialSelection,
             reason: 'Reduced motion selects the destination in one frame.');
-        expect(tester.getRect(surface).height, 56);
+        expect(tester.getRect(surface).height, 64);
         expect(tester.takeException(), isNull);
       });
     }

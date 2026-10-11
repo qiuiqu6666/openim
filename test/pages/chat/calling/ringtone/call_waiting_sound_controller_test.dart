@@ -13,16 +13,21 @@ import 'package:openim/pages/chat/calling/preferences/call_notification_preferen
 import 'package:openim_common/openim_common.dart';
 import 'package:openim_common/src/utils/http_util.dart' as http;
 import 'package:openim_live/openim_live.dart';
+import 'package:openim_live/src/pages/single/room.dart';
 import 'package:openim_live/src/signaling/call_ringtone.dart';
 import 'package:openim_live/src/widgets/incoming_call/incoming_call_view.dart';
 import 'package:openim_live/src/pages/single/widgets/controls.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/waiting_system_call.dart';
 import 'support/waiting_tone_player.dart';
 
 class _Live extends Object with OpenIMLive {
   _Live(this.sound);
   final CallRingtone sound;
+  SystemCallAdapter? system;
+  @override
+  SystemCallAdapter? get systemCallAdapter => system;
   IncomingCallPreferences Function(String)? preferences;
   @override
   CallRingtone get callRingtone => sound;
@@ -159,14 +164,18 @@ void main() {
     Get.reset();
   });
 
-  Future<void> mountHost(WidgetTester tester) async {
+  Future<void> mountHost(WidgetTester tester, {bool system = false}) async {
     // Bind the real Navigator explicitly for the controller's Get context.
     final navigator = GlobalKey<NavigatorState>();
     Get.addKey(navigator);
-    await tester.pumpWidget(MaterialApp(
+    final host = MaterialApp(
       navigatorKey: navigator,
       home: const Scaffold(body: Text('existing chat')),
-    ));
+    );
+    await tester.pumpWidget(system
+        ? ScreenUtilInit(
+            designSize: const Size(375, 812), builder: (_, __) => host)
+        : host);
     await tester.pump();
     expect(Get.key.currentState, isNotNull);
     expect(Get.overlayContext, isNotNull);
@@ -186,6 +195,71 @@ void main() {
         inviteeUserIDList: ['bob']);
     expect(live.isBusy, isTrue);
   }
+
+  for (final response in [
+    CallState.beAccepted,
+    CallState.beRejected,
+    CallState.cancel,
+    CallState.timeout,
+  ]) {
+    testWidgets(
+        'system outgoing ringback starts after audio and stops on $response',
+        (tester) async {
+      live.system = WaitingSystemCallProbe();
+      await mountHost(tester, system: true);
+      await tester.runAsync(() async => beginUnMountedCall());
+      await tester.pump();
+      final waiting = tester
+          .widget<SingleRoomView>(find.byType(SingleRoomView))
+          .owner!
+          .onWaitingAccept!;
+      await tester.runAsync(() async {
+        await live.onDialSingle(_signal());
+        await flushWaitingToneTasks();
+        expect(player.starts, 0, reason: 'CallKit must activate audio first');
+        // The owner emits this only after waitForAudio and media.publish;
+        // single_call_owner_test covers that native activation boundary.
+        waiting();
+        waiting();
+        await flushWaitingToneTasks();
+        expect(player.starts, 1);
+        expect(player.prepared, [CallWaitingTone.outgoing]);
+        expect(player.systemAudioPreparations, [true]);
+        switch (response) {
+          case CallState.beAccepted:
+            live.inviteeAccepted(_signal(actor: 'bob'));
+            break;
+          case CallState.beRejected:
+            live.inviteeRejected(_signal(actor: 'bob'));
+            break;
+          case CallState.cancel:
+            await live.onTapCancel(_signal());
+            break;
+          case CallState.timeout:
+            await live.onTimeoutCancelled(_signal());
+            break;
+          default:
+            throw StateError('Unexpected response');
+        }
+        await flushWaitingToneTasks();
+        expect(player.playback.single.isCompleted, isTrue);
+        waiting();
+        await flushWaitingToneTasks();
+        expect(player.starts, 1, reason: 'Late media callbacks cannot restart');
+      });
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(() => live.endLiveSession(notifyPeer: false));
+    });
+  }
+
+  test('system incoming ringing is left to CallKit', () async {
+    live.system = WaitingSystemCallProbe();
+    OpenIM.iMManager.userID = 'bob';
+    live.receiveNewInvitation(_signal());
+    await flushWaitingToneTasks();
+    expect(player.starts, 0);
+    expect(player.assets, isEmpty);
+  });
 
   testWidgets('invite and credentials succeed before outgoing waiting sound',
       (tester) async {

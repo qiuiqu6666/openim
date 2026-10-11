@@ -38,6 +38,24 @@ audio immediately; reactivation resumes only a prepared, still-current room.
 Ending quarantines audio, releases tracks/RTC and then restores global settings.
 Outgoing connected timing starts after the real peer joins and media is ready.
 
+CallKit supplies incoming ringing, but the app plays the outgoing waiting tone
+using the existing `CallRingtone` player and bundled ringback asset. For system
+calls, credential completion does not start the player: `SingleCallOwner` first
+waits for native audio activation and media publication, then emits
+`onWaitingAccept`. The player receives `systemAudio: true` and does not activate
+or reconfigure `AVAudioSession`. Acceptance, rejection, cancellation, timeout,
+logout and disposal retain the existing stop and stale-callback guards.
+
+The 2026-10-11 regression reproduced silent outgoing calls with a system adapter:
+the old controller rejected every tone whenever CallKit was present. Coverage
+now distinguishes incoming system ringing from app-owned outgoing ringback,
+checks the activation boundary and terminal callbacks, and preserves the
+existing non-system calling path. Device audibility, silent-switch behavior,
+receiver/speaker/Bluetooth routing and iOS builds still require an iPhone/macOS.
+Validation: all 241 tests in `test/pages/chat/calling` and
+`test/core/calling/ios` passed. Targeted analysis reported no errors or warnings;
+the controller retains six pre-existing brace-style information messages.
+
 ## Offline calling contract
 
 The separate `calling-api` service owns `/calling/*` on the Chat API HTTPS host.

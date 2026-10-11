@@ -188,6 +188,7 @@ class _Fixture {
         log.add('signal-ended');
       },
       onClosed: () => closes++,
+      onWaitingAccept: () => waiting++,
     );
   }
 
@@ -202,6 +203,7 @@ class _Fixture {
   Object? certificateError;
   bool current = true, permissionAllowed = true;
   int closes = 0;
+  int waiting = 0;
 
   Future<void> dispose() async {
     for (final barrier in [
@@ -328,6 +330,35 @@ void main() {
     await _drain();
     expect(fixture.media.publications, 1);
     expect(fixture.adapter.connected, 1);
+  });
+
+  test('outgoing waiting callback requires native activation and media readiness',
+      () async {
+    final fixture = _Fixture(incoming: false);
+    addTearDown(fixture.dispose);
+    final dialing = fixture.owner.start();
+    await _drain();
+    expect(fixture.log, contains('wait-audio'));
+    expect(fixture.waiting, 0);
+    fixture.adapter.audio.complete();
+    await dialing;
+    expect(fixture.media.ready, isTrue);
+    expect(fixture.waiting, 1);
+    await fixture.owner.start();
+    expect(fixture.waiting, 1);
+  });
+
+  test('cancelled outgoing audio wait cannot emit a late waiting callback',
+      () async {
+    final fixture = _Fixture(incoming: false);
+    addTearDown(fixture.dispose);
+    final dialing = fixture.owner.start();
+    await _drain();
+    expect(fixture.log, contains('wait-audio'));
+    await fixture.owner.end();
+    await dialing;
+    expect(fixture.media.publications, 0);
+    expect(fixture.waiting, 0);
   });
 
   test('permission failure does not fetch credentials, join, or fulfill',

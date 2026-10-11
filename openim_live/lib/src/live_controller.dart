@@ -424,9 +424,12 @@ mixin OpenIMLive {
     final certificate = await requestRtcCertificate(
         signal.invitation!.roomID!, _owner(signal)!);
     _ensureCurrent(signal);
-    // Permissions precede onDialSingle; do not ring until invite delivery and
-    // credentials succeed. Audio loading must never hold up media connection.
-    _run(_playSound(signal, outgoing: true));
+    // In-app calls can ring as soon as invite delivery and credentials succeed.
+    // CallKit must activate its audio first; SingleCallOwner invokes
+    // onWaitingAccept after waitForAudio and media publication complete.
+    if (systemCallAdapter == null) {
+      _run(_playSound(signal, outgoing: true));
+    }
     return certificate;
   }
 
@@ -662,7 +665,9 @@ mixin OpenIMLive {
   }
 
   Future<void> _playSound(SignalingInfo signal, {bool outgoing = false}) async {
-    if (systemCallAdapter != null ||
+    final systemAudio = systemCallAdapter != null;
+    // CallKit supplies the incoming ring, while outgoing ringback is ours.
+    if ((systemAudio && !outgoing) ||
         _liveClosed ||
         _liveClosing ||
         _activeSignal?.invitation?.roomID != signal.invitation?.roomID ||
@@ -682,7 +687,9 @@ mixin OpenIMLive {
     }
     try {
       await callRingtone.play(
-          tone: outgoing ? CallWaitingTone.outgoing : CallWaitingTone.incoming);
+        tone: outgoing ? CallWaitingTone.outgoing : CallWaitingTone.incoming,
+        systemAudio: systemAudio,
+      );
     } catch (error) {
       Logger.print('Call ring unavailable: ${error.runtimeType}');
     }

@@ -198,8 +198,8 @@ void main() {
           matching: find.byType(LiquidGlassSurface));
       expect(bar.bottom, 812);
       expect(tester.getRect(surface),
-          Rect.fromLTWH(bar.left + 12, bar.top, bar.width - 24, 56));
-      expect(bar.height, kBottomNavigationBarHeight + 34);
+          Rect.fromLTWH(bar.left + 12, bar.top, bar.width - 24, 64));
+      expect(bar.height, 64 + 34);
       expect(tester.getRect(find.byType(BottomNavigationBar)).bottom, 812 - 34);
     }
   });
@@ -251,8 +251,8 @@ void main() {
               brightness: brightness, platform: platform, scale: scale);
           final bar = tester.getRect(find.byType(GlassBottomNavBar));
           final capsule = tester.getRect(_bottomSurface());
-          expect(bar, const Rect.fromLTWH(0, 722, 375, 90));
-          expect(capsule, const Rect.fromLTWH(12, 722, 351, 56));
+          expect(bar, const Rect.fromLTWH(0, 714, 375, 98));
+          expect(capsule, const Rect.fromLTWH(12, 714, 351, 64));
           expect(
               tester
                   .widget<BottomNavigationBar>(find.byType(BottomNavigationBar))
@@ -394,15 +394,26 @@ void main() {
     }
   });
 
-  testWidgets('landscape, large text and reduced motion do not overflow',
+  testWidgets('phone/tablet sizes, large text and reduced motion do not overflow',
       (tester) async {
-    await pumpNavigation(tester,
-        size: const Size(812, 375), scale: 2, reducedMotion: true);
-    expect(tester.takeException(), isNull);
-    for (final widget in tester.widgetList<AnimatedContainer>(find.descendant(
-        of: find.byType(GlassBottomNavBar),
-        matching: find.byType(AnimatedContainer)))) {
-      expect(widget.duration, Duration.zero);
+    for (final size in [
+      const Size(320, 568),
+      const Size(430, 932),
+      const Size(812, 375),
+      const Size(768, 1024),
+      const Size(1024, 768),
+    ]) {
+      await pumpNavigation(tester,
+          size: size, scale: 3, reducedMotion: true);
+      expect(tester.takeException(), isNull);
+      expect(tester.getRect(_bottomSurface()).height, 64);
+      for (final widget in tester.widgetList<AnimatedContainer>(find.descendant(
+          of: find.byType(GlassBottomNavBar),
+          matching: find.byType(AnimatedContainer)))) {
+        expect(widget.duration, Duration.zero);
+      }
+      await _exportNavigation(tester,
+          'home-glass-${size.width.toInt()}x${size.height.toInt()}-text3');
     }
   });
 

@@ -79,6 +79,17 @@ void main() {
     expect(creations, 1);
   });
 
+  test('system ringback retains external audio ownership only for that call',
+      () async {
+    await ringtone.play(tone: CallWaitingTone.outgoing, systemAudio: true);
+    expect(player.systemAudioPreparations, [true]);
+    expect(player.starts, 1);
+    await ringtone.stop();
+    await ringtone.play(tone: CallWaitingTone.outgoing);
+    expect(player.systemAudioPreparations, [true, false]);
+    expect(player.starts, 2);
+  });
+
   test('stop before setup never creates a native player', () async {
     final pending = ringtone.play(tone: CallWaitingTone.outgoing);
     await ringtone.stop();

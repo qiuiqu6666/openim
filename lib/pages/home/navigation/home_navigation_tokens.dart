@@ -3,11 +3,12 @@ import 'package:openim_common/openim_common.dart';
 
 /// Home-only glass styling; shared headers keep their existing material.
 abstract final class HomeNavigationTokens {
-  static const height = kBottomNavigationBarHeight;
+  // Give the icon + label capsule breathing room above the system safe area.
+  static const height = 64.0;
   static const inset = NavigationGlassTokens.inset;
-  static const radius = NavigationGlassTokens.radius;
+  static const radius = height / 2;
   static const selectionInset = AppTokens.s2;
-  static const labelSize = 11.0;
+  static const labelSize = 12.0;
 
   static double opacity(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark ? .40 : .44;
