@@ -111,6 +111,7 @@ class ChatItemView extends StatefulWidget {
     this.onVisibleTrulyText,
     this.onFailedToResend,
     this.onClickItemView,
+    this.onTapQuotedMessage,
     this.onVoicePlayed,
     this.voicePlayback,
     this.voiceTranscription,
@@ -167,6 +168,7 @@ class ChatItemView extends StatefulWidget {
   final Function()? onLongPressRightAvatar;
   final Function(String? text)? onVisibleTrulyText;
   final Function()? onClickItemView;
+  final ValueChanged<Message>? onTapQuotedMessage;
   final List<PopMenuInfo> messageMenus;
   final ValueChanged<
           ({String userID, String name, String? faceURL, String? groupID})>
@@ -401,6 +403,9 @@ class _ChatItemViewState extends State<ChatItemView> {
         children: [
           ChatQuoteCard(
             message: quoted,
+            onTap: quoted == null || widget.onTapQuotedMessage == null
+                ? null
+                : () => widget.onTapQuotedMessage!(quoted),
             bubbleColor: _isISend
                 ? ChatBubbleTokens.outgoing(
                     dark: Theme.of(context).brightness == Brightness.dark)

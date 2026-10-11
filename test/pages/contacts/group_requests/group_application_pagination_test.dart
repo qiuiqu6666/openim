@@ -102,9 +102,12 @@ void main() {
     expect(fixture.recipientReplies, hasLength(1));
     fixture.holdRecipient = false;
     fixture.recipient = [for (var i = 100; i > 55; i--) request(time: i)];
-    await fixture.refresh(tester, logic);
+    final refreshed = logic.getApplicationList();
+    await tester.pump();
     fixture.recipientReplies.single
         .complete(jsonEncode([request(time: 25).toJson()]));
+    await tester.pumpAndSettle();
+    await refreshed;
     await stale;
     expect(logic.list.map((row) => row.reqTime),
         [for (var i = 100; i > 80; i--) i]);

@@ -9,4 +9,11 @@
 
 `RequestHistoryStore` 仍是当前账号下的本地记录清理，不删除好友/群关系，不调用参考仓库的腾讯申请接口。群通知保持原分页、重试、事件刷新和账号/token 防护。
 
+## 首屏加载
+
+- `data/request_list_cache.dart` 保存当前账号/token 的 30 秒内存快照，每类最多 100 条；群页只缓存首批 20 条。读出时重新过滤本地删除/清空标记，后台仍查询 SDK，快照不能启用尚未初始化的分页游标。账号或 token 改变后不复用旧快照。
+- `data/request_load_coordinator.dart` 合并进行中的读取；期间收到通知只排队一次最新刷新，过期响应不覆盖新状态，关闭页面后不再发起排队请求。分页和刷新共享队列。
+- 两个页面在初始化时立即开始读列表。新的朋友首屏为空时可先显示先返回的一侧申请；群通知发布列表后，邀请人群资料与用户资料并行补齐，不阻塞列表可用状态。后台资料响应仍检查账号、token、关闭及刷新版本。
+- `[FriendRequests][recipient/applicant/load]` 和 `[GroupRequests][list/profiles]` 记录读取耗时与数量，不记录账号、token、昵称、申请内容。列表首屏与补资料的时间分开观察。
+
 测试：`test/pages/contacts/{friend_requests,group_requests,request_history}/`。覆盖批量删除、刷新不复活、切换账号、来源标签、真实群/用户头像字段、时间格式、亮暗主题、小屏和双倍字号。设置 `EXPORT_REQUEST_HISTORY_PREVIEW=1` 运行 `request_history_pages_test.dart` 可在 Windows 使用微软雅黑导出 `artifacts/request-history-*.png`。

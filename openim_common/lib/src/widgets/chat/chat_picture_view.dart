@@ -101,10 +101,10 @@ class _ChatPictureViewState extends State<ChatPictureView> {
     final sourceSize = ChatPictureQuality.sourceSize(picture);
     final width = sourceSize.width;
     final height = sourceSize.height;
-    // Landscape attachments need room for their content; keep portrait/long
+    // Square and landscape attachments need room for their content; keep portrait/long
     // images compact and preserve explicit sizing used by conversation peeks.
     final limit =
-        (widget.maxDisplayWidth ?? (width > height ? 120.w : pictureWidth))
+        (widget.maxDisplayWidth ?? (width >= height ? 120.w : pictureWidth))
             .clamp(0.0, constraints.maxWidth);
     var displayWidth = width < limit ? width : limit;
     var displayHeight = displayWidth * height / width;

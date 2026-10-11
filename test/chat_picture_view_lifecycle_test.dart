@@ -38,6 +38,39 @@ class _FailedImageState implements ExtendedImageState {
 }
 
 void main() {
+  for (final screenWidth in [320.0, 375.0]) {
+    testWidgets('square pictures enlarge within available width $screenWidth',
+        (tester) async {
+      tester.view.physicalSize = Size(screenWidth, 812);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      for (final limit in [200.0, 80.0]) {
+        final message = Message()
+          ..pictureElem =
+              PictureElem(sourcePicture: PictureInfo(width: 800, height: 800));
+        await tester.pumpWidget(MaterialApp(
+            builder: (context, child) {
+              ScreenUtil.init(context, designSize: const Size(375, 812));
+              return child!;
+            },
+            home: Scaffold(
+                body: SizedBox(
+                    width: limit,
+                    child:
+                        ChatPictureView(message: message, isISend: false)))));
+        final expected = (120 * screenWidth / 375).clamp(0.0, limit);
+        expect(
+            find.descendant(
+                of: find.byType(ChatPictureView),
+                matching: find.byWidgetPredicate((widget) =>
+                    widget is SizedBox &&
+                    widget.width == expected &&
+                    widget.height == expected)),
+            findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    });
+  }
   testWidgets('failed thumbnail falls back to distinct unmodified sources',
       (tester) async {
     const original = 'https://example.test/original?signature=a%2Bb';

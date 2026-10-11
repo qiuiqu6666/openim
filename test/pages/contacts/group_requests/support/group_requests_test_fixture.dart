@@ -10,14 +10,14 @@ import 'package:get/get.dart';
 import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/pages/contacts/group_requests/group_requests_logic.dart';
 import 'package:openim/pages/home/home_logic.dart';
+import 'package:openim/pages/contacts/request_history/data/request_list_cache.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class GroupRequestsIM extends GetxController implements IMController {
   @override
-  final groupApplicationChangedSubject =
-      PublishSubject<GroupApplicationInfo>();
+  final groupApplicationChangedSubject = PublishSubject<GroupApplicationInfo>();
 
   @override
   void onClose() {
@@ -65,12 +65,16 @@ class GroupRequestsFixture {
   final home = GroupRequestsHome();
   final calls = <MethodCall>[];
   final recipientReplies = <Completer<String>>[];
+  final profileReplies = <Completer<String>>[];
+  final memberReplies = <Completer<String>>[];
   List<GroupApplicationInfo> recipient = [];
   List<GroupApplicationInfo> applicant = [];
   final profiles = <String, String?>{};
   bool failProfiles = false;
   bool failApplications = false;
   bool holdRecipient = false;
+  bool holdProfiles = false;
+  bool holdMembers = false;
   PlatformException? writeError;
   void Function()? onWrite;
 
@@ -78,6 +82,7 @@ class GroupRequestsFixture {
       calls.where((call) => call.method == method).toList();
 
   Future<void> initialize() async {
+    RequestListCache.shared.clear();
     Get.reset();
     Get.testMode = true;
     SharedPreferences.setMockInitialValues({});
@@ -109,9 +114,20 @@ class GroupRequestsFixture {
         case 'getGroupApplicationListAsApplicant':
           return _page(applicant, call);
         case 'getJoinedGroupList':
+          return '[]';
         case 'getGroupMembersInfo':
+          if (holdMembers) {
+            final reply = Completer<String>();
+            memberReplies.add(reply);
+            return reply.future;
+          }
           return '[]';
         case 'getUsersInfo':
+          if (holdProfiles) {
+            final reply = Completer<String>();
+            profileReplies.add(reply);
+            return reply.future;
+          }
           if (failProfiles) {
             throw PlatformException(
                 code: 'NETWORK', message: 'Profile offline');
@@ -165,7 +181,11 @@ class GroupRequestsFixture {
   }
 
   Future<void> dispose() async {
-    for (final reply in recipientReplies) {
+    for (final reply in [
+      ...recipientReplies,
+      ...profileReplies,
+      ...memberReplies
+    ]) {
       if (!reply.isCompleted) reply.complete('[]');
     }
     await LoadingView.singleton.dismiss();

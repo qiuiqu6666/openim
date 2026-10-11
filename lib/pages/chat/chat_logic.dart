@@ -1,4 +1,6 @@
 import 'navigation/chat_entry_trace.dart';
+import 'messages/quote/chat_quote_navigation.dart';
+import 'media/chat_media_message_locator.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -497,6 +499,24 @@ class ChatLogic extends SuperController {
     return _messageFocus.focus(message);
   }
 
+  late final _quoteNavigation = ChatQuoteNavigation(
+    findMessage: (id) => ChatMediaMessageLocator.findStoredMessage(
+        conversationID: conversationInfo.conversationID, clientMsgID: id),
+    focusMessage: focusSearchMessage,
+    isAvailable: (message) =>
+        isCurrentChat(message) &&
+        !_removedMessageIDs.contains(message.clientMsgID) &&
+        message.contentType != MessageType.revokeMessageNotification,
+    showFeedback: IMViews.showToast,
+  );
+
+  Future<bool> openQuotedMessage(BuildContext context, Message message) {
+    final route = ModalRoute.of(context);
+    return _quoteNavigation.open(message,
+        isCurrent: () =>
+            context.mounted && !_sessionInactive && route?.isCurrent == true);
+  }
+
   late final _dateJump = ChatDateJumpController(
     conversationID: () => conversationInfo.conversationID,
     isClosed: () => _sessionInactive,
@@ -801,8 +821,8 @@ class ChatLogic extends SuperController {
     faceUrl.value = conversationInfo.faceURL ?? '';
     _appearance.initialize();
     _setSdkSyncDataListener();
-    unawaited(onScrollToBottomLoad().whenComplete(
-        () => entryTrace?.mark('initial_history_finished')));
+    unawaited(onScrollToBottomLoad()
+        .whenComplete(() => entryTrace?.mark('initial_history_finished')));
 
     conversationSub = imLogic.conversationChangedSubject.listen((value) {
       final obj = value.firstWhereOrNull(
@@ -1024,7 +1044,8 @@ class ChatLogic extends SuperController {
   Future<void> onTapTransfer() => _funds.openSend(isRedPacket: false);
 
   void parseClickEvent(Message msg) async {
-    Logger.print('parseClickEvent type:${msg.contentType} id:${msg.clientMsgID}',
+    Logger.print(
+        'parseClickEvent type:${msg.contentType} id:${msg.clientMsgID}',
         onlyConsole: true);
     if (msg.contentType == MessageType.custom) {
       final fund = fundMessageData(msg);

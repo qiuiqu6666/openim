@@ -333,16 +333,17 @@ void main() {
     await tester.pump(const Duration(milliseconds: 2));
     final second = logic.getApplicationList();
     await tester.pump(const Duration(milliseconds: 2));
+    expect(fixture.recipientReplies, hasLength(1));
+    fixture.recipientReplies[0].complete(jsonEncode([
+      request(result: 1, handler: 'old-admin').toJson(),
+    ]));
+    await tester.pumpAndSettle();
     expect(fixture.recipientReplies, hasLength(2));
     fixture.recipientReplies[1].complete(jsonEncode([
       request(result: -1, handler: 'new-admin').toJson(),
     ]));
     await tester.pumpAndSettle();
     await second;
-    fixture.recipientReplies[0].complete(jsonEncode([
-      request(result: 1, handler: 'old-admin').toJson(),
-    ]));
-    await tester.pumpAndSettle();
     await first;
 
     expect(logic.list.single.handleResult, -1);

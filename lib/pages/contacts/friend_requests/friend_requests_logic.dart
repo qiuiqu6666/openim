@@ -8,6 +8,8 @@ import 'package:openim_common/openim_common.dart';
 import '../../../core/controller/im_controller.dart';
 import '../../home/home_logic.dart';
 import '../request_history/data/request_history_store.dart';
+import '../request_history/data/request_list_cache.dart';
+import '../request_history/data/request_load_coordinator.dart';
 import '../request_history/navigation/request_history_chat_opener.dart';
 
 class FriendRequestsLogic extends GetxController {
@@ -25,6 +27,7 @@ class FriendRequestsLogic extends GetxController {
   late final _history =
       RequestHistoryStore(_ownerAccount, RequestHistoryKind.friend);
   int _loadVersion = 0;
+  final _loads = RequestLoadCoordinator();
   late StreamSubscription faSub;
 
   bool get isSessionActive =>
@@ -97,6 +100,7 @@ class FriendRequestsLogic extends GetxController {
       if (!isSessionActive) return;
       applicationList.removeWhere((item) => !_visible(item));
       _retainSelection();
+      _cacheRows();
       homeLogic.getUnhandledFriendApplicationCount();
     } catch (_) {
       if (isSessionActive) IMViews.showToast('requestHistoryCleanupFailed'.tr);
@@ -107,37 +111,75 @@ class FriendRequestsLogic extends GetxController {
 
   @override
   void onInit() {
+    applicationList.assignAll(RequestListCache.shared
+        .read(_ownerAccount, _ownerToken, RequestHistoryKind.friend,
+            FriendApplicationInfo.fromJson)
+        .where(_visible));
     faSub = imLogic.friendApplicationChangedSubject.listen((value) {
-      loadRequests();
+      loadRequests(refreshAfter: true);
     });
     super.onInit();
-  }
-
-  @override
-  void onReady() {
-    loadRequests();
-    super.onReady();
+    unawaited(loadRequests());
   }
 
   @override
   void onClose() {
+    _loads.close();
     _loadVersion++;
     faSub.cancel();
     homeLogic.getUnhandledFriendApplicationCount();
     super.onClose();
   }
 
-  Future<void> loadRequests() async {
+  Future<void> loadRequests({bool refreshAfter = false}) {
+    if (refreshAfter && _loads.busy) _loadVersion++;
+    return _loads.run(_loadRequests, refreshAfter: refreshAfter);
+  }
+
+  void _cacheRows() {
     if (!isSessionActive) return;
+    RequestListCache.shared.save(_ownerAccount, _ownerToken,
+        RequestHistoryKind.friend, applicationList.map((row) => row.toJson()));
+  }
+
+  Future<void> _loadRequests() async {
+    if (!isSessionActive) return;
+    final watch = Stopwatch()..start();
     final version = ++_loadVersion;
     loading.value = true;
     loadFailed.value = false;
     try {
+      final showPartial = applicationList.isEmpty;
+      final partial = <FriendApplicationInfo>[];
+      List<FriendApplicationInfo> preview(List<FriendApplicationInfo> rows) {
+        if (showPartial && isSessionActive && version == _loadVersion) {
+          partial.addAll(rows);
+          partial
+              .sort((a, b) => (b.createTime ?? 0).compareTo(a.createTime ?? 0));
+          final seen = <String>{};
+          applicationList.assignAll(partial.where((row) =>
+              _visible(row) && seen.add(RequestHistoryEntry.friend(row).id)));
+        }
+        return rows;
+      }
+
       final list = await Future.wait([
         OpenIM.iMManager.friendshipManager
-            .getFriendApplicationListAsRecipient(),
+            .getFriendApplicationListAsRecipient()
+            .then((rows) {
+          Logger.print(
+              '[FriendRequests][recipient] elapsedMs=${watch.elapsedMilliseconds} rows=${rows.length}',
+              onlyConsole: true);
+          return preview(rows);
+        }),
         OpenIM.iMManager.friendshipManager
-            .getFriendApplicationListAsApplicant(),
+            .getFriendApplicationListAsApplicant()
+            .then((rows) {
+          Logger.print(
+              '[FriendRequests][applicant] elapsedMs=${watch.elapsedMilliseconds} rows=${rows.length}',
+              onlyConsole: true);
+          return preview(rows);
+        }),
       ]);
       if (!isSessionActive || version != _loadVersion) return;
 
@@ -148,23 +190,28 @@ class FriendRequestsLogic extends GetxController {
 
       allList.sort((a, b) => (b.createTime ?? 0).compareTo(a.createTime ?? 0));
 
-      var haveReadList = DataSp.getHaveReadUnHandleFriendApplication();
-      haveReadList ??= <String>[];
+      final haveReadList =
+          DataSp.getHaveReadUnHandleFriendApplication()?.toSet() ?? <String>{};
       for (var e in list[0]) {
         var id = IMUtils.buildFriendApplicationID(e);
         if (!haveReadList.contains(id)) {
           haveReadList.add(id);
         }
       }
-      DataSp.putHaveReadUnHandleFriendApplication(haveReadList);
+      DataSp.putHaveReadUnHandleFriendApplication(haveReadList.toList());
       final seen = <String>{};
       applicationList.assignAll(allList.where((item) =>
           _visible(item) && seen.add(RequestHistoryEntry.friend(item).id)));
       _retainSelection();
+      _cacheRows();
     } catch (_) {
       if (isSessionActive && version == _loadVersion) loadFailed.value = true;
     } finally {
       if (isSessionActive && version == _loadVersion) loading.value = false;
+      Logger.print(
+          '[FriendRequests][load] elapsedMs=${watch.elapsedMilliseconds} '
+          'rows=${applicationList.length} failed=${loadFailed.value}',
+          onlyConsole: true);
     }
   }
 
@@ -180,6 +227,7 @@ class FriendRequestsLogic extends GetxController {
     if (isSessionActive && result is int) {
       info.handleResult = result;
       applicationList.refresh();
+      _cacheRows();
     }
   }
 

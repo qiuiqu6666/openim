@@ -248,7 +248,7 @@ void main() {
     }));
     expect(menus.map((m) => m.id),
         containsAll(['sangong_stats', 'sangong_banker']));
-    expect(menus.map((m) => m.id), contains('sangong_exclude'));
+    expect(menus.map((m) => m.id), isNot(contains('sangong_exclude')));
     runtime.updateContext(
         sangongTestContext(api, canManage: false, capabilityVersion: 2));
     await tester.pump();

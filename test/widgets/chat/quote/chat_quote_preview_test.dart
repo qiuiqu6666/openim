@@ -44,6 +44,40 @@ void main() {
     Get.reset();
   });
 
+  for (final outgoing in [false, true]) {
+    for (final mention in [false, true]) {
+      testWidgets(
+          'quote tap routes original outgoing=$outgoing mention=$mention',
+          (tester) async {
+        final original = markdownMessage('原消息', id: 'target');
+        final reply = mention
+            ? markdownMessage('回复正文',
+                type: MessageType.atText,
+                outgoing: outgoing,
+                extra: {
+                    'atTextElem': {
+                      'text': '回复正文',
+                      'quoteMessage': original.toJson(),
+                    }
+                  })
+            : _reply(original, outgoing: outgoing);
+        Message? tapped;
+        var bodyTaps = 0;
+        await mountMarkdown(
+            tester,
+            ChatItemView(
+                message: reply,
+                onTapUserProfile: (_) {},
+                onClickItemView: () => bodyTaps++,
+                onTapQuotedMessage: (message) => tapped = message));
+        await tester.tap(find.byType(ChatQuoteCard));
+        await tester.pump();
+        expect(tapped?.clientMsgID, 'target');
+        expect(bodyTaps, 0);
+      });
+    }
+  }
+
   test('quote summaries preserve message types and packet remarks', () {
     final packet = markdownMessage('', type: MessageType.custom, extra: {
       'customElem': {

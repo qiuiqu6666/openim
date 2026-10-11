@@ -10,6 +10,8 @@ import '../../../core/controller/im_controller.dart';
 import '../../home/home_logic.dart';
 import 'pagination/group_application_pager.dart';
 import '../request_history/data/request_history_store.dart';
+import '../request_history/data/request_list_cache.dart';
+import '../request_history/data/request_load_coordinator.dart';
 import '../request_history/navigation/request_history_chat_opener.dart';
 
 class GroupRequestsLogic extends GetxController {
@@ -35,6 +37,8 @@ class GroupRequestsLogic extends GetxController {
       RequestHistoryStore(_ownerAccount, RequestHistoryKind.group);
   StreamSubscription<GroupApplicationInfo>? _applicationSubscription;
   int _loadGeneration = 0;
+  int _profileGeneration = 0;
+  final _loads = RequestLoadCoordinator();
 
   bool get isSessionActive =>
       !isClosed &&
@@ -60,6 +64,7 @@ class GroupRequestsLogic extends GetxController {
       await save();
       if (!isSessionActive) return;
       list.removeWhere((item) => !_visible(item));
+      _cacheRows();
       if (clearAll) {
         hasMore.value = false;
         refreshController.loadNoData();
@@ -75,23 +80,24 @@ class GroupRequestsLogic extends GetxController {
   }
 
   @override
-  void onReady() {
-    reloadApplications();
-    getJoinedGroup();
-    super.onReady();
-  }
-
-  @override
   void onInit() {
+    list.assignAll(RequestListCache.shared
+        .read(_ownerAccount, _ownerToken, RequestHistoryKind.group,
+            GroupApplicationInfo.fromJson)
+        .where(_visible));
     _applicationSubscription =
         imLogic.groupApplicationChangedSubject.listen((info) {
       reloadApplications();
     });
     super.onInit();
+    unawaited(reloadApplications());
+    getJoinedGroup();
   }
 
   @override
   void onClose() {
+    if (applicationsLoaded.value) _cacheRows();
+    _loads.close();
     _loadGeneration++;
     _applicationSubscription?.cancel();
     refreshController.dispose();
@@ -124,9 +130,30 @@ class GroupRequestsLogic extends GetxController {
     }
   }
 
-  Future<void> getApplicationList({bool loadMore = false}) async {
+  Future<void> getApplicationList({bool loadMore = false}) {
+    if (!loadMore && _loads.busy) {
+      _loadGeneration++;
+      _profileGeneration++;
+    }
+    return _loads.run(() => _loadApplications(loadMore: loadMore),
+        refreshAfter: !loadMore);
+  }
+
+  void _cacheRows() {
+    if (!isSessionActive) return;
+    RequestListCache.shared.save(
+        _ownerAccount,
+        _ownerToken,
+        RequestHistoryKind.group,
+        list.take(GroupApplicationPager.pageSize).map((row) => row.toJson()));
+  }
+
+  Future<void> _loadApplications({bool loadMore = false}) async {
     if (!isSessionActive || (loadMore && (_loading || !hasMore.value))) return;
+    final watch = Stopwatch()..start();
     final generation = ++_loadGeneration;
+    final profileGeneration =
+        loadMore ? _profileGeneration : ++_profileGeneration;
     _loading = true;
     loadingMore.value = loadMore;
     if (!loadMore) applicationsLoaded.value = false;
@@ -139,7 +166,6 @@ class GroupRequestsLogic extends GetxController {
             : GroupApplicationPager.pageSize);
     final account = OpenIM.iMManager.userID;
     final token = DataSp.chatToken;
-    var profileLookup = 'not_needed';
     List<GroupApplicationInfo> lastPage = [];
     bool reachedClearBoundary() => lastPage
         .any((item) => _history.isCleared(RequestHistoryEntry.group(item)));
@@ -164,74 +190,15 @@ class GroupRequestsLogic extends GetxController {
         if (!isCurrent()) return allList;
         allList.sort((a, b) => (b.reqTime ?? 0).compareTo(a.reqTime ?? 0));
 
-        var map = <String, List<String>>{};
-        final profileIDs = <String>{};
-
-        var haveReadList = DataSp.getHaveReadUnHandleGroupApplication();
-        haveReadList ??= <String>[];
+        final haveReadList =
+            DataSp.getHaveReadUnHandleGroupApplication()?.toSet() ?? <String>{};
         for (var a in candidate.receivedIn(allList)) {
           var id = IMUtils.buildGroupApplicationID(a);
           if (!haveReadList.contains(id)) {
             haveReadList.add(id);
           }
         }
-        DataSp.putHaveReadUnHandleGroupApplication(haveReadList);
-
-        for (var a in allList) {
-          final handlerID = _handlerUserID(a);
-          if (handlerID != null) profileIDs.add(handlerID);
-          if (isInvite(a) && IMUtils.isNotNullEmptyStr(a.groupID)) {
-            if (!map.containsKey(a.groupID)) {
-              map[a.groupID!] = [a.inviterUserID!];
-            } else {
-              if (!map[a.groupID!]!.contains(a.inviterUserID!)) {
-                map[a.groupID!]!.add(a.inviterUserID!);
-              }
-            }
-            profileIDs.add(a.inviterUserID!);
-          }
-        }
-
-        if (map.isNotEmpty) {
-          try {
-            final members = await Future.wait(map.entries.map((e) => OpenIM
-                .iMManager.groupManager
-                .getGroupMembersInfo(groupID: e.key, userIDList: e.value)));
-            if (isCurrent()) {
-              if (!loadMore) memberList.clear();
-              for (final member in members.expand((group) => group)) {
-                memberList.removeWhere((old) =>
-                    old.groupID == member.groupID &&
-                    old.userID == member.userID);
-                memberList.add(member);
-              }
-            }
-          } catch (error) {
-            Logger.print(
-                'Group application member lookup failed: ${error.runtimeType}');
-          }
-        }
-
-        if (!isCurrent()) return allList;
-        if (profileIDs.isNotEmpty) {
-          try {
-            final profiles = await OpenIM.iMManager.userManager
-                .getUsersInfo(userIDList: profileIDs.toList());
-            profileLookup = 'succeeded';
-            if (isCurrent()) {
-              if (!loadMore) userInfoList.clear();
-              for (final profile in profiles.map((e) => e.simpleUserInfo)) {
-                userInfoList.removeWhere((old) => old.userID == profile.userID);
-                userInfoList.add(profile);
-              }
-            }
-          } catch (error) {
-            profileLookup = 'failed';
-            // Profile availability must not hide the application's actual result.
-            Logger.print(
-                'Group application user lookup failed: ${error.runtimeType}');
-          }
-        }
+        DataSp.putHaveReadUnHandleGroupApplication(haveReadList.toList());
 
         return allList;
       }
@@ -255,6 +222,10 @@ class GroupRequestsLogic extends GetxController {
         _loading = false;
         loadingMore.value = false;
       }
+      Logger.print(
+          '[GroupRequests][list] elapsedMs=${watch.elapsedMilliseconds} '
+          'loadMore=$loadMore failed=${applicationsLoadFailed.value}',
+          onlyConsole: true);
     }
 
     if (isCurrent()) {
@@ -266,39 +237,114 @@ class GroupRequestsLogic extends GetxController {
         refreshController.refreshCompleted(resetFooterState: true);
       }
       applicationsLoaded.value = true;
+      _cacheRows();
       hasMore.value = candidate.hasMore && !reachedClearBoundary();
       if (hasMore.value) {
         refreshController.loadComplete();
       } else {
         refreshController.loadNoData();
       }
-      final processed = list
-          .where((item) => item.handleResult == 1 || item.handleResult == -1);
-      final namedIDs = userInfoList
-          .where((user) => IMUtils.isNotNullEmptyStr(user.nickname?.trim()))
-          .map((user) => user.userID)
-          .toSet();
-      var missingID = 0;
-      var missingNickname = 0;
-      var resolved = 0;
-      for (final item in processed) {
-        final handlerID = _handlerUserID(item);
-        if (handlerID == null) {
-          missingID++;
-        } else if (!namedIDs.contains(handlerID)) {
-          missingNickname++;
+      unawaited(_loadProfiles(
+          list,
+          () => isSessionActive && profileGeneration == _profileGeneration,
+          generation));
+    }
+  }
+
+  Future<void> _loadProfiles(List<GroupApplicationInfo> allList,
+      bool Function() isCurrent, int generation) async {
+    final watch = Stopwatch()..start();
+    final map = <String, List<String>>{};
+    final profileIDs = <String>{};
+    var profileLookup = 'not_needed';
+    for (var a in allList) {
+      final handlerID = _handlerUserID(a);
+      if (handlerID != null) profileIDs.add(handlerID);
+      if (isInvite(a) && IMUtils.isNotNullEmptyStr(a.groupID)) {
+        if (!map.containsKey(a.groupID)) {
+          map[a.groupID!] = [a.inviterUserID!];
         } else {
-          resolved++;
+          if (!map[a.groupID!]!.contains(a.inviterUserID!)) {
+            map[a.groupID!]!.add(a.inviterUserID!);
+          }
+        }
+        profileIDs.add(a.inviterUserID!);
+      }
+    }
+
+    Future<void> loadMembers() async {
+      if (map.isNotEmpty) {
+        try {
+          final members = await Future.wait(map.entries.map((e) => OpenIM
+              .iMManager.groupManager
+              .getGroupMembersInfo(groupID: e.key, userIDList: e.value)));
+          if (isCurrent()) {
+            for (final member in members.expand((group) => group)) {
+              memberList.removeWhere((old) =>
+                  old.groupID == member.groupID && old.userID == member.userID);
+              memberList.add(member);
+            }
+          }
+        } catch (error) {
+          Logger.print(
+              'Group application member lookup failed: ${error.runtimeType}');
         }
       }
-      Logger.print(
-        '[GroupRequests][handler] load=$generation '
-        'processed=${missingID + missingNickname + resolved} '
-        'missingHandlerID=$missingID missingNickname=$missingNickname '
-        'resolved=$resolved profileLookup=$profileLookup',
-        onlyConsole: true,
-      );
     }
+
+    Future<void> loadUsers() async {
+      if (profileIDs.isNotEmpty) {
+        try {
+          final profiles = await OpenIM.iMManager.userManager
+              .getUsersInfo(userIDList: profileIDs.toList());
+          profileLookup = 'succeeded';
+          if (isCurrent()) {
+            for (final profile in profiles.map((e) => e.simpleUserInfo)) {
+              userInfoList.removeWhere((old) => old.userID == profile.userID);
+              userInfoList.add(profile);
+            }
+          }
+        } catch (error) {
+          profileLookup = 'failed';
+          // Profile availability must not hide the application's actual result.
+          Logger.print(
+              'Group application user lookup failed: ${error.runtimeType}');
+        }
+      }
+    }
+
+    await Future.wait([loadMembers(), loadUsers()]);
+    if (!isCurrent()) return;
+    final processed = allList
+        .where((item) => item.handleResult == 1 || item.handleResult == -1);
+    final namedIDs = userInfoList
+        .where((user) => IMUtils.isNotNullEmptyStr(user.nickname?.trim()))
+        .map((user) => user.userID)
+        .toSet();
+    var missingID = 0;
+    var missingNickname = 0;
+    var resolved = 0;
+    for (final item in processed) {
+      final handlerID = _handlerUserID(item);
+      if (handlerID == null) {
+        missingID++;
+      } else if (!namedIDs.contains(handlerID)) {
+        missingNickname++;
+      } else {
+        resolved++;
+      }
+    }
+    Logger.print(
+      '[GroupRequests][handler] load=$generation '
+      'processed=${missingID + missingNickname + resolved} '
+      'missingHandlerID=$missingID missingNickname=$missingNickname '
+      'resolved=$resolved profileLookup=$profileLookup',
+      onlyConsole: true,
+    );
+
+    Logger.print(
+        '[GroupRequests][profiles] elapsedMs=${watch.elapsedMilliseconds}',
+        onlyConsole: true);
   }
 
   void getJoinedGroup() {
@@ -363,6 +409,7 @@ class GroupRequestsLogic extends GetxController {
     if (isSessionActive && result is int) {
       info.handleResult = result;
       list.refresh();
+      _cacheRows();
     }
   }
 }

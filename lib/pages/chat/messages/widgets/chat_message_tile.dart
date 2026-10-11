@@ -81,6 +81,8 @@ class ChatMessageTile extends StatelessWidget {
   Widget _buildItemView(BuildContext context, Message message) => ChatItemView(
         key: logic.itemKey(message),
         message: message,
+        onTapQuotedMessage: (quoted) =>
+            logic.openQuotedMessage(context, quoted),
         isStickerMedia: isStickerVideoMessage(message),
         textScaleFactor: logic.scaleFactor.value,
         allAtMap: logic.getAtMapping(message),
