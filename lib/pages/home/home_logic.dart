@@ -19,6 +19,7 @@ import '../../widgets/screen_lock_title.dart';
 import '../chat/fund/fund_card_state_cache.dart';
 import '../group_features/data/group_feature_runtime.dart';
 import '../mine/secondary/calls/data/call_records_runtime.dart';
+import '../contacts/request_history/data/request_history_store.dart';
 
 class HomeLogic extends SuperController {
   final pushLogic = Get.find<PushController>();
@@ -94,13 +95,21 @@ class HomeLogic extends SuperController {
   }
 
   void getUnhandledFriendApplicationCount() async {
+    final owner = OpenIM.iMManager.userID;
+    final token = DataSp.chatToken;
     var i = 0;
     var list = await OpenIM.iMManager.friendshipManager
         .getFriendApplicationListAsRecipient();
-    if (_closed) return;
+    if (_closed ||
+        owner != OpenIM.iMManager.userID ||
+        token != DataSp.chatToken) {
+      return;
+    }
+    final history = RequestHistoryStore(owner, RequestHistoryKind.friend);
     final haveReadList =
         DataSp.getHaveReadUnHandleFriendApplication()?.toSet() ?? <String>{};
     for (var info in list) {
+      if (history.isHidden(RequestHistoryEntry.friend(info))) continue;
       var id = IMUtils.buildFriendApplicationID(info);
       if (!haveReadList.contains(id)) {
         if (info.handleResult == 0) i++;
@@ -111,13 +120,21 @@ class HomeLogic extends SuperController {
   }
 
   void getUnhandledGroupApplicationCount() async {
+    final owner = OpenIM.iMManager.userID;
+    final token = DataSp.chatToken;
     var i = 0;
     var list = await OpenIM.iMManager.groupManager
         .getGroupApplicationListAsRecipient();
-    if (_closed) return;
+    if (_closed ||
+        owner != OpenIM.iMManager.userID ||
+        token != DataSp.chatToken) {
+      return;
+    }
+    final history = RequestHistoryStore(owner, RequestHistoryKind.group);
     final haveReadList =
         DataSp.getHaveReadUnHandleGroupApplication()?.toSet() ?? <String>{};
     for (var info in list) {
+      if (history.isHidden(RequestHistoryEntry.group(info))) continue;
       var id = IMUtils.buildGroupApplicationID(info);
       if (!haveReadList.contains(id)) {
         if (info.handleResult == 0) i++;

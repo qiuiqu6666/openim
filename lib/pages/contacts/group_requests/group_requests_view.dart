@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:pull_to_refresh_new/pull_to_refresh.dart';
@@ -10,6 +11,9 @@ import 'group_requests_logic.dart';
 import 'pagination/group_application_footer.dart';
 import 'widgets/group_request_handler_label.dart';
 import '../empty/contact_list_placeholder.dart';
+import '../request_history/data/request_history_store.dart';
+import '../request_history/widgets/request_history_app_bar.dart';
+import '../request_history/widgets/request_history_swipe_row.dart';
 
 class GroupRequestsPage extends StatelessWidget {
   final logic = Get.find<GroupRequestsLogic>();
@@ -18,43 +22,57 @@ class GroupRequestsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: TitleBar.back(
-        title: StrRes.newGroupRequest,
-        backIconColor: Styles.c_0089FF,
-        right: SizedBox(width: 24.w),
-      ),
-      backgroundColor: Styles.c_F8F9FA,
-      body: Obx(() {
-        if (logic.list.isEmpty) {
-          return SafeArea(
-            top: false,
-            child: contactListPlaceholder(
-              context,
-              title: StrRes.emptyGroupNotification,
-              loading: !logic.applicationsLoaded.value &&
-                  !logic.applicationsLoadFailed.value,
-              failed: logic.applicationsLoadFailed.value,
-              onRetry: logic.reloadApplications,
-            ),
-          );
-        }
-        return SmartRefresher(
-          controller: logic.refreshController,
-          header: IMViews.buildHeader(30),
-          footer: groupApplicationFooter(context),
-          enablePullDown: true,
-          enablePullUp: logic.hasMore.value && logic.applicationsLoaded.value,
-          onRefresh: logic.reloadApplications,
-          onLoading: logic.loadMore,
-          child: ListView.builder(
-            padding: EdgeInsets.only(top: 10.h),
-            itemCount: logic.list.length,
-            itemBuilder: (_, index) => _buildItemView(logic.list[index]),
+    return Obx(() => Scaffold(
+          appBar: RequestHistoryAppBar(
+            title: StrRes.newGroupRequest,
+            confirmation: 'requestHistoryClearGroups'.tr,
+            enabled: logic.list.isNotEmpty &&
+                !logic.cleaning.value &&
+                logic.applicationsLoaded.value &&
+                !logic.loadingMore.value,
+            onClear: logic.clearRequests,
           ),
-        );
-      }),
-    );
+          backgroundColor: Styles.c_F8F9FA,
+          body: Obx(() {
+            if (logic.list.isEmpty) {
+              return SafeArea(
+                top: false,
+                child: contactListPlaceholder(
+                  context,
+                  title: StrRes.emptyGroupNotification,
+                  loading: !logic.applicationsLoaded.value &&
+                      !logic.applicationsLoadFailed.value,
+                  failed: logic.applicationsLoadFailed.value,
+                  onRetry: logic.reloadApplications,
+                ),
+              );
+            }
+            return SlidableAutoCloseBehavior(
+                child: SmartRefresher(
+              controller: logic.refreshController,
+              header: IMViews.buildHeader(30),
+              footer: groupApplicationFooter(context),
+              enablePullDown: true,
+              enablePullUp:
+                  logic.hasMore.value && logic.applicationsLoaded.value,
+              onRefresh: logic.reloadApplications,
+              onLoading: logic.loadMore,
+              child: ListView.builder(
+                padding: EdgeInsets.only(top: 10.h),
+                itemCount: logic.list.length,
+                itemBuilder: (_, index) {
+                  final item = logic.list[index];
+                  return RequestHistorySwipeRow(
+                    key: ValueKey(RequestHistoryEntry.group(item).id),
+                    enabled: !logic.cleaning.value,
+                    onDelete: () => logic.deleteRequest(item),
+                    child: _buildItemView(item),
+                  );
+                },
+              ),
+            ));
+          }),
+        ));
   }
 
   Widget _buildItemView(GroupApplicationInfo info) {

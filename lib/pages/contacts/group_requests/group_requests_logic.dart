@@ -9,6 +9,7 @@ import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 import '../../../core/controller/im_controller.dart';
 import '../../home/home_logic.dart';
 import 'pagination/group_application_pager.dart';
+import '../request_history/data/request_history_store.dart';
 
 class GroupRequestsLogic extends GetxController {
   final imLogic = Get.find<IMController>();
@@ -19,6 +20,7 @@ class GroupRequestsLogic extends GetxController {
   final applicationsLoadFailed = false.obs;
   final hasMore = true.obs;
   final loadingMore = false.obs;
+  final cleaning = false.obs;
   final refreshController = RefreshController();
   GroupApplicationPager _pager = GroupApplicationPager();
   bool _loading = false;
@@ -27,6 +29,8 @@ class GroupRequestsLogic extends GetxController {
   final userInfoList = <UserInfo>[].obs;
   final _ownerAccount = OpenIM.iMManager.userID;
   final _ownerToken = DataSp.chatToken;
+  late final _history =
+      RequestHistoryStore(_ownerAccount, RequestHistoryKind.group);
   StreamSubscription<GroupApplicationInfo>? _applicationSubscription;
   int _loadGeneration = 0;
 
@@ -34,6 +38,39 @@ class GroupRequestsLogic extends GetxController {
       !isClosed &&
       _ownerAccount == OpenIM.iMManager.userID &&
       _ownerToken == DataSp.chatToken;
+
+  bool _visible(GroupApplicationInfo info) =>
+      !_history.isHidden(RequestHistoryEntry.group(info));
+
+  Future<void> deleteRequest(GroupApplicationInfo info) =>
+      _clean(() => _history.hide(RequestHistoryEntry.group(info)),
+          clearAll: false);
+
+  Future<void> clearRequests() =>
+      _clean(() => _history.clear(list.map(RequestHistoryEntry.group)),
+          clearAll: true);
+
+  Future<void> _clean(Future<void> Function() save,
+      {required bool clearAll}) async {
+    if (!isSessionActive || cleaning.value) return;
+    cleaning.value = true;
+    try {
+      await save();
+      if (!isSessionActive) return;
+      list.removeWhere((item) => !_visible(item));
+      if (clearAll) {
+        hasMore.value = false;
+        refreshController.loadNoData();
+      } else if (list.isEmpty && hasMore.value) {
+        await reloadApplications();
+      }
+      if (isSessionActive) homeLogic.getUnhandledGroupApplicationCount();
+    } catch (_) {
+      if (isSessionActive) IMViews.showToast('requestHistoryCleanupFailed'.tr);
+    } finally {
+      if (!isClosed) cleaning.value = false;
+    }
+  }
 
   @override
   void onReady() {
@@ -101,6 +138,9 @@ class GroupRequestsLogic extends GetxController {
     final account = OpenIM.iMManager.userID;
     final token = DataSp.chatToken;
     var profileLookup = 'not_needed';
+    List<GroupApplicationInfo> lastPage = [];
+    bool reachedClearBoundary() => lastPage
+        .any((item) => _history.isCleared(RequestHistoryEntry.group(item)));
     bool isCurrent() =>
         isSessionActive &&
         generation == _loadGeneration &&
@@ -112,9 +152,12 @@ class GroupRequestsLogic extends GetxController {
         if (!isCurrent()) return <GroupApplicationInfo>[];
         final allList = <GroupApplicationInfo>[];
         do {
-          allList.addAll(await candidate.nextPage());
+          lastPage = await candidate.nextPage();
+          allList.addAll(lastPage.where(_visible));
           if (!isCurrent()) return allList;
-        } while (allList.length < targetCount && candidate.hasMore);
+        } while (allList.length < targetCount &&
+            candidate.hasMore &&
+            !reachedClearBoundary());
 
         if (!isCurrent()) return allList;
         allList.sort((a, b) => (b.reqTime ?? 0).compareTo(a.reqTime ?? 0));
@@ -215,13 +258,13 @@ class GroupRequestsLogic extends GetxController {
     if (isCurrent()) {
       _pager = candidate;
       if (loadMore) {
-        this.list.addAll(list);
+        this.list.addAll(list.where(_visible));
       } else {
-        this.list.assignAll(list);
+        this.list.assignAll(list.where(_visible));
         refreshController.refreshCompleted(resetFooterState: true);
       }
       applicationsLoaded.value = true;
-      hasMore.value = candidate.hasMore;
+      hasMore.value = candidate.hasMore && !reachedClearBoundary();
       if (hasMore.value) {
         refreshController.loadComplete();
       } else {

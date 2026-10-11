@@ -17,7 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class GroupRequestsIM extends GetxController implements IMController {
   @override
   final groupApplicationChangedSubject =
-      BehaviorSubject<GroupApplicationInfo>();
+      PublishSubject<GroupApplicationInfo>();
 
   @override
   void onClose() {
