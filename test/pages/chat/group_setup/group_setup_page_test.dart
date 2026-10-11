@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -11,6 +13,16 @@ import 'package:openim/pages/chat/group_setup/loading/group_setup_membership.dar
 import 'package:openim_common/openim_common.dart';
 
 class _FakeGroupSetupLogic implements GroupSetupLogic {
+  _FakeGroupSetupLogic({this.manager = false});
+  final bool manager;
+  int avatarChanges = 0;
+  int nameEdits = 0;
+  @override
+  bool get isClosed => false;
+  @override
+  void modifyGroupAvatar() => avatarChanges++;
+  @override
+  void modifyGroupName(String? faceUrl) => nameEdits++;
   @override
   final membership = GroupSetupMembership();
   int retries = 0;
@@ -41,7 +53,7 @@ class _FakeGroupSetupLogic implements GroupSetupLogic {
   @override
   bool get isAdmin => false;
   @override
-  bool get isOwnerOrAdmin => false;
+  bool get isOwnerOrAdmin => manager;
   @override
   bool get isNotDisturb => false;
   @override
@@ -54,6 +66,39 @@ class _FakeGroupSetupLogic implements GroupSetupLogic {
 }
 
 void main() {
+  for (final manager in [false, true]) {
+    testWidgets('group header avatar respects edit permission ($manager)',
+        (tester) async {
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final logic = _FakeGroupSetupLogic(manager: manager);
+      addTearDown(logic.membership.dispose);
+      await tester.pumpWidget(ScreenUtilInit(
+        designSize: const Size(375, 812),
+        builder: (_, __) => GetMaterialApp(
+          translations: TranslationService(),
+          locale: const Locale('zh', 'CN'),
+          supportedLocales: const [Locale('zh', 'CN')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          home: GroupSetupPage(logic: logic),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(AvatarView).first);
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoActionSheet),
+          manager ? findsOneWidget : findsNothing);
+      expect(logic.nameEdits, 0);
+      if (manager) {
+        await tester.tap(find.text(StrRes.selectAssetsFromAlbum));
+        await tester.pumpAndSettle();
+      }
+      expect(logic.avatarChanges, manager ? 1 : 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final dark in [false, true]) {
     testWidgets('unresolved membership keeps header without delete ($dark)',
         (tester) async {

@@ -124,7 +124,11 @@ void main() {
     testWidgets('friend requests swipe, refresh and clear ($dark)',
         (tester) async {
       final logic = await open(tester, dark: dark);
-      expect(tester.getCenter(find.text(StrRes.newFriend)).dx,
+      expect(
+          tester
+              .getCenter(find.text(
+                  Get.locale?.languageCode == 'en' ? 'New Friends' : '新的朋友'))
+              .dx,
           closeTo(187.5, .01));
       await tester.drag(
           find.byType(RequestHistorySwipeRow).first, const Offset(-240, 0));
@@ -135,12 +139,18 @@ void main() {
       await logic.loadRequests();
       await tester.pumpAndSettle();
       expect(logic.applicationList.map((row) => row.createTime), [1]);
-      await tester.tap(find.byKey(const ValueKey('request-history-clear')));
+      await tester.tap(find.byKey(const ValueKey('friend-requests-edit')));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('friend-requests-select-all')));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('friend-requests-delete-selected')));
       await tester.pumpAndSettle();
       await tester.tap(find.descendant(
-          of: find.byType(CustomDialog), matching: find.text(StrRes.clearAll)));
+          of: find.byType(CustomDialog), matching: find.text(StrRes.delete)));
       await tester.pumpAndSettle();
-      expect(find.text('暂无好友申请'), findsOneWidget);
+      expect(find.text('暂无新联系人'), findsOneWidget);
       rows.insert(0, _request(3));
       im.friendApplicationChangedSubject.add(rows.first);
       await tester.pumpAndSettle();
@@ -149,12 +159,16 @@ void main() {
     });
   }
 
-  testWidgets('English large text keeps clear and centered title usable',
+  testWidgets('English large text keeps edit and centered title usable',
       (tester) async {
     await open(tester, english: true, dark: true);
-    expect(find.text('Clear All'), findsOneWidget);
+    expect(find.text(StrRes.edit), findsOneWidget);
     expect(
-        tester.getCenter(find.text(StrRes.newFriend)).dx, closeTo(187.5, .01));
+        tester
+            .getCenter(find.text(
+                Get.locale?.languageCode == 'en' ? 'New Friends' : '新的朋友'))
+            .dx,
+        closeTo(187.5, .01));
     expect(tester.takeException(), isNull);
   });
 
@@ -167,5 +181,65 @@ void main() {
             .isHidden(RequestHistoryEntry.friend(rows.first)),
         isFalse);
     expect(logic.applicationList, hasLength(2));
+  });
+
+  testWidgets('batch edit deletes only selected rows and survives SDK reload',
+      (tester) async {
+    final logic = await open(tester);
+    await tester.tap(find.byKey(const ValueKey('friend-requests-edit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Friend 1'));
+    await tester.pumpAndSettle();
+    expect(logic.selected.length, 1);
+    await tester
+        .tap(find.byKey(const ValueKey('friend-requests-delete-selected')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+        of: find.byType(CustomDialog), matching: find.text(StrRes.delete)));
+    await tester.pumpAndSettle();
+    expect(logic.applicationList.map((row) => row.createTime), [2]);
+    expect(logic.editing.value, isFalse);
+    await logic.loadRequests();
+    await tester.pumpAndSettle();
+    expect(logic.applicationList.map((row) => row.createTime), [2]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'received pending requests precede history and sent requests have own section',
+      (tester) async {
+    rows = [
+      _request(4),
+      _request(1)..handleResult = 0,
+      FriendApplicationInfo(
+          fromUserID: 'me',
+          toUserID: 'peer',
+          toNickname: 'Sent request',
+          createTime: 5,
+          handleResult: 0),
+    ];
+    await open(tester);
+    expect(find.text('对方添加我'), findsOneWidget);
+    expect(find.text('我添加对方'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('Friend 1')).dy,
+        lessThan(tester.getTopLeft(find.text('Friend 4')).dy));
+    expect(tester.getTopLeft(find.text('Friend 4')).dy,
+        lessThan(tester.getTopLeft(find.text('我添加对方')).dy));
+    expect(find.text('验证'), findsOneWidget);
+    expect(find.text(StrRes.waitingForVerification), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('selection cannot delete after account switch', (tester) async {
+    final logic = await open(tester);
+    logic.toggleEditing();
+    logic.toggleAll();
+    OpenIM.iMManager.userID = 'someone-else';
+    await logic.deleteSelected();
+    expect(logic.applicationList, hasLength(2));
+    expect(
+        RequestHistoryStore('me', RequestHistoryKind.friend)
+            .isHidden(RequestHistoryEntry.friend(rows.first)),
+        isFalse);
   });
 }

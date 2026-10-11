@@ -80,7 +80,11 @@ Future<void> mountMarkdown(WidgetTester tester, Widget child,
               markdownPreviewDirectory.isEmpty ? null : 'MarkdownPreviewFont',
           fontFamilyFallback: markdownPreviewDirectory.isEmpty
               ? null
-              : const ['MarkdownPreviewFont', 'MarkdownPreviewArabic']),
+              : const [
+                  'MarkdownPreviewFont',
+                  'MarkdownPreviewArabic',
+                  'MarkdownPreviewEmoji'
+                ]),
       home: MediaQuery(
         data: MediaQueryData(
             size: Size(width, 960), textScaler: TextScaler.linear(textScale)),
@@ -119,6 +123,7 @@ Future<void> loadMarkdownPreviewFonts() async {
   for (final entry in {
     'MarkdownPreviewFont': 'C:/Windows/Fonts/msyh.ttc',
     'MarkdownPreviewArabic': 'C:/Windows/Fonts/arial.ttf',
+    'MarkdownPreviewEmoji': 'C:/Windows/Fonts/seguiemj.ttf',
     'monospace': 'C:/Windows/Fonts/consola.ttf',
     'MaterialIcons':
         'E:/flutter/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',

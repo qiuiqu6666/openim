@@ -183,6 +183,7 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
     Set<String> allowed = {};
     final picked = await Navigator.of(context).push<Object>(
       SangongPageRoute(
+        recoverOnRefresh: false,
         context: context,
         builder: (_) => ContactSingleSelection(
           title: '\u9009\u62e9\u7528\u6237\u4ee3\u7406\u7fa4',
@@ -225,8 +226,9 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
                     onPressed: _busy
                         ? null
                         : () => _run(() async {
-                              if (!_current || !_runtime.canConfigure)
+                              if (!_current || !_runtime.canConfigure) {
                                 return false;
+                              }
                               await _api.setUserAgentGroup(_imUserId, '');
                               return true;
                             }),

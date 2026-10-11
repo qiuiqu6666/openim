@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -109,6 +108,13 @@ void main() {
       }
       expect(fixture.actions,
           ['voice', 'video', 'chat', 'remark', 'commonGroups', 'background']);
+      expect(_key('safety_group'), findsNothing);
+      expect(_key('blacklist'), findsNothing);
+      expect(find.text('profileAddBlacklist'.tr), findsNothing);
+      await _tap(tester, find.byIcon(Icons.more_horiz));
+      await _tap(tester, find.text('profileAddBlacklist'.tr));
+      expect(fixture.blacklistRequests, [true]);
+      expect(_key('safety_group'), findsNothing);
       await _tap(tester, find.byIcon(Icons.copy_outlined));
       expect(fixture.copiedIds, ['public_peer_1024']);
       expect(tester.takeException(), isNull);
@@ -388,7 +394,8 @@ void main() {
     });
   }
 
-  testWidgets('blacklist pending disables friend switch and stranger actions',
+  testWidgets(
+      'blacklist pending keeps friend card hidden and disables stranger actions',
       (tester) async {
     final fixture = ProfilePanelFixture();
     final moments = profileMomentsRepository();
@@ -396,9 +403,7 @@ void main() {
     await mountProfilePanel(tester, fixture: fixture, moments: moments);
     fixture.updatingBlacklist.value = true;
     await tester.pump();
-    final switches = find.descendant(
-        of: _key('blacklist'), matching: find.byType(CupertinoSwitch));
-    expect(tester.widget<CupertinoSwitch>(switches).onChanged, isNull);
+    expect(_key('blacklist'), findsNothing);
     fixture.userInfo.update((user) => user?.isFriendship = false);
     await tester.pumpAndSettle();
     final add = tester.widget<Button>(find.ancestor(
@@ -475,7 +480,7 @@ void main() {
           locale: const Locale('en', 'US'),
           textScale: 2,
           reducedMotion: true);
-      for (final action in ['voice', 'video', 'message', 'blacklist']) {
+      for (final action in ['voice', 'video', 'message', 'background']) {
         await _reveal(tester, _key(action));
         expect(tester.takeException(), isNull);
       }

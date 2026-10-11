@@ -10,8 +10,10 @@ import '../../../core/controller/im_controller.dart';
 import '../../home/home_logic.dart';
 import 'pagination/group_application_pager.dart';
 import '../request_history/data/request_history_store.dart';
+import '../request_history/navigation/request_history_chat_opener.dart';
 
 class GroupRequestsLogic extends GetxController {
+  final _chatOpener = RequestHistoryChatOpener();
   final imLogic = Get.find<IMController>();
   final homeLogic = Get.find<HomeLogic>();
   final list = <GroupApplicationInfo>[].obs;
@@ -318,7 +320,19 @@ class GroupRequestsLogic extends GetxController {
   }
 
   String getGroupName(GroupApplicationInfo info) =>
-      info.groupName ?? groupList[info.groupID]?.groupName ?? '';
+      IMUtils.emptyStrToNull(groupList[info.groupID]?.groupName?.trim()) ??
+      IMUtils.emptyStrToNull(info.groupName?.trim()) ??
+      '';
+
+  String? getGroupAvatar(GroupApplicationInfo info) =>
+      IMUtils.emptyStrToNull(groupList[info.groupID]?.faceURL?.trim()) ??
+      IMUtils.emptyStrToNull(info.groupFaceURL?.trim());
+
+  Future<void> openChat(GroupApplicationInfo info) => _chatOpener.open(
+      sourceID: info.groupID,
+      sessionType:
+          groupList[info.groupID]?.sessionType ?? ConversationType.superGroup,
+      isCurrent: () => isSessionActive);
 
   String getInviterNickname(GroupApplicationInfo info) =>
       (getMemberInfo(info.inviterUserID!)?.nickname) ??

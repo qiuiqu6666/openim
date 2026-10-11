@@ -59,13 +59,17 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      var canManage = true;
       final api = SangongTestApi()
         ..respond = (call) {
           if (call.path.endsWith('/feature-capabilities')) {
             return {
               'groupID': 'g',
               'capabilityVersion': 1,
-              'sangong': {'canManage': true, 'tenantID': 'tenant-authorized'}
+              'sangong': {
+                'canManage': canManage,
+                'tenantID': 'tenant-authorized'
+              }
             };
           }
           if (call.path.endsWith('/user-report')) {
@@ -129,6 +133,7 @@ void main() {
         expect(find.text('上下分'), findsWidgets);
       }
       expect(tester.takeException(), isNull);
+      canManage = false;
       store.invalidateCapabilities('g');
       await tester.pump();
       expect(find.textContaining('当前积分 420'), findsNothing);
@@ -165,7 +170,7 @@ void main() {
       runtime.dispose();
     });
   }
-  testWidgets('credit requires confirmation and uses original IM identity',
+  testWidgets('credit submits once and uses original IM identity',
       (tester) async {
     final api = SangongTestApi()..respond = profileResponse;
     final runtime = sangongTestRuntime(sangongTestContext(api));
@@ -174,8 +179,7 @@ void main() {
     await tester.enterText(find.byType(TextField).first, '10');
     await tester.tap(find.text('上分'));
     await tester.pump(const Duration(milliseconds: 350));
-    expect(api.count('/commands/wallet.adjust'), 0);
-    await tester.tap(find.text('确认'));
+    expect(find.byType(AlertDialog), findsNothing);
     await flushSangong(tester);
     expect(api.count('/commands/wallet.adjust'), 1);
     final request =

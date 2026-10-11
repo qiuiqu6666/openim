@@ -62,16 +62,17 @@ void main() {
     Get.reset();
   });
   for (final dark in [false, true]) {
-    testWidgets('source coexists with greeting and outgoing state ($dark)',
+    testWidgets(
+        'greeting, direction and outgoing status match reference ($dark)',
         (tester) async {
       await mountItem(tester, dark: dark);
       expect(find.text('dual'), findsOneWidget);
       expect(find.text('我是：秋12123'), findsOneWidget);
-      expect(find.text('通过99号添加'), findsOneWidget);
+      expect(find.text('你发起的申请'), findsOneWidget);
       expect(find.text(StrRes.waitingForVerification), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
-    testWidgets('incoming request keeps its action and source ($dark)',
+    testWidgets('incoming request keeps verification action ($dark)',
         (tester) async {
       var viewed = 0;
       await mountItem(tester,
@@ -80,8 +81,8 @@ void main() {
           extension: '{"addSource":"group"}',
           onView: () => viewed++);
       expect(find.text('发送者'), findsOneWidget);
-      expect(find.text('通过群聊添加'), findsOneWidget);
-      await tester.tap(find.text(StrRes.lookOver));
+      expect(find.text('对方发起的申请'), findsOneWidget);
+      await tester.tap(find.text('验证'));
       expect(viewed, 1);
       expect(tester.takeException(), isNull);
     });
@@ -92,20 +93,22 @@ void main() {
         extension: '{"v":1,"op":"private-operation","mac":"private-mac"}',
         reason: null,
         result: 1);
-    expect(find.text('来源未知'), findsOneWidget);
+    expect(find.text('来源未知'), findsNothing);
+    expect(find.text('验证：请求添加你为好友'), findsOneWidget);
     expect(find.text(StrRes.approved), findsOneWidget);
     expect(find.textContaining('private-'), findsNothing);
     expect(tester.takeException(), isNull);
   });
   for (final size in [const Size(320, 650), const Size(812, 375)]) {
-    testWidgets('English source fits large text on $size', (tester) async {
+    testWidgets('English direction and status fit large text on $size',
+        (tester) async {
       await mountItem(tester,
           english: true,
           scale: 2,
           size: size,
           extension: '{"addSource":"manage"}',
           result: -1);
-      expect(find.text('Added via group management'), findsOneWidget);
+      expect(find.text('Sent by you'), findsOneWidget);
       expect(find.text(StrRes.rejected), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

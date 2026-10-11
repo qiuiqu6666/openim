@@ -64,7 +64,12 @@ class _SangongProfileLedgerState extends State<SangongProfileLedger> {
             ],
             if (!loading)
               TextButton(
-                  onPressed: () => setState(() => _request = _load()),
+                  onPressed: () {
+                    final request = _load();
+                    setState(() {
+                      _request = request;
+                    });
+                  },
                   child: const Text('重试')),
           ]),
         ),

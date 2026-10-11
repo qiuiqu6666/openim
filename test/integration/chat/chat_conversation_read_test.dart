@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -10,6 +11,7 @@ import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
 import 'package:openim/pages/chat/history/chat_history_prefetcher.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
+import 'package:openim/pages/conversation/updates/conversation_latest_sync.dart';
 import 'package:openim/pages/group_features/data/group_feature_runtime.dart';
 import 'package:openim/pages/home/home_logic.dart';
 import 'package:openim/services/chat_history_cache.dart';
@@ -67,6 +69,8 @@ void main() {
   late List<Completer<void>> acknowledgements;
   late List<List<String>> paintedIDs;
   late bool chatOpened;
+  late Map<String, ConversationInfo> storedRows;
+  late List<String> calls;
 
   int unreadSource() => conversations.list
       .fold(0, (total, row) => total + conversations.getUnreadCount(row));
@@ -97,8 +101,14 @@ void main() {
     acknowledgements = [];
     paintedIDs = [];
     chatOpened = false;
+    storedRows = {
+      for (final row in Get.find<HomeLogic>().conversationsAtFirstPage)
+        row.conversationID: row,
+    };
+    calls = [];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdk, (call) {
+      calls.add(call.method);
       if (call.method == 'getAdvancedHistoryMessageList') {
         final history =
             EntryHistoryCall(Map<String, dynamic>.from(call.arguments as Map));
@@ -111,17 +121,30 @@ void main() {
         acknowledgements.add(acknowledgement);
         return acknowledgement.future;
       }
+      if (call.method == 'getConversationIDBySessionType') {
+        return Future.value('chat');
+      }
+      if (call.method == 'getConversationListSplit') {
+        return Future.value(
+            jsonEncode(storedRows.values.map((row) => row.toJson()).toList()));
+      }
+      if (call.method == 'getMultipleConversation') {
+        final ids = (call.arguments as Map)['conversationIDList'] as List;
+        return Future.value(jsonEncode([
+          for (final id in ids)
+            if (storedRows[id] != null) storedRows[id]!.toJson(),
+        ]));
+      }
       if (call.method == 'getBlacklist') return Future.value('[]');
       if (call.method == 'setConversationDraft') return Future.value();
       if (call.method == 'changeInputStates') return Future.value();
       throw StateError('Unexpected native call ${call.method}');
     });
-    // Get.put invokes the real onInit, including the neutral read subscription.
-    conversations = Get.put<ConversationLogic>(ConversationLogic());
   });
 
   tearDown(() async {
     if (chatOpened && !chat.isClosed) chat.onDelete();
+    if (!conversations.isClosed) conversations.onDelete();
     for (final acknowledgement in acknowledgements) {
       if (!acknowledgement.isCompleted) acknowledgement.complete();
     }
@@ -137,6 +160,13 @@ void main() {
   });
 
   Future<void> mountChat(WidgetTester tester) async {
+    // Initialize timer-owning subscriptions inside the widget test's clock.
+    im.conversationChangedSubject.listen((rows) {
+      for (final row in rows) {
+        storedRows[row.conversationID] = row;
+      }
+    });
+    conversations = Get.put<ConversationLogic>(ConversationLogic());
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     Get.routing.current = '/chat';
     // Keep route state independent from the list row to expose missing handoff.
@@ -166,14 +196,59 @@ void main() {
 
   Future<void> receive(WidgetTester tester, Message message,
       {required int unread}) async {
+    storedRows['chat'] = _conversation(message, unread: unread);
     im.conversationChanged([_conversation(message, unread: unread)]);
     im.recvNewMessage(message);
     await tester.pump();
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
   }
 
   ConversationInfo getTarget() =>
       conversations.list.firstWhere((row) => row.conversationID == 'chat');
+
+  testWidgets(
+      'received latest reaches the feed without a conversation callback',
+      (tester) async {
+    await mountChat(tester);
+    final latest = _message('newest-without-metadata', 31);
+    storedRows['chat'] = _conversation(latest, unread: 1);
+    im.recvNewMessage(latest);
+    await tester.pump();
+    await tester.pump(ConversationLatestSync.settleDelay);
+    await tester.pump();
+    expect(calls, contains('getMultipleConversation'));
+    expect(chat.messageList.last.clientMsgID, latest.clientMsgID);
+    expect(getTarget().latestMsg!.clientMsgID, latest.clientMsgID);
+    expect(getTarget().latestMsgSendTime, 31);
+    expect(getTarget().unreadCount, 1);
+    expect(conversations.getContent(getTarget()), 'newest-without-metadata');
+  });
+
+  testWidgets(
+      'leaving chat reconciles the persisted latest call without events',
+      (tester) async {
+    await mountChat(tester);
+    final latest = _message('local-call', 0)
+      ..sendTime = 31
+      ..contentType = MessageType.custom
+      ..customElem = CustomElem(
+          data: jsonEncode({
+        'customType': CustomMessageType.call,
+        'data': {'type': 'audio', 'state': 'timeout', 'duration': 0},
+      }));
+    storedRows['chat'] = _conversation(latest);
+    Get.routing.current = '/conversations';
+    await tester.pumpWidget(badgeSource());
+    chat.onDelete();
+    await tester.pump();
+    await tester.pump(ConversationLatestSync.settleDelay);
+    await tester.pump();
+    expect(calls, contains('getMultipleConversation'));
+    expect(getTarget().latestMsg!.clientMsgID, 'local-call');
+    expect(getTarget().latestMsgSendTime, 31);
+    expect(conversations.getContent(getTarget()), contains(StrRes.callVoice));
+    expect(getTarget().unreadCount, 0);
+  });
 
   testWidgets('viewed tall inbound clears list unread after returning and ACK',
       (tester) async {
@@ -196,6 +271,8 @@ void main() {
     acknowledgements.single.complete();
     await tester.pumpAndSettle();
     // There is deliberately no zero-unread ConversationChanged SDK event.
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
     expect(getTarget().unreadCount, 0);
     expect(
         conversations.list
@@ -303,11 +380,25 @@ void main() {
       expect(getTarget().unreadCount, 1);
       Get.routing.current = '/chat';
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      chat.scrollController.jumpTo(1);
+      chat.scrollController.jumpTo(20);
       await tester.pump();
+      // A tall row is read only once its bottom edge is back in the viewport.
+      chat.scrollController.jumpTo(0);
       await tester.pump();
+      // The resumed viewport can request a history catch-up before reading.
+      for (final history in histories.skip(1)) {
+        history.complete([
+          ...List.generate(
+              30,
+              (index) =>
+                  _message('history-$index', index + 1, incoming: false)),
+          storedRows['chat']!.latestMsg!,
+        ]);
+      }
+      await tester.pumpAndSettle();
       expect(nativeReads, hasLength(1));
       acknowledgements.single.complete();
+      await tester.pump(const Duration(milliseconds: 250));
       await tester.pumpAndSettle();
       expect(getTarget().unreadCount, 0);
       expect(find.text('unread-source:7'), findsOneWidget);

@@ -51,6 +51,7 @@ class SangongMyConfigPage extends StatefulWidget {
       SangongPageRoute(
         context: context,
         settings: const RouteSettings(name: 'sangong_my_config'),
+        configuration: true,
         builder: (_) => SangongMyConfigPage(
           initialGameGroupId: initialGameGroupId,
           onSaved: onSaved,
@@ -519,6 +520,7 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
         SangongPageRoute(
           context: context,
           settings: const RouteSettings(name: 'sangong_config_directory'),
+          recoverOnRefresh: false,
           builder: (_) => ContactSingleSelection(
             title: title,
             kind: kind,

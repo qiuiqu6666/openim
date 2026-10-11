@@ -58,6 +58,13 @@ class SetFriendRemarkPage extends StatelessWidget {
   final String? hintText;
   final bool showClearButton;
 
+  VoidCallback? _avatarTap(BuildContext context) => saving
+      ? null
+      : onAvatarTap ??
+          (AvatarActions.canPreview(url: avatarURL, bytes: avatarBytes)
+              ? () => AvatarActions.preview(context,
+                  url: avatarURL, bytes: avatarBytes)
+              : null);
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: Styles.c_F4F5F7,
@@ -105,7 +112,7 @@ class SetFriendRemarkPage extends StatelessWidget {
               Center(
                 child: avatarBytes != null
                     ? GestureDetector(
-                        onTap: onAvatarTap,
+                        onTap: _avatarTap(context),
                         child: ClipOval(
                           child: Image.memory(
                             avatarBytes!,
@@ -116,7 +123,7 @@ class SetFriendRemarkPage extends StatelessWidget {
                         ),
                       )
                     : AvatarView(
-                        onTap: onAvatarTap,
+                        onTap: _avatarTap(context),
                         url: avatarURL,
                         text: avatarName,
                         isGroup: isGroupAvatar,

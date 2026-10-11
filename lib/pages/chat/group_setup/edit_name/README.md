@@ -2,6 +2,8 @@
 
 `EditGroupNameLogic` 负责名称草稿和 SDK 保存，`EditGroupNamePage` 复用现有 `SetFriendRemarkPage.editor`。头像仍由 `GroupSetupLogic.modifyGroupAvatar` 裁剪、上传并单独更新 `faceURL`。
 
+点击群头像先复用 `showAppActionSheet` 显示 iOS 风格菜单：有有效头像地址时可「查看头像」，通过现有 `IMUtils.previewUrlPicture` 全屏查看、缩放和保存；「从相册选择」仍走原来的裁剪、上传流程。没有头像时只提供相册入口。预览不修改群资料或名称草稿，返回后仍停留在编辑页；菜单返回后检查页面和保存状态，避免退出页面后继续操作。群内个人昵称页面维持原入口行为。
+
 进入页面时记录原始名称，比较去除两侧空白后的草稿；名称未修改（包括只修改头像）时直接返回，不发送 `groupName`，避免产生多余的改名通知。真正改名仅提交 `groupID` 和新名称；群内昵称使用 SDK 的 `setGroupMemberInfo`，只设置当前成员昵称。
 
 已有群昵称显示为可编辑正文，可以在末尾追加或从中间修改。没有设置群昵称时输入框为空，以个人昵称作为 Placeholder，字符计数为 0；点击后输入新昵称。未修改时保存直接返回，不产生成员更新。继续使用群设置原有的昵称判断规则，SDK 返回与个人昵称相同的默认成员昵称视为未设置。群名称仍沿用原输入方式。

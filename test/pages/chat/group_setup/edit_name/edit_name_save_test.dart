@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
+import 'package:extended_image/extended_image.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -81,6 +85,12 @@ Future<EditGroupNameLogic> _open(
     builder: (_, __) => GetMaterialApp(
       locale: const Locale('zh', 'CN'),
       translations: TranslationService(),
+      supportedLocales: const [Locale('zh', 'CN')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
       builder: EasyLoading.init(),
       home: Scaffold(body: Text(nestedParent ? 'root' : 'origin')),
@@ -204,7 +214,11 @@ void main() {
       final setup = _GroupSetup();
       await _open(tester, setup: setup, dark: dark);
       await tester.tap(find.byType(AvatarView));
-      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(find.text(StrRes.viewAvatar), findsNothing);
+      expect(setup.avatarChanges, 0);
+      await tester.tap(find.text(StrRes.selectAssetsFromAlbum));
+      await tester.pumpAndSettle();
       expect(setup.avatarChanges, 1);
       expect(tester.widget<AvatarView>(find.byType(AvatarView)).url,
           'updated-avatar');
@@ -212,6 +226,63 @@ void main() {
       await tester.pumpAndSettle();
       expect(calls, isEmpty);
       expect(find.text('origin'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('viewing the group avatar keeps the name draft (dark=$dark)',
+        (tester) async {
+      const url = 'https://media.example.test/group-avatar.png';
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawColor(AppTokens.accent, BlendMode.src);
+      final picture = recorder.endRecording();
+      final image = picture.toImageSync(80, 120);
+      picture.dispose();
+      final provider = ExtendedNetworkImageProvider(url);
+      provider.imageCache.putIfAbsent(
+        provider,
+        () =>
+            OneFrameImageStreamCompleter(Future.value(ImageInfo(image: image))),
+      );
+      addTearDown(() {
+        provider.imageCache.clear();
+        provider.imageCache.clearLiveImages();
+      });
+      final setup = _GroupSetup();
+      setup.groupInfo.value.faceURL = url;
+      final logic = await _open(tester, setup: setup, dark: dark);
+      await tester.enterText(find.byType(TextField), '未保存的群名称');
+      await tester.tap(find.byType(AvatarView));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoActionSheet), findsOneWidget);
+      expect(setup.avatarChanges, 0);
+      await tester.tap(find.text(StrRes.viewAvatar));
+      await tester.pumpAndSettle();
+
+      final preview = find.byType(ChatPicturePreview);
+      expect(preview, findsOneWidget);
+      expect(tester.widget<ChatPicturePreview>(preview).images.single.url, url);
+      final photo = tester.widget<ExtendedImage>(
+          find.descendant(of: preview, matching: find.byType(ExtendedImage)));
+      expect(photo.mode, ExtendedImageMode.gesture);
+      expect(find.byTooltip(StrRes.saveToAlbum), findsOneWidget);
+      expect(setup.avatarChanges, 0);
+      expect(calls, isEmpty);
+
+      await tester.tapAt(tester.getCenter(preview));
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+      expect(preview, findsNothing);
+      expect(find.byType(EditGroupNamePage), findsOneWidget);
+      expect(logic.inputCtrl.text, '未保存的群名称');
+      expect(logic.saving.value, isFalse);
+      await tester.tap(find.byType(AvatarView));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(find.byType(EditGroupNamePage), findsOneWidget);
+      expect(logic.inputCtrl.text, '未保存的群名称');
+      expect(setup.avatarChanges, 0);
+      expect(calls, isEmpty);
       expect(tester.takeException(), isNull);
     });
   }

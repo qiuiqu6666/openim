@@ -413,7 +413,8 @@ void main() {
         expect(report.method, 'POST');
         expect(report.useBearerAuth, isTrue);
         expect(report.body!['requestId'], isA<String>());
-        expect(report.body!['input'], {'kind': 'settlement', 'roundId': 17});
+        // The server selects the latest settlement instead of a cached round.
+        expect(report.body!['input'], {'kind': 'settlement'});
         expect(find.byType(SangongManageHomePage), findsNothing);
         expect(find.text('图片报表已加入发送队列'), findsOneWidget);
       }
@@ -434,6 +435,9 @@ void main() {
       expect(fixture.api.streamStarts, 0);
       _expectNoDefaultConfigRead(fixture);
       expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(seconds: 3));
+      await EasyLoading.dismiss(animation: false);
+      await unmountSangong(tester);
     });
   }
 
@@ -465,7 +469,7 @@ void main() {
     expect(runtime.canConfigure, isFalse);
     expect(runtime.canManage, isFalse);
     expect(find.byType(GroupGameFloatingEntry), findsNothing);
-    expect(find.text('正在确认当前群的三公配置'), findsOneWidget);
+    expect(find.text('正在确认当前群的三公配置'), findsNothing);
     expect(fixture.lookups.length, previousLookups + 1);
 
     reply.complete(fixture.currentConfig(fixture.groupID, enabled: false));
@@ -506,7 +510,7 @@ void main() {
     expect(runtime.groupTenantReady, isFalse);
     expect(runtime.canManage, isFalse);
     expect(find.byType(GroupGameFloatingEntry), findsNothing);
-    expect(find.text('正在确认当前群的三公配置'), findsOneWidget);
+    expect(find.text('正在确认当前群的三公配置'), findsNothing);
     expect(fixture.lookups.length, previousLookups + 1);
     expect(fixture.api.streamStarts, previousStreams);
     expect(fixture.api.streamStops, 0);
@@ -654,6 +658,9 @@ void main() {
     expect(find.text('保存中...'), findsNothing);
     _expectNoDefaultConfigRead(fixture);
     expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(seconds: 3));
+    await EasyLoading.dismiss(animation: false);
+    await unmountSangong(tester);
   });
 
   for (final (name, type, privileged, agentOnly) in [

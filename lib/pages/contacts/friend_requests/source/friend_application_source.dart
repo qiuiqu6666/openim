@@ -2,6 +2,35 @@ import 'dart:convert';
 
 import 'package:openim_common/openim_common.dart';
 
+final _legacySourceTag = RegExp(r'\[99chat_src:(AddSource_Type_[^\]]+)\]');
+
+/// Strip transport metadata for presentation; retain the SDK record verbatim.
+String friendApplicationWording(String? wording) =>
+    (wording ?? '').replaceAll(_legacySourceTag, '').trim();
+
+String friendApplicationVerification(String? wording,
+    {required bool english, String? nickname}) {
+  var text = friendApplicationWording(wording);
+  final name = nickname?.trim() ?? '';
+  if (name.isNotEmpty) {
+    for (final placeholder in ['{name}', '{option1}', '（name）', '(name)']) {
+      text = text.replaceAll(placeholder, name);
+    }
+  }
+  if (text.isEmpty) {
+    return english
+        ? 'Verification: Wants to add you as a friend'
+        : '验证：请求添加你为好友';
+  }
+  if (text.startsWith('我是') ||
+      text.startsWith('验证') ||
+      text.startsWith('I am') ||
+      text.startsWith('Verification')) {
+    return text;
+  }
+  return english ? 'Verification: $text' : '验证：$text';
+}
+
 /// Application metadata is for display only, never for authorizing a request.
 FriendAddSource? friendApplicationSource(String? extension) {
   try {

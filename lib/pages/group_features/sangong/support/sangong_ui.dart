@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:openim_common/openim_common.dart';
 import '../sangong_scope.dart';
+import '../services/authorization/sangong_operation_scope.dart';
 import '../widgets/authorization/privilege_route_guard.dart';
 export 'package:openim_common/openim_common.dart' show AppTokens;
 
@@ -154,6 +155,8 @@ class AppDialog {
       Widget Function(BuildContext, Widget)? dialogWrapper}) async {
     final runtime = SangongScope.read(context);
     final featureContext = runtime.featureContext;
+    final scope =
+        SangongOperationScope.capture(featureContext, runtime.http.tenantId);
     if (!runtime.isCurrent) return false;
     final result = await showCupertinoDialog<bool>(
         context: context,
@@ -174,8 +177,12 @@ class AppDialog {
               ]);
           return SangongPrivilegeRouteGuard(
             featureContext: featureContext,
+            allowAssignedAgent: runtime.canOpenAgent,
+            scopeChanges: runtime,
             refreshOnEntry: false,
-            isCurrent: () => runtime.isCurrent,
+            isCurrent: () =>
+                runtime.isCurrent &&
+                scope.matches(runtime.featureContext, runtime.http.tenantId),
             builder: (_) => SangongScope(
                 runtime: runtime,
                 child: dialogWrapper?.call(dialogContext, dialog) ?? dialog),
@@ -200,6 +207,8 @@ class AppDialog {
       Widget Function(BuildContext, Widget)? dialogWrapper}) async {
     final runtime = SangongScope.read(context);
     final featureContext = runtime.featureContext;
+    final scope =
+        SangongOperationScope.capture(featureContext, runtime.http.tenantId);
     if (!runtime.isCurrent) return null;
     return showCupertinoDialog<String>(
         context: context,
@@ -218,8 +227,12 @@ class AppDialog {
               allowEmpty: allowEmpty);
           return SangongPrivilegeRouteGuard(
             featureContext: featureContext,
+            allowAssignedAgent: runtime.canOpenAgent,
+            scopeChanges: runtime,
             refreshOnEntry: false,
-            isCurrent: () => runtime.isCurrent,
+            isCurrent: () =>
+                runtime.isCurrent &&
+                scope.matches(runtime.featureContext, runtime.http.tenantId),
             builder: (_) => SangongScope(
                 runtime: runtime,
                 child: dialogWrapper?.call(dialogContext, prompt) ?? prompt),

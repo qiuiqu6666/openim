@@ -269,8 +269,8 @@ Future<bool?> showGroupAnnouncementSheet(BuildContext context, String text) =>
                 const SizedBox(height: 28),
                 FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: Styles.c_0089FF,
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppTokens.groupAnnouncementConfirm,
+                    foregroundColor: AppTokens.onAccent,
                     minimumSize: const Size.fromHeight(48),
                     shape: const StadiumBorder(),
                   ),

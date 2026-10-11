@@ -52,6 +52,8 @@ class SangongBetPreviewSheet extends StatefulWidget {
     final runtime = SangongScope.read(context);
     final featureContext = runtime.featureContext;
     if (!runtime.canManage) return Future.value(null);
+    final recovery = runtime.operatorRouteRevalidation();
+    var latestPreview = preview;
     return showModalBottomSheet<SangongBetSubmitResult>(
       context: context,
       isScrollControlled: true,
@@ -63,7 +65,24 @@ class SangongBetPreviewSheet extends StatefulWidget {
       builder: (context) => SangongPrivilegeRouteGuard(
         featureContext: featureContext,
         refreshOnEntry: false,
-        isCurrent: () => runtime.canManage,
+        requireCapabilitiesCurrent: false,
+        scopeChanges: runtime,
+        isCurrent: () => recovery.current,
+        canRevalidate: () => recovery.canRevalidate,
+        revalidate: (active) async {
+          if (!await recovery.refresh(active)) return false;
+          final session = await runtime.admin.fetchSession();
+          if (!active()) return false;
+          if (!recovery.current) throw StateError('群权限仍在更新');
+          if (session.round?.id != roundId || session.round!.isSettled) {
+            return false;
+          }
+          final result =
+              await runtime.admin.previewBets(roundId: roundId, cutoff: cutoff);
+          if (!active()) return false;
+          latestPreview = result.preview;
+          return true;
+        },
         builder: (context) => Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(context).bottom,
@@ -73,7 +92,7 @@ class SangongBetPreviewSheet extends StatefulWidget {
             child: SangongScope(
                 runtime: runtime,
                 child: SangongBetPreviewSheet(
-                  preview: preview,
+                  preview: latestPreview,
                   cutoff: cutoff,
                   roundId: roundId,
                   doorCount: doorCount,

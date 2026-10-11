@@ -204,15 +204,20 @@ void main() {
           ),
         ));
     expect(find.textContaining('当前积分 420'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).first, '10');
-    await tester.tap(find.text('上分'));
-    // Inline inputs are confirmed in a guarded dialog before any write.
+    // Exercise the scoped confirmation explicitly. Inline credit now submits
+    // directly and is covered by the profile command tests, not this guard test.
+    final confirmation = AppDialog.confirm(
+        context: tester.element(find.byType(SangongProfilePanel)),
+        title: '确认操作',
+        message: '测试资料页的确认作用域');
     await tester.pump(const Duration(milliseconds: 350));
     await flushSangong(tester);
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
     api.privilege.setAllowed(false);
     await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog, skipOffstage: false), findsNothing);
+    expect(
+        find.byType(CupertinoAlertDialog, skipOffstage: false), findsNothing);
+    expect(await confirmation, isFalse);
     expect(find.textContaining('当前积分 420'), findsNothing);
     expect(find.text('普通用户资料'), findsOneWidget);
     final navigator = tester.state<NavigatorState>(find.byType(Navigator));

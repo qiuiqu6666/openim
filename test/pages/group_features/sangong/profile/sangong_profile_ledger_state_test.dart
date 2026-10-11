@@ -135,6 +135,7 @@ void _expectOpaqueFrame(WidgetTester tester, {required bool dark}) {
 Future<void> _finish(WidgetTester tester, GroupFeatureStore store) async {
   await unmountSangong(tester);
   store.dispose();
+  debugPrint = tester.binding.debugPrintOverride;
 }
 
 List<Map<String, dynamic>> _ledgerEvents(List<String> logs, String stage) {
@@ -203,8 +204,7 @@ void main() {
       expect(find.byType(SangongUserDetailPage), findsNothing);
 
       await tester.tap(_inFrame(find.byTooltip('关闭')));
-      await tester.pump(const Duration(milliseconds: 350));
-      await flushSangong(tester);
+      await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
       expect(find.text(_ordinaryProfile), findsOneWidget);
       pending.complete(_account());
@@ -317,8 +317,7 @@ void main() {
       expect(find.byType(SangongUserDetailPage), findsNothing);
       expect(api.count('/user-report'), 0);
       await tester.tap(_inFrame(find.byTooltip('关闭')));
-      await tester.pump(const Duration(milliseconds: 350));
-      await flushSangong(tester);
+      await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
       expect(find.text(_ordinaryProfile), findsOneWidget);
       expect(tester.takeException(), isNull);

@@ -14,6 +14,7 @@ class SearchBox extends StatefulWidget {
     this.searchIcon,
     this.clearIcon,
     this.backgroundColor,
+    this.surfaceColor,
     this.searchIconHeight,
     this.searchIconWidth,
     this.margin,
@@ -37,6 +38,9 @@ class SearchBox extends StatefulWidget {
   final Widget? searchIcon;
   final Widget? clearIcon;
   final Color? backgroundColor;
+
+  /// Optional full-width surface behind the field and its outer margin.
+  final Color? surfaceColor;
   final double? searchIconWidth;
   final double? searchIconHeight;
   final EdgeInsetsGeometry? margin;
@@ -88,7 +92,7 @@ class _SearchBoxState extends State<SearchBox> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final field = Container(
       height: widget.height ?? 36.h,
       margin: widget.margin,
       padding: widget.padding ?? EdgeInsets.symmetric(horizontal: 14.w),
@@ -127,6 +131,9 @@ class _SearchBoxState extends State<SearchBox> {
         ],
       ),
     );
+    return widget.surfaceColor == null
+        ? field
+        : ColoredBox(color: widget.surfaceColor!, child: field);
   }
 
   Widget get _clearBtn => Visibility(

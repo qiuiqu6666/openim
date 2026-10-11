@@ -69,6 +69,12 @@ class RequestHistoryStore {
   Future<void> hide(RequestHistoryEntry entry) =>
       _save(_clearedThrough, {..._deleted, entry.id: entry.time});
 
+  Future<void> hideAll(Iterable<RequestHistoryEntry> entries) =>
+      _save(_clearedThrough, {
+        ..._deleted,
+        for (final entry in entries) entry.id: entry.time,
+      });
+
   Future<void> clear(Iterable<RequestHistoryEntry> entries) async {
     final snapshot = entries.toList();
     if (snapshot.isEmpty) return;

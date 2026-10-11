@@ -45,22 +45,32 @@ class GroupSetupMembership {
       try {
         final joined = await query().timeout(timeout);
         if (!current()) return;
-        resolved.value = true;
-        onResult(joined);
-        return;
+        // The SDK reads its local group cache. Confirm an absent result after
+        // a short delay instead of briefly presenting a joined group as left.
+        if (joined || attempt == 1) {
+          resolved.value = true;
+          onResult(joined);
+          return;
+        }
       } catch (_) {
         if (!current()) return;
         if (attempt == 1) {
           failed.value = true;
           return;
         }
-        final retry = _retry = Completer<bool>();
-        _retryTimer = Timer(retryDelay, () => retry.complete(true));
-        if (!await retry.future || !current()) return;
-        _retry = null;
-        _retryTimer = null;
       }
+      final retry = _retry = Completer<bool>();
+      _retryTimer = Timer(retryDelay, () => retry.complete(true));
+      if (!await retry.future || !current()) return;
+      _retry = null;
+      _retryTimer = null;
     }
+  }
+
+  /// Sync completion will start a fresh read; keep the last known page state.
+  void defer() {
+    _invalidate();
+    failed.value = false;
   }
 
   /// A current chat snapshot or SDK membership event supersedes pending reads.

@@ -9,7 +9,9 @@ import 'package:openim_common/openim_common.dart';
 import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 
 import 'group_list_logic.dart';
+import 'count/group_count_footer.dart';
 import '../empty/contact_list_placeholder.dart';
+import '../select_contacts/contact_card/contact_card_picker_tokens.dart';
 
 class GroupListPage extends StatelessWidget {
   final GroupListLogic logic;
@@ -46,6 +48,27 @@ class GroupListPage extends StatelessWidget {
       backgroundColor: Styles.c_F8F9FA,
       body: Column(
         children: [
+          SearchBox(
+            key: const ValueKey('my-groups-search'),
+            controller: logic.search.controller,
+            enabled: true,
+            height: ContactCardPickerTokens.searchHeight(context),
+            margin: ContactCardPickerTokens.searchPadding,
+            borderRadius:
+                BorderRadius.circular(ContactCardPickerTokens.searchRadius),
+            surfaceColor: Styles.c_FFFFFF,
+            backgroundColor: Styles.c_F4F5F7,
+            textStyle: ContactCardPickerTokens.searchStyle(context),
+            hintStyle: ContactCardPickerTokens.searchStyle(context, hint: true),
+            searchIconColor: ContactCardPickerTokens.secondary(context),
+            onChanged: logic.search.change,
+            onCleared: () => logic.search.change(''),
+            onSubmitted: (value) {
+              logic.search.change(value);
+              logic.search.run();
+              FocusScope.of(context).unfocus();
+            },
+          ),
           Obx(
             () => CustomTabBar(
               labels: [StrRes.iCreatedGroup, StrRes.iJoinedGroup],
@@ -56,9 +79,9 @@ class GroupListPage extends StatelessWidget {
           ),
           Expanded(
             child: Obx(
-              () => logic.index.value == 0
-                  ? _buildICreatedListView(context)
-                  : _buildIJoinedListView(context),
+              () => logic.search.query.isNotEmpty
+                  ? _buildSearchResults(context)
+                  : _buildDirectory(context, created: logic.index.value == 0),
             ),
           ),
         ],
@@ -66,66 +89,82 @@ class GroupListPage extends StatelessWidget {
     );
   }
 
-  Widget _buildICreatedListView(BuildContext context) => SmartRefresher(
-        key: logic.iCreateGlobalKey,
-        controller: logic.iCreateRefreshController,
-        header: IMViews.buildHeader(30),
-        footer: IMViews.buildFooter(),
-        enablePullUp: logic.canLoadMore(true),
-        enablePullDown: true,
-        onRefresh: () {
-          GroupLiveListScope.maybeOf(context)?.refreshVisible();
-          logic.iCreatedInitial();
-        },
-        onLoading: logic.iCreatedLoadMore,
-        child: logic.iCreatedList.isEmpty
-            ? contactListPlaceholder(
-                context,
-                title: Localizations.localeOf(context).languageCode == 'zh'
-                    ? '暂无创建的群聊'
-                    : 'No groups created yet',
-                loading: logic.loading[true]!,
-                failed: logic.loadFailed[true]!,
-                onRetry: logic.iCreatedInitial,
-              )
-            : ListView.builder(
-                physics: const BouncingScrollPhysics(),
-                itemCount: logic.iCreatedList.length,
-                itemBuilder: (_, index) => _buildItemView(
-                    logic.iCreatedList[index],
-                    showDivider: index < logic.iCreatedList.length - 1),
-              ),
+  Widget _buildSearchResults(BuildContext context) {
+    final search = logic.search;
+    final groups = search.groupsFor(created: logic.index.value == 0);
+    if (search.loading.value || search.failed.value || groups.isEmpty) {
+      return contactListPlaceholder(
+        context,
+        title: StrRes.searchNotFound,
+        loading: search.loading.value,
+        failed: search.failed.value,
+        onRetry: search.run,
+        footer: const GroupCountFooter(count: 0),
       );
+    }
+    return _buildList(
+      groups,
+      key: ValueKey('group-search-${logic.index.value}-${search.query.value}'),
+      showCount: true,
+    );
+  }
 
-  Widget _buildIJoinedListView(BuildContext context) => SmartRefresher(
-        key: logic.iJoinGlobalKey,
-        controller: logic.iJoinRefreshController,
-        header: IMViews.buildHeader(30),
-        footer: IMViews.buildFooter(),
-        enablePullUp: logic.canLoadMore(false),
-        enablePullDown: true,
-        onRefresh: () {
-          GroupLiveListScope.maybeOf(context)?.refreshVisible();
-          logic.iJoinedInitial();
-        },
-        onLoading: logic.iJoinedLoadMore,
-        child: logic.iJoinedList.isEmpty
-            ? contactListPlaceholder(
-                context,
-                title: Localizations.localeOf(context).languageCode == 'zh'
-                    ? '暂无加入的群聊'
-                    : 'No groups joined yet',
-                loading: logic.loading[false]!,
-                failed: logic.loadFailed[false]!,
-                onRetry: logic.iJoinedInitial,
-              )
-            : ListView.builder(
-                physics: const BouncingScrollPhysics(),
-                itemCount: logic.iJoinedList.length,
-                itemBuilder: (_, index) => _buildItemView(
-                    logic.iJoinedList[index],
-                    showDivider: index < logic.iJoinedList.length - 1),
-              ),
+  Widget _buildDirectory(BuildContext context, {required bool created}) {
+    final groups = (created ? logic.iCreatedList : logic.iJoinedList)
+        .toList(growable: false);
+    final refresh = created ? logic.iCreatedInitial : logic.iJoinedInitial;
+    final chinese = Localizations.localeOf(context).languageCode == 'zh';
+    final strings = RefreshLocalizations.of(context)?.currentLocalization ??
+        (chinese ? ChRefreshString() : EnRefreshString());
+    return SmartRefresher(
+      key: created ? logic.iCreateGlobalKey : logic.iJoinGlobalKey,
+      controller: created
+          ? logic.iCreateRefreshController
+          : logic.iJoinRefreshController,
+      header: IMViews.buildHeader(30),
+      footer: ClassicFooter(
+        textStyle: ContactCardPickerTokens.subtitleStyle(context),
+        idleText: strings.idleLoadingText,
+        loadingText: strings.loadingText,
+        canLoadingText: strings.canLoadingText,
+        failedText: strings.loadFailedText,
+        noDataText: strings.noMoreText,
+      ),
+      enablePullUp: logic.canLoadMore(created),
+      enablePullDown: true,
+      onRefresh: () {
+        GroupLiveListScope.maybeOf(context)?.refreshVisible();
+        refresh();
+      },
+      onLoading: created ? logic.iCreatedLoadMore : logic.iJoinedLoadMore,
+      child: groups.isEmpty
+          ? contactListPlaceholder(
+              context,
+              title: chinese
+                  ? (created ? '暂无创建的群聊' : '暂无加入的群聊')
+                  : (created
+                      ? 'No groups created yet'
+                      : 'No groups joined yet'),
+              loading: logic.loading[created]!,
+              failed: logic.loadFailed[created]!,
+              onRetry: refresh,
+              footer: const GroupCountFooter(count: 0),
+            )
+          : _buildList(groups, showCount: logic.isComplete(created)),
+    );
+  }
+
+  ListView _buildList(List<GroupInfo> groups,
+          {Key? key, required bool showCount}) =>
+      ListView.builder(
+        key: key,
+        physics: const AlwaysScrollableScrollPhysics(),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        itemCount: groups.length + (showCount ? 1 : 0),
+        itemBuilder: (_, index) => index == groups.length
+            ? GroupCountFooter(count: groups.length)
+            : _buildItemView(groups[index],
+                showDivider: index < groups.length - 1),
       );
 
   Widget _buildItemView(GroupInfo info, {required bool showDivider}) =>

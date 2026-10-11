@@ -10,6 +10,7 @@ import 'package:get/get.dart';
 import 'package:openim/core/controller/app_controller.dart';
 import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/core/im_callback.dart';
+import 'package:openim/pages/chat/navigation/chat_message_navigation.dart';
 import 'package:openim/pages/contacts/contacts_logic.dart';
 import 'package:openim/pages/contacts/user_profile_panel/user_profile _panel_binding.dart';
 import 'package:openim/pages/contacts/user_profile_panel/user_profile _panel_logic.dart';
@@ -237,11 +238,16 @@ void main() {
     UserCacheManager().removeUserInfo('me');
   });
 
-  Future<void> open(WidgetTester tester, {String id = _peer}) async {
+  Future<void> open(WidgetTester tester,
+      {String id = _peer, bool fromGroupCard = false}) async {
     await tester.pumpWidget(GetMaterialApp(
       initialRoute: '/',
       getPages: [
         GetPage(name: '/', page: () => const Scaffold()),
+        GetPage(
+          name: AppRoutes.myProfile,
+          page: () => const Scaffold(body: Text('my-profile')),
+        ),
         GetPage(
           name: AppRoutes.userProfilePanel,
           binding: UserProfilePanelBinding(),
@@ -252,11 +258,27 @@ void main() {
         ),
       ],
     ));
-    AppNavigator.startUserProfilePane(
-        userID: id, nickname: 'Route name', faceURL: 'route-avatar');
-    tagCreated = true;
+    if (fromGroupCard) {
+      ChatMessageNavigation(
+        isClosed: () => false,
+        isGroupChat: () => true,
+        isSingleChat: () => false,
+        isAdminOrOwner: () => false,
+        groupID: () => 'source-group',
+        groupInfo: () => GroupInfo(groupID: 'source-group', lookMemberInfo: 1),
+      ).viewUserInfo(
+        UserInfo(userID: id, nickname: 'Route name', faceURL: 'route-avatar'),
+        isCard: true,
+        inviteCode: 'card-invite',
+      );
+    } else {
+      AppNavigator.startUserProfilePane(
+          userID: id, nickname: 'Route name', faceURL: 'route-avatar');
+    }
+    tagCreated = !AppNavigator.isCurrentUser(id);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
+    if (AppNavigator.isCurrentUser(id)) return;
     expect(logic, isNotNull);
     expect(logic!.userInfo.value.userID, id);
   }
@@ -275,6 +297,21 @@ void main() {
     Get.put<ContactsLogic>(directory);
     return directory;
   }
+
+  testWidgets('group card opens a personal profile with the returned public account',
+      (tester) async {
+    contacts();
+    await open(tester, fromGroupCard: true);
+    expect(logic!.isGroupMemberPage, isFalse);
+    expect(logic!.groupID, isNull);
+    expect(logic!.addSource, FriendAddSource.card);
+    expect(logic!.friendAddFields, {'inviteCode': 'card-invite'});
+    friendReplies.single.complete(_friend());
+    await tester.pumpAndSettle();
+    expect(logic!.displayedUserID, 'chat-number');
+    expect(logic!.userInfo.value.userID, _peer);
+    expect(logic!.isFriendship, isTrue);
+  });
 
   testWidgets('current directory seeds the friend layout before SDK replies',
       (tester) async {
@@ -388,15 +425,15 @@ void main() {
     expect(logic!.initialProfileFailed.value, isFalse);
   });
 
-  testWidgets('self layout is ready on the first frame without a friend query',
+  testWidgets('self navigation opens own profile without a peer profile query',
       (tester) async {
     await open(tester, id: 'me');
-    expect(firstFrame!.ready, isTrue);
-    expect(logic!.isMyself, isTrue);
-    expect(nativeMethods, contains('getSelfUserInfo'));
-    expect(friendReplies, isEmpty);
     await tester.pumpAndSettle();
-    expect(logic!.userInfo.value.nickname, 'SDK self');
+    expect(find.text('my-profile'), findsOneWidget);
+    expect(logic, isNull);
+    expect(firstFrame, isNull);
+    expect(nativeMethods, isEmpty);
+    expect(friendReplies, isEmpty);
   });
 
   testWidgets(

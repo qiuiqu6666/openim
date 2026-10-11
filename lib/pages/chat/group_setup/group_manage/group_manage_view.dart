@@ -44,7 +44,7 @@ class GroupManagePage extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
                         children: [
                       _section([
-                        if (owner)
+                        if (logic.groupSetupLogic.isOwnerOrAdmin)
                           _toggle('sdkMuteAll'.tr,
                               value: info.status == 3,
                               onChanged: busy

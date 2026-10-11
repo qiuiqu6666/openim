@@ -20,6 +20,43 @@ void main() {
   tearDown(Get.reset);
 
   for (final dark in [false, true]) {
+    testWidgets('pending permission is silent and retains draft / dark=$dark',
+        (tester) async {
+      final fixture = await _DisabledComposer.mount(tester, dark: dark);
+      fixture.controller.value = _draft;
+      fixture.availability.value = const _Availability(
+        enabled: false,
+        hint: '',
+        showWarning: false,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(_bar), findsOneWidget);
+      expect(tester.getSize(find.byKey(_bar)).height, greaterThan(0));
+      expect(
+        tester
+            .widgetList<Text>(find.descendant(
+              of: find.byKey(_bar),
+              matching: find.byType(Text),
+            ))
+            .every((text) => (text.data ?? '').isEmpty),
+        isTrue,
+      );
+      expect(find.text(StrRes.youMuted), findsNothing);
+      expect(_warningImage(), findsNothing);
+      expect(find.widgetWithText(ElevatedButton, StrRes.send), findsNothing);
+      expect(fixture.controller.value, _draft);
+      fixture.availability.value = const _Availability();
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatTextField), findsOneWidget);
+      expect(fixture.controller.value, _draft);
+      expect(fixture.sent, isEmpty);
+      fixture.availability.value = const _Availability(enabled: false);
+      await tester.pumpAndSettle();
+      expect(find.text(StrRes.youMuted), findsOneWidget);
+      expect(_warningImage(), findsOneWidget);
+      expect(fixture.controller.value, _draft);
+    });
+
     testWidgets('mute and unmute preserve draft and selection / dark=$dark',
         (tester) async {
       final fixture = await _DisabledComposer.mount(tester, dark: dark);
@@ -67,9 +104,11 @@ void main() {
           case 'emoji':
             expect(find.byType(ChatEmojiPanel), findsOneWidget);
           case 'tools':
-            expect(find.text('tool-panel-fixture').hitTestable(), findsOneWidget);
+            expect(
+                find.text('tool-panel-fixture').hitTestable(), findsOneWidget);
           case 'voice':
-            expect(find.text('voice-panel-fixture').hitTestable(), findsOneWidget);
+            expect(
+                find.text('voice-panel-fixture').hitTestable(), findsOneWidget);
         }
         fixture.controller.value = _draft;
         await tester.pump();
@@ -130,7 +169,8 @@ void main() {
           expect(composer.height, closeTo(bar.height + inset, .1),
               reason: 'The bottom safe inset belongs to the disabled bar once');
           expect(bar.contains(label.topLeft), isTrue);
-          expect(bar.contains(label.bottomRight - const Offset(.01, .01)), isTrue);
+          expect(
+              bar.contains(label.bottomRight - const Offset(.01, .01)), isTrue);
           expect(bar.contains(warning.topLeft), isTrue);
           expect(warning.right, lessThan(label.left));
           expect(warning.center.dy, closeTo(label.center.dy, .1));
@@ -173,10 +213,16 @@ Finder _warningImage() => find.byWidgetPredicate((widget) =>
     (widget.image as AssetImage).assetName == ImageRes.warn);
 
 class _Availability {
-  const _Availability({this.enabled = true, this.exited = false, this.hint});
+  const _Availability({
+    this.enabled = true,
+    this.exited = false,
+    this.hint,
+    this.showWarning = true,
+  });
   final bool enabled;
   final bool exited;
   final String? hint;
+  final bool showWarning;
 }
 
 class _DisabledComposer {
@@ -232,6 +278,7 @@ class _DisabledComposer {
                 enabled: state.enabled,
                 isNotInGroup: state.exited,
                 hintText: state.hint,
+                showDisabledWarning: state.showWarning,
                 onTapVoice: () {},
                 onSend: fixture.sent.add,
                 toolbox: const SizedBox(

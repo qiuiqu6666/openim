@@ -237,7 +237,8 @@ class _FeedLogic extends GetxController
   }
 
   @override
-  Future<void> deleteConversation(ConversationInfo info) async {
+  Future<void> deleteConversation(ConversationInfo info,
+      {bool propagateError = false}) async {
     _expectPreviewDismissed();
     deletedIDs.add(info.conversationID);
     list.removeWhere((row) => row.conversationID == info.conversationID);
@@ -532,14 +533,16 @@ void main() {
       await _mount(tester, logic, archived: archived);
       await _peek(tester, 'chat');
       await _select(tester, 'delete');
-      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.byType(AppAlertDialog<bool>), findsOneWidget);
       expect(logic.deletedIDs, isEmpty);
-      await tester.tap(find.widgetWithText(TextButton, StrRes.cancel));
+      await tester
+          .tap(find.widgetWithText(CupertinoDialogAction, StrRes.cancel));
       await tester.pumpAndSettle();
       expect(_row('chat'), findsOneWidget);
       await _peek(tester, 'chat');
       await _select(tester, 'delete');
-      await tester.tap(find.widgetWithText(TextButton, StrRes.delete));
+      await tester
+          .tap(find.widgetWithText(CupertinoDialogAction, StrRes.delete));
       await tester.pumpAndSettle();
       expect(logic.deletedIDs, ['chat']);
       expect(_row('chat'), findsNothing);

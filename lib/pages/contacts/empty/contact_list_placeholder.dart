@@ -10,6 +10,7 @@ CustomScrollView contactListPlaceholder(
   required bool loading,
   required bool failed,
   required VoidCallback onRetry,
+  Widget? footer,
 }) {
   final chinese = Localizations.localeOf(context).languageCode == 'zh';
   return CustomScrollView(
@@ -17,17 +18,26 @@ CustomScrollView contactListPlaceholder(
     slivers: [
       SliverFillRemaining(
         hasScrollBody: false,
-        child: loading
-            ? const Center(
-                child: CircularProgressIndicator(color: AppTokens.accent))
-            : IllustratedEmptyState(
-                icon: Icons.inbox_outlined,
-                title: failed
-                    ? (chinese ? '加载失败，请重试' : 'Could not load. Please retry.')
-                    : title,
-                actionLabel: failed ? (chinese ? '重试' : 'Retry') : null,
-                onAction: failed ? onRetry : null,
-              ),
+        child: Column(
+          children: [
+            Expanded(
+                child: loading
+                    ? const Center(
+                        child:
+                            CircularProgressIndicator(color: AppTokens.accent))
+                    : IllustratedEmptyState(
+                        icon: Icons.inbox_outlined,
+                        title: failed
+                            ? (chinese
+                                ? '加载失败，请重试'
+                                : 'Could not load. Please retry.')
+                            : title,
+                        actionLabel: failed ? (chinese ? '重试' : 'Retry') : null,
+                        onAction: failed ? onRetry : null,
+                      )),
+            if (footer != null && !loading && !failed) footer,
+          ],
+        ),
       ),
     ],
   );

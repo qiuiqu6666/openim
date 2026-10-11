@@ -8,6 +8,8 @@ import '../../../models/group_feature_context.dart';
 import '../../data/mark_six_repository.dart';
 import '../../widgets/mark_six_style.dart';
 import '../data/agent_query_controller.dart';
+import '../identity/agent_avatar_directory.dart';
+import '../identity/agent_user_avatar.dart';
 import '../widgets/agent_descendant_tile.dart';
 import 'agent_descendant_history_page.dart';
 
@@ -30,6 +32,7 @@ class AgentDescendantDetailPage extends StatefulWidget {
 class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
   late final _repository = MarkSixRepository(widget.featureContext);
   late final _state = AgentQueryController(_repository);
+  late final _avatars = AgentAvatarDirectory(widget.featureContext);
   bool get allowed =>
       widget.featureContext.sessionCurrent() &&
       widget.featureContext.capabilitiesCurrent() &&
@@ -45,6 +48,7 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
 
   @override
   void dispose() {
+    _avatars.dispose();
     _state.dispose();
     _repository.close();
     super.dispose();
@@ -116,13 +120,13 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                                                               .start,
                                                       children: [
                                                         Row(children: [
-                                                          AvatarView(
-                                                              width: 48,
-                                                              height: 48,
-                                                              text:
-                                                                  '${item['displayName'] ?? item['playerNo']}',
-                                                              url:
-                                                                  '${item['avatarUrl'] ?? ''}'),
+                                                          AgentUserAvatar(
+                                                              directory:
+                                                                  _avatars,
+                                                              item: item,
+                                                              size: 48,
+                                                              name:
+                                                                  '${item['displayName'] ?? item['playerNo']}'),
                                                           const SizedBox(
                                                               width: 12),
                                                           Expanded(
@@ -193,6 +197,7 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                                                       '${row['userId']}' !=
                                                           widget.userID))
                                                 AgentDescendantTile(
+                                                    avatars: _avatars,
                                                     item: child,
                                                     onTap: () {
                                                       if (!_state.current) {

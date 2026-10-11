@@ -177,7 +177,7 @@ class _ChatPictureViewState extends State<ChatPictureView> {
             ? null
             : remote();
     return ClipRRect(
-      borderRadius: borderRadius(widget.isISend),
+      borderRadius: BorderRadius.circular(ChatBubbleTokens.radius),
       child: SizedBox(
         width: displayWidth,
         height: displayHeight,

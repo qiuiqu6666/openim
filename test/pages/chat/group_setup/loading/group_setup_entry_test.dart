@@ -2,6 +2,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
+import 'package:openim/core/im_callback.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../members/group_preview_fixture.dart';
@@ -104,11 +105,73 @@ void main() {
     await drainPreview();
     fixture.joined.single.complete('false');
     await drainPreview();
+    expect(fixture.setup.isJoinedGroup.value, isTrue);
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+    fixture.joined.last.complete('false');
+    await drainPreview();
     expect(fixture.setup.isJoinedGroup.value, isFalse);
     expect(fixture.setup.isOwnerOrAdmin, isFalse);
     expect(fixture.setup.membership.resolved.value, isTrue);
     fixture.members.single.complete(previewMembers());
     await drainPreview();
     expect(fixture.setup.memberList, isEmpty);
+  });
+
+  test('entering during SDK sync waits and recovers automatically', () async {
+    await fixture.initialize(assumeJoined: false);
+    fixture.im.imSdkStatus(IMSdkStatus.syncStart);
+    await drainPreview();
+    fixture.setup.onReady();
+    await drainPreview();
+    expect(fixture.joined, isEmpty);
+    expect(fixture.setup.membership.resolved.value, isFalse);
+    expect(fixture.setup.membership.failed.value, isFalse);
+    expect(fixture.setup.groupInfo.value.groupName, '群聊测试');
+    fixture.im.imSdkStatus(IMSdkStatus.syncEnded);
+    await drainPreview();
+    fixture.joined.single.complete('true');
+    await drainPreview();
+    expect(fixture.setup.isJoinedGroup.value, isTrue);
+    expect(fixture.members, hasLength(1));
+  });
+
+  test('sync supersedes an earlier membership read without erasing the page',
+      () async {
+    await fixture.initialize(
+      cachedGroup: cachedGroup(),
+      cachedMember: cachedMember(),
+      assumeJoined: false,
+    );
+    fixture.setup.onReady();
+    await drainPreview();
+    fixture.im.imSdkStatus(IMSdkStatus.syncStart);
+    await drainPreview();
+    fixture.im.imSdkStatus(IMSdkStatus.syncEnded);
+    await drainPreview();
+    expect(fixture.joined, hasLength(2));
+    fixture.joined.first.complete('false');
+    fixture.joined.last.complete('true');
+    await drainPreview();
+    expect(fixture.setup.isJoinedGroup.value, isTrue);
+    expect(fixture.setup.isOwner, isTrue);
+    expect(fixture.setup.groupInfo.value.memberCount, 1919);
+  });
+
+  test('real leave event is not undone by sync completion or old reads',
+      () async {
+    await fixture.initialize(assumeJoined: false);
+    fixture.setup.onReady();
+    await drainPreview();
+    fixture.im.joinedGroupDeletedSubject.add(cachedGroup());
+    await drainPreview();
+    fixture.im.imSdkStatus(IMSdkStatus.syncEnded);
+    fixture.joined.single.complete('true');
+    await drainPreview();
+    expect(fixture.joined, hasLength(1));
+    expect(fixture.setup.isJoinedGroup.value, isFalse);
+    expect(fixture.setup.membership.resolved.value, isTrue);
+    fixture.im.joinedGroupAddedSubject.add(cachedGroup());
+    await drainPreview();
+    expect(fixture.setup.isJoinedGroup.value, isTrue);
   });
 }

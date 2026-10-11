@@ -15,3 +15,6 @@
 当前 Chat 凭证申请在 `sendFriendApply` 中仅写入签名信息。服务端补丁位于 `server/friend_request_source/friend_apply_source.patch`：附加真实凭证记录的 `row.Source`，不改变签名或权限校验。补丁发布后新申请可以显示来源；旧的无来源申请不会自动补齐。
 
 参考 99chat 的 `friend_request_audit_page.dart` 来源文案，使用本项目已有 OpenIM 数据和组件。解析与列表项测试位于 `test/pages/contacts/friend_requests/`，覆盖来源元数据、旧签名记录、收发方向、处理动作、亮暗主题和英文大字号布局。
+# 99chat 列表对齐（2026-10-11）
+
+当前列表已按参考仓库 `lib/src/newContact.dart` 调整为“新的朋友”：分收件/发件区块、待验证优先、验证附言和时间方向、状态胶囊、编辑多选删除。旧来源协议标签仅在展示时去除，数据继续使用 OpenIM SDK。共享组件、清理语义和验证说明见 `../request_history/README.md`；下文为此前实现记录。

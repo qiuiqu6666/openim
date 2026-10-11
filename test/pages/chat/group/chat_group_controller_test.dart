@@ -460,6 +460,84 @@ void main() {
     expect(h.controller.ownerAndAdmin, isEmpty);
   });
 
+  for (final cached in [false, true]) {
+    for (final role in [
+      GroupRoleLevel.owner,
+      GroupRoleLevel.admin,
+      GroupRoleLevel.member,
+    ]) {
+      testWidgets('mute-all waits for self role $role, cached=$cached',
+          (tester) async {
+        final self = Completer<List<GroupMembersInfo>>();
+        GroupInfo mutedGroup() => GroupInfo(groupID: 'group', status: 3);
+        final h = _GroupHarness(
+          readCachedGroupInfo: cached ? (_) => mutedGroup() : null,
+          groupInfo: (_) async => [mutedGroup()],
+          selfMember: (_, __) => self.future,
+          admins: (_) async => [],
+        );
+        h.controller.initialize();
+        final loading = h.controller.loadAfterHistory();
+        await tester.pumpWidget(MaterialApp(
+          home: Obx(() => Text(h.controller.muteStatusPending
+              ? 'checking'
+              : (h.controller.sendingMuted ? 'muted' : 'allowed'))),
+        ));
+        await tester.pump();
+        expect(find.text('checking'), findsOneWidget);
+        expect(find.text('muted'), findsNothing);
+        expect(h.controller.sendingMuted, isTrue,
+            reason: 'An unconfirmed role cannot bypass mute-all.');
+        self.complete([
+          GroupMembersInfo(groupID: 'group', userID: 'me', roleLevel: role)
+        ]);
+        await loading;
+        await tester.pump();
+        expect(h.controller.muteStatusPending, isFalse);
+        expect(find.text(role == GroupRoleLevel.member ? 'muted' : 'allowed'),
+            findsOneWidget);
+      });
+    }
+  }
+
+  for (final response in ['failed', 'empty', 'missing-role']) {
+    test('unresolved self read $response stays neutral until a role event',
+        () async {
+      final h = _GroupHarness(
+        groupInfo: (_) async => [GroupInfo(groupID: 'group', status: 3)],
+        selfMember: (_, __) async {
+          if (response == 'failed') throw StateError('temporarily unavailable');
+          return response == 'empty'
+              ? []
+              : [GroupMembersInfo(groupID: 'group', userID: 'me')];
+        },
+        admins: (_) async => [],
+      );
+      h.controller.initialize();
+      await h.controller.loadAfterHistory();
+      expect(h.controller.muteStatusPending, isTrue);
+      expect(h.controller.sendingMuted, isTrue);
+      h.changed.add(GroupMembersInfo(
+          groupID: 'group', userID: 'me', roleLevel: GroupRoleLevel.admin));
+      expect(h.controller.muteStatusPending, isFalse);
+      expect(h.controller.sendingMuted, isFalse);
+      h.changed.add(GroupMembersInfo(
+          groupID: 'group', userID: 'me', roleLevel: GroupRoleLevel.member));
+      expect(h.controller.muteStatusPending, isFalse);
+      expect(h.controller.sendingMuted, isTrue);
+    });
+  }
+
+  test('explicit personal mute is confirmed even while the role is missing', () {
+    final h = _GroupHarness();
+    h.controller.initialize();
+    h.groupChanged.add(GroupInfo(groupID: 'group', status: 3));
+    h.changed.add(GroupMembersInfo(
+        groupID: 'group', userID: 'me', muteEndTime: h.now + 30));
+    expect(h.controller.muteStatusPending, isFalse);
+    expect(h.controller.sendingMuted, isTrue);
+  });
+
   testWidgets('mute expiration refreshes reactive send permission',
       (tester) async {
     final h = _GroupHarness();

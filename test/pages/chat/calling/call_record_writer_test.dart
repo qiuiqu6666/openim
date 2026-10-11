@@ -21,6 +21,8 @@ void main() {
   Completer<String>? sendGate;
   Completer<void>? sendReached;
   bool failCreate = false;
+  final refreshes = <ConversationRefreshRequest>[];
+  late StreamSubscription<ConversationRefreshRequest> refreshSubscription;
 
   SignalingInfo invitation() => SignalingInfo(
       userID: 'caller',
@@ -47,6 +49,9 @@ void main() {
   setUp(() {
     Get.testMode = true;
     OpenIM.iMManager.userID = 'callee';
+    refreshes.clear();
+    refreshSubscription =
+        ConversationRefreshEvents.changes.listen(refreshes.add);
     nativeCalls = [];
     createGate = null;
     sendGate = null;
@@ -69,7 +74,8 @@ void main() {
     });
   });
 
-  tearDown(() {
+  tearDown(() async {
+    await refreshSubscription.cancel();
     messenger.setMockMethodCallHandler(channel, null);
     Get.reset();
   });
@@ -96,6 +102,10 @@ void main() {
     expect(reported!.endedAt, ended.millisecondsSinceEpoch);
     expect(reported!.participantUserIDs, ['caller', 'callee']);
     expect(message, isNotNull);
+    await Future<void>.delayed(Duration.zero);
+    expect(refreshes, hasLength(1));
+    expect(refreshes.single.sourceID, 'caller');
+    expect(refreshes.single.sessionType, ConversationType.single);
     final inserted = args(nativeCalls.last);
     expect(inserted['receiverID'], 'callee');
     expect(inserted['senderID'], 'caller');
@@ -124,6 +134,8 @@ void main() {
         isCurrentAccount: () => true,
         onRecord: (record, _) async => records.add(record));
     expect(result, isNull);
+    await Future<void>.delayed(Duration.zero);
+    expect(refreshes, isEmpty);
     expect(records.single.duration, 0);
     expect(records.single.incomingCall, isFalse);
     expect(records.single.status, 'cancelled');

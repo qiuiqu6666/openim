@@ -134,7 +134,7 @@ class ChatPage extends StatelessWidget {
                               newMessageCount:
                                   logic.newMessages.unseenCount.value,
                               showBackToBottom:
-                                  logic.newMessages.awayFromLatest.value,
+                                  logic.newMessages.showBackToBottom.value,
                               onSeeNewMessage: () =>
                                   logic.scrollBottom(smooth: true),
                               bottomView: input,
@@ -195,7 +195,10 @@ class ChatPage extends StatelessWidget {
             focusNode: logic.focusNode,
             isNotInGroup: logic.isInvalidGroup,
             enabled: !logic.sendingMuted,
-            hintText: logic.sendingMuted ? StrRes.youMuted : null,
+            showDisabledWarning: !logic.groupMutePending,
+            hintText: logic.groupMutePending
+                ? ''
+                : (logic.sendingMuted ? StrRes.youMuted : null),
             directionalText: logic.directionalText(),
             onCloseDirectional: logic.onClearDirectional,
             onSend: (v) => logic.sendTextMsg(),

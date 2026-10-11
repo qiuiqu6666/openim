@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'process_friend_requests_logic.dart';
+import '../source/friend_application_source.dart';
 
 class ProcessFriendRequestsPage extends StatelessWidget {
   final logic = Get.find<ProcessFriendRequestsLogic>();
@@ -52,7 +53,8 @@ class ProcessFriendRequestsPage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      (logic.applicationInfo.reqMsg ?? '').toText
+                      friendApplicationWording(logic.applicationInfo.reqMsg)
+                          .toText
                         ..style = Styles.ts_0C1C33_17sp,
                     ],
                   ),

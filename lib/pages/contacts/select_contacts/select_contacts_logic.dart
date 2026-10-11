@@ -57,6 +57,24 @@ class SelectContactsLogic extends GetxController
   String? cardRecipientFaceURL;
   bool cardRecipientIsGroup = false;
   final inputCtrl = TextEditingController();
+  final recentScrollController = ScrollController();
+  final conversationSearch = ''.obs;
+
+  List<ConversationInfo> get visibleConversations {
+    final query = conversationSearch.value;
+    if (query.isEmpty) return conversationList;
+    return conversationList
+        .where((info) => (info.showName ?? '').toLowerCase().contains(query))
+        .toList(growable: false);
+  }
+
+  void searchConversations(String value) {
+    final query = graphemeTrim(value).toLowerCase();
+    if (query == conversationSearch.value) return;
+    conversationSearch.value = query;
+    if (recentScrollController.hasClients) recentScrollController.jumpTo(0);
+  }
+
   bool _confirmingCard = false;
   RecentConversationPreviewController? _recentPreviews;
   RecentConversationPreviewController get recentPreviews =>
@@ -89,6 +107,7 @@ class SelectContactsLogic extends GetxController
   void onClose() {
     _recentPreviews?.dispose();
     inputCtrl.dispose();
+    recentScrollController.dispose();
     super.onClose();
   }
 

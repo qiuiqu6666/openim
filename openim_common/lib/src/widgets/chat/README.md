@@ -1,8 +1,14 @@
 # 聊天公共组件
 
+正文排版复用 `res/typography/chat_message_typography.dart` 与现有 `PlatformTextFonts`。与 99chat `MessageBubbleTextColor.messageBodyBaseStyle` 一致，使用非继承样式、16px、w400、1.3 倍行高和 alphabetic 基线，避免 Material 主题的字距、字体或段落高度混入气泡。移动端保留系统字体与完整 Unicode 回退，桌面复用同一组中文 UI 字体；普通文字、@、引用回复正文、自定义 Markdown 和实体格式化文字保持一致。显式调用方样式和正文自身的加粗等格式仍生效。`test/widgets/chat/typography/` 在相同测试环境下比较参考样式的行框与像素，并覆盖亮暗主题、系统放大和平台字体选择；原生字体效果仍需设备验收。
+
 普通文字、@消息和引用正文按普通文字显示，保留换行及复制源文本，复用现有链接与提及回调，不自动套用 Markdown 格式。显示规则归属 [文字与 Markdown 气泡](markdown/README.md)；高级格式化消息及应用自定义文字渲染保留各自路径。
 
-文字气泡默认行高为 `ChatBubbleTokens.textLineHeight = 1.3`，默认字号 17 时名义行高约 22.1dp。`ChatText` 的普通正文、链接和 Markdown，以及 `ChatFormattedText` 的实体文字共用这一值；正式聊天和长按会话预览复用相同渲染组件。调用者显式提供的行高仍优先，不改变原始文本、Unicode 字符、字体倍率或强制字体行框。
+`@所有人` 由共用 `ChatItemView` 的提及匹配补齐高亮，聊天页与长按会话预览一致，兼容 SDK 的 `@atAllTag` 和已转换的显示文字，不依赖成员资料列表。浅色使用现有提及蓝色，暗色沿用提及对比色；它不指向单个成员，因而不创建用户资料跳转。保留正文、复制内容及 SDK 原始消息，匹配在空白、标点或结尾处结束，避免把较长昵称的前缀识别为所有人。
+
+文字气泡对照 99chat 正式聊天的 `TIMUIKitTextElem`、`MessageBubbleTextColor` 和 `chat_message_width.dart`：默认字号 16、常规字重、行高 1.3；普通气泡圆角 16，靠发送方向的上角为 6，内边距左右 12、上下 8。整体宽度在手机为视口 70%，宽屏上限 420，并继续服从消息行的实际约束。`ChatText` 的普通正文、链接和 Markdown，以及 `ChatFormattedText` 的实体文字共用正文样式；正式聊天和长按会话预览复用相同渲染组件。调用者显式提供的样式仍优先，不改变原始文本、Unicode 字符、字体倍率或强制字体行框。
+
+复用 `ChatBubble` / `ChatItemContainer` / `ChatInlineMetadata`，不新增消息渲染分支。浅色己方气泡 #DCEEFF，深色为主题强调蓝；对方气泡保持白色 / #1B1D22。气泡内时间字号 11、行高 1，末行空间足够时与正文保留 8px 间隔，不再额外下移；不足或多段正文时放在下方。深色回执使用浅色保证可见，单勾/双勾及 SDK 真实发送状态保持原有逻辑。图片外形采用 16px 圆角，用户指定的缩小尺寸、长图顶部裁切与清晰度策略保留。回归与可选亮暗渲染图位于 `test/widgets/chat/chat_bubble_99chat_test.dart`。
 
 气泡上方昵称由 `ChatNicknameView` 显示：20 个可见字符以内完整显示，超过时显示前 20 个字符加 `…`，复用 `graphemePrefix` 保证组合表情不被拆开。去掉原来的 `100.w` 宽度限制，使用消息行剩余空间，窄屏或大字号可换行；SDK 昵称和读屏原文保持完整，原有昵称样式及可选时间保留。已核对 99chat 的 `TIMUIKItMessageList/tim_uikit_chat_history_message_list_item.dart::_messageHeader`，这里按用户要求采用字符数上限，覆盖参考的单行宽度省略规则。
 

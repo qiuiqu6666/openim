@@ -133,6 +133,11 @@ class _AgentCurrentPageState extends State<AgentCurrentPage> {
     final data = _state.data;
     if (data == null) return const MarkSixEmpty(message: '暂无当前汇总');
     final summary = markSixMap(data['summary']);
+    final dataTime = DateTime.tryParse('${summary['dataTime'] ?? ''}');
+    final localDataTime = dataTime == null
+        ? '—'
+        : IMUtils.formatDateMs(dataTime.millisecondsSinceEpoch,
+            format: 'yyyy-MM-dd HH:mm:ss');
     final personal =
         markSixMap(data['personal'] ?? data['personalSummary'] ?? data['self']);
     return RefreshIndicator(
@@ -154,8 +159,7 @@ class _AgentCurrentPageState extends State<AgentCurrentPage> {
                     subtitle: [
                       if (summary['agentNo'] != null)
                         '用户编号：${summary['agentNo']}',
-                      if (summary['dataTime'] != null)
-                        '数据时间：${summary['dataTime']}'
+                      if (summary['dataTime'] != null) '数据时间：$localDataTime'
                     ].join('  ·  '),
                     summary: summary,
                     highlight: true)

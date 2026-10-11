@@ -41,7 +41,10 @@ String conversationLatestMessageText(ConversationInfo info) {
     if (info.isSingleChat || message.sendID == OpenIM.iMManager.userID) {
       return text;
     }
-    return '${message.senderNickname}: $text ';
+    final senderName = graphemeTrim(message.senderNickname ?? '');
+    // Some server-created messages omit the sender nickname.
+    if (senderName.isEmpty) return text;
+    return '$senderName: $text ';
   } catch (error, stack) {
     Logger.print('------e:$error s:$stack');
     return '[${StrRes.unsupportedMessage}]';

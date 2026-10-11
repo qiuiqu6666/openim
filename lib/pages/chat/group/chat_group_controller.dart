@@ -123,12 +123,24 @@ class ChatGroupController {
   bool get havePermissionMute =>
       isGroupChat && groupInfo?.ownerUserID == currentUserID();
 
+  /// The default role is only a placeholder until this user's member data arrives.
+  /// Keep sending blocked for mute-all without presenting an unconfirmed mute.
+  bool get muteStatusPending {
+    _muteRevision.value;
+    return isGroupChat &&
+        groupInfo?.status == 3 &&
+        (groupMembersInfo?.muteEndTime ?? 0) <= _nowSeconds() &&
+        !const [GroupRoleLevel.member, GroupRoleLevel.admin, GroupRoleLevel.owner]
+            .contains(groupMembersInfo?.roleLevel);
+  }
+
   bool get sendingMuted {
     _muteRevision.value;
     return isGroupChat &&
         ((groupMembersInfo?.muteEndTime ?? 0) > _nowSeconds() ||
-            (groupMemberRoleLevel.value == GroupRoleLevel.member &&
-                groupInfo?.status == 3));
+            (groupInfo?.status == 3 &&
+                (muteStatusPending ||
+                    groupMemberRoleLevel.value == GroupRoleLevel.member)));
   }
 
   static int _systemNowSeconds() =>

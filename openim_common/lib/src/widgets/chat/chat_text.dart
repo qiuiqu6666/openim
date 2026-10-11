@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
+import '../../res/typography/chat_message_typography.dart';
+
 class ChatText extends StatelessWidget {
   const ChatText({
     super.key,
@@ -40,12 +42,22 @@ class ChatText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bodyStyle = (textStyle ?? Styles.ts_0C1C33_17sp).copyWith(
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final bodyStyle = (textStyle ?? chatMessageTextStyle(context)).copyWith(
       height: textStyle?.height ?? ChatBubbleTokens.textLineHeight,
     );
-    final linkStyle = (matchTextStyle ?? Styles.ts_0089FF_17sp).copyWith(
+    final linkStyle = (matchTextStyle ??
+            bodyStyle.copyWith(
+              color: dark && isISend ? AppTokens.onAccent : Styles.c_0089FF,
+            ))
+        .copyWith(
       height: matchTextStyle?.height ?? bodyStyle.height,
     );
+    final scaler = textScaler ??
+        (textScaleFactor == 1
+            ? MediaQuery.textScalerOf(context)
+            : _ChatTextScaler(
+                MediaQuery.textScalerOf(context), textScaleFactor));
     if (enableMarkdown && ChatMarkdownText.hasMarkdown(text)) {
       return ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maximumWidth ?? maxWidth),
@@ -54,11 +66,7 @@ class ChatText extends StatelessWidget {
           textStyle: bodyStyle,
           matchTextStyle: linkStyle,
           patterns: patterns,
-          textScaler: textScaler ??
-              (textScaleFactor == 1
-                  ? MediaQuery.textScalerOf(context)
-                  : _ChatTextScaler(
-                      MediaQuery.textScalerOf(context), textScaleFactor)),
+          textScaler: scaler,
           onVisibleTrulyText: onVisibleTrulyText,
         ),
       );
@@ -70,7 +78,7 @@ class ChatText extends StatelessWidget {
         textStyle: bodyStyle,
         matchTextStyle: linkStyle,
         maximumWidth: maximumWidth,
-        textScaler: textScaler,
+        textScaler: scaler,
         prefixSpan: prefixSpan,
         textAlign: textAlign,
         overflow: overflow,

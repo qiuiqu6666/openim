@@ -1,7 +1,7 @@
 # Platform text fonts
 
 `PlatformTextFonts` centralizes the existing desktop CJK preferences used by the
-composer and wallet. Android and iOS leave `fontFamily` and `fontFamilyFallback`
+message body, composer and wallet. Android and iOS leave `fontFamily` and `fontFamilyFallback`
 unset, matching the app theme and 99chat's native typography. The browser also
 uses available platform fonts: this project does not register a `NotoSansSC`
 font asset, so it must not depend on that unregistered family name.
@@ -26,6 +26,15 @@ status text keeps its established geometry.
 
 Tests: `test/theme/typography/platform_text_fonts_test.dart` and
 `test/pages/contacts/user_profile_panel/identity/user_profile_unicode_test.dart`.
+
+`chat_message_typography.dart` provides the shared message-body style, matching
+99chat's `MessageBubbleTextColor.messageBodyBaseStyle`: 16px, w400, height 1.3,
+alphabetic baseline and `inherit: false`. Plain text, mentions, reply bodies,
+custom Markdown and formatted entities use this style without inheriting a
+page's Material font, letter/word spacing or weight. Explicit caller styles and
+message formatting remain supported; no fixed strut truncates fallback glyphs.
+The rendering comparison in `test/widgets/chat/typography/` checks line boxes
+and pixels against an independent reference style under unrelated page themes.
 
 References: [Flutter TextStyle](https://api.flutter.dev/flutter/painting/TextStyle-class.html)
 and [Flutter StrutStyle](https://api.flutter.dev/flutter/painting/StrutStyle-class.html).

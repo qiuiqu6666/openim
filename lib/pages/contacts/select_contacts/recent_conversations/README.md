@@ -2,6 +2,8 @@
 
 此目录维护收件人选择页 `SelectContactsPage` 中的最近会话摘要。继续使用现有 `SelectContactsLogic.conversationList` 的收件人范围与群成员校验，勾选、确认及路由保持原流程。
 
+选择会话页顶部复用公共 `SearchBox` 和 `ContactCardPickerTokens`，按当前会话 `showName`（联系人显示名称/群名称）即时筛选，忽略大小写及首尾空白。清空恢复原列表，空结果显示现有搜索空态；只筛选已校验的最近会话，不另查接口、消息正文或加载整个通讯录。搜索不会改写源列表、排序或 `checkedList`，不匹配的已选项仍可一并确认。查询变化时回到列表顶部，拖动或键盘搜索可收起键盘，控制器在选择页关闭时释放。参考 99chat `forward_message_screen.dart` 的输入框与最近会话 keyword 过滤，本页按用户要求在多选模式也提供搜索；“我的好友”和“我的群组”入口保留。
+
 ## 展示与复用
 
 参考 99chat 的 `third_party/tencent_cloud_chat_uikit/lib/ui/widgets/recent_conversation_list.dart` 中 `RecentForwardList` / `TIMUIKitLastMsg` 的名称、13 号弱色单行摘要。根据用户要求，本地还保留与主会话列表一致的未读和草稿前缀。

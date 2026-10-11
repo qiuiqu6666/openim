@@ -24,6 +24,79 @@ void main() {
 
   tearDown(() => tracker.close());
 
+  test('small movements hide the button without changing arrival tracking', () {
+    for (final offset in [-12.0, 0.0, 1.0, 2.0, 16.0, 40.0, 120.0]) {
+      tracker.updateScrollOffset(offset);
+      expect(tracker.showBackToBottom.value, isFalse);
+    }
+    expect(tracker.awayFromLatest.value, isTrue);
+    tracker.recordIncoming(_message('near-latest'));
+    expect(tracker.unseenCount.value, 1);
+    tracker.markVisible('near-latest');
+    expect(tracker.unseenCount.value, 0);
+    expect(tracker.showBackToBottom.value, isFalse);
+  });
+
+  test('button scales with viewport and stays stable near its show boundary', () {
+    var viewport = 800.0;
+    final responsive = ChatNewMessageTracker(
+      currentUserID: () => currentUserID,
+      isClosed: () => ownerInactive,
+      viewportDimension: () => viewport,
+    );
+    addTearDown(responsive.close);
+    responsive.updateScrollOffset(350);
+    expect(responsive.showBackToBottom.value, isFalse);
+    responsive.updateScrollOffset(410);
+    expect(responsive.showBackToBottom.value, isTrue);
+    for (final offset in [390.0, 405.0, 380.0]) {
+      responsive.updateScrollOffset(offset);
+      expect(responsive.showBackToBottom.value, isTrue);
+    }
+    responsive.updateScrollOffset(350);
+    expect(responsive.showBackToBottom.value, isFalse);
+    viewport = 400;
+    responsive.updateScrollOffset(220);
+    expect(responsive.showBackToBottom.value, isTrue);
+    responsive.updateScrollOffset(160);
+    expect(responsive.showBackToBottom.value, isFalse);
+  });
+
+  test('history windows retain a return button at their local newest edge', () {
+    var missingNewer = true;
+    final history = ChatNewMessageTracker(
+      currentUserID: () => currentUserID,
+      isClosed: () => ownerInactive,
+      hasMissingNewer: () => missingNewer,
+    );
+    addTearDown(history.close);
+    // History navigation reports a non-zero reading distance until rejoined.
+    history.updateScrollOffset(2);
+    expect(history.showBackToBottom.value, isTrue);
+    history.recordIncoming(_message('buffered'));
+    expect(history.unseenCount.value, 1);
+    missingNewer = false;
+    history.updateScrollOffset(0);
+    expect(history.showBackToBottom.value, isFalse);
+    expect(history.unseenCount.value, 0);
+  });
+
+  test('reset, close and inactive owners fence the visible button', () {
+    tracker.updateScrollOffset(400);
+    expect(tracker.showBackToBottom.value, isTrue);
+    tracker.reset();
+    expect(tracker.showBackToBottom.value, isFalse);
+    tracker.updateScrollOffset(400);
+    ownerInactive = true;
+    tracker.updateScrollOffset(0);
+    expect(tracker.showBackToBottom.value, isTrue);
+    tracker.close();
+    expect(tracker.showBackToBottom.value, isFalse);
+    ownerInactive = false;
+    tracker.updateScrollOffset(400);
+    expect(tracker.showBackToBottom.value, isFalse);
+  });
+
   test('live arrivals decrease individually as their bubbles become visible',
       () {
     tracker.updateScrollOffset(300);

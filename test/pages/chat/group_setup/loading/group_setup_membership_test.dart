@@ -5,6 +5,54 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/group_setup/loading/group_setup_membership.dart';
 
 void main() {
+  for (final stillAbsent in [false, true]) {
+    test('negative cache result is confirmed before publishing $stillAbsent',
+        () {
+      fakeAsync((time) {
+        final state = GroupSetupMembership();
+        final results = <bool>[];
+        var calls = 0;
+        state.refresh(
+          query: () async => ++calls == 1 ? false : !stillAbsent,
+          isCurrent: () => true,
+          onResult: results.add,
+        );
+        time.flushMicrotasks();
+        expect(results, isEmpty);
+        expect(state.resolved.value, isFalse);
+        expect(state.failed.value, isFalse);
+        time.elapse(const Duration(milliseconds: 500));
+        expect(results, [!stillAbsent]);
+        expect(state.resolved.value, isTrue);
+        expect(calls, 2);
+        state.dispose();
+      });
+    });
+  }
+
+  test('sync defers a pending negative result and allows a fresh read', () {
+    fakeAsync((time) {
+      final state = GroupSetupMembership();
+      final old = Completer<bool>();
+      final results = <bool>[];
+      state.refresh(
+        query: () => old.future,
+        isCurrent: () => true,
+        onResult: results.add,
+      );
+      state.defer();
+      state.refresh(
+        query: () async => true,
+        isCurrent: () => true,
+        onResult: results.add,
+      );
+      old.complete(false);
+      time.elapse(const Duration(seconds: 1));
+      expect(results, [true]);
+      state.dispose();
+    });
+  });
+
   test('transient initial failure retries without showing a retry button', () {
     fakeAsync((time) {
       final state = GroupSetupMembership();

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:openim_common/openim_common.dart';
 
 import '../../../../widgets/auth/auth_copy.dart';
 import '../../../../widgets/auth/auth_reference.dart';
@@ -26,7 +27,15 @@ class RegistrationAvatarPicker extends StatelessWidget {
     final label = bytes == null
         ? authText('选择头像', 'Choose avatar')
         : authText('更换头像', 'Change avatar');
-    final callback = enabled ? onPick : null;
+    final callback = enabled && !picking
+        ? () {
+            if (bytes?.isNotEmpty == true) {
+              AvatarActions.open(context, bytes: bytes, onChange: onPick);
+            } else {
+              onPick();
+            }
+          }
+        : null;
     return Center(
       child: Column(
         children: [

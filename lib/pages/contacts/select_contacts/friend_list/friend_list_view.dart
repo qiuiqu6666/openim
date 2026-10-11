@@ -182,10 +182,33 @@ class _SelectContactsFromFriendsPageState
                           ]),
                         )),
                 ]),
+              )
+            else
+              SearchBox(
+                key: const ValueKey('select-friends-search'),
+                controller: logic.searchController,
+                enabled: true,
+                height: ContactCardPickerTokens.searchHeight(context),
+                margin: ContactCardPickerTokens.searchPadding,
+                borderRadius:
+                    BorderRadius.circular(ContactCardPickerTokens.searchRadius),
+                surfaceColor: Styles.c_FFFFFF,
+                backgroundColor: Styles.c_F4F5F7,
+                textStyle: ContactCardPickerTokens.searchStyle(context),
+                hintStyle:
+                    ContactCardPickerTokens.searchStyle(context, hint: true),
+                searchIconColor: ContactCardPickerTokens.secondary(context),
+                onChanged: logic.searchFriends,
+                onCleared: () => logic.searchFriends(''),
+                onSubmitted: (value) {
+                  logic.searchFriends(value);
+                  FocusScope.of(context).unfocus();
+                },
               ),
             if (selectContactsLogic.isMultiModel &&
                 selectContactsLogic.action != SelAction.addMember)
-              Padding(
+              Ink(
+                color: Styles.c_FFFFFF,
                 padding: EdgeInsets.symmetric(vertical: 10.h),
                 child: Ink(
                   height: 64.h,
@@ -213,6 +236,18 @@ class _SelectContactsFromFriendsPageState
               child: Obx(
                 () {
                   final friends = logic.visibleFriends;
+                  if (friends.isEmpty && logic.searchQuery.isNotEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: ContactCardPickerTokens.searchPadding,
+                        child: Text(
+                          StrRes.searchNotFound,
+                          style: ContactCardPickerTokens.subtitleStyle(context),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  }
                   final tags = SuspensionUtil.getTagIndexList(friends);
                   return LayoutBuilder(builder: (context, constraints) {
                     final scaler = MediaQuery.textScalerOf(context);
@@ -229,6 +264,7 @@ class _SelectContactsFromFriendsPageState
                         context,
                         size: indexFont);
                     return WrapAzListView<ISUserInfo>(
+                      key: ValueKey(logic.searchQuery.value),
                       data: friends,
                       itemCount: friends.length,
                       susItemHeight:

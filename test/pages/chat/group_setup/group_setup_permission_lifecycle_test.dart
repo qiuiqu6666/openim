@@ -476,6 +476,80 @@ void main() {
     await _drain();
   }
 
+  for (final role in [GroupRoleLevel.owner, GroupRoleLevel.admin]) {
+    for (final muted in [true, false]) {
+      test('role $role can set whole-group mute to $muted', () async {
+        final controller = openManage();
+        final owner = role == GroupRoleLevel.owner ? _self : 'im_owner';
+        setup.groupInfo.value.ownerUserID = owner;
+        setup.myGroupMembersInfo.value.roleLevel = role;
+        final broadcasts = <GroupInfo>[];
+        final subscription = im.groupInfoUpdatedSubject.listen(broadcasts.add);
+        addTearDown(subscription.cancel);
+        final pending = controller.saveRules(muted: muted);
+        await _drain();
+        expect(nativeCalls.single.method, 'changeGroupMute');
+        expect(nativeCalls.single.arguments['groupID'], _groupID);
+        expect(nativeCalls.single.arguments['mute'], muted);
+        await completeWrite();
+        groupReplies.single.complete(jsonEncode([
+          {'groupID': _groupID, 'ownerUserID': owner, 'status': muted ? 3 : 0}
+        ]));
+        await pending;
+        await _drain();
+        expect(setup.groupInfo.value.status, muted ? 3 : 0);
+        expect(broadcasts.single.status, muted ? 3 : 0);
+        expect(controller.busy.value, isFalse);
+      });
+    }
+  }
+
+  test('ordinary members cannot enable or disable whole-group mute', () async {
+    final controller = openManage();
+    setup.groupInfo.value.ownerUserID = 'im_owner';
+    setup.myGroupMembersInfo.value.roleLevel = GroupRoleLevel.member;
+    await controller.saveRules(muted: true);
+    await controller.saveRules(muted: false);
+    expect(writeReplies, isEmpty);
+    expect(controller.busy.value, isFalse);
+  });
+
+  test('admin mute permission does not grant owner-only group rules', () async {
+    final controller = openManage();
+    setup.groupInfo.value.ownerUserID = 'im_owner';
+    setup.myGroupMembersInfo.value.roleLevel = GroupRoleLevel.admin;
+    await controller.saveRules(verification: 1);
+    await controller.saveRules(look: 1);
+    await controller.saveRules(addFriend: 1);
+    expect(writeReplies, isEmpty);
+  });
+
+  test(
+      'demotion during mute write discards late state and prevents another write',
+      () async {
+    final controller = openManage();
+    setup.groupInfo.value.ownerUserID = 'im_owner';
+    setup.myGroupMembersInfo.value.roleLevel = GroupRoleLevel.admin;
+    final broadcasts = <GroupInfo>[];
+    final subscription = im.groupInfoUpdatedSubject.listen(broadcasts.add);
+    addTearDown(subscription.cancel);
+    final pending = controller.saveRules(muted: true);
+    await _drain();
+    im.groupMemberInfoChanged(GroupMembersInfo(
+      groupID: _groupID,
+      userID: _self,
+      roleLevel: GroupRoleLevel.member,
+    ));
+    await _drain();
+    writeReplies.single.complete('');
+    await pending;
+    expect(groupReplies, isEmpty);
+    expect(broadcasts, isEmpty);
+    await controller.saveRules(muted: false);
+    expect(writeReplies, hasLength(1));
+    expect(controller.busy.value, isFalse);
+  });
+
   test('saving rules only applies and broadcasts the requested group',
       () async {
     final broadcasts = <GroupInfo>[];

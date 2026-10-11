@@ -103,11 +103,15 @@ void main() {
       await tester.tap(find.text(StrRes.delete).first);
       await tester.pumpAndSettle();
       expect(logic.list.map((row) => row.reqTime), [1]);
+      await tester.tap(find.byKey(const ValueKey('request-history-more')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('request-history-clear')));
       await tester.pumpAndSettle();
       await tester.tap(find.text(StrRes.cancel));
       await tester.pumpAndSettle();
       expect(logic.list, hasLength(1));
+      await tester.tap(find.byKey(const ValueKey('request-history-more')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('request-history-clear')));
       await tester.pumpAndSettle();
       await tester.tap(find.descendant(
@@ -116,8 +120,8 @@ void main() {
       expect(find.text(StrRes.emptyGroupNotification), findsOneWidget);
       expect(
           tester
-              .widget<TextButton>(
-                  find.byKey(const ValueKey('request-history-clear')))
+              .widget<IconButton>(
+                  find.byKey(const ValueKey('request-history-more')))
               .onPressed,
           isNull);
       expect(tester.takeException(), isNull);

@@ -70,9 +70,13 @@ class ChatLogic extends SuperController {
   final assistantStreams = AssistantStreamState();
   late final messageArrivals =
       ChatMessageArrivalController(currentUserID: () => _chatAccountID);
-  late final newMessages = ChatNewMessageTracker(
+  late final ChatNewMessageTracker newMessages = ChatNewMessageTracker(
     currentUserID: () => OpenIM.iMManager.userID,
     isClosed: () => _sessionInactive,
+    viewportDimension: () => scrollController.hasClients
+        ? scrollController.position.viewportDimension
+        : 0,
+    hasMissingNewer: () => _dateWindow.buffering,
   );
   late final _latestScroll = ChatLatestScrollController(
     controller: scrollController,
@@ -116,13 +120,12 @@ class ChatLogic extends SuperController {
     groupStatus: () => groupInfo?.status,
     scrollBottom: scrollBottom,
     resetInput: (message) => _composer.resetAfterSend(message),
-    onDeliveryStarted: (message, target) =>
-        !_sessionInactive &&
-                isSingleChat &&
-                userID == 'assistant' &&
-                target.userID == 'assistant'
-            ? assistantStreams.beginReply()
-            : null,
+    onDeliveryStarted: (message, target) => !_sessionInactive &&
+            isSingleChat &&
+            userID == 'assistant' &&
+            target.userID == 'assistant'
+        ? assistantStreams.beginReply()
+        : null,
     onDeliveryFinished: (waiting, message) {
       if (_sessionInactive || message.status != MessageStatus.succeeded) {
         assistantStreams.cancelReply(waiting as int?);
@@ -324,6 +327,8 @@ class ChatLogic extends SuperController {
   RxString get announcementVersion => _group.announcementVersion;
   String? get groupOwnerID => _group.groupOwnerID;
   bool get sendingMuted => isOfficialNotificationChat || _group.sendingMuted;
+  bool get groupMutePending =>
+      !isOfficialNotificationChat && _group.muteStatusPending;
 
   late final _memberActions = ChatMemberActionsController(
     groupID: () => groupID,
@@ -1080,6 +1085,13 @@ class ChatLogic extends SuperController {
   @override
   void onClose() {
     if (!_sessionInactive) _clearUnreadCount(leaving: true);
+    // GetX sets isClosed before calling onClose; the account fence still owns
+    // this final list refresh even though the chat itself is being disposed.
+    if (!_chatClosing && _sameAccount) {
+      ConversationRefreshEvents.publish(ConversationRefreshRequest(
+          accountID: _chatAccountID,
+          conversationID: conversationInfo.conversationID));
+    }
     _chatClosing = true;
     messageArrivals.dispose();
     _dateJump.invalidate();

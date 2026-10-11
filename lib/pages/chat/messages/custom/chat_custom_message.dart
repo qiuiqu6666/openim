@@ -72,6 +72,7 @@ CustomTypeInfo buildChatCustomMessage(
   final text = customMessageText(
       message.customElem?.data, message.customElem?.description);
   return CustomTypeInfo(ChatText(
+    isISend: message.sendID == OpenIM.iMManager.userID,
     text: text.isEmpty ? StrRes.unsupportedMessage : text,
     enableMarkdown: true,
     textScaleFactor: textScaleFactor,

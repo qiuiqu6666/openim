@@ -32,23 +32,29 @@ class SelectContactsFromGroupPage extends StatelessWidget {
       backgroundColor: ContactCardPickerTokens.pageBackground(context),
       body: Column(
         children: [
-          if (selectContactsLogic.isSingleSelection)
-            SearchBox(
-              controller: logic.searchController,
-              enabled: true,
-              height: ContactCardPickerTokens.searchHeight(context),
-              margin: ContactCardPickerTokens.searchPadding,
-              backgroundColor:
-                  ContactCardPickerTokens.searchBackground(context),
-              textStyle: ContactCardPickerTokens.searchStyle(context),
-              hintStyle:
-                  ContactCardPickerTokens.searchStyle(context, hint: true),
-              searchIconColor: ContactCardPickerTokens.secondary(context),
-              onChanged: logic.searchGroups,
-              onCleared: () => logic.searchGroups(''),
-            ),
+          SearchBox(
+            key: const ValueKey('select-groups-search'),
+            controller: logic.searchController,
+            enabled: true,
+            height: ContactCardPickerTokens.searchHeight(context),
+            margin: ContactCardPickerTokens.searchPadding,
+            borderRadius:
+                BorderRadius.circular(ContactCardPickerTokens.searchRadius),
+            surfaceColor: Styles.c_FFFFFF,
+            backgroundColor: Styles.c_F4F5F7,
+            textStyle: ContactCardPickerTokens.searchStyle(context),
+            hintStyle: ContactCardPickerTokens.searchStyle(context, hint: true),
+            searchIconColor: ContactCardPickerTokens.secondary(context),
+            onChanged: logic.searchGroups,
+            onCleared: () => logic.searchGroups(''),
+            onSubmitted: (value) {
+              logic.searchGroups(value);
+              FocusScope.of(context).unfocus();
+            },
+          ),
           if (selectContactsLogic.isMultiModel)
-            Padding(
+            Ink(
+              color: Styles.c_FFFFFF,
               padding: EdgeInsets.symmetric(vertical: 10.h),
               child: Ink(
                 height: 64.h,
@@ -86,6 +92,9 @@ class SelectContactsFromGroupPage extends StatelessWidget {
                     onRetry: logic.loadGroups,
                   )
                 : ListView.builder(
+                    key: ValueKey(logic.searchQuery.value),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     itemCount: groups.length,
                     itemBuilder: (_, index) =>
                         _buildItemView(context, groups[index]),
@@ -98,48 +107,53 @@ class SelectContactsFromGroupPage extends StatelessWidget {
   }
 
   Widget _buildItemView(BuildContext context, GroupInfo info) {
-    Widget buildChild() => Ink(
-          height: 64.h,
+    Widget buildChild() => Material(
           color: ContactCardPickerTokens.rowBackground(context),
           child: InkWell(
             key: ValueKey('select-group-${info.groupID}'),
             onTap: selectContactsLogic.onTap(info),
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16.w),
-              child: Row(
-                children: [
-                  if (selectContactsLogic.isMultiModel)
-                    Padding(
-                      padding: EdgeInsets.only(right: 10.w),
-                      child: ChatRadio(
-                        checked: selectContactsLogic.isChecked(info),
-                        enabled: !selectContactsLogic.isDefaultChecked(info),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: 64.h),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                    horizontal: 16.w,
+                    vertical: ContactCardPickerTokens.verticalPadding),
+                child: Row(
+                  children: [
+                    if (selectContactsLogic.isMultiModel)
+                      Padding(
+                        padding: EdgeInsets.only(right: 10.w),
+                        child: ChatRadio(
+                          checked: selectContactsLogic.isChecked(info),
+                          enabled: !selectContactsLogic.isDefaultChecked(info),
+                        ),
+                      ),
+                    AvatarView(
+                      url: info.faceURL,
+                      text: info.groupName,
+                      isGroup: true,
+                      isCircle: true,
+                    ),
+                    10.horizontalSpace,
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          GroupNameLabel(
+                            name: info.groupName ?? '',
+                            ex: info.ex,
+                            style: ContactCardPickerTokens.titleStyle(context),
+                          ),
+                          sprintf(StrRes.nPerson, [info.memberCount]).toText
+                            ..style =
+                                ContactCardPickerTokens.subtitleStyle(context),
+                        ],
                       ),
                     ),
-                  AvatarView(
-                    url: info.faceURL,
-                    text: info.groupName,
-                    isGroup: true,
-                    isCircle: true,
-                  ),
-                  10.horizontalSpace,
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        GroupNameLabel(
-                          name: info.groupName ?? '',
-                          ex: info.ex,
-                          style: ContactCardPickerTokens.titleStyle(context),
-                        ),
-                        sprintf(StrRes.nPerson, [info.memberCount]).toText
-                          ..style =
-                              ContactCardPickerTokens.subtitleStyle(context),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

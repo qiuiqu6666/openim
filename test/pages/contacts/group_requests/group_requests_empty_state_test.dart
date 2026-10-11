@@ -95,7 +95,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 2));
       await tester.pumpAndSettle();
       expect(find.text(StrRes.emptyGroupNotification), findsNothing);
-      expect(find.text(StrRes.lookOver), findsOneWidget);
+      expect(find.text('审核'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

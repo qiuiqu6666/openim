@@ -38,7 +38,10 @@ class GroupManageLogic extends GetxController {
         !_closed &&
         !isClosed &&
         groupSetupLogic.isPermissionContextCurrent(context);
-    if (busy.value || !isCurrent() || !groupSetupLogic.isOwner) return;
+    final canSave = muted != null
+        ? groupSetupLogic.isOwnerOrAdmin
+        : groupSetupLogic.isOwner;
+    if (busy.value || !isCurrent() || !canSave) return;
     busy.value = true;
     try {
       final id = context.groupID;

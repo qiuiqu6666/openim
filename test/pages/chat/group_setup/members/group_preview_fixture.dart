@@ -22,6 +22,9 @@ const _sdk = MethodChannel('flutter_openim_sdk');
 
 class _App extends GetxController implements AppController {
   @override
+  Future<void> onApplicationSessionReady({bool authenticated = false}) async {}
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

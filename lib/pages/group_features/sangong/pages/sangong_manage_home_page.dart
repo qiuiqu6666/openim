@@ -59,6 +59,8 @@ class SangongManageHomePage extends StatelessWidget {
       SangongPageRoute(
         context: context,
         settings: const RouteSettings(name: 'sangong_manage_home'),
+        configuration: !SangongScope.read(context).canManage &&
+            SangongScope.read(context).canConfigure,
         builder: (_) => SangongManageHomePage(
           gameGroupId: gameGroupId,
           tenantId: tenantId,

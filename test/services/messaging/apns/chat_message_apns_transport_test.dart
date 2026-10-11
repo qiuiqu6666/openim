@@ -20,6 +20,8 @@ void main() {
   var lookups = 0;
   var failLookup = false;
   var groups = <Map<String, dynamic>>[];
+  final refreshes = <ConversationRefreshRequest>[];
+  late StreamSubscription<ConversationRefreshRequest> refreshSubscription;
 
   Future<void> credentials({String token = 'test-im-token'}) async {
     await DataSp.putLoginCertificate(LoginCertificate.fromJson({
@@ -34,6 +36,9 @@ void main() {
     await DataSp.init();
     await credentials();
     OpenIM.iMManager.userID = '@owner';
+    refreshes.clear();
+    refreshSubscription =
+        ConversationRefreshEvents.changes.listen(refreshes.add);
     sent.clear();
     lookupGate = null;
     lookups = 0;
@@ -66,7 +71,8 @@ void main() {
     });
   });
 
-  tearDown(() {
+  tearDown(() async {
+    await refreshSubscription.cancel();
     if (lookupGate?.isCompleted == false) lookupGate!.complete();
     messenger.setMockMethodCallHandler(channel, null);
     OpenIM.iMManager.userID = '';
@@ -100,6 +106,11 @@ void main() {
       () async {
     await ChatMessageSender().sendRaw(message(sourceType: 3),
         const FavoriteTarget(conversationID: 'si_peer', userID: '@peer'));
+    await Future<void>.delayed(Duration.zero);
+    expect(refreshes, hasLength(1));
+    expect(refreshes.single.sourceID, '@peer');
+    expect(refreshes.single.sessionType, ConversationType.single);
+    expect(refreshes.single.accountID, '@owner');
     expect(lookups, 0);
     expect(sent.single['userID'], '@peer');
     expect(sent.single['groupID'], '');

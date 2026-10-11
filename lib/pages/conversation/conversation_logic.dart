@@ -1,4 +1,5 @@
 import 'updates/conversation_update_buffer.dart';
+import 'updates/conversation_latest_sync.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -101,6 +102,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   void queueChanges(List<ConversationInfo> changes) {
     if (!_sessionActive) return;
+    _latestSync
+        .conversationsChanged(changes.map((info) => info.conversationID));
     if (_readingList) {
       for (final info in changes) {
         if (_deletions.allows(info)) {
@@ -111,6 +114,12 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     _updates.add(changes);
   }
 
+  late final _latestSync = ConversationLatestSync(
+    isActive: () => _sessionActive,
+    flushChanges: _updates.flush,
+    publish: onChanged,
+  );
+
   @override
   void onInit() {
     getFirstPage();
@@ -120,6 +129,10 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     refreshOrganizer();
     _subscriptions.add(imLogic.conversationAddedSubject.listen(queueChanges));
     _subscriptions.add(imLogic.conversationChangedSubject.listen(queueChanges));
+    _subscriptions
+        .add(imLogic.receivedMessages.listen(_latestSync.observeMessage));
+    _subscriptions.add(
+        ConversationRefreshEvents.changes.listen(_latestSync.requestRefresh));
     _subscriptions.add(imLogic.unreadMsgCountEventSubject
         .listen(_unreadSync.onTotalUnreadChanged));
     _subscriptions.add(imLogic.conversationReadRequestSubject
@@ -180,6 +193,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     _closed = true;
     _reconcileUnreadPending = false;
     _unreadSync.close();
+    _latestSync.close();
     _updates.close();
     ++_listGeneration;
     ++_clearGeneration;
@@ -279,6 +293,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   void onChanged(List<ConversationInfo> newList) {
     if (!_sessionActive || newList.isEmpty) return;
+    _latestSync
+        .conversationsChanged(newList.map((info) => info.conversationID));
     final accepted = <ConversationInfo>[];
     final currentByID = {
       for (final info in list) info.conversationID: info,
@@ -399,6 +415,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       );
       if (!_sessionActive) return;
       _updates.flush();
+      _latestSync.conversationsChanged([info.conversationID]);
       info.isPinned = pinned;
       for (final conversation in list) {
         if (conversation.conversationID == info.conversationID) {
@@ -424,6 +441,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       );
       if (!_sessionActive) return;
       _updates.flush();
+      _latestSync.conversationsChanged([info.conversationID]);
       info.recvMsgOpt =
           enabled ? _receiveWithoutNotification : _receiveMessages;
       for (final conversation in list) {
@@ -441,6 +459,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   Future<void> deleteConversation(ConversationInfo info,
       {bool propagateError = false}) async {
     if (!_sessionActive || !_deletions.begin(info)) return;
+    _latestSync.discard(info);
     _updates.remove(info.conversationID);
     onChangeConversations.remove(info.conversationID);
     final clearing = _clearGeneration;
@@ -509,6 +528,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     bool active() => _sessionActive && clearing == _clearGeneration;
     void removeLocal(ConversationInfo info) {
       final id = info.conversationID;
+      _latestSync.discard(info);
       _updates.remove(id);
       onChangeConversations.remove(id);
       _deletions.begin(info);
@@ -600,6 +620,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
                   !_changesDuringRead.containsKey(info.conversationID)))
           .toList();
       OpenIM.iMManager.conversationManager.simpleSort(merged);
+      _latestSync
+          .conversationsChanged(merged.map((info) => info.conversationID));
       list.value = merged;
       if (_reconcileUnreadPending && !usesCachedSnapshot) {
         _reconcileUnreadPending = false;
@@ -651,6 +673,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   void clearConversations() {
     _reconcileUnreadPending = false;
     _unreadSync.reset();
+    _latestSync.reset();
     _updates.clear();
     onChangeConversations.clear();
     ChatHistoryCache.clear();

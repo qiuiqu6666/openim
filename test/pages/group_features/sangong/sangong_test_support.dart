@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -367,6 +368,7 @@ Future<void> pumpSangongPage(
   await tester.pumpWidget(ScreenUtilInit(
       designSize: const Size(375, 812),
       builder: (_, __) => MaterialApp(
+          builder: EasyLoading.init(),
           locale: const Locale('zh', 'CN'),
           supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
@@ -416,6 +418,7 @@ Future<void> rejectSangongRequest(
 }
 
 Future<void> unmountSangong(WidgetTester tester) async {
+  await EasyLoading.dismiss(animation: false);
   await tester.pumpWidget(const SizedBox.shrink());
   await tester.pump();
 }

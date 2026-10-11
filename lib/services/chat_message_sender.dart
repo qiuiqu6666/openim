@@ -46,7 +46,7 @@ class ChatMessageSender {
     final push =
         await _offlinePush(session.accountID, target, hasGroup ? group : null);
     session.check();
-    return observeUserActivity(
+    final sent = await observeUserActivity(
         messageActivity(message.contentType),
         () => OpenIM.iMManager.messageManager.sendMessage(
               message: message,
@@ -55,6 +55,18 @@ class ChatMessageSender {
               offlinePushInfo: push,
               isOnlineOnly: false,
             ));
+    if (session.current) {
+      final type = hasUser
+          ? ConversationType.single
+          : target.sessionType ?? sent.sessionType;
+      if (hasUser || type == 2 || type == ConversationType.superGroup) {
+        ConversationRefreshEvents.publish(ConversationRefreshRequest(
+            accountID: session.accountID,
+            sourceID: hasUser ? user : group,
+            sessionType: type));
+      }
+    }
+    return sent;
   }
 
   Future<OfflinePushInfo> _offlinePush(

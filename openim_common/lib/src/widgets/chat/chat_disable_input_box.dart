@@ -4,10 +4,12 @@ import 'package:openim_common/openim_common.dart';
 import 'chat_composer_palette.dart';
 
 class ChatDisableInputBox extends StatelessWidget {
-  const ChatDisableInputBox({super.key, this.type = 0, this.message});
+  const ChatDisableInputBox(
+      {super.key, this.type = 0, this.message, this.showWarning = true});
 
   final int type;
   final String? message;
+  final bool showWarning;
 
   @override
   Widget build(BuildContext context) {
@@ -23,10 +25,12 @@ class ChatDisableInputBox extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                ImageRes.warn.toImage
-                  ..width = 14.w
-                  ..height = 14.h,
-                6.horizontalSpace,
+                if (showWarning) ...[
+                  ImageRes.warn.toImage
+                    ..width = 14.w
+                    ..height = 14.h,
+                  6.horizontalSpace,
+                ],
                 Flexible(
                   child: Text(
                     message ?? StrRes.notSendMessageNotInGroup,

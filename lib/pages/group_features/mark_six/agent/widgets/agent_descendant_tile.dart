@@ -1,13 +1,19 @@
 // Geometry adapted from 99chat _DescendantTile.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'package:flutter/material.dart';
-import 'package:openim_common/openim_common.dart';
 import '../../widgets/mark_six_style.dart';
+import '../identity/agent_avatar_directory.dart';
+import '../identity/agent_user_avatar.dart';
 
 class AgentDescendantTile extends StatelessWidget {
   const AgentDescendantTile(
-      {super.key, required this.item, required this.onTap, this.depth = 0});
+      {super.key,
+      required this.item,
+      required this.avatars,
+      required this.onTap,
+      this.depth = 0});
   final Map<String, dynamic> item;
+  final AgentAvatarDirectory avatars;
   final VoidCallback onTap;
   final int depth;
   @override
@@ -27,11 +33,8 @@ class AgentDescendantTile extends StatelessWidget {
                 child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(children: [
-                      AvatarView(
-                          width: 40,
-                          height: 40,
-                          text: name,
-                          url: '${item['avatarUrl'] ?? item['faceURL'] ?? ''}'),
+                      AgentUserAvatar(
+                          directory: avatars, item: item, name: name),
                       const SizedBox(width: 12),
                       Expanded(
                           child: Column(

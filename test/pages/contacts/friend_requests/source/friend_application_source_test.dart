@@ -3,6 +3,21 @@ import 'package:openim/pages/contacts/friend_requests/source/friend_application_
 import 'package:openim_common/openim_common.dart';
 
 void main() {
+  test('legacy source tags are hidden without changing the greeting', () {
+    for (final source in ['Group', 'Card', 'Chat']) {
+      final raw = '[99chat_src:AddSource_Type_$source] 我是：阿秋';
+      expect(friendApplicationWording(raw), '我是：阿秋');
+      expect(friendApplicationVerification(raw, english: false), '我是：阿秋');
+      expect(raw, contains('[99chat_src:'));
+    }
+    expect(friendApplicationWording('[普通附言] 你好'), '[普通附言] 你好');
+    expect(friendApplicationVerification('你好', english: false), '验证：你好');
+    expect(friendApplicationVerification(null, english: false), '验证：请求添加你为好友');
+    expect(
+        friendApplicationVerification('我是：{name}',
+            english: false, nickname: '小明'),
+        '我是：小明');
+  });
   test('signed metadata exposes the server supplied adding method only', () {
     const metadata =
         '{"v":1,"op":"private-operation","mac":"private-signature","addSource":"account"}';

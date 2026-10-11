@@ -46,6 +46,18 @@ void main() {
         isTrue);
   });
 
+  test('batch selection hides only selected identities, including equal times',
+      () async {
+    final store = RequestHistoryStore('alice', RequestHistoryKind.friend);
+    const selected = RequestHistoryEntry('selected', 200);
+    const other = RequestHistoryEntry('other', 200);
+    await store.hideAll([selected, const RequestHistoryEntry('second', 300)]);
+    final reopened = RequestHistoryStore('alice', RequestHistoryKind.friend);
+    expect(reopened.isHidden(selected), isTrue);
+    expect(reopened.isHidden(other), isFalse);
+    expect(reopened.isHidden(const RequestHistoryEntry('older', 100)), isFalse);
+  });
+
   test('approval and profile enrichment do not resurrect a deleted notice',
       () async {
     final row = GroupApplicationInfo(

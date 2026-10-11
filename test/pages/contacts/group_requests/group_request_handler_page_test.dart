@@ -62,12 +62,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 2));
       await tester.pumpAndSettle();
 
-      expect(find.text('处理人：阿秋'), findsOneWidget);
-      expect(find.text('处理人：阿冬'), findsOneWidget);
+      expect(find.text('处理管理员：阿秋'), findsOneWidget);
+      expect(find.text('处理管理员：阿冬'), findsOneWidget);
       expect(find.textContaining('未处理记录不得展示此人'), findsNothing);
       expect(find.text(StrRes.approved), findsNWidgets(2));
       expect(find.text(StrRes.rejected), findsOneWidget);
-      expect(find.text(StrRes.lookOver), findsOneWidget);
+      expect(find.text('审核'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       logic.userInfoList.assignAll([
@@ -76,14 +76,14 @@ void main() {
       ]);
       await tester.pump();
 
-      expect(find.text('处理人：阿秋'), findsNothing);
-      expect(find.text('处理人：阿秋的新昵称'), findsOneWidget);
-      expect(find.text('处理人：阿冬'), findsOneWidget);
+      expect(find.text('处理管理员：阿秋'), findsNothing);
+      expect(find.text('处理管理员：阿秋的新昵称'), findsOneWidget);
+      expect(find.text('处理管理员：阿冬'), findsOneWidget);
       expect(find.text(StrRes.approved), findsNWidgets(2));
       expect(find.text(StrRes.rejected), findsOneWidget);
-      expect(find.text(StrRes.lookOver), findsOneWidget);
-      final label = tester.widget<Text>(find.text('处理人：阿秋的新昵称'));
-      expect(label.style!.color, Styles.c_8E9AB0);
+      expect(find.text('审核'), findsOneWidget);
+      final label = tester.widget<Text>(find.text('处理管理员：阿秋的新昵称'));
+      expect(label.style!.color, AppTokens.textSecondary(dark: Styles.isDark));
       expect(tester.takeException(), isNull);
     });
   }

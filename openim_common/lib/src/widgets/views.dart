@@ -107,12 +107,18 @@ class IMViews {
 
   static void openPhotoSheet(
       {Function(dynamic path, dynamic url)? onData,
+      String? avatarUrl,
+      bool Function()? isActive,
       bool crop = true,
       bool toUrl = true,
       bool fromGallery = true,
       bool fromCamera = true,
       List<SheetItem> items = const [],
-      int quality = 80}) {
+      int quality = 80}) async {
+    final context = Get.context;
+    if (context == null || !context.mounted || isActive?.call() == false) {
+      return;
+    }
     bool allowSendImageTypeHelper(String? mimeType) {
       final result = mimeType?.contains('png') == true ||
           mimeType?.contains('jpeg') == true;
@@ -126,67 +132,82 @@ class IMViews {
       return allowSendImageTypeHelper(mimeType);
     }
 
-    Get.bottomSheet(
-      BottomSheetView(
-        items: [
-          ...items,
-          if (fromGallery)
-            SheetItem(
-              label: StrRes.toolboxAlbum,
-              onTap: () async {
-                final List<AssetEntity>? assets =
-                    await AssetPicker.pickAssets(Get.context!,
-                        pickerConfig: AssetPickerConfig(
-                            requestType: RequestType.image,
-                            maxAssets: 1,
-                            selectPredicate: (_, entity, isSelected) async {
-                              if (await allowSendImageType(entity)) {
-                                return true;
-                              }
+    final itemsToShow = [
+      if (AvatarActions.canPreview(url: avatarUrl))
+        SheetItem(
+          label: StrRes.viewAvatar,
+          onTap: () => AvatarActions.preview(context, url: avatarUrl),
+        ),
+      ...items,
+      if (fromGallery)
+        SheetItem(
+          label: StrRes.toolboxAlbum,
+          onTap: () async {
+            final List<AssetEntity>? assets =
+                await AssetPicker.pickAssets(context,
+                    pickerConfig: AssetPickerConfig(
+                        requestType: RequestType.image,
+                        maxAssets: 1,
+                        selectPredicate: (_, entity, isSelected) async {
+                          if (await allowSendImageType(entity)) {
+                            return true;
+                          }
 
-                              IMViews.showToast(StrRes.supportsTypeHint);
+                          IMViews.showToast(StrRes.supportsTypeHint);
 
-                              return false;
-                            }));
-                final file = await assets?.firstOrNull?.file;
+                          return false;
+                        }));
+            final file = await assets?.firstOrNull?.file;
 
-                if (file?.path != null) {
-                  final map = await uCropPic(file!.path,
-                      crop: crop, toUrl: toUrl, quality: quality);
-                  onData?.call(map['path'], map['url']);
-                }
-              },
-            ),
-          if (fromCamera)
-            SheetItem(
-              label: StrRes.toolboxCamera,
-              onTap: () async {
-                final AssetEntity? entity = await CameraPicker.pickFromCamera(
-                  Get.context!,
-                  locale: Get.locale,
-                  pickerConfig: CameraPickerConfig(
-                    enableAudio: true,
-                    enableRecording: true,
-                    enableScaledPreview: false,
-                    maximumRecordingDuration: 60.seconds,
-                    onMinimumRecordDurationNotMet: () {
-                      IMViews.showToast(StrRes.tapTooShort);
-                    },
-                  ),
-                );
+            if (context.mounted &&
+                isActive?.call() != false &&
+                file?.path != null) {
+              final map = await uCropPic(file!.path,
+                  crop: crop, toUrl: toUrl, quality: quality);
+              if (context.mounted && isActive?.call() != false) {
+                onData?.call(map['path'], map['url']);
+              }
+            }
+          },
+        ),
+      if (fromCamera)
+        SheetItem(
+          label: StrRes.toolboxCamera,
+          onTap: () async {
+            final AssetEntity? entity = await CameraPicker.pickFromCamera(
+              context,
+              locale: Get.locale,
+              pickerConfig: CameraPickerConfig(
+                enableAudio: true,
+                enableRecording: true,
+                enableScaledPreview: false,
+                maximumRecordingDuration: 60.seconds,
+                onMinimumRecordDurationNotMet: () {
+                  IMViews.showToast(StrRes.tapTooShort);
+                },
+              ),
+            );
 
-                final file = await entity?.file;
+            final file = await entity?.file;
 
-                if (file?.path != null) {
-                  final map = await uCropPic(file!.path,
-                      crop: crop, toUrl: toUrl, quality: quality);
-                  onData?.call(map['path'], map['url']);
-                }
-              },
-            ),
-        ],
-      ),
+            if (context.mounted &&
+                isActive?.call() != false &&
+                file?.path != null) {
+              final map = await uCropPic(file!.path,
+                  crop: crop, toUrl: toUrl, quality: quality);
+              if (context.mounted && isActive?.call() != false) {
+                onData?.call(map['path'], map['url']);
+              }
+            }
+          },
+        ),
+    ];
+    final selected = await showAppActionSheet<SheetItem>(
+      context,
+      title: StrRes.avatar,
+      actions: [for (final item in itemsToShow) AppAction(item.label, item)],
     );
+    if (context.mounted && isActive?.call() != false) selected?.onTap?.call();
   }
 
   static Future<Map<String, dynamic>> uCropPic(

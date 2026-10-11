@@ -9,6 +9,7 @@ import 'package:openim/pages/group_features/data/group_feature_store.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_entry_scope.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_ledger_floating_entry.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_panel.dart';
+import 'package:openim/pages/group_features/sangong/profile/sangong_profile_ledger.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_surface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -139,6 +140,48 @@ void main() {
 
   for (final dark in [false, true]) {
     testWidgets(
+        'private ledger remains open across capability refresh dark=$dark',
+        (tester) async {
+      Completer<dynamic>? pending;
+      final api = SangongTestApi()
+        ..respond = (call) =>
+            call.path.endsWith('/feature-capabilities') && pending != null
+                ? pending.future
+                : _response(call, manage: true);
+      final store = _store(api, FixtureAccountPrivilege());
+      await _mount(tester,
+          store: store,
+          dark: dark,
+          groups: () async => [_group('g', enabled: true)]);
+      await _openLedger(tester);
+      expect(find.byType(SangongProfileLedger), findsOneWidget);
+      pending = Completer<dynamic>();
+      store.invalidateCapabilities('g');
+      await flushSangong(tester);
+      expect(find.byType(BottomSheet), findsOneWidget);
+      final response = pending;
+      pending = null;
+      response.complete({
+        'groupID': 'g',
+        'capabilityVersion': 2,
+        'sangong': {
+          'canManage': true,
+          'canConfigure': false,
+          'tenantID': 'tenant-authorized'
+        }
+      });
+      await flushSangong(tester);
+      await tester.pumpAndSettle();
+      expect(find.byType(SangongProfileLedger), findsOneWidget);
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await unmountSangong(tester);
+      store.dispose();
+    });
+  }
+
+  for (final dark in [false, true]) {
+    testWidgets(
         'tapping the actual ledger opens the unavailable sheet dark=$dark',
         (tester) async {
       final api = SangongTestApi()..respond = (call) => _response(call);
@@ -171,7 +214,7 @@ void main() {
     await _mount(tester, store: store, groups: () async => []);
     await _openLedger(tester);
     expect(find.byKey(_unavailableKey), findsOneWidget);
-    expect(_inSheet(find.text('暂无已加入的群聊，请加入群聊后重试')), findsOneWidget);
+    expect(_inSheet(find.text('暂无已配置或授权的游戏群，请先配置游戏群或联系配置者授权')), findsOneWidget);
     expect(_inSheet(find.text('重试')), findsOneWidget);
     expect(api.calls, isEmpty);
     expect(tester.takeException(), isNull);

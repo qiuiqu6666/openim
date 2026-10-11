@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../../../models/group_feature_context.dart';
 import '../../../../../services/account_privilege/account_privilege_store.dart';
+import '../../support/settings_exports.dart';
 
 /// Owns only the explicit game route containing this widget. Embedded game
 /// content in an ordinary chat or profile uses its content guard instead.
@@ -17,6 +18,8 @@ class SangongPrivilegeRouteGuard extends StatefulWidget {
     this.requireCapabilitiesCurrent = true,
     this.scopeChanges,
     this.isCurrent,
+    this.canRevalidate,
+    this.revalidate,
   })  : accountPrivilege = null,
         userID = null,
         baseUrl = null,
@@ -37,7 +40,9 @@ class SangongPrivilegeRouteGuard extends StatefulWidget {
   })  : featureContext = null,
         accountPrivilege = privilege,
         requireCapabilitiesCurrent = false,
-        allowAssignedAgent = false;
+        allowAssignedAgent = false,
+        canRevalidate = null,
+        revalidate = null;
 
   final GroupFeatureContext? featureContext;
   final AccountPrivilegeAccess? accountPrivilege;
@@ -51,6 +56,8 @@ class SangongPrivilegeRouteGuard extends StatefulWidget {
   final bool requireCapabilitiesCurrent;
   final Listenable? scopeChanges;
   final bool Function()? isCurrent;
+  final bool Function()? canRevalidate;
+  final Future<bool> Function(bool Function() active)? revalidate;
 
   @override
   State<SangongPrivilegeRouteGuard> createState() =>
@@ -67,15 +74,21 @@ class _SangongPrivilegeRouteGuardState
   bool _closing = false;
   bool _sawAllowed = false;
   int? _authorizedRevision;
+  bool _revalidating = false;
+  bool _revalidationFailed = false;
+  int _contentGeneration = 0;
 
   bool get _agentAllowed =>
       widget.allowAssignedAgent &&
       _entry != null &&
-      sangongAssignedAgentAccess(_entry);
+      (sangongAssignedAgentAccess(_entry.readCurrentContext()) ||
+          (widget.canRevalidate?.call() ?? false));
   bool get _allowed =>
       _privilege.allows(userID: _userID, baseUrl: _baseUrl) || _agentAllowed;
+  bool get _sessionCurrent =>
+      _entry?.sessionCurrent() ?? widget.sessionCurrent!();
   bool get _current =>
-      (_entry?.sessionCurrent() ?? widget.sessionCurrent!()) &&
+      _sessionCurrent &&
       (!widget.requireCapabilitiesCurrent || _entry!.capabilitiesCurrent()) &&
       (widget.isCurrent?.call() ?? true);
 
@@ -87,9 +100,13 @@ class _SangongPrivilegeRouteGuardState
     widget.scopeChanges?.addListener(_changed);
     if (widget.refreshOnEntry) {
       unawaited(_authorize());
-    } else if (_allowed && _current) {
-      _ready = true;
+    } else if (_allowed) {
       _authorizedRevision = _privilege.revision;
+      if (_current) {
+        _ready = true;
+      } else {
+        _recoverOrClose(notify: false);
+      }
     } else {
       _close();
     }
@@ -103,8 +120,13 @@ class _SangongPrivilegeRouteGuardState
       confirmed = false;
     }
     if (!mounted || _closing) return;
-    if (!confirmed || !_allowed || !_current) {
+    if (!confirmed || !_allowed) {
       _close();
+      return;
+    }
+    _authorizedRevision = _privilege.revision;
+    if (!_current) {
+      _recoverOrClose();
       return;
     }
     setState(() {
@@ -116,17 +138,69 @@ class _SangongPrivilegeRouteGuardState
 
   void _changed() {
     if (!mounted || _closing) return;
+    // Identity can change before the first authorization request completes.
+    // Do not keep an orphan loading route waiting for that old request.
+    if (!_sessionCurrent) {
+      _close();
+      return;
+    }
     final allowed = _allowed;
-    if (!_current ||
-        (_sawAllowed && !allowed) ||
-        (_ready &&
-            (!allowed ||
-                !_current ||
-                _authorizedRevision != _privilege.revision))) {
+    if ((_sawAllowed && !allowed) ||
+        (_authorizedRevision != null &&
+            (!allowed || _authorizedRevision != _privilege.revision))) {
       _close();
       return;
     }
     _sawAllowed = _sawAllowed || allowed;
+    // Group events can arrive before the entry account check finishes.
+    if (_authorizedRevision != null && !_current) _recoverOrClose();
+  }
+
+  void _recoverOrClose({bool notify = true}) {
+    if (widget.revalidate == null || !(widget.canRevalidate?.call() ?? false)) {
+      _close(notify: notify);
+      return;
+    }
+    if (_revalidating || _revalidationFailed) return;
+    _ready = false;
+    _revalidating = true;
+    if (notify &&
+        SchedulerBinding.instance.schedulerPhase !=
+            SchedulerPhase.persistentCallbacks) {
+      setState(() {});
+    }
+    // A runtime can invalidate this guard while its route is being built.
+    // Revalidation only reads, and is fenced when this route is removed.
+    scheduleMicrotask(() async {
+      bool active() => mounted && !_closing;
+      if (!active()) return;
+      try {
+        final allowed = await widget.revalidate!(active);
+        if (!active()) return;
+        if (!allowed || !_allowed) {
+          _close();
+          return;
+        }
+        // A newer invalidation can arrive between the read and this callback.
+        // Keep the route recoverable instead of treating that race as denial.
+        if (!_current) throw StateError('群权限仍在更新');
+        setState(() {
+          _contentGeneration++;
+          _ready = true;
+          _sawAllowed = true;
+          _authorizedRevision = _privilege.revision;
+        });
+      } catch (_) {
+        if (!active()) return;
+        if (!_allowed || !(widget.canRevalidate?.call() ?? false)) {
+          _close();
+          return;
+        }
+        setState(() => _revalidationFailed = true);
+      } finally {
+        _revalidating = false;
+      }
+    });
   }
 
   void _close({bool notify = true}) {
@@ -171,16 +245,28 @@ class _SangongPrivilegeRouteGuardState
 
   @override
   Widget build(BuildContext context) {
-    if (_ready &&
-        (!_allowed ||
-            !_current ||
-            _authorizedRevision != _privilege.revision)) {
+    if (_ready && (!_allowed || _authorizedRevision != _privilege.revision)) {
       _close(notify: false);
     }
+    if (_ready && !_current) _recoverOrClose(notify: false);
     if (_closing) return const SizedBox.shrink();
+    if (_revalidationFailed) {
+      return SettingsScaffold(title: '三公', children: [
+        const Text('暂时无法确认当前群权限，请重试', textAlign: TextAlign.center),
+        SettingsPrimaryButton(
+            text: '重试',
+            onPressed: () {
+              _revalidationFailed = false;
+              _recoverOrClose();
+            }),
+      ]);
+    }
     if (!_ready) {
       return const Center(child: CircularProgressIndicator());
     }
-    return widget.builder(context);
+    return KeyedSubtree(
+      key: ValueKey(_contentGeneration),
+      child: Builder(builder: widget.builder),
+    );
   }
 }

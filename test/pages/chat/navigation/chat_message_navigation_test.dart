@@ -183,19 +183,26 @@ void main() {
     expect(profiles.opened.single['forceCanAdd'], isFalse);
   });
 
-  testWidgets('shared cards retain their independent add-friend fields',
-      (tester) async {
-    final profiles = _Profiles();
-    await profiles.mount(tester);
-    profiles.navigation.viewUserInfo(UserInfo(userID: 'member'),
-        isCard: true, inviteCode: 'invite-code');
-    await tester.pumpAndSettle();
+  for (final privacy in <int?>[null, 0, 1]) {
+    testWidgets('shared cards use personal identity with group privacy $privacy',
+        (tester) async {
+      final profiles = _Profiles();
+      if (privacy != null) {
+        profiles.group = GroupInfo(groupID: 'group', lookMemberInfo: privacy);
+      }
+      await profiles.mount(tester);
+      profiles.navigation.viewUserInfo(UserInfo(userID: 'card-target'),
+          isCard: true, inviteCode: 'invite-code');
+      await tester.pumpAndSettle();
 
-    expect(profiles.opened.single['forceCanAdd'], isTrue);
-    expect(profiles.opened.single['addSource'], FriendAddSource.card);
-    expect(profiles.opened.single['friendAddFields'],
-        {'inviteCode': 'invite-code'});
-  });
+      expect(profiles.opened.single['userID'], 'card-target');
+      expect(profiles.opened.single['groupID'], isNull);
+      expect(profiles.opened.single['forceCanAdd'], isTrue);
+      expect(profiles.opened.single['addSource'], FriendAddSource.card);
+      expect(profiles.opened.single['friendAddFields'],
+          {'inviteCode': 'invite-code'});
+    });
+  }
 
   testWidgets('single chat profile access does not depend on group metadata',
       (tester) async {

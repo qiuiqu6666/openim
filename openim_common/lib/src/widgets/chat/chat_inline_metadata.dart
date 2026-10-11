@@ -74,8 +74,6 @@ class _InlineMetadata extends RenderBox
           width = math.max(width, needed);
           y = offset.dy + top;
           y += math.max(0, bottom - top - metadata.size.height);
-          // Lower the receipt slightly without consuming a separate text line.
-          y += 4;
         }
       }
     }

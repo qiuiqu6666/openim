@@ -66,12 +66,12 @@ class SelectContactsFromGroupLogic extends GetxController {
     }
   }
 
-  Iterable<GroupInfo> get operableList => allList.where(_remove);
+  Iterable<GroupInfo> get operableList => visibleGroups.where(_remove);
 
   bool _remove(GroupInfo info) => !selectContactsLogic.isDefaultChecked(info);
 
   bool get isSelectAll {
-    if (selectContactsLogic.checkedList.isEmpty) {
+    if (selectContactsLogic.checkedList.isEmpty || operableList.isEmpty) {
       return false;
     } else if (operableList
         .every((item) => selectContactsLogic.isChecked(item))) {

@@ -547,6 +547,9 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
 
   Future<void> _openLedger(BuildContext context, SangongRuntime runtime) {
     final target = widget.userID;
+    final recovery = runtime.operatorRouteRevalidation();
+    bool ownerCurrent() =>
+        mounted && identical(_runtime, runtime) && target == widget.userID;
     return showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
@@ -558,12 +561,12 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
         barrierColor: const Color(0xFF000000).withValues(alpha: .45),
         builder: (context) => SangongPrivilegeRouteGuard(
             featureContext: runtime.featureContext,
-            scopeChanges: runtime,
-            isCurrent: () =>
-                mounted &&
-                identical(_runtime, runtime) &&
-                runtime.isCurrent &&
-                target == widget.userID,
+            scopeChanges: Listenable.merge([runtime, _ledgerScopeChanges]),
+            requireCapabilitiesCurrent: false,
+            canRevalidate: () => ownerCurrent() && recovery.canRevalidate,
+            revalidate: (active) =>
+                recovery.refresh(() => active() && ownerCurrent()),
+            isCurrent: () => ownerCurrent() && recovery.current,
             builder: (context) => Padding(
                 padding: EdgeInsets.only(
                     bottom: MediaQuery.viewInsetsOf(context).bottom),

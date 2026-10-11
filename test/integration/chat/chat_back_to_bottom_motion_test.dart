@@ -130,6 +130,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(ChatPage), findsOneWidget);
       expect(find.byType(ChatListView), findsOneWidget);
+      final position = logic.scrollController.position;
+      logic.scrollController.jumpTo(position.minScrollExtent + 16);
+      await tester.pumpAndSettle();
+      expect(logic.newMessages.awayFromLatest.value, isTrue);
+      expect(find.byType(NewMessageIndicator), findsNothing,
+          reason: 'A small movement must not show the return button.');
+      for (final (ratio, visible) in [
+        (0.55, true),
+        (0.48, true),
+        (0.4, false),
+      ]) {
+        logic.scrollController.jumpTo(
+            position.minScrollExtent + position.viewportDimension * ratio);
+        await tester.pumpAndSettle();
+        expect(find.byType(NewMessageIndicator),
+            visible ? findsOneWidget : findsNothing);
+      }
       logic.scrollController.jumpTo(900);
       await tester.pumpAndSettle();
       expect(logic.newMessages.awayFromLatest.value, isTrue);

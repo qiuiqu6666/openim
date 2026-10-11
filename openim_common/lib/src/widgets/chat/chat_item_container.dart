@@ -132,6 +132,7 @@ class ChatItemContainer extends StatelessWidget {
 
   Widget _buildChildView(BuildContext context, BubbleType type) {
     final textStyle = textBubbleStyle;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final overlay = mediaOverlay || stickerMedia;
     final showReadStatus = this.showReadStatus &&
         (textStyle?.showReadStatus ?? true) &&
@@ -140,9 +141,12 @@ class ChatItemContainer extends StatelessWidget {
         ? null
         : Text(timeStr!,
             style: textStyle?.metadataStyle(isISend) ??
-                Styles.ts_8E9AB0_12sp.copyWith(
-                    fontSize: 10.sp,
-                    color: overlay ? AppTokens.onAccent : null));
+                TextStyle(
+                    fontSize: ChatBubbleTokens.metadataFontSize,
+                    height: 1,
+                    color: overlay
+                        ? AppTokens.onAccent
+                        : ChatBubbleTokens.metadata(dark: dark)));
     final Widget? status = !isISend || !showStatus
         ? null
         : isSendFailed
@@ -160,11 +164,11 @@ class ChatItemContainer extends StatelessWidget {
                     isRead: showReadStatus && hasRead,
                     size: compactBubble ? 16.w : null,
                     color: embeddedStatusColor ??
-                        (overlay
+                        (overlay || dark
                             ? AppTokens.onAccent
                             : showReadStatus && hasRead
                                 ? Styles.c_0089FF
-                                : Styles.c_8E9AB0),
+                                : ChatBubbleTokens.metadata(dark: dark)),
                     semanticLabel: showReadStatus
                         ? (hasRead ? StrRes.hasRead : StrRes.unread)
                         : StrRes.sentSuccessfully,
@@ -182,8 +186,9 @@ class ChatItemContainer extends StatelessWidget {
         ? ChatMessageContentAnchor(
             messageID: id,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(
-                  stickerMedia ? StickerBubbleLayout.radius : 12.r),
+              borderRadius: BorderRadius.circular(stickerMedia
+                  ? StickerBubbleLayout.radius
+                  : ChatBubbleTokens.radius),
               child: Stack(
                 children: [
                   if (stickerMedia && hasMetadata)
@@ -292,7 +297,11 @@ class ChatItemContainer extends StatelessWidget {
                       borderRadius: textStyle?.radius(isISend),
                       backgroundColor: textStyle?.background(isISend),
                       constraints: textStyle == null
-                          ? null
+                          ? (compactBubble
+                              ? null
+                              : BoxConstraints(
+                                  maxWidth: ChatBubbleTokens.maxWidth(
+                                      MediaQuery.sizeOf(context).width)))
                           : BoxConstraints(maxWidth: textStyle.maxBubbleWidth),
                       // Position the bubble in the message row; do not expand its background.
                       alignment: null,

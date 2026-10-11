@@ -12,6 +12,7 @@ import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
 import '../../../core/controller/app_controller.dart';
 import '../../../core/controller/im_controller.dart';
+import '../../../core/im_callback.dart';
 import '../../../routes/app_navigator.dart';
 import '../../../services/chat_history_cache.dart';
 import '../../contacts/select_contacts/select_contacts_logic.dart';
@@ -67,6 +68,8 @@ class GroupSetupLogic extends GetxController {
   late StreamSubscription _jasSub;
   late StreamSubscription _jdsSub;
   StreamSubscription? _selfInfoSubscription;
+  StreamSubscription? _sdkStatusSubscription;
+  bool _membershipRevoked = false;
   final lock = Lock();
   final isJoinedGroup = false.obs;
   final avatar = Rx<File?>(null);
@@ -82,6 +85,18 @@ class GroupSetupLogic extends GetxController {
     myGroupMembersInfo = Rx(_defaultMemberInfo);
     _initialPermissionContext = capturePermissionContext();
     _seedCurrentChat();
+    _sdkStatusSubscription = imLogic.imSdkStatusPublishSubject.listen((event) {
+      if (!_isCurrentGroupSession || _membershipRevoked) return;
+      if (_membershipSyncing) {
+        membership.defer();
+      } else if (event.status == IMSdkStatus.syncEnded) {
+        membership.defer();
+        unawaited(refreshMembership());
+      } else if (event.status == IMSdkStatus.syncFailed) {
+        membership.defer();
+        membership.failed.value = true;
+      }
+    });
 
     _ccSub = imLogic.conversationChangedSubject.listen((newList) {
       if (!_isCurrentGroupSession) return;
@@ -109,6 +124,7 @@ class GroupSetupLogic extends GetxController {
 
     _jasSub = imLogic.joinedGroupAddedSubject.listen((value) {
       if (_isCurrentGroupSession && value.groupID == groupInfo.value.groupID) {
+        _membershipRevoked = false;
         membership.accept();
         _permissionGeneration++;
         isJoinedGroup.value = true;
@@ -153,6 +169,7 @@ class GroupSetupLogic extends GetxController {
     _mASub = imLogic.memberAddedSubject.listen((e) async {
       if (_isCurrentGroupSession && e.groupID == groupInfo.value.groupID) {
         if (e.userID == OpenIM.iMManager.userID) {
+          _membershipRevoked = false;
           membership.accept();
           _permissionGeneration++;
           isJoinedGroup.value = true;
@@ -196,6 +213,7 @@ class GroupSetupLogic extends GetxController {
     _jdsSub.cancel();
     _jasSub.cancel();
     _selfInfoSubscription?.cancel();
+    _sdkStatusSubscription?.cancel();
     super.onClose();
   }
 
@@ -305,26 +323,36 @@ class GroupSetupLogic extends GetxController {
       context.generation == _permissionGeneration &&
       isJoinedGroup.value;
 
-  void _leaveGroup() {
+  void _leaveGroup({bool fromEvent = true}) {
+    if (fromEvent) _membershipRevoked = true;
     membership.accept();
     _permissionGeneration++;
     isJoinedGroup.value = false;
     _memberPreview.invalidate();
   }
 
-  Future<void> refreshMembership() => membership.refresh(
-        query: () => OpenIM.iMManager.groupManager
-            .isJoinedGroup(groupID: _initialPermissionContext.groupID),
-        isCurrent: () => _isCurrentGroupSession,
-        onResult: (joined) {
-          if (!joined) {
-            _leaveGroup();
-          } else if (!isJoinedGroup.value) {
-            isJoinedGroup.value = true;
-            _queryAllInfo();
-          }
-        },
-      );
+  bool get _membershipSyncing => const {
+        IMSdkStatus.syncStart,
+        IMSdkStatus.syncProgress,
+        IMSdkStatus.synchronizing,
+      }.contains(imLogic.currentSdkStatus);
+
+  Future<void> refreshMembership() {
+    if (_membershipSyncing || _membershipRevoked) return Future.value();
+    return membership.refresh(
+      query: () => OpenIM.iMManager.groupManager
+          .isJoinedGroup(groupID: _initialPermissionContext.groupID),
+      isCurrent: () => _isCurrentGroupSession,
+      onResult: (joined) {
+        if (!joined) {
+          _leaveGroup(fromEvent: false);
+        } else if (!isJoinedGroup.value) {
+          isJoinedGroup.value = true;
+          _queryAllInfo();
+        }
+      },
+    );
+  }
 
   void _seedCurrentChat() {
     if (!_isCurrentGroupSession) return;

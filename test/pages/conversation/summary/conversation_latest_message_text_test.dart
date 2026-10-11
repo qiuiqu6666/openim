@@ -165,6 +165,42 @@ void main() {
     expect(conversationLatestMessageText(_conversation(message)), 'hello');
   });
 
+  test('missing group sender names keep text and exclusive packet summaries', () {
+    final messages = <(Message, String)>[
+      (
+        _message(MessageType.text, {
+          'textElem': {'content': 'hello'}
+        }),
+        'hello'
+      ),
+      (
+        _message(MessageType.custom, {
+          'customElem': {
+            'data': jsonEncode({
+              'orderID': 'exclusive-packet',
+              'biz': 'packet_exclusive',
+              'currency': 'BI99',
+              'amount': '1.00',
+              'status': 'open',
+            })
+          }
+        }),
+        '[专属红包]'
+      ),
+    ];
+    for (final (message, expected) in messages) {
+      final group = _conversation(message, group: true);
+      for (final name in <String?>[null, '', ' \t\n\u3000']) {
+        message.senderNickname = name;
+        final before = message.toJson();
+        expect(conversationLatestMessageText(group), expected);
+        expect(message.toJson(), before);
+      }
+      message.senderNickname = '小林⬇️';
+      expect(conversationLatestMessageText(group), '小林⬇️: $expected ');
+    }
+  });
+
   test('notification summary has no extra group sender prefix', () {
     final notification =
         _message(MessageType.groupInfoSetAnnouncementNotification, {

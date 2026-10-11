@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
+import '../../res/typography/chat_message_typography.dart';
+
 /// Entity offsets keep the SDK's UTF-16 units; display spans never split a
 /// grapheme cluster. Invalid protocol ranges are ignored.
 class ChatFormattedText extends StatelessWidget {
@@ -58,9 +60,7 @@ class ChatFormattedText extends StatelessWidget {
       );
   @override
   Widget build(BuildContext context) {
-    final style = Styles.ts_0C1C33_17sp.copyWith(
-      height: ChatBubbleTokens.textLineHeight,
-    );
+    final style = chatMessageTextStyle(context);
     return Text.rich(TextSpan(children: spans(text, entities, style)),
         style: style);
   }

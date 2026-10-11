@@ -139,6 +139,7 @@ void main() {
       expect(api.calls.where((c) => c.method == 'POST'), hasLength(2));
       expect(find.text('未设置'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      await unmountSangong(tester);
     });
   }
 
@@ -269,6 +270,7 @@ void main() {
     expect(button.onPressed, isNull);
     expect(find.text('清除绑定'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await unmountSangong(tester);
   });
 
   testWidgets('late assignment query is hidden after group scope changes',

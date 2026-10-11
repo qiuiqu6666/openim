@@ -36,7 +36,8 @@ class ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = backgroundColor ??
         (isISend
-            ? Styles.c_CCE7FE
+            ? ChatBubbleTokens.outgoing(
+                dark: Theme.of(context).brightness == Brightness.dark)
             : ChatBubbleTokens.incoming(
                 dark: Theme.of(context).brightness == Brightness.dark));
     final incomingBorder = !isISend &&
@@ -52,7 +53,9 @@ class ChatBubble extends StatelessWidget {
       padding: padding ??
           (compact
               ? EdgeInsets.fromLTRB(10.w, 8.w, 10.w, 6.w)
-              : EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h)),
+              : const EdgeInsets.symmetric(
+                  horizontal: ChatBubbleTokens.horizontalPadding,
+                  vertical: ChatBubbleTokens.verticalPadding)),
       alignment: alignment,
       decoration: BoxDecoration(
         color: color,

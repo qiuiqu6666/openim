@@ -1,6 +1,8 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 
+import 'chat_latest_scroll_tokens.dart';
+
 /// Tracks live messages received while the reversed chat list is away from zero.
 ///
 /// History pages and the conversation's initial unread count must not be passed
@@ -10,13 +12,20 @@ class ChatNewMessageTracker {
   ChatNewMessageTracker({
     required String Function() currentUserID,
     required bool Function() isClosed,
+    double Function()? viewportDimension,
+    bool Function()? hasMissingNewer,
   })  : _currentUserID = currentUserID,
-        _isClosed = isClosed;
+        _isClosed = isClosed,
+        _viewportDimension = viewportDimension,
+        _hasMissingNewer = hasMissingNewer;
 
   final String Function() _currentUserID;
   final bool Function() _isClosed;
+  final double Function()? _viewportDimension;
+  final bool Function()? _hasMissingNewer;
   final unseenCount = 0.obs;
   final awayFromLatest = false.obs;
+  final showBackToBottom = false.obs;
 
   final _receivedIDs = <String>{};
   final _unseenIDs = <String>{};
@@ -27,6 +36,17 @@ class ChatNewMessageTracker {
   void updateScrollOffset(double pixels) {
     if (_inactive) return;
     awayFromLatest.value = pixels > 1;
+    final viewport = _viewportDimension?.call() ?? 0;
+    final extent = viewport.isFinite && viewport > 0
+        ? viewport
+        : ChatLatestScrollTokens.fallbackViewportDimension;
+    // The 1px reading boundary must not also control the visible button.
+    // Use separate show/hide distances so small movements cannot flash it.
+    final ratio = showBackToBottom.value
+        ? ChatLatestScrollTokens.hintHideViewportRatio
+        : ChatLatestScrollTokens.hintShowViewportRatio;
+    showBackToBottom.value = awayFromLatest.value &&
+        (_hasMissingNewer?.call() == true || pixels >= extent * ratio);
     if (!awayFromLatest.value) {
       _unseenIDs.clear();
       unseenCount.value = 0;
@@ -70,6 +90,7 @@ class ChatNewMessageTracker {
     _unseenIDs.clear();
     unseenCount.value = 0;
     awayFromLatest.value = false;
+    showBackToBottom.value = false;
   }
 
   void close() {

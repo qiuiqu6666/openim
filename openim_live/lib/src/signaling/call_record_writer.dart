@@ -22,6 +22,13 @@ Future<Message?> writeCallRecord({
   CallRecordCallback? onRecord,
 }) async {
   final invitation = signaling.invitation!;
+  final refresh = ConversationRefreshRequest(
+    accountID: accountID,
+    sessionType: ConversationType.single,
+    sourceID: invitation.inviterUserID == accountID
+        ? invitation.inviteeUserIDList!.first
+        : invitation.inviterUserID,
+  );
   final record = buildCallRecord(
       signaling: signaling,
       accountID: accountID,
@@ -57,14 +64,16 @@ Future<Message?> writeCallRecord({
       description: '',
     );
     if (!isCurrentAccount()) return null;
-    return await OpenIM.iMManager.messageManager
-        .insertSingleMessageToLocalStorage(
+    final inserted =
+        await OpenIM.iMManager.messageManager.insertSingleMessageToLocalStorage(
       receiverID: invitation.inviteeUserIDList!.first,
       senderID: invitation.inviterUserID!,
       message: message
         ..status = 2
         ..isRead = true,
     );
+    if (isCurrentAccount()) ConversationRefreshEvents.publish(refresh);
+    return inserted;
   } catch (error) {
     Logger.print('Call chat-history record unavailable: ${error.runtimeType}');
     return null;

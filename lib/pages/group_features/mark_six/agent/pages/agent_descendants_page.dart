@@ -8,6 +8,7 @@ import '../../../models/group_feature_context.dart';
 import '../../data/mark_six_repository.dart';
 import '../../widgets/mark_six_style.dart';
 import '../data/agent_descendants_controller.dart';
+import '../identity/agent_avatar_directory.dart';
 import '../widgets/agent_descendant_tile.dart';
 import 'agent_descendant_detail_page.dart';
 
@@ -21,6 +22,7 @@ class AgentDescendantsPage extends StatefulWidget {
 class _AgentDescendantsPageState extends State<AgentDescendantsPage> {
   late final _repository = MarkSixRepository(widget.featureContext);
   late final _state = AgentDescendantsController(_repository);
+  late final _avatars = AgentAvatarDirectory(widget.featureContext);
   final _search = TextEditingController();
   String _keyword = '', _sort = 'balance';
   bool get allowed =>
@@ -35,6 +37,7 @@ class _AgentDescendantsPageState extends State<AgentDescendantsPage> {
 
   @override
   void dispose() {
+    _avatars.dispose();
     _state.dispose();
     _repository.close();
     _search.dispose();
@@ -155,6 +158,7 @@ class _AgentDescendantsPageState extends State<AgentDescendantsPage> {
                                                             : '未找到匹配昵称或编号的下级'),
                                                   for (final row in rows)
                                                     AgentDescendantTile(
+                                                        avatars: _avatars,
                                                         key: ValueKey(
                                                             row.$1['userId']),
                                                         item: row.$1,

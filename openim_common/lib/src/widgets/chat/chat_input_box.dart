@@ -22,6 +22,7 @@ class ChatInputBox extends StatefulWidget {
     this.style,
     this.atStyle,
     this.enabled = true,
+    this.showDisabledWarning = true,
     this.isNotInGroup = false,
     this.hintText,
     this.forceCloseToolboxSub,
@@ -40,6 +41,7 @@ class ChatInputBox extends StatefulWidget {
   final TextStyle? style;
   final TextStyle? atStyle;
   final bool enabled;
+  final bool showDisabledWarning;
   final bool isNotInGroup;
   final String? hintText;
   final Widget toolbox;
@@ -143,6 +145,7 @@ class _ChatInputBoxState
     final alternatePanelVisible = _emojiVisible || _leftKeyboardButton;
     final content = _inputBlocked
         ? ChatDisableInputBox(
+            showWarning: widget.isNotInGroup || widget.showDisabledWarning,
             message: widget.isNotInGroup
                 ? StrRes.notSendMessageNotInGroup
                 : widget.hintText ?? StrRes.youMuted,

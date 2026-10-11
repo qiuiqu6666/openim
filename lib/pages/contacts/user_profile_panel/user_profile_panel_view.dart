@@ -1,6 +1,5 @@
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:common_utils/common_utils.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart' show GroupInfo;
 import 'package:get/get.dart';
@@ -218,26 +217,6 @@ class UserProfilePanelPage extends StatelessWidget {
                                         onTap: logic.setChatBackground),
                                 ],
                                 key: 'user_profile_conversation_group'),
-                          if (friend)
-                            _card(
-                                context,
-                                [
-                                  SettingsCell(
-                                    key: const ValueKey(
-                                        'user_profile_blacklist'),
-                                    title: 'profileAddBlacklist'.tr,
-                                    showArrow: false,
-                                    showDivider: false,
-                                    trailing: CupertinoSwitch(
-                                      value: user.isBlacklist,
-                                      activeTrackColor: AppTokens.accent,
-                                      onChanged: logic.updatingBlacklist.value
-                                          ? null
-                                          : logic.setBlacklist,
-                                    ),
-                                  ),
-                                ],
-                                key: 'user_profile_safety_group'),
                         ],
                       ),
               )),

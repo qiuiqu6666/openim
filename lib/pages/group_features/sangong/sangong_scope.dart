@@ -15,6 +15,7 @@ import 'models/agent_rebate_models.dart';
 import 'models/sangong_my_config.dart';
 import 'models/binding/sangong_group_tenant_state.dart';
 import 'services/authorization/sangong_operation_scope.dart';
+import 'services/authorization/sangong_route_revalidation.dart';
 import 'services/binding/sangong_group_tenant_store.dart';
 import 'services/sangong_realtime.dart';
 import 'widgets/authorization/privilege_route_guard.dart';
@@ -155,6 +156,35 @@ class SangongRuntime extends ChangeNotifier {
   String get preferenceKey =>
       '${featureContext.api.baseUrl}:${featureContext.currentUserID}:${featureContext.groupID}';
   bool get canAccessModule => sangongModuleAccess(featureContext);
+  SangongRouteRevalidation operatorRouteRevalidation() =>
+      SangongRouteRevalidation(
+          readContext: () => featureContext,
+          readTenant: () => http.tenantId,
+          canUseRoute: () => canManage,
+          sessionCurrent: () => isSessionCurrent,
+          updateContext: updateContext,
+          confirmBinding: ensureManageBinding);
+  SangongRouteRevalidation agentRouteRevalidation() => SangongRouteRevalidation(
+      agent: true,
+      readContext: () => featureContext,
+      readTenant: () => http.tenantId,
+      canUseRoute: () => canOpenAgent,
+      sessionCurrent: () => isSessionCurrent,
+      updateContext: updateContext,
+      confirmBinding: ensureAgentBinding);
+  SangongRouteRevalidation configurationRouteRevalidation() =>
+      SangongRouteRevalidation(
+          configuration: true,
+          readContext: () => featureContext,
+          readTenant: () => http.tenantId,
+          canUseRoute: () => canConfigure,
+          sessionCurrent: () => isSessionCurrent,
+          updateContext: updateContext,
+          confirmBinding: () async {
+            // A not-yet-created group is allowed only after the authoritative
+            // binding lookup confirms canInitialize; admin alone is no grant.
+            if (requiresGroupTenantCheck) await ensureManageBinding();
+          });
   void _applyCapabilities() {
     if (!canAccessModule) return;
     final capability = featureContext.capabilities.sangong;
@@ -409,23 +439,45 @@ class SangongPageRoute<T> extends AppMaterialPageRoute<T> {
       {required BuildContext context,
       required WidgetBuilder builder,
       bool agent = false,
+      bool configuration = false,
+      bool recoverOnRefresh = true,
       super.settings,
       super.fullscreenDialog})
-      : super(builder: _capture(context, builder, agent));
-  static WidgetBuilder _capture(
-      BuildContext context, WidgetBuilder builder, bool agent) {
+      : super(
+            builder: _capture(
+                context, builder, agent, configuration, recoverOnRefresh));
+  static WidgetBuilder _capture(BuildContext context, WidgetBuilder builder,
+      bool agent, bool configuration, bool recoverOnRefresh) {
     final runtime = SangongScope.read(context);
     final featureContext = runtime.featureContext;
     final scope =
         SangongOperationScope.capture(featureContext, runtime.http.tenantId);
+    final recovery = !recoverOnRefresh
+        ? null
+        : configuration
+            ? (runtime.canConfigure
+                ? runtime.configurationRouteRevalidation()
+                : null)
+            : agent
+                ? (runtime.canOpenAgent
+                    ? runtime.agentRouteRevalidation()
+                    : null)
+                : (runtime.canManage
+                    ? runtime.operatorRouteRevalidation()
+                    : null);
     return (_) => SangongPrivilegeRouteGuard(
           featureContext: featureContext,
           allowAssignedAgent: agent,
+          requireCapabilitiesCurrent: recovery == null,
+          canRevalidate: recovery == null ? null : () => recovery.canRevalidate,
+          revalidate: recovery?.refresh,
           scopeChanges: runtime,
           isCurrent: () =>
-              runtime.isCurrent &&
-              scope.matches(runtime.featureContext, runtime.http.tenantId) &&
-              (!agent || runtime.canOpenAgent),
+              recovery?.current ??
+              (runtime.isCurrent &&
+                  scope.matches(
+                      runtime.featureContext, runtime.http.tenantId) &&
+                  (!agent || runtime.canOpenAgent)),
           builder: (_) =>
               SangongScope(runtime: runtime, child: Builder(builder: builder)),
         );

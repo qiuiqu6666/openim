@@ -8,6 +8,7 @@ import 'package:openim_common/openim_common.dart';
 import '../../../core/controller/im_controller.dart';
 import '../../home/home_logic.dart';
 import '../request_history/data/request_history_store.dart';
+import '../request_history/navigation/request_history_chat_opener.dart';
 
 class FriendRequestsLogic extends GetxController {
   final imLogic = Get.find<IMController>();
@@ -16,6 +17,9 @@ class FriendRequestsLogic extends GetxController {
   final loading = true.obs;
   final loadFailed = false.obs;
   final cleaning = false.obs;
+  final editing = false.obs;
+  final selected = <String>{}.obs;
+  final _chatOpener = RequestHistoryChatOpener();
   final _ownerAccount = OpenIM.iMManager.userID;
   final _ownerToken = DataSp.chatToken;
   late final _history =
@@ -37,6 +41,54 @@ class FriendRequestsLogic extends GetxController {
   Future<void> clearRequests() => _clean(
       () => _history.clear(applicationList.map(RequestHistoryEntry.friend)));
 
+  String selectionKey(FriendApplicationInfo info) =>
+      RequestHistoryEntry.friend(info).id;
+
+  bool get allSelected =>
+      applicationList.isNotEmpty &&
+      applicationList.every((item) => selected.contains(selectionKey(item)));
+
+  void toggleEditing() {
+    if (!isSessionActive || cleaning.value) return;
+    editing.toggle();
+    selected.clear();
+  }
+
+  void toggleSelection(FriendApplicationInfo info) {
+    if (!isSessionActive || cleaning.value) return;
+    final key = selectionKey(info);
+    if (!selected.remove(key)) selected.add(key);
+  }
+
+  void toggleAll() {
+    if (!isSessionActive || cleaning.value) return;
+    if (allSelected) {
+      selected.clear();
+    } else {
+      selected.addAll(applicationList.map(selectionKey));
+    }
+  }
+
+  Future<void> deleteSelected() async {
+    if (selected.isEmpty) return;
+    final entries = applicationList
+        .where((item) => selected.contains(selectionKey(item)))
+        .map(RequestHistoryEntry.friend)
+        .toList();
+    await _clean(() => _history.hideAll(entries));
+    if (isSessionActive && selected.isEmpty) editing.value = false;
+  }
+
+  void _retainSelection() {
+    final visible = applicationList.map(selectionKey).toSet();
+    selected.removeWhere((key) => !visible.contains(key));
+  }
+
+  Future<void> openChat(FriendApplicationInfo info) => _chatOpener.open(
+      sourceID: isISendRequest(info) ? info.toUserID : info.fromUserID,
+      sessionType: ConversationType.single,
+      isCurrent: () => isSessionActive);
+
   Future<void> _clean(Future<void> Function() save) async {
     if (!isSessionActive || cleaning.value) return;
     cleaning.value = true;
@@ -44,6 +96,7 @@ class FriendRequestsLogic extends GetxController {
       await save();
       if (!isSessionActive) return;
       applicationList.removeWhere((item) => !_visible(item));
+      _retainSelection();
       homeLogic.getUnhandledFriendApplicationCount();
     } catch (_) {
       if (isSessionActive) IMViews.showToast('requestHistoryCleanupFailed'.tr);
@@ -107,6 +160,7 @@ class FriendRequestsLogic extends GetxController {
       final seen = <String>{};
       applicationList.assignAll(allList.where((item) =>
           _visible(item) && seen.add(RequestHistoryEntry.friend(item).id)));
+      _retainSelection();
     } catch (_) {
       if (isSessionActive && version == _loadVersion) loadFailed.value = true;
     } finally {
@@ -117,10 +171,17 @@ class FriendRequestsLogic extends GetxController {
   bool isISendRequest(FriendApplicationInfo info) =>
       info.fromUserID == OpenIM.iMManager.userID;
 
-  void acceptFriendApplication(FriendApplicationInfo info) =>
-      AppNavigator.startProcessFriendRequests(
-        applicationInfo: info,
-      );
+  void acceptFriendApplication(FriendApplicationInfo info) async {
+    if (!isSessionActive || isISendRequest(info) || !info.isWaitingHandle) {
+      return;
+    }
+    final result =
+        await AppNavigator.startProcessFriendRequests(applicationInfo: info);
+    if (isSessionActive && result is int) {
+      info.handleResult = result;
+      applicationList.refresh();
+    }
+  }
 
   void refuseFriendApplication(FriendApplicationInfo info) async {}
 }

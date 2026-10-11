@@ -10,6 +10,7 @@ class AppTokens {
 
   // Semantic colors.
   static const Color accent = Color(0xFF1E90FF);
+  static const Color groupAnnouncementConfirm = Color(0xFF2ED1B3);
   static const Color ink600 = Color(0xFF374151);
   static const Color danger = Color(0xFFDC2626);
   static const Color walletDanger = Color(0xFFE60022);
@@ -182,17 +183,36 @@ class FavoritePickerTokens {
       dark ? sendBackgroundDark : sendBackgroundLight;
 }
 
-/// Received message surfaces from 99chat's production theme and bubble helper.
+/// 99chat's production TIMUIKitTextElem and MessageBubbleTextColor geometry.
 class ChatBubbleTokens {
   ChatBubbleTokens._();
 
+  static const double textFontSize = 16;
   static const double textLineHeight = 1.3;
+  static const double radius = 16;
+  static const double senderCornerRadius = 6;
+  static const double horizontalPadding = 12;
+  static const double verticalPadding = 8;
+  static const double metadataFontSize = 11;
+  static const Color outgoingLight = Color(0xFFDCEEFF);
   static const Color incomingBorder = Color(0x14000000);
   static const double incomingBorderWidth = .5;
-  static const double metadataHorizontalGap = 6;
+  static const double metadataHorizontalGap = 8;
   static const double metadataVerticalGap = 4;
 
   static Color incoming({required bool dark}) => AppTokens.surface(dark: dark);
+  static Color outgoing({required bool dark}) =>
+      dark ? AppTokens.accent : outgoingLight;
+  static Color bodyText({required bool dark}) =>
+      dark ? AppTokens.onAccent : AppTokens.textPrimaryLight;
+  static Color metadata({required bool dark}) => dark
+      ? AppTokens.onAccent.withValues(alpha: .92)
+      : AppTokens.textSecondaryLight.withValues(alpha: .88);
+
+  /// Overall bubble width, including padding; the row can constrain it further.
+  static double maxWidth(double viewportWidth) => viewportWidth < 900
+      ? (viewportWidth * .70).clamp(160.0, double.infinity)
+      : (viewportWidth * .46).clamp(240.0, 420.0);
 }
 
 /// Compact file and voice attachment rows in chat-history results.

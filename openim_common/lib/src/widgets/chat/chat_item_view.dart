@@ -21,10 +21,14 @@ double videoWidth = 120.w;
 double locationWidth = 220.w;
 
 BorderRadius borderRadius(bool isISend) => BorderRadius.only(
-      topLeft: Radius.circular(isISend ? 6.r : 0),
-      topRight: Radius.circular(isISend ? 0 : 6.r),
-      bottomLeft: Radius.circular(6.r),
-      bottomRight: Radius.circular(6.r),
+      topLeft: Radius.circular(isISend
+          ? ChatBubbleTokens.radius
+          : ChatBubbleTokens.senderCornerRadius),
+      topRight: Radius.circular(isISend
+          ? ChatBubbleTokens.senderCornerRadius
+          : ChatBubbleTokens.radius),
+      bottomLeft: const Radius.circular(ChatBubbleTokens.radius),
+      bottomRight: const Radius.circular(ChatBubbleTokens.radius),
     );
 
 class MsgStreamEv<T> {
@@ -243,6 +247,7 @@ class _ChatItemViewState extends State<ChatItemView> {
       markdownContent =
           allowMarkdown && ChatMarkdownText.hasMarkdown(textSource);
       return ChatText(
+        isISend: _isISend,
         text: textSource,
         enableMarkdown: allowMarkdown,
         textStyle: _textBubbleStyle?.textStyle(_isISend),
@@ -255,7 +260,17 @@ class _ChatItemViewState extends State<ChatItemView> {
                     Brightness.dark
                 ? AppTokens.onAccent
                 : AppTokens.accent),
-        patterns: widget.patterns,
+        patterns: [
+          ...widget.patterns,
+          // Everyone has no member profile, but is still a highlighted mention.
+          // Keep this in the shared bubble so read-only previews match chat.
+          if (_message.contentType == MessageType.atText)
+            MatchPattern(
+              type: PatternType.custom,
+              pattern: '${RegExp.escape('@${StrRes.everyone}')}'
+                  r'(?=\s|$|[，。！？、,.!?;；:：])',
+            ),
+        ],
         textScaleFactor: widget.textScaleFactor,
         onVisibleTrulyText: widget.onVisibleTrulyText,
       );
@@ -387,7 +402,8 @@ class _ChatItemViewState extends State<ChatItemView> {
           ChatQuoteCard(
             message: quoted,
             bubbleColor: _isISend
-                ? Styles.c_CCE7FE
+                ? ChatBubbleTokens.outgoing(
+                    dark: Theme.of(context).brightness == Brightness.dark)
                 : ChatBubbleTokens.incoming(
                     dark: Theme.of(context).brightness == Brightness.dark),
           ),

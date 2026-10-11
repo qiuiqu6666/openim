@@ -1,6 +1,8 @@
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'services/authorization/sangong_access_policy.dart';
+import 'services/authorization/sangong_route_revalidation.dart';
 import 'agents/halls/sangong_agent_hall_page.dart';
+import 'agents/halls/sangong_agent_hall_binding.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/group_feature_context.dart';
@@ -430,7 +432,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
         final registration = _runtime.groupTenant.state;
         final bindingStatus = _runtime.requiresGroupTenantCheck
             ? (_runtime.groupTenant.loading
-                ? '正在确认当前群的三公配置'
+                ? null
                 : registration != null &&
                         registration.status !=
                             SangongGroupTenantStatus.configured &&
@@ -585,6 +587,12 @@ class SangongModule {
     final nextRuntime =
         runtime ?? SangongRuntime(current, pathPrefix: pathPrefix);
     if (runtime != null) runtime.updateContext(current);
+    final agentRecovery = agent ? nextRuntime.agentRouteRevalidation() : null;
+    final agentBinding =
+        agent ? SangongAgentHallBinding(pathPrefix: pathPrefix) : null;
+    void syncAgentContext() =>
+        agentBinding?.updateContext(nextRuntime.featureContext);
+    if (agentBinding != null) nextRuntime.addListener(syncAgentContext);
     try {
       await Navigator.of(context).push<void>(AppMaterialPageRoute(
           builder: (_) => SangongPrivilegeRouteGuard(
@@ -593,13 +601,20 @@ class SangongModule {
               refreshOnEntry: false,
               requireCapabilitiesCurrent: false,
               scopeChanges: nextRuntime,
+              canRevalidate: agentRecovery == null
+                  ? null
+                  : () => agentRecovery.canRevalidate,
+              revalidate: agentRecovery?.refresh,
               isCurrent: () =>
-                  nextRuntime.isSessionCurrent &&
-                  (!agent ||
-                      sangongAssignedAgentAccess(nextRuntime.featureContext)),
+                  agentRecovery?.current ??
+                  (nextRuntime.isSessionCurrent &&
+                      (!agent ||
+                          sangongAssignedAgentAccess(
+                              nextRuntime.featureContext))),
               builder: (_) => agent
                   ? SangongAgentHallPage(
-                      featureContext: current,
+                      featureContext: nextRuntime.featureContext,
+                      binding: agentBinding,
                       section: section,
                       pathPrefix: pathPrefix)
                   : _SangongModulePage(
@@ -610,6 +625,10 @@ class SangongModule {
                       onFloatVisibleChanged: onFloatVisibleChanged,
                       section: section))));
     } finally {
+      if (agentBinding != null) {
+        nextRuntime.removeListener(syncAgentContext);
+        agentBinding.dispose();
+      }
       if (runtime == null) nextRuntime.dispose();
     }
   }
@@ -636,6 +655,7 @@ class _SangongModulePageState extends State<_SangongModulePage> {
   bool _loading = true;
   String? _error;
   int _generation = 0;
+  SangongRouteRevalidation? _routeRevalidation;
   @override
   void initState() {
     super.initState();
@@ -685,7 +705,18 @@ class _SangongModulePageState extends State<_SangongModulePage> {
         _logManageUnavailable(widget.runtime,
             widget.runtime.manageUnavailableReason ?? '当前群暂不可进行三公运营');
       }
-      setState(() => _loading = false);
+      setState(() {
+        _routeRevalidation = widget.agent
+            ? (widget.runtime.canOpenAgent
+                ? widget.runtime.agentRouteRevalidation()
+                : null)
+            : (widget.runtime.canManage
+                ? widget.runtime.operatorRouteRevalidation()
+                : widget.runtime.canConfigure
+                    ? widget.runtime.configurationRouteRevalidation()
+                    : null);
+        _loading = false;
+      });
     } catch (failure) {
       if (mounted &&
           generation == _generation &&
@@ -729,10 +760,16 @@ class _SangongModulePageState extends State<_SangongModulePage> {
             featureContext: widget.runtime.featureContext,
             allowAssignedAgent: widget.agent,
             refreshOnEntry: false,
+            requireCapabilitiesCurrent: _routeRevalidation == null,
+            canRevalidate: _routeRevalidation == null
+                ? null
+                : () => _routeRevalidation!.canRevalidate,
+            revalidate: _routeRevalidation?.refresh,
             scopeChanges: widget.runtime,
             isCurrent: () =>
-                widget.runtime.isCurrent &&
-                (!widget.agent || widget.runtime.canOpenAgent),
+                _routeRevalidation?.current ??
+                (widget.runtime.isCurrent &&
+                    (!widget.agent || widget.runtime.canOpenAgent)),
             builder: _businessPage);
       }));
 

@@ -4,4 +4,6 @@
 
 普通消息的 SDK 传输仍由 `../chat_message_sender.dart` 提供，聊天、转发、收藏、联系人推荐、分享和通知快捷回复共用该入口。APNs 提示与目标会话协议由公共包的 `APNsOfflinePushInfo` 工厂生成；未知群类型只发通用通知，消息仍按原 SDK 目标发送。通话在线信令由通话包单独管理。
 
+发送成功且账号仍有效时，发送器通过公共包 `ConversationRefreshEvents` 请求定向读取目标会话。使用实际发送目标，不使用转发消息的原群或聊天页传入的来源会话 ID；会话页自行合并读取，不让刷新失败改变发送结果。接收消息、通话记录和退出聊天的补偿见 [会话更新模块](../../pages/conversation/updates/README.md)。
+
 真实 SDK 传输与账号切换测试位于 `test/services/messaging/apns/`；纯推送协议测试位于 `test/core/push/apns/apns_offline_push_info_test.dart`。平台与服务端合同见 [iOS APNs](../../../docs/ios-apns-push.md)。

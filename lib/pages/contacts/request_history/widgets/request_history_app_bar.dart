@@ -1,11 +1,11 @@
-import 'dart:math' as math;
-
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
-/// Equal action widths keep the title centered with localized clear labels.
+import '../presentation/request_history_labels.dart';
+import '../presentation/request_history_style.dart';
+
 class RequestHistoryAppBar extends StatelessWidget
     implements PreferredSizeWidget {
   const RequestHistoryAppBar({
@@ -14,74 +14,94 @@ class RequestHistoryAppBar extends StatelessWidget
     required this.confirmation,
     required this.onClear,
     required this.enabled,
+    this.actions,
   });
 
   final String title;
   final String confirmation;
   final Future<void> Function() onClear;
   final bool enabled;
+  final List<Widget>? actions;
 
   @override
-  Size get preferredSize =>
-      Size.fromHeight(NavigationGlassTokens.toolbarHeight);
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
+  Future<void> _showMore(BuildContext context) async {
+    final clear = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (sheetContext) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            key: const ValueKey('request-history-clear'),
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(sheetContext, true),
+            child: Text(RequestHistoryLabels.clearGroups),
+          )
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(sheetContext, false),
+          child: Text(StrRes.cancel),
+        ),
+      ),
+    );
+    if (clear != true || !context.mounted) return;
+    final accepted = await Get.dialog<bool>(CustomDialog(
+      title: confirmation,
+      rightText: StrRes.clearAll,
+    ));
+    if (accepted == true && context.mounted) await onClear();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final label = TextPainter(
-      text: TextSpan(text: StrRes.clearAll, style: Styles.ts_0089FF_14sp),
-      textDirection: Directionality.of(context),
-      textScaler: MediaQuery.textScalerOf(context),
-    )..layout();
-    final width = math.min(
-        math.max(kMinInteractiveDimension, label.width + AppTokens.s5.w),
-        (MediaQuery.sizeOf(context).width - AppTokens.s5.w * 2) / 3);
-    label.dispose();
-    return TitleBar(
-      left: SizedBox(
-        width: width,
-        child: Align(
+    final width = MediaQuery.sizeOf(context).width;
+    final count = actions?.length ?? 0;
+    final sideWidth = count == 0
+        ? kToolbarHeight
+        : (RequestHistoryStyle.actionWidth *
+                count *
+                MediaQuery.textScalerOf(context)
+                    .scale(AppTokens.captionFontSize) /
+                AppTokens.captionFontSize)
+            .clamp(kToolbarHeight, width * (count > 1 ? .4 : .25));
+    return AppBar(
+      backgroundColor: RequestHistoryStyle.surface(context),
+      foregroundColor: AppTokens.accent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: true,
+      leadingWidth: sideWidth,
+      leading: Align(
           alignment: AlignmentDirectional.centerStart,
           child: IconButton(
             tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-            padding: EdgeInsets.zero,
             onPressed: () => Get.back(),
-            icon: ImageRes.backBlack.toImage
-              ..width = AppTokens.s7.w
-              ..height = AppTokens.s7.h
-              ..color = Styles.c_0089FF,
-          ),
-        ),
-      ),
-      center: Expanded(
-        child: Text(title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: Styles.ts_0C1C33_17sp_semibold),
-      ),
-      right: SizedBox(
-        width: width,
-        child: TextButton(
-          key: const ValueKey('request-history-clear'),
-          style: TextButton.styleFrom(
-            foregroundColor: Styles.c_0089FF,
-            disabledForegroundColor: Styles.c_8E9AB0,
-            textStyle: Styles.ts_0089FF_14sp,
-            padding: EdgeInsets.zero,
-          ),
-          onPressed: !enabled
-              ? null
-              : () async {
-                  final accepted = await Get.dialog<bool>(CustomDialog(
-                    title: confirmation,
-                    rightText: StrRes.clearAll,
-                  ));
-                  if (accepted == true && context.mounted) await onClear();
-                },
-          child: FittedBox(
-              fit: BoxFit.scaleDown, child: Text(StrRes.clearAll, maxLines: 1)),
-        ),
-      ),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                size: RequestHistoryStyle.backIcon),
+          )),
+      title: Text(title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: RequestHistoryStyle.title(context).copyWith(
+              fontSize: RequestHistoryStyle.headingSize,
+              fontWeight: FontWeight.w700)),
+      actions: actions == null
+          ? [
+              IconButton(
+                key: const ValueKey('request-history-more'),
+                tooltip: RequestHistoryLabels.more,
+                onPressed: enabled ? () => _showMore(context) : null,
+                icon: const Icon(Icons.more_horiz),
+              )
+            ]
+          : [
+              SizedBox(
+                  width: sideWidth,
+                  child: Row(children: [
+                    for (final action in actions!) Expanded(child: action)
+                  ]))
+            ],
     );
   }
 }

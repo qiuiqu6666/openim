@@ -63,7 +63,7 @@ class _Conversations extends GetxController
   @override
   String getShowName(ConversationInfo info) => info.showName ?? '';
   @override
-  String getContent(ConversationInfo info) => '消息';
+  String getContent(ConversationInfo info) => IMUtils.parseMsg(info.latestMsg!);
   @override
   String getTime(ConversationInfo info) => '18:29';
   @override
@@ -150,6 +150,31 @@ List<int> _positiveNavCounts(WidgetTester tester) => tester
     .toList();
 
 void main() {
+  testWidgets('return from a chat shows the latest message in the retained tab',
+      (tester) async {
+    final old = _row('peer', group: false, unread: 0)
+      ..latestMsg!.textElem!.content = '看到了';
+    final conversations = _Conversations()..list.add(old);
+    await _mountHome(tester, conversations, dark: false);
+    expect(find.text('看到了'), findsOneWidget);
+
+    final navigator = Navigator.of(tester.element(find.byType(HomePage)),
+        rootNavigator: true);
+    navigator.push(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('Chat route'))));
+    await tester.pumpAndSettle();
+    final latest = _row('peer', group: false, unread: 0)
+      ..latestMsg!.textElem!.content = '真服了';
+    conversations.list.assignAll([latest]);
+    await tester.pumpAndSettle();
+    navigator.pop();
+    await tester.pumpAndSettle();
+
+    expect(find.text('真服了'), findsOneWidget);
+    expect(find.text('看到了'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final dark in [false, true]) {
     testWidgets('home unread badges follow notification scope ($dark)',
         (tester) async {

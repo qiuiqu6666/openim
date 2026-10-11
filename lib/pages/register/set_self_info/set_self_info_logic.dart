@@ -38,10 +38,12 @@ class SetSelfInfoLogic extends GetxController {
   }
 
   void openPhotoSheet() {
-    IMViews.openPhotoSheet(onData: (path, url) async {
-      if (url != null) {
-        faceURL.value = url;
-      }
-    });
+    IMViews.openPhotoSheet(
+      avatarUrl: faceURL.value,
+      isActive: () => !isClosed,
+      onData: (path, url) {
+        if (url != null) faceURL.value = url;
+      },
+    );
   }
 }

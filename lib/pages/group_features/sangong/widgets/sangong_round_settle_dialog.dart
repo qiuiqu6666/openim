@@ -37,6 +37,9 @@ class SangongRoundSettleDialog extends StatefulWidget {
     final runtime = SangongScope.read(context);
     final featureContext = runtime.featureContext;
     if (!runtime.canManage) return Future.value(null);
+    // Correction confirmations keep their original settled-round scope.
+    final recovery = clearExisting ? null : runtime.operatorRouteRevalidation();
+    var latestDraw = drawStatus;
     return showModalBottomSheet<List<SangongDrawInput>>(
       context: context,
       isScrollControlled: true,
@@ -48,11 +51,30 @@ class SangongRoundSettleDialog extends StatefulWidget {
       builder: (_) => SangongPrivilegeRouteGuard(
         featureContext: featureContext,
         refreshOnEntry: false,
-        isCurrent: () => runtime.canManage,
+        requireCapabilitiesCurrent: recovery == null,
+        scopeChanges: runtime,
+        isCurrent: () => recovery?.current ?? runtime.canManage,
+        canRevalidate: recovery == null ? null : () => recovery.canRevalidate,
+        revalidate: recovery == null
+            ? null
+            : (active) async {
+                if (!await recovery.refresh(active)) return false;
+                final latest = await runtime.admin.fetchCurrentDraws();
+                if (!active()) return false;
+                if (!recovery.current) throw StateError('群权限仍在更新');
+                if (latest.draw.roundId != drawStatus.roundId ||
+                    latest.round?.id != drawStatus.roundId ||
+                    latest.round!.isSettled ||
+                    !latest.round!.hasBetWindowClose) {
+                  return false;
+                }
+                latestDraw = latest.draw;
+                return true;
+              },
         builder: (_) => SangongScope(
           runtime: runtime,
           child: SangongRoundSettleDialog(
-            drawStatus: drawStatus,
+            drawStatus: latestDraw,
             clearExisting: clearExisting,
             titleText: titleText,
             subtitleText: subtitleText,

@@ -39,7 +39,7 @@ class GroupSetupPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _groupHeaderCard(),
+                _groupHeaderCard(context),
                 if (!logic.isJoinedGroup.value &&
                     !logic.membership.resolved.value)
                   GroupSetupLoading(
@@ -165,7 +165,7 @@ class GroupSetupPage extends StatelessWidget {
         ),
       );
 
-  Widget _groupHeaderCard() => GestureDetector(
+  Widget _groupHeaderCard(BuildContext context) => GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: logic.isOwnerOrAdmin
             ? () => logic.modifyGroupName(logic.groupInfo.value.faceURL)
@@ -188,7 +188,12 @@ class GroupSetupPage extends StatelessWidget {
               isCircle: true,
               enabledPreview: !logic.isOwnerOrAdmin,
               onTap: logic.isOwnerOrAdmin
-                  ? () => logic.modifyGroupName(logic.groupInfo.value.faceURL)
+                  ? () => AvatarActions.open(
+                        context,
+                        url: logic.groupInfo.value.faceURL,
+                        onChange: logic.modifyGroupAvatar,
+                        isActive: () => !logic.isClosed && logic.isOwnerOrAdmin,
+                      )
                   : null,
             ),
             12.horizontalSpace,

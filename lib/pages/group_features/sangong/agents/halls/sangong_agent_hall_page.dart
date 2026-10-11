@@ -9,21 +9,26 @@ import '../../sangong_scope.dart';
 import '../../services/authorization/sangong_access_policy.dart';
 import '../../support/sangong_ui.dart';
 import '../../widgets/app_back_button.dart';
+import 'sangong_agent_hall_binding.dart';
 
 /// Resolves exactly one fixed hall; the group never offers a tenant picker.
 class SangongAgentHallPage extends StatefulWidget {
   const SangongAgentHallPage(
       {super.key,
       required this.featureContext,
+      this.binding,
       this.section = 'dashboard',
       this.pathPrefix = SangongApiConfig.pathPrefix});
   final GroupFeatureContext featureContext;
+  final SangongAgentHallBinding? binding;
   final String section, pathPrefix;
   @override
   State<SangongAgentHallPage> createState() => _SangongAgentHallPageState();
 }
 
 class _SangongAgentHallPageState extends State<SangongAgentHallPage> {
+  late final _binding =
+      widget.binding ?? SangongAgentHallBinding(pathPrefix: widget.pathPrefix);
   late final _discovery =
       SangongRuntime(widget.featureContext, pathPrefix: widget.pathPrefix);
   SangongRuntime? _bound;
@@ -64,10 +69,7 @@ class _SangongAgentHallPageState extends State<SangongAgentHallPage> {
       }
       final hall = halls.single;
       setState(() {
-        _bound = SangongRuntime(current,
-            pathPrefix: widget.pathPrefix,
-            selectedAgentTenantId: hall.tenantId,
-            selectedAgentHallName: hall.name);
+        _bound = _binding.bind(current, hall.tenantId, hall.name);
         _loading = false;
       });
     } catch (error) {
@@ -82,7 +84,7 @@ class _SangongAgentHallPageState extends State<SangongAgentHallPage> {
   @override
   void dispose() {
     _generation++;
-    _bound?.dispose();
+    if (widget.binding == null) _binding.dispose();
     _discovery.dispose();
     super.dispose();
   }

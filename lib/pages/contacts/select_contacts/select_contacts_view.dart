@@ -46,62 +46,103 @@ class SelectContactsPage extends StatelessWidget {
       backgroundColor: Styles.c_F8F9FA,
       body: Column(
         children: [
-          10.verticalSpace,
+          SearchBox(
+            key: const ValueKey('select-conversations-search'),
+            controller: logic.inputCtrl,
+            enabled: true,
+            height: ContactCardPickerTokens.searchHeight(context),
+            margin: ContactCardPickerTokens.searchPadding,
+            borderRadius:
+                BorderRadius.circular(ContactCardPickerTokens.searchRadius),
+            surfaceColor: Styles.c_FFFFFF,
+            backgroundColor: Styles.c_F4F5F7,
+            textStyle: ContactCardPickerTokens.searchStyle(context),
+            hintStyle: ContactCardPickerTokens.searchStyle(context, hint: true),
+            searchIconColor: ContactCardPickerTokens.secondary(context),
+            onChanged: logic.searchConversations,
+            onCleared: () => logic.searchConversations(''),
+            onSubmitted: (value) {
+              logic.searchConversations(value);
+              FocusScope.of(context).unfocus();
+            },
+          ),
           Flexible(
-            child: Obx(() => CustomScrollView(
-                  slivers: [
-                    SliverFixedExtentList(
-                      delegate: SliverChildListDelegate(
-                        [
+            child: Obx(() {
+              final conversations = logic.visibleConversations;
+              return CustomScrollView(
+                controller: logic.recentScrollController,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: [
+                  SliverFixedExtentList(
+                    delegate: SliverChildListDelegate(
+                      [
+                        _buildCategoryItemView(
+                          label: StrRes.myFriend,
+                          onTap: logic.selectFromMyFriend,
+                        ),
+                        if (!logic.hiddenGroup)
                           _buildCategoryItemView(
-                            label: StrRes.myFriend,
-                            onTap: logic.selectFromMyFriend,
+                            label: StrRes.myGroup,
+                            onTap: logic.selectFromMyGroup,
                           ),
-                          if (!logic.hiddenGroup)
-                            _buildCategoryItemView(
-                              label: StrRes.myGroup,
-                              onTap: logic.selectFromMyGroup,
-                            ),
-                        ],
-                      ),
-                      itemExtent: 56.h,
+                      ],
                     ),
-                    if (logic.conversationList.isNotEmpty)
-                      SliverToBoxAdapter(
-                        child: Container(
-                          constraints: BoxConstraints(minHeight: 29.h),
-                          alignment: Alignment.centerLeft,
-                          margin: EdgeInsets.symmetric(horizontal: 16.w),
-                          padding: EdgeInsets.symmetric(
-                              vertical:
-                                  ContactCardPickerTokens.verticalPadding.h),
-                          child: StrRes.recentConversations.toText
-                            ..style = Styles.ts_8E9AB0_12sp,
-                        ),
-                      ),
-                    SliverList.separated(
-                      itemCount: logic.conversationList.length,
-                      itemBuilder: (context, index) =>
-                          _buildRecentConversationsItemView(
-                        context,
-                        logic.conversationList.elementAt(index),
-                      ),
-                      separatorBuilder: (context, index) => ColoredBox(
-                        color: Styles.c_FFFFFF,
-                        child: Divider(
-                          height: ContactCardPickerTokens.dividerThickness,
-                          thickness: ContactCardPickerTokens.dividerThickness,
-                          color: ContactCardPickerTokens.divider(context),
-                          indent: 16.w +
-                              (logic.isMultiModel ? 30.w : 0) +
-                              math.min(44.w, 44.h) +
-                              10.w,
-                          endIndent: 16.w,
-                        ),
+                    itemExtent: 56.h,
+                  ),
+                  if (conversations.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Container(
+                        constraints: BoxConstraints(minHeight: 29.h),
+                        alignment: Alignment.centerLeft,
+                        margin: EdgeInsets.symmetric(horizontal: 16.w),
+                        padding: EdgeInsets.symmetric(
+                            vertical:
+                                ContactCardPickerTokens.verticalPadding.h),
+                        child: StrRes.recentConversations.toText
+                          ..style = Styles.ts_8E9AB0_12sp,
                       ),
                     ),
-                  ],
-                )),
+                  SliverList.separated(
+                    itemCount: conversations.length,
+                    itemBuilder: (context, index) =>
+                        _buildRecentConversationsItemView(
+                      context,
+                      conversations[index],
+                    ),
+                    separatorBuilder: (context, index) => ColoredBox(
+                      color: Styles.c_FFFFFF,
+                      child: Divider(
+                        height: ContactCardPickerTokens.dividerThickness,
+                        thickness: ContactCardPickerTokens.dividerThickness,
+                        color: ContactCardPickerTokens.divider(context),
+                        indent: 16.w +
+                            (logic.isMultiModel ? 30.w : 0) +
+                            math.min(44.w, 44.h) +
+                            10.w,
+                        endIndent: 16.w,
+                      ),
+                    ),
+                  ),
+                  if (conversations.isEmpty &&
+                      logic.conversationSearch.isNotEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Padding(
+                          padding: ContactCardPickerTokens.searchPadding,
+                          child: Text(
+                            StrRes.searchNotFound,
+                            style:
+                                ContactCardPickerTokens.subtitleStyle(context),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            }),
           ),
           logic.checkedConfirmView,
         ],

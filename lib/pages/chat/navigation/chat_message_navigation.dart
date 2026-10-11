@@ -70,7 +70,8 @@ class ChatMessageNavigation {
         userID: userInfo.userID!,
         nickname: userInfo.nickname,
         faceURL: userInfo.faceURL,
-        groupID: groupID,
+        // A shared card identifies a person, not membership in the source chat.
+        groupID: isCard ? null : groupID,
         offAllWhenDelFriend: isSingleChat,
         forceCanAdd: isCard,
         addSource: isCard ? FriendAddSource.card : null,
