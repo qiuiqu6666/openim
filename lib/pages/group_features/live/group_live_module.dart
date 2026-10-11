@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -17,7 +18,7 @@ abstract final class GroupLiveModule {
           {required GroupFeatureContext featureContext,
           ValueChanged<LiveSession>? onStateChanged}) =>
       Navigator.of(context, rootNavigator: true).push<LiveSession>(
-          MaterialPageRoute(
+          AppMaterialPageRoute(
               builder: (_) => LiveEntryPage(
                   featureContext: featureContext,
                   onStateChanged: onStateChanged)));
@@ -25,7 +26,7 @@ abstract final class GroupLiveModule {
       {required GroupFeatureContext featureContext,
       LiveSession? session}) async {
     await Navigator.of(context, rootNavigator: true).push<void>(
-        MaterialPageRoute(
+        AppMaterialPageRoute(
             builder: (_) => LiveRoomPage(
                 featureContext: featureContext, session: session)));
   }

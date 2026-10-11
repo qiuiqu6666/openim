@@ -43,6 +43,7 @@ void main() {
           AppRoutes.aiAssistantChat,
           AppRoutes.officialAccountChat,
           AppRoutes.userProfilePanel,
+          AppRoutes.myProfile,
           AppRoutes.personalInfo,
           AppRoutes.friendSetup,
           AppRoutes.chatSetup,
@@ -182,12 +183,28 @@ void main() {
     await mount(tester);
     final navigation = AppNavigator.startUserProfilePane(userID: 'self');
     await tester.pumpAndSettle();
-    expect(Get.currentRoute, AppRoutes.userProfilePanel);
-    profileTagCreated = true;
+    expect(Get.currentRoute, AppRoutes.myProfile);
+    expect(() => GetTags.userProfile, throwsStateError);
     expect(calls, isEmpty);
     Get.back();
     await tester.pumpAndSettle();
     await navigation;
+  });
+
+  testWidgets('replacing a self profile entry preserves replacement semantics',
+      (tester) async {
+    await mount(tester);
+    Get.toNamed(AppRoutes.personalInfo);
+    await tester.pumpAndSettle();
+    final navigation =
+        AppNavigator.startUserProfilePane(userID: 'self', offAndToNamed: true);
+    await tester.pumpAndSettle();
+    expect(Get.currentRoute, AppRoutes.myProfile);
+    expect(calls, isEmpty);
+    Get.back();
+    await tester.pumpAndSettle();
+    await navigation;
+    expect(Get.currentRoute, AppRoutes.home);
   });
 
   testWidgets('notification chats reject a direct personal-chat settings entry',

@@ -51,6 +51,60 @@ void main() {
         kDebugMode ? isA<SangongApiDebugLog>() : isNull);
   });
 
+  test('application events reuse masking without changing diagnostic data', () {
+    final logger = SangongApiDebugLog()..onRequest(_request());
+    final data = {
+      'imUserId': 'im_target',
+      'exists': true,
+      'user': {'imUserId': 'im_target', 'balance': '100'},
+      'credentials': {'chatToken': 'application-private-token'},
+      'detail': 'Could not parse $_token and application-private-token',
+      'raw': '{"password":"application-private-password","exists":true}',
+    };
+    final original = jsonEncode(data);
+
+    logger.onApplicationEvent('资料解析失败', data);
+
+    final payload = _payload(logs, '资料解析失败');
+    expect(payload['imUserId'], 'im_target');
+    expect(payload['exists'], isTrue);
+    expect(payload['user'], {'imUserId': 'im_target', 'balance': '100'});
+    expect(payload['credentials'], {'chatToken': '***'});
+    expect(payload['detail'], 'Could not parse *** and ***');
+    expect(payload['raw'], {'password': '***', 'exists': true});
+    expect(_joined(logs), isNot(contains(_token)));
+    expect(_joined(logs), isNot(contains('application-private-')));
+    expect(jsonEncode(data), original);
+  });
+
+  test('application events reuse complete Unicode chunking', () {
+    final logger = SangongApiDebugLog()..onRequest(_request());
+    final detail = '${List.filled(1200, '汉😀').join()}末尾-END';
+
+    logger.onApplicationEvent('资料解析失败', {'detail': detail});
+
+    final parts = _parts(logs, '资料解析失败');
+    expect(parts.length, greaterThan(1));
+    expect(parts.every((part) => part.runes.length <= 800), isTrue);
+    expect(_payload(logs, '资料解析失败')['detail'], detail);
+    expect(parts.last, contains('末尾-END'));
+  });
+
+  test('application logging failure never disrupts operation completion',
+      () async {
+    final logger = SangongApiDebugLog();
+    debugPrint = (String? message, {int? wrapWidth}) {
+      throw StateError('diagnostic sink unavailable');
+    };
+    Future<int> completeOperation() async {
+      final result = await Future<int>.value(42);
+      logger.onApplicationEvent('资料读取完成', {'result': result});
+      return result;
+    }
+
+    expect(await completeOperation(), 42);
+  });
+
   test('request logs actual method, full query, tenant and masked credentials',
       () {
     final body = {'toImUserId': 'child', 'amount': 25, 'note': '团队划转'};

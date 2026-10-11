@@ -12,6 +12,7 @@ import 'data/call_records_repository.dart';
 import 'data/call_records_runtime.dart';
 import 'recent_call_tile.dart';
 import 'recent_call_tokens.dart';
+import 'widgets/recent_call_icons.dart';
 
 enum _RecentCallTab { all, missed }
 
@@ -124,6 +125,22 @@ class _RecentCallsPageState extends State<RecentCallsPage>
     }
   }
 
+  Future<void> _openProfile(CallRecords record) async {
+    if (_acting || record.roomType == 'group' || record.userID.trim().isEmpty) {
+      return;
+    }
+    if (!_sessionCurrent(_cache.userID)) return;
+    setState(() => _acting = true);
+    try {
+      await AppNavigator.startUserProfilePane(
+          userID: record.userID,
+          nickname: record.nickname,
+          faceURL: record.faceURL);
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
   Future<void> _delete(List<CallRecords> records, {bool bulk = false}) async {
     if (_acting || records.isEmpty) return;
     final account = _cache.userID;
@@ -158,7 +175,9 @@ class _RecentCallsPageState extends State<RecentCallsPage>
         height: RecentCallTokens.segmentHeight,
         padding: const EdgeInsets.all(RecentCallTokens.segmentInset),
         decoration: BoxDecoration(
-          color: AppTokens.surfaceAlt(dark: dark),
+          color: dark
+              ? RecentCallTokens.segmentDark
+              : RecentCallTokens.segmentLight,
           borderRadius: BorderRadius.circular(RecentCallTokens.segmentRadius),
         ),
         child: Row(
@@ -173,7 +192,9 @@ class _RecentCallsPageState extends State<RecentCallsPage>
               behavior: HitTestBehavior.opaque,
               onTap: _acting ? null : () => setState(() => _tab = tab),
               child: AnimatedContainer(
-                duration: RecentCallTokens.transition,
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : RecentCallTokens.transition,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: selected
@@ -181,6 +202,8 @@ class _RecentCallsPageState extends State<RecentCallsPage>
                       : Colors.transparent,
                   borderRadius:
                       BorderRadius.circular(RecentCallTokens.segmentItemRadius),
+                  boxShadow:
+                      selected ? const [RecentCallTokens.segmentShadow] : null,
                 ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppTokens.s2),
@@ -223,9 +246,8 @@ class _RecentCallsPageState extends State<RecentCallsPage>
                 padding: const EdgeInsets.symmetric(
                     horizontal: AppTokens.s5, vertical: AppTokens.s4),
                 child: Row(children: [
-                  const Icon(Icons.add_call,
-                      size: AppTokens.chevronSize, color: AppTokens.accent),
-                  const SizedBox(width: AppTokens.s4),
+                  const RecentNewCallIcon(),
+                  const SizedBox(width: RecentCallTokens.newCallGap),
                   Expanded(
                       child: Text(_label('开始新通话', 'Start a New Call'),
                           style: const TextStyle(
@@ -261,33 +283,28 @@ class _RecentCallsPageState extends State<RecentCallsPage>
             : _label('暂无通话记录', 'No call records'),
       );
     }
-    return ListView.builder(
+    return ListView.separated(
       key: const ValueKey('recent-calls-list'),
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
-          AppTokens.s5, 0, AppTokens.s5, AppTokens.s7),
+      padding: EdgeInsets.zero,
       itemCount: records.length,
+      separatorBuilder: (_, __) => Divider(
+        height: 1,
+        indent: _editing
+            ? RecentCallTokens.editingDividerIndent
+            : RecentCallTokens.dividerIndent,
+        endIndent: AppTokens.s5,
+        color: AppTokens.border(dark: dark),
+      ),
       itemBuilder: (context, index) {
         final record = records[index];
-        final radius = Radius.circular(RecentCallTokens.sectionRadius);
-        return ClipRRect(
-          borderRadius: BorderRadius.vertical(
-              top: index == 0 ? radius : Radius.zero,
-              bottom: index == records.length - 1 ? radius : Radius.zero),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            RecentCallTile(
-                record: record,
-                editing: _editing,
-                enabled: !_acting,
-                onRedial: () => unawaited(_redial(record)),
-                onDelete: () => unawaited(_delete([record]))),
-            if (index != records.length - 1)
-              Divider(
-                  height: 1,
-                  thickness: .5,
-                  color: AppTokens.border(dark: dark)),
-          ]),
-        );
+        return RecentCallTile(
+            record: record,
+            editing: _editing,
+            enabled: !_acting,
+            onRedial: () => unawaited(_redial(record)),
+            onProfile: () => unawaited(_openProfile(record)),
+            onDelete: () => unawaited(_delete([record])));
       },
     );
   }
@@ -308,6 +325,7 @@ class _RecentCallsPageState extends State<RecentCallsPage>
         child: Scaffold(
           backgroundColor: background,
           appBar: GlassAppBar(
+            opaque: true,
             toolbarHeight: kToolbarHeight,
             elevation: 0,
             scrolledUnderElevation: 0,
@@ -315,37 +333,66 @@ class _RecentCallsPageState extends State<RecentCallsPage>
             backgroundColor: surface,
             surfaceTintColor: Colors.transparent,
             systemOverlayStyle: overlay,
+            leadingWidth: _editing ? RecentCallTokens.editLeadingWidth : null,
             leading: _editing
-                ? IconButton(
+                ? TextButton(
                     key: const ValueKey('recent-calls-delete-visible'),
-                    tooltip: _tab == _RecentCallTab.all
-                        ? _label('隐藏全部记录', 'Hide all records')
-                        : _label('隐藏未接记录', 'Hide missed records'),
                     onPressed: _acting || records.isEmpty
                         ? null
                         : () => unawaited(_delete(records, bulk: true)),
-                    icon:
-                        Icon(Icons.delete_outline, color: settingsDanger(dark)),
+                    style: TextButton.styleFrom(
+                        padding: const EdgeInsets.only(
+                            left: RecentCallTokens.newCallGap,
+                            right: RecentCallTokens.actionGap),
+                        alignment: Alignment.centerLeft,
+                        foregroundColor: RecentCallTokens.danger,
+                        disabledForegroundColor:
+                            AppTokens.textSecondary(dark: dark)),
+                    child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          _tab == _RecentCallTab.all
+                              ? _label('删除全部', 'Delete All')
+                              : _label('删除未接', 'Delete Missed'),
+                          style: const TextStyle(
+                              fontSize: AppTokens.secondaryFontSize,
+                              fontWeight: FontWeight.w500),
+                        )),
                   )
                 : IconButton(
                     tooltip:
                         MaterialLocalizations.of(context).backButtonTooltip,
                     onPressed: () => Navigator.of(context).maybePop(),
                     icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                        size: RecentCallTokens.mediaIconSize,
+                        size: RecentCallTokens.backIconSize,
                         color: AppTokens.accent),
                   ),
             title: _segments(dark),
             actions: [
-              IconButton(
-                key: const ValueKey('recent-calls-edit'),
-                tooltip: _editing ? _label('完成', 'Done') : _label('编辑', 'Edit'),
-                onPressed: _acting || (!_editing && records.isEmpty)
-                    ? null
-                    : () => setState(() => _editing = !_editing),
-                icon: Icon(_editing ? Icons.check : Icons.edit_outlined,
-                    color: AppTokens.accent),
-              )
+              SizedBox(
+                width: RecentCallTokens.headerActionWidth,
+                child: TextButton(
+                  key: const ValueKey('recent-calls-edit'),
+                  onPressed: _acting || (!_editing && records.isEmpty)
+                      ? null
+                      : () => setState(() => _editing = !_editing),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTokens.accent,
+                    disabledForegroundColor:
+                        AppTokens.textSecondary(dark: dark),
+                  ),
+                  child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                          _editing
+                              ? _label('完成', 'Done')
+                              : _label('编辑', 'Edit'),
+                          style: const TextStyle(
+                              fontSize: RecentCallTokens.nameSize,
+                              fontWeight: FontWeight.w500))),
+                ),
+              ),
+              const SizedBox(width: RecentCallTokens.actionGap),
             ],
           ),
           body: SafeArea(

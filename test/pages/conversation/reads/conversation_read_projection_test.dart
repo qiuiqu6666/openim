@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/core/controller/app_controller.dart';
 import 'package:openim/core/controller/im_controller.dart';
+import 'package:openim/core/conversation_reads/conversation_read_projection.dart';
 import 'package:openim/core/conversation_reads/conversation_read_request.dart';
 import 'package:openim/core/im_callback.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
@@ -179,6 +180,68 @@ void main() {
     logic.onChanged([_row(unread: 2)]);
     expect(logic.list.single, same(increased));
     expect(increased.unreadCount, 4);
+  });
+
+  test('ordinary same-target zero cannot clear an increased unread count', () {
+    final projection = ConversationReadProjection()
+      ..confirm(ConversationReadRequest.capture(_row()));
+    final current = _row(unread: 4);
+    final incoming = _row(unread: 0);
+    expect(projection.project(incoming, current: current), same(current));
+    expect(current.unreadCount, 4);
+  });
+
+  test('reconciled SDK zero clears an increased count for the same target', () {
+    final projection = ConversationReadProjection()
+      ..confirm(ConversationReadRequest.capture(_row()));
+    final current = _row(unread: 4);
+    final incoming = _row(unread: 0);
+    expect(
+        projection.project(incoming,
+            current: current, authoritativeUnread: true),
+        same(incoming));
+    expect(incoming.unreadCount, 0);
+    expect(current.unreadCount, 4,
+        reason:
+            'Reconciliation replaces the row without mutating its predecessor.');
+  });
+
+  test('reconciliation does not grant authority to a lower positive count', () {
+    final projection = ConversationReadProjection()
+      ..confirm(ConversationReadRequest.capture(_row()));
+    final current = _row(unread: 4);
+    expect(
+        projection.project(_row(unread: 2),
+            current: current, authoritativeUnread: true),
+        same(current));
+    expect(current.unreadCount, 4);
+  });
+
+  for (final sequence in [0, 10]) {
+    test('reconciled old zero preserves a distinct same-time ID, seq=$sequence',
+        () {
+      final projection = ConversationReadProjection()
+        ..confirm(ConversationReadRequest.capture(_row(sequence: sequence)));
+      final current = _row(
+          message: 'unviewed', sequence: sequence == 0 ? 0 : 11, unread: 1);
+      expect(
+          projection.project(_row(sequence: sequence, unread: 0),
+              current: current, authoritativeUnread: true),
+          same(current));
+      expect(current.unreadCount, 1);
+    });
+  }
+
+  test('reconciled old zero preserves an advanced sequence for the same ID',
+      () {
+    final projection = ConversationReadProjection()
+      ..confirm(ConversationReadRequest.capture(_row()));
+    final current = _row(sequence: 11, unread: 1);
+    expect(
+        projection.project(_row(unread: 0),
+            current: current, authoritativeUnread: true),
+        same(current));
+    expect(current.unreadCount, 1);
   });
 
   test('repeated confirmation does not weaken an earlier confirmed count',

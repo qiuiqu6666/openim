@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -61,7 +62,7 @@ void main() {
       rtl: true
     ),
   ]) {
-    testWidgets('Markdown bubble stays bounded ${variant.name}',
+    testWidgets('literal text bubble stays bounded ${variant.name}',
         (tester) async {
       const source = '**支持格式**\n\n- 第一项\n- 第二项\n\n> 引用说明';
       await mountMarkdown(
@@ -84,6 +85,8 @@ void main() {
         expect(rect.right, lessThanOrEqualTo(variant.width));
       }
       expect(renderedMarkdownText(tester), contains('第一项'));
+      expect(renderedMarkdownText(tester), contains('**支持格式**'));
+      expect(find.byType(ChatMarkdownText), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -98,10 +101,13 @@ void main() {
           tester,
           Column(children: [
             ChatItemView(
-                message: markdownMessage(text), onTapUserProfile: (_) {}),
+                message: markdownMessage(text, type: MessageType.advancedText),
+                onTapUserProfile: (_) {}),
             ChatItemView(
                 message: markdownMessage('**收到**\n\n支持 Markdown 气泡。',
-                    id: 'reply', outgoing: true),
+                    id: 'reply',
+                    outgoing: true,
+                    type: MessageType.advancedText),
                 onTapUserProfile: (_) {}),
           ]),
           brightness: variant.brightness,

@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 // Layout adapted from 99chat agent_rebate_descendants_page.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'dart:async';
@@ -163,7 +164,7 @@ class _AgentDescendantsPageState extends State<AgentDescendantsPage> {
                                                               !_state.current) {
                                                             return;
                                                           }
-                                                          Navigator.of(context).push(MaterialPageRoute<
+                                                          Navigator.of(context).push(AppMaterialPageRoute<
                                                                   void>(
                                                               builder: (_) => AgentDescendantDetailPage(
                                                                   featureContext:

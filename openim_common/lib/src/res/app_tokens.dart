@@ -186,6 +186,7 @@ class FavoritePickerTokens {
 class ChatBubbleTokens {
   ChatBubbleTokens._();
 
+  static const double textLineHeight = 1.3;
   static const Color incomingBorder = Color(0x14000000);
   static const double incomingBorderWidth = .5;
   static const double metadataHorizontalGap = 6;

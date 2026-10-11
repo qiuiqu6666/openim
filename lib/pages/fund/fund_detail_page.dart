@@ -6,6 +6,8 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../services/fund_api.dart';
+import '../../routes/swipe_back/app_page_route.dart';
+import '../../routes/swipe_back/app_swipe_back_tokens.dart';
 import 'notifications/fund_claim_notice.dart';
 import '../mine/settings/widgets/settings_widgets.dart';
 import 'widgets/fund_detail_message_sender.dart';
@@ -30,7 +32,7 @@ typedef FundPartyProfileResolver = Future<Map<String, FundPartyProfile>>
 
 /// Keeps the latest verified order as the result of system and gesture back,
 /// as well as the app bar back button.
-class FundDetailRoute extends PageRouteBuilder<FundOrder> {
+class FundDetailRoute extends AppMaterialPageRoute<FundOrder> {
   factory FundDetailRoute({
     required FundMessageData message,
     FundApi? api,
@@ -55,10 +57,8 @@ class FundDetailRoute extends PageRouteBuilder<FundOrder> {
   )   : _result = result,
         super(
           opaque: false,
-          barrierColor: FundTokens.transparent,
-          transitionDuration: FundTokens.openAnimationDuration,
-          reverseTransitionDuration: FundTokens.openAnimationDuration,
-          pageBuilder: (_, __, ___) => FundDetailPage._route(
+          edgeStartWidthPx: AppSwipeBackTokens.walletOverlayEdgeWidth,
+          builder: (_) => FundDetailPage._route(
             message: message,
             api: api,
             currentUserID: currentUserID,
@@ -73,13 +73,6 @@ class FundDetailRoute extends PageRouteBuilder<FundOrder> {
 
   @override
   FundOrder? get currentResult => _result.order;
-
-  @override
-  Widget buildTransitions(BuildContext context, Animation<double> animation,
-          Animation<double> secondaryAnimation, Widget child) =>
-      MediaQuery.disableAnimationsOf(context)
-          ? child
-          : FadeTransition(opacity: animation, child: child);
 }
 
 class _FundDetailResult {

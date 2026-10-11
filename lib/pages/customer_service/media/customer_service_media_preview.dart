@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_swipe_back_tokens.dart';
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
@@ -39,6 +40,7 @@ Future<void> openCustomerServiceMedia(BuildContext context,
       isVideo: video);
   await Navigator.of(context, rootNavigator: true).push<void>(
     MaterialPageRoute(
+      settings: const RouteSettings(name: AppSwipeBackTokens.mediaRouteName),
       builder: (_) => MediaBrowser(
         sources: [source],
         initialIndex: 0,

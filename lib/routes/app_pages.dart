@@ -80,6 +80,7 @@ import '../pages/mine/language_setup/language_setup_binding.dart';
 import '../pages/mine/language_setup/language_setup_view.dart';
 import '../pages/mine/my_info/my_info_binding.dart';
 import '../pages/mine/my_info/my_info_view.dart';
+import '../pages/mine/profile/my_profile_page.dart';
 import '../pages/register/register_binding.dart';
 import '../pages/register/register_view.dart';
 import '../pages/register/set_password/set_password_binding.dart';
@@ -91,10 +92,13 @@ import '../pages/register/verify_phone/verify_phone_view.dart';
 import '../pages/splash/splash_binding.dart';
 import '../pages/splash/splash_view.dart';
 
+import 'swipe_back/app_get_transition.dart';
+import 'swipe_back/app_swipe_back_tokens.dart';
+
 part 'app_routes.dart';
 
 class AppPages {
-  static _pageBuilder({
+  static GetPage _pageBuilder({
     required String name,
     required GetPageBuilder page,
     Bindings? binding,
@@ -116,8 +120,17 @@ class AppPages {
         },
         binding: binding,
         preventDuplicates: preventDuplicates,
-        transition: Transition.cupertino,
-        popGesture: popGesture,
+        customTransition: AppGetTransition(
+          enableBackGesture: popGesture &&
+              name != AppRoutes.home &&
+              name != AppRoutes.login &&
+              name != AppRoutes.splash,
+          edgeWidth: AppRoutes.isConversationRoute(name)
+              ? AppSwipeBackTokens.chatEdgeWidth
+              : AppSwipeBackTokens.edgeWidth,
+        ),
+        transitionDuration: AppSwipeBackTokens.transitionDuration,
+        popGesture: false,
       );
 
   static final routes = <GetPage>[
@@ -160,7 +173,6 @@ class AppPages {
       name: AppRoutes.chatSetup,
       page: () => ChatSetupPage(),
       binding: ChatSetupBinding(),
-      popGesture: false,
     ),
     _pageBuilder(
       name: AppRoutes.addContactsMethod,
@@ -201,6 +213,10 @@ class AppPages {
       name: AppRoutes.groupProfilePanel,
       page: () => GroupProfilePanelPage(),
       binding: GroupProfilePanelBinding(),
+    ),
+    _pageBuilder(
+      name: AppRoutes.myProfile,
+      page: () => const MyProfilePage(),
     ),
     _pageBuilder(
       name: AppRoutes.myInfo,

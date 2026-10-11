@@ -3,6 +3,7 @@ import 'package:openim_common/openim_common.dart';
 
 import '../../settings/widgets/settings_widgets.dart';
 import 'recent_call_tokens.dart';
+import 'widgets/recent_call_icons.dart';
 
 String recentCallResult(BuildContext context, CallRecords record) {
   String label(String zh, String en) => settingsText(context, zh: zh, en: en);
@@ -39,14 +40,9 @@ String recentCallTime(BuildContext context, CallRecords record,
   final today = now ?? DateTime.now();
   String two(int value) => value.toString().padLeft(2, '0');
   final time = '${two(local.hour)}:${two(local.minute)}';
-  final date = DateTime(local.year, local.month, local.day);
-  final currentDate = DateTime(today.year, today.month, today.day);
-  if (date == currentDate) return time;
-  if (date == DateTime(today.year, today.month, today.day - 1)) {
-    return '${settingsText(context, zh: '昨天', en: 'Yesterday')} $time';
-  }
-  final prefix = local.year == today.year ? '' : '${local.year}/';
-  return '$prefix${two(local.month)}/${two(local.day)} $time';
+  return local.year == today.year
+      ? time
+      : '${local.year}/${local.month}/${local.day}';
 }
 
 class RecentCallTile extends StatelessWidget {
@@ -56,6 +52,7 @@ class RecentCallTile extends StatelessWidget {
     required this.editing,
     required this.enabled,
     required this.onRedial,
+    required this.onProfile,
     required this.onDelete,
   });
 
@@ -63,13 +60,14 @@ class RecentCallTile extends StatelessWidget {
   final bool editing;
   final bool enabled;
   final VoidCallback onRedial;
+  final VoidCallback onProfile;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final dark = settingsIsDark(context);
     final secondary = AppTokens.textSecondary(dark: dark);
-    final resultColor = record.isMissed ? settingsDanger(dark) : secondary;
+    final resultColor = record.isMissed ? RecentCallTokens.danger : secondary;
     final group = record.roomType == 'group';
     final fallback = group ? record.groupID : record.userID;
     final name = record.nickname.trim().isEmpty ? fallback : record.nickname;
@@ -96,9 +94,11 @@ class RecentCallTile extends StatelessWidget {
           constraints:
               const BoxConstraints(minHeight: RecentCallTokens.rowMinHeight),
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppTokens.s5,
-                vertical: RecentCallTokens.rowVerticalPadding),
+            padding: EdgeInsets.fromLTRB(
+                editing ? 0 : AppTokens.s5,
+                RecentCallTokens.rowVerticalPadding,
+                AppTokens.s5,
+                RecentCallTokens.rowVerticalPadding),
             child: LayoutBuilder(builder: (context, constraints) {
               final compact = MediaQuery.sizeOf(context).width <
                       RecentCallTokens.compactWidth ||
@@ -110,20 +110,25 @@ class RecentCallTile extends StatelessWidget {
                     key: ValueKey('recent-call-delete-${record.recordKey}'),
                     tooltip: settingsText(context,
                         zh: '隐藏通话记录', en: 'Hide call record'),
-                    color: settingsDanger(dark),
+                    padding: const EdgeInsets.only(left: AppTokens.s2),
                     constraints: const BoxConstraints.tightFor(
                         width: RecentCallTokens.tapExtent,
                         height: RecentCallTokens.tapExtent),
                     onPressed: enabled ? onDelete : null,
-                    icon: const Icon(Icons.remove_circle,
-                        size: RecentCallTokens.mediaIconSize),
+                    icon: Container(
+                      width: RecentCallTokens.mediaIconSize,
+                      height: RecentCallTokens.mediaIconSize,
+                      decoration: const BoxDecoration(
+                          color: RecentCallTokens.danger,
+                          shape: BoxShape.circle),
+                      child: const Icon(Icons.remove_rounded,
+                          color: AppTokens.onAccent,
+                          size: RecentCallTokens.deleteIconSize),
+                    ),
                   ),
-                Icon(
-                    record.type == 'video'
-                        ? Icons.videocam_rounded
-                        : Icons.call_rounded,
-                    color: resultColor,
-                    size: RecentCallTokens.mediaIconSize),
+                RecentCallMediaIcon(
+                    video: record.type.toLowerCase() == 'video',
+                    color: secondary),
                 const SizedBox(width: RecentCallTokens.mediaGap),
                 AvatarView(
                   width: RecentCallTokens.avatarSize,
@@ -145,7 +150,7 @@ class RecentCallTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: record.isMissed
-                                ? settingsDanger(dark)
+                                ? RecentCallTokens.danger
                                 : AppTokens.textPrimary(dark: dark),
                             fontSize: RecentCallTokens.nameSize,
                             fontWeight: FontWeight.w500)),
@@ -154,34 +159,57 @@ class RecentCallTile extends StatelessWidget {
                         maxLines: compact ? 3 : 2,
                         overflow: TextOverflow.ellipsis,
                         style: metadataStyle),
-                    if (compact && time.isNotEmpty) ...[
+                    if (compact && (time.isNotEmpty || !group)) ...[
                       const SizedBox(height: RecentCallTokens.metadataGap),
-                      Text(time, style: timeStyle),
+                      Row(children: [
+                        Expanded(child: Text(time, style: timeStyle)),
+                        if (!group) _profileAction(context, secondary),
+                      ]),
                     ],
                   ],
                 )),
                 if (!compact) ...[
                   const SizedBox(width: AppTokens.s4),
-                  Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text(time, style: timeStyle),
-                    if (!editing && !group)
-                      IconButton(
-                        key: ValueKey('recent-call-redial-${record.recordKey}'),
-                        tooltip:
-                            settingsText(context, zh: '重拨', en: 'Call again'),
-                        constraints: const BoxConstraints.tightFor(
-                            width: RecentCallTokens.tapExtent,
-                            height: RecentCallTokens.tapExtent),
-                        onPressed: enabled ? onRedial : null,
-                        icon: const Icon(Icons.info_outline,
-                            color: AppTokens.accent,
-                            size: RecentCallTokens.actionIconSize),
-                      ),
-                  ]),
+                  if (group)
+                    Text(time, style: timeStyle)
+                  else
+                    _profileAction(context, secondary,
+                        time: Text(time, style: timeStyle)),
                 ],
               ]);
             }),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _profileAction(BuildContext context, Color secondary, {Widget? time}) {
+    final canOpen = enabled && record.userID.trim().isNotEmpty;
+    return Semantics(
+      button: true,
+      enabled: canOpen,
+      label: settingsText(context, zh: '查看资料', en: 'View profile'),
+      child: InkWell(
+        key: ValueKey('recent-call-profile-${record.recordKey}'),
+        onTap: canOpen ? onProfile : null,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+              minWidth: RecentCallTokens.tapExtent,
+              minHeight: RecentCallTokens.tapExtent),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (time != null) ...[
+                  time,
+                  const SizedBox(height: RecentCallTokens.actionGap),
+                ],
+                Icon(Icons.info_outline_rounded,
+                    color: canOpen ? AppTokens.accent : secondary,
+                    size: RecentCallTokens.actionIconSize),
+              ]),
         ),
       ),
     );

@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -8,7 +9,7 @@ import 'friend_qr_gallery_service.dart';
 Future<Map<String, String>?> scanFriendQrCode(BuildContext context,
         {Future<void> Function()? onMyQrTap}) =>
     Navigator.of(context).push<Map<String, String>>(
-      MaterialPageRoute(builder: (_) => FriendQrScanner(onMyQrTap: onMyQrTap)),
+      AppMaterialPageRoute(builder: (_) => FriendQrScanner(onMyQrTap: onMyQrTap)),
     );
 
 /// Compatibility wrapper retains the original widget and State identity.

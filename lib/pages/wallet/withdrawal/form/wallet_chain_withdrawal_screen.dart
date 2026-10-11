@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -408,7 +409,7 @@ class _WalletChainWithdrawalScreenState
         ModalRoute.of(context)?.isCurrent != true) {
       return;
     }
-    await Navigator.of(context).push<void>(MaterialPageRoute(
+    await Navigator.of(context).push<void>(AppMaterialPageRoute(
         builder: (_) => WalletWithdrawalSuccessScreen(receipt: receipt)));
   }
 

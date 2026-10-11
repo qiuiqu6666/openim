@@ -1,6 +1,10 @@
-import '../../mine/settings/widgets/settings_widgets.dart' show showSettingsConfirm;
+import 'dart:async';
+
+import '../../mine/settings/widgets/settings_widgets.dart'
+    show showSettingsConfirm;
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../conversation_logic.dart';
@@ -39,7 +43,9 @@ class ConversationEditActions {
       if (error is! _ReportedEditFailure &&
           isMounted() &&
           logic.isSessionActive) {
-        IMViews.showToast(error.toString());
+        IMViews.showToast(error is TimeoutException
+            ? 'apiRequestTimeout'.tr
+            : error.toString());
       }
     }
   }

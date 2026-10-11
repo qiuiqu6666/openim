@@ -4,6 +4,7 @@ import 'package:openim_common/openim_common.dart';
 import '../../mine/settings/verification_code_result.dart';
 import '../../mine/settings/widgets/aliyun_captcha_dialog.dart';
 import '../../../routes/app_pages.dart';
+import '../../../routes/swipe_back/app_page_route.dart';
 import 'data/password_device_login_attempt.dart';
 import 'device_verification_page.dart';
 
@@ -30,7 +31,7 @@ class DeviceVerificationFlow {
   final String areaCode;
   final bool Function() isCurrent;
   final DeviceCaptchaPresenter? captchaPresenter;
-  CupertinoPageRoute<bool>? _route;
+  AppMaterialPageRoute<bool>? _route;
   Route<VerificationCodeResult>? _captchaRoute;
   bool _cancelled = false;
   Object? _fatalError;
@@ -42,7 +43,7 @@ class DeviceVerificationFlow {
   Future<LoginCertificate?> run(BuildContext context) async {
     if (!_ownsAttempt || !context.mounted) return null;
     final navigator = Navigator.of(context, rootNavigator: true);
-    final route = CupertinoPageRoute<bool>(
+    final route = AppMaterialPageRoute<bool>(
       settings: const RouteSettings(name: AppRoutes.deviceVerification),
       builder: (pageContext) => DeviceVerificationPage(
         initialPhoneNumber: phoneNumber,

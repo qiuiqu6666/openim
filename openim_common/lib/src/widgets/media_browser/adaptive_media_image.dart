@@ -80,6 +80,12 @@ class _AdaptiveMediaImageState extends State<AdaptiveMediaImage>
       initialScale: initialScale,
       maxScale: initialScale * 3,
       animationMaxScale: initialScale * 3.5,
+      // ExtendedImage uses this as the fling distance (logical pixels), not
+      // velocity. Its 100px default makes tall screenshots require many swipes.
+      // Keep direct dragging at 1:1; let a flick continue about a viewport.
+      inertialSpeed: initialScale > 1
+          ? (viewport.height * 1.25).clamp(400.0, 1200.0)
+          : 100.0,
       inPageView: true,
       initialAlignment: initialScale > 1
           ? InitialAlignment.topCenter

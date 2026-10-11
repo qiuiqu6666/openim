@@ -40,13 +40,19 @@ class ChatText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bodyStyle = (textStyle ?? Styles.ts_0C1C33_17sp).copyWith(
+      height: textStyle?.height ?? ChatBubbleTokens.textLineHeight,
+    );
+    final linkStyle = (matchTextStyle ?? Styles.ts_0089FF_17sp).copyWith(
+      height: matchTextStyle?.height ?? bodyStyle.height,
+    );
     if (enableMarkdown && ChatMarkdownText.hasMarkdown(text)) {
       return ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maximumWidth ?? maxWidth),
         child: ChatMarkdownText(
           text: text,
-          textStyle: textStyle ?? Styles.ts_0C1C33_17sp,
-          matchTextStyle: matchTextStyle ?? Styles.ts_0089FF_17sp,
+          textStyle: bodyStyle,
+          matchTextStyle: linkStyle,
           patterns: patterns,
           textScaler: textScaler ??
               (textScaleFactor == 1
@@ -57,20 +63,23 @@ class ChatText extends StatelessWidget {
         ),
       );
     }
-    return MatchTextView(
-      text: text,
-      textStyle: textStyle ?? Styles.ts_0C1C33_17sp,
-      matchTextStyle: matchTextStyle ?? Styles.ts_0089FF_17sp,
-      maximumWidth: maximumWidth,
-      textScaler: textScaler,
-      prefixSpan: prefixSpan,
-      textAlign: textAlign,
-      overflow: overflow,
-      textScaleFactor: textScaleFactor,
-      patterns: patterns,
-      model: model,
-      maxLines: maxLines,
-      onVisibleTrulyText: onVisibleTrulyText,
+    return DefaultTextStyle.merge(
+      style: bodyStyle,
+      child: MatchTextView(
+        text: text,
+        textStyle: bodyStyle,
+        matchTextStyle: linkStyle,
+        maximumWidth: maximumWidth,
+        textScaler: textScaler,
+        prefixSpan: prefixSpan,
+        textAlign: textAlign,
+        overflow: overflow,
+        textScaleFactor: textScaleFactor,
+        patterns: patterns,
+        model: model,
+        maxLines: maxLines,
+        onVisibleTrulyText: onVisibleTrulyText,
+      ),
     );
   }
 }

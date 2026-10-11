@@ -26,6 +26,8 @@ import 'drafts/conversation_draft_text.dart';
 import 'legacy_cleanup/legacy_service_conversation_cleanup.dart';
 import 'group_identity/legacy_group_conversation_projection.dart';
 import 'summary/conversation_latest_message_text.dart';
+import 'unread/conversation_unread_count.dart';
+import 'unread/conversation_unread_sync.dart';
 
 class ConversationLogic extends GetxController with WidgetsBindingObserver {
   ConversationLogic({LegacyServiceConversationCleanup? legacyCleanup})
@@ -50,6 +52,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   int _listGeneration = 0;
   int _clearGeneration = 0;
   bool _readingList = false;
+  bool _reconcileUnreadPending = false;
   final _listLoading = false.obs;
   final _listFailed = false.obs;
   bool get canShowEmptyFeed => !_listLoading.value && !_listFailed.value;
@@ -85,6 +88,16 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
             ? 80
             : 16),
   );
+  late final _unreadSync = ConversationUnreadSync(
+    isActive: () => _sessionActive,
+    isReading: () => _readingList,
+    flushChanges: _updates.flush,
+    localUnreadCount: () => sumSdkConversationUnread(list),
+    reload: () =>
+        _loadConversationList(firstPageOnly: false, reconcileUnread: true),
+    onError: (error, _) =>
+        Logger.print('Conversation unread reconciliation failed: $error'),
+  );
 
   void queueChanges(List<ConversationInfo> changes) {
     if (!_sessionActive) return;
@@ -107,6 +120,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     refreshOrganizer();
     _subscriptions.add(imLogic.conversationAddedSubject.listen(queueChanges));
     _subscriptions.add(imLogic.conversationChangedSubject.listen(queueChanges));
+    _subscriptions.add(imLogic.unreadMsgCountEventSubject
+        .listen(_unreadSync.onTotalUnreadChanged));
     _subscriptions.add(imLogic.conversationReadRequestSubject
         .listen(onConversationReadRequested));
     _subscriptions.add(imLogic.imSdkStatusSubject.listen((value) {
@@ -119,6 +134,10 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
       if (status == IMSdkStatus.connectionSucceeded) {
         refreshOrganizer();
+        if (previousStatus != IMSdkStatus.connectionSucceeded &&
+            !_listFailed.value) {
+          _unreadSync.reconcile();
+        }
         _retryFailedList();
       }
 
@@ -159,6 +178,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   @override
   void onClose() {
     _closed = true;
+    _reconcileUnreadPending = false;
+    _unreadSync.close();
     _updates.close();
     ++_listGeneration;
     ++_clearGeneration;
@@ -187,7 +208,11 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     if (_sessionActive && state == AppLifecycleState.resumed) {
       refreshOrganizer();
       groupFeatures.refreshKnownGroups();
-      _retryFailedList();
+      if (_listFailed.value) {
+        _retryFailedList();
+      } else {
+        _unreadSync.reconcile();
+      }
     }
   }
 
@@ -334,7 +359,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     final projecting = onConversationReadRequested(request);
     try {
       await OpenIM.iMManager.conversationManager
-          .markConversationMessageAsRead(conversationID: info.conversationID);
+          .markConversationMessageAsRead(conversationID: info.conversationID)
+          .timeout(const Duration(seconds: 10));
       request.complete(true);
       await projecting;
     } catch (_) {
@@ -516,8 +542,11 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> _loadConversationList(
-      {required bool firstPageOnly, bool useCachedFirstPage = false}) async {
+      {required bool firstPageOnly,
+      bool useCachedFirstPage = false,
+      bool reconcileUnread = false}) async {
     if (!_sessionActive) return;
+    if (reconcileUnread) _reconcileUnreadPending = true;
     final generation = ++_listGeneration;
     _readingList = true;
     _listLoading.value = true;
@@ -538,8 +567,10 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       final cached = firstPageOnly && useCachedFirstPage
           ? homeLogic.conversationsAtFirstPage
           : const <ConversationInfo>[];
+      final usesCachedSnapshot =
+          firstPageOnly && useCachedFirstPage && cached.isNotEmpty;
       final snapshot = firstPageOnly
-          ? useCachedFirstPage && cached.isNotEmpty
+          ? usesCachedSnapshot
               ? List<ConversationInfo>.of(cached)
               : await getConversationFirstPage()
           : await _request(generation);
@@ -563,10 +594,18 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       final merged = _groupProjection
           .project(byID.values)
           .map((info) => _readProjection.project(info,
-              current: currentByID[info.conversationID]))
+              current: currentByID[info.conversationID],
+              authoritativeUnread: _reconcileUnreadPending &&
+                  !usesCachedSnapshot &&
+                  !_changesDuringRead.containsKey(info.conversationID)))
           .toList();
       OpenIM.iMManager.conversationManager.simpleSort(merged);
       list.value = merged;
+      if (_reconcileUnreadPending && !usesCachedSnapshot) {
+        _reconcileUnreadPending = false;
+        _unreadSync.snapshotReconciled(
+            hadChanges: _changesDuringRead.isNotEmpty);
+      }
 
       if (snapshot.length < pageSize) {
         refreshController.loadNoData();
@@ -583,6 +622,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       if (generation == _listGeneration) {
         _readingList = false;
         _changesDuringRead.clear();
+        _unreadSync.snapshotFinished();
         if (_sessionActive) {
           _listLoading.value = false;
           refreshController.refreshCompleted();
@@ -609,6 +649,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   }
 
   void clearConversations() {
+    _reconcileUnreadPending = false;
+    _unreadSync.reset();
     _updates.clear();
     onChangeConversations.clear();
     ChatHistoryCache.clear();

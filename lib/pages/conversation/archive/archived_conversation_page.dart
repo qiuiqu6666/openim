@@ -324,7 +324,9 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
               actions: [
                 ConversationEditButton(
                     editing: _editor.editing,
-                    onPressed: _editor.busy ? null : _toggleEditing),
+                    onPressed: _editor.busy && !_editor.editing
+                        ? null
+                        : _toggleEditing),
               ],
             ),
             body: _buildBody(conversations),

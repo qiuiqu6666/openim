@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -192,7 +193,7 @@ class _MomentsSettingsPageState extends State<MomentsSettingsPage> {
   Future<void> _openList(MomentsPrivacyKind kind) async {
     if (_openingList || _loading || _saving) return;
     _openingList = true;
-    await Navigator.of(context).push<void>(MaterialPageRoute(
+    await Navigator.of(context).push<void>(AppMaterialPageRoute(
       builder: (_) =>
           MomentsPrivacyListPage(repository: widget.repository, kind: kind),
     ));

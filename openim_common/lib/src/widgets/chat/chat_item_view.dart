@@ -16,7 +16,7 @@ import 'markdown/chat_message_text_source.dart';
 import 'quote/chat_quote_card.dart';
 
 double maxWidth = 247.w;
-double pictureWidth = 120.w;
+double pictureWidth = 90.w;
 double videoWidth = 120.w;
 double locationWidth = 220.w;
 
@@ -199,7 +199,8 @@ class _ChatItemViewState extends State<ChatItemView> {
       color: widget.highlightColor,
       margin: widget.itemMargin ??
           _textBubbleStyle?.rowMargin ??
-          EdgeInsets.only(bottom: sticker ? StickerBubbleLayout.rowGap : 20.h),
+          EdgeInsets.only(
+              bottom: sticker ? StickerBubbleLayout.rowGap : AppTokens.s4),
       padding: widget.itemPadding ??
           _textBubbleStyle?.rowPadding(_isISend) ??
           EdgeInsets.symmetric(

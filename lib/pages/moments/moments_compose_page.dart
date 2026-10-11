@@ -1,3 +1,5 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
+import 'package:openim/routes/swipe_back/app_swipe_back_tokens.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -245,7 +247,7 @@ class _MomentsComposePageState extends State<MomentsComposePage>
     var selection = MomentsVisibilitySelection(mode: mode);
     if (selection.requiresAudience) {
       final users =
-          await Navigator.of(context).push<List<MomentUser>>(MaterialPageRoute(
+          await Navigator.of(context).push<List<MomentUser>>(AppMaterialPageRoute(
         builder: (_) => MomentsPrivacyFriendPicker(
           repository: _repository,
           title: momentsText(context,
@@ -475,6 +477,7 @@ class _MomentsComposePageState extends State<MomentsComposePage>
   }
 
   void _preview(int index) => Navigator.of(context).push(MaterialPageRoute(
+      settings: const RouteSettings(name: AppSwipeBackTokens.mediaRouteName),
       builder: (_) => MediaBrowser(
           sources: _store.media
               .map((item) =>

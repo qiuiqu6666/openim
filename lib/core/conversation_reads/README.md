@@ -8,4 +8,6 @@
 
 `ConversationReadProjection` 保存至多 256 个会话、每个会话 8 个确认目标，以保护晚到的相同目标回调和列表快照。仅在时间、消息 ID、序号都匹配且未读数没有超过请求时的数值时清零；不同消息、更新的序号或时间、增加的未读数保留。旧确认目标回调不能替换列表中更晚或无法判定先后的不同消息。该模块不创建消息、不模拟 SDK 接收状态、不修改语音播放与私密消息燃烧状态。
 
+未读校准从 SDK 重新读取会话时，可对读取期间没有实时变更的行传入 `project(..., authoritativeUnread: true)`。只有 SDK 返回未读数为零且最新消息时间、ID、序号与当前行完全相同，才允许清除超过旧确认计数的未读；不同目标仍保留。普通回调、普通快照和读取期间已有实时变更的行保持默认 `false`，避免晚到的旧零值覆盖新消息。账号和列表代际校验、读取期间变更跟踪由调用方负责；该参数本身不证明事件来自另一设备。
+
 入口：`conversation_read_request.dart`、`conversation_read_projection.dart`。集成回归位于 `test/pages/conversation/reads/conversation_read_projection_test.dart`，原会话列表手动标为已读回归仍在 `test/pages/conversation/editing/conversation_mark_read_test.dart`。

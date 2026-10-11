@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 import '../models/group_feature_context.dart';
 import 'agent/pages/agent_current_page.dart';
@@ -36,7 +37,7 @@ class MarkSixModule {
   static Future<void> _open(BuildContext context,
       GroupFeatureContext featureContext, Widget page, String name) async {
     if (!featureContext.sessionCurrent() || !context.mounted) return;
-    await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+    await Navigator.of(context).push<void>(AppMaterialPageRoute<void>(
         settings: RouteSettings(name: name), builder: (_) => page));
   }
 }

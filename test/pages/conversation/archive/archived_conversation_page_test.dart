@@ -158,7 +158,8 @@ class _ArchiveLogic extends GetxController
   }
 
   @override
-  Future<void> deleteConversation(ConversationInfo info, {bool propagateError = false}) async {
+  Future<void> deleteConversation(ConversationInfo info,
+      {bool propagateError = false}) async {
     list.removeWhere((item) => item.conversationID == info.conversationID);
     states.remove(info.conversationID);
   }
@@ -505,9 +506,12 @@ void main() {
   });
 
   testWidgets(
-      'pending batch action blocks changing selection or leaving edit mode',
+      'done leaves a pending archive read batch and preserves the next selection',
       (tester) async {
     final gate = Completer<void>();
+    addTearDown(() {
+      if (!gate.isCompleted) gate.complete();
+    });
     final logic = _ArchiveLogic()
       ..seed('selected')
       ..seed('ignored');
@@ -516,8 +520,6 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('编辑'));
     await tester.pumpAndSettle();
-    await tester.tap(_row('selected'));
-    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('conversation-edit-mark-read')));
     await tester.pump();
     expect(
@@ -527,15 +529,35 @@ void main() {
             .busy,
         isTrue);
     await tester.tap(_row('ignored'));
-    await tester.tap(find.text('完成'));
     await tester.pump();
-    expect(_selected(tester, 'selected'), isTrue);
-    expect(_selected(tester, 'ignored'), isFalse);
+    expect(_selected(tester, 'ignored'), isFalse,
+        reason: 'An active batch still prevents changing its selection.');
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+    expect(gate.isCompleted, isFalse);
+    expect(find.byType(ConversationEditActionBar), findsNothing);
+    expect(find.byTooltip('编辑'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('编辑'));
+    await tester.pumpAndSettle();
+    await tester.tap(_row('ignored'));
+    await tester.pump();
     expect(find.byType(ConversationEditActionBar), findsOneWidget);
+    expect(_selected(tester, 'ignored'), isTrue);
     gate.complete();
     await tester.pumpAndSettle();
     expect(logic.markedIds, ['selected']);
     expect(logic.list.last.unreadCount, 2);
+    expect(find.byType(ConversationEditActionBar), findsOneWidget,
+        reason: 'The old SDK acknowledgement must not close the new edit.');
+    expect(_selected(tester, 'selected'), isFalse);
+    expect(_selected(tester, 'ignored'), isTrue);
+    expect(
+        tester
+            .widget<ConversationEditActionBar>(
+                find.byType(ConversationEditActionBar))
+            .busy,
+        isFalse);
     await _disposePage(tester);
   });
 

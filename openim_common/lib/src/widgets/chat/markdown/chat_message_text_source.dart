@@ -5,9 +5,12 @@ import 'package:openim_common/openim_common.dart';
 import 'chat_draw_report_text.dart';
 import 'chat_agent_report_text.dart';
 
-/// Generated report separators are literal text, not Markdown headings.
-/// Use the server's report marker so ordinary chat keeps Markdown support.
+/// Ordinary text, mentions and replies stay literal, as in 99chat. Only the
+/// explicit rich-text SDK type may use Markdown when it has no format entities.
 bool chatMessageAllowsMarkdown(Message message) {
+  if (message.contentType != MessageType.advancedText) return false;
+
+  // Generated report separators remain literal even in a rich-text envelope.
   final text = chatMessageTextSource(message);
   if (isChatDrawReportText(text) || isChatAgentReportText(text)) return false;
   final ex = message.ex;

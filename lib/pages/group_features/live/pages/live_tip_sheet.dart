@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -191,7 +192,7 @@ class _LiveTipFormState extends State<_LiveTipForm>
                 ]));
     if (!mounted) return false;
     if (configure != true || !current) return false;
-    await Navigator.of(context).push(MaterialPageRoute<void>(
+    await Navigator.of(context).push(AppMaterialPageRoute<void>(
         builder: (_) => TradePasswordPage(service: service)));
     return current && await service.hasTradePassword();
   }

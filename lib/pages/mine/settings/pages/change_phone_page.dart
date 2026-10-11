@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
@@ -201,7 +202,7 @@ class _ChangePhonePageState extends State<ChangePhonePage>
   Future<void> _selectCountry() async {
     if (busy) return;
     FocusManager.instance.primaryFocus?.unfocus();
-    final code = await Navigator.of(context).push<String>(MaterialPageRoute(
+    final code = await Navigator.of(context).push<String>(AppMaterialPageRoute(
         builder: (_) =>
             CountryCodePage(selectedCode: areaCodeController.text)));
     if (mounted && code != null) setState(() => areaCodeController.text = code);

@@ -4,6 +4,30 @@
 `reference-99chat/lib/src/pages/recent_calls_page.dart`，复用 settings 的主题、
 头像、空状态、动作表、确认弹窗和现有通话入口，支持亮色、暗色和大文字。
 
+## 99chat 样式对齐
+
+顶部采用原版“删除全部/删除未接”和“编辑/完成”文字按钮、164×34 分段控件，
+新通话卡片保留 16 圆角与 16/12/16/10 外边距。通话列表按原版铺满宽度，
+72 最小行高、42 圆形头像，分隔线在正常/编辑状态分别缩进 88/122。
+未接文字使用原版红色；电话/视频图标始终使用次级文字色。
+时间遵循原版：本年显示时分，跨年显示年月日，同时兼容本地旧秒级时间戳。
+保留现有呼入/拨出及具体终态说明，避免丢失 OpenIM 的通话信息。
+
+`assets/call.png`、`assets/video.webp` 原样复制自 99chat 的 `assets/img/`。
+原版引用的 `assets/img/start_new_call.svg` 在参考仓库和用户提供的
+`C:/Users/ASUS/Downloads/Telegram Desktop/99999999` 源码、构建目录及两个 APK
+中均缺失；`widgets/recent_call_icons.dart` 暂用原电话图片配加号，保持原版 24 尺寸，
+不宣称该缺失图标已逐像素还原。后续取得原文件只需替换此局部组件。
+
+右侧信息按钮与原版一致打开联系人资料，点击行仍走原重拨入口；群通话不打开单人资料。
+删除按钮仅改变显示，确认弹窗仍明确说明“从本设备隐藏”，不伪造服务端删除。
+保持 48 点击区域，小屏/大字号时将时间放在说明下方，关闭动画时分段切换立即完成。
+
+样式测试：`test/pages/mine/calls/recent_calls_reference_style_test.dart`。
+使用 `--dart-define=RECENT_CALLS_PREVIEW=true` 可在 Windows 上加载本机字体并输出
+`build/previews/recent-calls/` 中的亮暗及编辑状态预览；预览联系人是测试夹具。
+普通测试不依赖本机字体，不发起真实通话。
+
 `data/` 管理 Chat 通话记录接口、账号仓库和 OpenIM 业务通知绑定。
 HTTP 使用当前 `Config.appAuthUrl` 和登录返回的 `chatToken`，调用
 `GET /chat/call-records?syncAt=...&limit=200` 与 `POST /chat/call-records`。

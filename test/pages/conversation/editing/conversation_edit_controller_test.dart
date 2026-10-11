@@ -167,33 +167,176 @@ void main() {
     expect(controller.selectedIds, {'a', 'b'});
   });
 
-  test('pending actions disable reentry and selection changes', () async {
+  test('done releases a pending batch and never starts its remaining targets',
+      () async {
     final controller = ConversationEditController()..toggleEditing();
     addTearDown(controller.dispose);
     controller.toggleSelection('a');
+    controller.toggleSelection('b');
     final gate = Completer<void>();
-    var calls = 0;
+    addTearDown(() {
+      if (!gate.isCompleted) gate.complete();
+    });
+    final calls = <String>[];
     final pending = controller.execute(
-      conversations: [_conversation('a')],
-      action: (_) {
-        calls++;
+      conversations: [_conversation('a'), _conversation('b')],
+      action: (conversation) {
+        calls.add(conversation.conversationID);
         return gate.future;
       },
     );
     expect(controller.busy, isTrue);
-    controller.toggleEditing();
-    controller.toggleSelection('b');
+    controller.toggleSelection('c');
+    expect(controller.selectedIds, {'a', 'b'});
     await controller.execute(
       conversations: [_conversation('a')],
-      action: (_) async => calls++,
+      action: (_) async => calls.add('unexpected-reentry'),
     );
-    expect(calls, 1);
-    expect(controller.editing, isTrue);
-    expect(controller.selectedIds, {'a'});
-    gate.complete();
+    expect(calls, ['a']);
+
+    controller.toggleEditing();
+    expect(controller.editing, isFalse);
+    expect(controller.busy, isFalse);
+    expect(controller.selectedIds, isEmpty);
     await pending;
+    expect(gate.isCompleted, isFalse,
+        reason: 'Done must release the operation without waiting for the SDK.');
+    gate.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, ['a']);
     expect(controller.busy, isFalse);
     expect(controller.editing, isFalse);
+  });
+
+  for (final lateFailure in [false, true]) {
+    test('old completion cannot change the next busy edit ($lateFailure)',
+        () async {
+      final controller = ConversationEditController()..toggleEditing();
+      addTearDown(controller.dispose);
+      controller.toggleSelection('old-a');
+      controller.toggleSelection('old-b');
+      final oldGate = Completer<void>();
+      final newGate = Completer<void>();
+      addTearDown(() {
+        for (final gate in [oldGate, newGate]) {
+          if (!gate.isCompleted) gate.complete();
+        }
+      });
+      final calls = <String>[];
+      final previous = controller.execute(
+        conversations: [_conversation('old-a'), _conversation('old-b')],
+        action: (conversation) {
+          calls.add(conversation.conversationID);
+          return oldGate.future;
+        },
+      );
+      controller.toggleEditing();
+      expect(oldGate.isCompleted, isFalse);
+      controller.toggleEditing();
+      controller.toggleSelection('new');
+      final current = controller.execute(
+        conversations: [_conversation('new')],
+        action: (conversation) {
+          calls.add(conversation.conversationID);
+          return newGate.future;
+        },
+      );
+      expect(controller.editing, isTrue);
+      expect(controller.busy, isTrue);
+      expect(controller.selectedIds, {'new'});
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      // Reenter before the cancelled operation gets to run its old finally.
+      await previous;
+      expect(controller.editing, isTrue);
+      expect(controller.busy, isTrue);
+      expect(controller.selectedIds, {'new'});
+      expect(notifications, 0);
+      if (lateFailure) {
+        oldGate.completeError(StateError('Late cancelled SDK failure'));
+      } else {
+        oldGate.complete();
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, ['old-a', 'new']);
+      expect(controller.editing, isTrue);
+      expect(controller.busy, isTrue);
+      expect(controller.selectedIds, {'new'});
+      expect(notifications, 0,
+          reason: 'An abandoned operation must not publish into a new edit.');
+      newGate.complete();
+      await current;
+      expect(controller.editing, isFalse);
+      expect(controller.busy, isFalse);
+      expect(controller.selectedIds, isEmpty);
+    });
+  }
+
+  test('a resolved SDK error cannot escape after its edit is replaced',
+      () async {
+    final controller = ConversationEditController()..toggleEditing();
+    addTearDown(controller.dispose);
+    controller.toggleSelection('old-a');
+    controller.toggleSelection('old-b');
+    final oldGate = Completer<void>();
+    final newGate = Completer<void>();
+    addTearDown(() {
+      for (final gate in [oldGate, newGate]) {
+        if (!gate.isCompleted) gate.complete();
+      }
+    });
+    final failure = StateError('Resolved SDK failure');
+    final calls = <String>[];
+    var errorDeliveries = 0;
+    Future<void>? replacement;
+    final previous = runZoned(
+      () => controller.execute(
+        conversations: [_conversation('old-a'), _conversation('old-b')],
+        action: (conversation) {
+          calls.add(conversation.conversationID);
+          return oldGate.future;
+        },
+      ),
+      zoneSpecification: ZoneSpecification(
+        registerBinaryCallback: <R, T1, T2>(Zone self, ZoneDelegate parent,
+            Zone zone, R Function(T1, T2) callback) {
+          final registered = parent.registerBinaryCallback(zone, callback);
+          return (T1 first, T2 second) {
+            if (identical(first, failure) && ++errorDeliveries == 2) {
+              // The first delivery lets Future.any choose the SDK error. The
+              // second is execute's await continuation: replace the edit before
+              // that continuation can report its old error or run its finally.
+              controller.toggleEditing();
+              controller.toggleEditing();
+              controller.toggleSelection('new');
+              replacement = controller.execute(
+                conversations: [_conversation('new')],
+                action: (conversation) {
+                  calls.add(conversation.conversationID);
+                  return newGate.future;
+                },
+              );
+            }
+            return registered(first, second);
+          };
+        },
+      ),
+    );
+    final completion = expectLater(previous, completes);
+    oldGate.completeError(failure);
+    await completion;
+    expect(errorDeliveries, 2,
+        reason: 'Cancellation must occur after the error wins the SDK race.');
+    expect(replacement, isNotNull);
+    expect(calls, ['old-a', 'new']);
+    expect(controller.editing, isTrue);
+    expect(controller.busy, isTrue);
+    expect(controller.selectedIds, {'new'});
+    newGate.complete();
+    await replacement;
+    expect(controller.editing, isFalse);
+    expect(controller.busy, isFalse);
+    expect(controller.selectedIds, isEmpty);
   });
 
   test('disposal stops queued actions and never notifies after disposal',
@@ -213,8 +356,11 @@ void main() {
     );
     expect(notifications, 1);
     controller.dispose();
-    gate.complete();
     await pending;
+    expect(gate.isCompleted, isFalse,
+        reason: 'Disposal also releases a pending SDK wait immediately.');
+    gate.complete();
+    await Future<void>.delayed(Duration.zero);
     expect(actedOn, ['a']);
     expect(notifications, 1);
     controller.toggleEditing();

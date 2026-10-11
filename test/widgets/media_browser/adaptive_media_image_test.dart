@@ -217,6 +217,73 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('long image flick covers a screen and respects edges',
+      (tester) async {
+    _phone(tester);
+    final bytes = (await tester.runAsync(() => _png(const Size(120, 2400))))!;
+    await tester.pumpWidget(renderTestHost(MediaBrowser(
+        initialIndex: 0, sources: [MediaSource(thumbnail: '', bytes: bytes)])));
+    await _settle(tester);
+
+    Future<void> flick({bool down = false}) async {
+      await tester.flingFrom(
+          down ? const Offset(180, 280) : const Offset(180, 560),
+          Offset(0, down ? 250 : -250),
+          1800);
+      await tester.pumpAndSettle();
+    }
+
+    await flick();
+    var rect = _gesture(tester).gestureDetails!.destinationRect!;
+    // A short flick should advance through a readable screen of a long image,
+    // without changing its scale or dismissing the preview.
+    expect(-rect.top, greaterThan(812));
+    expect(-rect.top, lessThan(1624));
+    expect(rect.width, closeTo(375, 0.01));
+    await flick(down: true);
+    expect(_gesture(tester).gestureDetails!.destinationRect!.top,
+        closeTo(0, 0.01));
+
+    for (var i = 0; i < 8; i++) {
+      await flick();
+    }
+    rect = _gesture(tester).gestureDetails!.destinationRect!;
+    expect(rect.bottom, closeTo(812, 0.01));
+    expect(rect.width, closeTo(375, 0.01));
+    expect(find.byType(MediaBrowser), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  },
+      variant:
+          TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
+
+  testWidgets('long image slow drag stays precise and touching stops a flick',
+      (tester) async {
+    _phone(tester);
+    final bytes = (await tester.runAsync(() => _png(const Size(120, 2400))))!;
+    await tester.pumpWidget(renderTestHost(MediaBrowser(
+        initialIndex: 0, sources: [MediaSource(thumbnail: '', bytes: bytes)])));
+    await _settle(tester);
+    await tester.timedDragFrom(const Offset(180, 500), const Offset(0, -160),
+        const Duration(milliseconds: 1000));
+    final beforeRelease = _gesture(tester).gestureDetails!.destinationRect!.top;
+    await tester.pumpAndSettle();
+    var rect = _gesture(tester).gestureDetails!.destinationRect!;
+    expect(-rect.top, inInclusiveRange(120, 180));
+    expect(rect.top, closeTo(beforeRelease, 1));
+
+    await tester.flingFrom(const Offset(180, 560), const Offset(0, -250), 1800);
+    await tester.pump(const Duration(milliseconds: 50));
+    final hold = await tester.startGesture(const Offset(180, 400));
+    final stoppedAt = _gesture(tester).gestureDetails!.destinationRect!.top;
+    await tester.pump(const Duration(milliseconds: 300));
+    rect = _gesture(tester).gestureDetails!.destinationRect!;
+    expect(rect.top, closeTo(stoppedAt, 0.01));
+    expect(rect.width, closeTo(375, 0.01));
+    await hold.cancel();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('long image adapts to a resized viewport without losing its page',
       (tester) async {
     _phone(tester);

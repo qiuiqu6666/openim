@@ -11,6 +11,20 @@ import 'package:visibility_detector/visibility_detector.dart';
 
 import 'support/markdown_fixture.dart';
 
+Future<void> _tapPlainText(WidgetTester tester, String label) async {
+  final finder = find.descendant(
+      of: find.byType(MatchTextView), matching: find.byType(RichText));
+  final text = tester.widget<RichText>(finder).text.toPlainText();
+  final start = text.indexOf(label);
+  expect(start, greaterThanOrEqualTo(0));
+  final paragraph = tester.renderObject<RenderParagraph>(finder);
+  final box = paragraph
+      .getBoxesForSelection(
+          TextSelection(baseOffset: start, extentOffset: start + label.length))
+      .first;
+  await tester.tapAt(paragraph.localToGlobal(box.toRect().center));
+}
+
 void main() {
   setUp(() async {
     await setupMarkdownFixture();
@@ -37,8 +51,7 @@ void main() {
           ignorePointer: ignorePointer,
           patterns: patterns);
 
-  testWidgets(
-      'ordinary SDK text preserves Markdown source and paragraph breaks',
+  testWidgets('ordinary SDK text displays literal markers and paragraph breaks',
       (tester) async {
     const source = '# Heading\n\n**Bold**\n\n- First\n- Second';
     String? copied;
@@ -47,15 +60,13 @@ void main() {
     expect(copied, source);
     expect(renderedMarkdownText(tester), contains('Heading'));
     expect(renderedMarkdownText(tester), contains('Second'));
-    expect(renderedMarkdownText(tester), isNot(contains('**Bold**')));
+    expect(renderedMarkdownText(tester), contains(source));
+    expect(find.byType(ChatMarkdownText), findsNothing);
     expect(
         tester
             .widget<ChatItemContainer>(find.byType(ChatItemContainer))
             .metadataBelow,
-        isTrue);
-    final body = tester.getRect(find.byType(ChatMarkdownText));
-    final time = tester.getRect(find.text('14:08'));
-    expect(time.top, greaterThanOrEqualTo(body.bottom));
+        isFalse);
     expect(tester.takeException(), isNull);
   });
 
@@ -73,6 +84,47 @@ void main() {
   });
 
   for (final brightness in Brightness.values) {
+    testWidgets(
+        'download instructions stay plain with working links $brightness',
+        (tester) async {
+      const appleUrl = 'https://testflight.apple.com/join/Fj5d9CpY';
+      const siteUrl = 'https://99chat.vip';
+      const source = '阿伦_(现南风在管理)\n2026年9月25日最新链接\n'
+          '正在使用 99CHAT，快来一起聊天吧！\n'
+          '苹果下载链接：\n$appleUrl\n下载安装即可\n兑换码无\n'
+          '----------------\n安卓/苹果/电脑端/聚合下载链接：\n'
+          '$siteUrl\n（格式错误，不记录）';
+      await mountMarkdown(tester, bubble(markdownMessage('普通聊天文字')),
+          brightness: brightness);
+      final normalStyle =
+          tester.widget<MatchTextView>(find.byType(MatchTextView)).textStyle;
+      final message = markdownMessage(source, extra: {
+        'groupID': 'group',
+        'sessionType': ConversationType.superGroup,
+      });
+      String? copied;
+      final taps = <String>[];
+      await mountMarkdown(
+          tester,
+          bubble(message, copied: (value) => copied = value, patterns: [
+            MatchPattern(
+                type: PatternType.url, onTap: (url, _) => taps.add(url)),
+          ]),
+          brightness: brightness);
+      expect(ChatMarkdownText.hasMarkdown(source), isTrue);
+      expect(find.byType(ChatMarkdownText), findsNothing);
+      final body = tester.widget<MatchTextView>(find.byType(MatchTextView));
+      expect(body.textStyle, normalStyle);
+      expect(body.text, source);
+      expect(renderedMarkdownText(tester), contains(source));
+      expect(copied, source);
+      expect(message.textElem!.content, source);
+      await _tapPlainText(tester, appleUrl);
+      await _tapPlainText(tester, siteUrl);
+      expect(taps, [appleUrl, siteUrl]);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('Sangong summary uses ordinary text style in $brightness',
         (tester) async {
       const source = '庄【秋的测试号】1包共0注\n==================\n'
@@ -102,12 +154,13 @@ void main() {
     });
   }
 
-  testWidgets('unrelated or malformed metadata retains ordinary Markdown',
+  testWidgets('unrelated or malformed metadata cannot enable ordinary Markdown',
       (tester) async {
     for (final ex in ['{"unrelated":true}', 'legacy text', '[]', 'null']) {
       await mountMarkdown(
           tester, bubble(markdownMessage('# Heading', extra: {'ex': ex})));
-      expect(find.byType(ChatMarkdownText), findsOneWidget);
+      expect(find.byType(ChatMarkdownText), findsNothing);
+      expect(renderedMarkdownText(tester), contains('# Heading'));
       expect(tester.takeException(), isNull);
     }
   });
@@ -136,12 +189,13 @@ void main() {
     }
   }
 
-  testWidgets('ordinary Setext headings still use Markdown', (tester) async {
+  testWidgets('ordinary Setext headings remain literal', (tester) async {
     await mountMarkdown(tester, bubble(markdownMessage('标题\n========')));
-    expect(find.byType(ChatMarkdownText), findsOneWidget);
+    expect(find.byType(ChatMarkdownText), findsNothing);
+    expect(renderedMarkdownText(tester), contains('标题\n========'));
   });
 
-  testWidgets('custom text bubble keeps Markdown footer outside code and table',
+  testWidgets('custom text bubble treats code and table markers as plain text',
       (tester) async {
     const source = '```dart\nfinal x = 1;\n```\n\n'
         '| Heading | Value |\n| --- | --- |\n| First | 2 |';
@@ -168,8 +222,10 @@ void main() {
         tester
             .widget<ChatTextBubbleLayout>(find.byType(ChatTextBubbleLayout))
             .forceSeparateFooter,
-        isTrue);
-    final text = tester.getRect(find.byType(ChatMarkdownText));
+        isFalse);
+    expect(find.byType(ChatMarkdownText), findsNothing);
+    expect(renderedMarkdownText(tester), contains(source));
+    final text = tester.getRect(find.byType(MatchTextView));
     final time = tester.getRect(find.text('14:08'));
     expect(time.top, greaterThanOrEqualTo(text.bottom));
     expect(tester.getRect(find.byType(ChatBubble)).width,
@@ -177,7 +233,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('group mention replaces SDK ID without losing Markdown newlines',
+  testWidgets('plain group mention preserves callbacks and literal newlines',
       (tester) async {
     final message = markdownMessage('@peer **Hello**\n\n- Group item',
         type: MessageType.atText,
@@ -203,6 +259,8 @@ void main() {
               onTap: (value, _) => taps.add(value)),
         ]));
     expect(copied, '@张三 **Hello**\n\n- Group item');
+    expect(find.byType(ChatMarkdownText), findsNothing);
+    expect(renderedMarkdownText(tester), contains('**Hello**\n\n- Group item'));
     expect(renderedMarkdownText(tester), contains('@张三'));
     expect(renderedMarkdownText(tester), isNot(contains('@peer')));
     final mention = find.byWidgetPredicate((widget) =>
@@ -218,8 +276,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-      'quoted body parses Markdown and referenced message stays compact',
+  testWidgets('quoted body stays literal and referenced message stays compact',
       (tester) async {
     final original = markdownMessage('Original\n\n**source**', id: 'original');
     final message = markdownMessage('**Reply**\n\n- Answer',
@@ -231,7 +288,8 @@ void main() {
           },
         });
     await mountMarkdown(tester, bubble(message));
-    expect(find.byType(ChatMarkdownText), findsOneWidget);
+    expect(find.byType(ChatMarkdownText), findsNothing);
+    expect(renderedMarkdownText(tester), contains('**Reply**\n\n- Answer'));
     expect(find.text('聊天好友'), findsWidgets);
     final text = tester.widget<Text>(find.text('Original **source**'));
     expect(text.maxLines, 1);
@@ -279,18 +337,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('ignored selected bubble cannot launch Markdown link',
+  testWidgets('ignored selected plain bubble cannot launch a link',
       (tester) async {
     var taps = 0;
     await mountMarkdown(
         tester,
-        bubble(markdownMessage('[Open](https://example.com)'),
+        bubble(markdownMessage('**地址**\nhttps://example.com'),
             ignorePointer: true,
             patterns: [
               MatchPattern(type: PatternType.url, onTap: (_, __) => taps++)
             ]));
-    await tester.tap(find.text('Open', findRichText: true),
-        warnIfMissed: false);
+    await _tapPlainText(tester, 'https://example.com');
     expect(taps, 0);
     expect(tester.takeException(), isNull);
   });
@@ -314,7 +371,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('merged SDK history renders nested original Markdown messages',
+  testWidgets('merged SDK history keeps nested ordinary messages literal',
       (tester) async {
     const source = '# Forwarded\n\n- Keep\n- Newlines';
     final message = markdownMessage('', type: MessageType.merger, extra: {
@@ -327,9 +384,9 @@ void main() {
     await mountMarkdown(tester, bubble(message));
     await tester.tap(find.text('Merged history'));
     await tester.pumpAndSettle();
-    expect(find.byType(ChatMarkdownText), findsOneWidget);
-    expect(tester.widget<ChatMarkdownText>(find.byType(ChatMarkdownText)).text,
-        source);
+    expect(find.byType(ChatMarkdownText), findsNothing);
+    expect(
+        tester.widget<MatchTextView>(find.byType(MatchTextView)).text, source);
     expect(renderedMarkdownText(tester), contains('Newlines'));
     expect(tester.takeException(), isNull);
   });
@@ -357,7 +414,7 @@ void main() {
         .setMockMethodCallHandler(SystemChannels.platform, null));
     await mountMarkdown(
         tester, ChatMessageTile(logic: logic, message: message));
-    await tester.longPress(find.text('Bold', findRichText: true));
+    await tester.longPress(find.byType(MatchTextView));
     await tester.pumpAndSettle();
     expect(
         find.byKey(const ValueKey('chat-message-menu-panel')), findsOneWidget);

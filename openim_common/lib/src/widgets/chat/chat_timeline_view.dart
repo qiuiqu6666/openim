@@ -37,6 +37,7 @@ class ChatTimelineView extends StatelessWidget {
                 minimumSize: const Size(
                     kMinInteractiveDimension, kMinInteractiveDimension),
                 padding: EdgeInsets.zero,
+                alignment: Alignment.center,
                 foregroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: Semantics(

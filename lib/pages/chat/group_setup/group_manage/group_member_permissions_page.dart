@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 import '../../../../core/controller/im_controller.dart';
 import 'package:flutter/cupertino.dart';
@@ -45,7 +46,7 @@ class _GroupMemberPermissionsPageState
 
   Future<void> addMember() async {
     final result = await Navigator.of(context).push<GroupMembersInfo>(
-        MaterialPageRoute(
+        AppMaterialPageRoute(
             builder: (_) => GroupMemberPermissionsPage(
                 groupID: widget.groupID,
                 owner: widget.owner,

@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -177,7 +178,7 @@ class _MomentsPrivacyListPageState extends State<MomentsPrivacyListPage> {
     final request = _requestGeneration;
     final scope = _scope;
     final picked = await Navigator.of(context).push<List<MomentUser>>(
-      MaterialPageRoute(
+      AppMaterialPageRoute(
           builder: (_) => MomentsPrivacyFriendPicker(
                 repository: widget.repository,
                 title: momentsText(context,

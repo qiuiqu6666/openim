@@ -1,6 +1,8 @@
 // Selection flow adapted from 99chat's lib/src/conversation.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache License 2.0).
 // Changes: use caller-supplied OpenIM actions and page-owned lifecycle guards.
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
@@ -13,6 +15,7 @@ class ConversationEditController extends ChangeNotifier {
   bool _editing = false;
   bool _busy = false;
   bool _disposed = false;
+  Completer<void>? _cancelExecution;
   final _selectedIds = <String>{};
 
   bool get editing => _editing;
@@ -20,7 +23,14 @@ class ConversationEditController extends ChangeNotifier {
   Set<String> get selectedIds => Set<String>.unmodifiable(_selectedIds);
 
   void toggleEditing() {
-    if (_disposed || _busy) return;
+    if (_disposed) return;
+    // Done always releases the UI, even if the current SDK action is pending.
+    // Its in-flight request may still finish, but no further batch item starts.
+    if (_editing) {
+      _cancelCurrentExecution();
+    } else if (_busy) {
+      return;
+    }
     _editing = !_editing;
     if (!_editing) _selectedIds.clear();
     notifyListeners();
@@ -38,7 +48,8 @@ class ConversationEditController extends ChangeNotifier {
   ///
   /// No selection acts on the whole supplied scope only for [allWhenEmpty].
   /// The first failure is propagated, retaining selection for the page's error
-  /// feedback. Disposal prevents any subsequent action from starting.
+  /// feedback. Done/disposal release the wait and stop subsequent actions.
+  /// An old request's completion cannot finish a newer editing operation.
   Future<void> execute({
     required List<ConversationInfo> conversations,
     required Future<void> Function(ConversationInfo) action,
@@ -61,28 +72,44 @@ class ConversationEditController extends ChangeNotifier {
       }),
     );
 
+    final cancelled = Completer<void>();
+    _cancelExecution = cancelled;
+    bool current() => !_disposed && identical(_cancelExecution, cancelled);
     _busy = true;
     notifyListeners();
     try {
       for (final conversation in targets) {
-        if (_disposed) return;
-        await action(conversation);
+        if (!current()) return;
+        await Future.any<void>([action(conversation), cancelled.future]);
       }
-      if (_disposed) return;
+      if (!current()) return;
       _editing = false;
       _selectedIds.clear();
+    } catch (_) {
+      // Done can invalidate this batch before an already resolved error resumes.
+      // Only the active operation may report a failure to its page.
+      if (current()) rethrow;
     } finally {
-      if (!_disposed) {
+      if (current()) {
+        _cancelExecution = null;
         _busy = false;
         notifyListeners();
       }
     }
   }
 
+  void _cancelCurrentExecution() {
+    final cancelled = _cancelExecution;
+    _cancelExecution = null;
+    _busy = false;
+    if (cancelled != null && !cancelled.isCompleted) cancelled.complete();
+  }
+
   @override
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _cancelCurrentExecution();
     _editing = false;
     _busy = false;
     _selectedIds.clear();

@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -156,7 +157,7 @@ class _LiveManagePageState extends State<LiveManagePage>
 
   Future<void> _pickAnchor() async {
     final member = await Navigator.of(context).push<GroupMembersInfo>(
-        MaterialPageRoute(
+        AppMaterialPageRoute(
             builder: (_) => LiveMemberPicker(featureContext: featureContext)));
     if (current && member != null) setState(() => _anchor = member);
   }
@@ -260,7 +261,7 @@ class _LiveManagePageState extends State<LiveManagePage>
           : session.status == LiveStatus.authorized && livePermissions.canPush;
       if (showConfiguration) {
         final ended = await Navigator.of(context).push<LiveSession>(
-            MaterialPageRoute<LiveSession>(
+            AppMaterialPageRoute<LiveSession>(
                 builder: (_) => LivePushPage(
                     featureContext: refreshed,
                     session: session,
@@ -341,7 +342,7 @@ class _LiveManagePageState extends State<LiveManagePage>
       final session = _session!;
       if (!session.status.active) return;
       final ended = await Navigator.of(context).push<LiveSession>(
-          MaterialPageRoute<LiveSession>(
+          AppMaterialPageRoute<LiveSession>(
               builder: (_) => LivePushPage(
                   featureContext: refreshed,
                   session: session,

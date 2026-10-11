@@ -134,6 +134,77 @@ void main() {
     expect(selected.unreadCount, 3);
   });
 
+  testWidgets('a hanging native read times out and ignores its late success',
+      (tester) async {
+    final logic = createLogic();
+    final selected = _conversation();
+    logic.list.add(selected);
+
+    final pending = logic.markConversationRead(selected);
+    final timeout = expectLater(
+        pending,
+        throwsA(isA<TimeoutException>().having((error) => error.duration,
+            'duration', const Duration(seconds: 10))));
+    await tester.pump();
+    expect(calls, hasLength(1));
+    expect(replies.single.isCompleted, isFalse);
+    await tester.pump(const Duration(seconds: 9));
+    expect(logic.list.single.unreadCount, 3);
+    expect(replies.single.isCompleted, isFalse);
+
+    await tester.pump(const Duration(seconds: 1));
+    await timeout;
+    expect(logic.list.single, same(selected));
+    expect(selected.unreadCount, 3);
+
+    replies.single.complete();
+    await tester.pump();
+    expect(logic.list.single.unreadCount, 3);
+    expect(selected.unreadCount, 3);
+    // A timed-out request must not install a read projection for a delayed
+    // SDK preview of the original target, or for a subsequent new message.
+    final originalPreview = _conversation();
+    logic.onChanged([originalPreview]);
+    expect(logic.list.single, same(originalPreview));
+    expect(originalPreview.unreadCount, 3);
+    final incoming =
+        _conversation(unread: 4, time: 2, messageId: 'message-2', sequence: 2);
+    logic.onChanged([incoming]);
+    await tester.pump();
+    expect(logic.list.single, same(incoming));
+    expect(incoming.unreadCount, 4);
+    expect(selected.unreadCount, 3);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a late native failure after timeout stays handled and unread',
+      (tester) async {
+    final logic = createLogic();
+    final selected = _conversation();
+    logic.list.add(selected);
+
+    final pending = logic.markConversationRead(selected);
+    final timeout = expectLater(pending, throwsA(isA<TimeoutException>()));
+    await tester.pump();
+    expect(calls, hasLength(1));
+    await tester.pump(const Duration(seconds: 10));
+    await timeout;
+    expect(logic.list.single.unreadCount, 3);
+    expect(selected.unreadCount, 3);
+
+    final incoming =
+        _conversation(unread: 4, time: 2, messageId: 'message-2', sequence: 2);
+    logic.onChanged([incoming]);
+    replies.single.completeError(PlatformException(code: 'SDK_LATE_FAILURE'));
+    await tester.pump();
+    expect(logic.list.single, same(incoming));
+    expect(incoming.unreadCount, 4);
+    expect(selected.unreadCount, 3);
+    expect(tester.takeException(), isNull,
+        reason: 'The original native Future retains an error handler after '
+            'the caller has already received its timeout.');
+  });
+
   test('a late ack after close cannot restore or mutate the closed page',
       () async {
     final logic = createLogic();

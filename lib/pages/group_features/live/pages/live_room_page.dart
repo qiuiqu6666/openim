@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -149,7 +150,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
       if (!canOperate || !featureContext.capabilities.live.canPush) return;
       if (_session?.status.active != true) return;
       await Navigator.of(context)
-          .push<LiveSession>(MaterialPageRoute<LiveSession>(
+          .push<LiveSession>(AppMaterialPageRoute<LiveSession>(
               builder: (_) => LivePushPage(
                   featureContext: featureContext,
                   session: _session!,

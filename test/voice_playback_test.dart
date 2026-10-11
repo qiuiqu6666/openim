@@ -4,6 +4,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:openim_common/src/widgets/chat/voice/voice_playback_source.dart';
 
 class FakePlayer implements AudioPlayer {
   Completer<void>? pending;
@@ -69,6 +70,9 @@ Future<void> flush() async {
   }
 }
 
+Future<VoicePlaybackSource> remoteSource(Message message) async =>
+    VoicePlaybackSource.remote(message.soundElem!.sourceUrl!);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test('completion plays next chronological audio across other messages',
@@ -83,6 +87,7 @@ void main() {
               first
             ],
         playerFactory: () => player,
+        sourceLoader: remoteSource,
         onPlayed: (m) async {
           heard.add(m.clientMsgID);
         });
@@ -103,7 +108,9 @@ void main() {
     final first = voice('a', 1), next = voice('b', 2);
     final player = FakePlayer();
     final controller = VoicePlaybackController(
-        messages: () => [first, next], playerFactory: () => player);
+        messages: () => [first, next],
+        playerFactory: () => player,
+        sourceLoader: remoteSource);
     unawaited(controller.toggle(first));
     await flush();
     await controller.toggle(first);
@@ -116,7 +123,9 @@ void main() {
     final first = voice('a', 1);
     final player = FakePlayer();
     final controller = VoicePlaybackController(
-        messages: () => [first], playerFactory: () => player);
+        messages: () => [first],
+        playerFactory: () => player,
+        sourceLoader: remoteSource);
     unawaited(controller.toggle(first));
     await flush();
     controller.didChangeAppLifecycleState(AppLifecycleState.inactive);

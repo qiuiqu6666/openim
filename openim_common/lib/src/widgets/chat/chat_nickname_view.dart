@@ -4,34 +4,37 @@ import 'package:openim_common/openim_common.dart';
 
 class ChatNicknameView extends StatelessWidget {
   const ChatNicknameView({
-    Key? key,
+    super.key,
     this.nickname,
     this.timeStr,
-  }) : super(key: key);
+  });
   final String? nickname;
   final String? timeStr;
 
+  static const _maxNicknameCharacters = 20;
+
   @override
   Widget build(BuildContext context) {
-    return RichText(
-      text: TextSpan(
-        text: '',
-        style: Styles.ts_8E9AB0_12sp,
+    final name = nickname ?? '';
+    final prefix = graphemePrefix(name, _maxNicknameCharacters);
+    final displayName = prefix.length < name.length ? '$prefix…' : name;
+    return Text.rich(
+      TextSpan(
         children: [
           if (null != nickname)
+            TextSpan(text: displayName, semanticsLabel: nickname),
+          if (name.isNotEmpty && timeStr?.isNotEmpty == true)
             WidgetSpan(
-              child: Container(
-                constraints: BoxConstraints(maxWidth: 100.w),
-                margin: EdgeInsets.only(right: 6.w),
-                child: nickname!.toText
-                  ..style = Styles.ts_8E9AB0_12sp
-                  ..maxLines = 1
-                  ..overflow = TextOverflow.ellipsis,
-              ),
+              child: SizedBox(width: 6.w),
             ),
           TextSpan(text: timeStr),
         ],
       ),
+      style: Styles.ts_8E9AB0_12sp,
+      // Use the message row's width; narrow screens and large text can wrap
+      // instead of introducing a second, premature layout-based truncation.
+      softWrap: true,
+      overflow: TextOverflow.visible,
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'services/authorization/sangong_access_policy.dart';
 import 'agents/halls/sangong_agent_hall_page.dart';
 import 'dart:async';
@@ -585,7 +586,7 @@ class SangongModule {
         runtime ?? SangongRuntime(current, pathPrefix: pathPrefix);
     if (runtime != null) runtime.updateContext(current);
     try {
-      await Navigator.of(context).push<void>(MaterialPageRoute(
+      await Navigator.of(context).push<void>(AppMaterialPageRoute(
           builder: (_) => SangongPrivilegeRouteGuard(
               allowAssignedAgent: agent,
               featureContext: current,

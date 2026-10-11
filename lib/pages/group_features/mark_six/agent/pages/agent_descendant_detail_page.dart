@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 // Layout adapted from 99chat agent_rebate_descendant_detail_page.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'dart:async';
@@ -67,7 +68,7 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                         tooltip: '历史记录',
                         onPressed: () {
                           if (!_state.current) return;
-                          Navigator.of(context).push(MaterialPageRoute<void>(
+                          Navigator.of(context).push(AppMaterialPageRoute<void>(
                               builder: (_) => AgentDescendantHistoryPage(
                                   featureContext: widget.featureContext,
                                   userID: widget.userID)));
@@ -197,7 +198,7 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                                                       if (!_state.current) {
                                                         return;
                                                       }
-                                                      Navigator.of(context).push(MaterialPageRoute<
+                                                      Navigator.of(context).push(AppMaterialPageRoute<
                                                               void>(
                                                           builder: (_) => AgentDescendantDetailPage(
                                                               featureContext: widget

@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:file_picker/file_picker.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -367,7 +368,7 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
 
   Future<void> _openPhone() async {
     await Navigator.of(context).push(
-      MaterialPageRoute(
+      AppMaterialPageRoute(
         builder: (_) => ChangePhonePage(
           service: widget.service,
           isBound: widget.phoneNumber.trim().isNotEmpty,

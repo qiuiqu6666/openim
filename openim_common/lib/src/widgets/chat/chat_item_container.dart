@@ -115,7 +115,6 @@ class ChatItemContainer extends StatelessWidget {
                 timeStr: timelineStr!,
                 onTap: onTapTimeline,
                 semanticLabel: timelineSemanticLabel,
-                margin: EdgeInsets.only(bottom: 20.h),
               ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,

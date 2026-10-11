@@ -57,6 +57,11 @@ class ChatFormattedText extends StatelessWidget {
         ]),
       );
   @override
-  Widget build(BuildContext context) => Text.rich(
-      TextSpan(children: spans(text, entities, Styles.ts_0C1C33_17sp)));
+  Widget build(BuildContext context) {
+    final style = Styles.ts_0C1C33_17sp.copyWith(
+      height: ChatBubbleTokens.textLineHeight,
+    );
+    return Text.rich(TextSpan(children: spans(text, entities, style)),
+        style: style);
+  }
 }

@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'dart:typed_data';
 import 'package:openim_common/openim_common.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
@@ -17,6 +18,7 @@ import '../../../services/favorite_send_coordinator.dart';
 import '../../favorites/widgets/favorite_capability_gate.dart';
 import '../../favorites/widgets/favorite_recovery_banner.dart';
 import '../../favorites/widgets/favorite_search_formatter.dart';
+import '../../favorites/widgets/favorite_swipe_delete.dart';
 import '../../favorites/favorite_p0.dart';
 import '../../favorites/media/favorite_picked_media.dart';
 import '../settings/settings_navigation.dart';
@@ -1309,6 +1311,7 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
                       disabled: _busy,
                       onTap: _openDetail,
                       onLongPress: _itemActions,
+                      onDelete: (item) => _deleteItems([item]),
                       emptyActionLabel: _text('添加收藏', 'Add favorite'),
                       onEmptyAction: _addFavorite,
                     )),
@@ -1363,6 +1366,7 @@ class FavoriteCollectionView extends StatefulWidget {
     required this.repository,
     required this.onTap,
     this.onLongPress,
+    this.onDelete,
     this.trailingBuilder,
     this.selectedIds = const {},
     this.selectionMode = false,
@@ -1376,6 +1380,7 @@ class FavoriteCollectionView extends StatefulWidget {
   final FavoriteRepository repository;
   final void Function(FavoriteItem) onTap;
   final void Function(FavoriteItem)? onLongPress;
+  final Future<void> Function(FavoriteItem)? onDelete;
   final Widget Function(FavoriteItem)? trailingBuilder;
   final Set<String> selectedIds;
   final bool selectionMode;
@@ -1616,7 +1621,33 @@ class _FavoriteCollectionViewState extends State<FavoriteCollectionView> {
     }
     return repository.loading && items.isEmpty
         ? const Center(child: CircularProgressIndicator())
-        : list;
+        : SlidableAutoCloseBehavior(child: list);
+  }
+
+  Widget _managementTile(FavoriteItem item) {
+    final tile = FavoriteItemTile(
+      key: ValueKey('favorite-${item.id}'),
+      item: item,
+      repository: widget.repository,
+      selected: widget.selectedIds.contains(item.id),
+      selectionMode: widget.selectionMode,
+      onTap: widget.disabled ? null : () => widget.onTap(item),
+      onLongPress: widget.disabled || widget.onLongPress == null
+          ? null
+          : () => widget.onLongPress!(item),
+      trailing: widget.trailingBuilder?.call(item),
+    );
+    final onDelete = widget.onDelete;
+    if (onDelete == null) return tile;
+    return FavoriteSwipeDelete(
+      key: ValueKey('favorite-swipe-${item.id}'),
+      id: item.id,
+      enabled: !widget.disabled &&
+          !widget.selectionMode &&
+          widget.repository.available,
+      onDelete: () => onDelete(item),
+      child: tile,
+    );
   }
 
   @override
@@ -1738,6 +1769,7 @@ class _FavoriteCollectionViewState extends State<FavoriteCollectionView> {
                         }
                         final date = _date(item.createdAt);
                         return Padding(
+                          key: ValueKey('favorite-row-${item.id}'),
                           padding: const EdgeInsets.fromLTRB(
                               AppTokens.s4, 0, AppTokens.s4, AppTokens.s4),
                           child: Column(
@@ -1755,22 +1787,7 @@ class _FavoriteCollectionViewState extends State<FavoriteCollectionView> {
                                           style: TextStyle(
                                               color: settingsSecondaryTextColor(
                                                   context)))),
-                                FavoriteItemTile(
-                                  key: ValueKey('favorite-${item.id}'),
-                                  item: item,
-                                  repository: widget.repository,
-                                  selected:
-                                      widget.selectedIds.contains(item.id),
-                                  selectionMode: widget.selectionMode,
-                                  onTap: widget.disabled
-                                      ? null
-                                      : () => widget.onTap(item),
-                                  onLongPress: widget.disabled ||
-                                          widget.onLongPress == null
-                                      ? null
-                                      : () => widget.onLongPress!(item),
-                                  trailing: widget.trailingBuilder?.call(item),
-                                ),
+                                _managementTile(item),
                               ]),
                         );
                       },

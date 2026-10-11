@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_swipe_back_tokens.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -251,6 +252,7 @@ class _GroupLiveWatchSurfaceState extends State<GroupLiveWatchSurface>
     final navigator = Navigator.of(context, rootNavigator: true);
     _holdFullscreenHandoff(state);
     final route = MaterialPageRoute<void>(
+      settings: const RouteSettings(name: AppSwipeBackTokens.mediaRouteName),
       builder: (_) => LiveFullscreenPage(
         state: state,
         onPopped: () => _holdFullscreenHandoff(state),

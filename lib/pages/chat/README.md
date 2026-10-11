@@ -1,6 +1,6 @@
 # 聊天模块维护入口
 
-普通消息气泡默认显示 Markdown，文字源、格式解析和主题样式集中在公共包 [Markdown 气泡模块](../../../openim_common/lib/src/widgets/chat/markdown/README.md)。消息行继续通过已有匹配回调打开链接和成员资料，复制保留 Markdown 源文本；发送、草稿、历史及转发继续使用原 SDK 消息。
+普通消息气泡按普通文字显示，不自动识别标题、加粗等 Markdown 格式；文字源、格式化消息的解析和主题样式集中在公共包 [文字与 Markdown 气泡模块](../../../openim_common/lib/src/widgets/chat/markdown/README.md)。消息行继续通过已有匹配回调打开链接和成员资料，复制保留原始文本和换行；发送、草稿、历史及转发继续使用原 SDK 消息。
 
 聊天按功能组织，页面入口仍为 `chat_view.dart`、`chat_logic.dart`、`chat_binding.dart`，原有路由和 GetX 标签保持兼容。
 

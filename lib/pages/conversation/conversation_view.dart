@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import '../mine/settings/widgets/settings_widgets.dart' show showSettingsConfirm;
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -122,6 +123,10 @@ class _ConversationPageState extends State<ConversationPage> {
   }
 
   Future<void> _toggleEditing() async {
+    if (_editor.editing) {
+      _editor.toggleEditing();
+      return;
+    }
     if (_switchingEditing || _folders.busy || !logic.isSessionActive) return;
     _switchingEditing = true;
     try {
@@ -449,7 +454,7 @@ class _ConversationPageState extends State<ConversationPage> {
       color: ConversationFeedStyle.background(context),
       child: InkWell(
         onTap: () => Navigator.of(context, rootNavigator: true)
-            .push(MaterialPageRoute<void>(
+            .push(AppMaterialPageRoute<void>(
           builder: (_) =>
               ArchivedConversationPage(groupChats: widget.groupChats),
         )),

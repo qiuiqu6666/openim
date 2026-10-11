@@ -78,6 +78,10 @@ class _MentionNavigationFixture {
         home: const Scaffold(body: Text('Chat')),
         getPages: [
           GetPage<dynamic>(
+            name: AppRoutes.myProfile,
+            page: () => const Scaffold(body: Text('My profile')),
+          ),
+          GetPage<dynamic>(
             name: AppRoutes.userProfilePanel,
             page: () {
               usersOpened.add(Map<String, dynamic>.from(Get.arguments as Map));
@@ -196,6 +200,21 @@ void main() {
     expect(fixture.nativeCalls.map((call) => call.method),
         isNot(contains('getUsersInfo')));
     expect(find.text('mentionIdNotFound'.tr), findsOneWidget);
+  });
+
+  testWidgets('own public @account resolves to own editable profile',
+      (tester) async {
+    transport.users = [
+      {'userID': 'self', 'account': 'myaccount9', 'nickname': 'Group name'},
+    ];
+    await fixture.mount(tester);
+    await fixture.search(tester, '@myaccount9');
+    expect(Get.currentRoute, AppRoutes.myProfile);
+    expect(find.text('My profile'), findsOneWidget);
+    expect(fixture.usersOpened, isEmpty);
+    expect(fixture.groupsOpened, isEmpty);
+    expect(fixture.nativeCalls.where((call) => call.method == 'getUsersInfo'),
+        isEmpty);
   });
 
   for (final userID in [null, '', '   ']) {

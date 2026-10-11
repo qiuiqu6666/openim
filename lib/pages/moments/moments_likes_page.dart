@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -287,7 +288,7 @@ class _MomentsLikesPageState extends State<MomentsLikesPage> {
 Future<void> openMomentsLikes(
         BuildContext context, MomentsRepository repository, String momentId,
         {ValueChanged<MomentUser>? onOpenAuthor}) =>
-    Navigator.of(context).push<void>(MaterialPageRoute(
+    Navigator.of(context).push<void>(AppMaterialPageRoute(
         builder: (_) => MomentsLikesPage(
             repository: repository,
             momentId: momentId,

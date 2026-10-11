@@ -10,4 +10,6 @@
 
 初次本地快照为空或读取失败时，普通登录的同步完成也必须重新读取 SDK 列表，不能仅在 `reInstall=true` 时读取。连续重复的同步完成回调不重复扫描；新的同步周期仍刷新。重连成功、回到前台时只对失败且没有正在读取的列表重试，继续遵守账号、token 和请求代次隔离。失败保留已显示会话，加载期间的实时变化仍合并到最新快照。产品行为参考 99Chat `conversation_sync_service.dart` 的同步结束恢复与重复结束事件抑制，保留本项目 OpenIM/GetX 数据链路。
 
+未读的跨设备校准另由 [会话未读模块](../unread/README.md) 处理：SDK 总未读失配、正常前台恢复或真实重连时合并校准，继续使用本页的分页读取与增量合并，不新增轮询。
+
 `test/pages/conversation/conversation_startup_recovery_test.dart` 覆盖普通同步恢复、结束事件先于页面构建、旧首屏响应、实时增量、重复结束、重连/前台重试及账号切换。Android 大列表的 `read-only file system` 则由原生 `io/openim/storage/OpenIMApplication` 的 SQLite 临时目录配置修复；客户端重试本身不能修复错误的文件路径。

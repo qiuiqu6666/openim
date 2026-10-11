@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<void> mountRecentCalls(WidgetTester tester, Widget page,
     {bool dark = false,
     Size size = const Size(375, 812),
+    String? fontFamily,
     double textScale = 1}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -25,6 +26,7 @@ Future<void> mountRecentCalls(WidgetTester tester, Widget page,
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: ThemeData(
+        fontFamily: fontFamily,
         brightness: dark ? Brightness.dark : Brightness.light,
         platform: TargetPlatform.iOS,
       ),

@@ -3,6 +3,7 @@ import 'package:openim_common/openim_common.dart';
 
 /// Ledger float values from 99chat d7c3c65's user profile ledger entry.
 abstract final class SangongProfileLedgerTokens {
+  static const sheetRadius = 16.0;
   static const size = Size(58, 58);
   static const fontSize = 24.0;
   static const fontWeight = FontWeight.w600;

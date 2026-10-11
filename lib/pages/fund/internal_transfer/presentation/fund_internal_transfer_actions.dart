@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -65,7 +66,7 @@ Future<FundTransferAccountType?> showFundTransferAccountTypes(
 
 Future<String?> chooseFundTransferAreaCode(
         BuildContext context, String selectedCode) =>
-    Navigator.of(context).push<String>(MaterialPageRoute(
+    Navigator.of(context).push<String>(AppMaterialPageRoute(
         builder: (_) => CountryCodePage(selectedCode: selectedCode)));
 
 Future<void> showFundInternalTransferHelp(BuildContext context) =>
@@ -86,5 +87,5 @@ Future<void> showFundInternalTransferHelp(BuildContext context) =>
 
 Future<void> openFundInternalTransferHistory(
         BuildContext context, FundCurrency currency) =>
-    Navigator.of(context).push<void>(MaterialPageRoute(
+    Navigator.of(context).push<void>(AppMaterialPageRoute(
         builder: (_) => WalletRecordScreen(initialCoin: currency.code)));

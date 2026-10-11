@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -95,7 +96,7 @@ class _AccountSecurityPageState extends State<AccountSecurityPage> {
   Future<bool> _openTradePassword(BuildContext context) async {
     if (!_ready) return false;
     final result = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
+      AppMaterialPageRoute(
         settings: const RouteSettings(name: '/pay_password'),
         builder: (_) => _tradePasswordSet
             ? ChangeTradePasswordPage(

@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:common_utils/common_utils.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -165,7 +166,7 @@ class UserProfilePanelPage extends StatelessWidget {
                                       return;
                                     }
                                     Navigator.of(context).push<void>(
-                                      MaterialPageRoute(
+                                      AppMaterialPageRoute(
                                         builder: (_) => MomentsPage(
                                           repository: momentsRepository,
                                           authorId: user.userID,

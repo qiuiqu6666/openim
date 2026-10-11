@@ -135,17 +135,18 @@ void main() {
       final widget = tester.widget<ExtendedImage>(find.byType(ExtendedImage));
       final decoded = (await tester.runAsync(() => _decode(widget.image)))!;
       final displayed = tester.getSize(find.byType(ChatPictureView));
-      expect(displayed, const Size(120, 200));
-      expect(decoded.width, (120 * dpr).toInt());
-      expect(decoded.height, (1440 * dpr).toInt());
+      expect(displayed.width, 90);
+      expect(displayed.height, closeTo(90 * 5 / 3, .01));
+      expect(decoded.width, (90 * dpr).toInt());
+      expect(decoded.height, (1080 * dpr).toInt());
 
       // The old square decode discarded 11/12 of the horizontal detail.
       final old = ImageUtil.fileImage(
           file: longPhoto,
-          width: 120,
-          height: 120,
-          cacheWidth: (120 * dpr).toInt(),
-          cacheHeight: (120 * dpr).toInt(),
+          width: 90,
+          height: 90,
+          cacheWidth: (90 * dpr).toInt(),
+          cacheHeight: (90 * dpr).toInt(),
           resizePolicy: ResizeImagePolicy.fit) as ExtendedImage;
       final blurred = (await tester.runAsync(() => _decode(old.image)))!;
       expect(decoded.width, greaterThanOrEqualTo(blurred.width * 11));

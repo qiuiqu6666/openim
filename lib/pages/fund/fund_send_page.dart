@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 // Adapted from qiuiqu6666/99chat, revision d7c3c65 (Apache-2.0).
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -443,7 +444,7 @@ class _FundSendPageState extends State<FundSendPage>
         selection = widget.transferFriendPicker!(context);
       } else {
         selection = Navigator.of(context).push<FundTransferRecipient>(
-            MaterialPageRoute(
+            AppMaterialPageRoute(
                 builder: (_) => const FundTransferFriendPicker()));
       }
       final recipient = await selection;
@@ -602,7 +603,7 @@ class _FundSendPageState extends State<FundSendPage>
   }
 
   Future<void> _pickRecipient() async {
-    final member = await Navigator.of(context).push(MaterialPageRoute(
+    final member = await Navigator.of(context).push(AppMaterialPageRoute(
         builder: (_) => FundRecipientPicker(groupID: widget.groupID!)));
     if (!mounted || member == null || !_sameAccount) return;
     setState(() {
@@ -615,7 +616,7 @@ class _FundSendPageState extends State<FundSendPage>
   }
 
   Future<void> _setPassword() async {
-    await Navigator.of(context).push<bool>(MaterialPageRoute(
+    await Navigator.of(context).push<bool>(AppMaterialPageRoute(
         builder: (_) => TradePasswordPage(service: _settings)));
     if (mounted && _sameAccount) await _load();
   }

@@ -39,12 +39,19 @@ class ChatMessageNavigation {
   }
 
   void onTapRightAvatar() {
-    viewUserInfo(OpenIM.iMManager.userInfo);
+    viewUserInfo(UserInfo(userID: OpenIM.iMManager.userID));
   }
 
   void viewUserInfo(UserInfo userInfo,
       {bool isCard = false, String? inviteCode}) {
     if (isClosed) return;
+    final userID = userInfo.userID;
+    if (userID == null || userID.isEmpty) return;
+    // Group member privacy never prevents the owner from viewing themselves.
+    if (AppNavigator.isCurrentUser(userID)) {
+      AppNavigator.startUserProfilePane(userID: userID);
+      return;
+    }
     if (isGroupChat && !isAdminOrOwner && !isCard) {
       // Until group metadata arrives, member-profile permission is unknown.
       // A later click re-evaluates the loaded policy rather than bypassing it.
@@ -81,6 +88,8 @@ class ChatMessageNavigation {
   }
 
   Future<void> searchMentionID(String id) async {
+    if (isClosed) return;
+    final owner = (OpenIM.iMManager.userID, DataSp.imToken);
     final candidates = mentionIDCandidates(id.trim());
     if (candidates.first.isEmpty) return;
     final results = await LoadingView.singleton.wrap(asyncFunction: () async {
@@ -88,7 +97,7 @@ class ChatMessageNavigation {
       final groupsFuture = _findMentionGroups(candidates);
       return (await usersFuture, await groupsFuture);
     });
-    if (isClosed) return;
+    if (isClosed || owner != (OpenIM.iMManager.userID, DataSp.imToken)) return;
 
     final user = results.$1
         .firstWhereOrNull((item) => _matchesMentionUser(item, candidates));

@@ -14,6 +14,7 @@ import 'sangong_profile_panel.dart';
 import 'sangong_profile_ledger.dart';
 import 'sangong_profile_admin_tokens.dart';
 import 'sangong_profile_ledger_floating_entry.dart';
+import 'sangong_profile_ledger_tokens.dart';
 import 'sangong_profile_ledger_unavailable.dart';
 import '../widgets/authorization/privilege_route_guard.dart';
 
@@ -393,7 +394,8 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
             final ledger = canManage
                 ? SangongProfileLedger(
                     key: ValueKey('${runtime!.preferenceKey}:${widget.userID}'),
-                    userID: widget.userID)
+                    userID: widget.userID,
+                    embedded: true)
                 : const SizedBox.shrink();
             final sideBody = constraints.maxHeight >= 600
                 ? Column(
@@ -468,7 +470,11 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
       final choice = await showModalBottomSheet<SangongProfileLedgerChoice>(
           context: context,
           isScrollControlled: true,
-          backgroundColor: Colors.transparent,
+          backgroundColor: AppTokens.surface(
+              dark: Theme.of(context).brightness == Brightness.dark),
+          shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(SangongProfileLedgerTokens.sheetRadius))),
           barrierColor: const Color(0xFF000000).withValues(alpha: .45),
           builder: (context) => SangongPrivilegeRouteGuard.account(
               privilege: store.accountPrivilege,
@@ -483,7 +489,8 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
                       height: MediaQuery.sizeOf(context).height * .82,
                       child: ClipRRect(
                           borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(16)),
+                              top: Radius.circular(
+                                  SangongProfileLedgerTokens.sheetRadius)),
                           child: SangongProfileLedgerUnavailable(
                               groups: List.unmodifiable(_groups),
                               selectedGroupID: _selected,
@@ -505,7 +512,11 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
     return showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppTokens.surface(
+            dark: Theme.of(context).brightness == Brightness.dark),
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(
+                top: Radius.circular(SangongProfileLedgerTokens.sheetRadius))),
         barrierColor: const Color(0xFF000000).withValues(alpha: .45),
         builder: (context) => SangongPrivilegeRouteGuard(
             featureContext: runtime.featureContext,
@@ -522,7 +533,8 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
                     height: MediaQuery.sizeOf(context).height * .82,
                     child: ClipRRect(
                         borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16)),
+                            top: Radius.circular(
+                                SangongProfileLedgerTokens.sheetRadius)),
                         child: SangongScope(
                             runtime: runtime,
                             child: SangongProfileLedger(userID: target)))))));

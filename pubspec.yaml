@@ -170,6 +170,7 @@ flutter:
     - assets/images/
     - assets/ai/
     - assets/img/
+    - lib/pages/mine/secondary/calls/assets/
     - assets/wallet.png
     - lib/pages/chat/messages/selection/assets/
     - lib/pages/chat/stickers/builtin/assets/4351/

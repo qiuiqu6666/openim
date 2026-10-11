@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/auth/auth_copy.dart';
@@ -103,7 +104,7 @@ class RegisterAgreement extends StatelessWidget {
             Text(authText('注册代表同意', 'By registering, you agree to'),
                 style: style),
             GestureDetector(
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              onTap: () => Navigator.of(context).push(AppMaterialPageRoute<void>(
                   builder: (_) =>
                       const LegalDocumentPage(kind: LegalDocumentKind.terms))),
               child: Padding(

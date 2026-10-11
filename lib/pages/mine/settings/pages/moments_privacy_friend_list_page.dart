@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -55,7 +56,7 @@ class MomentsPrivacyFriendListPage extends StatelessWidget {
 
   Future<void> _add(BuildContext context) async {
     final picked = await Navigator.of(context).push<List<SettingsContactDraft>>(
-      MaterialPageRoute(
+      AppMaterialPageRoute(
         builder: (_) => MomentsFriendPickerPage(
           title: settingsText(context, zh: '选择朋友', en: 'Select Friends'),
           initialSelectedIds: _entries.keys.toList(growable: false),

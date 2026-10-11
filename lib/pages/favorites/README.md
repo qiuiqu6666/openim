@@ -8,6 +8,8 @@
 
 `widgets/favorite_conflict_review_dialog.dart` 让用户审阅服务器最新正文并保留自己的编辑；审阅不保存，下一次点击完成才按最新版本提交，成功后才清理已确定的旧冲突记录。`widgets/favorite_note_byte_formatter.dart` 按 64 KiB UTF-8 限制笔记输入与提交，原有长正文不会被字符数上限截断。
 
+`widgets/favorite_swipe_delete.dart` 为正式收藏管理条目提供从左往右滑出的删除按钮，复用现有 `flutter_slidable` 与主题色。99chat 原版收藏使用左滑移除；本次按用户要求采用右滑显示按钮，再调用管理页原有 `_deleteItems` 确认与仓储删除流程。界面不提前移除条目，失败/版本冲突保留内容及原有重试选择；编辑或请求中关闭滑动，同时只展开一条。每条记录拥有独立控制器和稳定 key，编辑时的关闭在帧后执行，避免跨条目通知打断构建。聊天发送选择器不提供删除入口，左边缘仍交给原页面返回手势。测试见 `test/pages/favorites/favorite_swipe_delete_test.dart`，不操作真实收藏。
+
 `media/favorite_picked_media.dart` 从所选原件文件头及实际文件名取得上传 MIME，保留原文件路径；服务端负责最终解码。管理与详情遇到删除版本冲突后先读取最新内容，读取失败时保留选择并阻止再次提交旧版本。预览只展示脱敏错误，不重写授权 URL。
 
 聊天适配位于 `../chat/favorites/`。现有管理、详情和笔记编辑暂保留 `../mine/secondary/` 路径，本轮只做 P0 协议与能力门禁局部修正，避免和聊天拆分及服务协议改造交叉迁移；后续分别迁移公共列表、详情及编辑职责。

@@ -312,7 +312,8 @@ class _ChatVoiceMessageViewState extends State<ChatVoiceMessageView> {
         } else {
           final url = sound.sourceUrl;
           if (url == null || url.isEmpty) return <double>[];
-          audio = await DefaultCacheManager().getSingleFile(url);
+          audio = await DefaultCacheManager().getSingleFile(
+              OpenIMMediaUrl.resolve(url, imApiUrl: Config.imApiUrl));
         }
         final output = File('${directory.path}/$name.wave');
         try {

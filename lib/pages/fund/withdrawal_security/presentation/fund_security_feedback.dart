@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -58,7 +59,7 @@ Future<void> showFundSecurityFailure(BuildContext context, Object error,
   );
   if (!context.mounted || !isCurrent()) return;
   if (recovery == _Recovery.bindPhone && Get.isRegistered<IMController>()) {
-    await Navigator.of(context).push<bool>(MaterialPageRoute(
+    await Navigator.of(context).push<bool>(AppMaterialPageRoute(
         builder: (_) => ChangePhonePage(
             service: OpenIMProfileService(Get.find<IMController>()))));
   } else if (recovery == _Recovery.signIn && Get.isRegistered<HomeLogic>()) {

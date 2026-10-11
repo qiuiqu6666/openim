@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/moments_repository.dart';
@@ -40,7 +41,7 @@ Future<void> changeMomentVisibility(
   if (!post.canEditVisibility) return;
   final selection =
       await Navigator.of(context).push<MomentsVisibilitySelection>(
-    MaterialPageRoute(
+    AppMaterialPageRoute(
         builder: (_) => MomentsVisibilityPage(
             repository: repository,
             initialSelection: MomentsVisibilitySelection(

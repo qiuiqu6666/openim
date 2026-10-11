@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'services/authorization/sangong_access_policy.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -403,7 +404,7 @@ class SangongScope extends InheritedNotifier<SangongRuntime> {
 }
 
 /// Captures the scoped APIs across Navigator routes, including initState.
-class SangongPageRoute<T> extends MaterialPageRoute<T> {
+class SangongPageRoute<T> extends AppMaterialPageRoute<T> {
   SangongPageRoute(
       {required BuildContext context,
       required WidgetBuilder builder,

@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
@@ -115,7 +116,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
                             onOpenTerms: () {
                               FocusScope.of(context).unfocus();
                               Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
+                                  AppMaterialPageRoute<void>(
                                       builder: (_) => const LegalDocumentPage(
                                           kind: LegalDocumentKind.terms)));
                             },

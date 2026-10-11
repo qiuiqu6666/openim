@@ -3,7 +3,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'conversation_read_request.dart';
 
 /// Keeps successful read targets across late SDK events and list snapshots.
-/// It never acknowledges a different message or an increased unread count.
+/// Only a reconciled SDK zero can clear an increased count for the same target.
 class ConversationReadProjection {
   static const _conversationLimit = 256;
   static const _targetsPerConversation = 8;
@@ -32,7 +32,7 @@ class ConversationReadProjection {
   }
 
   ConversationInfo project(ConversationInfo incoming,
-      {ConversationInfo? current}) {
+      {ConversationInfo? current, bool authoritativeUnread = false}) {
     final targets = _confirmed[incoming.conversationID];
     if (targets == null) return incoming;
     ConversationReadRequest? covering;
@@ -49,7 +49,8 @@ class ConversationReadProjection {
     // message already shown by the list, including distinct same-time IDs.
     if (current != null &&
         (_sameTarget(current, incoming)
-            ? current.unreadCount > covering.unreadCount
+            ? current.unreadCount > covering.unreadCount &&
+                !(authoritativeUnread && incoming.unreadCount == 0)
             : !covering.followsPreview(current) &&
                 _mayBeNewer(current, incoming))) {
       return current;

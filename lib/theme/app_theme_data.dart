@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:openim_common/openim_common.dart';
+import '../routes/swipe_back/app_page_transitions_theme.dart';
 
 ThemeData buildAppThemeData(Brightness brightness) {
   final dark = brightness == Brightness.dark;
@@ -16,6 +17,7 @@ ThemeData buildAppThemeData(Brightness brightness) {
         .copyWith(onSurface: foreground),
   );
   return base.copyWith(
+    pageTransitionsTheme: appPageTransitionsTheme,
     scaffoldBackgroundColor:
         dark ? const Color(0xFF141D27) : const Color(0xFFF8F9FA),
     canvasColor: surface,

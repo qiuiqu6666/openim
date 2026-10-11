@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_swipe_back_tokens.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -389,6 +390,7 @@ Future<void> openMomentsMedia(BuildContext context,
     MomentsRepository repository, MomentPost post, int index) async {
   if (index < 0 || index >= post.mediaList.length) return;
   await Navigator.of(context).push<void>(MaterialPageRoute(
+      settings: const RouteSettings(name: AppSwipeBackTokens.mediaRouteName),
       builder: (_) => MomentsMediaPreview(
           repository: repository, post: post, initialIndex: index)));
 }

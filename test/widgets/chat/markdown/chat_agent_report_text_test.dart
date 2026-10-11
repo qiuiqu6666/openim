@@ -26,14 +26,14 @@ void main() {
       expect(chatMessageTextSource(message), text);
     }
   });
-  test('ordinary headings and incomplete reports retain Markdown', () {
+  test('ordinary headings and incomplete reports also remain literal', () {
     for (final text in ['# 标题\n正文', '统计\n====\n流水:0', '#0：一级数量：1']) {
       expect(isChatAgentReportText(text), isFalse);
       expect(
           chatMessageAllowsMarkdown(Message(
               contentType: MessageType.text,
               textElem: TextElem(content: text))),
-          isTrue);
+          isFalse);
     }
   });
 }

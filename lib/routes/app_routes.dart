@@ -21,6 +21,7 @@ abstract class AppRoutes {
   static const sendVerificationApplication = '/send_verification_application';
   static const groupProfilePanel = '/group_profile_panel';
   static const myInfo = '/my_info';
+  static const myProfile = '/my_profile';
   static const editMyInfo = '/edit_my_info';
   static const accountSetup = '/account_setup';
   static const blacklist = '/blacklist';

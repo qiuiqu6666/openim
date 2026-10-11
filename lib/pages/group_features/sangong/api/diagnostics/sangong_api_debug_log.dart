@@ -16,6 +16,11 @@ class SangongApiDebugLog implements GroupFeatureApiDiagnostics {
   static T trace<T>(T Function() action) =>
       kDebugMode ? withGroupFeatureDiagnostics(action, create) : action();
 
+  /// Records application parsing and lifecycle stages with the same safeguards
+  /// as transport diagnostics; this never affects the operation being logged.
+  void onApplicationEvent(String stage, Map<String, dynamic> data) =>
+      _emit(stage, data);
+
   /// Records the parsed permission and raw fields when no API is dispatched.
   static void permissionDenied(GroupFeatureContext context, String reason,
       {String? logicalTenantId, Map<String, dynamic>? config}) {

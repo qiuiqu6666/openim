@@ -162,6 +162,11 @@ class AppNavigator {
     bool offAndToNamed = false,
     bool forceCanAdd = false,
   }) async {
+    if (isCurrentUser(userID)) {
+      return offAndToNamed
+          ? Get.offAndToNamed(AppRoutes.myProfile)
+          : Get.toNamed(AppRoutes.myProfile);
+    }
     final owner = (OpenIM.iMManager.userID, DataSp.imToken);
     final resolution = await _resolveProfileTarget(userID, ex: ex);
     if (owner != (OpenIM.iMManager.userID, DataSp.imToken)) return null;
@@ -190,6 +195,10 @@ class AppNavigator {
             preventDuplicates: false,
           );
   }
+
+  /// SDK IDs are opaque; public @accounts must be resolved before this check.
+  static bool isCurrentUser(String? userID) =>
+      userID != null && userID.isNotEmpty && userID == OpenIM.iMManager.userID;
 
   static Future<dynamic> startPersonalInfo({
     required String userID,

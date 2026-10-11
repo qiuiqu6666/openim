@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -164,7 +165,7 @@ class _MomentsPageState extends State<MomentsPage> {
 
   Future<void> _compose() async {
     final result = await Navigator.of(context).push<MomentPost>(
-        MaterialPageRoute(
+        AppMaterialPageRoute(
             builder: (_) => MomentsComposePage(
                 repository: _repository,
                 displayName: widget.profileUser?.displayName,
@@ -173,19 +174,19 @@ class _MomentsPageState extends State<MomentsPage> {
   }
 
   void _author(MomentUser author) =>
-      Navigator.of(context).push<void>(MaterialPageRoute(
+      Navigator.of(context).push<void>(AppMaterialPageRoute(
           builder: (_) => MomentsPage(
               repository: _repository,
               authorId: author.userId,
               profileUser: author)));
   Future<void> _detail(String id) =>
-      Navigator.of(context).push<void>(MaterialPageRoute(
+      Navigator.of(context).push<void>(AppMaterialPageRoute(
           builder: (_) => MomentsDetailPage(
               repository: _repository, momentId: id, onOpenAuthor: _author)));
   Future<void> _settings() async {
     final previous = _repository.settings;
     final permissions = _repository.authorizationScope;
-    await Navigator.of(context).push<void>(MaterialPageRoute(
+    await Navigator.of(context).push<void>(AppMaterialPageRoute(
         builder: (_) => MomentsSettingsPage(repository: _repository)));
     if (!_current || _state.loading) return;
     final settings = _repository.settings;
@@ -198,7 +199,7 @@ class _MomentsPageState extends State<MomentsPage> {
   }
 
   Future<void> _cover() async {
-    final saved = await Navigator.of(context).push<bool>(MaterialPageRoute(
+    final saved = await Navigator.of(context).push<bool>(AppMaterialPageRoute(
         builder: (_) => MomentsCoverPage(repository: _repository)));
     if (saved == true && _current && !_state.loading) await _load();
   }
@@ -463,7 +464,7 @@ class _MomentsPageState extends State<MomentsPage> {
         onProfile: _feed ? () => _author(_profile) : null,
         onCompose: _own ? _compose : null,
         onNotifications: _own
-            ? () => Navigator.of(context).push<void>(MaterialPageRoute(
+            ? () => Navigator.of(context).push<void>(AppMaterialPageRoute(
                 builder: (_) => MomentsNotificationsPage(
                     repository: _repository, onOpenMoment: _detail)))
             : null,

@@ -33,6 +33,10 @@ class _Profiles {
       home: const Scaffold(body: Text('Chat')),
       getPages: [
         GetPage<dynamic>(
+          name: AppRoutes.myProfile,
+          page: () => const Scaffold(body: Text('My profile')),
+        ),
+        GetPage<dynamic>(
           name: AppRoutes.userProfilePanel,
           page: () {
             opened.add(Map<String, dynamic>.from(Get.arguments as Map));
@@ -121,6 +125,51 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(profiles.opened, isEmpty);
+  });
+
+  for (final private in [false, true]) {
+    for (final entry in ['mention', 'avatar', 'card']) {
+      testWidgets(
+          'self $entry opens own profile with ${private ? 'private' : 'unknown'} group permissions',
+          (tester) async {
+        final profiles = _Profiles();
+        if (private) {
+          profiles.group = GroupInfo(groupID: 'group', lookMemberInfo: 1);
+        }
+        await profiles.mount(tester);
+        if (entry == 'avatar') {
+          // The logged-in SDK ID is authoritative even before userInfo loads.
+          OpenIM.iMManager.userInfo = UserInfo();
+          profiles.navigation.onTapRightAvatar();
+        } else {
+          profiles.navigation.viewUserInfo(
+            UserInfo(userID: 'self', nickname: 'My group nickname'),
+            isCard: entry == 'card',
+          );
+        }
+        await tester.pumpAndSettle();
+        expect(Get.currentRoute, AppRoutes.myProfile);
+        expect(find.text('My profile'), findsOneWidget);
+        expect(profiles.opened, isEmpty);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('self avatar cannot open a closed chat or an empty account',
+      (tester) async {
+    final profiles = _Profiles()..closed = true;
+    await profiles.mount(tester);
+    profiles.navigation.onTapRightAvatar();
+    await tester.pumpAndSettle();
+    expect(find.text('My profile'), findsNothing);
+    profiles.closed = false;
+    OpenIM.iMManager.userID = '';
+    profiles.navigation.onTapRightAvatar();
+    await tester.pumpAndSettle();
+    expect(find.text('My profile'), findsNothing);
+    expect(profiles.opened, isEmpty);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('known administrator retains profile access while info loads',

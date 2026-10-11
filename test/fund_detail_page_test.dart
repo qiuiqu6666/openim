@@ -1380,22 +1380,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('system route pop returns the latest server order',
-      (tester) async {
-    final navigator = GlobalKey<NavigatorState>();
-    final serverOrder = _order(status: 'refunded');
-    final api = _FakeFundApi(load: (_) async => serverOrder);
-    await tester.pumpWidget(_host(const SizedBox(), navigatorKey: navigator));
-    final result = navigator.currentState!.push<FundOrder>(FundDetailRoute(
-      message: _message(),
-      api: api,
-      currentUserID: 'me',
-    ));
-    await tester.pumpAndSettle();
-    navigator.currentState!.pop();
-    await tester.pumpAndSettle();
-    expect(await result, same(serverOrder));
-  });
+  for (final gestureBack in [false, true]) {
+    testWidgets('${gestureBack ? 'gesture' : 'system'} route pop returns the latest server order',
+        (tester) async {
+      final navigator = GlobalKey<NavigatorState>();
+      final serverOrder = _order(status: 'refunded');
+      final api = _FakeFundApi(load: (_) async => serverOrder);
+      await tester.pumpWidget(_host(const SizedBox(), navigatorKey: navigator));
+      final result = navigator.currentState!.push<FundOrder>(FundDetailRoute(
+        message: _message(),
+        api: api,
+        currentUserID: 'me',
+      ));
+      await tester.pumpAndSettle();
+      if (gestureBack) {
+        final gesture = await tester.startGesture(const Offset(80, 300));
+        await gesture.moveBy(const Offset(180, 0),
+            timeStamp: const Duration(milliseconds: 800));
+        await tester.pump();
+        await gesture.up();
+      } else {
+        navigator.currentState!.pop();
+      }
+      await tester.pumpAndSettle();
+      expect(await result, same(serverOrder));
+    });
+  }
+
 
   for (final closeFromScrim in [false, true]) {
     testWidgets(

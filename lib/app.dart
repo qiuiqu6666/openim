@@ -8,12 +8,14 @@ import 'core/controller/im_controller.dart';
 import 'core/controller/app_controller.dart';
 import 'core/user_activity/activity_runtime.dart';
 import 'routes/app_pages.dart';
+import 'routes/swipe_back/app_get_transition.dart';
+import 'routes/swipe_back/app_swipe_back_tokens.dart';
 import 'theme/app_theme_controller.dart';
 import 'theme/app_theme_data.dart';
 import 'widgets/app_view.dart';
 
 class ChatApp extends StatelessWidget {
-  const ChatApp({Key? key}) : super(key: key);
+  const ChatApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +48,9 @@ class ChatApp extends StatelessWidget {
           },
           supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
           getPages: AppPages.routes,
+          customTransition: AppGetTransition(),
+          popGesture: false,
+          transitionDuration: AppSwipeBackTokens.transitionDuration,
           initialBinding: InitBinding(),
           initialRoute: AppRoutes.splash,
           theme: buildAppThemeData(Brightness.light),

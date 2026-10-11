@@ -1,3 +1,4 @@
+import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -21,7 +22,7 @@ Future<AiAssistantCardRef?> pickAiCard(
   final token = DataSp.imToken;
   if (owner.isEmpty || token == null || token.isEmpty) return null;
   final result = await Navigator.of(context).push<AiAssistantCardRef>(
-    MaterialPageRoute(
+    AppMaterialPageRoute(
       fullscreenDialog: true,
       builder: (_) => _AiCardPicker(kind: kind, owner: owner, token: token),
     ),
