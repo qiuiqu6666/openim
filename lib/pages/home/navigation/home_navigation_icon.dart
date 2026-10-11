@@ -25,7 +25,6 @@ class HomeNavigationIcon extends StatelessWidget {
               child: IgnorePointer(
                 child: UnreadCountView.compact(
                   count: count,
-                  borderColor: NavigationGlassTokens.backgroundColor(context),
                 ),
               ),
             ),

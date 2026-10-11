@@ -21,7 +21,7 @@
 
 ## 未读角标（2026-10-11）
 
-`home_navigation_icon.dart` 复用公共 `UnreadCountView.compact`，提供固定图标框和右上角锚点。角标按内容向外展开，避免两位数挤入小圆或 `99+` 向左遮住图标。参考 99chat `UnreadMessage` 的内容宽度胶囊，使用统一 16 高度、10 号半粗数字、语义红色和随主题变化的细描边，去掉原角标的扩散阴影。公共默认角标样式保留；未读汇总、免打扰过滤、选中状态及点击行为继续使用原逻辑。
+`home_navigation_icon.dart` 复用公共 `UnreadCountView.compact`，提供固定图标框和右上角锚点。角标按内容向外展开，避免两位数挤入小圆或 `99+` 向左遮住图标。参考 99chat `UnreadMessage` 的内容宽度胶囊，使用统一 16 高度、10 号半粗数字、原有角标红色（#FF381F），不添加描边，去掉原角标的扩散阴影。公共默认角标样式保留；未读汇总、免打扰过滤、选中状态及点击行为继续使用原逻辑。
 
 生产组件亮暗预览：`build/nav-badge-preview.png`（样例数量）；真实首页未读及导航回归沿用 `home_unread_badge_test.dart` 和 `glass_bottom_nav_bar_test.dart`。
 

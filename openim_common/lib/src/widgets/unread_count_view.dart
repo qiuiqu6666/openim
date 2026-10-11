@@ -63,7 +63,7 @@ class UnreadCountView extends StatelessWidget {
 
   Decoration get _decoration => _compact
       ? BoxDecoration(
-          color: AppTokens.danger,
+          color: Styles.c_FF381F,
           borderRadius: BorderRadius.circular(size / 2),
           border: borderColor == null
               ? null
