@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/group_features/data/group_feature_api.dart';
+import 'package:openim/pages/group_features/sangong/identity/widgets/sangong_identity_view.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_admin_layout.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_admin_panel.dart';
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'package:openim/pages/group_features/sangong/utils/sangong_banker_setup_input.dart';
+import 'package:openim_common/openim_common.dart';
 import '../sangong_test_support.dart';
 
 Map<String, dynamic> _session({bool member = false, String banker = 'other'}) =>
@@ -36,7 +39,8 @@ Map<String, dynamic> _session({bool member = false, String banker = 'other'}) =>
       }
     };
 
-dynamic _readResponse(SangongCall call) {
+dynamic _readResponse(SangongCall call,
+    {Map<String, dynamic>? parent = const {'nickname': '上级甲'}}) {
   if (call.path.endsWith('/reports/users')) {
     return {
       'users': [
@@ -62,7 +66,7 @@ dynamic _readResponse(SangongCall call) {
         'balance': 420,
         'rebatePer10000': 8
       },
-      'parent': {'nickname': '上级甲'}
+      'parent': parent
     };
   }
   if (call.path.endsWith('/snapshot')) return _session();
@@ -73,17 +77,22 @@ SangongProfileAdminLayout _layout(WidgetTester tester) => tester
     .widget<SangongProfileAdminLayout>(find.byType(SangongProfileAdminLayout));
 
 Future<void> _mount(WidgetTester tester, SangongRuntime runtime,
-        {String nickname = ''}) =>
+        {String nickname = '',
+        bool dark = false,
+        SangongIdentityDirectory? directory}) =>
     pumpSangongPage(
         tester,
         runtime,
-        Builder(
-            builder: (context) => EasyLoading.init()(
-                context,
-                Scaffold(
-                    body: SingleChildScrollView(
-                        child: SangongProfilePanel(
-                            userID: 'im_target', nickname: nickname))))));
+        SangongIdentityScope(
+            directory: directory ?? SangongIdentityDirectory.shared,
+            child: Builder(
+                builder: (context) => EasyLoading.init()(
+                    context,
+                    Scaffold(
+                        body: SingleChildScrollView(
+                            child: SangongProfilePanel(
+                                userID: 'im_target', nickname: nickname)))))),
+        dark: dark);
 
 Future<void> _confirm(WidgetTester tester, VoidCallback action) async {
   action();
@@ -141,6 +150,158 @@ void main() {
         api.calls.every(
             (c) => c.headers?['X-Tenant-Id'] == expectedSangongRequestTenant()),
         isTrue);
+    await unmountSangong(tester);
+    runtime.dispose();
+  });
+
+  for (final dark in [false, true]) {
+    testWidgets('parent uses the resolved nickname and cache / dark=$dark',
+        (tester) async {
+      final pending = Completer<List<PublicUserInfo>>();
+      final requests = <List<String>>[];
+      final directory = SangongIdentityDirectory(
+        session: () => ('owner', 'token', 'endpoint'),
+        profiles: (_) async => [],
+        imUsers: (ids) {
+          requests.add(ids);
+          return pending.future;
+        },
+      );
+      final api = SangongTestApi()
+        ..respond = (call) => _readResponse(call,
+            parent: {'imUserId': 'im_parent', 'nickname': 'im_parent'});
+      final runtime = sangongTestRuntime(sangongTestContext(api));
+      await _mount(tester, runtime, directory: directory, dark: dark);
+      expect(_layout(tester).parentLabel, '用户');
+      expect(_layout(tester).points, 420);
+      expect(_layout(tester).disabled, isFalse,
+          reason: 'A pending nickname must not block the form');
+      pending.complete([PublicUserInfo(userID: 'im_parent', nickname: '林先生')]);
+      await tester.pumpAndSettle();
+      expect(_layout(tester).parentLabel, '林先生');
+      expect(find.textContaining('上级 林先生', findRichText: true), findsOneWidget);
+      expect(
+          find.textContaining('im_parent', findRichText: true), findsNothing);
+      _layout(tester).bankerController.text = '2.1000';
+      await tester.pump();
+      expect(requests, [
+        ['im_parent']
+      ]);
+      expect(api.count('/user'), 1);
+      await unmountSangong(tester);
+      runtime.dispose();
+    });
+  }
+
+  testWidgets('parent can resolve Chat nickname through the legacy ID field',
+      (tester) async {
+    final directory = SangongIdentityDirectory(
+      session: () => ('owner', 'token', 'endpoint'),
+      profiles: (_) async =>
+          [UserFullInfo(userID: 'im_parent', nickname: '上级昵称')],
+      imUsers: (_) async =>
+          [PublicUserInfo(userID: 'im_parent', nickname: ' ')],
+    );
+    final api = SangongTestApi()
+      ..respond =
+          (call) => _readResponse(call, parent: {'im_user_id': 'im_parent'});
+    final runtime = sangongTestRuntime(sangongTestContext(api));
+    await _mount(tester, runtime, directory: directory);
+    expect(_layout(tester).parentLabel, '上级昵称');
+    await unmountSangong(tester);
+    runtime.dispose();
+  });
+
+  for (final fallback in ['上级甲', 'im_parent']) {
+    testWidgets('failed parent lookup keeps a safe fallback: $fallback',
+        (tester) async {
+      final directory = SangongIdentityDirectory(
+        session: () => ('owner', 'token', 'endpoint'),
+        profiles: (_) async => throw StateError('unavailable'),
+        imUsers: (_) async => throw StateError('unavailable'),
+      );
+      final api = SangongTestApi()
+        ..respond = (call) => _readResponse(call,
+            parent: {'imUserId': 'im_parent', 'nickname': fallback});
+      final runtime = sangongTestRuntime(sangongTestContext(api));
+      await _mount(tester, runtime, directory: directory);
+      expect(_layout(tester).parentLabel,
+          fallback == 'im_parent' ? '用户' : fallback);
+      expect(_layout(tester).error, isNull);
+      expect(_layout(tester).disabled, isFalse);
+      expect(tester.takeException(), isNull);
+      await unmountSangong(tester);
+      runtime.dispose();
+    });
+  }
+
+  testWidgets('a late old parent nickname cannot replace the new parent',
+      (tester) async {
+    final oldParent = Completer<List<PublicUserInfo>>();
+    final directory = SangongIdentityDirectory(
+      session: () => ('owner', 'token', 'endpoint'),
+      profiles: (_) async => [],
+      imUsers: (ids) => ids.contains('im_old')
+          ? oldParent.future
+          : Future.value([PublicUserInfo(userID: 'im_new', nickname: '新上级')]),
+    );
+    var parentID = 'im_old';
+    final api = SangongTestApi()
+      ..respond = (call) => _readResponse(call, parent: {'imUserId': parentID});
+    final runtime = sangongTestRuntime(sangongTestContext(api));
+    await _mount(tester, runtime, directory: directory);
+    parentID = 'im_new';
+    _layout(tester).onRetry!();
+    await flushSangong(tester);
+    expect(_layout(tester).parentLabel, '新上级');
+    oldParent.complete([PublicUserInfo(userID: 'im_old', nickname: '旧上级')]);
+    await flushSangong(tester);
+    expect(_layout(tester).parentLabel, '新上级');
+    await unmountSangong(tester);
+    runtime.dispose();
+  });
+
+  testWidgets('parent response after revocation cannot restore private content',
+      (tester) async {
+    final pending = Completer<List<PublicUserInfo>>();
+    final directory = SangongIdentityDirectory(
+      session: () => ('owner', 'token', 'endpoint'),
+      profiles: (_) async => [],
+      imUsers: (_) => pending.future,
+    );
+    final api = SangongTestApi()
+      ..respond =
+          (call) => _readResponse(call, parent: {'imUserId': 'im_parent'});
+    final runtime = sangongTestRuntime(sangongTestContext(api));
+    await _mount(tester, runtime, directory: directory);
+    api.privilege.setAllowed(false);
+    await tester.pump();
+    pending.complete([PublicUserInfo(userID: 'im_parent', nickname: '旧上级')]);
+    await flushSangong(tester);
+    expect(find.byType(SangongProfileAdminLayout), findsNothing);
+    expect(find.textContaining('旧上级', findRichText: true), findsNothing);
+    expect(tester.takeException(), isNull);
+    await unmountSangong(tester);
+    runtime.dispose();
+  });
+
+  testWidgets('no parent does not request an identity or invent a label',
+      (tester) async {
+    final requests = <List<String>>[];
+    final directory = SangongIdentityDirectory(
+      session: () => ('owner', 'token', 'endpoint'),
+      profiles: (ids) async {
+        requests.add(ids);
+        return [];
+      },
+      imUsers: (_) async => [],
+    );
+    final api = SangongTestApi()
+      ..respond = (call) => _readResponse(call, parent: null);
+    final runtime = sangongTestRuntime(sangongTestContext(api));
+    await _mount(tester, runtime, directory: directory);
+    expect(_layout(tester).parentLabel, isEmpty);
+    expect(requests, isEmpty);
     await unmountSangong(tester);
     runtime.dispose();
   });

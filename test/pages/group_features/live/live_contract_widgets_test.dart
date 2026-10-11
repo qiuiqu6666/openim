@@ -631,6 +631,9 @@ void main() {
       await tester.pumpAndSettle();
       LivePrimaryButton button() =>
           tester.widget<LivePrimaryButton>(find.byType(LivePrimaryButton));
+      expect(button().onPressed, isNull);
+      await tester.enterText(find.byType(TextField).first, '1');
+      await tester.pump();
       expect(button().onPressed != null, live);
       if (live) {
         fixture.acceptSummary(_summary(status: 'ended', revision: 2));
@@ -665,6 +668,8 @@ void main() {
     await tester.pumpAndSettle();
     LivePrimaryButton button() =>
         tester.widget<LivePrimaryButton>(find.byType(LivePrimaryButton));
+    await tester.enterText(find.byType(TextField).first, '1');
+    await tester.pump();
     expect(button().onPressed, isNotNull);
     fixture.acceptSummary(_summary(status: 'scheduled', revision: 2));
     await tester.pumpAndSettle();
@@ -698,6 +703,7 @@ void main() {
     await tester.tap(find.text('打开打赏'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '1');
+    await tester.pump();
     await tester.tap(find.text('确认打赏'));
     await _frames(tester);
     for (final digit in '123456'.split('')) {

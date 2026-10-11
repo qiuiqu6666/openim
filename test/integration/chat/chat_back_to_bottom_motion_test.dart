@@ -133,7 +133,8 @@ void main() {
       final position = logic.scrollController.position;
       logic.scrollController.jumpTo(position.minScrollExtent + 16);
       await tester.pumpAndSettle();
-      expect(logic.newMessages.awayFromLatest.value, isTrue);
+      expect(logic.newMessages.awayFromLatest.value, isFalse,
+          reason: 'Small movement stays inside the latest-message tolerance.');
       expect(find.byType(NewMessageIndicator), findsNothing,
           reason: 'A small movement must not show the return button.');
       for (final (ratio, visible) in [

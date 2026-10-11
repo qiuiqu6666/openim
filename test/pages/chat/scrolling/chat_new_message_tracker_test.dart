@@ -24,6 +24,25 @@ void main() {
 
   tearDown(() => tracker.close());
 
+  test('near-bottom jitter follows latest with a stable rejoin boundary', () {
+    for (final pixels in [2.0, 16.0, 40.0, 48.0]) {
+      tracker.updateScrollOffset(pixels);
+      expect(tracker.awayFromLatest.value, isFalse);
+    }
+    tracker.recordIncoming(_message('near'));
+    expect(tracker.unseenCount.value, 0);
+    tracker.updateScrollOffset(49);
+    expect(tracker.awayFromLatest.value, isTrue);
+    tracker.updateScrollOffset(35);
+    expect(tracker.awayFromLatest.value, isTrue);
+    tracker.updateScrollOffset(0, viewportConfirmed: false);
+    expect(tracker.awayFromLatest.value, isTrue);
+    tracker.updateScrollOffset(24);
+    expect(tracker.awayFromLatest.value, isFalse);
+    tracker.updateScrollOffset(double.nan);
+    expect(tracker.awayFromLatest.value, isFalse);
+  });
+
   test('small movements hide the button without changing arrival tracking', () {
     for (final offset in [-12.0, 0.0, 1.0, 2.0, 16.0, 40.0, 120.0]) {
       tracker.updateScrollOffset(offset);
@@ -71,7 +90,7 @@ void main() {
     );
     addTearDown(history.close);
     // History navigation reports a non-zero reading distance until rejoined.
-    history.updateScrollOffset(2);
+    history.updateScrollOffset(0);
     expect(history.showBackToBottom.value, isTrue);
     history.recordIncoming(_message('buffered'));
     expect(history.unseenCount.value, 1);
@@ -182,7 +201,7 @@ void main() {
     expect(tracker.unseenCount.value, 0);
     expect(tracker.awayFromLatest.value, isFalse);
 
-    tracker.updateScrollOffset(1.01);
+    tracker.updateScrollOffset(49);
     tracker.recordIncoming(_message('first'));
     expect(tracker.unseenCount.value, 0);
     expect(tracker.awayFromLatest.value, isTrue);
@@ -198,7 +217,7 @@ void main() {
       () {
     tracker.updateScrollOffset(400);
     tracker.recordIncoming(_message('new'));
-    for (final pixels in [300.0, 100.0, 200.0, 2.0]) {
+    for (final pixels in [300.0, 100.0, 200.0, 25.0]) {
       tracker.updateScrollOffset(pixels);
       expect(tracker.unseenCount.value, 1);
       expect(tracker.awayFromLatest.value, isTrue);

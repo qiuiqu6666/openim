@@ -45,6 +45,15 @@ void main() {
     expect(source.value, audio.path);
   });
 
+  test('file URI from an iOS attachment is treated as a local source',
+      () async {
+    final source = await VoicePlaybackSource.load(
+        message(path: audio.uri.toString()),
+        download: (_) => throw StateError('No download expected'));
+    expect(File(source.value).uri, audio.uri);
+    expect(source.isFile, isTrue);
+  });
+
   test('empty recording falls back to its uploaded source', () async {
     await audio.writeAsBytes([]);
     final source = await VoicePlaybackSource.load(

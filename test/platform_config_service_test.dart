@@ -67,6 +67,18 @@ void main() {
         PlatformConfigService.fetch(client: Dio()..httpClientAdapter = adapter),
         throwsStateError);
   });
+  test('same release compares numeric internal builds', () {
+    expect(compareAppVersions('3.0.1+22', '3.0.1+2023'), lessThan(0));
+    expect(compareAppVersions('3.0.1+2023', '3.0.1+22'), greaterThan(0));
+    expect(compareAppVersions('3.0.1+2023', '3.0.1+2023'), 0);
+    expect(compareAppVersions('3.0.2+1', '3.0.1+2023'), greaterThan(0));
+    expect(compareAppVersions('3.0.1+22', '3.0.1'), 0);
+  });
+  test('omitted rollout is public while explicit zero stays disabled', () {
+    expect(PlatformRelease({}).grayRatio, 100);
+    expect(PlatformRelease({'grayRatio': 0}).grayRatio, 0);
+    expect(PlatformRelease({'grayRatio': 30}).grayRatio, 30);
+  });
   test('numeric versions do not confuse 3.10 and 3.9', () {
     expect(compareAppVersions('v3.10.0', '3.9.9'), greaterThan(0));
     expect(compareAppVersions('3.8.3+12', '3.8.3'), 0);

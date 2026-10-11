@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import '../../../../services/fund_api.dart';
 import '../../data/group_feature_api.dart';
 import 'live_models.dart';
@@ -50,8 +51,10 @@ GroupFeatureException mapLiveError(GroupFeatureException error) {
 
 String liveErrorMessage(Object error) => error is GroupFeatureException
     ? mapLiveError(error).message
-    : error is FormatException
-        ? error.message
-        : error is StateError
+    : error is PlatformException
+        ? '直播播放失败，请重新连接或稍后重试'
+        : error is FormatException
             ? error.message
-            : error.toString();
+            : error is StateError
+                ? error.message
+                : error.toString();

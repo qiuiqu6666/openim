@@ -5,6 +5,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:just_audio/just_audio.dart' as audio;
 import 'package:openim_common/openim_common.dart';
+import 'package:path/path.dart' as p;
 import 'package:sprintf/sprintf.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:wechat_camera_picker/wechat_camera_picker.dart';
@@ -24,6 +25,9 @@ class ChatMediaController {
     required void Function(Message) stageMessage,
     required Future<void> Function(File, int) previewVoice,
     required this.closeToolbox,
+    Future<List<AssetEntity>?> Function()? pickAssets,
+    Future<File?> Function(File)? compressImage,
+    void Function()? onPreparationFailed,
   })  : _conversationID = conversationID,
         _isClosed = isClosed,
         _sendingMuted = sendingMuted,
@@ -31,7 +35,11 @@ class ChatMediaController {
         _voiceBusy = voiceBusy,
         _sendMessage = sendMessage,
         _stageMessage = stageMessage,
-        _previewAndSendVoice = previewVoice;
+        _previewAndSendVoice = previewVoice,
+        _pickAssets = pickAssets,
+        _compressImage = compressImage ?? IMUtils.compressImageAndGetFile,
+        _onPreparationFailed =
+            onPreparationFailed ?? (() => IMViews.showToast(StrRes.sendFailed));
 
   final String Function() _conversationID;
   final bool Function() _isClosed, _sendingMuted, _isInvalidGroup, _voiceBusy;
@@ -39,7 +47,11 @@ class ChatMediaController {
   final void Function(Message) _stageMessage;
   final Future<void> Function(File, int) _previewAndSendVoice;
   final void Function() closeToolbox;
+  final Future<List<AssetEntity>?> Function()? _pickAssets;
+  final Future<File?> Function(File) _compressImage;
+  final void Function() _onPreparationFailed;
   final tempMessages = <Message>[];
+  final preparingCount = 0.obs;
   bool _closed = false;
   bool get isClosed => _closed || _isClosed();
   bool get sendingMuted => _sendingMuted();
@@ -49,6 +61,7 @@ class ChatMediaController {
   void close() {
     _closed = true;
     tempMessages.clear();
+    preparingCount.value = 0;
   }
 
   Future<List<Message>> searchMediaMessage() async {
@@ -63,23 +76,45 @@ class ChatMediaController {
   }
 
   Future sendPicture({required String path, bool sendNow = true}) async {
-    if (isClosed) return;
-    final file = await IMUtils.compressImageAndGetFile(File(path));
-    if (isClosed) return;
-
-    var message =
-        await OpenIM.iMManager.messageManager.createImageMessageFromFullPath(
-      imagePath: file!.path,
-    );
-
-    if (isClosed) return;
-
+    final message = await _preparePicture(path);
+    if (message == null || isClosed) return;
     if (sendNow) {
       return _sendMessage(message);
     } else {
       _stageMessage(message);
       tempMessages.add(message);
     }
+  }
+
+  Future<Message?> _preparePicture(String path) async {
+    if (isClosed) return null;
+    // Keep the source and compression target unique while earlier photos upload.
+    final original = await _retainAttachment(path);
+    if (isClosed) return null;
+    if (await original.length() == 0) {
+      throw StateError('Image file is empty');
+    }
+    var file = original;
+    try {
+      final compressed = await _compressImage(original);
+      if (isClosed) return null;
+      if (compressed != null &&
+          await compressed.exists() &&
+          await compressed.length() > 0) {
+        file = compressed;
+      }
+    } catch (_) {
+      // Compression is optional. A readable local source can still be sent.
+      Logger.print('Image compression failed; using retained source',
+          onlyConsole: true);
+    }
+    if (isClosed) return null;
+    final message =
+        await OpenIM.iMManager.messageManager.createImageMessageFromFullPath(
+      imagePath: file.path,
+    );
+    if (isClosed) return null;
+    return message;
   }
 
   Future<void> onTapLocation() async {
@@ -113,8 +148,20 @@ class ChatMediaController {
     }
     _pickingAttachment = true;
     try {
-      final List<AssetEntity>? assets = await AssetPicker.pickAssets(
-          Get.context!,
+      final assets = await (_pickAssets?.call() ?? _selectAlbumAssets());
+      if (assets != null && assets.isNotEmpty && !isClosed) {
+        closeToolbox();
+        await _sendSelectedAssets(assets);
+      }
+    } catch (_) {
+      if (!isClosed) _onPreparationFailed();
+    } finally {
+      _pickingAttachment = false;
+    }
+  }
+
+  Future<List<AssetEntity>?> _selectAlbumAssets() =>
+      AssetPicker.pickAssets(Get.context!,
           pickerConfig: AssetPickerConfig(
               requestType: RequestType.common,
               sortPathsByModifiedDate: true,
@@ -137,30 +184,42 @@ class ChatMediaController {
                 }
                 return true;
               }));
-      if (null != assets && !isClosed) {
-        for (var asset in assets) {
-          try {
-            await _handleAssets(asset, sendNow: false);
-          } catch (_) {
-            IMViews.showToast(StrRes.sendFailed);
-          }
-        }
 
-        for (final msg in List<Message>.of(tempMessages)) {
-          if (isClosed) break;
-          await _sendMessage(msg, addToUI: false);
+  Future<void> _sendSelectedAssets(List<AssetEntity> assets) async {
+    var delivery = Future<void>.value();
+    preparingCount.value = assets.length;
+    try {
+      for (final asset in assets) {
+        if (isClosed) break;
+        try {
+          final message = await _prepareAsset(asset);
+          if (message == null || isClosed) break;
+          _stageMessage(message);
+          // Start each prepared message immediately. Only one upload runs at a
+          // time, but the next local asset can prepare during that upload.
+          delivery = delivery.then((_) async {
+            if (isClosed) return;
+            await _sendMessage(message, addToUI: false);
+          }).catchError((Object error) {
+            // Delivery normally owns failure/retry UI. Do not let an unexpected
+            // delivery error prevent the rest of the selected batch from sending.
+            if (!isClosed) _onPreparationFailed();
+          });
+        } catch (_) {
+          if (!isClosed) _onPreparationFailed();
+        } finally {
+          if (!isClosed) preparingCount.value--;
         }
-
-        tempMessages.clear();
       }
     } finally {
-      _pickingAttachment = false;
+      preparingCount.value = 0;
+      await delivery;
     }
   }
 
   bool _pickingAttachment = false;
   Future<File> _retainAttachment(String path) async {
-    final name = path.split(Platform.pathSeparator).last;
+    final name = p.basename(path);
     final directory = Directory('${Config.cachePath}/outgoing_media');
     await directory.create(recursive: true);
     return File(path).copy(
@@ -177,9 +236,12 @@ class ChatMediaController {
               enableRecording: true,
               enableAudio: true,
               maximumRecordingDuration: Duration(seconds: 60)));
-      if (asset != null && !isClosed) await _handleAssets(asset);
+      if (asset != null && !isClosed) {
+        closeToolbox();
+        await _sendSelectedAssets([asset]);
+      }
     } catch (_) {
-      IMViews.showToast(StrRes.sendFailed);
+      if (!isClosed) _onPreparationFailed();
     } finally {
       _pickingAttachment = false;
     }
@@ -253,57 +315,44 @@ class ChatMediaController {
     return IMUtils.allowImageType(mimeType);
   }
 
-  Future _handleAssets(AssetEntity? asset, {bool sendNow = true}) async {
-    if (null != asset) {
-      Logger.print(
-          '--------assets type-----${asset.type} create time: ${asset.createDateTime}');
-      final originalFile = await asset.file;
-      if (originalFile == null) {
-        IMViews.showToast(StrRes.sendFailed);
-        return;
-      }
-      if (isClosed) return;
-      final originalPath = originalFile.path;
-      var path = originalPath.toLowerCase().endsWith('.gif')
-          ? originalPath
-          : originalFile.path;
-      Logger.print('--------assets path-----$path');
-      switch (asset.type) {
-        case AssetType.image:
-          await sendPicture(path: path, sendNow: sendNow);
-          break;
-        case AssetType.video:
-          final saved = await _retainAttachment(path);
-          if (isClosed) return;
-          final thumbnail =
-              await asset.thumbnailDataWithSize(const ThumbnailSize(640, 640));
-          if (isClosed) return;
-          if (thumbnail == null) {
-            throw StateError('Video thumbnail unavailable');
-          }
-          final snapshot = File('${saved.path}.jpg');
-          await snapshot.writeAsBytes(thumbnail);
-          final mimeType = await asset.mimeTypeAsync ?? 'video/mp4';
-          if (isClosed) return;
-          final message = await OpenIM.iMManager.messageManager
-              .createVideoMessageFromFullPath(
-                  videoPath: saved.path,
-                  videoType: mimeType,
-                  duration: asset.videoDuration.inSeconds < 1
-                      ? 1
-                      : asset.videoDuration.inSeconds,
-                  snapshotPath: snapshot.path);
-          if (isClosed) return;
-          if (sendNow) {
-            await _sendMessage(message);
-          } else {
-            _stageMessage(message);
-            tempMessages.add(message);
-          }
-          break;
-        default:
-          break;
-      }
+  Future<Message?> _prepareAsset(AssetEntity asset) async {
+    Logger.print(
+        '--------assets type-----${asset.type} create time: ${asset.createDateTime}');
+    final originalFile = await asset.file;
+    if (isClosed) return null;
+    if (originalFile == null) {
+      throw StateError('Selected asset file is unavailable');
+    }
+    final path = originalFile.path;
+    Logger.print('--------assets path-----$path');
+    switch (asset.type) {
+      case AssetType.image:
+        return _preparePicture(path);
+      case AssetType.video:
+        final saved = await _retainAttachment(path);
+        if (isClosed) return null;
+        final thumbnail =
+            await asset.thumbnailDataWithSize(const ThumbnailSize(640, 640));
+        if (isClosed) return null;
+        if (thumbnail == null) {
+          throw StateError('Video thumbnail unavailable');
+        }
+        final snapshot = File('${saved.path}.jpg');
+        await snapshot.writeAsBytes(thumbnail);
+        final mimeType = await asset.mimeTypeAsync ?? 'video/mp4';
+        if (isClosed) return null;
+        final message = await OpenIM.iMManager.messageManager
+            .createVideoMessageFromFullPath(
+                videoPath: saved.path,
+                videoType: mimeType,
+                duration: asset.videoDuration.inSeconds < 1
+                    ? 1
+                    : asset.videoDuration.inSeconds,
+                snapshotPath: snapshot.path);
+        if (isClosed) return null;
+        return message;
+      default:
+        throw StateError('Unsupported asset type');
     }
   }
 }

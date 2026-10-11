@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import '../security_feedback.dart';
 import '../../../../widgets/empty_state/illustrated_empty_state.dart';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -525,25 +524,10 @@ class SettingsPlatformSwitch extends StatelessWidget {
   final ValueChanged<bool>? onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    final platform = Theme.of(context).platform;
-    final isCupertino =
-        platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
-    if (isCupertino) {
-      return CupertinoSwitch(
+  Widget build(BuildContext context) => AppSwitch(
         value: value,
         onChanged: onChanged,
-        activeTrackColor: AppTokens.accent,
       );
-    }
-    return Switch(
-      value: value,
-      onChanged: onChanged,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      thumbColor: const WidgetStatePropertyAll<Color>(Colors.white),
-      activeTrackColor: AppTokens.accent,
-    );
-  }
 }
 
 class SettingsSwitchCell extends StatelessWidget {

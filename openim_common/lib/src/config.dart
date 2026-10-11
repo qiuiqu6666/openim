@@ -8,7 +8,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 class Config {
-  static Future init(Function() runApp) async {
+  static Future init(Function() runApp,
+      {Future<void> Function()? prepareNetwork}) async {
     WidgetsFlutterBinding.ensureInitialized();
     try {
       final path = (await getApplicationDocumentsDirectory()).path;
@@ -16,6 +17,7 @@ class Config {
       await DataSp.init();
       await Hive.initFlutter(path);
       MediaKit.ensureInitialized();
+      await prepareNetwork?.call();
       HttpUtil.init();
     } catch (_) {}
 
@@ -86,8 +88,7 @@ class Config {
     if (null != server) {
       url = server['authUrl'];
     }
-    return _currentEndpoint(
-        url, 'http://$_host:10008', 'https://99chatapi.99chat.vip');
+    return _currentEndpoint(url, 'https://99chatapi.99chat.vip');
   }
 
   static String get imApiUrl {
@@ -96,8 +97,7 @@ class Config {
     if (null != server) {
       url = server['apiUrl'];
     }
-    return _currentEndpoint(
-        url, 'http://$_host:10002', 'https://99imapi.99chat.vip');
+    return _currentEndpoint(url, 'https://99imapi.99chat.vip');
   }
 
   static String get imWsUrl {
@@ -106,20 +106,17 @@ class Config {
     if (null != server) {
       url = server['wsUrl'];
     }
-    return _currentEndpoint(
-        url, 'ws://$_host:10001', 'wss://websocket.99chat.vip');
+    return _currentEndpoint(url, 'wss://websocket.99chat.vip');
   }
 
-  // Upgrade saved defaults too, while preserving explicitly configured servers.
-  static String _currentEndpoint(
-      String? saved, String previous, String current) {
+  // Keep a successfully selected direct route; startup probes may select the
+  // domain again on the next launch when it becomes available.
+  static String _currentEndpoint(String? saved, String current) {
     final value = saved?.trim();
-    if (value == null ||
-        value.isEmpty ||
-        value.replaceFirst(RegExp(r'/+$'), '') == previous) {
+    if (value == null || value.isEmpty) {
       return current;
     }
-    return value;
+    return value.replaceFirst(RegExp(r'/+$'), '');
   }
 
   static int get logLevel {

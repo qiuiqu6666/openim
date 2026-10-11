@@ -28,6 +28,7 @@ class ActivityRuntime {
       followRedirects: false));
   bool Function()? _ready;
   Timer? _timer;
+  bool _foreground = true;
   Interceptor? _interceptor;
   CancelToken? _cancel;
   ActivitySession? _endedOwner;
@@ -57,7 +58,12 @@ class ActivityRuntime {
     if (!dio.interceptors.contains(_interceptor)) {
       dio.interceptors.add(_interceptor!);
     }
-    _timer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+    _startTimer();
+  }
+
+  void _startTimer() {
+    if (!_foreground || _ready == null) return;
+    _timer ??= Timer.periodic(const Duration(seconds: 30), (_) {
       sessionReadyNow();
       collector.tick();
     });
@@ -116,7 +122,13 @@ class ActivityRuntime {
   }
 
   void setForeground(bool value) {
+    _foreground = value;
+    if (!value) {
+      _timer?.cancel();
+      _timer = null;
+    }
     collector.setForeground(value);
+    if (value) _startTimer();
   }
 
   void markInteraction() {

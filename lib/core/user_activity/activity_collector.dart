@@ -61,7 +61,8 @@ class ActivityCollector {
     _foreground = value;
     _add(value ? 'foreground' : 'background');
     if (value) _lastHeartbeat = now();
-    unawaited(flush());
+    // Flush once when leaving; foreground events join the next scheduled batch.
+    if (!value) unawaited(flush());
   }
 
   void visit(String page) {

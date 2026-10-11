@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/group_feature_api.dart';
+import '../identity/widgets/sangong_identity_view.dart';
 import '../models/sangong_admin_models.dart';
 import '../models/sangong_game_settings.dart';
 import '../models/sangong_admin_realtime_state.dart';
@@ -388,13 +389,22 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
           ? _user!.nickname.trim()
           : widget.userID;
 
-  String get _parentLabel {
+  String get _parentUserID {
+    final parent = _detail['parent'];
+    if (parent is! Map) return '';
+    return '${parent['imUserId'] ?? parent['im_user_id'] ?? ''}'.trim();
+  }
+
+  String _parentLabel(SangongDisplayIdentity? identity) {
     final parent = _detail['parent'];
     if (parent is! Map) return '';
     final nickname = '${parent['nickname'] ?? ''}'.trim();
-    return nickname.isNotEmpty
-        ? nickname
-        : '${parent['imUserId'] ?? parent['im_user_id'] ?? ''}'.trim();
+    if (_parentUserID.isEmpty && nickname.isEmpty) return '';
+    return sangongDisplayName(
+        identity?.nickname.trim().isNotEmpty == true
+            ? identity!.nickname
+            : nickname,
+        _parentUserID);
   }
 
   String? get _bankerSummary {
@@ -434,6 +444,14 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
   @override
   Widget build(BuildContext context) {
     if (!_current) return const SizedBox.shrink();
+    return SangongIdentityView(
+      key: ValueKey((widget.userID, _scope?.token)),
+      userID: _parentUserID,
+      builder: (identity) => _buildLayout(_parentLabel(identity)),
+    );
+  }
+
+  Widget _buildLayout(String parentLabel) {
     return SangongProfileAdminLayout(
         embedded: widget.embedded,
         pointsController: _points,
@@ -442,7 +460,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
         loading: _loading,
         disabled: !_canSubmit,
         points: _user?.balance,
-        parentLabel: _parentLabel,
+        parentLabel: parentLabel,
         rebatePer10000: _user?.rebatePer10000,
         bankerSummary: _bankerSummary,
         sharePercent: _sharePercent,

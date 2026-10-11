@@ -1,6 +1,7 @@
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import '../../../../core/controller/im_controller.dart';
@@ -10,6 +11,7 @@ import '../../../../pages/mine/settings/pages/trade_password_page.dart';
 import '../../../../services/fund_api.dart';
 import '../../../../services/fund_pending_store.dart';
 import '../../../../widgets/payment/password_payment_sheet.dart';
+import '../../../wallet/data/wallet_fund_api.dart';
 import '../../data/group_feature_api.dart';
 import '../../models/group_feature_context.dart';
 import '../data/live_api.dart';
@@ -18,14 +20,16 @@ import '../models/live_errors.dart';
 import '../models/live_models.dart';
 import '../models/live_summary_events.dart';
 import '../models/live_tip_currency.dart';
-import '../widgets/live_style.dart';
 import '../widgets/live_sheet_surface.dart';
+import '../tipping/live_tip_balance.dart';
+import '../tipping/live_tip_form.dart';
 
 class GroupLiveTipSheet {
   static Future<void> show(BuildContext context,
           {required GroupFeatureContext featureContext,
           required LiveSession session,
           SettingsService? security,
+          WalletFundApi? walletApi,
           FundPendingStore? pendingStore}) =>
       showModalBottomSheet<void>(
           context: context,
@@ -37,6 +41,7 @@ class GroupLiveTipSheet {
                   featureContext: featureContext,
                   session: session,
                   security: security,
+                  walletApi: walletApi,
                   pendingStore: pendingStore)));
 }
 
@@ -45,10 +50,12 @@ class _LiveTipForm extends StatefulWidget {
       {required this.featureContext,
       required this.session,
       this.security,
+      this.walletApi,
       this.pendingStore});
   final GroupFeatureContext featureContext;
   final LiveSession session;
   final SettingsService? security;
+  final WalletFundApi? walletApi;
   final FundPendingStore? pendingStore;
   @override
   State<_LiveTipForm> createState() => _LiveTipFormState();
@@ -59,6 +66,8 @@ class _LiveTipFormState extends State<_LiveTipForm>
   final _amount = TextEditingController(), _memo = TextEditingController();
   List<LiveTipCurrency> _currencies = const [];
   late final FundPendingStore _store;
+  late final Future<String> _anchorNickname;
+  late final LiveTipBalance _balance;
   LiveTipCurrency? _currency;
   Map<String, dynamic>? _pending;
   Object? _error;
@@ -79,11 +88,15 @@ class _LiveTipFormState extends State<_LiveTipForm>
           _currencies.any((value) => value.code == _pending!['currency']));
   String get scope =>
       'group-live-tip:${widget.featureContext.groupID}:${widget.session.id}';
+  bool get _pendingUnavailable =>
+      _pending != null &&
+      !_currencies.any((value) => value.code == _pending!['currency']);
   @override
   void initState() {
     super.initState();
     _permissions = LivePermissionState(widget.featureContext);
     _permissions.addListener(_permissionsChanged);
+    _anchorNickname = _loadAnchorNickname();
     _summaries = LiveSummaryEvents(widget.featureContext.features);
     _isLive = widget.session.status == LiveStatus.live &&
         (!widget.featureContext.features.valid ||
@@ -94,6 +107,14 @@ class _LiveTipFormState extends State<_LiveTipForm>
     _foreground = WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     _permissions.setActive(_foreground);
+    final walletToken = DataSp.chatToken;
+    final walletApi = widget.walletApi ??
+        WalletFundApi(api: FundApi(baseUrl: widget.featureContext.api.baseUrl));
+    _balance = LiveTipBalance(
+        load: walletApi.fetchBalances,
+        current: () => sessionCurrent && DataSp.chatToken == walletToken);
+    _balance.setActive(_foreground);
+    unawaited(_balance.refresh());
     _syncCurrencies();
     _events = widget.featureContext.events.listen((event) {
       final summary = _summaries.accept(event, widget.featureContext.groupID);
@@ -114,9 +135,32 @@ class _LiveTipFormState extends State<_LiveTipForm>
     _load();
   }
 
+  Future<String> _loadAnchorNickname() async {
+    final anchorID = widget.session.anchorID;
+    if (!sessionCurrent || anchorID.isEmpty) return '主播';
+    try {
+      final users = await OpenIM.iMManager.userManager
+          .getUsersInfo(userIDList: [anchorID])
+          .timeout(const Duration(seconds: 5));
+      if (!sessionCurrent) return '主播';
+      for (final user in users) {
+        if (user.userID != anchorID) continue;
+        final nickname = graphemeTrim(user.nickname ?? '');
+        if (nickname.isNotEmpty) return nickname;
+      }
+    } catch (_) {
+      // Optional display metadata must not interrupt or retarget the payment.
+    }
+    return '主播';
+  }
+
   void _syncCurrencies() {
-    _currencies =
-        LiveTipCurrency.fromCapabilities(featureContext.capabilities.live.raw);
+    _currencies = LiveTipCurrency.fromCapabilities(
+            featureContext.capabilities.live.raw)
+        .where((value) =>
+            (value.code == 'USDT' && value.decimals == 6) ||
+            (value.code == 'BI99' && value.decimals == 2))
+        .toList(growable: false);
     final selected =
         _currencies.where((value) => value.code == _currency?.code);
     _currency = selected.firstOrNull ?? _currencies.firstOrNull;
@@ -133,6 +177,8 @@ class _LiveTipFormState extends State<_LiveTipForm>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
     _permissions.setActive(_foreground);
+    _balance.setActive(_foreground);
+    if (_foreground) unawaited(_balance.refresh());
     if (_foreground && !_busy) unawaited(_load());
     if (mounted) setState(() {});
   }
@@ -152,9 +198,12 @@ class _LiveTipFormState extends State<_LiveTipForm>
             pending.containsKey('payPin')) {
           throw const FormatException('待确认打赏记录不完整，请核对账单');
         }
+        // Keep even a retired-currency order locked; never replace it with a
+        // new currency/order when restoring an uncertain payment.
+        _pending = pending;
         final matches = _currencies.where((v) => v.code == pending['currency']);
         if (matches.isEmpty) {
-          throw const FormatException('待确认打赏币种当前未配置，请联系管理员核对账单');
+          return;
         }
         _currency = matches.first;
         _amount.text = '${pending['amountText'] ?? ''}';
@@ -162,7 +211,6 @@ class _LiveTipFormState extends State<_LiveTipForm>
         if (_currency!.units(_amount.text) != pending['amount']) {
           throw const FormatException('待确认打赏金额不完整');
         }
-        _pending = pending;
       }
     } catch (error) {
       if (sessionCurrent && _foreground) _error = error;
@@ -208,12 +256,21 @@ class _LiveTipFormState extends State<_LiveTipForm>
       _syncCurrencies();
       if (_currency == null) throw const FormatException('打赏币种尚未配置');
       final units = _currency!.units(_amount.text);
+      final available = _balance.forCurrency(_currency)?.available;
+      // An uncertain order may already have reduced the real balance. Its
+      // original idempotency key must still be allowed to resolve that result.
+      if (_pending == null &&
+          available != null &&
+          BigInt.from(units) > available.units) {
+        throw const FormatException('可用余额不足，请调整打赏金额');
+      }
       if (graphemeTrim(_memo.text).characters.length > 50) {
         throw const FormatException('备注最多 50 个字');
       }
       final ready = await _passwordReady();
       if (!mounted) return;
       if (!ready || !canTip) return;
+      FocusScope.of(context).unfocus();
       final draft = _pending ??
           <String, dynamic>{
             'clientOrderID': 'tip_${FundApi.createClientOrderID()}',
@@ -233,7 +290,11 @@ class _LiveTipFormState extends State<_LiveTipForm>
                     style: const TextStyle(
                         fontSize: 26, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
-                Text('打赏给 ${widget.session.anchorID}'),
+                FutureBuilder<String>(
+                    future: _anchorNickname,
+                    builder: (_, snapshot) => Text(
+                        '打赏给 ${sessionCurrent ? snapshot.data ?? '主播' : '主播'}',
+                        textAlign: TextAlign.center)),
                 if ('${draft['memo']}'.isNotEmpty) Text('${draft['memo']}')
               ]),
               errorMessage: liveErrorMessage,
@@ -295,6 +356,8 @@ class _LiveTipFormState extends State<_LiveTipForm>
         throw const PasswordPaymentException('已有一笔打赏待确认，请关闭支付窗口后重试原交易');
       }
       rethrow;
+    } finally {
+      unawaited(_balance.refresh());
     }
   }
 
@@ -304,66 +367,38 @@ class _LiveTipFormState extends State<_LiveTipForm>
     unawaited(_events?.cancel() ?? Future<void>.value());
     _permissions.removeListener(_permissionsChanged);
     _permissions.dispose();
+    _balance.dispose();
     _amount.dispose();
     _memo.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-      padding: EdgeInsets.fromLTRB(
-          16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-          child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-            Text('打赏主播', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            if (_loading)
-              const Center(child: CircularProgressIndicator())
-            else if (_currencies.isEmpty)
-              const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Text('打赏币种尚未配置，请联系管理员。'))
-            else ...[
-              SegmentedButton<String>(
-                  segments: [
-                    for (final currency in _currencies)
-                      ButtonSegment(
-                          value: currency.code, label: Text(currency.label))
-                  ],
-                  selected: {
-                    _currency!.code
-                  },
-                  onSelectionChanged: _pending != null || _busy
-                      ? null
-                      : (value) => setState(() {
-                            _currency = _currencies
-                                .firstWhere((v) => v.code == value.first);
-                          })),
-              const SizedBox(height: 12),
-              TextField(
-                  controller: _amount,
-                  enabled: !_busy && _pending == null,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: '金额')),
-              const SizedBox(height: 8),
-              TextField(
-                  controller: _memo,
-                  enabled: !_busy && _pending == null,
-                  maxLength: 50,
-                  decoration: const InputDecoration(labelText: '备注（选填）')),
-              if (_pending != null) const Text('上次打赏结果待确认，重试将使用同一订单号。'),
-            ],
-            if (_error != null)
-              Text(liveErrorMessage(_error!),
-                  style: const TextStyle(color: LiveStyle.red)),
-            const SizedBox(height: 12),
-            LivePrimaryButton(
-                label: _pending == null ? '确认打赏' : '重试原交易',
-                busy: _busy,
-                onPressed: _currencies.isNotEmpty && canTip ? _submit : null),
-          ])));
+  Widget build(BuildContext context) => ListenableBuilder(
+      listenable: _balance,
+      builder: (_, __) => LiveTipForm(
+          currencies: _currencies,
+          currency: _currency,
+          amount: _amount,
+          memo: _memo,
+          loading: _loading,
+          busy: _busy,
+          pending: _pending != null,
+          pendingUnavailable: _pendingUnavailable,
+          balance: _balance.forCurrency(_currency),
+          balanceLoading: _balance.loading,
+          balanceFailed: _balance.failed,
+          error: _error == null ? null : liveErrorMessage(_error!),
+          onRefreshBalance: _balance.refresh,
+          onCurrency: (code) => setState(() {
+                _currency = _currencies.firstWhere((v) => v.code == code);
+                _error = null;
+              }),
+          onAmountChanged: () => setState(() => _error = null),
+          onClose: () => Navigator.of(context).pop(),
+          onSubmit: canTip &&
+                  _currency != null &&
+                  (_pending != null || _amount.text.trim().isNotEmpty)
+              ? _submit
+              : null));
 }

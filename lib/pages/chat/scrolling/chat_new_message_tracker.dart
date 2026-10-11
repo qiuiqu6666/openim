@@ -33,21 +33,29 @@ class ChatNewMessageTracker {
 
   bool get _inactive => _closed || _isClosed();
 
-  void updateScrollOffset(double pixels) {
-    if (_inactive) return;
-    awayFromLatest.value = pixels > 1;
+  void updateScrollOffset(double pixels, {bool viewportConfirmed = true}) {
+    if (_inactive || !pixels.isFinite) return;
+    final missingNewer = _hasMissingNewer?.call() == true;
+    if (missingNewer || pixels > ChatLatestScrollTokens.leaveLatestDistance) {
+      awayFromLatest.value = true;
+    } else if (viewportConfirmed &&
+        pixels <= ChatLatestScrollTokens.rejoinLatestDistance) {
+      awayFromLatest.value = false;
+    }
     final viewport = _viewportDimension?.call() ?? 0;
     final extent = viewport.isFinite && viewport > 0
         ? viewport
         : ChatLatestScrollTokens.fallbackViewportDimension;
-    // The 1px reading boundary must not also control the visible button.
-    // Use separate show/hide distances so small movements cannot flash it.
+    // History windows never count as latest, even at their local newest edge.
+    // The button uses separate, larger show/hide distances.
     final ratio = showBackToBottom.value
         ? ChatLatestScrollTokens.hintHideViewportRatio
         : ChatLatestScrollTokens.hintShowViewportRatio;
     showBackToBottom.value = awayFromLatest.value &&
-        (_hasMissingNewer?.call() == true || pixels >= extent * ratio);
-    if (!awayFromLatest.value) {
+        (missingNewer || pixels >= extent * ratio);
+    if (!awayFromLatest.value &&
+        viewportConfirmed &&
+        pixels <= ChatLatestScrollTokens.distanceEpsilon) {
       _unseenIDs.clear();
       unseenCount.value = 0;
     }

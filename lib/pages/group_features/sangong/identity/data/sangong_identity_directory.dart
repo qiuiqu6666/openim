@@ -135,9 +135,9 @@ class SangongIdentityDirectory {
         final user = SangongDisplayIdentity(
             userID: id,
             account: accounts[id]?.account?.trim() ?? '',
-            nickname: avatars[id]?.nickname?.trim() ??
-                accounts[id]?.nickname?.trim() ??
-                '',
+            nickname: avatars[id]?.nickname?.trim().isNotEmpty == true
+                ? avatars[id]!.nickname!.trim()
+                : accounts[id]?.nickname?.trim() ?? '',
             faceURL: avatars[id]?.faceURL?.trim() ?? '');
         {
           _cache.remove(id);

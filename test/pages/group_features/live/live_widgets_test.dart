@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -102,6 +103,45 @@ Future<void> _paymentFrames(WidgetTester tester) async {
   for (var frame = 0; frame < 16; frame++) {
     await tester.pump(const Duration(milliseconds: 100));
   }
+}
+
+List<MethodCall> _mockAnchorProfile(Future<String> Function() reply) {
+  const sdk = MethodChannel('flutter_openim_sdk');
+  final calls = <MethodCall>[];
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(sdk, (call) async {
+    if (call.method != 'getUsersInfo') return null;
+    calls.add(call);
+    return reply();
+  });
+  addTearDown(() => messenger.setMockMethodCallHandler(sdk, null));
+  return calls;
+}
+
+Future<void> _openTipConfirmation(WidgetTester tester,
+    {bool dark = false, bool Function()? current}) async {
+  SharedPreferences.setMockInitialValues({});
+  final transport = LiveTransport((_) => throw StateError('Unexpected payment'));
+  final fixture = liveContext(transport.api(), current: current);
+  await _mount(
+      tester,
+      Scaffold(
+          body: Builder(
+              builder: (context) => TextButton(
+                  onPressed: () => GroupLiveTipSheet.show(context,
+                      featureContext: fixture,
+                      session: liveSession(status: LiveStatus.live),
+                      security: _PaymentSecurity()),
+                  child: const Text('打开打赏')))),
+      dark: dark);
+  await tester.tap(find.text('打开打赏'));
+  await tester.pumpAndSettle();
+  await tester.enterText(find.byType(TextField).first, '1');
+  await tester.pump();
+  await tester.tap(find.text('确认打赏'));
+  await _paymentFrames(tester);
+  expect(find.byKey(const ValueKey('trade-password-key-1')), findsOneWidget);
 }
 
 Future<LiveWatchState> _playingState(List<TestLiveVideo> videos) async {
@@ -441,6 +481,9 @@ void main() {
   testWidgets(
       'uncertain tip survives closing and reopening with the same real payment request',
       (tester) async {
+    final profileCalls = _mockAnchorProfile(() async => jsonEncode([
+          {'userID': 'anchor', 'nickname': '秋🍂'}
+        ]));
     SharedPreferences.setMockInitialValues({});
     var fail = true;
     final transport = LiveTransport((request) {
@@ -469,6 +512,9 @@ void main() {
     await tester.enterText(find.byType(TextField).last, '谢谢');
     await tester.tap(find.text('确认打赏'));
     await _paymentFrames(tester);
+    expect(find.text('打赏给 秋🍂'), findsOneWidget);
+    expect(find.text('打赏给 anchor'), findsNothing);
+    expect(profileCalls.single.arguments['userIDList'], ['anchor']);
     expect(find.byKey(const ValueKey('trade-password-key-1')), findsOneWidget);
     for (final digit in '123456'.split('')) {
       await tester.tap(find.byKey(ValueKey('trade-password-key-$digit')));
@@ -480,6 +526,8 @@ void main() {
     final firstRequest =
         Map<String, dynamic>.from(transport.requests.single.data as Map);
     expect(firstRequest['amount'], 1000001);
+    expect(transport.requests.single.path, endsWith('/live/live-1/tip'));
+    expect(firstRequest.containsKey('nickname'), isFalse);
     await tester.tap(find.byKey(const ValueKey('payment-cancel')));
     await _paymentFrames(tester);
     await tester.tapAt(const Offset(8, 8));
@@ -492,6 +540,8 @@ void main() {
     fail = false;
     await tester.tap(find.text('重试原交易'));
     await _paymentFrames(tester);
+    expect(find.text('打赏给 秋🍂'), findsOneWidget);
+    expect(profileCalls.length, 2);
     expect(find.byKey(const ValueKey('trade-password-key-1')), findsOneWidget);
     for (final digit in '123456'.split('')) {
       await tester.tap(find.byKey(ValueKey('trade-password-key-$digit')));
@@ -507,6 +557,76 @@ void main() {
     await _unmount(tester);
     await tester.pump(const Duration(seconds: 4));
   });
+  for (final dark in [false, true]) {
+    testWidgets('tip nickname updates inside the open PIN sheet ($dark)',
+        (tester) async {
+      final reply = Completer<String>();
+      final calls = _mockAnchorProfile(() => reply.future);
+      await _openTipConfirmation(tester, dark: dark);
+      expect(find.text('打赏给 主播'), findsOneWidget);
+      const nickname = '这是超过二十字的主播昵称用于确认打赏显示完整信息👨‍👩‍👧‍👦';
+      reply.complete(jsonEncode([
+        {'userID': 'another-user', 'nickname': '其他用户'},
+        {'userID': 'anchor', 'nickname': ' $nickname '}
+      ]));
+      await _paymentFrames(tester);
+      expect(find.text('打赏给 $nickname'), findsOneWidget);
+      expect(find.textContaining('其他用户'), findsNothing);
+      expect(calls.length, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  for (final missing in ['empty', 'blank', 'wrong-user', 'error', 'timeout']) {
+    testWidgets('tip nickname $missing falls back without blocking PIN entry',
+        (tester) async {
+      final reply = Completer<String>();
+      _mockAnchorProfile(() {
+        if (missing == 'error') throw PlatformException(code: 'offline');
+        if (missing == 'timeout') return reply.future;
+        return Future.value(jsonEncode([
+          if (missing != 'empty')
+            {
+              'userID': missing == 'wrong-user' ? 'other' : 'anchor',
+              'nickname': missing == 'blank' ? '  ' : '其他用户'
+            }
+        ]));
+      });
+      await _openTipConfirmation(tester);
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pump();
+      expect(find.text('打赏给 主播'), findsOneWidget);
+      expect(find.textContaining('打赏给 anchor'), findsNothing);
+      expect(find.textContaining('其他用户'), findsNothing);
+      if (missing == 'timeout') {
+        reply.complete(jsonEncode([
+          {'userID': 'anchor', 'nickname': '迟到的昵称'}
+        ]));
+        await _paymentFrames(tester);
+        expect(find.text('打赏给 主播'), findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+  for (final close in [false, true]) {
+    testWidgets('tip ignores late nickname after ${close ? 'close' : 'logout'}',
+        (tester) async {
+      var current = true;
+      final reply = Completer<String>();
+      _mockAnchorProfile(() => reply.future);
+      await _openTipConfirmation(tester, current: () => current);
+      if (close) {
+        await _unmount(tester);
+      } else {
+        current = false;
+      }
+      reply.complete(jsonEncode([
+        {'userID': 'anchor', 'nickname': '旧账号的昵称'}
+      ]));
+      await _paymentFrames(tester);
+      expect(find.textContaining('旧账号的昵称'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets(
       'review live create, push and waiting surfaces with reference art in light/dark',
       (tester) async {

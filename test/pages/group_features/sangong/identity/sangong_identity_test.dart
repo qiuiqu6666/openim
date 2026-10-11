@@ -9,6 +9,31 @@ import 'package:openim/pages/group_features/sangong/models/sangong_admin_models.
 import '../sangong_test_support.dart';
 
 void main() {
+  test('empty IM nickname falls back to Chat profile nickname', () async {
+    final directory = SangongIdentityDirectory(
+        session: () => ('owner', 'token', 'endpoint'),
+        profiles: (_) async => [UserFullInfo(userID: 'im_1', nickname: '真实昵称')],
+        imUsers: (_) async => [PublicUserInfo(userID: 'im_1', nickname: '  ')]);
+    expect((await directory.resolve('im_1'))?.nickname, '真实昵称');
+  });
+
+  testWidgets('resolved nickname replaces placeholder supplied by team row',
+      (tester) async {
+    final directory = SangongIdentityDirectory(
+        session: () => ('owner', 'token', 'endpoint'),
+        profiles: (_) async => [],
+        imUsers: (_) async =>
+            [PublicUserInfo(userID: 'im_1', nickname: '真实昵称')]);
+    await tester.pumpWidget(MaterialApp(
+        home: SangongIdentityScope(
+            directory: directory,
+            child: const SangongUserName(userID: 'im_1', nickname: '用户'))));
+    await tester.pumpAndSettle();
+    expect(find.text('真实昵称'), findsOneWidget);
+    expect(find.text('用户'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   test('account and real IM avatar are batched and matched by routing ID',
       () async {
     var profileCalls = 0, imCalls = 0;

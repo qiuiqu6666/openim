@@ -201,6 +201,7 @@ const Map<String, String> en_US = {
   'groupMemberCountLabel': '%s group members',
   'attachmentFile': 'File',
   'attachmentLoading': 'Downloading…',
+  'chatMediaPreparing': 'Preparing attachments (@count remaining)…',
   'attachmentRetry': 'Failed. Tap to retry',
   'attachmentOpen': 'Tap to open',
   'attachmentDownload': 'Tap to download',

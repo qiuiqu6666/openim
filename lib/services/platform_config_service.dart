@@ -9,7 +9,7 @@ class PlatformRelease {
             : (data['version'] as String? ?? '').trim(),
         minimum = (data['minVersion'] as String? ?? '').trim(),
         changelog = (data['changelog'] as String? ?? '').trim(),
-        grayRatio = ((data['grayRatio'] as num? ?? 0).toInt()).clamp(0, 100),
+        grayRatio = ((data['grayRatio'] as num? ?? 100).toInt()).clamp(0, 100),
         downloadURL = (data['downloadURL'] as String? ?? '').trim(),
         downloadLink = (data['downloadLink'] as String? ?? '').trim();
   final String latest, minimum, changelog, downloadURL, downloadLink;
@@ -73,6 +73,17 @@ int compareAppVersions(String a, String b) {
     final result = (i < left.length ? left[i] : 0)
         .compareTo(i < right.length ? right[i] : 0);
     if (result != 0) return result;
+  }
+  // The release API uses Flutter's numeric +build convention. A missing
+  // build preserves version-only minimum/latest compatibility.
+  int? build(String value) {
+    final fields = value.trim().split('+');
+    return fields.length == 2 ? int.tryParse(fields.last) : null;
+  }
+
+  final leftBuild = build(a), rightBuild = build(b);
+  if (leftBuild != null && rightBuild != null) {
+    return leftBuild.compareTo(rightBuild);
   }
   return 0;
 }

@@ -146,6 +146,7 @@ export 'src/utils/text/unicode_text.dart';
 export 'src/widgets/chat/editing/chat_text_editing.dart';
 export 'src/widgets/app_switch.dart';
 export 'src/utils/friend_add_source.dart';
+export 'src/utils/group_qr_link.dart';
 export 'src/widgets/voice_capture_dialog.dart';
 export 'src/widgets/chat/location_picker.dart';
 export 'src/widgets/chat/chat_formatted_text.dart';

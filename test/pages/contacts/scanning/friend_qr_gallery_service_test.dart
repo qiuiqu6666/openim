@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 import 'package:openim/pages/contacts/scanning/friend_qr_gallery_service.dart';
+import 'package:openim/pages/contacts/scanning/contact_qr_result.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 void main() {
@@ -35,6 +36,14 @@ void main() {
     const payload = '{"type":"group","id":"group_001","name":"秋的群聊"}';
     final path = await save(_qrPixels(payload), 'group.png');
     expect(await service.readCode(path), payload);
+  });
+
+  test('decodes an exported 99chat group QR into a group invitation', () async {
+    const payload = 'https://99chat.vip?group=@123456';
+    final path = await save(_qrPixels(payload), 'group-link.png');
+    final decoded = await service.readCode(path);
+    expect(decoded, payload);
+    expect(parseContactQrResult(decoded!), {'groupID': '@123456'});
   });
 
   test('recognizes the QR in every phone image orientation', () async {

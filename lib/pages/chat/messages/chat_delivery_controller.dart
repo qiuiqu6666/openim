@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -91,7 +89,8 @@ class ChatDeliveryController {
       ));
       return Future<void>.value();
     }
-    log('send type:${message.contentType} id:${message.clientMsgID}');
+    Logger.print('send type:${message.contentType} id:${message.clientMsgID}',
+        onlyConsole: true);
     final account = _currentAccountID();
     if (favoriteResult != null) {
       final visible = messageList

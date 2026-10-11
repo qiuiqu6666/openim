@@ -30,7 +30,7 @@ List<HomeQuickAction> homeContactActions({
     HomeQuickAction(
         id: 'scanQRCode',
         title: StrRes.scan,
-        subtitle: zh ? '扫描二维码添加好友' : 'Scan a QR code to add friends',
+        subtitle: zh ? '扫描好友或群二维码' : 'Scan a friend or group QR code',
         onTap: onScan),
   ];
 }

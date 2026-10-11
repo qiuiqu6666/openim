@@ -144,7 +144,10 @@ class SangongUserName extends StatelessWidget {
       userID: userID,
       builder: (identity) => Text(
           sangongDisplayName(
-              nickname.isEmpty ? identity?.nickname ?? '' : nickname, userID),
+              identity?.nickname.trim().isNotEmpty == true
+                  ? identity!.nickname
+                  : nickname,
+              userID),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: style));

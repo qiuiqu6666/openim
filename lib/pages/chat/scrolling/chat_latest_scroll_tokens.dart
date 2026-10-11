@@ -10,6 +10,8 @@ abstract final class ChatLatestScrollTokens {
   static const correctionDuration = Duration(milliseconds: 140);
   static const curve = Curves.easeInCubic;
   static const distanceEpsilon = 1.0;
+  static const leaveLatestDistance = 48.0;
+  static const rejoinLatestDistance = 24.0;
   static const correctionAttempts = 4;
   static const millisecondsPerViewport = 60;
 

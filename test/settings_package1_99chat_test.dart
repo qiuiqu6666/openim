@@ -266,7 +266,7 @@ void main() {
   });
 
   testWidgets(
-      'node page displays the configured endpoint without fake nodes',
+      'node page displays both deployment routes and the active selection',
       (tester) async {
     final store = SettingsDraftStore();
     addTearDown(store.dispose);
@@ -275,11 +275,13 @@ void main() {
       service: const StubSettingsService(),
     )));
     expect(find.text('节点01'), findsOneWidget);
+    expect(find.text('节点02'), findsOneWidget);
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
     expect(find.textContaining(Config.appAuthUrl), findsNothing);
     expect(find.textContaining(Config.imApiUrl), findsNothing);
     expect(find.textContaining(Config.imWsUrl), findsNothing);
     expect(find.text('尚未测速'), findsOneWidget);
-    expect(find.text('未知'), findsOneWidget);
+    expect(find.text('未知'), findsNWidgets(2));
   });
 
   testWidgets(

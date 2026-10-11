@@ -1,15 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/media/chat_media_controller.dart';
-
-Future<void> _flush() async {
-  await Future<void>.delayed(Duration.zero);
-  await Future<void>.delayed(Duration.zero);
-}
+import 'package:openim_common/openim_common.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -19,13 +16,18 @@ void main() {
   late List<Message> sent;
   late List<Message> staged;
   late int sdkCalls;
+  late Directory directory;
+  late File image;
   bool voiceBusy = false;
 
   void completeImage() => created.complete(jsonEncode(
       Message(clientMsgID: 'image', contentType: MessageType.picture)
           .toJson()));
 
-  setUp(() {
+  setUp(() async {
+    directory = await Directory.systemTemp.createTemp('chat-media-controller-');
+    Config.cachePath = directory.path;
+    image = await File('${directory.path}/image.gif').writeAsBytes([1, 2, 3]);
     OpenIM.iMManager.userID = 'self';
     created = Completer<String>();
     sent = [];
@@ -55,17 +57,24 @@ void main() {
       return created.future;
     });
   });
-  tearDown(() {
+  tearDown(() async {
     media.close();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdkChannel, null);
+    await directory.delete(recursive: true);
   });
+
+  Future<void> waitForCreation() async {
+    while (sdkCalls == 0) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+  }
 
   test('picture staging owns one pending message and defers delivery',
       () async {
     // GIF compression preserves the original path without platform compression.
-    final pending = media.sendPicture(path: 'image.gif', sendNow: false);
-    await _flush();
+    final pending = media.sendPicture(path: image.path, sendNow: false);
+    await waitForCreation().timeout(const Duration(seconds: 5));
     completeImage();
     await pending;
     expect(staged.single.clientMsgID, 'image');
@@ -75,8 +84,8 @@ void main() {
 
   test('picture creation finishing after close cannot stage or deliver',
       () async {
-    final pending = media.sendPicture(path: 'image.gif', sendNow: false);
-    await _flush();
+    final pending = media.sendPicture(path: image.path, sendNow: false);
+    await waitForCreation().timeout(const Duration(seconds: 5));
     media.close();
     completeImage();
     await pending;
@@ -87,8 +96,8 @@ void main() {
 
   test('picture creation finishing after account switch cannot deliver',
       () async {
-    final pending = media.sendPicture(path: 'image.gif');
-    await _flush();
+    final pending = media.sendPicture(path: image.path);
+    await waitForCreation().timeout(const Duration(seconds: 5));
     OpenIM.iMManager.userID = 'next-account';
     completeImage();
     await pending;
@@ -98,7 +107,7 @@ void main() {
 
   test('closed media does not start another SDK image creation', () async {
     media.close();
-    await media.sendPicture(path: 'image.gif');
+    await media.sendPicture(path: image.path);
     expect(sdkCalls, 0);
   });
 

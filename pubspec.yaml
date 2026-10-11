@@ -130,6 +130,8 @@ dependencies:
   webview_flutter: 4.13.1
 
 dependency_overrides:
+  video_player_android:
+    path: local_plugin/video_player_android
   # livekit_client 2.5.0+hotfix.3 requires WebRTC-SDK 137.7151.03 on iOS.
   # flutter_webrtc 1.2.x requires 137.7151.04, which CocoaPods cannot combine.
   flutter_webrtc: 1.1.0

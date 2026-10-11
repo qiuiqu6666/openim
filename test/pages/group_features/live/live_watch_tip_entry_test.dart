@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -38,6 +39,11 @@ void main() {
   setUp(() {
     Get.testMode = true;
     SharedPreferences.setMockInitialValues({});
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('flutter_openim_sdk'),
+            (call) async => jsonEncode(call.method == 'getUsersInfo'
+                ? [{'userID': 'anchor', 'nickname': '主播昵称'}]
+                : []));
     tipped = false;
     transport = LiveTransport((request) {
       if (request.path.endsWith('/feature-capabilities')) {
@@ -81,6 +87,9 @@ void main() {
     store.apply('group#1', _features(1));
   });
   tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+            const MethodChannel('flutter_openim_sdk'), null);
     store.dispose();
     Get.reset();
   });

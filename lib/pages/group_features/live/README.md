@@ -87,13 +87,22 @@ ID 均按 URI 组件编码；预约时间发送 UTC ISO-8601。管理只能使�
 ## 打赏与支付
 
 复用 OpenIMProfileService 的真实支付密码设置、PasswordPaymentSheet 和 FundPendingStore。
+打开打赏表单时按当前场次的 `anchorUserId` 单次查询 OpenIM 用户昵称，确认页显示“打赏给 昵称”。
+资料未返回、为空或读取失败时显示“主播”；查询不阻塞密码弹窗，5 秒超时，关闭页面或账号失效后的迟回包不展示。
+昵称仅用于展示，不进入支付请求或待确认订单，实际收款对象仍由原直播场次确定。
 服务在 live capabilities 明确返回 `tipCurrencies`，元素为 `{code,label,decimals}`。现有后端只接受 USDT/TRX（6 位）、BI99（2 位，显示名 元）；提交还校验币种在当前能力列表中。
-未返回币种时显示“打赏币种尚未配置”。通用金额模型保留其他旧码解析，不代表直播接口允许这些币种；不自动互换币种码。
+打赏面板只展示当前能力允许的 USDT（6 位）和 BI99（2 位，显示名“元”），隐藏 TRX；没有可用币种时提示稍后重试，不自动互换币种码。
 金额使用 BigInt / 现有 FundAmount 转换整数单位，不使用浮点舍入，限制 JSON 安全整数范围。
+
+`tipping/live_tip_form.dart` 管理面板布局，复用 CupertinoSlidingSegmentedControl、FundCoinIcon、LiveStyle、AppTokens 和 LivePrimaryButton，支持日夜主题、安全区、键盘避让及大字体滚动。
+`tipping/live_tip_balance.dart` 持有当前账号的一份余额快照，复用 WalletFundApi 的 GET `/chat/fund/balances`，按币种与精度匹配 `available`，不把冻结余额计入可用余额，也不把失败伪装为零。
+打开面板、回到前台、手动刷新和支付请求结束后重读；切换币种直接展示该快照对应余额。合并在途读取，10 秒超时允许重试，后台、关闭及账号变化后的迟回包不回写。
+已知余额不足时新打赏在输入密码前提示；未知交易的原单重试不受可能已扣款后的低余额阻断，实际扣款仍以服务端为准。
 
 首次发起前按服务地址、账号、群、场次保存 clientOrderID 和原参数，绝不保存支付密码。
 页面关闭、进程重启或网络超时后重试同一订单；另一个窗口不能覆盖待确认记录。
 未知结果锁定金额/备注；只有首次明确拒绝可以清除待确认，已存在未知结果的后续失败不清除。
+恢复到已隐藏或已不支持币种的旧待确认单时保留原记录并锁定提交，提示到钱包核对，不能将其改成 USDT 新单或静默清除。
 服务端须对 clientOrderId 保证幂等、真实鉴权和扣款原子性，前端不能替代。
 
 ## 现有服务边界

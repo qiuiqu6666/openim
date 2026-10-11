@@ -78,6 +78,10 @@ void main() {
         1);
     c.setForeground(false);
     await Future<void>.delayed(Duration.zero);
+    expect(batches.length, 2);
+    c.setForeground(false);
+    await Future<void>.delayed(Duration.zero);
+    expect(batches.length, 2);
     now = now.add(const Duration(minutes: 5));
     c.tick();
     await Future<void>.delayed(Duration.zero);
@@ -88,6 +92,7 @@ void main() {
         isEmpty);
     c.setForeground(true);
     await Future<void>.delayed(Duration.zero);
+    expect(batches.length, 2);
     now = now.add(const Duration(seconds: 30));
     c.tick();
     await Future<void>.delayed(Duration.zero);

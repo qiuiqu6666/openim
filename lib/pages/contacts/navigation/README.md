@@ -6,9 +6,9 @@
 
 `MainTabPlusButton` 位于公共包的 `widgets/navigation/`，由消息页和通讯录复用。点击区域 48×48，图标 24；菜单打开与关闭各顺时针转 45°，220ms，关闭动画偏好下直接切换。既有 `GlassAppBar`、系统栏和亮暗主题配置继续复用。
 
-菜单复用 `showHomeQuickActions`，参考顺序为搜索添加、创建群聊、创建频道、扫一扫。联系人控制器负责真实导航，搜索与创建群使用既有 OpenIM 入口；扫一扫复用 `scanning/FriendQrScanner`，返回邀请码后验证账号与登录状态再打开好友资料。频道缺少当前产品能力，明确禁用并显示“暂未开放”，不会伪造创建结果。
+菜单复用 `showHomeQuickActions`，参考顺序为搜索添加、创建群聊、创建频道、扫一扫。联系人控制器负责真实导航，搜索与创建群使用既有 OpenIM 入口；扫一扫复用 `scanning/FriendQrScanner`，返回后验证账号与登录状态，由 `openScannedContact` 打开好友或群资料。频道缺少当前产品能力，明确禁用并显示“暂未开放”，不会伪造创建结果。
 
-扫描组件与“我的二维码”页共享，邀请码继续经过公共 `parseFriendInvite` 校验。相机跟随前后台和页面覆盖状态暂停/恢复；扫码页面的 `ModalRoute.isCurrentOf` 依赖监听避免增加全局路由订阅。关闭后忽略晚到结果，扫码返回时两个入口均校验账号和登录令牌；原生 QRView 管理自身控制器释放。
+扫描组件与“我的二维码”页共享，邀请码经过公共 `parseFriendInvite` 或 `parseGroupQrLink` 校验，群邀请查询 SDK 后使用真实群 ID 进入既有资料页。相机跟随前后台和页面覆盖状态暂停/恢复；扫码页面的 `ModalRoute.isCurrentOf` 依赖监听避免增加全局路由订阅。关闭后忽略晚到结果，扫码返回时两个入口均校验账号和登录令牌，群查询返回后再检查一次；原生 QRView 管理自身控制器释放。
 
 头部测试归 `test/pages/contacts/navigation/`；扫描生命周期测试归 `test/pages/contacts/scanning/`；原通讯录目录、搜索和控制器测试继续各自维护。头部复用既有 SDK 状态流，未增加好友数据请求、目录排序和好友数据订阅。
 

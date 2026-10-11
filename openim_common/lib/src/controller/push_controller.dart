@@ -35,11 +35,13 @@ class PushController extends GetxService {
   ///   - alias: The alias to bind to the push notification service for getui.
   ///   - onTokenRefresh: A callback function that is invoked with the refreshed
   ///     token when using FCM. Required if the push type is FCM.
-  static void login(String alias, {void Function(String token)? onTokenRefresh}) {
+  static void login(String alias,
+      {void Function(String token)? onTokenRefresh}) {
     // iOS uses the app-owned direct APNs registration and account binding.
     if (Platform.isIOS) return;
     if (PushController().pushType == PushType.FCM) {
-      assert((PushController().pushType == PushType.FCM && onTokenRefresh != null));
+      assert((PushController().pushType == PushType.FCM &&
+          onTokenRefresh != null));
 
       FCMPushController()._initialize().then((_) {
         FCMPushController()._getToken().then((token) => onTokenRefresh!(token));
@@ -63,12 +65,15 @@ class FCMPushController {
   FCMPushController._internal();
 
   Future<void> _initialize() async {
-    GooglePlayServicesAvailability? availability = GooglePlayServicesAvailability.success;
+    GooglePlayServicesAvailability? availability =
+        GooglePlayServicesAvailability.success;
     if (Platform.isAndroid) {
-      availability = await GoogleApiAvailability.instance.checkGooglePlayServicesAvailability();
+      availability = await GoogleApiAvailability.instance
+          .checkGooglePlayServicesAvailability();
     }
     if (availability != GooglePlayServicesAvailability.serviceInvalid) {
-      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform);
     } else {
       Logger.print('Google Play Services are not available');
       return;
@@ -84,13 +89,15 @@ class FCMPushController {
   }
 
   Future<void> _requestPermission() async {
-    NotificationSettings settings = await FirebaseMessaging.instance.requestPermission();
-    print('User granted permission: ${settings.authorizationStatus}');
+    NotificationSettings settings =
+        await FirebaseMessaging.instance.requestPermission();
+    Logger.print('User granted permission: ${settings.authorizationStatus}',
+        onlyConsole: true);
   }
 
   void _configureForegroundNotification() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-      print('Foreground notification received: ${message.notification?.title}');
+      Logger.print('Foreground notification received', onlyConsole: true);
 
       if (message.notification != null) {}
     });
@@ -98,12 +105,14 @@ class FCMPushController {
 
   void _configureBackgroundNotification() {
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('App opened from background: ${message.notification?.title}');
+      Logger.print('App opened from background', onlyConsole: true);
     });
 
-    FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
+    FirebaseMessaging.instance
+        .getInitialMessage()
+        .then((RemoteMessage? message) {
       if (message != null) {
-        print('App opened from terminated state: ${message.notification?.title}');
+        Logger.print('App opened from terminated state', onlyConsole: true);
       }
     });
   }
@@ -125,7 +134,7 @@ class FCMPushController {
 
   void _listenToTokenRefresh(void Function(String token) onTokenRefresh) {
     FirebaseMessaging.instance.onTokenRefresh.listen((String newToken) {
-      print("FCM Token refreshed: $newToken");
+      Logger.print('FCM token refreshed', onlyConsole: true);
       onTokenRefresh(newToken);
     });
   }

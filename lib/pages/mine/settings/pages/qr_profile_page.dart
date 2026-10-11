@@ -6,7 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:openim/pages/contacts/scanning/friend_qr_scanner.dart';
-import 'package:openim/routes/app_navigator.dart';
+import 'package:openim/pages/contacts/scanning/contact_qr_navigation.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -219,13 +219,12 @@ class _QrProfilePageState extends State<QrProfilePage> {
         DataSp.chatToken != sessionToken) {
       return;
     }
-    AppNavigator.startUserProfilePane(
-      userID: invite['userID']!,
-      addSource: invite['source'] == 'link'
-          ? FriendAddSource.link
-          : FriendAddSource.qrcode,
-      friendAddFields: {'inviteCode': invite['inviteCode']!},
-      forceCanAdd: true,
+    await openScannedContact(
+      invite,
+      isActive: () =>
+          mounted &&
+          DataSp.userID == accountID &&
+          DataSp.chatToken == sessionToken,
     );
   }
 

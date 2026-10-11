@@ -37,10 +37,11 @@ class AgentRebateController extends AgentQueryController
         settled) {
       return false;
     }
-    final raw = data?[personal ? 'personal' : 'summary'];
-    final value = raw is Map
-        ? raw[personal ? 'pendingRebate' : 'agentPendingRebate']
-        : null;
+    // Agent settlement is calculated by the server. The current summary may
+    // omit pending amounts or show zero before settlement; it is not a gate.
+    if (!personal) return true;
+    final raw = data?['personal'];
+    final value = raw is Map ? raw['pendingRebate'] : null;
     final amount = value is num ? value.toDouble() : double.tryParse('$value');
     return amount != null && amount.isFinite && amount > 0;
   }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -175,7 +174,9 @@ class ChatLogic extends SuperController {
     sendMessage: (message, {addToUI = true, resetInput = true}) =>
         _sendMessage(message, addToUI: addToUI, resetInput: resetInput),
     stageMessage: (message) {
-      if (!_sessionInactive) messageList.add(message);
+      if (_sessionInactive) return;
+      messageList.add(message);
+      scrollBottom();
     },
     previewVoice: _voice.previewAndSendVoice,
     closeToolbox: closeToolbox,
@@ -616,7 +617,7 @@ class ChatLogic extends SuperController {
         scrollController.offset - scrollController.position.minScrollExtent;
     // Lazy, variable-height rows can refine an estimated latest edge in layout.
     // Only the painted viewport (or an explicit return) confirms reaching it.
-    if (distance > 1) newMessages.updateScrollOffset(distance);
+    newMessages.updateScrollOffset(distance, viewportConfirmed: false);
   }
 
   void onChatViewportChanged(List<String> readIDs, double distanceFromLatest) {
@@ -699,7 +700,7 @@ class ChatLogic extends SuperController {
     if (scrollController.hasClients) {
       final distance =
           scrollController.offset - scrollController.position.minScrollExtent;
-      if (distance > 1) newMessages.updateScrollOffset(distance);
+      newMessages.updateScrollOffset(distance, viewportConfirmed: false);
     }
     final followLatest = !newMessages.awayFromLatest.value;
     if (_dateWindow.buffering ||
@@ -974,6 +975,7 @@ class ChatLogic extends SuperController {
   }
 
   Future<void> onTapAlbum() => _media.onTapAlbum();
+  int get preparingMediaCount => _media.preparingCount.value;
   Future<void> onTapFile() => _media.onTapFile();
   Future<void> onTapCamera() => _media.onTapCamera();
   Future<void> onTapRecord() => _voice.onTapRecord();
@@ -1014,7 +1016,8 @@ class ChatLogic extends SuperController {
   Future<void> onTapTransfer() => _funds.openSend(isRedPacket: false);
 
   void parseClickEvent(Message msg) async {
-    log('parseClickEvent type:${msg.contentType} id:${msg.clientMsgID}');
+    Logger.print('parseClickEvent type:${msg.contentType} id:${msg.clientMsgID}',
+        onlyConsole: true);
     if (msg.contentType == MessageType.custom) {
       final fund = fundMessageData(msg);
       if (fund != null) {

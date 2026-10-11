@@ -548,7 +548,8 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
     final version = packageInfo.version;
     final appName = packageInfo.appName;
     final buildNumber = packageInfo.buildNumber;
-    displayVersion.value = version;
+    displayVersion.value =
+        buildNumber.isEmpty ? version : '$version+$buildNumber';
 
     versionInfo.value = '$appName $version+$buildNumber SDK: ${OpenIM.version}';
   }

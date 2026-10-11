@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
 
 import 'video_media_cache.dart';
+import '../utils/media/native_media_file.dart';
 
 /// Mobile playback uses platform players rather than the mpv FFI lifecycle.
 class NativeMediaVideo extends StatefulWidget {
@@ -30,7 +33,9 @@ class NativeMediaVideo extends StatefulWidget {
 
 class _NativeMediaVideoState extends State<NativeMediaVideo> {
   VideoPlayerController? _controller;
-  Future<void>? _initializing;
+  bool _initializing = false;
+  bool _skipLocal = false;
+  static const _loadTimeout = Duration(seconds: 20);
   bool _closed = false;
   bool _failed = false;
   double? _seekSeconds;
@@ -38,76 +43,157 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
   @override
   void initState() {
     super.initState();
-    _initializing = _initialize();
+    unawaited(_initialize());
+  }
+
+  // Report platform failures without leaking signed URLs, headers or paths.
+  void _logFailure(String stage, Object error) {
+    final raw = error is PlatformException ? error.message ?? '' : '$error';
+    final detail =
+        raw.replaceAll(RegExp(r'(?:https?|file)://[^\s]+'), '<source>');
+    debugPrint('[ChatVideo] stage=$stage platform=${Platform.operatingSystem} '
+        'type=${error.runtimeType} detail=$detail');
+  }
+
+  Future<bool> _open(VideoPlayerController controller, String source) async {
+    if (_closed) return false;
+    _controller = controller;
+    try {
+      await controller.initialize().timeout(_loadTimeout);
+      if (_closed) return false;
+      await controller.setVolume(widget.muted ? 0 : 1).timeout(_loadTimeout);
+      if (_closed) return false;
+      await controller.setLooping(widget.looping).timeout(_loadTimeout);
+      if (_closed) return false;
+      if (widget.autoPlay) await controller.play().timeout(_loadTimeout);
+      if (_closed) return false;
+      if (controller.value.hasError) {
+        throw StateError(
+            controller.value.errorDescription ?? 'Playback failed');
+      }
+      controller.addListener(_playbackChanged);
+      debugPrint('[ChatVideo] stage=ready source=$source '
+          'platform=${Platform.operatingSystem} '
+          'size=${controller.value.size} autoPlay=${widget.autoPlay}');
+      return true;
+    } catch (error) {
+      _logFailure(source, error);
+      if (identical(_controller, controller)) {
+        _controller = null;
+        unawaited(_disposeController(controller));
+      }
+      return false;
+    }
   }
 
   Future<void> _initialize() async {
+    if (_initializing || _closed) return;
+    _initializing = true;
     try {
       final file =
           widget.file ?? (widget.path == null ? null : File(widget.path!));
-      final local = file != null && await file.exists();
-      if (_closed) return;
-      final url = widget.url;
-      if (!local && (url == null || url.isEmpty)) {
-        throw StateError('Missing video');
+      final url = widget.url?.trim();
+      final hasRemote = url != null && url.isNotEmpty;
+      File? sourceFile;
+      if (!_skipLocal) {
+        try {
+          final stat = await file?.stat();
+          if (stat?.type == FileSystemEntityType.file && stat!.size > 0) {
+            sourceFile = file;
+          } else if (hasRemote && widget.httpHeaders.isEmpty) {
+            sourceFile = await VideoMediaCache.cachedFile(url)
+                .timeout(const Duration(seconds: 3));
+          }
+        } catch (error) {
+          _logFailure('local_lookup', error);
+        }
       }
-      final cached = !local && url != null && widget.httpHeaders.isEmpty
-          ? await VideoMediaCache.cachedFile(url)
-          : null;
       if (_closed) return;
-      final sourceFile = local ? file : cached;
-      final controller = sourceFile != null
-          ? VideoPlayerController.file(sourceFile)
-          : VideoPlayerController.networkUrl(Uri.parse(url!),
-              httpHeaders: widget.httpHeaders);
-      _controller = controller;
-      await controller.initialize();
-      if (_closed) return;
-      await controller.setVolume(widget.muted ? 0 : 1);
-      if (_closed) return;
-      if (widget.looping) {
-        await controller.setLooping(true);
+      var ready = false;
+      if (sourceFile != null) {
+        // File-only previews (e.g. verified favorite originals) own temporary
+        // files that must disappear on close; do not persist a shared copy.
+        final playable = hasRemote
+            ? await NativeMediaFile.prepare(sourceFile).timeout(_loadTimeout)
+            : sourceFile;
         if (_closed) return;
+        ready = await _open(VideoPlayerController.file(playable), 'local');
+        if (!ready) _skipLocal = true;
       }
-      if (widget.autoPlay) await controller.play();
-      if (mounted && !_closed) setState(() {});
-      if (!local &&
-          cached == null &&
-          url != null &&
+      if (_closed) return;
+      if (!ready && hasRemote) {
+        ready = await _open(
+            VideoPlayerController.networkUrl(Uri.parse(url),
+                httpHeaders: widget.httpHeaders),
+            'network');
+      }
+      if (_closed) return;
+      if (!ready && hasRemote && defaultTargetPlatform == TargetPlatform.iOS) {
+        final downloaded = await VideoMediaCache.downloadForPlayback(url,
+                headers: widget.httpHeaders, refresh: _skipLocal)
+            .timeout(_loadTimeout);
+        if (_closed) return;
+        ready = await _open(VideoPlayerController.file(downloaded), 'download');
+        sourceFile = downloaded;
+      }
+      if (_closed) return;
+      setState(() => _failed = !ready);
+      if (ready &&
+          hasRemote &&
+          sourceFile == null &&
           widget.httpHeaders.isEmpty) {
-        unawaited(Future<void>.delayed(const Duration(seconds: 2), () async {
-          if (!_closed) await VideoMediaCache.remember(url);
-        }));
+        unawaited(VideoMediaCache.remember(url));
       }
-    } catch (_) {
+    } catch (error) {
+      _logFailure('initialize', error);
       if (mounted && !_closed) setState(() => _failed = true);
+    } finally {
+      _initializing = false;
     }
   }
 
-  Future<void> _release() async {
-    await _initializing;
+  void _playbackChanged() {
+    final controller = _controller;
+    if (_closed ||
+        _failed ||
+        controller == null ||
+        !controller.value.hasError) {
+      return;
+    }
+    _logFailure(
+        'playback', controller.value.errorDescription ?? 'Unknown error');
+    _skipLocal = true;
+    controller.removeListener(_playbackChanged);
+    _controller = null;
+    unawaited(_disposeController(controller));
+    setState(() => _failed = true);
+  }
+
+  Future<void> _disposeController(VideoPlayerController controller) async {
+    controller.removeListener(_playbackChanged);
+    try {
+      // Dispose immediately, even if initialization has not emitted an event.
+      await controller.dispose();
+    } catch (error) {
+      _logFailure('dispose', error);
+    }
+  }
+
+  void _retry() {
+    if (_initializing || _closed) return;
     final controller = _controller;
     _controller = null;
-    if (controller == null) return;
-    try {
-      if (controller.value.isInitialized && controller.value.isPlaying) {
-        await controller.pause();
-      }
-    } catch (error) {
-      debugPrint('Video pause during release failed: $error');
-    } finally {
-      try {
-        await controller.dispose();
-      } catch (error) {
-        debugPrint('Video release failed: $error');
-      }
-    }
+    if (controller != null) unawaited(_disposeController(controller));
+    setState(() => _failed = false);
+    unawaited(_initialize());
   }
 
   @override
   void dispose() {
     _closed = true;
-    unawaited(_release());
+    final controller = _controller;
+    _controller = null;
+    if (controller != null) unawaited(_disposeController(controller));
     super.dispose();
   }
 
@@ -116,8 +202,13 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
   @override
   Widget build(BuildContext context) {
     if (_failed) {
-      return const Center(
-          child: Icon(Icons.error_outline, color: Colors.white));
+      return Center(
+        child: TextButton.icon(
+          onPressed: _retry,
+          icon: const Icon(Icons.refresh),
+          label: const Text('视频加载失败，点击重试'),
+        ),
+      );
     }
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) {

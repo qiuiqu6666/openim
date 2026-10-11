@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
+import '../../../../core/server_nodes/node_endpoint.dart';
+import '../../../../core/server_nodes/startup_node_selection.dart';
 import '../node_switch/node_probe_controller.dart';
 import '../settings_draft_store.dart';
 import '../settings_service.dart';
@@ -42,7 +44,7 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
   }
 
   String _time(BuildContext context) {
-    final value = _controller.testedAt;
+    final value = _controller.testedAt ?? StartupNodeSelection.last?.checkedAt;
     if (value == null) {
       return settingsText(context, zh: '尚未测速', en: 'Not tested');
     }
@@ -65,17 +67,72 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
     }
   }
 
+  Widget _nodeRow(BuildContext context, NodeEndpoint node, int index) {
+    final dark = settingsIsDark(context);
+    final selected = node.signature == _controller.endpoint.signature;
+    var status = NodeProbeStatus.unknown;
+    int? latency;
+    final checks = StartupNodeSelection.last?.checks ?? [];
+    for (final check in checks) {
+      if (check.endpoint.signature == node.signature) {
+        status =
+            check.available ? NodeProbeStatus.normal : NodeProbeStatus.abnormal;
+        latency = check.latencyMs;
+      }
+    }
+    var label = status == NodeProbeStatus.normal
+        ? '${settingsText(context, zh: '正常', en: 'OK')} (${latency}ms)'
+        : settingsText(context,
+            zh: status == NodeProbeStatus.abnormal ? '异常' : '未知',
+            en: status == NodeProbeStatus.abnormal ? 'Abnormal' : 'Unknown');
+    if (selected && (_controller.testing || _controller.testedAt != null)) {
+      status = _controller.status;
+      label = _status(context);
+    }
+    final color = status == NodeProbeStatus.normal
+        ? (dark ? AppTokens.successDark : AppTokens.success)
+        : status == NodeProbeStatus.abnormal
+            ? AppTokens.danger
+            : AppTokens.textSecondary(dark: dark);
+    return Semantics(
+      selected: selected,
+      child: Container(
+        constraints: BoxConstraints(
+            minHeight: SettingsResponsive.listRowMinHeight(context)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(children: [
+          Expanded(
+              child: Text(
+                  settingsText(context,
+                      zh: '节点${(index + 1).toString().padLeft(2, '0')}',
+                      en: 'Node ${(index + 1).toString().padLeft(2, '0')}'),
+                  style: TextStyle(color: AppTokens.textPrimary(dark: dark)))),
+          Expanded(
+            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              Icon(Icons.circle, size: 8, color: color),
+              const SizedBox(width: 6),
+              Flexible(child: Text(label, style: TextStyle(color: color))),
+              const SizedBox(width: 10),
+              SizedBox(
+                  width: 22,
+                  child: selected
+                      ? const Icon(Icons.check_rounded,
+                          color: AppTokens.accent, size: 22)
+                      : null),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
           final dark = settingsIsDark(context);
           final sub = AppTokens.textSecondary(dark: dark);
-          final statusColor = _controller.status == NodeProbeStatus.normal
-              ? const Color(0xFF34C759)
-              : _controller.status == NodeProbeStatus.abnormal
-                  ? AppTokens.danger
-                  : sub;
+          final nodes = NodeEndpoint.candidates(_controller.endpoint);
           return SettingsScaffold(
             embedded: widget.embedded,
             title: settingsText(context, zh: '节点切换', en: 'Node Switch'),
@@ -121,47 +178,15 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
                 ]),
               ),
               SettingsGroup(children: [
-                Container(
-                  constraints: BoxConstraints(
-                      minHeight: SettingsResponsive.listRowMinHeight(context)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(children: [
-                    Expanded(
-                        child: Text(
-                            settingsText(context, zh: '节点01', en: 'Node 01'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: AppTokens.textPrimary(dark: dark),
-                                fontSize: SettingsResponsive.isDesktop(context)
-                                    ? 15
-                                    : 16,
-                                fontWeight: FontWeight.w400))),
-                    Icon(Icons.circle, size: 8, color: statusColor),
-                    const SizedBox(width: 6),
-                    Semantics(
-                        liveRegion: true,
-                        child: Text(_status(context),
-                            style: TextStyle(
-                                color: statusColor,
-                                fontSize: SettingsResponsive.isDesktop(context)
-                                    ? 13
-                                    : 14,
-                                fontWeight: FontWeight.w500))),
-                    const SizedBox(width: 10),
-                    const SizedBox(
-                        width: 22,
-                        child: Icon(Icons.check_rounded,
-                            color: AppTokens.accent, size: 22)),
-                  ]),
-                ),
+                for (var i = 0; i < nodes.length; i++)
+                  _nodeRow(context, nodes[i], i),
               ]),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
                 child: Text(
                     settingsText(context,
-                        zh: '加载失败或速度慢时，可重新测速查看节点状态。\n\n状态说明：正常 / 异常 / 未知。可切换 4G、5G、Wi-Fi 后重新测速。',
-                        en: 'If loading fails or feels slow, retest the node.\n\nStatus: OK / Abnormal / Unknown. Retest on 4G, 5G or Wi-Fi.'),
+                        zh: '每次启动 App 时自动检测并选择可用节点，使用中保持连接稳定。\n\n可手动测速查看当前节点状态；下次启动时会重新自动选择。',
+                        en: 'A working node is selected automatically at each app launch. The connection stays unchanged during use.\n\nRetest the current node manually, or relaunch to select again.'),
                     style: TextStyle(color: sub, fontSize: 12, height: 1.45)),
               ),
             ],

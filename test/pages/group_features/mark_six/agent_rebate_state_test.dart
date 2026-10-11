@@ -131,7 +131,7 @@ void main() {
     expect(api.calls.where((c) => c.method == 'POST'), hasLength(1));
   });
   for (final amount in [null, 0, -1, 'invalid', double.infinity]) {
-    test('unconfirmed or nonpositive outstanding amount blocks POST $amount',
+    test('agent settlement does not depend on summary estimate $amount',
         () async {
       final api = MarkSixFakeApi(
           respond: (_, path, query, __) => path.endsWith('/current')
@@ -146,9 +146,9 @@ void main() {
         repo.close();
       });
       await state.initialize();
-      expect(state.canApply(), isFalse);
+      expect(state.canApply(), isTrue);
       await state.apply();
-      expect(api.calls.where((c) => c.method == 'POST'), isEmpty);
+      expect(api.calls.where((c) => c.method == 'POST'), hasLength(1));
     });
   }
   test(

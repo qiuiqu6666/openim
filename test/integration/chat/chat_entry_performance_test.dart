@@ -171,12 +171,16 @@ void main() {
     await tester.pump();
     final watch = Stopwatch()..start();
     for (var i = 0; i < 10000; i++) {
+      // Small offsets must not freeze the window once it reaches 600 rows.
+      logic.newMessages.updateScrollOffset(16);
       im.recvNewMessage(_entryMessage('burst-$i', time: i + 2));
     }
     print(
         'UX_AUDIT live route: ${logic.messageList.length} retained rows after 10000 arrivals; callback-only elapsed ${watch.elapsedMilliseconds} ms (no per-arrival frames)');
     expect(logic.messageList.length, 600);
     expect(logic.messageList.last.clientMsgID, 'burst-9999');
+    expect(logic.viewingHistory.value, isFalse);
+    expect(logic.scrollingCacheMessageList, isEmpty);
     expect(logic.historyHasMore.value, isTrue);
     logic.onDelete();
     await tester.pump(const Duration(milliseconds: 100));

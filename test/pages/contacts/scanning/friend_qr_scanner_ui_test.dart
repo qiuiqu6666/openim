@@ -357,6 +357,54 @@ void main() {
       await h.close();
     }
   });
+  for (final code in [
+    'https://99chat.vip?group=@123456',
+    'https://99chat.vip/?group=%40123456',
+    'io.openim.app/joinGroup/123456',
+  ]) {
+    testWidgets('camera accepts a group invitation once: $code',
+        (tester) async {
+      final h = _ScannerHost(tester);
+      try {
+        await h.mount();
+        await Future.wait([
+          h.native.recognize(code),
+          h.native.recognize(code),
+        ]);
+        await tester.pumpAndSettle();
+        expect(h.results, [
+          {'groupID': code.startsWith('https') ? '@123456' : '123456'}
+        ]);
+        expect(find.text('Home'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await h.close();
+      }
+    });
+  }
+
+  testWidgets('album accepts the group link while camera permission is denied',
+      (tester) async {
+    final gallery = _Gallery(
+      pick: () async => '/group.png',
+      read: (_) async => 'https://99chat.vip?group=@123456',
+    );
+    final h = _ScannerHost(tester, gallery: gallery);
+    try {
+      await h.mount(granted: false);
+      await tester.tap(_action('album'));
+      await tester.pumpAndSettle();
+      expect(gallery.paths, ['/group.png']);
+      expect(h.results, [
+        {'groupID': '@123456'}
+      ]);
+      expect(find.text('Home'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    } finally {
+      await h.close();
+    }
+  });
+
   testWidgets('export actual light and dark scanner pages', (tester) async {
     await tester.runAsync(() async {
       final font = File('C:/Windows/Fonts/msyh.ttc');

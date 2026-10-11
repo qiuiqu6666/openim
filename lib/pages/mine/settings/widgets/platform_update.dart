@@ -12,6 +12,7 @@ Future<void> checkPlatformUpdate(BuildContext context,
   try {
     final config = await PlatformConfigService.fetch();
     final current = await PackageInfo.fromPlatform();
+    final installedVersion = '${current.version}+${current.buildNumber}';
     final release = config.release;
     final prefs = await SharedPreferences.getInstance();
     var install = prefs.getString('platform_update_install_id');
@@ -22,7 +23,7 @@ Future<void> checkPlatformUpdate(BuildContext context,
     final bucket =
         install.codeUnits.fold<int>(0, (sum, c) => (sum * 31 + c) % 100);
     final force = release.minimum.isNotEmpty &&
-        compareAppVersions(current.version, release.minimum) < 0;
+        compareAppVersions(installedVersion, release.minimum) < 0;
     if (!context.mounted) return;
     if (release.latest.isEmpty && !force) {
       if (!automatic) {
@@ -38,7 +39,7 @@ Future<void> checkPlatformUpdate(BuildContext context,
             ? release.minimum
             : release.latest;
     final available = force ||
-        (compareAppVersions(current.version, target) < 0 &&
+        (compareAppVersions(installedVersion, target) < 0 &&
             bucket < release.grayRatio);
     if (!available) {
       if (!automatic) {

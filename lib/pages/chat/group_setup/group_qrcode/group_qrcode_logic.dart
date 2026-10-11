@@ -7,10 +7,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/group_setup/group_setup_logic.dart';
 import 'package:openim_common/openim_common.dart';
-import '../../../contacts/group_profile_panel/group_profile_panel_logic.dart';
-import '../../../../routes/app_navigator.dart';
-import '../../../contacts/group_profile_panel/group_profile_panel_logic.dart'
-    show JoinGroupMethod;
+import '../../../contacts/scanning/contact_qr_navigation.dart';
 import 'group_qrcode_background.dart';
 
 class GroupQrcodeLogic extends GetxController {
@@ -67,24 +64,16 @@ class GroupQrcodeLogic extends GetxController {
       return;
     }
     scanning.value = true;
+    final owner = (OpenIM.iMManager.userID, DataSp.userID, DataSp.chatToken);
+    bool isActive() =>
+        !isClosed &&
+        owner == (OpenIM.iMManager.userID, DataSp.userID, DataSp.chatToken);
     try {
       final id = await Get.to<String>(() => const GroupQrScanner());
-      if (id == null || isClosed) return;
-      // New links have an @ prefix; existing OpenIM installations can store
-      // the same ID without it. Resolve the real SDK ID before navigation.
-      final groups = await OpenIM.iMManager.groupManager.getGroupsInfo(
-        groupIDList: [id, if (id.startsWith('@')) id.substring(1)],
-      );
-      if (isClosed) return;
-      if (groups.isEmpty) {
-        IMViews.showToast('groupQrNotFound'.tr);
-        return;
-      }
-      await AppNavigator.startGroupProfilePanel(
-          groupID: groups.first.groupID,
-          joinGroupMethod: JoinGroupMethod.qrcode);
+      if (id == null || !isActive()) return;
+      await openScannedGroup(id, isActive: isActive);
     } catch (_) {
-      if (!isClosed) IMViews.showToast('groupQrScanFailed'.tr);
+      if (isActive()) IMViews.showToast('groupQrScanFailed'.tr);
     } finally {
       if (!isClosed) scanning.value = false;
     }

@@ -16,13 +16,15 @@ void main() {
   }
 
   test('default endpoints use HTTPS and WSS domains', expectDomains);
-  test('saved previous defaults upgrade to domain endpoints', () async {
+  test('selected direct fallback remains effective for this launch', () async {
     await DataSp.putServerConfig({
       'authUrl': 'http://129.226.192.93:10008/',
       'apiUrl': 'http://129.226.192.93:10002',
       'wsUrl': 'ws://129.226.192.93:10001',
     });
-    expectDomains();
+    expect(Config.appAuthUrl, 'http://129.226.192.93:10008');
+    expect(Config.imApiUrl, 'http://129.226.192.93:10002');
+    expect(Config.imWsUrl, 'ws://129.226.192.93:10001');
   });
   test('explicit custom endpoints remain configured', () async {
     await DataSp.putServerConfig({

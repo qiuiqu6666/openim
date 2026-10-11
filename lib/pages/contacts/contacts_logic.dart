@@ -18,6 +18,7 @@ import 'presence_store.dart';
 import 'directory/contact_directory_indexer.dart';
 import 'add_by_search/add_by_search_logic.dart';
 import 'scanning/friend_qr_scanner.dart';
+import 'scanning/contact_qr_navigation.dart';
 
 class ContactsLogic extends GetxController
     with WidgetsBindingObserver
@@ -465,14 +466,7 @@ class ContactsLogic extends GetxController
     final invite = await Get.to<Map<String, String>>(
         () => FriendQrScanner(onMyQrTap: _openScannerQrCode));
     if (_inactive || invite == null) return;
-    AppNavigator.startUserProfilePane(
-      userID: invite['userID']!,
-      addSource: invite['source'] == 'link'
-          ? FriendAddSource.link
-          : FriendAddSource.qrcode,
-      friendAddFields: {'inviteCode': invite['inviteCode']!},
-      forceCanAdd: true,
-    );
+    await openScannedContact(invite, isActive: () => !_inactive);
   }
 
   Future<void> _openScannerQrCode() async {

@@ -129,7 +129,17 @@ class VoicePlaybackController extends ChangeNotifier
       if (_disposed || generation != _generation) return;
       _setStage(source.isFile ? 'load_file' : 'load_remote', generation);
       if (source.isFile) {
-        await player.setFilePath(source.value);
+        try {
+          await player.setFilePath(source.value);
+        } catch (error) {
+          if (_disposed || generation != _generation) return;
+          final fallback = source.fallbackUrl;
+          if (fallback == null) rethrow;
+          VoicePlaybackLog.write('load_file_fallback',
+              error: error, attempt: generation);
+          _setStage('load_remote', generation);
+          await player.setUrl(fallback);
+        }
       } else {
         await player.setUrl(source.value);
       }

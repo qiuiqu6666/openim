@@ -2,9 +2,17 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
 class Logger {
+  /// Release keeps native OpenIM diagnostics, without application debug output.
+  static void configureOutput() {
+    if (kReleaseMode) {
+      debugPrint = (String? message, {int? wrapWidth}) {};
+    }
+  }
+
   static Logger? _instance;
 
   factory Logger() {
@@ -43,6 +51,7 @@ class Logger {
       String? errorMsg,
       List<dynamic>? keyAndValues,
       bool onlyConsole = false}) {
+    if (kReleaseMode) return;
     final time = DateTime.now().toIso8601String();
     final logger = Logger();
 

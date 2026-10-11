@@ -287,6 +287,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _setupIcon(Widget icon, int Function() unreadCount) {
     return Obx(() => Stack(
+          clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
             icon,
