@@ -43,6 +43,7 @@ mixin IMCallback {
   Function(Message msg)? onRecvOfflineMessage;
 
   Function(String msgId, int progress)? onMsgSendProgress;
+  final messageUploadProgress = PublishSubject<MsgStreamEv<int>>();
 
   Function(BlacklistInfo u)? onBlacklistAdd;
 
@@ -190,6 +191,7 @@ mixin IMCallback {
   }
 
   void progressCallback(String msgId, int progress) {
+    messageUploadProgress.addSafely(MsgStreamEv(id: msgId, value: progress));
     onMsgSendProgress?.call(msgId, progress);
   }
 

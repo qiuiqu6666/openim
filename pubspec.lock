@@ -474,12 +474,11 @@ packages:
     source: hosted
     version: "10.0.1"
   extended_image_library:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: extended_image_library
-      sha256: "1f9a24d3a00c2633891c6a7b5cab2807999eb2d5b597e5133b63f49d113811fe"
-      url: "https://pub.dev"
-    source: hosted
+      path: "local_plugin/extended_image_library"
+      relative: true
+    source: path
     version: "5.0.1"
   extended_text:
     dependency: transitive

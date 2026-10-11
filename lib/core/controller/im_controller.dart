@@ -206,6 +206,14 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       ..messageManager.setMsgSendProgressListener(OnMsgSendProgressListener(
         onProgress: progressCallback,
       ))
+      ..setUploadFileListener(OnUploadFileListener(
+        onUploadProgress: (id, fileSize, streamSize, storageSize) {
+          if (id.startsWith('chat-media:') && fileSize > 0) {
+            progressCallback(id.substring('chat-media:'.length),
+                (streamSize * 100 ~/ fileSize).clamp(0, 100));
+          }
+        },
+      ))
       ..messageManager.setCustomBusinessListener(OnCustomBusinessListener(
         onRecvCustomBusinessMessage: recvCustomBusinessMessage,
       ))

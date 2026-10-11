@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -80,6 +81,8 @@ class ChatItemView extends StatefulWidget {
     this.customTypeBuilder,
     this.notificationTypeBuilder,
     this.sendStatusSubject,
+    this.transferStatus,
+    this.onCheckDelivery,
     this.visibilityChange,
     this.timelineStr,
     this.onTapTimeline,
@@ -126,6 +129,8 @@ class ChatItemView extends StatefulWidget {
   final NotificationTypeBuilder? notificationTypeBuilder;
 
   final Subject<MsgStreamEv<bool>>? sendStatusSubject;
+  final ValueListenable<ChatTransferStatus?>? transferStatus;
+  final VoidCallback? onCheckDelivery;
 
   final ItemVisibilityChange? visibilityChange;
   final String? timelineStr;
@@ -512,6 +517,8 @@ class _ChatItemViewState extends State<ChatItemView> {
           cardWithStatus == null ? null : ContactCardTokens.footerText,
       ignorePointer: widget.ignorePointer,
       sendStatusStream: widget.sendStatusSubject,
+      transferStatus: widget.transferStatus,
+      onCheckDelivery: widget.onCheckDelivery,
       onFailedToResend: widget.onFailedToResend,
       onLongPressRightAvatar: widget.onLongPressRightAvatar,
       onTapLeftAvatar: widget.onTapLeftAvatar,

@@ -46,9 +46,18 @@ class ChatMessageSender {
     final push =
         await _offlinePush(session.accountID, target, hasGroup ? group : null);
     session.check();
+    final remote = message.contentType == MessageType.picture
+        ? _remoteURL(message.pictureElem?.sourcePicture?.url) &&
+            _remoteURL(message.pictureElem?.bigPicture?.url) &&
+            _remoteURL(message.pictureElem?.snapshotPicture?.url)
+        : message.contentType == MessageType.video &&
+            _remoteURL(message.videoElem?.videoUrl) &&
+            _remoteURL(message.videoElem?.snapshotUrl);
     final sent = await observeUserActivity(
         messageActivity(message.contentType),
-        () => OpenIM.iMManager.messageManager.sendMessage(
+        () => (remote
+                ? OpenIM.iMManager.messageManager.sendMessageNotOss
+                : OpenIM.iMManager.messageManager.sendMessage)(
               message: message,
               userID: hasUser ? user : null,
               groupID: hasGroup ? group : null,
@@ -93,6 +102,13 @@ class ChatMessageSender {
       Logger.print('Message APNs metadata unavailable: ${error.runtimeType}');
       return APNsOfflinePushInfo.generic();
     }
+  }
+
+  static bool _remoteURL(String? value) {
+    final uri = value == null ? null : Uri.tryParse(value);
+    return uri != null &&
+        {'http', 'https'}.contains(uri.scheme) &&
+        uri.host.isNotEmpty;
   }
 
   Future<FavoriteSendResult> send(

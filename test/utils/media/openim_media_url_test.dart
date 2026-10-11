@@ -9,10 +9,26 @@ void main() {
       '?height=960&width=960&type=image';
 
   group('OpenIMMediaUrl.resolve', () {
-    test('resolves historical Sangong XLSX downloads through the public API', () {
+    test('upgrades only unsigned object links on the configured HTTPS host',
+        () {
+      const old = 'http://im.test/object/media/a.png?width=640&type=image';
+      expect(OpenIMMediaUrl.resolve(old, imApiUrl: 'https://im.test'),
+          old.replaceFirst('http:', 'https:'));
+      for (final url in [
+        '$old&Signature=secret',
+        'http://cdn.test/object/a.png',
+        'http://im.test/avatar.png',
+        'http://im.test:8080/object/a.png',
+      ]) {
+        expect(OpenIMMediaUrl.resolve(url, imApiUrl: 'https://im.test'), url);
+      }
+    });
+    test('resolves historical Sangong XLSX downloads through the public API',
+        () {
       const path = '/object/sangong-go/report.xlsx';
-      expect(OpenIMMediaUrl.resolve('http://127.0.0.1:10002$path',
-          imApiUrl: api), '$api$path');
+      expect(
+          OpenIMMediaUrl.resolve('http://127.0.0.1:10002$path', imApiUrl: api),
+          '$api$path');
     });
 
     test('corrects the logged Sangong object URL through the IM API', () {

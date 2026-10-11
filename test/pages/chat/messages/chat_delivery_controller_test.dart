@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:fake_async/fake_async.dart';
+import 'package:openim_common/openim_common.dart';
 import 'package:openim/pages/chat/messages/chat_delivery_controller.dart';
 import 'package:openim/services/favorite_send_coordinator.dart';
 
@@ -84,6 +86,69 @@ void main() {
     expect(messages, hasLength(1));
     expect(message.status, MessageStatus.succeeded);
     expect(message.seq, 7);
+  });
+
+  test('repeated send of an in-flight ID uses one transport and one bubble',
+      () async {
+    final message = _outgoing('same');
+    final first = delivery.send(message);
+    final second = delivery.send(message);
+    expect(destinations, hasLength(1));
+    expect(messages, hasLength(1));
+    transport.complete(_sent('same'));
+    await Future.wait([first, second]);
+  });
+
+  test('unrelated receipt cannot mark an ordinary message successful',
+      () async {
+    final message = _outgoing('mine');
+    final pending = delivery.send(message);
+    transport.complete(_sent('other'));
+    await pending;
+    expect(message.clientMsgID, 'mine');
+    expect(message.status, MessageStatus.sending);
+    expect(message.seq, isNull);
+  });
+
+  test(
+      'stalled receipt queries the existing ID and still accepts its late success',
+      () {
+    fakeAsync((clock) {
+      delivery.close();
+      transport = Completer<Message>();
+      var queries = 0, sends = 0;
+      delivery = ChatDeliveryController(
+        accountID: 'self',
+        currentAccountID: () => currentAccount,
+        messageList: messages,
+        conversation: () =>
+            ConversationInfo(conversationID: 'chat', userID: 'peer'),
+        isClosed: () => false,
+        groupStatus: () => null,
+        scrollBottom: () {},
+        resetInput: (_) {},
+        sendRaw: (_, __) {
+          sends++;
+          return transport.future;
+        },
+        lookup: (message, target) async {
+          queries++;
+          return FavoriteSendResult.unknown(clientMsgID: message.clientMsgID);
+        },
+      );
+      final message = _outgoing('stalled');
+      delivery.send(message);
+      clock.elapse(const Duration(seconds: 31));
+      clock.flushMicrotasks();
+      expect(queries, 1);
+      expect(sends, 1);
+      expect(delivery.transferFor(message)!.value!.stage,
+          ChatTransferStage.unknown);
+      transport.complete(_sent('stalled'));
+      clock.flushMicrotasks();
+      expect(message.status, MessageStatus.succeeded);
+      delivery.close();
+    });
   });
 
   test('staged attachments preserve one bubble without resetting input',
@@ -171,13 +236,13 @@ void main() {
     expect(message.status, MessageStatus.sending);
   });
 
-  test('ordinary send timeouts retain the existing failed-bubble behavior',
+  test('ordinary send timeouts remain unconfirmed instead of permitting resend',
       () async {
     final message = _outgoing('ordinary');
     final pending = delivery.send(message);
     transport.completeError(TimeoutException('transport delayed'));
     await pending;
-    expect(message.status, MessageStatus.failed);
+    expect(message.status, MessageStatus.sending);
   });
 
   test('a mismatched favorite receipt remains unresolved', () async {

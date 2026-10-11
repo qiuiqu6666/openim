@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -9,6 +10,10 @@ import 'package:path/path.dart' as p;
 import 'package:sprintf/sprintf.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:wechat_camera_picker/wechat_camera_picker.dart';
+
+import 'upload/ordered_media_batch.dart';
+import 'upload/chat_media_upload.dart';
+import 'video/chat_video_preparation.dart';
 
 typedef MediaMessageSender = Future Function(Message message,
     {bool addToUI, bool resetInput});
@@ -25,6 +30,8 @@ class ChatMediaController {
     required void Function(Message) stageMessage,
     required Future<void> Function(File, int) previewVoice,
     required this.closeToolbox,
+    this.onTransfer,
+    this.onUploadFailed,
     Future<List<AssetEntity>?> Function()? pickAssets,
     Future<File?> Function(File)? compressImage,
     void Function()? onPreparationFailed,
@@ -47,6 +54,8 @@ class ChatMediaController {
   final void Function(Message) _stageMessage;
   final Future<void> Function(File, int) _previewAndSendVoice;
   final void Function() closeToolbox;
+  final void Function(Message, ChatTransferStatus)? onTransfer;
+  final void Function(Message)? onUploadFailed;
   final Future<List<AssetEntity>?> Function()? _pickAssets;
   final Future<File?> Function(File) _compressImage;
   final void Function() _onPreparationFailed;
@@ -186,35 +195,69 @@ class ChatMediaController {
               }));
 
   Future<void> _sendSelectedAssets(List<AssetEntity> assets) async {
-    var delivery = Future<void>.value();
+    final quality = assets.any((asset) => asset.type == AssetType.video)
+        ? await chooseChatVideoQuality()
+        : ChatVideoQuality.original;
+    if (quality == null || isClosed) return;
+    final ready = List.generate(assets.length, (_) => Completer<Message?>());
+    final messages = <int, Message>{};
     preparingCount.value = assets.length;
-    try {
-      for (final asset in assets) {
-        if (isClosed) break;
-        try {
-          final message = await _prepareAsset(asset);
-          if (message == null || isClosed) break;
-          _stageMessage(message);
-          // Start each prepared message immediately. Only one upload runs at a
-          // time, but the next local asset can prepare during that upload.
-          delivery = delivery.then((_) async {
-            if (isClosed) return;
-            await _sendMessage(message, addToUI: false);
-          }).catchError((Object error) {
-            // Delivery normally owns failure/retry UI. Do not let an unexpected
-            // delivery error prevent the rest of the selected batch from sending.
+    Future<void> prepareLocal() async {
+      try {
+        for (var index = 0; index < assets.length; index++) {
+          Message? message;
+          try {
+            if (!isClosed) {
+              message = await _prepareAsset(assets[index], quality: quality);
+              if (message != null && !isClosed) {
+                messages[index] = message;
+                _stageMessage(message);
+                onTransfer?.call(message,
+                    const ChatTransferStatus(ChatTransferStage.queued));
+              }
+            }
+          } catch (_) {
             if (!isClosed) _onPreparationFailed();
-          });
-        } catch (_) {
-          if (!isClosed) _onPreparationFailed();
-        } finally {
-          if (!isClosed) preparingCount.value--;
+          } finally {
+            ready[index].complete(message);
+            if (!isClosed) preparingCount.value--;
+          }
         }
+      } finally {
+        preparingCount.value = 0;
       }
-    } finally {
-      preparingCount.value = 0;
-      await delivery;
     }
+
+    final local = prepareLocal();
+    final uploader = ChatMediaUpload(
+        isClosed: () => isClosed,
+        onTransfer: (message, state) => onTransfer?.call(message, state));
+    await runOrderedMediaBatch<int>(
+      List.generate(assets.length, (index) => index),
+      prepare: (index) async {
+        final message = await ready[index].future;
+        if (message != null && !isClosed) await uploader.prepare(message);
+      },
+      send: (index) async {
+        final message = messages[index];
+        if (message != null) {
+          await _sendMessage(message, addToUI: false, resetInput: false);
+        }
+      },
+      onError: (index, error) {
+        final message = messages[index];
+        if (message != null) {
+          message.status = MessageStatus.failed;
+          if (onUploadFailed != null) {
+            onUploadFailed!(message);
+          } else {
+            _onPreparationFailed();
+          }
+        }
+      },
+      isClosed: () => isClosed,
+    );
+    await local;
   }
 
   bool _pickingAttachment = false;
@@ -317,7 +360,8 @@ class ChatMediaController {
     return IMUtils.allowImageType(mimeType);
   }
 
-  Future<Message?> _prepareAsset(AssetEntity asset) async {
+  Future<Message?> _prepareAsset(AssetEntity asset,
+      {ChatVideoQuality quality = ChatVideoQuality.original}) async {
     Logger.print(
         '--------assets type-----${asset.type} create time: ${asset.createDateTime}');
     final originalFile = await asset.file;
@@ -331,7 +375,9 @@ class ChatMediaController {
       case AssetType.image:
         return _preparePicture(path);
       case AssetType.video:
-        final saved = await _retainAttachment(path);
+        final prepared = await prepareChatVideo(originalFile, quality);
+        if (isClosed) return null;
+        final saved = await _retainAttachment(prepared.path);
         if (isClosed) return null;
         final thumbnail =
             await asset.thumbnailDataWithSize(const ThumbnailSize(640, 640));
@@ -341,7 +387,9 @@ class ChatMediaController {
         }
         final snapshot = File('${saved.path}.jpg');
         await snapshot.writeAsBytes(thumbnail);
-        final mimeType = await asset.mimeTypeAsync ?? 'video/mp4';
+        final mimeType = prepared.path != path
+            ? 'video/mp4'
+            : await asset.mimeTypeAsync ?? 'video/mp4';
         if (isClosed) return null;
         final message = await OpenIM.iMManager.messageManager
             .createVideoMessageFromFullPath(

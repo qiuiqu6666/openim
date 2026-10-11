@@ -1,6 +1,7 @@
 import 'navigation/chat_entry_trace.dart';
 import 'messages/quote/chat_quote_navigation.dart';
 import 'media/chat_media_message_locator.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -115,6 +116,7 @@ class ChatLogic extends SuperController {
     showError: IMViews.showToast,
   );
   late final _delivery = ChatDeliveryController(
+    uploadProgress: imLogic.messageUploadProgress,
     accountID: _chatAccountID,
     messageList: messageList,
     conversation: () => conversationInfo,
@@ -169,6 +171,11 @@ class ChatLogic extends SuperController {
     attachmentBusy: () => _media.pickingAttachment,
   );
   late final ChatMediaController _media = ChatMediaController(
+    onTransfer: (message, state) =>
+        _delivery.updateTransfer(message.clientMsgID, state),
+    onUploadFailed: (_) {
+      if (!_sessionInactive) messageList.refresh();
+    },
     conversationID: () => conversationInfo.conversationID,
     isClosed: () => _sessionInactive,
     sendingMuted: () => sendingMuted,
@@ -279,6 +286,9 @@ class ChatLogic extends SuperController {
   PersonalStickerStore get personalStickers => _stickers.personalStickers;
   PublishSubject<MsgStreamEv<bool>> get sendStatusSub =>
       _delivery.sendStatusSub;
+  ValueListenable<ChatTransferStatus?>? transferStatus(Message message) =>
+      _delivery.transferFor(message);
+  void checkDelivery(Message message) => _delivery.checkDelivery(message);
 
   late final _calling = ChatCallController(
     im: imLogic,

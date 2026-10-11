@@ -1025,4 +1025,11 @@ const Map<String, String> errorMessages = {
   '200003': 'Meeting auth check permission error',
   '200004': 'The meeting has ended',
   '100010': 'The login status has expired and you need to log in again',
+  'chatMediaQueued': 'Queued',
+  'chatMediaUploading': 'Uploading',
+  'chatSendConfirming': 'Confirming',
+  'chatSendCheck': 'Check delivery',
+  'chatVideoStandard': 'Standard quality (faster)',
+  'chatVideoOriginal': 'Original quality (larger)',
+  'chatVideoPreparing': 'Preparing video…',
 };

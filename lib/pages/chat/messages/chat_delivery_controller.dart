@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -19,6 +22,8 @@ class ChatDeliveryController {
     String? accountID,
     String Function()? currentAccountID,
     Future<Message> Function(Message, FavoriteTarget)? sendRaw,
+    Stream<MsgStreamEv<int>>? uploadProgress,
+    Future<FavoriteSendResult> Function(Message, FavoriteTarget)? lookup,
     this.onDeliveryStarted,
     this.onDeliveryFinished,
   })  : _conversation = conversation,
@@ -27,7 +32,15 @@ class ChatDeliveryController {
         _reset = resetInput,
         _currentAccountID = currentAccountID ?? (() => OpenIM.iMManager.userID),
         _accountID = accountID ?? OpenIM.iMManager.userID,
-        _sendRaw = sendRaw ?? ChatMessageSender().sendRaw;
+        _sendRaw = sendRaw ?? ChatMessageSender().sendRaw,
+        _lookup = lookup ?? ChatMessageSender().lookup {
+    _progressSubscription = uploadProgress?.listen((event) {
+      if (this.isClosed || !_transfers.containsKey(event.id)) return;
+      final value = event.value.clamp(0, 100);
+      updateTransfer(
+          event.id, ChatTransferStatus(ChatTransferStage.uploading, value));
+    });
+  }
 
   final RxList<Message> messageList;
   final ConversationInfo Function() _conversation;
@@ -38,6 +51,72 @@ class ChatDeliveryController {
   final String _accountID;
   final String Function() _currentAccountID;
   final Future<Message> Function(Message, FavoriteTarget) _sendRaw;
+  final Future<FavoriteSendResult> Function(Message, FavoriteTarget) _lookup;
+  StreamSubscription<MsgStreamEv<int>>? _progressSubscription;
+  final _transfers = <String, ValueNotifier<ChatTransferStatus?>>{};
+  final _checking = <String>{};
+  final _inFlight = <String, Future>{};
+  final _deadlines = <String, Timer>{};
+  ValueListenable<ChatTransferStatus?>? transferFor(Message message) {
+    final id = message.clientMsgID;
+    if (isClosed ||
+        id == null ||
+        message.sendID != _accountID ||
+        message.status != MessageStatus.sending) {
+      return null;
+    }
+    return _transfers.putIfAbsent(id, () => ValueNotifier(null));
+  }
+
+  void updateTransfer(String? id, ChatTransferStatus value) {
+    if (isClosed || id == null) return;
+    _deadlines.remove(id)?.cancel();
+    if (value.stage == ChatTransferStage.confirming ||
+        value.stage == ChatTransferStage.uploading) {
+      _deadlines[id] = Timer(const Duration(seconds: 30), () {
+        if (isClosed) return;
+        final message =
+            messageList.firstWhereOrNull((item) => item.clientMsgID == id);
+        if (message?.status == MessageStatus.sending) {
+          updateTransfer(
+              id, const ChatTransferStatus(ChatTransferStage.unknown));
+          unawaited(checkDelivery(message!));
+        }
+      });
+    }
+    final current = _transfers.putIfAbsent(id, () => ValueNotifier(null));
+    if (current.value?.stage != value.stage ||
+        current.value?.percent != value.percent) {
+      current.value = value;
+    }
+  }
+
+  Future<void> checkDelivery(Message message) async {
+    final id = message.clientMsgID;
+    if (isClosed || id == null || !_checking.add(id)) return;
+    try {
+      final result = await _lookup(
+          Message.fromJson(message.toJson()),
+          FavoriteTarget(
+              conversationID: conversationInfo.conversationID,
+              userID: userID,
+              groupID: groupID));
+      if (isClosed) return;
+      if (result.isSuccess && result.message != null) {
+        sendSucceeded(message, result.message!);
+        _completed();
+      } else {
+        updateTransfer(id, const ChatTransferStatus(ChatTransferStage.unknown));
+      }
+    } catch (_) {
+      if (!isClosed) {
+        updateTransfer(id, const ChatTransferStatus(ChatTransferStage.unknown));
+      }
+    } finally {
+      _checking.remove(id);
+    }
+  }
+
   // Presentation hooks share delivery across text, attachments and retry.
   final Object? Function(Message, FavoriteTarget)? onDeliveryStarted;
   final void Function(Object?, Message)? onDeliveryFinished;
@@ -54,6 +133,15 @@ class ChatDeliveryController {
 
   void close() {
     _closed = true;
+    for (final timer in _deadlines.values) {
+      timer.cancel();
+    }
+    _deadlines.clear();
+    _progressSubscription?.cancel();
+    for (final notifier in _transfers.values) {
+      notifier.dispose();
+    }
+    _transfers.clear();
     sendStatusSub.close();
   }
 
@@ -91,6 +179,10 @@ class ChatDeliveryController {
     }
     Logger.print('send type:${message.contentType} id:${message.clientMsgID}',
         onlyConsole: true);
+    final messageID = message.clientMsgID;
+    if (messageID != null && _inFlight.containsKey(messageID)) {
+      return _inFlight[messageID]!;
+    }
     final account = _currentAccountID();
     if (favoriteResult != null) {
       final visible = messageList
@@ -137,9 +229,13 @@ class ChatDeliveryController {
               : null),
     );
     final presentation = onDeliveryStarted?.call(message, target);
-    return _sendRaw(message, target).then((value) {
-      if (favoriteResult != null && value.clientMsgID != message.clientMsgID) {
-        favoriteResult(FavoriteSendResult(
+    updateTransfer(message.clientMsgID,
+        const ChatTransferStatus(ChatTransferStage.confirming));
+    final operation = _sendRaw(message, target).then((value) {
+      if (value.clientMsgID != message.clientMsgID) {
+        updateTransfer(message.clientMsgID,
+            const ChatTransferStatus(ChatTransferStage.unknown));
+        favoriteResult?.call(FavoriteSendResult(
           status: FavoriteSendStatus.unknown,
           clientMsgID: message.clientMsgID,
           errorCode: 'RECEIPT_UNCONFIRMED',
@@ -156,22 +252,30 @@ class ChatDeliveryController {
         message: value,
         sentCount: 1,
       ));
-    }).catchError((Object error, StackTrace stack) {
+    }).catchError((Object error, StackTrace stack) async {
       final result = ChatMessageSender.resultForError(error, message);
       if (!isClosed && account == _currentAccountID()) {
-        if (favoriteResult == null ||
-            result.status == FavoriteSendStatus.failed) {
+        if (result.status == FavoriteSendStatus.failed) {
           _senFailed(message, groupId, userId, error, stack);
+        } else if (favoriteResult == null) {
+          updateTransfer(message.clientMsgID,
+              const ChatTransferStatus(ChatTransferStage.unknown));
+          await checkDelivery(message);
         }
       }
       favoriteResult?.call(result);
     }).whenComplete(() {
+      _deadlines.remove(messageID)?.cancel();
+      _inFlight.remove(messageID);
       onDeliveryFinished?.call(presentation, message);
       if (!isClosed && account == _currentAccountID()) _completed();
     });
+    if (messageID != null) _inFlight[messageID] = operation;
+    return operation;
   }
 
   void sendSucceeded(Message oldMsg, Message newMsg) {
+    _deadlines.remove(oldMsg.clientMsgID)?.cancel();
     Logger.print('message send success----');
     oldMsg.update(newMsg);
     sendStatusSub.addSafely(MsgStreamEv<bool>(

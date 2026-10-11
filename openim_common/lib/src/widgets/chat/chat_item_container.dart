@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'chat_inline_metadata.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -39,6 +40,8 @@ class ChatItemContainer extends StatelessWidget {
     this.childWithStatusBuilder,
     this.embeddedStatusColor,
     this.sendStatusStream,
+    this.transferStatus,
+    this.onCheckDelivery,
     this.onTapLeftAvatar,
     this.onTapRightAvatar,
     this.onLongPressRightAvatar,
@@ -82,6 +85,8 @@ class ChatItemContainer extends StatelessWidget {
   final Widget Function(Widget? status)? childWithStatusBuilder;
   final Color? embeddedStatusColor;
   final Stream<MsgStreamEv<bool>>? sendStatusStream;
+  final ValueListenable<ChatTransferStatus?>? transferStatus;
+  final VoidCallback? onCheckDelivery;
   final Function()? onTapLeftAvatar;
   final Function()? onTapRightAvatar;
   final Function()? onLongPressRightAvatar;
@@ -158,8 +163,14 @@ class ChatItemContainer extends StatelessWidget {
                 stream: sendStatusStream,
               )
             : isSending
-                ? ChatDelayedStatusView(
-                    isSending: true, color: embeddedStatusColor)
+                ? transferStatus != null
+                    ? ChatTransferStatusView(
+                        status: transferStatus!,
+                        onCheck: onCheckDelivery,
+                        color: embeddedStatusColor ??
+                            (overlay ? AppTokens.onAccent : null))
+                    : ChatDelayedStatusView(
+                        isSending: true, color: embeddedStatusColor)
                 : ChatReadReceiptIcon(
                     isRead: showReadStatus && hasRead,
                     size: compactBubble ? 16.w : null,
@@ -177,7 +188,7 @@ class ChatItemContainer extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (time != null) time,
-        if (status != null) ...[5.horizontalSpace, status],
+        if (status != null) ...[5.horizontalSpace, Flexible(child: status)],
       ],
     );
     final hasMetadata = time != null || status != null;

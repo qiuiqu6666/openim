@@ -63,6 +63,7 @@ export 'src/widgets/chat/chat_attachment_view.dart'
     show ChatFileMessageView, ChatFileMessageBuilder, ChatFileOpener;
 export 'src/widgets/chat/chat_call_item_view.dart';
 export 'src/widgets/chat/chat_delayed_status_view.dart';
+export 'src/widgets/chat/delivery/chat_transfer_status.dart';
 export 'src/widgets/chat/chat_disable_input_box.dart';
 export 'src/widgets/chat/chat_expiring_content.dart';
 export 'src/widgets/chat/chat_friend_relationship_hint_view.dart';

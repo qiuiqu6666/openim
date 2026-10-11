@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/media/chat_media_controller.dart';
@@ -29,6 +30,15 @@ Future<void> _until(bool Function() condition) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    PackageInfo.setMockInitialValues(
+        appName: '99Chat',
+        packageName: 'test.openim',
+        version: '1',
+        buildNumber: '1',
+        buildSignature: '');
+    await Config.init(() {});
+  });
   const channel = MethodChannel('flutter_openim_sdk');
   late Directory directory;
   late File photo;
@@ -81,6 +91,9 @@ void main() {
     );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'uploadFile') {
+        return jsonEncode({'url': 'https://im.test/object/media/image.png'});
+      }
       expect(call.method, 'createImageMessageFromFullPath');
       final path = (call.arguments as Map)['imagePath'] as String;
       paths.add(path);
@@ -92,6 +105,10 @@ void main() {
         clientMsgID: 'image-${paths.length}',
         contentType: MessageType.picture,
         status: MessageStatus.sending,
+        pictureElem: PictureElem(
+            sourcePath: path,
+            sourcePicture:
+                PictureInfo(type: 'image/jpeg', width: 100, height: 100)),
       ).toJson());
     });
   });
@@ -128,7 +145,7 @@ void main() {
     expect(failures, 0);
   });
 
-  test('slow upload does not block later bubbles and uploads stay serial',
+  test('slow receipt does not block later bubbles and sends stay ordered',
       () async {
     final firstUpload = Completer<void>();
     deliver = (message) => message.clientMsgID == 'image-1'
