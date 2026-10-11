@@ -118,6 +118,8 @@ void main() {
     expect(deviceSendButton(tester).onPressed, isNull);
     expect(deviceConfirmButton(tester).onPressed, isNull);
     expect(tester.widget<TextField>(deviceCodeField).enabled, isFalse);
+    expect(find.text('发送中…'), findsOneWidget);
+    expect(deviceConfirmButton(tester).loading, isFalse);
     pending.complete(null);
     await tester.pump();
     expect(deviceSendButton(tester).onPressed, isNotNull);

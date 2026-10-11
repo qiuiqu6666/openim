@@ -41,12 +41,14 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
   final _phoneFocus = FocusNode();
   late String _areaCode;
   late String _observedPhone;
-  bool _busy = false;
+  bool _sending = false;
+  bool _verifying = false;
   int _remaining = 0;
   int _requestVersion = 0;
   Timer? _timer;
   DateTime? _resendAt;
 
+  bool get _busy => _sending || _verifying;
   bool get _active => mounted && (ModalRoute.of(context)?.isCurrent ?? true);
   String get _phoneNumber => _phone.text.trim();
   bool get _phoneValid =>
@@ -101,7 +103,8 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
 
   void _invalidatePhone() {
     _requestVersion++;
-    _busy = false;
+    _sending = false;
+    _verifying = false;
     _timer?.cancel();
     _timer = null;
     _resendAt = null;
@@ -156,7 +159,7 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
     final version = _requestVersion;
     final phone = _phoneNumber;
     final area = _areaCode;
-    setState(() => _busy = true);
+    setState(() => _sending = true);
     try {
       final result = await widget.onSendCode!(phone, area);
       if (!mounted ||
@@ -181,7 +184,7 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
       }
     } finally {
       if (mounted && version == _requestVersion) {
-        setState(() => _busy = false);
+        setState(() => _sending = false);
       }
     }
   }
@@ -191,7 +194,7 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
     final version = _requestVersion;
     final code = _code.text.trim();
     FocusScope.of(context).unfocus();
-    setState(() => _busy = true);
+    setState(() => _verifying = true);
     try {
       final verified = await widget.onVerify!(code);
       if (!mounted || !_active || version != _requestVersion || !verified) {
@@ -204,7 +207,7 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
       }
     } finally {
       if (mounted && version == _requestVersion) {
-        setState(() => _busy = false);
+        setState(() => _verifying = false);
       }
     }
   }
@@ -301,7 +304,11 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
               ),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
-                child: Text(_remaining > 0 ? '${_remaining}s' : strings.send),
+                child: Text(_sending
+                    ? strings.sending
+                    : _remaining > 0
+                        ? '${_remaining}s'
+                        : strings.send),
               ),
             ),
           ),
@@ -314,7 +321,7 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
             child: AuthPrimaryButton(
               key: const ValueKey('device-verification-confirm'),
               text: strings.confirm,
-              loading: _busy,
+              loading: _verifying,
               pill: true,
               disabledForegroundColor: AuthReferenceTokens.surface,
               textStyle: AuthReferenceTokens.plainFormButton,

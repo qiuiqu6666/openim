@@ -35,6 +35,7 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
   WebViewController? _controller;
   Timer? _timeout;
   bool _ready = false, _checking = false, _closing = false;
+  bool _loadFailed = false;
   bool _cancelRequested = false;
   String? _error;
   int _generation = 0;
@@ -54,6 +55,7 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
   void _load() {
     final generation = ++_generation;
     _ready = false;
+    _loadFailed = false;
     _error = null;
     final locale = Localizations.localeOf(context);
     final controller = WebViewController()
@@ -97,14 +99,18 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
     });
   }
 
-  void _loadError() => setState(() {
-        _error = text('验证加载失败，请检查网络后重试',
-            'Could not load verification. Check your connection and retry.');
-        _ready = false;
-      });
+  void _loadError() {
+    _timeout?.cancel();
+    setState(() {
+      _loadFailed = true;
+      _error = text('验证加载失败，请检查网络后重试',
+          'Could not load verification. Check your connection and retry.');
+      _ready = false;
+    });
+  }
 
   Future<void> _message(String raw, int generation) async {
-    if (_closing) return;
+    if (_closing || _loadFailed) return;
     dynamic message;
     try {
       message = jsonDecode(raw);
@@ -161,7 +167,9 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
           'bizResult': false
         };
         try {
-          final result = await widget.request(param);
+          final result = await widget.request(param).timeout(
+                const Duration(seconds: 40),
+              );
           if (!mounted || generation != _generation) return;
           _result = result;
           if (ModalRoute.of(context)?.isCurrent != true) {
@@ -198,16 +206,20 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
             _finish();
             return;
           }
-          final errorText = HttpUtil.errorMessage(error,
-              path: Urls.getVerificationCode,
-              fallback: text('发送失败，请重新验证后重试',
-                  'Could not send the code. Verify again to retry.'));
+          final errorText = error is TimeoutException
+              ? text('请求超时，请稍后重试', 'The request timed out. Please try again.')
+              : HttpUtil.errorMessage(error,
+                  path: Urls.getVerificationCode,
+                  fallback: text('发送失败，请重新验证后重试',
+                      'Could not send the code. Verify again to retry.'));
           showSettingsMessage(context, errorText);
         }
         if (!mounted || generation != _generation) return;
         try {
-          await _controller!.runJavaScript(
-              'window.resolveCaptchaRequest(${jsonEncode(id)},${jsonEncode(sdkResult)});');
+          await _controller!
+              .runJavaScript(
+                  'window.resolveCaptchaRequest(${jsonEncode(id)},${jsonEncode(sdkResult)});')
+              .timeout(const Duration(seconds: 5));
         } catch (_) {
           if (mounted && _result?.sent == true) {
             _finish();
@@ -300,8 +312,12 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
                           const SizedBox(height: AppTokens.s5),
                         if (_supported && _error != null)
                           TextButton(
-                              onPressed: () => setState(_load),
+                              onPressed:
+                                  _checking ? null : () => setState(_load),
                               child: Text(text('重新加载', 'Reload'))),
+                        TextButton(
+                            onPressed: _checking ? null : _finish,
+                            child: Text(text('返回', 'Back'))),
                       ]),
                     ),
                   ),

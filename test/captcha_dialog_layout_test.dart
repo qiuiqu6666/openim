@@ -23,7 +23,8 @@ void main() {
     expect(html, isNot(contains('rem:')));
     expect(html, isNot(contains('transform:')));
     expect(html, isNot(contains('zoom:')));
-    expect(html, contains('2100'));
+    expect(html, contains('getInstance:openCaptcha'));
+    expect(html, isNot(contains('2100')));
     expect(html, isNot(contains('AccessKey')));
   });
   for (final dark in [false, true]) {

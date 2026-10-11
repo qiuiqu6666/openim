@@ -1,5 +1,15 @@
 # 登录设备二次验证
 
+## 发送一直加载的修复（2026-10-11）
+
+旧图形验证在脚本加载后固定等待 2.1 秒，先通知 Flutter `ready` 再调用 `captcha.show()`。网络较慢时实例尚未建立，异步回调抛错且原生加载超时已被取消，透明弹层会让底层页面一直等待。
+
+现在由 SDK 的 `getInstance` 回调触发展示，成功打开后才发送 `ready`，同步异常和异步失败都进入恢复界面。加载超时保持为 25 秒，失败后可以重新加载或返回，迟到的旧页面回调不能覆盖失败状态。验证码请求最多等待 40 秒，向 WebView 回传结果最多等待 5 秒；短信接口确认已发送后，即使桥接回调失效也会返回已发送结果并开始冷却。
+
+发送阶段显示「发送中…」，确认登录按钮仅在真正提交登录时显示进度。沿用当前认证组件与验证接口，不跳过图形验证、短信验证或设备检查。这部分 HTML 随客户端打包，需要更新客户端才能生效。
+
+回归验证：`flutter test test/aliyun_captcha_bridge_test.dart test/captcha_dialog_layout_test.dart test/pages/login/device_verification`；嵌入 JavaScript 的慢初始化、异常及桥接测试：`node --test test/pages/mine/settings/widgets/aliyun_captcha_html_test.mjs`。桥接测试覆盖 Android/iOS 模拟平台与亮暗主题；仍需真机检查网络较慢时的第三方验证弹窗。
+
 参考 99chat `d7c3c65` 的 `lib/src/pages/login.dart` 中 `DeviceChallengePage`，以及 `src/ui/auth_widgets.dart` 中普通认证页和提示条。手机号入口保留原布局、文案、字号、间距、颜色和圆角。参考认证页固定使用亮色；应用暗色下也保持白底。账号或邮箱入口因为当前服务端不返回绑定手机号，增加绑定手机号和区号输入，使用原有国家区号选择器。
 
 ## 职责与入口

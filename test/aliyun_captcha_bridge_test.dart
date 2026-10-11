@@ -33,6 +33,7 @@ class _Controller extends PlatformWebViewController {
   _Controller(super.params) : super.implementation();
   late JavaScriptChannelParams channel;
   final scripts = <String>[];
+  Completer<void>? scriptResponse;
   @override
   Future<void> setJavaScriptMode(JavaScriptMode mode) async {}
   @override
@@ -50,6 +51,7 @@ class _Controller extends PlatformWebViewController {
   @override
   Future<void> runJavaScript(String script) async {
     scripts.add(script);
+    await scriptResponse?.future;
   }
 
   void emit(Map<String, dynamic> message) => channel
@@ -72,6 +74,107 @@ class _View extends PlatformWebViewWidget {
 }
 
 void main() {
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    for (final dark in [false, true]) {
+      testWidgets('load timeout can return without sending ($platform, $dark)',
+          (tester) async {
+        var sends = 0;
+        var closed = false;
+        final webview = await _openRecoveryDialog(tester, (_) async {
+          sends++;
+          return const VerificationCodeResult(
+              captchaVerified: true, sent: true);
+        }, platform: platform, dark: dark, onClose: (_) => closed = true);
+        await tester.pump(const Duration(seconds: 26));
+        expect(find.text('验证加载失败，请检查网络后重试'), findsOneWidget);
+        // A stale ready callback cannot hide recovery after the timeout.
+        webview.controllers.single.emit({'type': 'ready'});
+        await tester.pump();
+        expect(find.text('重新加载'), findsOneWidget);
+        await tester.tap(find.text('返回'));
+        await tester.pumpAndSettle();
+        expect(sends, 0);
+        expect(closed, isTrue);
+        debugDefaultTargetPlatformOverride = null;
+      });
+    }
+  }
+
+  testWidgets('reload ignores callbacks from the old WebView', (tester) async {
+    final webview = await _openRecoveryDialog(
+        tester,
+        (_) async =>
+            const VerificationCodeResult(captchaVerified: true, sent: true));
+    final first = webview.controllers.single;
+    first.emit({'type': 'error'});
+    await tester.pump();
+    await tester.tap(find.text('重新加载'));
+    await tester.pump();
+    first.emit({'type': 'ready'});
+    await tester.pump();
+    expect(find.text('返回'), findsOneWidget);
+    webview.controllers.last.emit({'type': 'ready'});
+    await tester.pump();
+    expect(find.text('返回'), findsNothing);
+    webview.controllers.last.emit({'type': 'close', 'reason': 'userDismiss'});
+    await tester.pumpAndSettle();
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('unanswered backend request times out and ignores late success',
+      (tester) async {
+    final response = Completer<VerificationCodeResult>();
+    VerificationCodeResult? result;
+    var closed = false;
+    final webview = await _openRecoveryDialog(tester, (_) => response.future,
+        onClose: (value) {
+      result = value;
+      closed = true;
+    });
+    final controller = webview.controllers.single;
+    controller.emit({'type': 'ready'});
+    controller.emit({'type': 'verify', 'id': 1, 'captchaVerifyParam': 'proof'});
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 41));
+    await tester.pump();
+    expect(webview.controllers, hasLength(2));
+    expect(find.text('返回'), findsOneWidget);
+    response.complete(
+        const VerificationCodeResult(captchaVerified: true, sent: true));
+    await tester.pump();
+    expect(result, isNull);
+    // The feedback overlay is independent of the request/route under test.
+    await EasyLoading.dismiss(animation: false);
+    await tester.pump();
+    await tester.tap(find.text('返回'));
+    await tester.pumpAndSettle();
+    expect(result, isNull);
+    expect(closed, isTrue);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('accepted SMS closes even if the JavaScript reply never finishes',
+      (tester) async {
+    const accepted = VerificationCodeResult(captchaVerified: true, sent: true);
+    VerificationCodeResult? result;
+    final webview = await _openRecoveryDialog(tester, (_) async => accepted,
+        onClose: (value) => result = value);
+    final controller = webview.controllers.single;
+    final bridge = Completer<void>();
+    controller.scriptResponse = bridge;
+    controller.emit({'type': 'ready'});
+    controller.emit({'type': 'verify', 'id': 1, 'captchaVerifyParam': 'proof'});
+    await tester.pump();
+    expect(result, isNull);
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+    expect(result, accepted);
+    bridge.complete();
+    await tester.pump();
+    expect(find.text('open'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   for (final result in [
     const VerificationCodeResult(captchaVerified: false, sent: false),
     const VerificationCodeResult(captchaVerified: true, sent: false),
@@ -153,4 +256,40 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     });
   }
+}
+
+Future<_Platform> _openRecoveryDialog(WidgetTester tester,
+    Future<VerificationCodeResult> Function(String) request,
+    {TargetPlatform platform = TargetPlatform.iOS,
+    bool dark = false,
+    ValueChanged<VerificationCodeResult?>? onClose}) async {
+  final webview = _Platform();
+  final previous = WebViewPlatform.instance;
+  WebViewPlatform.instance = webview;
+  debugDefaultTargetPlatformOverride = platform;
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await EasyLoading.dismiss();
+    WebViewPlatform.instance = previous ?? _Platform();
+    debugDefaultTargetPlatformOverride = null;
+  });
+  await tester.pumpWidget(MaterialApp(
+      builder: EasyLoading.init(),
+      theme: ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
+      locale: const Locale('zh'),
+      supportedLocales: const [Locale('zh')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      home: Builder(
+          builder: (context) => Scaffold(
+              body: TextButton(
+                  onPressed: () async {
+                    final result = await showAliyunCaptcha(context, request);
+                    onClose?.call(result);
+                  },
+                  child: const Text('open'))))));
+  await tester.tap(find.text('open'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  return webview;
 }

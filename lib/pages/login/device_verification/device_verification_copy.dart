@@ -27,6 +27,7 @@ class DeviceVerificationCopy {
   String get codeLabel => _text('验证码', 'Verification Code', hant: '驗證碼');
   String get codeHint => _text('6 位验证码', '6-digit code', hant: '6 位驗證碼');
   String get send => _text('发送', 'Send', hant: '發送');
+  String get sending => _text('发送中…', 'Sending…', hant: '發送中…');
   String get confirm => _text('确认登录', 'Confirm Login', hant: '確認登入');
   String get back => _text('返回', 'Back');
   String get phoneLabel => _text('绑定手机号', 'Bound phone number', hant: '綁定手機號');
