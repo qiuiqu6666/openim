@@ -49,7 +49,12 @@ class EditGroupNameLogic extends GetxController {
     // Avatar changes are saved separately by GroupSetupLogic. Sending the
     // original name again creates an unnecessary group-name notification.
     saving.value = true;
-    if (name == _originalName) {
+    if (name == _originalName ||
+        (type == EditNameType.myGroupMemberNickname &&
+            _originalName.isEmpty &&
+            name ==
+                graphemeTrim(
+                    groupSetupLogic.imLogic.userInfo.value.nickname ?? ''))) {
       Get.back();
       return;
     }

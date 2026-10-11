@@ -111,7 +111,10 @@ void main() {
         await tester.tap(find.byType(TextField));
         await tester.pump();
         expect(tester.testTextInput.isVisible, isTrue);
-        expect(input.controller!.selection.isValid, isTrue);
+        final editableName = original ?? '秋啊';
+        expect(input.controller!.text, editableName);
+        expect(input.controller!.selection,
+            TextSelection.collapsed(offset: editableName.length));
         await tester.enterText(find.byType(TextField), '新备注');
         await tester.tap(find.text(StrRes.determine));
         await tester.runAsync(
@@ -173,5 +176,24 @@ void main() {
     await tester.pump();
     expect(logic.inputCtrl.text, '旧新备注追加');
     expect(logic.inputCtrl.selection.baseOffset, 2);
+  });
+  testWidgets('empty remark appends to nickname and stays empty after clearing',
+      (tester) async {
+    final logic = await _open(tester);
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    expect(logic.inputCtrl.text, '秋啊');
+    expect(logic.inputCtrl.selection.baseOffset, 2);
+    tester.testTextInput.updateEditingValue(const TextEditingValue(
+        text: '秋啊朋友', selection: TextSelection.collapsed(offset: 4)));
+    await tester.pump();
+    expect(logic.inputCtrl.text, '秋啊朋友');
+    await tester.tap(find.byKey(const ValueKey('name-editor-clear')));
+    await tester.pump();
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    expect(logic.inputCtrl.text, isEmpty);
+    expect(find.text('0/30'), findsOneWidget);
+    expect(calls, isEmpty);
   });
 }

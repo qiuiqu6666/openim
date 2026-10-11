@@ -507,6 +507,12 @@ class GroupFeatureStore extends ChangeNotifier {
       }
       if (key == 'groupFeatureCapabilitiesChanged') {
         final version = data['capabilityVersion'];
+        // Re-delivery can have a new event ID. A version already confirmed by
+        // the server does not revoke the current scope or rebuild open routes.
+        final confirmed = _capabilities[id];
+        if (version is int && confirmed != null && version <= confirmed.version) {
+          return;
+        }
         if (version is int && version < (_capabilityMinimumVersion[id] ?? 0)) {
           return;
         }

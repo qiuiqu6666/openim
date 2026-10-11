@@ -4,6 +4,7 @@ import 'package:openim_common/openim_common.dart';
 
 class ProcessFriendRequestsLogic extends GetxController {
   late FriendApplicationInfo applicationInfo;
+  final processing = false.obs;
 
   @override
   void onInit() {
@@ -11,33 +12,44 @@ class ProcessFriendRequestsLogic extends GetxController {
     super.onInit();
   }
 
-  void acceptFriendApplication() async {
-    LoadingView.singleton
-        .wrap(
-            asyncFunction: () =>
-                OpenIM.iMManager.friendshipManager.acceptFriendApplication(userID: applicationInfo.fromUserID!))
-        .then(_addSuccessfully)
-        .catchError((_) => IMViews.showToast(StrRes.addFailed));
-  }
+  Future<void> acceptFriendApplication() => _process(true);
 
-  void refuseFriendApplication() async {
-    LoadingView.singleton
-        .wrap(
-            asyncFunction: () =>
-                OpenIM.iMManager.friendshipManager.refuseFriendApplication(userID: applicationInfo.fromUserID!))
-        .then(_rejectSuccessfully)
-        .catchError((_) => IMViews.showToast(StrRes.rejectFailed));
-  }
+  Future<void> refuseFriendApplication() => _process(false);
 
-  _addSuccessfully(_) {
-    IMViews.showToast(StrRes.addSuccessfully);
-    Get.back(result: 1);
-    return _;
-  }
-
-  _rejectSuccessfully(_) {
-    IMViews.showToast(StrRes.rejectSuccessfully);
-    Get.back(result: -1);
-    return _;
+  Future<void> _process(bool accept) async {
+    if (isClosed ||
+        processing.value ||
+        applicationInfo.handleResult == 1 ||
+        applicationInfo.handleResult == -1) {
+      return;
+    }
+    final account = OpenIM.iMManager.userID;
+    final token = DataSp.chatToken;
+    bool current() =>
+        !isClosed &&
+        account == OpenIM.iMManager.userID &&
+        token == DataSp.chatToken;
+    processing.value = true;
+    try {
+      final manager = OpenIM.iMManager.friendshipManager;
+      if (accept) {
+        await manager.acceptFriendApplication(
+            userID: applicationInfo.fromUserID!);
+      } else {
+        await manager.refuseFriendApplication(
+            userID: applicationInfo.fromUserID!);
+      }
+      if (!current()) return;
+      applicationInfo.handleResult = accept ? 1 : -1;
+      IMViews.showToast(
+          accept ? StrRes.addSuccessfully : StrRes.rejectSuccessfully);
+      Get.back(result: applicationInfo.handleResult);
+    } catch (_) {
+      if (current()) {
+        IMViews.showToast(accept ? StrRes.addFailed : StrRes.rejectFailed);
+      }
+    } finally {
+      if (!isClosed) processing.value = false;
+    }
   }
 }

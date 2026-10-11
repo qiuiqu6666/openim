@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:path_provider/path_provider.dart';
@@ -100,8 +101,11 @@ class _ChatPictureViewState extends State<ChatPictureView> {
     final sourceSize = ChatPictureQuality.sourceSize(picture);
     final width = sourceSize.width;
     final height = sourceSize.height;
-    final limit = (widget.maxDisplayWidth ?? pictureWidth)
-        .clamp(0.0, constraints.maxWidth);
+    // Landscape attachments need room for their content; keep portrait/long
+    // images compact and preserve explicit sizing used by conversation peeks.
+    final limit =
+        (widget.maxDisplayWidth ?? (width > height ? 120.w : pictureWidth))
+            .clamp(0.0, constraints.maxWidth);
     var displayWidth = width < limit ? width : limit;
     var displayHeight = displayWidth * height / width;
     // Choose the visible top crop before fitting the bubble's height. Fitting
@@ -129,24 +133,20 @@ class _ChatPictureViewState extends State<ChatPictureView> {
         ? ChatPictureQuality.croppedSource(picture, decodeSize) ?? thumbnailURL
         : thumbnailURL;
 
-    Widget? fallback() =>
-        IMUtils.isNotNullEmptyStr(thumbnailURL) && thumbnailURL != remoteURL
-            ? ImageUtil.networkImage(
-                url: thumbnailURL!,
-                width: displayWidth,
-                height: displayHeight,
-                cacheWidth: cacheWidth,
-                cacheHeight: cacheHeight,
-                resizePolicy: ResizeImagePolicy.fit,
-                cacheRawData: false,
-                fit: BoxFit.fitWidth,
-                alignment: alignment,
-              )
-            : null;
+    // Only mount the next source after a failure, avoiding parallel downloads.
+    final urls = <String>{
+      if (remoteURL != null && remoteURL.trim().isNotEmpty) remoteURL,
+      if (picture?.snapshotPicture?.url case final String url)
+        if (url.trim().isNotEmpty) url,
+      if (picture?.bigPicture?.url case final String url)
+        if (url.trim().isNotEmpty) url,
+      if (picture?.sourcePicture?.url case final String url)
+        if (url.trim().isNotEmpty) url,
+    }.toList();
 
-    Widget? remote() => IMUtils.isNotNullEmptyStr(remoteURL)
+    Widget? remote([int index = 0]) => index < urls.length
         ? ImageUtil.networkImage(
-            url: remoteURL!,
+            url: urls[index],
             width: displayWidth,
             height: displayHeight,
             cacheWidth: cacheWidth,
@@ -155,8 +155,7 @@ class _ChatPictureViewState extends State<ChatPictureView> {
             cacheRawData: false,
             fit: BoxFit.fitWidth,
             alignment: alignment,
-            loadingWidget: fallback(),
-            errorWidget: fallback(),
+            errorWidget: remote(index + 1),
           )
         : null;
 

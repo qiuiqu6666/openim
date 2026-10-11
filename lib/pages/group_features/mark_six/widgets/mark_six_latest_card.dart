@@ -239,13 +239,20 @@ class _MarkSixLatestCardState extends State<MarkSixLatestCard> {
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 6, vertical: 3),
                                       decoration: BoxDecoration(
-                                          color: style.lotteryAlt,
+                                          color:
+                                              style.resultTagBackground(value),
                                           borderRadius:
                                               BorderRadius.circular(6)),
                                       child: Text(value,
                                           style: TextStyle(
                                               fontSize: 11,
-                                              color: style.secondary))),
+                                              color: style
+                                                  .resultTagForeground(value),
+                                              fontWeight: style.resultTagAccent(
+                                                          value) !=
+                                                      null
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal))),
                               ]),
                             ])),
                       ]),

@@ -222,8 +222,10 @@ class ChatMediaController {
     final name = p.basename(path);
     final directory = Directory('${Config.cachePath}/outgoing_media');
     await directory.create(recursive: true);
-    return File(path).copy(
-        '${directory.path}/${DateTime.now().microsecondsSinceEpoch}_$name');
+    // Clock precision can repeat across fast selections. Reserve a unique
+    // directory so a later attachment cannot overwrite an active upload.
+    final attachmentDirectory = await directory.createTemp('attachment-');
+    return File(path).copy(p.join(attachmentDirectory.path, name));
   }
 
   Future<void> onTapFile() => _pickAttachment(false);

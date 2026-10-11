@@ -3,6 +3,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../conversation/drafts/conversation_draft_text.dart';
+import '../../conversation/summary/conversation_latest_message_text.dart';
 
 class GlobalSearchConversationSubtitle extends StatelessWidget {
   const GlobalSearchConversationSubtitle({
@@ -17,8 +18,8 @@ class GlobalSearchConversationSubtitle extends StatelessWidget {
     final draft = conversationDraftText(conversation.draftText) ?? '';
     if (graphemeTrim(draft).isEmpty) {
       return Text(
-        conversation.isGroupChat ? StrRes.globalSearchGroup : StrRes.singleChat,
-        maxLines: 2,
+        conversationLatestMessageText(conversation),
+        maxLines: 1,
         overflow: TextOverflow.ellipsis,
       );
     }

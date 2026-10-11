@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../../core/server_nodes/node_endpoint.dart';
+import '../../../../core/server_nodes/manual_node_switch_service.dart';
 import '../../../../core/server_nodes/startup_node_selection.dart';
 import '../node_switch/node_probe_controller.dart';
 import '../settings_draft_store.dart';
@@ -44,7 +45,12 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
   }
 
   String _time(BuildContext context) {
-    final value = _controller.testedAt ?? StartupNodeSelection.last?.checkedAt;
+    if (_controller.testing) {
+      return settingsText(context, zh: '测速中', en: 'Testing');
+    }
+    final value = _controller.hasManualTest
+        ? _controller.testedAt
+        : StartupNodeSelection.last?.checkedAt;
     if (value == null) {
       return settingsText(context, zh: '尚未测速', en: 'Not tested');
     }
@@ -53,26 +59,44 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
         '${two(value.hour)}:${two(value.minute)}:${two(value.second)}';
   }
 
-  String _status(BuildContext context) {
-    if (_controller.testing) {
-      return settingsText(context, zh: '测速中', en: 'Testing');
-    }
-    switch (_controller.status) {
-      case NodeProbeStatus.unknown:
-        return settingsText(context, zh: '未知', en: 'Unknown');
-      case NodeProbeStatus.normal:
-        return '${settingsText(context, zh: '正常', en: 'OK')} (${_controller.latencyMs}ms)';
-      case NodeProbeStatus.abnormal:
-        return settingsText(context, zh: '异常', en: 'Abnormal');
-    }
+  Future<void> _switchNode(NodeEndpoint node) async {
+    final failure = await _controller.switchTo(node);
+    if (!mounted) return;
+    final (zh, en) = switch (failure) {
+      null => ('节点切换成功', 'Node switched'),
+      NodeSwitchFailure.busy => (
+          '正在通话或处理连接，请稍后切换',
+          'A call or connection change is in progress. Try again shortly.'
+        ),
+      NodeSwitchFailure.unavailable => (
+          '该节点暂不可用，已保留原连接',
+          'This node is unavailable. Your connection is unchanged.'
+        ),
+      NodeSwitchFailure.sessionChanged => (
+          '操作已取消，请稍后重试',
+          'Operation cancelled. Please try again.'
+        ),
+      NodeSwitchFailure.connectionFailed => (
+          '切换失败，已恢复原节点',
+          'Switch failed. The previous node was restored.'
+        ),
+      NodeSwitchFailure.recoveryFailed => (
+          '连接未恢复，请检查网络后重启 App',
+          'Connection could not be restored. Check your network and restart the app.'
+        ),
+    };
+    showSettingsMessage(context, settingsText(context, zh: zh, en: en));
   }
 
   Widget _nodeRow(BuildContext context, NodeEndpoint node, int index) {
     final dark = settingsIsDark(context);
-    final selected = node.signature == _controller.endpoint.signature;
+    final selected = !_controller.connectionUnconfirmed &&
+        node.signature == _controller.endpoint.signature;
     var status = NodeProbeStatus.unknown;
     int? latency;
-    final checks = StartupNodeSelection.last?.checks ?? [];
+    final checks = _controller.hasManualTest
+        ? []
+        : StartupNodeSelection.last?.checks ?? [];
     for (final check in checks) {
       if (check.endpoint.signature == node.signature) {
         status =
@@ -80,14 +104,23 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
         latency = check.latencyMs;
       }
     }
+    final result = _controller.results[node.signature];
+    if (result != null) {
+      status = result.status;
+      latency = result.latencyMs;
+    }
     var label = status == NodeProbeStatus.normal
         ? '${settingsText(context, zh: '正常', en: 'OK')} (${latency}ms)'
         : settingsText(context,
             zh: status == NodeProbeStatus.abnormal ? '异常' : '未知',
             en: status == NodeProbeStatus.abnormal ? 'Abnormal' : 'Unknown');
-    if (selected && (_controller.testing || _controller.testedAt != null)) {
-      status = _controller.status;
-      label = _status(context);
+    if (_controller.pending.contains(node.signature)) {
+      status = NodeProbeStatus.unknown;
+      label = settingsText(context, zh: '测速中', en: 'Testing');
+    }
+    if (_controller.switchingTo?.signature == node.signature) {
+      status = NodeProbeStatus.unknown;
+      label = settingsText(context, zh: '切换中', en: 'Switching');
     }
     final color = status == NodeProbeStatus.normal
         ? (dark ? AppTokens.successDark : AppTokens.success)
@@ -95,33 +128,40 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
             ? AppTokens.danger
             : AppTokens.textSecondary(dark: dark);
     return Semantics(
+      key: ValueKey('node-row-$index'),
       selected: selected,
-      child: Container(
-        constraints: BoxConstraints(
-            minHeight: SettingsResponsive.listRowMinHeight(context)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(children: [
-          Expanded(
-              child: Text(
-                  settingsText(context,
-                      zh: '节点${(index + 1).toString().padLeft(2, '0')}',
-                      en: 'Node ${(index + 1).toString().padLeft(2, '0')}'),
-                  style: TextStyle(color: AppTokens.textPrimary(dark: dark)))),
-          Expanded(
-            child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              Icon(Icons.circle, size: 8, color: color),
-              const SizedBox(width: 6),
-              Flexible(child: Text(label, style: TextStyle(color: color))),
-              const SizedBox(width: 10),
-              SizedBox(
-                  width: 22,
-                  child: selected
-                      ? const Icon(Icons.check_rounded,
-                          color: AppTokens.accent, size: 22)
-                      : null),
-            ]),
-          ),
-        ]),
+      child: InkWell(
+        onTap: _controller.testing || _controller.switching || selected
+            ? null
+            : () => _switchNode(node),
+        child: Container(
+          constraints: BoxConstraints(
+              minHeight: SettingsResponsive.listRowMinHeight(context)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(children: [
+            Expanded(
+                child: Text(
+                    settingsText(context,
+                        zh: '节点${(index + 1).toString().padLeft(2, '0')}',
+                        en: 'Node ${(index + 1).toString().padLeft(2, '0')}'),
+                    style:
+                        TextStyle(color: AppTokens.textPrimary(dark: dark)))),
+            Expanded(
+              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                Icon(Icons.circle, size: 8, color: color),
+                const SizedBox(width: 6),
+                Flexible(child: Text(label, style: TextStyle(color: color))),
+                const SizedBox(width: 10),
+                SizedBox(
+                    width: 22,
+                    child: selected
+                        ? const Icon(Icons.check_rounded,
+                            color: AppTokens.accent, size: 22)
+                        : null),
+              ]),
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -141,7 +181,9 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Row(children: [
                   OutlinedButton.icon(
-                    onPressed: _controller.testing ? null : _controller.test,
+                    onPressed: _controller.testing || _controller.switching
+                        ? null
+                        : _controller.test,
                     style: OutlinedButton.styleFrom(
                         foregroundColor: AppTokens.accent,
                         side: BorderSide(
@@ -185,8 +227,8 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
                 padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
                 child: Text(
                     settingsText(context,
-                        zh: '每次启动 App 时自动检测并选择可用节点，使用中保持连接稳定。\n\n可手动测速查看当前节点状态；下次启动时会重新自动选择。',
-                        en: 'A working node is selected automatically at each app launch. The connection stays unchanged during use.\n\nRetest the current node manually, or relaunch to select again.'),
+                        zh: '点击节点可立即切换并重新连接。每次启动 App 时仍会自动检测并选择可用节点。\n\n手动测速会重新检测所有节点，不会自动切换连接。通话中请稍后切换。',
+                        en: 'Tap a node to switch and reconnect. Each app launch still automatically selects an available node.\n\nSpeed Test checks every node without switching. Wait until your call ends before switching.'),
                     style: TextStyle(color: sub, fontSize: 12, height: 1.45)),
               ),
             ],

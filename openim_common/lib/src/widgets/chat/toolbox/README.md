@@ -10,6 +10,8 @@
 
 `ChatComposerToolboxSlot` 使用 200ms easeOutCubic 增减高度，在裁剪范围内保持内容终态约束。安全区只由面板底部内边距承担；关闭时普通输入槽保留相同安全区，切到表情或语音后槽位归零，由对应面板承担安全区。外部输入与焦点控制器、草稿和关闭 stream 仍归 `ChatInputBox` 的调用方。焦点恢复、强制关闭或输入失效会关闭面板，表情、语音和工具互斥。
 
+`ChatInputBox` 还监听所属 `FlutterView` 的原生键盘高度；不能使用已被 `Scaffold` 消耗的局部 `MediaQuery.viewInsets` 判定键盘。键盘收起期间只保留目标面板状态，不展示或预留面板高度；键盘恢复时立即收起面板槽位，避免关闭动画仍占用高度。未传入焦点节点时由输入组件创建、监听并释放节点，传入的节点仍归调用方。此逻辑沿用输入组件生命周期，不引入延时任务或修改草稿。
+
 `ChatToolboxGrid` 按实际父宽度分配间距，小屏、大字或受限高度可以在页内纵向滚动；页数因群能力变化减少时重置到第一页并释放旧控制器。SVG/PNG 资源在公共包 `assets/chat_toolbox/`，来源和许可见 `docs/third-party-assets.md`。
 
 应用测试位于 `test/widgets/chat/toolbox/`，另有兼容分页、输入、名片和资金入口回归。`CHAT_TOOLBOX_PREVIEW=true` 可生成 `.dart_tool/chat-toolbox-{light,dark}-page-{1,2}.png`，预览使用正式组件与测试回调。

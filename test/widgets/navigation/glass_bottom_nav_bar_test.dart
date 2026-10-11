@@ -3,22 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/home/glass_bottom_nav_bar.dart';
+import 'package:openim/pages/home/navigation/home_navigation_icon.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:persistent_bottom_nav_bar_v2/persistent_bottom_nav_bar_v2.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget _badgedIcon(IconData icon, int count) => SizedBox(
-      width: 32,
-      height: 28,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          Icon(icon),
-          Positioned(top: -2, right: -2, child: UnreadCountView(count: count)),
-        ],
-      ),
-    );
+Widget _badgedIcon(IconData icon, int count) =>
+    HomeNavigationIcon(icon: Icon(icon), count: count);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

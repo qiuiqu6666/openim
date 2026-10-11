@@ -617,7 +617,11 @@ void main() {
     await tester.pump();
     expect(logic.newMessages.unseenCount.value, 1);
     expect(logic.messageList.map((message) => message.clientMsgID),
-        isNot(anyOf(contains('deleted-arrival'), contains('revoked-arrival'))));
+        isNot(contains('deleted-arrival')));
+    final revoked = logic.messageList
+        .singleWhere((message) => message.clientMsgID == 'revoked-arrival');
+    expect(revoked.contentType, MessageType.revokeMessageNotification);
+    expect(revoked.textElem, isNull);
     im.recvNewMessage(deleted);
     expect(logic.newMessages.unseenCount.value, 1);
     logic.onChatViewportChanged(['remaining-arrival'], 160);

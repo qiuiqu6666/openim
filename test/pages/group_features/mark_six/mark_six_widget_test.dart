@@ -284,6 +284,35 @@ void main() {
     expect(find.text('平台输赢'), findsNothing);
     expect(find.text('下载'), findsNothing);
   });
+  for (final dark in [false, true]) {
+    for (final status in ['NONE', 'SUCCESS', 'FAILED']) {
+      testWidgets('rebate entry enables confirmed idle $status dark=$dark',
+          (tester) async {
+        final api = MarkSixFakeApi(respond: (method, path, query, _) {
+          if (method == 'POST') return {'status': 'FAILED'};
+          if (path.endsWith('/apply/status')) return {'status': status};
+          return markSixFixtureResponse(path, query);
+        });
+        await _mount(
+            tester, AgentCurrentPage(featureContext: markSixContext(api)),
+            dark: dark);
+        await tester.pumpAndSettle();
+        expect(
+            tester
+                .widget<FilledButton>(find.byType(FilledButton))
+                .onPressed,
+            isNotNull);
+        expect(api.calls.where((c) => c.method == 'POST'), isEmpty);
+        await tester.tap(find.text('申请反水'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('确认申请'));
+        await tester.pumpAndSettle();
+        expect(api.calls.where((c) => c.method == 'POST'), hasLength(1));
+        expect(find.text('反水结算成功'), findsNothing);
+        expect(find.textContaining('反水结算失败'), findsOneWidget);
+      });
+    }
+  }
   testWidgets(
       'rebate cancellation never submits and failed acknowledgement is visible',
       (tester) async {
@@ -341,7 +370,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(AgentCurrentPage), findsOneWidget);
     expect(find.text('恢复申请状态中…'), findsOneWidget);
-    expect(tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
         isNull);
     expect(api.calls.where((call) => call.path.endsWith('/apply/status')),
         hasLength(1));
@@ -368,8 +397,8 @@ void main() {
     serverStatus = 'SUCCESS';
     await tester.tap(find.text('查询处理状态'));
     await tester.pumpAndSettle();
-    expect(tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
-        isNull);
+    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNotNull);
     expect(api.calls.where((call) => call.method == 'POST'), hasLength(1));
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());

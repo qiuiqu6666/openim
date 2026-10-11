@@ -59,14 +59,14 @@ void main() {
       await tester.tap(toolboxAction(id));
       await tester.pumpAndSettle();
       expect(fixture.calls[id], isNull);
-      expect(find.byType(AlertDialog), findsOneWidget);
-      await tester.tap(find.widgetWithText(TextButton, StrRes.cancel));
+      expect(find.text(StrRes.permissionDeniedTitle), findsOneWidget);
+      await tester.tap(find.text(StrRes.cancel));
       await tester.pumpAndSettle();
       native.status = 1;
       await tester.tap(toolboxAction(id));
       await tester.pumpAndSettle();
       expect(fixture.calls[id], 1);
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text(StrRes.permissionDeniedTitle), findsNothing);
     }
     expect(tester.takeException(), isNull);
   });

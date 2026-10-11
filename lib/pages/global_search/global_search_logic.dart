@@ -7,6 +7,11 @@ import '../conversation/conversation_logic.dart';
 import '../group_features/data/group_feature_store.dart';
 
 class GlobalSearchSource {
+  Iterable<ConversationInfo> get currentConversations =>
+      Get.isRegistered<ConversationLogic>()
+          ? Get.find<ConversationLogic>().list
+          : const <ConversationInfo>[];
+
   GroupFeatureStore? get groupFeatures => Get.isRegistered<ConversationLogic>()
       ? Get.find<ConversationLogic>().groupFeatures
       : null;

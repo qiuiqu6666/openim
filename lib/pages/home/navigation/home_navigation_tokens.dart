@@ -9,6 +9,9 @@ abstract final class HomeNavigationTokens {
   static const radius = height / 2;
   static const selectionInset = AppTokens.s2;
   static const labelSize = 12.0;
+  static const iconSize = 24.0;
+  static const badgeTop = -5.0;
+  static const badgeStart = 16.0;
 
   static double opacity(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark ? .40 : .44;

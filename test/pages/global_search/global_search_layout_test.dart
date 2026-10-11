@@ -20,6 +20,9 @@ const _previewOutput = String.fromEnvironment('GLOBAL_SEARCH_PREVIEW');
 bool _previewFontsLoaded = false;
 
 class _Source extends GlobalSearchSource {
+  final previews = <ConversationInfo>[].obs;
+  @override
+  Iterable<ConversationInfo> get currentConversations => previews;
   final calls = <String, int>{};
   Completer<List<FriendInfo>>? pendingFriends;
   bool failFiles = false;
@@ -185,6 +188,33 @@ void main() {
   tearDown(() {
     Styles.isDark = false;
     Get.reset();
+  });
+
+  testWidgets('group results show live last message instead of group ID',
+      (tester) async {
+    OpenIM.iMManager.userID = 'me';
+    final source = _Source();
+    ConversationInfo preview(String text) => ConversationInfo(
+        conversationID: 'sg_group',
+        groupID: 'group',
+        conversationType: ConversationType.superGroup,
+        latestMsg: Message(
+            contentType: MessageType.text,
+            sendID: 'me',
+            textElem: TextElem(content: text)));
+    source.previews.add(preview('最后一条消息'));
+    await _mount(tester, source);
+    await _search(tester);
+    await _select(tester, StrRes.globalSearchGroup);
+    expect(find.text('最后一条消息'), findsOneWidget);
+    expect(find.text('group'), findsNothing);
+    source.previews.assignAll([preview('新收到的消息')]);
+    await tester.pumpAndSettle();
+    expect(find.text('新收到的消息'), findsOneWidget);
+    source.previews.clear();
+    await tester.pumpAndSettle();
+    expect(find.text('新收到的消息'), findsNothing);
+    expect(find.text('group'), findsNothing);
   });
 
   testWidgets('contact and conversation badges use identity and keep remarks',

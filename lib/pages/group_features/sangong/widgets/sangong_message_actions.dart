@@ -35,10 +35,8 @@ class SangongMessageActions {
       }
     }
 
-    Future<void> preview(bool exclude) async {
-      final cutoff = exclude
-          ? SangongBetSubmitCutoff.excludingMessage(message)
-          : SangongBetSubmitCutoff.fromLongPressedMessage(message);
+    Future<void> preview() async {
+      final cutoff = SangongBetSubmitCutoff.fromLongPressedMessage(message);
       if (cutoff == null) return;
       final session = await runtime.admin.fetchSession();
       if (!runtime.canManage) return;
@@ -60,7 +58,7 @@ class SangongMessageActions {
           selectedMessagePreview:
               SangongBetSubmitCutoff.readMessagePreviewText(message),
           selectedSenderLabel: SangongBetSubmitCutoff.readSenderLabel(message),
-          excludeMode: exclude);
+          excludeMode: false);
     }
 
     return [
@@ -68,12 +66,7 @@ class SangongMessageActions {
         PopMenuInfo(
             id: 'sangong_stats',
             text: '统计',
-            onTap: () => run(() => preview(false))),
-      if (SangongBetSubmitCutoff.canExcludeMessage(message))
-        PopMenuInfo(
-            id: 'sangong_exclude',
-            text: '不计入',
-            onTap: () => run(() => preview(true))),
+            onTap: () => run(preview)),
       if (canAssign(message))
         PopMenuInfo(
             id: 'sangong_banker',

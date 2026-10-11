@@ -202,7 +202,7 @@ class AppDialog {
       int? maxLength,
       TextInputType? keyboardType,
       List<TextInputFormatter>? inputFormatters,
-      bool barrierDismissible = true,
+      bool barrierDismissible = false,
       bool allowEmpty = false,
       Widget Function(BuildContext, Widget)? dialogWrapper}) async {
     final runtime = SangongScope.read(context);

@@ -174,33 +174,52 @@ class _SangongUserAgentGroupEntryState
         ? '未设置'
         : (_group?.groupName?.isNotEmpty == true ? _group!.groupName! : '已设置');
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.groups_outlined),
-          title: const Text('代理群'),
-          subtitle: Text(_loading
+      Row(children: [
+        const Icon(Icons.groups_outlined),
+        const SizedBox(width: AppTokens.s2),
+        Expanded(
+            child: Text('代理群', style: Theme.of(context).textTheme.titleMedium)),
+      ]),
+      const SizedBox(height: AppTokens.s2),
+      Text(
+          _loading
               ? '正在加载…'
               : _error != null
                   ? '加载失败，请重试'
-                  : _groupId == null
-                      ? title
-                      : '$title\n群 ID：$_groupId'),
-          trailing: _error != null
-              ? IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
-              : TextButton(
+                  : title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis),
+      if (_groupId != null && !_loading && _error == null)
+        Tooltip(
+          message: '群 ID：$_groupId',
+          child: SelectableText('群 ID：$_groupId',
+              maxLines: 1, style: Theme.of(context).textTheme.bodySmall),
+        ),
+      SizedBox(
+          width: double.infinity,
+          child: Wrap(alignment: WrapAlignment.end, children: [
+            if (_error != null)
+              TextButton.icon(
+                  onPressed: _load,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('重试'))
+            else
+              TextButton(
                   onPressed:
                       _loading || _saving || !widget.hasRebate ? null : _edit,
                   child: Text(_saving
                       ? '保存中…'
                       : _groupId == null
                           ? '设置'
-                          : '更换'))),
+                          : '更换')),
+            if (_groupId != null && !_loading && _error == null)
+              TextButton(
+                  onPressed: _saving ? null : () => _edit(clear: true),
+                  child: const Text('清除绑定')),
+          ])),
       if (!widget.hasRebate)
         Text('返水比例大于 0 时可设置代理群', style: Theme.of(context).textTheme.bodySmall),
-      if (_groupId != null && !_loading && _error == null)
-        TextButton(
-            onPressed: _saving ? null : () => _edit(clear: true),
-            child: const Text('清除绑定')),
+      const Divider(),
     ]);
   }
 }

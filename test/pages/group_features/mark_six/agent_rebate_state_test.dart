@@ -151,9 +151,7 @@ void main() {
       expect(api.calls.where((c) => c.method == 'POST'), hasLength(1));
     });
   }
-  test(
-      'confirmed prior SUCCESS cannot be applied again even with stale positive amount',
-      () async {
+  test('confirmed prior SUCCESS allows a new explicit application', () async {
     final api = MarkSixFakeApi(
         respond: (_, path, query, __) => path.endsWith('/apply/status')
             ? {'status': 'SUCCESS'}
@@ -166,9 +164,36 @@ void main() {
     });
     await state.initialize();
     expect(state.settled, isTrue);
-    expect(state.canApply(), isFalse);
+    expect(state.canApply(), isTrue);
     await state.apply();
-    expect(api.calls.where((c) => c.method == 'POST'), isEmpty);
+    expect(api.calls.where((c) => c.method == 'POST'), hasLength(1));
+  });
+  test(
+      'new uncertain submission clears prior success and blocks duplicate taps',
+      () async {
+    final submitted = Completer<Map<String, dynamic>>();
+    final api = MarkSixFakeApi(respond: (method, path, query, _) {
+      if (method == 'POST') return submitted.future;
+      if (path.endsWith('/apply/status')) return {'status': 'SUCCESS'};
+      return markSixFixtureResponse(path, query);
+    });
+    final repo = MarkSixRepository(markSixContext(api));
+    final state = AgentRebateController(repo);
+    addTearDown(() {
+      state.dispose();
+      repo.close();
+    });
+    await state.initialize();
+    final work = state.apply();
+    expect(state.settled, isFalse);
+    await state.apply();
+    expect(api.calls.where((c) => c.method == 'POST'), hasLength(1));
+    submitted.complete({});
+    await work;
+    expect(state.settled, isFalse);
+    expect(state.needsStatusQuery, isTrue);
+    await state.apply();
+    expect(api.calls.where((c) => c.method == 'POST'), hasLength(1));
   });
   for (final revokeAccount in [false, true]) {
     test(

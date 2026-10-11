@@ -141,6 +141,20 @@ void main() {
     expect(_subtitle(tester, '冬'), '[${StrRes.draftText}] $raw');
   });
 
+  testWidgets('last message is shown unless a draft exists', (tester) async {
+    OpenIM.iMManager.userID = 'me';
+    final single = _conversation('冬')
+      ..latestMsg = Message(contentType: MessageType.text, sendID: 'me',
+          textElem: TextElem(content: '最后一条聊天消息'));
+    final group = _conversation('群聊', group: true, draft: '待发送草稿')
+      ..latestMsg = Message(contentType: MessageType.text, sendID: 'me',
+          textElem: TextElem(content: '草稿下的旧消息'));
+    await _mount(tester, items: [single, group]);
+    expect(_subtitle(tester, '冬'), '最后一条聊天消息');
+    expect(_subtitle(tester, '群聊'), contains('待发送草稿'));
+    expect(find.text('草稿下的旧消息'), findsNothing);
+  });
+
   for (final dark in [false, true]) {
     testWidgets(
         'plain and composer drafts show in all and conversation tabs: $dark',
@@ -160,7 +174,7 @@ void main() {
       expect(_subtitle(tester, '冬'), contains('明天见，这条还没有发出去'));
       expect(_subtitle(tester, '测试222'), contains('@冬 帮我看看这份资料'));
       expect(_subtitle(tester, '测试222'), isNot(contains('mentions')));
-      expect(_subtitle(tester, '普通会话'), StrRes.singleChat);
+      expect(_subtitle(tester, '普通会话'), isEmpty);
 
       if (_previewOutput.isNotEmpty) {
         await _export(tester, boundaryKey, dark ? 'dark' : 'light');
@@ -202,9 +216,9 @@ void main() {
       _conversation('普通群聊', group: true),
     ]);
     for (final name in ['未保存草稿', '清空草稿', '空白草稿', '空结构化草稿']) {
-      expect(_subtitle(tester, name), StrRes.singleChat);
+      expect(_subtitle(tester, name), isEmpty);
     }
-    expect(_subtitle(tester, '普通群聊'), StrRes.globalSearchGroup);
+    expect(_subtitle(tester, '普通群聊'), isEmpty);
     expect(tester.takeException(), isNull);
   });
 

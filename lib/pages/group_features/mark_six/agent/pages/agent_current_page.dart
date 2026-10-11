@@ -19,6 +19,7 @@ class AgentCurrentPage extends StatefulWidget {
 class _AgentCurrentPageState extends State<AgentCurrentPage> {
   late final _repository = MarkSixRepository(widget.featureContext);
   late final _state = AgentRebateController(_repository);
+  bool _confirming = false;
   bool get allowed =>
       widget.featureContext.sessionCurrent() &&
       widget.featureContext.capabilitiesCurrent() &&
@@ -37,20 +38,27 @@ class _AgentCurrentPageState extends State<AgentCurrentPage> {
   }
 
   Future<void> _confirmApply() async {
-    if (!allowed || !_state.canApply()) {
+    if (_confirming || !allowed || !_state.canApply()) {
       return;
     }
-    final confirmed = await showAppConfirm(context,
-        barrierDismissible: true,
-        title: '确认级差反水',
-        message: '申请结算本人级差待结算。金额由机器人侧核算，确定继续吗？',
-        cancelText: '取消',
-        confirmText: '确认申请');
-    if (!mounted || !allowed || confirmed != true || !_state.canApply()) return;
-    await _state.apply();
-    if (mounted && _state.current && _state.settled) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('反水结算成功')));
+    _confirming = true;
+    try {
+      final confirmed = await showAppConfirm(context,
+          barrierDismissible: true,
+          title: '确认级差反水',
+          message: '申请结算本人级差待结算。金额由机器人侧核算，确定继续吗？',
+          cancelText: '取消',
+          confirmText: '确认申请');
+      if (!mounted || !allowed || confirmed != true || !_state.canApply()) {
+        return;
+      }
+      await _state.apply();
+      if (mounted && _state.current && _state.settled) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('反水结算成功')));
+      }
+    } finally {
+      _confirming = false;
     }
   }
 
@@ -106,7 +114,11 @@ class _AgentCurrentPageState extends State<AgentCurrentPage> {
                                     ])),
                           SizedBox(
                               width: double.infinity,
-                              child: OutlinedButton(
+                              child: FilledButton(
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: style.primary,
+                                    foregroundColor: Colors.white,
+                                  ),
                                   onPressed: !_state.current ||
                                           _state.restoring ||
                                           _state.submitting ||

@@ -147,6 +147,8 @@ class _ChatMessageMenuState extends State<ChatMessageMenu>
           'add_to_stickers' => 9,
           'delete' => 100,
           'multiSelect' => 110,
+          'sangong_stats' => 120,
+          'sangong_banker' => 121,
           _ => 50,
         };
     return rank(first.id).compareTo(rank(next.id));

@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import '../conversation/conversation_logic.dart';
+import '../conversation/summary/conversation_latest_message_text.dart';
 import '../chat/chat_setup/chat_history_search_page.dart';
 import 'global_search_logic.dart';
 import 'widgets/global_search_conversation_subtitle.dart';
@@ -69,6 +70,11 @@ class GlobalSearchPage extends StatelessWidget {
               _searchHeader(context),
               Expanded(child: Obx(() {
                 final selected = logic.index.value;
+                final groupMessages = <String, ConversationInfo>{
+                  for (final item in logic.source.currentConversations)
+                    if (item.isGroupChat && item.groupID != null)
+                      item.groupID!: item,
+                };
                 final rows = <Widget>[];
                 void section(int id, List<Widget> children) {
                   if (selected != 0 && selected != id) return;
@@ -129,8 +135,14 @@ class GlobalSearchPage extends StatelessWidget {
                 section(
                     2,
                     logic.groupList
-                        .map((group) => _row(group.groupName ?? group.groupID,
-                                group.groupID, group.faceURL, true, () {
+                        .map((group) => _row(
+                                group.groupName ?? group.groupID,
+                                groupMessages[group.groupID] == null
+                                    ? ''
+                                    : conversationLatestMessageText(
+                                        groupMessages[group.groupID]!),
+                                group.faceURL,
+                                true, () {
                               Get.find<ConversationLogic>().toChat(
                                   groupID: group.groupID,
                                   sessionType: group.sessionType,

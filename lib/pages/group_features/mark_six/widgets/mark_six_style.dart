@@ -8,6 +8,29 @@ class MarkSixStyle {
   MarkSixStyle.of(BuildContext context)
       : dark = Theme.of(context).brightness == Brightness.dark;
   final bool dark;
+  // Exact latest-result tag palette from 99chat lottery_dashboard.dart _tag.
+  Color? resultTagAccent(String value) => switch (value) {
+        '单' || '小' || '蓝波' => blue,
+        '双' || '大' || '红波' => red,
+        '绿波' => const Color(0xFF00B25E),
+        '金' || '木' || '水' || '火' || '土' => fiveElementColor(value),
+        _ => null,
+      };
+  Color resultTagBackground(String value) =>
+      resultTagAccent(value)?.withValues(alpha: .10) ??
+      (dark ? AppTokens.surfaceAltDark : const Color(0xFFF0F5FC));
+  Color resultTagForeground(String value) =>
+      resultTagAccent(value) ??
+      (dark ? AppTokens.textSecondaryDark : const Color(0xFF536780));
+  // Matches 99chat test_page.dart _ResultRow._attributeColor, both themes.
+  Color fiveElementColor(String element) => switch (element.trim()) {
+        '金' => dark ? const Color(0xFFFFC857) : const Color(0xFF9A6700),
+        '木' => dark ? const Color(0xFF55D99A) : const Color(0xFF008A4A),
+        '水' => dark ? const Color(0xFF76B6FF) : const Color(0xFF0066CC),
+        '火' => dark ? const Color(0xFFFF788A) : const Color(0xFFD72C48),
+        '土' => dark ? const Color(0xFFD5A678) : const Color(0xFF8C5A36),
+        _ => text,
+      };
   Color get background => AppTokens.background(dark: dark);
   Color get surface => AppTokens.surface(dark: dark);
   Color get alternate => AppTokens.surfaceAlt(dark: dark);

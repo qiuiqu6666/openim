@@ -49,11 +49,50 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   for (final shape in {
+    'exact screen': const Size(375, 812),
+    'slightly taller': const Size(375, 850),
+    'near screen': const Size(375, 900),
+    'slightly shorter': const Size(375, 800),
+    'retina screenshot': const Size(1179, 2556),
+    'just below reading overflow': const Size(375, 974),
+    'square': const Size(300, 300),
+    'panorama': const Size(8000, 40),
+    'one pixel': const Size(1, 1),
+  }.entries) {
+    for (final direction in [-1, 1]) {
+      testWidgets(
+          '${shape.key} swipes ${direction < 0 ? "up" : "down"} to close',
+          (tester) async {
+        _phone(tester);
+        final bytes = (await tester.runAsync(() => _png(shape.value)))!;
+        await tester.pumpWidget(renderTestHost(const Text('chat')));
+        final nav = Navigator.of(tester.element(find.text('chat')));
+        nav.push(MaterialPageRoute<void>(
+            builder: (_) => MediaBrowser(
+                  initialIndex: 0,
+                  sources: [MediaSource(thumbnail: '', bytes: bytes)],
+                )));
+        await _settle(tester);
+        await tester.timedDragFrom(Offset(180, direction < 0 ? 560 : 260),
+            Offset(0, direction * 300.0), const Duration(milliseconds: 500));
+        await tester.pumpAndSettle();
+        expect(find.byType(MediaBrowser), findsNothing);
+        expect(find.text('chat'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+          variant: TargetPlatformVariant(
+              {TargetPlatform.android, TargetPlatform.iOS}));
+    }
+  }
+
+  for (final shape in {
     'square': const Size(300, 300),
     'portrait': const Size(300, 500),
     'landscape': const Size(600, 300),
     'panorama': const Size(2400, 100),
     'small': const Size(20, 20),
+    'one pixel wide panorama': const Size(8192, 1),
+    'large square': const Size(4096, 4096),
   }.entries) {
     testWidgets('${shape.key} stays fully visible and centered',
         (tester) async {
@@ -163,6 +202,119 @@ void main() {
       debugNetworkImageHttpClientProvider = previousClient;
     });
   }
+
+  for (final viewport in [
+    const Size(320, 568),
+    const Size(812, 375),
+    const Size(768, 1024)
+  ]) {
+    testWidgets('near viewport $viewport supports gallery swipe then dismissal',
+        (tester) async {
+      tester.view.physicalSize = viewport;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final bytes = (await tester
+          .runAsync(() => _png(Size(viewport.width, viewport.height * 1.1))))!;
+      await tester.pumpWidget(
+          renderTestHost(const Text('chat'), brightness: Brightness.dark));
+      Navigator.of(tester.element(find.text('chat')))
+          .push(MaterialPageRoute<void>(
+              builder: (_) => MediaBrowser(
+                    initialIndex: 0,
+                    sources: [
+                      MediaSource(thumbnail: '', bytes: bytes, tag: 'first'),
+                      MediaSource(thumbnail: '', bytes: bytes, tag: 'second')
+                    ],
+                  )));
+      await _settle(tester);
+      await tester.timedDragFrom(
+          Offset(viewport.width * .8, viewport.height / 2),
+          Offset(-viewport.width * .7, 0),
+          const Duration(milliseconds: 500));
+      await _settle(tester);
+      expect(find.text('2/2'), findsOneWidget);
+      await tester.timedDragFrom(
+          Offset(viewport.width / 2, viewport.height * .3),
+          Offset(0, viewport.height * .4),
+          const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      expect(find.byType(MediaBrowser), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('zoomed near-screen photo pans and closes after restoring fit',
+      (tester) async {
+    _phone(tester);
+    final bytes = (await tester.runAsync(() => _png(const Size(375, 850))))!;
+    await tester.pumpWidget(renderTestHost(const Text('chat')));
+    Navigator.of(tester.element(find.text('chat')))
+        .push(MaterialPageRoute<void>(
+            builder: (_) => MediaBrowser(
+                  initialIndex: 0,
+                  sources: [MediaSource(thumbnail: '', bytes: bytes)],
+                )));
+    await _settle(tester);
+    Future<void> doubleTap() async {
+      await tester.tapAt(const Offset(180, 400));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tapAt(const Offset(180, 400));
+      await tester.pumpAndSettle();
+    }
+
+    await doubleTap();
+    expect(_gesture(tester).gestureDetails!.totalScale, closeTo(2, .01));
+    await tester.timedDragFrom(const Offset(180, 500), const Offset(0, -250),
+        const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    expect(find.byType(MediaBrowser), findsOneWidget);
+    await doubleTap();
+    expect(_gesture(tester).gestureDetails!.totalScale, closeTo(1, .01));
+    // A short drag cancels cleanly and does not poison the next full swipe.
+    await tester.timedDragFrom(const Offset(180, 350), const Offset(0, 45),
+        const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.byType(MediaBrowser), findsOneWidget);
+    await tester.timedDragFrom(const Offset(180, 280), const Offset(0, 320),
+        const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(find.byType(MediaBrowser), findsNothing);
+    expect(tester.takeException(), isNull);
+  },
+      variant:
+          TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
+
+  testWidgets(
+      'extreme narrow image remains finite and readable with pinch and drag',
+      (tester) async {
+    _phone(tester);
+    final bytes = (await tester.runAsync(() => _png(const Size(1, 8192))))!;
+    await tester.pumpWidget(renderTestHost(MediaBrowser(
+        initialIndex: 0, sources: [MediaSource(thumbnail: '', bytes: bytes)])));
+    await _settle(tester);
+    var rect = _gesture(tester).gestureDetails!.destinationRect!;
+    expect(rect.isFinite, isTrue);
+    expect(rect.width, closeTo(375, .01));
+    expect(rect.top, closeTo(0, .01));
+    await tester.timedDragFrom(const Offset(180, 500), const Offset(0, -280),
+        const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    rect = _gesture(tester).gestureDetails!.destinationRect!;
+    expect(rect.top, lessThan(-200));
+    final scale = _gesture(tester).gestureDetails!.totalScale!;
+    final left = await tester.startGesture(const Offset(120, 400), pointer: 1);
+    final right = await tester.startGesture(const Offset(250, 400), pointer: 2);
+    await left.moveTo(const Offset(80, 400));
+    await right.moveTo(const Offset(290, 400));
+    await tester.pump();
+    await left.up();
+    await right.up();
+    await tester.pumpAndSettle();
+    expect(_gesture(tester).gestureDetails!.totalScale!, greaterThan(scale));
+    expect(_gesture(tester).gestureDetails!.destinationRect!.isFinite, isTrue);
+    expect(find.byType(MediaBrowser), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('long image pans vertically and still swipes to the next photo',
       (tester) async {

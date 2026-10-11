@@ -1,3 +1,4 @@
+import 'navigation/chat_entry_trace.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -752,6 +753,8 @@ class ChatLogic extends SuperController {
   @override
   void onInit() {
     var arguments = Get.arguments;
+    final entryTrace = arguments['chatEntryTrace'] as ChatEntryTrace?;
+    entryTrace?.mark('init_start');
     conversationInfo = arguments['conversationInfo'];
     final account = arguments['officialAccount'];
     if (account is OfficialAccount &&
@@ -798,7 +801,8 @@ class ChatLogic extends SuperController {
     faceUrl.value = conversationInfo.faceURL ?? '';
     _appearance.initialize();
     _setSdkSyncDataListener();
-    unawaited(onScrollToBottomLoad());
+    unawaited(onScrollToBottomLoad().whenComplete(
+        () => entryTrace?.mark('initial_history_finished')));
 
     conversationSub = imLogic.conversationChangedSubject.listen((value) {
       final obj = value.firstWhereOrNull(
@@ -864,6 +868,10 @@ class ChatLogic extends SuperController {
     };
     imLogic.onSignalingMessage = _ownedSignalingCallback;
 
+    entryTrace?.mark('init_finished');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_sessionInactive) entryTrace?.mark('first_frame');
+    });
     super.onInit();
   }
 

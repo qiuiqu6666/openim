@@ -151,6 +151,7 @@ class GroupManagePage extends StatelessWidget {
           trailing: AppSwitch(value: value, onChanged: onChanged));
 
   Future<void> _selectJoinRule(BuildContext context, int current) async {
+    final permissionContext = logic.groupSetupLogic.capturePermissionContext();
     final draft = current.clamp(0, 2);
     final accent = Styles.c_0089FF;
     final selected = await showModalBottomSheet<int>(
@@ -218,8 +219,27 @@ class GroupManagePage extends StatelessWidget {
         ),
       ),
     );
-    if (selected != null && selected != current && !logic.isClosed) {
-      await logic.saveRules(verification: selected);
+    if (selected == null ||
+        selected == current ||
+        !context.mounted ||
+        logic.isClosed ||
+        !logic.groupSetupLogic.isPermissionContextCurrent(permissionContext)) {
+      return;
     }
+    final confirmed = await showAppConfirm(
+      context,
+      title: '确认修改入群验证',
+      message:
+          '将入群验证修改为“${'sdkJoinRule$selected'.tr}”？\n${'sdkJoinRuleDescription$selected'.tr}',
+      cancelText: StrRes.cancel,
+      confirmText: '确认修改',
+    );
+    if (!confirmed ||
+        !context.mounted ||
+        logic.isClosed ||
+        !logic.groupSetupLogic.isPermissionContextCurrent(permissionContext)) {
+      return;
+    }
+    await logic.saveRules(verification: selected);
   }
 }

@@ -139,9 +139,7 @@ void main() {
     layout.jointController.text = '200';
     await tester.pump();
     expect(_layout(tester).sharePercent, 25);
-    _layout(tester).onSetCoBank!();
-    await tester.pump();
-    expect(_layout(tester).coBankSummary, contains('未保存'));
+    expect(_layout(tester).coBankSummary, isNot(contains('未保存')));
     expect(api.count('/commands/round.co_bank'), 0);
     expect(api.count('/commands/round.co_bank_notice'), 0);
     expect(api.count('/snapshot'), 1);
@@ -372,14 +370,12 @@ void main() {
     await tester.pump();
     _layout(tester).onAssignBanker!();
     await tester.pump();
-    expect(api.count('/commands/round.banker'), 0);
-    expect(_layout(tester).bankerSummary, contains('未保存'));
-    await _confirm(tester, _layout(tester).onSendBanker!);
+    await flushSangong(tester);
     final call =
         api.calls.singleWhere((c) => c.path.endsWith('/commands/round.banker'));
     expect(call.body?['input'], {
       'roundId': 18,
-      'openBetting': true,
+      'openBetting': false,
       'imUserId': 'im_target',
       'door': 2,
       'bankerLimit': 5000,
@@ -450,10 +446,9 @@ void main() {
     runtime.dispose();
   });
 
-  testWidgets('co-bank amount is only saved by Send in one command',
-      (tester) async {
+  testWidgets('co-bank amount saves immediately without Send', (tester) async {
     final api = SangongTestApi()
-      ..respond = (call) => call.path.endsWith('/commands/round.co_bank_notice')
+      ..respond = (call) => call.path.endsWith('/commands/round.co_bank')
           ? sangongReceipt(call, {'state': _session(member: true)})
           : _readResponse(call);
     final runtime = sangongTestRuntime(sangongTestContext(api));
@@ -462,12 +457,10 @@ void main() {
     await tester.pump();
     _layout(tester).onSetCoBank!();
     await tester.pump();
-    expect(api.calls.where((c) => c.method == 'POST'), isEmpty);
-    expect(_layout(tester).coBankSummary, contains('未保存'));
-    await _confirm(tester, _layout(tester).onSendCoBank!);
+    await flushSangong(tester);
     final writes = api.calls.where((c) => c.method == 'POST').toList();
     expect(writes, hasLength(1));
-    expect(writes.single.path, endsWith('/commands/round.co_bank_notice'));
+    expect(writes.single.path, endsWith('/commands/round.co_bank'));
     expect(writes.single.body?['input'],
         {'roundId': 18, 'userId': 19, 'amount': 300});
     expect(_layout(tester).coBankSummary, isNot(contains('未保存')));
@@ -481,7 +474,7 @@ void main() {
     var member = true;
     final api = SangongTestApi()
       ..respond = (call) {
-        if (call.path.endsWith('/commands/round.co_bank_notice')) {
+        if (call.path.endsWith('/commands/round.co_bank_remove')) {
           member = false;
           return sangongReceipt(call, {'state': _session(member: member)});
         }
@@ -492,13 +485,11 @@ void main() {
     await _mount(tester, runtime);
     _layout(tester).onRemoveCoBank!();
     await tester.pump();
-    expect(api.count('/commands/round.co_bank_notice'), 0);
-    expect(member, isTrue);
-    expect(_layout(tester).coBankSummary, contains('未保存'));
-    await _confirm(tester, _layout(tester).onSendCoBank!);
+    await flushSangong(tester);
+    expect(member, isFalse);
     final call = api.calls
-        .singleWhere((c) => c.path.endsWith('/commands/round.co_bank_notice'));
-    expect(call.body?['input'], {'roundId': 18, 'userId': 19, 'remove': true});
+        .singleWhere((c) => c.path.endsWith('/commands/round.co_bank_remove'));
+    expect(call.body?['input'], {'roundId': 18, 'userId': 19});
     expect(_layout(tester).sharePercent, 0);
     expect(_layout(tester).error, isNull);
     await unmountSangong(tester);
@@ -563,11 +554,11 @@ void main() {
     await tester.pump();
     _layout(tester).onAssignBanker!();
     await tester.pump();
-    await _confirm(tester, _layout(tester).onSendBanker!);
+    await flushSangong(tester);
     expect(_layout(tester).error, isNull);
     expect(_layout(tester).disabled, isFalse);
     expect(find.text('操作结果尚未确认，请刷新后查看'), findsOneWidget);
-    expect(_layout(tester).bankerSummary, contains('未保存'));
+    expect(_layout(tester).bankerController.text, '2.5000');
     _layout(tester).onRetry!();
     await flushSangong(tester);
     expect(api.count('/commands/round.banker'), 1);

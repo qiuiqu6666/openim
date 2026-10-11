@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -129,6 +130,40 @@ void main() {
   });
 
   for (final result in [1, -1]) {
+    testWidgets('result $result stays usable while refresh is pending',
+        (tester) async {
+      fixture.recipient = [request()];
+      final logic = await fixture.mount(tester);
+      final processor = _processor(logic.list.single);
+      fixture.holdRecipient = true;
+
+      if (result == 1) {
+        processor.approve();
+      } else {
+        processor.reject();
+      }
+      await tester.pump(const Duration(milliseconds: 2));
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pump();
+
+      expect(processor.currentHandleResult, result);
+      expect(fixture.recipientReplies, isNotEmpty);
+      expect(find.byType(SpinKitCircle), findsNothing);
+
+      // An SDK notification can refresh again while the review page is open.
+      fixture.im.groupApplicationChangedSubject.add(request(result: result));
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pump();
+      expect(find.byType(SpinKitCircle), findsNothing);
+      fixture.holdRecipient = false;
+      for (final reply in fixture.recipientReplies) {
+        reply.complete(jsonEncode([request(result: result).toJson()]));
+      }
+      await tester.pumpAndSettle();
+      expect(processor.currentHandleResult, result);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('successful result $result reloads the server handler record',
         (tester) async {
       fixture.recipient = [request()];

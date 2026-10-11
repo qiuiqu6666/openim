@@ -117,7 +117,8 @@ void main() {
       await flushSangong(tester);
       await tester.pump(const Duration(milliseconds: 300));
       expect(assigned, 'group_@agents-A');
-      expect(find.text('秋的代理群\n群 ID：group_@agents-A'), findsOneWidget);
+      expect(find.text('秋的代理群'), findsOneWidget);
+      expect(find.text('群 ID：group_@agents-A'), findsOneWidget);
       await tester.tap(find.text('更换'));
       await tester.pumpAndSettle();
       expect(

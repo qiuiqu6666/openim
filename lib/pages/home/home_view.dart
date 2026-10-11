@@ -14,6 +14,7 @@ import '../wallet/entry/wallet_entry_coordinator.dart';
 import 'home_logic.dart';
 import 'glass_bottom_nav_bar.dart';
 import 'navigation/home_navigation_tokens.dart';
+import 'navigation/home_navigation_icon.dart';
 import '../../widgets/theme_aware_page.dart';
 import '../../core/controller/im_controller.dart';
 import '../../core/controller/app_controller.dart';
@@ -286,21 +287,7 @@ class _HomePageState extends State<HomePage> {
       );
 
   Widget _setupIcon(Widget icon, int Function() unreadCount) {
-    return Obx(() => Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            icon,
-            Positioned(
-              top: 0,
-              right: 0,
-              child: Transform.translate(
-                offset: const Offset(2, -2),
-                child: UnreadCountView(count: unreadCount()),
-              ),
-            ),
-          ],
-        ));
+    return Obx(() => HomeNavigationIcon(icon: icon, count: unreadCount()));
   }
 
   @override

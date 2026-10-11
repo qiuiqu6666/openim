@@ -9,13 +9,23 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await DataSp.init();
   });
-  void expectDomains() {
+  void expectDirect() {
+    expect(Config.appAuthUrl, 'http://129.226.192.93:10008');
+    expect(Config.imApiUrl, 'http://129.226.192.93:10002');
+    expect(Config.imWsUrl, 'ws://129.226.192.93:10001');
+  }
+
+  test('default endpoints use the requested direct route', expectDirect);
+  test('selected domain fallback remains effective for this launch', () async {
+    await DataSp.putServerConfig({
+      'authUrl': 'https://99chatapi.99chat.vip',
+      'apiUrl': 'https://99imapi.99chat.vip',
+      'wsUrl': 'wss://websocket.99chat.vip',
+    });
     expect(Config.appAuthUrl, 'https://99chatapi.99chat.vip');
     expect(Config.imApiUrl, 'https://99imapi.99chat.vip');
     expect(Config.imWsUrl, 'wss://websocket.99chat.vip');
-  }
-
-  test('default endpoints use HTTPS and WSS domains', expectDomains);
+  });
   test('selected direct fallback remains effective for this launch', () async {
     await DataSp.putServerConfig({
       'authUrl': 'http://129.226.192.93:10008/',

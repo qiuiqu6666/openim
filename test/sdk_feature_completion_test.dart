@@ -245,6 +245,58 @@ void main() {
     expect(find.text('Alice'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+  for (final dark in [false, true]) {
+    testWidgets(
+        'admins can be selected across searches and saved together ($dark)',
+        (tester) async {
+      const channel = MethodChannel('flutter_openim_sdk');
+      final saved = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel,
+          (call) async {
+        if (call.method == 'setGroupMemberInfo') {
+          saved.add(call.arguments['info']['userID'] as String);
+          expect(call.arguments['info']['roleLevel'], GroupRoleLevel.admin);
+          return null;
+        }
+        if (call.method == 'getGroupMemberList' ||
+            call.method == 'searchGroupMembers') {
+          return jsonEncode([
+            for (final id in call.method == 'searchGroupMembers'
+                ? ['Bob']
+                : ['Alice', 'Bob'])
+              {
+                'userID': id,
+                'groupID': 'g',
+                'nickname': id,
+                'roleLevel': GroupRoleLevel.member
+              }
+          ]);
+        }
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null));
+      await tester.pumpWidget(host(
+          const GroupMemberPermissionsPage(groupID: 'g', owner: true),
+          dark: dark));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('添加管理员'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('admin-picker-row-Alice')));
+      expect(saved, isEmpty);
+      await tester.enterText(find.byType(TextField), 'Bob');
+      await tester.pumpAndSettle(const Duration(milliseconds: 350));
+      await tester.tap(find.byKey(const ValueKey('admin-picker-row-Bob')));
+      await tester.pump();
+      expect(find.text('确定（2）'), findsOneWidget);
+      await tester.tap(find.text('确定（2）'));
+      await tester.pumpAndSettle();
+      expect(saved, ['Alice', 'Bob']);
+      expect(find.text('管理员 (2)'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
   testWidgets('mute and unmute update immediately despite stale SDK cache',
       (tester) async {
     const channel = MethodChannel('flutter_openim_sdk');

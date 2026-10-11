@@ -426,13 +426,20 @@ void main() {
     await store.loadCapabilities('g');
     final snapshot = store.context(
         id: 'g', name: 'Group', userID: 'me', admin: true, current: () => true);
-    store.receiveBusiness(jsonEncode({
-      'key': 'groupFeatureCapabilitiesChanged',
-      'eventId': 'old-permission',
-      'data': {'groupID': 'g', 'capabilityVersion': 4}
-    }));
+    for (final version in [4, 5, 5]) {
+      store.receiveBusiness(jsonEncode({
+        'key': 'groupFeatureCapabilitiesChanged',
+        'data': {'groupID': 'g', 'capabilityVersion': version}
+      }));
+    }
     expect(snapshot.capabilitiesCurrent(), true);
     expect(store.capabilities('g').sangong.canManage, true);
+    store.receiveBusiness(jsonEncode({
+      'key': 'groupFeatureCapabilitiesChanged',
+      'data': {'groupID': 'g', 'capabilityVersion': 6}
+    }));
+    expect(snapshot.capabilitiesCurrent(), false);
+    expect(store.capabilities('g').sangong.canManage, false);
   });
   test('session exit clears cached state and fences open contexts immediately',
       () {

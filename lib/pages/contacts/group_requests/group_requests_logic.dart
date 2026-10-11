@@ -236,10 +236,10 @@ class GroupRequestsLogic extends GetxController {
         return allList;
       }
 
-      list = loadMore
-          ? await fetchApplications()
-          : await LoadingView.singleton.wrap(
-              showing: this.list.isNotEmpty, asyncFunction: fetchApplications);
+      // The list owns its initial/refresh/footer indicators. SDK notifications
+      // and post-approval refreshes must not cover the review page with an
+      // overlay after the operation has already succeeded.
+      list = await fetchApplications();
     } catch (_) {
       if (isCurrent()) {
         if (loadMore) {

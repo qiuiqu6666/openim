@@ -79,21 +79,23 @@ class MarkSixHistoryTable extends StatelessWidget {
                                   fontWeight: header || [3, 4, 8, 9].contains(i)
                                       ? FontWeight.w700
                                       : FontWeight.normal,
-                                  color: !header && i == 9
-                                      ? markSixWaveColor(values[i])
-                                      : !header && [3, 7].contains(i)
-                                          ? (values[i] == '单'
-                                              ? MarkSixStyle.blue
-                                              : values[i] == '双'
-                                                  ? MarkSixStyle.red
-                                                  : style.text)
-                                          : !header && i == 4
-                                              ? (values[i] == '小'
+                                  color: !header && i == 8
+                                      ? style.fiveElementColor(values[i])
+                                      : !header && i == 9
+                                          ? markSixWaveColor(values[i])
+                                          : !header && [3, 7].contains(i)
+                                              ? (values[i] == '单'
                                                   ? MarkSixStyle.blue
-                                                  : values[i] == '大'
+                                                  : values[i] == '双'
                                                       ? MarkSixStyle.red
                                                       : style.text)
-                                              : style.text))),
+                                              : !header && i == 4
+                                                  ? (values[i] == '小'
+                                                      ? MarkSixStyle.blue
+                                                      : values[i] == '大'
+                                                          ? MarkSixStyle.red
+                                                          : style.text)
+                                                  : style.text))),
                 )),
         ]));
   }

@@ -27,28 +27,29 @@ void main() {
       'chatToken': 'chat-secret',
     }));
     final selected = await StartupNodeSelector(
-            probe: (node) async => result(node, node == NodeEndpoint.direct))
+            probe: (node) async => result(node, node == NodeEndpoint.primary))
         .select();
-    expect(selected.selected, NodeEndpoint.direct);
-    expect(NodeEndpoint.current().signature, NodeEndpoint.direct.signature);
+    expect(selected.selected, NodeEndpoint.primary);
+    expect(NodeEndpoint.current().signature, NodeEndpoint.primary.signature);
     expect(DataSp.getServerConfig()?['logLevel'], '4');
     expect(DataSp.imToken, 'im-secret');
     expect(DataSp.chatToken, 'chat-secret');
   });
 
-  test('each launch rechecks and returns to the secure domain when restored',
+  test(
+      'each launch rechecks and returns to the default direct route when restored',
       () async {
     await StartupNodeSelector(
-            probe: (node) async => result(node, node == NodeEndpoint.direct))
+            probe: (node) async => result(node, node == NodeEndpoint.primary))
         .select();
     final probed = <NodeEndpoint>[];
     final selected = await StartupNodeSelector(probe: (node) async {
       probed.add(node);
       return result(node, true);
     }).select();
-    expect(probed, NodeEndpoint.builtIn);
-    expect(selected.selected, NodeEndpoint.primary);
-    expect(NodeEndpoint.current().signature, NodeEndpoint.primary.signature);
+    expect(probed, NodeEndpoint.builtIn.reversed.toList());
+    expect(selected.selected, NodeEndpoint.direct);
+    expect(NodeEndpoint.current().signature, NodeEndpoint.direct.signature);
   });
 
   test('offline startup keeps the last endpoint and does not clear credentials',

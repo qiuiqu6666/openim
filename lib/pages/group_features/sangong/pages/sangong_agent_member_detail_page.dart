@@ -286,6 +286,10 @@ class _State extends State<SangongAgentMemberDetailPage> {
                         child: SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppTokens.accent,
+                              foregroundColor: AppTokens.onAccent,
+                            ),
                             onPressed: _claiming ? null : _claimRebate,
                             icon: const Icon(
                                 Icons.account_balance_wallet_outlined),

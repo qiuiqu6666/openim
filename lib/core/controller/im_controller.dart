@@ -123,7 +123,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     WidgetsBinding.instance.addPostFrameCallback((_) => initOpenIM());
   }
 
-  void initOpenIM() async {
+  Future<bool> initOpenIM({bool notifyStartup = true}) async {
     final initialized = await OpenIM.iMManager.initSDK(
       platformID: IMUtils.getPlatform(),
       apiAddr: Config.imApiUrl,
@@ -269,7 +269,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
             .map<void>((_) {}),
       );
     }
-    initializedSubject.sink.add(initialized);
+    if (notifyStartup) initializedSubject.sink.add(initialized);
+    return initialized;
   }
 
   Future login(String userID, String token) async {

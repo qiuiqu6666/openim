@@ -1,11 +1,12 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'chat_emoji_panel.dart';
 import 'chat_composer_palette.dart';
-import 'chat_composer_context_preview.dart';
 import 'toolbox/chat_composer_toolbox_slot.dart';
 import '../../res/chat_voice_tokens.dart';
 
@@ -61,11 +62,38 @@ class ChatInputBox extends StatefulWidget {
   State<ChatInputBox> createState() => _ChatInputBoxState();
 }
 
-class _ChatInputBoxState
-    extends State<ChatInputBox> /*with TickerProviderStateMixin */ {
+class _ChatInputBoxState extends State<ChatInputBox>
+    with WidgetsBindingObserver {
   StreamSubscription? _toolSubscription;
+  final _fallbackFocusNode = FocusNode();
+  FocusNode get _focusNode => widget.focusNode ?? _fallbackFocusNode;
+  ui.FlutterView? _view;
+  bool _keyboardVisible = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _view = View.of(context);
+    _keyboardVisible = _view!.viewInsets.bottom > 0;
+  }
+
+  @override
+  void didChangeMetrics() => _syncKeyboardVisibility();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _syncKeyboardVisibility();
+  }
+
+  void _syncKeyboardVisibility() {
+    final visible = (_view?.viewInsets.bottom ?? 0) > 0;
+    if (mounted && visible != _keyboardVisible) {
+      setState(() => _keyboardVisible = visible);
+    }
+  }
+
   void _focusChanged() {
-    if (mounted && widget.focusNode?.hasFocus == true) {
+    if (mounted && _focusNode.hasFocus) {
       setState(() {
         _toolsVisible = false;
         _emojiVisible = false;
@@ -87,8 +115,10 @@ class _ChatInputBoxState
 
   @override
   void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _sendButtonVisible = widget.controller?.text.isNotEmpty ?? false;
-    widget.focusNode?.addListener(_focusChanged);
+    _focusNode.addListener(_focusChanged);
 
     _toolSubscription = widget.forceCloseToolboxSub?.listen((value) {
       if (!mounted) return;
@@ -100,8 +130,6 @@ class _ChatInputBoxState
     });
 
     widget.controller?.addListener(_syncSendButton);
-
-    super.initState();
   }
 
   @override
@@ -111,11 +139,11 @@ class _ChatInputBoxState
       _toolsVisible = false;
       _emojiVisible = false;
       _leftKeyboardButton = false;
-      widget.focusNode?.unfocus();
+      _focusNode.unfocus();
     }
     if (oldWidget.focusNode != widget.focusNode) {
-      oldWidget.focusNode?.removeListener(_focusChanged);
-      widget.focusNode?.addListener(_focusChanged);
+      (oldWidget.focusNode ?? _fallbackFocusNode).removeListener(_focusChanged);
+      _focusNode.addListener(_focusChanged);
     }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_syncSendButton);
@@ -133,7 +161,9 @@ class _ChatInputBoxState
 
   @override
   void dispose() {
-    widget.focusNode?.removeListener(_focusChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    _focusNode.removeListener(_focusChanged);
+    _fallbackFocusNode.dispose();
     _toolSubscription?.cancel();
     widget.controller?.removeListener(_syncSendButton);
     super.dispose();
@@ -141,8 +171,15 @@ class _ChatInputBoxState
 
   @override
   Widget build(BuildContext context) {
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
-    final alternatePanelVisible = _emojiVisible || _leftKeyboardButton;
+    // Scaffold consumes MediaQuery.viewInsets when resizing its body. Observe
+    // this FlutterView instead, including the native keyboard's closing frames.
+    // Keep the requested panel, but never allocate its height above a keyboard.
+    final safeBottom =
+        _keyboardVisible ? 0.0 : MediaQuery.paddingOf(context).bottom;
+    final toolsVisible = _toolsVisible && !_keyboardVisible;
+    final emojiVisible = _emojiVisible && !_keyboardVisible;
+    final voiceVisible = _leftKeyboardButton && !_keyboardVisible;
+    final alternatePanelVisible = emojiVisible || voiceVisible;
     final content = _inputBlocked
         ? ChatDisableInputBox(
             showWarning: widget.isNotInGroup || widget.showDisabledWarning,
@@ -272,18 +309,18 @@ class _ChatInputBoxState
                   },
                 ),
               ChatComposerToolboxSlot(
-                visible: _toolsVisible,
+                visible: toolsVisible,
                 safeBottom: safeBottom,
                 collapsedHeight: alternatePanelVisible ? 0 : safeBottom,
-                animate: !alternatePanelVisible,
+                animate: !alternatePanelVisible && !_keyboardVisible,
                 child: widget.toolbox,
               ),
-              if (_emojiVisible)
+              if (emojiVisible)
                 Padding(
                   padding: EdgeInsets.only(bottom: safeBottom),
                   child: _emojiPanel,
                 ),
-              if (_leftKeyboardButton)
+              if (voiceVisible)
                 AnimatedContainer(
                   key: const ValueKey('chat-voice-panel-slot'),
                   duration: ChatVoiceTokens.panelAnimationDuration,
@@ -297,7 +334,7 @@ class _ChatInputBoxState
           );
     final bottomColor = _inputBlocked
         ? chatComposerSurface(context)
-        : _toolsVisible
+        : toolsVisible
             ? ChatToolboxTokens.panelBackground(context)
             : !_leftKeyboardButton &&
                     !_emojiVisible &&
@@ -417,7 +454,7 @@ class _ChatInputBoxState
           onEditingComplete: send,
           autocorrect: false,
           controller: widget.controller,
-          focusNode: widget.focusNode,
+          focusNode: _focusNode,
           style: widget.style ?? chatComposerTextStyle(context),
           atStyle: widget.atStyle ??
               TextStyle(
@@ -484,8 +521,12 @@ class _ChatInputBoxState
   }
 
   void focus() {
-    if (!_inputBlocked) FocusScope.of(context).requestFocus(widget.focusNode);
+    if (!_inputBlocked) _focusNode.requestFocus();
   }
 
-  void unfocus() => FocusScope.of(context).unfocus();
+  void unfocus() {
+    FocusScope.of(context).unfocus();
+    // A pending iOS keyboard presentation can outlive the focus change.
+    unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.hide'));
+  }
 }

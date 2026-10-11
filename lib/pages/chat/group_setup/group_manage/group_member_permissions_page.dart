@@ -4,6 +4,7 @@ import '../../../../core/controller/im_controller.dart';
 import 'package:flutter/cupertino.dart';
 import '../group_member_order.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -28,6 +29,9 @@ class _GroupMemberPermissionsPageState
     extends State<GroupMemberPermissionsPage> {
   final members = <GroupMembersInfo>[];
   late MemberPermissionMode mode = widget.mode;
+  final _selected = <String, GroupMembersInfo>{};
+  final _completed = <GroupMembersInfo>[];
+  bool _batchSubmitting = false;
   bool get picking =>
       mode == MemberPermissionMode.addAdmin ||
       mode == MemberPermissionMode.addMuted;
@@ -45,7 +49,7 @@ class _GroupMemberPermissionsPageState
       }).toList();
 
   Future<void> addMember() async {
-    final result = await Navigator.of(context).push<GroupMembersInfo>(
+    final result = await Navigator.of(context).push<List<GroupMembersInfo>>(
         AppMaterialPageRoute(
             builder: (_) => GroupMemberPermissionsPage(
                 groupID: widget.groupID,
@@ -54,7 +58,9 @@ class _GroupMemberPermissionsPageState
                     ? MemberPermissionMode.addAdmin
                     : MemberPermissionMode.addMuted)));
     if (mounted) {
-      if (result != null) _latestMembers[result.userID!] = result;
+      for (final member in result ?? <GroupMembersInfo>[]) {
+        _latestMembers[member.userID!] = member;
+      }
       searchChanged(searchController.text);
       load();
     }
@@ -184,12 +190,13 @@ class _GroupMemberPermissionsPageState
     }
   }
 
-  Future<void> change(GroupMembersInfo member, int action) async {
-    if (busy != null) return;
+  Future<bool> change(GroupMembersInfo member, int action,
+      {bool batch = false}) async {
+    if (busy != null) return false;
     setState(() => busy = member.userID);
     try {
       if (action == -1) {
-        if (!widget.owner) return;
+        if (!widget.owner) return false;
         final role = member.roleLevel == GroupRoleLevel.admin
             ? GroupRoleLevel.member
             : GroupRoleLevel.admin;
@@ -207,11 +214,12 @@ class _GroupMemberPermissionsPageState
         if (Get.isRegistered<IMController>()) {
           Get.find<IMController>().memberInfoChangedSubject.addSafely(updated);
         }
-        if (picking && mounted) Navigator.of(context).pop(updated);
+        if (batch) _completed.add(updated);
+        if (picking && mounted && !batch) Navigator.of(context).pop([updated]);
       } else {
         await OpenIM.iMManager.groupManager.changeGroupMemberMute(
             groupID: widget.groupID, userID: member.userID!, seconds: action);
-        if (!mounted) return;
+        if (!mounted) return false;
         // The SDK's immediate read may still contain the old local-cache value.
         final end = action == 0
             ? 0
@@ -230,14 +238,31 @@ class _GroupMemberPermissionsPageState
         if (Get.isRegistered<IMController>())
           Get.find<IMController>().memberInfoChangedSubject.addSafely(updated);
         _scheduleExpiry();
-        if (picking && mounted) Navigator.of(context).pop(updated);
-        return;
+        if (picking && mounted) Navigator.of(context).pop([updated]);
       }
     } catch (error) {
       IMViews.showToast(error.toString());
+      return false;
     } finally {
       if (mounted) setState(() => busy = null);
     }
+    return true;
+  }
+
+  Future<void> _submitAdmins() async {
+    if (_batchSubmitting || !widget.owner || _selected.isEmpty) return;
+    setState(() => _batchSubmitting = true);
+    for (final member in _selected.values.toList()) {
+      if (!mounted) break;
+      final current = _latestMembers[member.userID] ?? member;
+      if (current.roleLevel != GroupRoleLevel.member ||
+          await change(current, -1, batch: true)) {
+        if (mounted) setState(() => _selected.remove(member.userID));
+      }
+    }
+    if (!mounted) return;
+    setState(() => _batchSubmitting = false);
+    if (_selected.isEmpty) Navigator.of(context).pop(_completed);
   }
 
   Widget _adminCards() {
@@ -320,17 +345,25 @@ class _GroupMemberPermissionsPageState
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        backgroundColor: Styles.c_F8F9FA,
+  Widget build(BuildContext context) => PopScope(
+      canPop: !_batchSubmitting,
+      child: Scaffold(
+        backgroundColor: mode == MemberPermissionMode.addAdmin
+            ? Styles.c_FFFFFF
+            : Styles.c_F8F9FA,
         appBar: GlassAppBar(
           toolbarHeight: kToolbarHeight,
           centerTitle: true,
-          backgroundColor: Styles.c_F8F9FA,
+          backgroundColor: mode == MemberPermissionMode.addAdmin
+              ? Styles.c_FFFFFF
+              : Styles.c_F8F9FA,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: _batchSubmitting
+                ? null
+                : () => Navigator.of(context).pop(_completed),
             icon: Icon(CupertinoIcons.back, color: Styles.c_0089FF, size: 24),
           ),
           title: Text(
@@ -343,6 +376,17 @@ class _GroupMemberPermissionsPageState
                               : 'sdkMutedList')
                   .tr,
               style: Styles.ts_0C1C33_17sp_semibold),
+          actions: [
+            if (mode == MemberPermissionMode.addAdmin)
+              TextButton(
+                onPressed:
+                    _batchSubmitting || _selected.isEmpty || !widget.owner
+                        ? null
+                        : _submitAdmins,
+                child:
+                    Text(_batchSubmitting ? '设置中…' : '确定（${_selected.length}）'),
+              ),
+          ],
         ),
         body: SafeArea(
             top: false,
@@ -456,6 +500,84 @@ class _GroupMemberPermissionsPageState
                                     : member.roleLevel == GroupRoleLevel.admin
                                         ? 'sdkAdmin'.tr
                                         : StrRes.groupMember;
+                                if (mode == MemberPermissionMode.addAdmin) {
+                                  final selected =
+                                      _selected.containsKey(member.userID);
+                                  final enabled = !_batchSubmitting &&
+                                      widget.owner &&
+                                      canEdit;
+                                  return Semantics(
+                                    checked: selected,
+                                    enabled: enabled,
+                                    child: Material(
+                                      color: Styles.c_FFFFFF,
+                                      child: InkWell(
+                                        key: ValueKey(
+                                            'admin-picker-row-${member.userID}'),
+                                        onTap: !enabled
+                                            ? null
+                                            : () => setState(() {
+                                                  if (selected) {
+                                                    _selected
+                                                        .remove(member.userID);
+                                                  } else {
+                                                    _selected[member.userID!] =
+                                                        member;
+                                                  }
+                                                }),
+                                        child: Column(children: [
+                                          Padding(
+                                            padding: EdgeInsets.symmetric(
+                                                vertical: AppTokens.s3),
+                                            child: Row(children: [
+                                              ChatRadio(
+                                                  checked: selected,
+                                                  enabled: enabled),
+                                              SizedBox(width: AppTokens.s3),
+                                              AvatarView(
+                                                  width: 44,
+                                                  height: 44,
+                                                  isCircle: true,
+                                                  text: name,
+                                                  url: member.faceURL),
+                                              SizedBox(width: AppTokens.s3),
+                                              Expanded(
+                                                  child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(name,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: Styles
+                                                          .ts_0C1C33_17sp),
+                                                  SizedBox(
+                                                      height: AppTokens.s2),
+                                                  Text(role,
+                                                      style: Styles
+                                                          .ts_8E9AB0_14sp),
+                                                ],
+                                              )),
+                                            ]),
+                                          ),
+                                          if (index <
+                                              displayedMembers.length - 1)
+                                            Divider(
+                                              height: 1,
+                                              thickness: 0.5,
+                                              indent:
+                                                  20.w + 44 + AppTokens.s3 * 2,
+                                              color: AppTokens.border(
+                                                  dark: Theme.of(context)
+                                                          .brightness ==
+                                                      Brightness.dark),
+                                            ),
+                                        ]),
+                                      ),
+                                    ),
+                                  );
+                                }
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 8),
                                   child: Material(
@@ -588,5 +710,5 @@ class _GroupMemberPermissionsPageState
                                 );
                               })),
                   ])),
-      );
+      ));
 }

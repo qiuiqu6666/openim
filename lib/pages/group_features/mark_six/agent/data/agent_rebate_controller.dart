@@ -33,8 +33,7 @@ class AgentRebateController extends AgentQueryController
         polling ||
         loading ||
         error != null ||
-        needsStatusQuery ||
-        settled) {
+        needsStatusQuery) {
       return false;
     }
     // Agent settlement is calculated by the server. The current summary may
@@ -102,6 +101,9 @@ class AgentRebateController extends AgentQueryController
   Future<void> apply({bool personal = false}) async {
     if (!canApply(personal: personal)) return;
     submitting = true;
+    // SUCCESS describes the previous request, not the new submission.
+    status = '';
+    uncertain = false;
     applyError = null;
     notify();
     try {

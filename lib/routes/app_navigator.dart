@@ -1,3 +1,4 @@
+import '../pages/chat/navigation/chat_entry_trace.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import '../pages/register/profile/registration_profile_draft.dart';
@@ -54,8 +55,10 @@ class AppNavigator {
   }) async {
     if (isCurrent?.call() == false) return null;
     final owner = (OpenIM.iMManager.userID, DataSp.imToken);
+    final entryTrace = ChatEntryTrace(conversationInfo.conversationType);
     final resolution = await OfficialAccountResolver.shared
         .resolveConversation(conversationInfo);
+    entryTrace.mark('account_resolved');
     if (owner != (OpenIM.iMManager.userID, DataSp.imToken) ||
         isCurrent?.call() == false) {
       return null;
@@ -63,6 +66,7 @@ class AppNavigator {
     return _startResolvedChat<T>(
       conversationInfo: conversationInfo,
       resolution: resolution,
+      entryTrace: entryTrace,
       offUntilHome: offUntilHome,
       draftText: draftText,
       searchMessage: searchMessage,
@@ -72,12 +76,15 @@ class AppNavigator {
   static Future<T?>? _startResolvedChat<T>({
     required ConversationInfo conversationInfo,
     required OfficialConversationResolution resolution,
+    ChatEntryTrace? entryTrace,
     bool offUntilHome = true,
     bool replaceCurrent = false,
     String? draftText,
     Message? searchMessage,
   }) {
+    entryTrace?.mark('prefetch_start');
     ChatHistoryPrefetcher.shared.prepare(conversationInfo);
+    entryTrace?.mark('route_push');
     GetTags.createChatTag();
     final route = switch (resolution.target) {
       OfficialConversationTarget.notification => AppRoutes.officialAccountChat,
@@ -87,6 +94,7 @@ class AppNavigator {
 
     final arguments = {
       'draftText': draftText,
+      if (entryTrace != null) 'chatEntryTrace': entryTrace,
       'conversationInfo': conversationInfo,
       'searchMessage': searchMessage,
       if (resolution.account != null) 'officialAccount': resolution.account,

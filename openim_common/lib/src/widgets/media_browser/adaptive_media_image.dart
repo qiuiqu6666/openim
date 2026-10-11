@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/widgets.dart';
 
@@ -61,6 +59,11 @@ class _AdaptiveMediaImageState extends State<AdaptiveMediaImage>
     super.dispose();
   }
 
+  // A slightly taller-than-screen photo should stay at fit scale, where the
+  // image recognizer can hand vertical drags to the slide-to-close route.
+  // Reserve automatic width fitting for images with meaningful reading overflow.
+  static const _minimumReadingOverflow = 1.2;
+
   GestureConfig _gestureConfig(ExtendedImageState state, Size viewport) {
     final image = state.extendedImageInfo?.image;
     var initialScale = 1.0;
@@ -71,8 +74,11 @@ class _AdaptiveMediaImageState extends State<AdaptiveMediaImage>
         !viewport.isEmpty) {
       // ExtendedImage scales relative to BoxFit.contain. Do not cap this at
       // the ordinary 3x zoom limit: very long screenshots can need much more.
-      initialScale = math.max(
-          1.0, viewport.width * image.height / (viewport.height * image.width));
+      final widthFitScale =
+          viewport.width * image.height / (viewport.height * image.width);
+      if (widthFitScale > _minimumReadingOverflow) {
+        initialScale = widthFitScale;
+      }
     }
     return GestureConfig(
       minScale: 0.9,

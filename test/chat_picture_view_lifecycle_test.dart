@@ -26,7 +26,73 @@ class _PendingFile implements File {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _FailedImageState implements ExtendedImageState {
+  @override
+  LoadState get extendedImageLoadState => LoadState.failed;
+
+  @override
+  ImageProvider get imageProvider => const AssetImage('unused');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
+  testWidgets('failed thumbnail falls back to distinct unmodified sources',
+      (tester) async {
+    const original = 'https://example.test/original?signature=a%2Bb';
+    final message = Message()
+      ..pictureElem = PictureElem(
+        snapshotPicture: PictureInfo(url: 'https://example.test/thumb'),
+        bigPicture: PictureInfo(url: original),
+        sourcePicture: PictureInfo(url: original, width: 800, height: 400),
+      );
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) {
+        ScreenUtil.init(context, designSize: const Size(375, 812));
+        return child!;
+      },
+      home: Scaffold(body: ChatPictureView(message: message, isISend: false)),
+    ));
+    // Error children are constructed but not mounted/downloaded until needed.
+    expect(find.byType(ExtendedImage), findsOneWidget);
+    Widget? current = tester.widget<ExtendedImage>(find.byType(ExtendedImage));
+    final urls = <String>[];
+    while (current is ExtendedImage) {
+      final resized = current.image as ExtendedResizeImage;
+      urls.add((resized.imageProvider as ExtendedNetworkImageProvider).url);
+      current = current.loadStateChanged!(_FailedImageState());
+    }
+    expect(urls, [
+      'https://example.test/thumb?height=960&width=960&type=image',
+      'https://example.test/thumb',
+      original,
+    ]);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('landscape fills bubble width while respecting parent bounds',
+      (tester) async {
+    final message = Message()
+      ..pictureElem =
+          PictureElem(sourcePicture: PictureInfo(width: 1000, height: 500));
+    await tester.pumpWidget(MaterialApp(
+        builder: (context, child) {
+          ScreenUtil.init(context, designSize: const Size(375, 812));
+          return child!;
+        },
+        home: Scaffold(
+            body: SizedBox(
+                width: 200,
+                child: ChatPictureView(message: message, isISend: false)))));
+    final bubble = find.descendant(
+        of: find.byType(ChatPictureView),
+        matching: find.byWidgetPredicate((widget) =>
+            widget is SizedBox && widget.width == 200 && widget.height == 100));
+    expect(bubble, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'local checks survive rebuilds and ignore completion after leaving',
       (tester) async {

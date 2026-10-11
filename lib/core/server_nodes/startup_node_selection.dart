@@ -17,7 +17,7 @@ class StartupNodeSelector {
     Future<void> Function(NodeEndpoint)? apply,
   })  : _probe = probe ?? NodeAvailabilityProbe().check,
         _readCurrent = readCurrent ?? NodeEndpoint.current,
-        _apply = apply ?? _persist;
+        _apply = apply ?? persist;
 
   final Future<NodeAvailability> Function(NodeEndpoint) _probe;
   final NodeEndpoint Function() _readCurrent;
@@ -30,16 +30,16 @@ class StartupNodeSelector {
 
   Future<NodeSelection> _select() async {
     final current = _readCurrent();
-    final checks =
-        await Future.wait(NodeEndpoint.candidates(current).map((node) async {
+    final checks = await Future.wait(
+        NodeEndpoint.candidates(current).reversed.map((node) async {
       try {
         return await _probe(node);
       } catch (_) {
         return NodeAvailability(node, available: false, latencyMs: 0);
       }
     }));
-    // Prefer the secure domain route when both work; a fast broken service
-    // must never win over an available complete route.
+    // Prefer the direct route requested by the deployment owner, falling back
+    // to the domain only when the complete direct route is unavailable.
     var selected = current;
     for (final check in checks) {
       if (check.available) {
@@ -60,7 +60,7 @@ class StartupNodeSelector {
     return NodeSelection(selected, checks);
   }
 
-  static Future<void> _persist(NodeEndpoint node) async {
+  static Future<void> persist(NodeEndpoint node) async {
     final previous = DataSp.getServerConfig();
     final config = <String, String>{
       if (previous != null)

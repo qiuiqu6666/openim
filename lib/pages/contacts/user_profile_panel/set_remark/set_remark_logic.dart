@@ -19,8 +19,9 @@ class SetFriendRemarkLogic extends GetxController {
   void save() async {
     if (isClosed) return;
     final remark = graphemeTrim(inputCtrl.text);
-    // Showing a nickname as a hint must not create a friend remark.
-    if (remark == _originalRemark) {
+    // Focusing the fallback nickname alone does not create a remark.
+    if (remark == _originalRemark ||
+        (_originalRemark.isEmpty && remark == graphemeTrim(avatarName ?? ''))) {
       Get.back();
       return;
     }

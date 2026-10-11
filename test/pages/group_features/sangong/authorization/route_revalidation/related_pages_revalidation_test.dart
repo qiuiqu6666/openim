@@ -19,6 +19,42 @@ import 'package:openim/pages/group_features/sangong/support/sangong_ui.dart';
 import 'route_revalidation_fixture.dart';
 
 void main() {
+  testWidgets('prompt survives focus, keyboard resizing and outside taps',
+      (tester) async {
+    final fixture = RouteRevalidationFixture();
+    await fixture.pumpChat(tester);
+    await fixture.open(tester, 'manage');
+    final context = tester.element(find.byType(SangongScope).last);
+    final result = AppDialog.prompt(
+        context: context,
+        title: '设置返水比例',
+        initialValue: '1.7000',
+        keyboardType: const TextInputType.numberWithOptions(decimal: true));
+    await RouteRevalidationFixture.flush(tester);
+    await tester.tap(find.byType(CupertinoTextField));
+    await tester.enterText(find.byType(CupertinoTextField), '2.1000');
+    addTearDown(tester.view.resetViewInsets);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pumpAndSettle();
+    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+            .controller!
+            .text,
+        '2.1000');
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(await result, '2.1000');
+    fixture.expectNoCommands();
+    expect(tester.takeException(), isNull);
+  });
+
   final pages = <Widget>[
     const SangongAllUsersPage(),
     const SangongMembersPage(),

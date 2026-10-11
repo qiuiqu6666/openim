@@ -88,7 +88,7 @@ class Config {
     if (null != server) {
       url = server['authUrl'];
     }
-    return _currentEndpoint(url, 'https://99chatapi.99chat.vip');
+    return _currentEndpoint(url, 'http://129.226.192.93:10008');
   }
 
   static String get imApiUrl {
@@ -97,7 +97,7 @@ class Config {
     if (null != server) {
       url = server['apiUrl'];
     }
-    return _currentEndpoint(url, 'https://99imapi.99chat.vip');
+    return _currentEndpoint(url, 'http://129.226.192.93:10002');
   }
 
   static String get imWsUrl {
@@ -106,11 +106,11 @@ class Config {
     if (null != server) {
       url = server['wsUrl'];
     }
-    return _currentEndpoint(url, 'wss://websocket.99chat.vip');
+    return _currentEndpoint(url, 'ws://129.226.192.93:10001');
   }
 
-  // Keep a successfully selected direct route; startup probes may select the
-  // domain again on the next launch when it becomes available.
+  // Keep the selected route for this session. Startup probes prefer the direct
+  // route and use the domain fallback only when the direct route is unavailable.
   static String _currentEndpoint(String? saved, String current) {
     final value = saved?.trim();
     if (value == null || value.isEmpty) {

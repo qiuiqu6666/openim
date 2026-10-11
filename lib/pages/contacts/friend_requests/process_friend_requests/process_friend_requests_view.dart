@@ -60,19 +60,21 @@ class ProcessFriendRequestsPage extends StatelessWidget {
                   ),
                 ),
               ),
-            Row(
-              children: [
-                Flexible(child: _buildRejectButton()),
-                12.horizontalSpace,
-                Flexible(
-                  child: Button(
-                    text: StrRes.accept,
-                    textStyle: Styles.ts_FFFFFF_17sp,
-                    onTap: logic.acceptFriendApplication,
-                  ),
-                ),
-              ],
-            )
+            Obx(() => logic.processing.value
+                ? Center(child: LoadingView.indicator(size: 24))
+                : Row(
+                    children: [
+                      Flexible(child: _buildRejectButton()),
+                      12.horizontalSpace,
+                      Flexible(
+                        child: Button(
+                          text: StrRes.accept,
+                          textStyle: Styles.ts_FFFFFF_17sp,
+                          onTap: logic.acceptFriendApplication,
+                        ),
+                      ),
+                    ],
+                  ))
           ],
         ),
       ),
