@@ -21,9 +21,9 @@ void main() {
   test('retired domain node uses direct even offline and preserves credentials',
       () async {
     await DataSp.putServerConfig({
-      'authUrl': 'https://99chatapi.99chat.vip',
-      'apiUrl': 'https://99imapi.99chat.vip',
-      'wsUrl': 'wss://websocket.99chat.vip',
+      'authUrl': 'http://127.0.0.1:10008',
+      'apiUrl': 'http://127.0.0.1:10002',
+      'wsUrl': 'ws://127.0.0.1:10001',
       'logLevel': '4',
     });
     await DataSp.putLoginCertificate(LoginCertificate.fromJson({
@@ -66,11 +66,11 @@ void main() {
       'apiUrl': 'http://129.226.192.93:10002',
       'wsUrl': 'ws://129.226.192.93:10001',
     });
-    const host = '99chatapi.99chat.vip';
+    const host = '127.0.0.1';
     expect(Config.serverIp, host);
-    expect(Config.appAuthUrl, 'https://99chatapi.99chat.vip');
-    expect(Config.imApiUrl, 'https://99imapi.99chat.vip');
-    expect(Config.imWsUrl, 'wss://websocket.99chat.vip');
+    expect(Config.appAuthUrl, 'http://127.0.0.1:10008');
+    expect(Config.imApiUrl, 'http://127.0.0.1:10002');
+    expect(Config.imWsUrl, 'ws://127.0.0.1:10001');
     expect(NodeEndpoint.current().signature, NodeEndpoint.direct.signature);
   });
 

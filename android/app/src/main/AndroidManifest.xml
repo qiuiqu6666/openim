@@ -170,5 +170,11 @@
             tools:targetApi="q"
             android:enabled="true"
             android:exported="false"/>
+        <service android:name="io.openim.youmeng.YoumengService"
+            android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains encrypted forwarding for active chat connections" />
+        </service>
     </application>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 </manifest>

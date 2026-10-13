@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'app.dart';
-import 'core/server_nodes/startup_node_selection.dart';
+import 'core/youmeng/youmeng_runtime.dart';
 import 'theme/app_theme_controller.dart';
 
 void main() {
@@ -23,7 +23,21 @@ void main() {
         NavigationGlassController.instance.load();
         await NavigationGlassController.instance.initializeRenderer();
         runApp(const ChatApp());
-      }, prepareNetwork: StartupNodeSelection.prepare);
+      },
+          prepareNetwork: YoumengRuntime.prepare,
+          onInitError: YoumengRuntime.enabled
+              ? (_) {
+                  runApp(MaterialApp(
+                      home: Scaffold(
+                          body: Center(
+                              child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                        const Text('网络保护启动失败，请检查配置后重试'),
+                        TextButton(onPressed: boot, child: const Text('重试')),
+                      ])))));
+                }
+              : null);
     }
 
     unawaited(boot());

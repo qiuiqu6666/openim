@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B859AE1818E6455390B84201 /* GameShieldClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B859AE1818E6455390B84202; };
+		B859AE1818E6455390B84203 /* YoumengBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B859AE1818E6455390B84204; };
 		10CA7100302D2E3000000001 /* NativeChatLocationMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		173BE1932A67E13300A4D9A9 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 173BE1922A67E13300A4D9A9 /* NotificationService.swift */; };
@@ -50,6 +52,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B859AE1818E6455390B84202 /* GameShieldClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Youmeng/GameShieldClient.swift; sourceTree = "<group>"; };
+		B859AE1818E6455390B84204 /* YoumengBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Youmeng/YoumengBridge.swift; sourceTree = "<group>"; };
 		10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChatLocationMap.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
@@ -174,6 +178,8 @@
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
+				B859AE1818E6455390B84202 /* GameShieldClient.swift */,
+				B859AE1818E6455390B84204 /* YoumengBridge.swift */,
 				10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
@@ -504,6 +510,8 @@
 				A9A550020000000000000005 /* CallKitAudioSession.swift in Sources */,
 				A9A550020000000000000007 /* VoIPCallPayload.swift in Sources */,
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
+				B859AE1818E6455390B84201 /* GameShieldClient.swift in Sources */,
+				B859AE1818E6455390B84203 /* YoumengBridge.swift in Sources */,
 				DE51CE5302D2E30000000001 /* DeviceSyncOriginalsBridge.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);

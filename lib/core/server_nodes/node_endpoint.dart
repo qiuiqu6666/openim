@@ -9,9 +9,9 @@ class NodeEndpoint {
       chatApi: Config.appAuthUrl, imApi: Config.imApiUrl, imWs: Config.imWsUrl);
 
   static const direct = NodeEndpoint(
-      chatApi: 'https://99chatapi.99chat.vip',
-      imApi: 'https://99imapi.99chat.vip',
-      imWs: 'wss://websocket.99chat.vip');
+      chatApi: 'http://127.0.0.1:10008',
+      imApi: 'http://127.0.0.1:10002',
+      imWs: 'ws://127.0.0.1:10001');
   static const builtIn = [direct];
 
   final String chatApi, imApi, imWs;

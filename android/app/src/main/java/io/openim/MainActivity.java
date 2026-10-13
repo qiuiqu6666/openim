@@ -30,6 +30,12 @@ public class MainActivity extends FlutterFragmentActivity {
     @Override
     public void configureFlutterEngine(FlutterEngine flutterEngine) {
         super.configureFlutterEngine(flutterEngine);
+        new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), "openim/youmeng")
+            .setMethodCallHandler((call, result) -> {
+                if ("start".equals(call.method)) {
+                    io.openim.youmeng.YoumengService.start(getApplicationContext(), call.arguments(), result);
+                } else result.notImplemented();
+            });
         nativeNotificationBridge = new io.openim.messaging.NativeNotificationBridge(this, flutterEngine);
         chatLocationMapFactory = new NativeChatLocationMapFactory(
                 getLifecycle(), flutterEngine.getDartExecutor().getBinaryMessenger());

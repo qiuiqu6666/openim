@@ -15,6 +15,7 @@ import UserNotifications
     var deviceSyncOriginals: DeviceSyncOriginalsBridge?
     private let apnsPush = IOSAPNsPushBridge()
     private let voipCalls = IOSVoIPCallBridge()
+    private let youmeng = YoumengBridge()
     
     override func application(
         _ application: UIApplication,
@@ -27,6 +28,7 @@ import UserNotifications
         }
 
         apnsPush.attach(messenger: controller.binaryMessenger)
+        youmeng.attach(messenger: controller.binaryMessenger)
         voipCalls.attach(messenger: controller.binaryMessenger)
         pendingInvite = (launchOptions?[.url] as? URL)?.absoluteString
         inviteChannel = FlutterMethodChannel(name: "openim_friend_invites", binaryMessenger: controller.binaryMessenger)

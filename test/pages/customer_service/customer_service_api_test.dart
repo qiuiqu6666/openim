@@ -80,9 +80,9 @@ void main() {
 
   test('uses the approved deployment and permits explicit configuration', () {
     const defaults = CustomerServiceConfig();
-    expect(defaults.normalizedBaseUrl, 'https://99chatapi.99chat.vip');
+    expect(defaults.normalizedBaseUrl, 'http://127.0.0.1:8815');
     expect(defaults.inboxIdentifier, 'JucC6gvPuKjfzZxLtT5ftaiQ');
-    expect(defaults.cableUri.toString(), 'wss://99chatapi.99chat.vip/cable');
+    expect(defaults.cableUri.toString(), 'ws://127.0.0.1:8815/cable');
     expect(config.cableUri.toString(), 'wss://support.example/kefu/cable');
   });
 

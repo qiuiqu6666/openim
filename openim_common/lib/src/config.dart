@@ -49,7 +49,7 @@ class Config {
   }
 
   static const customerServiceOriginUrl =
-      'https://99chatapi.99chat.vip';
+      'http://127.0.0.1:8815';
   static String? get customerServiceForwardUrl =>
       _runtimeNetworkRoute?.customerServiceUrl;
 
@@ -75,7 +75,7 @@ class Config {
   static const friendScheme = "io.openim.app/addFriend/";
   static const groupScheme = "https://99chat.vip?group=";
 
-  static const _host = '99chatapi.99chat.vip';
+  static const _host = '127.0.0.1';
 
   static String get serverIp {
     String? ip;
@@ -93,8 +93,8 @@ class Config {
     if (null != server) {
       url = server['authUrl'];
     }
-    return _currentEndpoint(url, 'https://99chatapi.99chat.vip',
-        retired: 'http://127.0.0.1:10008',
+    return _currentEndpoint(url, 'http://127.0.0.1:10008',
+        retired: 'https://99chatapi.99chat.vip',
         previous: 'http://129.226.192.93:10008');
   }
 
@@ -105,8 +105,8 @@ class Config {
     if (null != server) {
       url = server['apiUrl'];
     }
-    return _currentEndpoint(url, 'https://99imapi.99chat.vip',
-        retired: 'http://127.0.0.1:10002',
+    return _currentEndpoint(url, 'http://127.0.0.1:10002',
+        retired: 'https://99imapi.99chat.vip',
         previous: 'http://129.226.192.93:10002');
   }
 
@@ -117,8 +117,8 @@ class Config {
     if (null != server) {
       url = server['wsUrl'];
     }
-    return _currentEndpoint(url, 'wss://websocket.99chat.vip',
-        retired: 'ws://127.0.0.1:10001',
+    return _currentEndpoint(url, 'ws://127.0.0.1:10001',
+        retired: 'wss://websocket.99chat.vip',
         previous: 'ws://129.226.192.93:10001');
   }
 

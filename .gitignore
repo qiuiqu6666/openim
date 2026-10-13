@@ -30,6 +30,7 @@ ios/Flutter/Flutter.podspec
 
 # GameShield credentials and locally verified vendor binaries.
 /tool/gameshield/gameshield.local.json
+/tool/youmeng/youmeng.local.json
 /tool/gameshield/__pycache__/
 /local_plugin/gameshield_bridge/vendor/android/
 /local_plugin/gameshield_bridge/vendor/ios/
