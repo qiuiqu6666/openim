@@ -1,0 +1,125 @@
+﻿GameShield 与 OpenIM 原生 SDK 兼容问题说明
+整理日期：2026-10-13
+用途：供 GameShield / OpenIM SDK 技术支持评估共存方案。
+
+一、项目与检查范围
+
+客户端：Flutter，同时使用 OpenIM 原生 SDK 与拟接入的 GameShield SDK。
+GameShield：60.1.10，Android AAR、iOS XCFramework。
+OpenIM Android：io.openim:core-sdk:3.8.3-patch12。
+OpenIM iOS：3.8.3-hotfix.12（此前按项目锁定版本检查）。
+
+本报告为二进制结构检查结果，不是两套 SDK 真机共存验证报告。
+Android 已直接比对两个 AAR 内的 classes.jar，确认以下 12 个重复类。
+iOS 已检查 GameShield 静态归档中的符号、平台切片及元数据；此前对照
+OpenIM 对应版本的符号与头文件发现重叠。尚未在 Mac/Xcode 实际链接，
+最终是否出现 duplicate symbol、以及具体被链接的符号集合，须构建确认。
+
+二、Android：重复 Java 类（已确认）
+
+两个 AAR 的 classes.jar 同时包含：
+1. go/Seq$GoObject.class
+2. go/Seq$GoRef.class
+3. go/Seq$GoRefQueue$1.class
+4. go/Seq$GoRefQueue.class
+5. go/Seq$Proxy.class
+6. go/Seq$Ref.class
+7. go/Seq$RefMap.class
+8. go/Seq$RefTracker.class
+9. go/Seq.class
+10. go/Universe$proxyerror.class
+11. go/Universe.class
+12. go/error.class
+
+原因：两套 SDK 均携带 gomobile 生成的 go.* 桥接类，类全限定名相同。
+影响：同时作为依赖参与 Android 打包会有 duplicate class 问题。
+不能仅删除其中一套桥接类便认定兼容；它们与各自的 JNI 实现绑定，
+需要核对 JNI 注册、对象引用管理、错误桥接与运行时状态是否正确隔离。
+
+三、Android：同名原生库（已确认）
+
+两套 SDK 使用 libgojni.so 作为原生库名称。
+GameShield 中的文件位置：
+jni/armeabi-v7a/libgojni.so
+jni/arm64-v8a/libgojni.so
+jni/x86/libgojni.so
+jni/x86_64/libgojni.so
+
+在两套 SDK 都提供的相同 ABI 下，同名库会竞争同一个最终打包路径。
+两份库承载不同业务实现，不能把它们当成可互换的重复文件。
+pickFirst、删除其中一个 SO 或仅修改 SO 文件名，均不能证明功能正确。
+若修改库名，需要同步处理加载逻辑、JNI 绑定和桥接命名空间，完成共存验证。
+
+四、Android：GameShield 自身的 16KB 兼容问题
+
+GameShield 上述四个 ABI 的 ELF PT_LOAD p_align 检查结果均为 4096（4KB）。
+当前检查要求为至少 16384（16KB），且为 16384 的整数倍，因此未通过。
+这是游戏盾原生库自身的兼容问题，不是 Java 重复类问题。
+仅重新编译 OpenIM 或调整 APK ZIP 对齐，不能修正 GameShield ELF 内部对齐。
+需重新构建游戏盾原生库，并在 16KB 页面设备/模拟器上验证加载与运行。
+
+五、iOS：静态库 Go / CGo / Objective-C 符号重叠
+
+GameShield XCFramework 内为静态归档，并非仅靠改名即可隔离的动态库。
+检查到的高风险符号包括以下类别：
+
+1. Objective-C 类及元类：
+   _OBJC_CLASS_$_GoSeqRef
+   _OBJC_METACLASS_$_GoSeqRef
+   _OBJC_CLASS_$_Universeerror
+   _OBJC_METACLASS_$_Universeerror
+
+2. Go / CGo 运行时桥接：
+   _crosscall2
+   _go_seq_* 符号族
+   _cgo_*、_x_cgo_* 等运行时符号族
+
+当前检查器在 GameShield 真机切片和模拟器切片中分别识别到 31 个
+未隔离的 gomobile 相关符号。31 是检查器匹配到的风险符号数，
+不代表已经通过 Xcode 证实的 31 个重复链接错误。
+
+影响：两套静态库一起链接时可能发生重复符号；Objective-C 同名类也存在
+运行时冲突风险。具体结果受链接器抽取的对象文件和链接选项影响。
+仅修改 framework 名称、Swift 导入名或头文件名，不能隔离底层全局符号。
+需供应商评估运行时命名空间隔离或其他经验证的共存构建方案。
+
+六、iOS：GameShield 自身的最低系统版本元数据问题
+
+GameShield 真机及模拟器 framework 的 Info.plist 中：
+MinimumOSVersion = 100.0
+
+该值与 SDK 接入文档要求的 iOS 15 不一致，当前兼容检查拒绝导入。
+需供应商核对 Info.plist、构建部署目标和 Mach-O 版本信息并提供一致的产物。
+不能仅修改 plist 就声称已经解决所有部署兼容问题。
+
+现有切片：
+真机：arm64。
+模拟器：arm64、x86_64。
+目前并非因为缺少这些切片而拒绝导入。
+
+七、建议供应商提供的处理结果
+
+1. Android 提供与上述 OpenIM AAR 可同时使用的版本：
+   隔离 go.* 桥接类、JNI 注册和原生库加载；支持 16KB 页面环境。
+2. iOS 提供与上述 OpenIM 静态框架共存的版本：
+   处理 Go/CGo 全局符号和 Objective-C 同名类问题；修正最低系统版本元数据。
+3. 保持现有公开 API，或提供明确的 API 迁移说明：
+   Android com.gameshield.sdk.mobile.Mobile / Client；
+   iOS MobileNewClientWithToken、MobileVersion、MobileClient；
+   start/stop、endpoint 查询、currentTCPPort、网络及前台恢复通知。
+4. 提供编译工具链版本、支持系统/架构范围，以及双 SDK 共存测试结果。
+
+八、集成后必须验证
+
+Android：Debug/Release 打包、混淆、原生库加载、16KB 页面环境。
+iOS：真机/模拟器编译链接、签名安装、最低支持系统启动。
+共存：两套 SDK 同时初始化；登录、消息收发、数据库读取、重连、网络切换、
+前后台恢复、客服 HTTP/WebSocket/上传、通话接口。
+若替换 OpenIM 定制包，还需测试旧版本升级后的本地数据和消息状态。
+
+九、当前结论
+
+Flutter 已准备游戏盾启动与转发桥接，但原始 SDK 未通过兼容检查，未导入。
+配置 Token、APP_ID、分组、服务地址不能解决上述二进制冲突。
+目前不能宣称游戏盾已经启动或双 SDK 可以正常共存。
+本文件不包含 Token、密钥或其他接入凭据。

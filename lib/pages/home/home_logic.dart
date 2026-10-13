@@ -215,6 +215,7 @@ class HomeLogic extends SuperController {
   @override
   void onReady() {
     if (_closed) return;
+    unawaited(initLogic.autoCheckVersionUpgrade());
     _getRTCInvitationStart();
     _getUnreadMsgCount();
     getUnhandledFriendApplicationCount();

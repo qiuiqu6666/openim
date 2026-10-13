@@ -1,18 +1,29 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:openim/pages/contacts/contacts_logic.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:openim/pages/contacts/user_profile_panel/set_remark/set_remark_logic.dart';
 import 'package:openim/pages/contacts/user_profile_panel/set_remark/set_remark_view.dart';
 import 'package:openim/pages/contacts/user_profile_panel/user_profile%20_panel_logic.dart';
 import 'package:openim_common/openim_common.dart';
 
 const _sdk = MethodChannel('flutter_openim_sdk');
+
+class _Contacts extends GetxController implements ContactsLogic {
+  final saved = <String, String>{};
+  @override
+  void applySavedRemark(String userID, String remark) => saved[userID] = remark;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class _Profile extends GetxController implements UserProfilePanelLogic {
   _Profile(String? remark) {
@@ -36,6 +47,7 @@ Future<SetFriendRemarkLogic> _open(
   GetTags.createUserProfileTag();
   addTearDown(GetTags.destroyUserProfileTag);
   Get.put<UserProfilePanelLogic>(_Profile(remark), tag: GetTags.userProfile);
+  Get.put<ContactsLogic>(_Contacts());
   tester.view.physicalSize = const Size(375, 812);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -76,9 +88,12 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late List<MethodCall> calls;
 
-  setUp(() {
+  setUp(() async {
     Get.reset();
     Get.testMode = true;
+    OpenIM.iMManager.userID = 'self';
+    SharedPreferences.setMockInitialValues({});
+    await DataSp.init();
     calls = [];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_sdk, (call) async {
@@ -121,6 +136,7 @@ void main() {
             () async => Future<void>.delayed(const Duration(milliseconds: 30)));
         await tester.pumpAndSettle();
         expect(calls, hasLength(1));
+        expect((Get.find<ContactsLogic>() as _Contacts).saved['friend'], '新备注');
         expect((calls.single.arguments as Map)['req'], {
           'friendUserIDs': ['friend'],
           'remark': '新备注',
@@ -156,6 +172,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(calls, hasLength(1));
     expect(((calls.single.arguments as Map)['req'] as Map)['remark'], '');
+    expect((Get.find<ContactsLogic>() as _Contacts).saved['friend'], '');
     expect(find.text('origin'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();

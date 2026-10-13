@@ -51,8 +51,8 @@ mixin UpgradeManger {
   }
 
   Future<void> autoCheckVersionUpgrade() {
-    // Startup must join an existing check, not treat its visible dialog as
-    // permission to navigate. A required update keeps this future pending.
+    // Home entry reuses the same check so rebuilding the home route cannot
+    // issue another request or show a duplicate update dialog.
     if (_automaticUpdateCheck != null) return _automaticUpdateCheck!;
     if (isNowIgnoreUpdate) return Future.value();
     final context = Get.context;

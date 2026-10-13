@@ -23,6 +23,7 @@ class ChatBackgroundMessageRecovery {
   final void Function(Object) onError;
   final int pageSize;
   Message? _cursor;
+  Message? _verificationAnchor;
   Future<bool>? _request;
   Timer? _retry;
   final _visible = <String>{};
@@ -31,24 +32,40 @@ class ChatBackgroundMessageRecovery {
   bool _settled = false;
   bool _closed = false;
   bool _rerun = false;
+  bool _verifyBeforeRead = false;
+  bool _unverifiedGap = false;
 
   bool get hasCheckpoint => _cursor != null;
 
   void suspend() {
     if (_closed) return;
     final latest = anchor();
-    if (_cursor == null) {
+    if (_cursor == null ||
+        (_settled &&
+            _request == null &&
+            !_verifyBeforeRead &&
+            !_unverifiedGap &&
+            latest != null &&
+            !_after(latest, _cursor!))) {
       _cursor = latest;
+      _verificationAnchor = latest;
       _visible.clear();
     }
     _settled = false;
-    restart();
+    restart(verifyCheckpoint: _unverifiedGap);
   }
 
-  void restart() {
+  void restart({bool verifyCheckpoint = false}) {
     _attempts = 0;
     _retry?.cancel();
     _retry = null;
+    // A successful early local page can contain a newer live row before an
+    // older interval is persisted. A fresh native completion must be able to
+    // revisit this recovery boundary, including when a read is still in flight.
+    // Sequence holes alone cannot prove loss: deleted messages create them too.
+    if (verifyCheckpoint && _verificationAnchor != null) {
+      _verifyBeforeRead = true;
+    }
   }
 
   void observeVisible(Iterable<String> ids) {
@@ -77,11 +94,17 @@ class ChatBackgroundMessageRecovery {
     }
     _retry?.cancel();
     _retry = null;
+    final verifying = _verifyBeforeRead;
+    if (verifying) {
+      _cursor = _verificationAnchor;
+      _verifyBeforeRead = false;
+      _settled = false;
+    }
     final revision = _revision;
     final completer = Completer<bool>();
     _request = completer.future;
     ++_attempts;
-    _run(revision).then((applied) {
+    _run(revision, verifying: verifying).then((applied) {
       if (revision == _revision) {
         _request = null;
         // Native persistence can finish after the first successful empty read.
@@ -107,10 +130,11 @@ class ChatBackgroundMessageRecovery {
     return completer.future;
   }
 
-  Future<bool> _run(int revision) async {
+  Future<bool> _run(int revision, {required bool verifying}) async {
     bool current() => !_closed && revision == _revision && canRead();
     try {
       var pages = 0;
+      var sawGap = false;
       while (current()) {
         final cursor = _cursor!;
         final result = await readNewer(count: pageSize, startMsg: cursor);
@@ -119,11 +143,24 @@ class ChatBackgroundMessageRecovery {
             .where((message) => _after(message, cursor))
             .toList()
           ..sort(_compare);
+        var previousSeq = cursor.seq ?? 0;
+        for (final message in page) {
+          final seq = message.seq ?? 0;
+          if (previousSeq > 0 && seq > previousSeq + 1) {
+            // This can be a legal deletion. Preserve the verification
+            // boundary without rejecting the page or extending its ordinary
+            // retry budget. A wake can finish before native persistence, so
+            // even a verification pass must not certify another sparse page.
+            sawGap = _unverifiedGap = true;
+          }
+          previousSeq = seq;
+        }
         for (final message in page) {
           apply(message, !_visible.contains(message.clientMsgID));
         }
         if (page.isNotEmpty) _cursor = page.last;
         if (result.isEnd == true) {
+          if (verifying) _unverifiedGap = sawGap;
           final latest = anchor();
           _settled = latest == null || !_after(latest, _cursor!);
           if (_settled) _visible.clear();
@@ -165,9 +202,10 @@ class ChatBackgroundMessageRecovery {
   void cancel() {
     ++_revision;
     _cursor = null;
+    _verificationAnchor = null;
     _request = null;
     _visible.clear();
-    _rerun = _settled = false;
+    _rerun = _settled = _verifyBeforeRead = _unverifiedGap = false;
     restart();
   }
 

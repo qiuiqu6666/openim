@@ -206,8 +206,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1));
     expect(f.calls, hasLength(count + 1));
-    expect(f.calls.last.arguments['startClientMsgID'], 'm-33');
-    f.calls.last.complete([recoveryMessage('m-34', 34)]);
+    // A fresh native completion verifies from the pre-background boundary,
+    // including rows already delivered by the first successful local page.
+    expect(f.calls.last.arguments['startClientMsgID'], 'm-32');
+    f.calls.last.complete([
+      recoveryMessage('m-33', 33),
+      recoveryMessage('m-34', 34),
+    ]);
     await tester.pump();
     expect(logic.newMessages.unseenCount.value, 4);
   });

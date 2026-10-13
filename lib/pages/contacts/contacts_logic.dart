@@ -171,7 +171,24 @@ class ContactsLogic extends GetxController
   bool _reloadFriendsPending = false;
   bool _closed = false;
   Timer? _friendChangesTimer;
-  final _directory = <String, ISUserInfo>{};
+  final _directory = <String, ISUserInfo>{}.obs;
+
+  /// Reactive, constant-time lookup for sender labels in group conversations.
+  String? remarkFor(String? userID) {
+    if (_inactive || userID == null) return null;
+    final remark = _directory[userID]?.remark?.trim();
+    return remark == null || remark.isEmpty ? null : remark;
+  }
+
+  /// Apply a server-confirmed edit even when the SDK profile event is delayed.
+  void applySavedRemark(String userID, String remark) {
+    if (_inactive) return;
+    final friend = FriendInfo.fromJson(
+        _directory[userID]?.toJson() ?? {'userID': userID});
+    friend.remark = remark;
+    _queueFriendChange(userID, friend);
+  }
+
   final _friendChangesDuringLoad = <String, FriendInfo?>{};
   int _directoryRevision = 0;
   Future<void>? _directoryWork;

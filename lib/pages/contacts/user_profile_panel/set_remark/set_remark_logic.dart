@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../user_profile _panel_logic.dart';
+import '../../contacts_logic.dart';
 
 class SetFriendRemarkLogic extends GetxController {
   static const maxRemarkLength = 30;
@@ -26,14 +27,24 @@ class SetFriendRemarkLogic extends GetxController {
       return;
     }
     try {
+      final userID = userProfilesLogic.userInfo.value.userID!;
+      final account = OpenIM.iMManager.userID;
+      final sessionToken = DataSp.chatToken;
       await LoadingView.singleton.wrap(
         asyncFunction: () => OpenIM.iMManager.friendshipManager.updateFriends(
           UpdateFriendsReq(
-            friendUserIDs: [userProfilesLogic.userInfo.value.userID!],
+            friendUserIDs: [userID],
             remark: remark,
           ),
         ),
       );
+      if (account != OpenIM.iMManager.userID ||
+          sessionToken != DataSp.chatToken) {
+        return;
+      }
+      if (Get.isRegistered<ContactsLogic>()) {
+        Get.find<ContactsLogic>().applySavedRemark(userID, remark);
+      }
       if (isClosed) return;
       IMViews.showToast(StrRes.saveSuccessfully);
       Get.back(result: remark);

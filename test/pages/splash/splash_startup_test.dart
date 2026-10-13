@@ -15,8 +15,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _App extends GetxController implements AppController {
   Future<void>? updateCheck;
+  int updateCheckCalls = 0;
   @override
-  Future<void> autoCheckVersionUpgrade() => updateCheck ?? Future.value();
+  Future<void> autoCheckVersionUpgrade() {
+    updateCheckCalls++;
+    return updateCheck ?? Future.value();
+  }
   @override
   Future<void> onApplicationSessionReady({bool authenticated = false}) async {}
 
@@ -71,7 +75,7 @@ void main() {
     Get.reset();
   });
   for (final authenticated in [true, false]) {
-    testWidgets('update gate blocks startup authenticated=$authenticated',
+    testWidgets('startup does not check updates authenticated=$authenticated',
         (tester) async {
       final update = Completer<void>();
       (Get.find<AppController>() as _App).updateCheck = update.future;
@@ -92,14 +96,7 @@ void main() {
       im.initializedSubject.add(true);
       im.initializedSubject.add(true);
       await tester.pump(const Duration(seconds: 2));
-      expect(im.loginCalls, 0);
-      expect(find.text('splash'), findsOneWidget);
-      expect(find.text('main ready'), findsNothing);
-      expect(find.text('login'), findsNothing);
-      // An optional update can finish; a mandatory dialog never releases this
-      // gate merely because its external download URL was opened.
-      update.complete();
-      await tester.pump();
+      expect((Get.find<AppController>() as _App).updateCheckCalls, 0);
       if (authenticated) {
         expect(im.loginCalls, 1);
         im.reply.complete();
@@ -107,6 +104,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text(authenticated ? 'main ready' : 'login'), findsOneWidget);
+      update.complete();
       logic.onClose();
     });
   }

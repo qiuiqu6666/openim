@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -53,6 +54,35 @@ void main() {
   });
 
   tearDown(Get.reset);
+
+  testWidgets('saved remark refreshes historical sender without an SDK event',
+      (tester) async {
+    final page = Completer<List<FriendInfo>>();
+    final logic = ContactsLogic(
+      fetchFriendsPage: (_, __) => page.future,
+      directoryIndexer: ContactDirectoryIndexer(
+          worker: (names) async => buildContactNameIndex(names)),
+    )..onInit();
+    addTearDown(() => logic.onDelete());
+    final loading = logic.loadFriends();
+    await tester.pumpWidget(MaterialApp(home: Obx(() => Text(
+        logic.remarkFor('sender') ?? '原昵称'))));
+    expect(find.text('原昵称'), findsOneWidget);
+    logic.applySavedRemark('sender', '新备注');
+    await tester.pump();
+    expect(find.text('新备注'), findsOneWidget);
+    page.complete([FriendInfo(userID: 'sender', remark: '旧备注')]);
+    await tester.pump();
+    await loading;
+    await tester.pump();
+    expect(find.text('新备注'), findsOneWidget);
+    logic.applySavedRemark('sender', '');
+    await tester.pump();
+    expect(find.text('原昵称'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpWidget(const SizedBox.shrink());
+    logic.onDelete();
+  });
 
   test('friend event bursts apply locally without reloading the SDK directory',
       () async {
@@ -112,9 +142,31 @@ void main() {
     expect(fetches, 1);
     expect(logic.friends.map((friend) => friend.userID), ['updated', 'added']);
     expect(logic.friends.first.showName, '阿强');
+    expect(logic.remarkFor('updated'), '阿强');
+    expect(logic.remarkFor('added'), isNull);
+    expect(logic.remarkFor('deleted'), isNull);
     expect(logic.friends.first.tagIndex, 'A');
     expect(logic.friends.last.tagIndex, 'Z');
     expect(logic.friends.every((friend) => friend.isShowSuspension), isTrue);
+  });
+
+  test('sender remarks react to editing, clearing and friend removal', () async {
+    final logic = ContactsLogic()..onInit();
+    addTearDown(() => logic.onDelete());
+    im.friendAdded(FriendInfo(userID: 'sender', remark: '老王'));
+    await Future<void>.delayed(Duration.zero);
+    expect(logic.remarkFor('sender'), '老王');
+    im.friendInfoChanged(FriendInfo(userID: 'sender', remark: '新备注'));
+    await Future<void>.delayed(Duration.zero);
+    expect(logic.remarkFor('sender'), '新备注');
+    im.friendInfoChanged(FriendInfo(userID: 'sender', remark: '  '));
+    await Future<void>.delayed(Duration.zero);
+    expect(logic.remarkFor('sender'), isNull);
+    im.friendInfoChanged(FriendInfo(userID: 'sender', remark: '恢复备注'));
+    await Future<void>.delayed(Duration.zero);
+    im.friendDeleted(FriendInfo(userID: 'sender'));
+    await Future<void>.delayed(Duration.zero);
+    expect(logic.remarkFor('sender'), isNull);
   });
 
   testWidgets(

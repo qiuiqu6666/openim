@@ -67,14 +67,14 @@ void main() {
         'http://127.0.0.1:28815/uploads/a.png');
     expect(
         config.resolveMediaUrl(
-            'http://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815/uploads/a.png?download=1'),
+            'https://99chatapi.99chat.vip/uploads/a.png?download=1'),
         'http://127.0.0.1:28815/uploads/a.png?download=1');
-    expect(config.resolveMediaUrl('//lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815/uploads/a.png'),
+    expect(config.resolveMediaUrl('//99chatapi.99chat.vip/uploads/a.png'),
         'http://127.0.0.1:28815/uploads/a.png');
     expect(config.resolveMediaUrl('https://cdn.example/a.png'),
         'https://cdn.example/a.png');
-    expect(config.resolveMediaUrl('https://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815/a.png'),
-        'https://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815/a.png');
+    expect(config.resolveMediaUrl('https://127.0.0.1:8815/a.png'),
+        'https://127.0.0.1:8815/a.png');
   });
   test('custom customer endpoint does not inherit production forwarding', () {
     const custom =
@@ -83,7 +83,7 @@ void main() {
     expect(custom.cableUri.toString(), 'wss://custom.example/support/cable');
     Config.useRuntimeNetworkRoute(null);
     expect(config.normalizedBaseUrl, Config.customerServiceOriginUrl);
-    expect(config.cableUri.toString(), 'ws://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815/cable');
+    expect(config.cableUri.toString(), 'wss://99chatapi.99chat.vip/cable');
   });
   test(
       'visitor session survives forwarding-port changes and resumes old conversation',

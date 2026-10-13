@@ -5,7 +5,6 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../core/controller/im_controller.dart';
-import '../../core/controller/app_controller.dart';
 import '../../core/session/sdk_session_queue.dart';
 import '../../core/user_activity/activity_runtime.dart';
 import '../../routes/app_navigator.dart';
@@ -45,8 +44,6 @@ class SplashLogic extends GetxController {
   Future<void> _start() async {
     if (_closed || !_ready || !_initialized || _starting) return;
     _starting = true;
-    await Get.find<AppController>().autoCheckVersionUpgrade();
-    if (_closed) return;
     if (userID != null && token != null) {
       await _login();
     } else {

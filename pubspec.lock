@@ -1021,13 +1021,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  gameshield_bridge:
-    dependency: "direct main"
-    description:
-      path: "local_plugin/gameshield_bridge"
-      relative: true
-    source: path
-    version: "0.1.0"
   geoclue:
     dependency: transitive
     description:

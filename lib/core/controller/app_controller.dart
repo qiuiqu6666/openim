@@ -232,7 +232,6 @@ class AppController extends GetxController with UpgradeManger {
     }
     if (_closed) return;
 
-    autoCheckVersionUpgrade();
     super.onInit();
   }
 

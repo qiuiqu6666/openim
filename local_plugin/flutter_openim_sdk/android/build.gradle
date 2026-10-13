@@ -47,7 +47,7 @@ android {
     }
 
     dependencies {
-        api 'io.openim:core-sdk:3.8.3-patch15-recovery.10@aar'
+        api 'io.openim:core-sdk:3.8.3-patch15-recovery.12@aar'
         testImplementation("junit:junit:4.13.2")
         testImplementation("org.json:json:20180813")
         testImplementation("org.mockito:mockito-core:5.0.0")

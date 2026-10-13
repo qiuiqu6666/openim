@@ -970,7 +970,7 @@ class ChatLogic extends SuperController {
     });
     _messageSubscriptions.add(imLogic.historyRecoverySignals.listen((_) {
       _group.recover(resetAttempts: true);
-      _backgroundMessageRecovery.restart();
+      _backgroundMessageRecovery.restart(verifyCheckpoint: true);
       // The immediate resume read can succeed before native persistence catches
       // up. A wake must reconcile healthy windows too, not only failed reads.
       if (historyError.value == null) unawaited(_loadHistoryForSyncEnd());
@@ -1419,8 +1419,13 @@ class ChatLogic extends SuperController {
     }
   }
 
-  String? getNewestNickname(Message message) =>
-      isSingleChat ? message.senderNickname : _group.nicknameFor(message);
+  String? getNewestNickname(Message message) {
+    if (isSingleChat) return message.senderNickname;
+    final remark = Get.isRegistered<ContactsLogic>()
+        ? Get.find<ContactsLogic>().remarkFor(message.sendID)
+        : null;
+    return remark ?? _group.nicknameFor(message);
+  }
   String? getNewestFaceURL(Message message) =>
       isSingleChat ? message.senderFaceUrl : _group.avatarFor(message);
 
@@ -1470,7 +1475,7 @@ class ChatLogic extends SuperController {
       syncStatus.value = value.status;
       if (value.status == IMSdkStatus.syncEnded) {
         _group.recover(resetAttempts: true);
-        _backgroundMessageRecovery.restart();
+        _backgroundMessageRecovery.restart(verifyCheckpoint: true);
         _historyRecovery.request(resetAttempts: true);
         unawaited(_loadHistoryForSyncEnd());
         _latestMessageRecovery.conversationChanged(resetAttempts: true);

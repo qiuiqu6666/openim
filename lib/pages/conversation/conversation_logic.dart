@@ -207,7 +207,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         if (reInstall ||
             (status == IMSdkStatus.syncEnded &&
                 previousStatus != IMSdkStatus.syncEnded)) {
-          unawaited(onRefresh());
+          unawaited(_refreshConversations(
+              afterCurrentRead: status == IMSdkStatus.syncEnded));
         }
         reInstall = false;
       }
@@ -645,9 +646,12 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   void _sortConversationList() =>
       OpenIM.iMManager.conversationManager.simpleSort(list);
 
-  Future<void> onRefresh() async {
+  Future<void> onRefresh() => _refreshConversations();
+
+  Future<void> _refreshConversations({bool afterCurrentRead = false}) async {
     final clearing = _clearGeneration;
-    await _loadConversationList(firstPageOnly: false);
+    await _loadConversationList(
+        firstPageOnly: false, afterCurrentRead: afterCurrentRead);
     if (_sessionActive && clearing == _clearGeneration) {
       unawaited(_cleanupLegacyConversations());
     }
@@ -695,12 +699,17 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   Future<void> _loadConversationList(
       {required bool firstPageOnly,
       bool useCachedFirstPage = false,
-      bool reconcileUnread = false}) {
+      bool reconcileUnread = false,
+      bool afterCurrentRead = false}) {
     if (!_sessionActive) return Future.value();
     if (reconcileUnread) _reconcileUnreadPending = true;
     final pending = _listRequest;
     if (pending != null) {
-      if (!firstPageOnly && _listFirstPageOnly) _fullReadQueued = true;
+      // Sync may finish after a full read took its local snapshot. Preserve
+      // one trailing read even when the in-flight request is already full.
+      if (!firstPageOnly && (_listFirstPageOnly || afterCurrentRead)) {
+        _fullReadQueued = true;
+      }
       return pending;
     }
     final completer = Completer<void>();
@@ -718,7 +727,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     unawaited(Future<void>.sync(() async {
       await _readConversationSnapshot(
           firstPageOnly: firstPageOnly, useCachedFirstPage: useCachedFirstPage);
-      if (_fullReadQueued && _sessionActive && clearing == _clearGeneration) {
+      while (_fullReadQueued && _sessionActive && clearing == _clearGeneration) {
         _fullReadQueued = false;
         _listFirstPageOnly = false;
         await _readConversationSnapshot(firstPageOnly: false);

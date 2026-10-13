@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'chat_logic.dart';
-import 'media/widgets/chat_media_preparation_indicator.dart';
 import 'messages/widgets/chat_message_list.dart';
 import 'messages/selection/message_selection_action_bar.dart';
 import 'messages/selection/message_selection_toolbar.dart';
@@ -171,8 +170,6 @@ class ChatPage extends StatelessWidget {
   Widget _buildComposer() => Obx(() => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (logic.preparingMediaCount > 0)
-            ChatMediaPreparationIndicator(count: logic.preparingMediaCount),
           if (logic.quotedMessage.value != null)
             ChatComposerContextPreview(
               message: logic.quotedMessage.value,

@@ -227,6 +227,82 @@ void main() {
     expect(logic.list.single.conversationID, 'restored');
   });
 
+  test('sync completion refreshes again after an older full snapshot', () async {
+    ConversationInfo conversation(int seq) => _row('group', time: seq)
+      ..latestMsg = Message(clientMsgID: 'message-$seq', seq: seq);
+    logic.onInit();
+    await flush();
+    complete(0, [conversation(998)]);
+    await flush();
+
+    final oldRefresh = logic.onRefresh();
+    await flush();
+    im.imSdkStatus(IMSdkStatus.syncStart);
+    im.imSdkStatus(IMSdkStatus.syncEnded);
+    await flush();
+    expect(reads, hasLength(2), reason: 'Native reads remain serialized.');
+    complete(1, [conversation(998)]);
+    await flush();
+    expect(reads, hasLength(3),
+        reason: 'The pre-sync snapshot cannot satisfy sync completion.');
+    im.imSdkStatus(IMSdkStatus.syncEnded);
+    await flush();
+    complete(2, [conversation(1000)]);
+    await oldRefresh;
+    await flush();
+    expect(logic.list.single.latestMsg?.seq, 1000,
+        reason: 'Catch-up must not require another message callback.');
+    expect(reads, hasLength(3), reason: 'Repeated finish events are coalesced.');
+  });
+
+  test('a new sync cycle during a trailing snapshot keeps its refresh', () async {
+    logic.onInit();
+    await flush();
+    complete(0, [_row('group', time: 998)]);
+    await flush();
+    final refresh = logic.onRefresh();
+    await flush();
+    im.imSdkStatus(IMSdkStatus.syncStart);
+    im.imSdkStatus(IMSdkStatus.syncEnded);
+    await flush();
+    complete(1, [_row('group', time: 998)]);
+    await flush();
+    expect(reads, hasLength(3));
+
+    im.imSdkStatus(IMSdkStatus.syncStart);
+    im.imSdkStatus(IMSdkStatus.syncEnded);
+    await flush();
+    complete(2, [_row('group', time: 1000)]);
+    await flush();
+    expect(reads, hasLength(4));
+    complete(3, [_row('group', time: 1002)]);
+    await refresh;
+    expect(logic.list.single.latestMsgSendTime, 1002);
+  });
+
+  for (final invalidate in ['clear', 'account']) {
+    test('$invalidate cancels a queued post-sync snapshot', () async {
+      logic.onInit();
+      await flush();
+      complete(0, [_row('group', time: 998)]);
+      await flush();
+      final refresh = logic.onRefresh();
+      await flush();
+      im.imSdkStatus(IMSdkStatus.syncStart);
+      im.imSdkStatus(IMSdkStatus.syncEnded);
+      await flush();
+      if (invalidate == 'clear') {
+        logic.clearConversations();
+      } else {
+        OpenIM.iMManager.userID = 'another';
+      }
+      complete(1, [_row('stale', time: 1000)]);
+      await refresh;
+      expect(reads, hasLength(2));
+      expect(logic.list.any((row) => row.conversationID == 'stale'), isFalse);
+    });
+  }
+
   for (final trigger in ['reconnect', 'resume']) {
     test('$trigger retries a failed list without overlapping retries',
         () async {

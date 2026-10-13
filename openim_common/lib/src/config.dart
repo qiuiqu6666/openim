@@ -49,7 +49,7 @@ class Config {
   }
 
   static const customerServiceOriginUrl =
-      'http://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815';
+      'https://99chatapi.99chat.vip';
   static String? get customerServiceForwardUrl =>
       _runtimeNetworkRoute?.customerServiceUrl;
 
@@ -75,7 +75,7 @@ class Config {
   static const friendScheme = "io.openim.app/addFriend/";
   static const groupScheme = "https://99chat.vip?group=";
 
-  static const _host = 'lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com';
+  static const _host = '99chatapi.99chat.vip';
 
   static String get serverIp {
     String? ip;
@@ -83,7 +83,7 @@ class Config {
     if (null != server) {
       ip = server['serverIP'];
     }
-    return ip == null || ip == '129.226.192.93' ? _host : ip;
+    return ip == null || ip == '129.226.192.93' || ip == '127.0.0.1' ? _host : ip;
   }
 
   static String get appAuthUrl {
@@ -93,8 +93,8 @@ class Config {
     if (null != server) {
       url = server['authUrl'];
     }
-    return _currentEndpoint(url, 'http://$_host:10008',
-        retired: 'https://99chatapi.99chat.vip',
+    return _currentEndpoint(url, 'https://99chatapi.99chat.vip',
+        retired: 'http://127.0.0.1:10008',
         previous: 'http://129.226.192.93:10008');
   }
 
@@ -105,8 +105,8 @@ class Config {
     if (null != server) {
       url = server['apiUrl'];
     }
-    return _currentEndpoint(url, 'http://$_host:10002',
-        retired: 'https://99imapi.99chat.vip',
+    return _currentEndpoint(url, 'https://99imapi.99chat.vip',
+        retired: 'http://127.0.0.1:10002',
         previous: 'http://129.226.192.93:10002');
   }
 
@@ -117,8 +117,8 @@ class Config {
     if (null != server) {
       url = server['wsUrl'];
     }
-    return _currentEndpoint(url, 'ws://$_host:10001',
-        retired: 'wss://websocket.99chat.vip',
+    return _currentEndpoint(url, 'wss://websocket.99chat.vip',
+        retired: 'ws://127.0.0.1:10001',
         previous: 'ws://129.226.192.93:10001');
   }
 
@@ -144,7 +144,7 @@ class Config {
     return !kDebugMode && level > 4 ? 4 : level;
   }
 
-  static const callingUrl = 'https://99chatapi.99chat.vip';
+  static String get callingUrl => appAuthUrl;
 
   static bool get logStandardOutput => kDebugMode;
 }

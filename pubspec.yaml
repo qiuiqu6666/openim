@@ -123,8 +123,6 @@ dependencies:
   focus_detector_v2: ^3.1.0+1
   persistent_bottom_nav_bar_v2: ^5.3.1
   flutter_openim_sdk: ^3.8.3+hotfix.12
-  gameshield_bridge:
-    path: local_plugin/gameshield_bridge
 
   openim_common:
     path: openim_common

@@ -55,7 +55,9 @@ ConversationInfo _row(String id, {String? preview}) => ConversationInfo(
     );
 
 Future<void> _settle() =>
-    Future<void>.delayed(const Duration(milliseconds: 35));
+    // Conversation changes are intentionally batched for 80 ms. Assert after
+    // that delivery window rather than treating a queued live delta as lost.
+    Future<void>.delayed(const Duration(milliseconds: 120));
 
 Future<void> _cancelAll(List<StreamSubscription<dynamic>> subscriptions) async {
   for (final subscription in subscriptions) {

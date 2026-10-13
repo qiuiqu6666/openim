@@ -102,12 +102,6 @@
 @import flutter_webrtc;
 #endif
 
-#if __has_include(<gameshield_bridge/GameShieldBridgePlugin.h>)
-#import <gameshield_bridge/GameShieldBridgePlugin.h>
-#else
-@import gameshield_bridge;
-#endif
-
 #if __has_include(<geolocator_apple/GeolocatorPlugin.h>)
 #import <geolocator_apple/GeolocatorPlugin.h>
 #else
@@ -324,7 +318,6 @@
   [FlutterOpenimSdkPlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterOpenimSdkPlugin"]];
   [FlutterSecureStorageDarwinPlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterSecureStorageDarwinPlugin"]];
   [FlutterWebRTCPlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterWebRTCPlugin"]];
-  [GameShieldBridgePlugin registerWithRegistrar:[registry registrarForPlugin:@"GameShieldBridgePlugin"]];
   [GeolocatorPlugin registerWithRegistrar:[registry registrarForPlugin:@"GeolocatorPlugin"]];
   [FLTImageCropperPlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTImageCropperPlugin"]];
   [ImageGallerySaverPlusPlugin registerWithRegistrar:[registry registrarForPlugin:@"ImageGallerySaverPlusPlugin"]];

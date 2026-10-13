@@ -66,11 +66,11 @@ void main() {
       'apiUrl': 'http://129.226.192.93:10002',
       'wsUrl': 'ws://129.226.192.93:10001',
     });
-    const host = 'lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com';
+    const host = '99chatapi.99chat.vip';
     expect(Config.serverIp, host);
-    expect(Config.appAuthUrl, 'http://$host:10008');
-    expect(Config.imApiUrl, 'http://$host:10002');
-    expect(Config.imWsUrl, 'ws://$host:10001');
+    expect(Config.appAuthUrl, 'https://99chatapi.99chat.vip');
+    expect(Config.imApiUrl, 'https://99imapi.99chat.vip');
+    expect(Config.imWsUrl, 'wss://websocket.99chat.vip');
     expect(NodeEndpoint.current().signature, NodeEndpoint.direct.signature);
   });
 
