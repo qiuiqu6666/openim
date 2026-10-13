@@ -15,9 +15,9 @@ A new Flutter project.
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'
-  s.platform = :ios, '11.0'
+  s.platform = :ios, '13.0'
 
-  # Official patch.15 binary; Windows cannot compile the local Go fix for iOS.
+  # patch.15 + the same recovery patch as Android; build via native_sdk/patch15/build-ios.sh.
   s.vendored_frameworks = 'Frameworks/OpenIMCore.xcframework'
   s.static_framework = true
   s.library = 'resolv'

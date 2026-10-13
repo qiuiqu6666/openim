@@ -2,6 +2,21 @@
 
 本方案从 OpenIM 官方 `v3.8.3-patch.15` 源码修复后台回前台时消息同步失败后无法恢复的问题。补丁包含实现和测试，保留官方 patch.15 的历史消息、重复消息修复。
 
+## iOS 与 Android 共用 recovery.10
+
+两端以 `manifest.json` 的官方提交和补丁 SHA256 为准，原生版本为 `v3.8.3-patch.15+recovery.10`。iOS 使用 macOS/Xcode 从同一份补丁源码构建，不再使用未打补丁的官方预编译包。以下旧版 recovery.1–6 的接入状态和 Windows 验证记录为历史记录。
+
+在 macOS 安装 Go 1.24.0、Xcode 和 Python 3 后执行：
+
+```sh
+native_sdk/patch15/build-ios.sh
+./tool/flutterw build ios --release --no-codesign
+```
+
+Go 不在 PATH 时可以设置 `GO=/absolute/path/to/go`。脚本创建独立源码目录，验证官方提交与补丁哈希，使用 Android 清单固定的 gomobile/gobind，执行四个 Core 包的测试，并编译 iOS arm64 和模拟器架构。完成校验后安装到本地插件的 `Frameworks/OpenIMCore.xcframework`；旧 Framework 保留在本次构建目录以便回退。每次输出的 `verification.json` 记录来源、版本和二进制哈希。
+
+`fetch-ios.ps1` 仅用于获取未修复官方包作对照，不用于当前发布。生成物仍被 Git 忽略，新机器需要运行构建脚本。Core 源码对齐不代表 iOS 后台执行策略与 Android 相同；真机后台恢复、首次登录和消息收发需要单独验收。
+
 ## 2026-10-13 同步让出实时消息处理（recovery.3）
 
 - `MsgSyncer` 收到实时推送时取消同步任务当前的网络等待，等待该任务退出后串行处理推送，再恢复一项合并后的同步任务。序号提交、落库回执和去重沿用原链路，不并发修改同步游标；重复唤醒不积累同步任务，退出会取消并等待当前同步任务。

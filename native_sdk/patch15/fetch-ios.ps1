@@ -18,4 +18,4 @@ if (Test-Path -LiteralPath (Join-Path $target 'OpenIMCore.xcframework')) {
     throw 'Framework already exists. Preserve it; use a fresh checkout to prepare another copy.'
 }
 Expand-Archive -LiteralPath $ArchivePath -DestinationPath $target
-Write-Output 'Official iOS patch.15 prepared. Run pod install and validate on macOS; the local recovery patch is Android-only.'
+Write-Output 'Official unpatched iOS patch.15 prepared for comparison. For parity with Android recovery.10, run build-ios.sh on macOS instead.'
