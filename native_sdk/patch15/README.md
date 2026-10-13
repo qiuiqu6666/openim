@@ -2,10 +2,11 @@
 
 本方案从 OpenIM 官方 `v3.8.3-patch.15` 源码修复后台回前台时消息同步失败后无法恢复的问题。补丁包含实现和测试，保留官方 patch.15 的历史消息、重复消息修复。
 
-<<<<<<< HEAD
-## iOS 与 Android 共用 recovery.10
+## iOS recovery.10 构建记录与构建入口
 
-两端以 `manifest.json` 的官方提交和补丁 SHA256 为准，原生版本为 `v3.8.3-patch.15+recovery.10`。iOS 使用 macOS/Xcode 从同一份补丁源码构建，不再使用未打补丁的官方预编译包。以下旧版 recovery.1–6 的接入状态和 Windows 验证记录为历史记录。
+当前 Android 与补丁源码为 recovery.12；已验证的 iOS 产物为 recovery.10，iOS recovery.12 尚未构建验证。
+
+历史构建记录：两端以 `manifest.json` 的官方提交和补丁 SHA256 为准，原生版本为 `v3.8.3-patch.15+recovery.10`。iOS 使用 macOS/Xcode 从同一份补丁源码构建，不再使用未打补丁的官方预编译包。以下旧版 recovery.1–6 的接入状态和 Windows 验证记录为历史记录。
 
 在 macOS 安装 Go 1.24.0、Xcode 和 Python 3 后执行：
 
@@ -17,7 +18,6 @@ native_sdk/patch15/build-ios.sh
 Go 不在 PATH 时可以设置 `GO=/absolute/path/to/go`。脚本创建独立源码目录，验证官方提交与补丁哈希，使用 Android 清单固定的 gomobile/gobind，执行四个 Core 包的测试，并编译 iOS arm64 和模拟器架构。完成校验后安装到本地插件的 `Frameworks/OpenIMCore.xcframework`；旧 Framework 保留在本次构建目录以便回退。每次输出的 `verification.json` 记录来源、版本和二进制哈希。
 
 `fetch-ios.ps1` 仅用于获取未修复官方包作对照，不用于当前发布。生成物仍被 Git 忽略，新机器需要运行构建脚本。Core 源码对齐不代表 iOS 后台执行策略与 Android 相同；真机后台恢复、首次登录和消息收发需要单独验收。
-=======
 ## 2026-10-13 消息恢复交叉验证（recovery.12）
 
 - 修复同账号另一设备发来的消息在部分落库后重试时，跳过会话摘要和消息回调的问题。待投递记录在任何消息写入前登记，成功回调后释放，覆盖逐条写入部分成功、会话写入失败、总未读查询失败。本机 Seq0 确认重试修复摘要，不重复作为远端新消息投递。
@@ -44,7 +44,6 @@ Go 不在 PATH 时可以设置 `GO=/absolute/path/to/go`。脚本创建独立源
 Android 四 ABI AAR 已构建并接入 `3.8.3-patch15-recovery.11`，每个原生库的版本标记及 43 个补丁文件与构建快照已核对，Java 插件编译通过。AAR SHA256：`cea631fded8bb0d4bda8d0b15092d49e8c5f76a95ec7f4d7568ce1fdac76e23b`。本轮未构建/安装新的 APK；iOS 仍为不含本地补丁的官方 Framework，需 macOS 构建后才能获得同样修复。
 
 构建和核验记录：`E:/openim/artifacts/online-seq-recovery-20261013/`。以下章节保留先前版本的历史记录，不代表当前版本号。
->>>>>>> 5d837d7 (Restore service domains, remove GameShield integration and update message recovery)
 
 ## 2026-10-13 同步让出实时消息处理（recovery.3）
 
