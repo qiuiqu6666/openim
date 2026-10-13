@@ -732,7 +732,7 @@ class _SangongModulePageState extends State<_SangongModulePage> {
   }
 
   @override
-  Widget build(BuildContext context) => SangongRealtimeScope(
+  Widget build(BuildContext context) => SangongScope(
       runtime: widget.runtime,
       child: Builder(builder: (context) {
         if (_loading || _error != null) {

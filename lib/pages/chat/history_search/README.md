@@ -1,5 +1,61 @@
 # Conversation history search
 
+## Sender picker progressive loading (2026-10-12)
+
+The sender picker is now a plain member list, as requested. It has no alphabet
+bar, section headers or pinyin sorting. `chat_history_sender_directory.dart`
+retains the SDK's returned order and appends only new, nonempty user IDs.
+Selection returns the original sender model; public nicknames and presence
+privacy still use the existing source and shared display rules.
+
+`selection/chat_history_sender_page.dart` shows the first 50-member SDK page.
+The page-owned preloader then continues one page at a time, with a 350 ms pause
+between batches. Each new batch is appended silently at the bottom and becomes
+selectable immediately; existing members keep their indices and the positioned
+list keeps its state and scroll position. No final full-directory replacement,
+temporary sorting buffer or post-frame scroll correction is needed.
+
+Loading pauses during touch/scroll gestures, while the page is covered, and
+while the app is inactive. A pending response waits until idle before appending.
+Failed requests keep loaded rows and offer retry at the same cursor.
+Search/account changes clear the directory, reset scrolling and invalidate old
+requests. Closing the page cancels timers/waits, releases presence ownership
+and clears members. Already submitted SDK requests cannot be recalled, but
+late responses are discarded. Presence observes only currently visible rows.
+
+The reference `TIMUIKitConversationMemberPickerPage._loadMembers` in
+`reference-99chat/third_party/tencent_cloud_chat_uikit/lib/ui/views/TIMUIKitSearch/`
+also exposes each SDK page before completion. This page reuses the existing
+OpenIM source, member row, search box, theme tokens and positioned list.
+The alphabet-specific viewport helper was removed because appending does not
+move existing rows. The shared contacts directory is unchanged.
+
+Static comparison: this page no longer computes pinyin, sorts all members,
+builds letter headers/indexes or recreates the list for a completed snapshot.
+Per-page deduplication inspects only the incoming page. SDK request counts are
+unchanged. CPU, frame-time and thermal effects have not been measured.
+Per user restriction, no build, test, analyzer or device run was performed.
+Existing ordering, pagination, search, large-text and presence cases were
+adapted to the plain list but not run. Long-list scrolling, lifecycle changes,
+failures/retry and search changes during loading remain pending validation.
+
+## Cloud history supplementation
+
+Production search uses `cloud/chat_history_cloud_sync.dart` to retrieve one
+100-message SDK history page on initial search, then another when local results
+are exhausted and the user requests more. `getAdvancedHistoryMessageList` lets
+the SDK fill missing records in its local database; this is not a server-side
+keyword search. The oldest SDK message anchors the next page. Server retention
+and account access still bound the available history.
+
+After supplementation, local offsets restart and displayed IDs are deduplicated.
+Each interaction scans at most ten local pages of 30 messages, retaining a
+load-more action even with no matching sender yet. Errors, empty nonterminal
+pages and stalled cursors remain retryable instead of implying completion.
+Changing queries or closing the controller prevents further work and ignores
+late responses; an already submitted native SDK call may still finish caching.
+The existing account/token guards apply to both history retrieval and search.
+
 `chat_history_search_page.dart` is the entry used by single/group chat settings.
 The old `chat_setup/chat_history_search_page.dart` import remains an export for
 existing callers. Global search can still supply `initialQuery` and `filesOnly`.
@@ -87,18 +143,16 @@ existing callers. Global search can still supply `initialQuery` and `filesOnly`.
   are resolved only for the valid members of the current SDK page, without
   changing raw offsets or making an optional profile failure fail the page.
   No entered ID or fabricated member list is used in production.
-- The sender directory reuses the contacts name indexer and `AzListView` for
-  pinyin/A–Z/# sections and the right-hand touch/drag index. The projection is
-  refreshed after a source page arrives, reusing unchanged-name pinyin. Search
-  resets both rows and index; pagination keeps the SDK cursor and visible sender.
-  Index entries reflect the currently loaded members rather than unavailable
-  letters, and loading/retry controls stay outside the indexed data.
+- The sender directory uses a plain `ScrollablePositionedList` in SDK order.
+  Each page appends unique members without letter grouping or reordering.
+  Search resets the rows and scroll position; pagination keeps the SDK cursor
+  and existing viewport. Loading/retry controls stay outside the member rows.
 - Sender rows reserve two lines: nickname, then the contacts `PresenceLabel`.
   Every member row has the reference's 0.6px themed divider aligned with the
-  nickname, including the final member; the alphabetical index remains separate.
+  nickname, including the final member.
   The layout references 99chat's `tim_uikit_conversation_member_picker_page.dart`.
   The shared `ContactsLogic` owns the real presence cache, privacy labels and
-  subscriptions. The page reports only the indexed list's visible users through
+  subscriptions. The page reports only the member list's visible users through
   its existing positions listener; covering/backgrounding the page or disabling
   online display pauses its owner, and disposal releases only that owner. Missing
   ordinary presence remains blank. Official service accounts resolve to online
@@ -107,7 +161,7 @@ existing callers. Global search can still supply `initialQuery` and `filesOnly`.
   No store, HTTP client or SDK listener is created by
   this selector; cached labels require the original account/current session.
 - Other category and selection routes use the existing 17sp semibold heading and
-  blue back icon. Index text fits the remaining viewport on compact screens.
+  blue back icon. Member rows use the full available width on compact screens.
 
 The native SDK does not implement `senderUserIDList` filtering. The controller
 checks `sendID` and advances raw SDK pages until the visible page is filled or

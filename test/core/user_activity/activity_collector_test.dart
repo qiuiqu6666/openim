@@ -96,6 +96,11 @@ void main() {
     now = now.add(const Duration(seconds: 30));
     c.tick();
     await Future<void>.delayed(Duration.zero);
+    expect(batches.expand((b) => b['events'] as List)
+        .where((e) => e['kind'] == 'heartbeat'), isEmpty);
+    now = now.add(const Duration(seconds: 30));
+    c.tick();
+    await Future<void>.delayed(Duration.zero);
     expect(
         batches
             .expand((b) => b['events'] as List)

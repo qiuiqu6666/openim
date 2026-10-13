@@ -1,10 +1,30 @@
 import 'package:get/get.dart';
+import 'package:openim/core/im_callback.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'package:openim/pages/conversation/conversation_organizer.dart';
+import 'package:openim/pages/conversation/summary/conversation_feed_snapshot.dart';
 import 'package:openim/pages/group_features/data/group_feature_api.dart';
 import 'package:openim/pages/group_features/data/group_feature_store.dart';
 
 /// Presentation tests have no logged-in business session. Real list status
 /// networking is covered by the live-list integration fixtures separately.
 mixin ConversationLiveFixture on GetxController {
+  final imStatus = IMSdkStatus.connectionSucceeded.obs;
+  RxList<ConversationInfo> get list;
+  bool isArchived(ConversationInfo info);
+  String? folderID(ConversationInfo info);
+
+  // Match the production feed projection, while keeping each fixture's own
+  // archive/folder state as the source used by its interaction assertions.
+  ConversationFeedSnapshot get feedSnapshot => ConversationFeedSnapshot(list, {
+        for (final row in list)
+          row.conversationID: ChatConversationState.fromJson({
+            'conversationID': row.conversationID,
+            'archived': isArchived(row),
+            'folderID': folderID(row),
+            'version': 0,
+          }),
+      });
   bool get canShowEmptyFeed => true;
 
   Future<void> onRefresh() async {}

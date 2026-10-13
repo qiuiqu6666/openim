@@ -1,3 +1,4 @@
+import '../chat/media/upload/chat_media_outbox.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -29,6 +30,7 @@ class HomeLogic extends SuperController {
   final initLogic = Get.find<AppController>();
   final index = 0.obs;
   final unreadMsgCount = 0.obs;
+  int _unreadCountRevision = 0;
   final unhandledFriendApplicationCount = 0.obs;
   final unhandledGroupApplicationCount = 0.obs;
   final unhandledCount = 0.obs;
@@ -104,12 +106,17 @@ class HomeLogic extends SuperController {
     ActivityRuntime.instance.setHomeTab(index);
   }
 
-  _getUnreadMsgCount() {
-    OpenIM.iMManager.conversationManager.getTotalUnreadMsgCount().then((count) {
-      if (_closed) return;
+  Future<void> _getUnreadMsgCount() async {
+    final revision = _unreadCountRevision;
+    try {
+      final count = await OpenIM.iMManager.conversationManager
+          .getTotalUnreadMsgCount();
+      if (!_badgeSessionCurrent || revision != _unreadCountRevision) return;
       unreadMsgCount.value = int.tryParse(count) ?? 0;
       initLogic.showBadge(unreadMsgCount.value);
-    });
+    } catch (error) {
+      Logger.print('Unread count unavailable: ${error.runtimeType}');
+    }
   }
 
   void getUnhandledFriendApplicationCount() => _friendBadgeRefresh.request();
@@ -176,7 +183,8 @@ class HomeLogic extends SuperController {
       conversationsAtFirstPage = Get.arguments['conversations'] ?? [];
     }
     _subscriptions.add(imLogic.unreadMsgCountEventSubject.listen((value) {
-      if (_closed) return;
+      if (!_badgeSessionCurrent) return;
+      ++_unreadCountRevision;
       unreadMsgCount.value = value;
     }));
     _subscriptions.add(imLogic.friendApplicationChangedSubject.listen((value) {
@@ -221,6 +229,7 @@ class HomeLogic extends SuperController {
     _friendBadgeRefresh.close();
     _groupBadgeRefresh.close();
     ChatHistoryCache.clear();
+    ChatMediaOutbox.instance.clear();
     FundCardStateCache.shared.clear();
     for (final subscription in _subscriptions) {
       subscription.cancel();

@@ -12,6 +12,7 @@ final class CallKitCallRecord {
     let outgoing: Bool
     var status = "ringing"
     var reported = false
+    var serverAccepted = false
     var expiry: DispatchWorkItem?
 
     init(uuid: UUID = UUID(), roomID: String, accountID: String, sessionKey: String,
@@ -164,6 +165,14 @@ final class CallKitCallCoordinator: NSObject, CXProviderDelegate {
         let update = CXCallUpdate()
         update.localizedCallerName = name
         provider.reportCall(with: record.uuid, updated: update)
+    }
+
+    func markAccepted(_ record: CallKitCallRecord) {
+        guard records[record.uuid] === record else { return }
+        record.serverAccepted = true
+        record.expiry?.cancel()
+        record.expiry = nil
+        // The server has selected a device; media readiness is still separate.
     }
 
     func markConnected(_ record: CallKitCallRecord) {
@@ -323,8 +332,11 @@ final class CallKitCallCoordinator: NSObject, CXProviderDelegate {
 
     private func scheduleExpiry(_ record: CallKitCallRecord, deadline: Date) {
         record.expiry?.cancel()
+        record.expiry = nil
+        guard !record.serverAccepted else { return }
         let expiry = DispatchWorkItem { [weak self] in
-            guard let self = self, self.records[record.uuid] === record, record.status != "connected" else { return }
+            guard let self = self, self.records[record.uuid] === record,
+                  !record.serverAccepted, record.status != "connected" else { return }
             var event = record.event("expired")
             event["status"] = record.status
             self.onEvent?(event)

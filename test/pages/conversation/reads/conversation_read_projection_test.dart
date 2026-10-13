@@ -140,7 +140,10 @@ void main() {
     expect(target.unreadCount, 3);
     final incoming = _row();
     logic.onChanged([incoming]);
-    expect(logic.list.single, same(incoming));
+    // Equal callbacks keep the published row; failed reads must still retain
+    // the complete unread payload rather than clearing it optimistically.
+    expect(logic.list.single, same(target));
+    expect(logic.list.single.toJson(), incoming.toJson());
     expect(incoming.unreadCount, 3);
   });
 
@@ -204,6 +207,30 @@ void main() {
     expect(current.unreadCount, 4,
         reason:
             'Reconciliation replaces the row without mutating its predecessor.');
+  });
+
+  test('rejected zero repairs once per protected state without a callback loop',
+      () {
+    final projection = ConversationReadProjection()
+      ..confirm(ConversationReadRequest.capture(_row()));
+    final current = _row(unread: 4);
+    for (var i = 0; i < 10; i++) {
+      final incoming = _row(unread: 0);
+      final projected = projection.project(incoming, current: current);
+      expect(projection.takeReconciliationSignal(incoming, projected), i == 0);
+    }
+    final changed = _row(unread: 5);
+    final zero = _row(unread: 0);
+    expect(
+        projection.takeReconciliationSignal(
+            zero, projection.project(zero, current: changed)),
+        isTrue);
+    projection.project(_row(unread: 0),
+        current: changed, authoritativeUnread: true);
+    expect(
+        projection.takeReconciliationSignal(
+            zero, projection.project(zero, current: changed)),
+        isTrue);
   });
 
   test('reconciliation does not grant authority to a lower positive count', () {

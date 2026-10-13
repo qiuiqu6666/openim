@@ -30,16 +30,16 @@ class StartupNodeSelector {
 
   Future<NodeSelection> _select() async {
     final current = _readCurrent();
-    final checks = await Future.wait(
-        NodeEndpoint.candidates(current).reversed.map((node) async {
+    final checks =
+        await Future.wait(NodeEndpoint.candidates(current).map((node) async {
       try {
         return await _probe(node);
       } catch (_) {
         return NodeAvailability(node, available: false, latencyMs: 0);
       }
     }));
-    // Prefer the direct route requested by the deployment owner, falling back
-    // to the domain only when the complete direct route is unavailable.
+    // The deployment has one direct route. Offline startup keeps that route
+    // and custom deployments only probe their own configured addresses.
     var selected = current;
     for (final check in checks) {
       if (check.available) {

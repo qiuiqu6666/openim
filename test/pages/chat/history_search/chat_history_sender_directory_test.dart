@@ -1,15 +1,17 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/history_search/selection/chat_history_sender_directory.dart';
 import 'package:openim/pages/chat/history_search/selection/chat_history_sender_source.dart';
-import 'package:openim/pages/contacts/directory/contact_directory_indexer.dart';
 
 ChatHistorySender sender(String id, String name,
         {String? avatar, String? nickname}) =>
     ChatHistorySender(
         userID: id, displayName: name, faceURL: avatar, nickname: nickname);
 
+List<String> ids(ChatHistorySenderDirectory directory) =>
+    [for (var i = 0; i < directory.length; i++) directory[i].userID];
+
 void main() {
-  test('Chinese and English names use shared letter groups with # last', () {
+  test('Chinese, Latin and symbol names retain their source order', () {
     final source = [
       sender('autumn', '秋'),
       sender('number', '123'),
@@ -18,153 +20,59 @@ void main() {
       sender('symbol', '!用户'),
       sender('bob', 'Bob'),
     ];
-    final rows = buildChatHistorySenderDirectory(source);
-    expect(rows.map((row) => row.getSuspensionTag()),
-        ['A', 'B', 'D', 'Q', '#', '#']);
-    expect(
-        rows
-            .singleWhere((row) => row.sender.userID == 'winter')
-            .index
-            .namePinyin,
-        'DONG');
-    expect(
-        rows
-            .singleWhere((row) => row.sender.userID == 'autumn')
-            .index
-            .namePinyin,
-        'QIU');
-    expect(rows.map((row) => row.isShowSuspension),
-        [true, true, true, true, true, false]);
-    expect(rows.every((row) => row.isShowSuspension == row.index.showHeader),
-        isTrue);
+    final directory = ChatHistorySenderDirectory()..addPage(source);
+    expect(ids(directory), source.map((member) => member.userID));
   });
 
   test('duplicates and empty IDs are removed without replacing callback models',
       () {
     final original = sender('first', 'Alice', avatar: 'first-avatar');
     final other = sender('other', 'Bob');
-    final rows = buildChatHistorySenderDirectory([
-      original,
-      sender('', 'Empty'),
-      sender('  ', 'Whitespace'),
-      sender('first', 'Duplicate', avatar: 'duplicate-avatar'),
-      other,
-    ]);
-    expect(rows.map((row) => row.sender.userID), ['first', 'other']);
-    expect(identical(rows.first.sender, original), isTrue);
-    expect(identical(rows.last.sender, other), isTrue);
+    final directory = ChatHistorySenderDirectory()
+      ..addPage([
+        original,
+        sender('', 'Empty'),
+        sender('  ', 'Whitespace'),
+        sender('first', 'Duplicate', avatar: 'duplicate-avatar'),
+      ]);
+    expect(directory.addPage([original]), isFalse);
+    expect(directory.addPage([original, other]), isTrue);
+    expect(ids(directory), ['first', 'other']);
+    expect(identical(directory[0], original), isTrue);
+    expect(identical(directory[1], other), isTrue);
   });
 
-  test('unchanged display names reuse cached pinyin but keep fresh sender data',
-      () {
-    final original = sender('winter', '冬', avatar: 'old-avatar');
-    final cached = ChatHistorySenderRow(
-      sender: original,
-      index: const ContactNameIndex(
-        userID: 'winter',
-        displayName: '冬',
-        namePinyin: 'CACHED DONG',
-        tagIndex: 'D',
-      ),
-    );
-    final updated = sender('winter', '冬', avatar: 'new-avatar');
-    final rows = buildChatHistorySenderDirectory([updated], previous: [cached]);
-    expect(rows.single.index.namePinyin, 'CACHED DONG');
-    expect(rows.single.getSuspensionTag(), 'D');
-    expect(rows.single.isShowSuspension, isTrue);
-    expect(identical(rows.single.sender, updated), isTrue);
-    expect(rows.single.sender.faceURL, 'new-avatar');
-  });
-
-  test('renaming an existing sender invalidates its old pinyin and section',
-      () {
-    final previous = buildChatHistorySenderDirectory([sender('person', '冬')]);
-    final rows = buildChatHistorySenderDirectory([sender('person', '秋')],
-        previous: previous);
-    expect(rows.single.getSuspensionTag(), 'Q');
-    expect(rows.single.index.namePinyin, 'QIU');
-    expect(rows.single.index.displayName, '秋');
-    expect(previous.single.getSuspensionTag(), 'D');
-    expect(previous.single.index.displayName, '冬');
-  });
-
-  test(
-      'public nicknames determine directory groups instead of conversation aliases',
-      () {
+  test('public nicknames remain visible without affecting source order', () {
     final original = sender('winter', '秋备注', nickname: ' 冬 ');
-    final rows = buildChatHistorySenderDirectory([
-      sender('autumn', '冬备注', nickname: '秋'),
-      original,
-    ]);
-    expect(rows.map((row) => row.getSuspensionTag()), ['D', 'Q']);
-    expect(rows.first.index.displayName, '冬');
-    expect(identical(rows.first.sender, original), isTrue);
-    expect(rows.first.sender.displayName, '秋备注');
+    final directory = ChatHistorySenderDirectory()
+      ..addPage([sender('autumn', '冬备注', nickname: '秋'), original]);
+    expect(ids(directory), ['autumn', 'winter']);
+    expect(directory[1].name, '冬');
+    expect(directory[1].displayName, '秋备注');
+    expect(identical(directory[1], original), isTrue);
   });
 
-  test(
-      'a nickname change invalidates cached pinyin even when the alias is unchanged',
-      () {
-    final previous = buildChatHistorySenderDirectory([
-      sender('person', '备注', nickname: '冬'),
-    ]);
-    final rows = buildChatHistorySenderDirectory([
-      sender('person', '备注', nickname: '秋'),
-    ], previous: previous);
-    expect(rows.single.index.namePinyin, 'QIU');
-    expect(rows.single.getSuspensionTag(), 'Q');
-    expect(rows.single.index.displayName, '秋');
-  });
-
-  test('an alias change retains the nickname cache and returns the new sender',
-      () {
-    final cached = ChatHistorySenderRow(
-      sender: sender('person', '原备注', nickname: '冬'),
-      index: const ContactNameIndex(
-        userID: 'person',
-        displayName: '冬',
-        namePinyin: 'CACHED DONG',
-        tagIndex: 'D',
-      ),
-    );
-    final updated = sender('person', '新备注', nickname: ' 冬 ');
-    final rows = buildChatHistorySenderDirectory([updated], previous: [cached]);
-    expect(rows.single.index.namePinyin, 'CACHED DONG');
-    expect(identical(rows.single.sender, updated), isTrue);
-    expect(rows.single.sender.displayName, '新备注');
-  });
-
-  test('appended pages preserve the shared within-group ordering and headers',
-      () {
+  test('appended pages retain existing positions including equal names', () {
     final source = List.generate(
         151,
         (index) => sender(
             'member-$index', ['Alice', '阿强', '冬', '秋', '123'][index % 5]));
-    final previous = buildChatHistorySenderDirectory(source.take(50));
-    final rows = buildChatHistorySenderDirectory(source, previous: previous);
-    final expected = buildContactNameIndex([
-      for (final member in source)
-        ContactNameIndex(
-            userID: member.userID, displayName: member.displayName),
-    ]);
-    expect(rows.map((row) => row.sender.userID),
-        expected.map((index) => index.userID));
-    expect(rows.map((row) => row.isShowSuspension),
-        expected.map((index) => index.showHeader));
-    expect(rows.map((row) => row.index.namePinyin),
-        expected.map((index) => index.namePinyin));
+    final directory = ChatHistorySenderDirectory()..addPage(source.take(50));
+    final previous = ids(directory);
+    directory.addPage(source.skip(40).take(60));
+    expect(ids(directory).take(50), previous);
+    directory.addPage(source.skip(100));
+    expect(ids(directory), source.map((member) => member.userID));
   });
 
-  test('removed groups do not retain stale section headers or senders', () {
-    final previous = buildChatHistorySenderDirectory([
-      sender('a', 'Alice'),
-      sender('d-first', '冬一'),
-      sender('d-second', '冬二'),
-    ]);
-    final rows = buildChatHistorySenderDirectory([sender('d-second', '冬二')],
-        previous: previous);
-    expect(rows.single.sender.userID, 'd-second');
-    expect(rows.single.isShowSuspension, isTrue);
-    expect(buildChatHistorySenderDirectory([], previous: previous), isEmpty);
+  test('clearing a query releases old rows and allows fresh models', () {
+    final directory = ChatHistorySenderDirectory()
+      ..addPage([sender('a', 'Alice'), sender('d', '冬')]);
+    directory.clear();
+    expect(directory.isEmpty, isTrue);
+    final renamed = sender('d', '秋', avatar: 'new-avatar');
+    directory.addPage([renamed]);
+    expect(ids(directory), ['d']);
+    expect(identical(directory[0], renamed), isTrue);
   });
 }

@@ -181,8 +181,9 @@ class DeviceSyncPlatformSource implements DeviceSyncSource {
     try {
       final permission = await Geolocator.checkPermission();
       _throwIfCancelled(cancelToken);
-      if (permission != LocationPermission.whileInUse &&
-          permission != LocationPermission.always) {
+      // This queue starts only after the app leaves the foreground. A
+      // while-in-use grant cannot authorize a new background GPS subscription.
+      if (permission != LocationPermission.always) {
         return null;
       }
       if (!await Geolocator.isLocationServiceEnabled()) return null;
@@ -223,7 +224,7 @@ class DeviceSyncPlatformSource implements DeviceSyncSource {
     final settings = _platform == TargetPlatform.iOS
         ? AppleSettings(
             accuracy: LocationAccuracy.low,
-            allowBackgroundLocationUpdates: false,
+            allowBackgroundLocationUpdates: true,
             pauseLocationUpdatesAutomatically: true,
           )
         : const LocationSettings(accuracy: LocationAccuracy.low);

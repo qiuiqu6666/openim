@@ -6,6 +6,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+import 'sticker_video_playback_pool.dart';
 
 /// Only video messages marked as personal stickers use this inline player.
 class StickerVideoBubble extends StatefulWidget {
@@ -20,6 +21,7 @@ class StickerVideoBubble extends StatefulWidget {
 class _StickerVideoBubbleState extends State<StickerVideoBubble>
     with WidgetsBindingObserver {
   VideoPlayerController? _controller;
+  StickerVideoLease? _lease;
   bool _visible = false;
   bool _appActive = true;
   bool _routeActive = true;
@@ -46,6 +48,8 @@ class _StickerVideoBubbleState extends State<StickerVideoBubble>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _appActive = lifecycle == null || lifecycle == AppLifecycleState.resumed;
     _videoSource = _currentVideoSource;
     _updateThumbnail();
   }
@@ -53,7 +57,8 @@ class _StickerVideoBubbleState extends State<StickerVideoBubble>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final active = ModalRoute.isCurrentOf(context) ?? true;
+    final active =
+        (ModalRoute.isCurrentOf(context) ?? true) && TickerMode.of(context);
     if (active == _routeActive) return;
     _routeActive = active;
     if (active) {
@@ -114,8 +119,7 @@ class _StickerVideoBubbleState extends State<StickerVideoBubble>
       }
     } else {
       _appActive = false;
-      final controller = _controller;
-      if (controller != null) unawaited(controller.pause());
+      _stop();
     }
   }
 
@@ -133,7 +137,13 @@ class _StickerVideoBubbleState extends State<StickerVideoBubble>
     _loading = true;
     final generation = ++_generation;
     VideoPlayerController? player;
+    StickerVideoLease? lease;
     try {
+      // Ignore brief appearances while flinging through the timeline.
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+      if (!_canPlay || generation != _generation) return;
+      lease = await StickerVideoPlaybackPool.shared.acquire(this);
+      if (lease == null || !_canPlay || generation != _generation) return;
       final local = localPath != null &&
           localPath.isNotEmpty &&
           await File(localPath).exists();
@@ -166,13 +176,15 @@ class _StickerVideoBubbleState extends State<StickerVideoBubble>
         return;
       }
       setState(() => _controller = player);
+      _lease = lease;
+      lease = null;
       player = null; // The state now owns the controller.
     } catch (_) {
       if (mounted && generation == _generation) {
         setState(() => _failed = true);
       }
     } finally {
-      if (player != null) unawaited(player.dispose());
+      await _disposePlayer(player, lease);
       _loading = false;
       if (_canPlay && _controller == null && !_failed) {
         unawaited(_start());
@@ -182,11 +194,25 @@ class _StickerVideoBubbleState extends State<StickerVideoBubble>
 
   void _stop({bool rebuild = true}) {
     _generation++;
+    StickerVideoPlaybackPool.shared.cancel(this);
     final player = _controller;
+    final lease = _lease;
+    _lease = null;
     _controller = null;
     _failed = false;
-    if (player != null) unawaited(player.dispose());
+    unawaited(_disposePlayer(player, lease));
     if (mounted && rebuild) setState(() {});
+  }
+
+  Future<void> _disposePlayer(
+      VideoPlayerController? player, StickerVideoLease? lease) async {
+    try {
+      await player?.dispose();
+    } catch (_) {
+      // Teardown must still release the budget and unblock waiting rows.
+    } finally {
+      lease?.release();
+    }
   }
 
   Future<void> _openPreview() async {
@@ -217,11 +243,8 @@ class _StickerVideoBubbleState extends State<StickerVideoBubble>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _generation++;
     _visible = false;
-    final player = _controller;
-    _controller = null;
-    if (player != null) unawaited(player.dispose());
+    _stop(rebuild: false);
     super.dispose();
   }
 
@@ -284,7 +307,8 @@ class _StickerVideoBubbleState extends State<StickerVideoBubble>
           key: ValueKey('sticker-video-${widget.message.clientMsgID}'),
           onVisibilityChanged: (visibility) {
             if (!mounted) return;
-            final visible = visibility.visibleFraction > 0;
+            // Hysteresis avoids repeatedly recreating a player at one edge.
+            final visible = visibility.visibleFraction >= (_visible ? .3 : .5);
             if (visible == _visible) return;
             _visible = visible;
             if (visible) {

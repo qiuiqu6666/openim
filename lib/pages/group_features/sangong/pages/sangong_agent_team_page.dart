@@ -53,8 +53,6 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
 
   @override
   void dispose() {
-    _accountSession.runtime.http.agentDataRevision
-        .removeListener(_onAgentDataChanged);
     _searchTimer?.cancel();
     _userSearch.close();
     _searchController.dispose();
@@ -65,13 +63,7 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
   @override
   void initState() {
     super.initState();
-    _accountSession.runtime.http.agentDataRevision
-        .addListener(_onAgentDataChanged);
     _load();
-  }
-
-  void _onAgentDataChanged() {
-    if (_isCurrentSession) _load();
   }
 
   Future<void> _load() async {

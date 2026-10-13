@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -27,8 +25,6 @@ void main() {
       'wsUrl': NodeEndpoint.direct.imWs,
     });
     StartupNodeSelection.last = NodeSelection(NodeEndpoint.direct, [
-      const NodeAvailability(NodeEndpoint.primary,
-          available: false, latencyMs: 3000),
       const NodeAvailability(NodeEndpoint.direct,
           available: true, latencyMs: 80),
     ]);
@@ -37,7 +33,7 @@ void main() {
   for (final dark in [false, true]) {
     for (final size in [const Size(320, 700), const Size(700, 320)]) {
       for (final scale in [1.0, 1.6]) {
-        testWidgets('selected fallback dark=$dark size=$size scale=$scale',
+        testWidgets('single direct node dark=$dark size=$size scale=$scale',
             (tester) async {
           tester.view.physicalSize = size;
           tester.view.devicePixelRatio = 1;
@@ -46,7 +42,6 @@ void main() {
           final store = SettingsDraftStore();
           addTearDown(store.dispose);
           var active = NodeEndpoint.direct;
-          final connectGate = Completer<void>();
           var connections = 0;
           final controller = NodeProbeController(
             readEndpoint: () => active,
@@ -58,7 +53,6 @@ void main() {
                   NodeAvailability(node, available: true, latencyMs: 10),
               connect: (node, _) async {
                 connections++;
-                await connectGate.future;
                 active = node;
               },
             ),
@@ -87,22 +81,21 @@ void main() {
             ),
           ));
           expect(find.text('节点01'), findsOneWidget);
-          expect(find.text('节点02'), findsOneWidget);
-          expect(find.text('异常'), findsOneWidget);
+          expect(find.text('节点02'), findsNothing);
+          expect(find.text('异常'), findsNothing);
           expect(find.text('正常 (80ms)'), findsOneWidget);
           expect(find.byIcon(Icons.check_rounded), findsOneWidget);
           expect(tester.takeException(), isNull);
           if (size.height > size.width && scale == 1.0) {
             await tester.tap(find.text('节点01'));
             await tester.pump();
-            expect(find.text('切换中'), findsOneWidget);
+            expect(find.text('切换中'), findsNothing);
             expect(active, NodeEndpoint.direct);
             await tester.tap(find.text('节点01'));
             await tester.pump();
-            expect(connections, 1);
-            connectGate.complete();
+            expect(connections, 0);
             await tester.pumpAndSettle();
-            expect(active, NodeEndpoint.primary);
+            expect(active, NodeEndpoint.direct);
             expect(
                 find.descendant(
                     of: find.byKey(const ValueKey('node-row-0')),

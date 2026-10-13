@@ -141,7 +141,7 @@ class AccountSetupLogic extends GetxController with WidgetsBindingObserver {
         imLogic.userInfo
             .update((info) => info?.globalRecvMsgOpt = user.globalRecvMsgOpt);
     } catch (error) {
-      IMViews.showToast(error.toString());
+      IMViews.showErrorToast(error);
     } finally {
       if (!isClosed) globalMuteBusy.value = false;
     }

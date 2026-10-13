@@ -62,7 +62,12 @@ class ChatNewMessageTracker {
     }
   }
 
-  void recordIncoming(Message message) {
+  void recordIncoming(Message message) =>
+      recordRecovered(message, unseen: true);
+
+  /// Only forward recovery after the pre-background checkpoint belongs here;
+  /// ordinary history pages and initial unread totals are not arrivals.
+  void recordRecovered(Message message, {required bool unseen}) {
     if (_inactive ||
         message.contentType == MessageType.typing ||
         message.sendID == _currentUserID()) {
@@ -71,7 +76,7 @@ class ChatNewMessageTracker {
     final id = message.clientMsgID;
     if (id == null || id.isEmpty || !_receivedIDs.add(id, message.seq)) return;
     // Remember bottom-of-list arrivals too: replayed SDK callbacks are not new.
-    if (awayFromLatest.value) {
+    if (unseen && awayFromLatest.value) {
       _unseenIDs.add(id);
       unseenCount.value = _unseenIDs.length;
     }

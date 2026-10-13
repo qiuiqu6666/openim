@@ -27,3 +27,13 @@ ios/Flutter/Flutter.podspec
 
 # Server-only speech recognition credentials; examples remain tracked.
 **/config/asr.env
+
+# GameShield credentials and locally verified vendor binaries.
+/tool/gameshield/gameshield.local.json
+/tool/gameshield/__pycache__/
+/local_plugin/gameshield_bridge/vendor/android/
+/local_plugin/gameshield_bridge/vendor/ios/
+
+# Reproducible native Core artifacts; see native_sdk/patch15/README.md.
+/native_sdk/patch15/artifacts/
+/local_plugin/flutter_openim_sdk/ios/Frameworks/

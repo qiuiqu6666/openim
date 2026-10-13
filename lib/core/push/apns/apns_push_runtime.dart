@@ -507,7 +507,7 @@ class APNsPushRuntime {
 
   /// Invalidates immediately, then waits for old uploads before unbinding.
   /// Repeated route/resume callbacks cannot reactivate this logged-out owner.
-  Future<void> endSession({bool logout = true}) {
+  Future<void> endSession({bool logout = true, bool waitForRemote = true}) {
     if (!_supported || _closed) return Future<void>.value();
     if (logout) _clearNativeSession();
     final active = _owner ?? _credentials();
@@ -519,7 +519,7 @@ class APNsPushRuntime {
             _completedCleanups.contains(active) ||
             _pendingCleanups.any((cleanup) => cleanup.owner == active))) {
       if (logout) _retryPendingCleanups();
-      return _waitForCleanup();
+      return _waitForCleanup(waitForRemote: waitForRemote);
     }
     if (active != null) _blocked = active;
     // First cold SDK preparation has never owned a binding. Keep its stored
@@ -527,10 +527,10 @@ class APNsPushRuntime {
     // Explicit logout must still remove that stored device registration.
     _retireOwner(cleanupOwner: logout ? active : null);
     if (logout) _retryPendingCleanups();
-    return _waitForCleanup();
+    return _waitForCleanup(waitForRemote: waitForRemote);
   }
 
-  Future<void> _waitForCleanup() {
+  Future<void> _waitForCleanup({bool waitForRemote = true}) {
     late final Future<void> ending;
     ending = Future.wait([_serverOperations, _platformOperations])
         .then<void>((_) {})
@@ -538,7 +538,9 @@ class APNsPushRuntime {
       if (identical(_ending, ending)) _ending = null;
     });
     _ending = ending;
-    return ending;
+    // Native unregistration must finish before SDK account replacement. Server
+    // cleanup retains its captured owner and serialized queue in the background.
+    return waitForRemote ? ending : _platformOperations;
   }
 
   Future<void> dispose() async {

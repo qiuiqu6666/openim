@@ -35,7 +35,7 @@ class CustomerServiceSessionStore {
   String get storageKey {
     final scope = jsonEncode([
       accountId.trim().isEmpty ? 'guest' : 'account:${accountId.trim()}',
-      api.config.normalizedBaseUrl,
+      api.config.normalizedOriginBaseUrl,
       api.config.inboxIdentifier.trim(),
     ]);
     return 'customer_service_session_v1_${base64Url.encode(utf8.encode(scope))}';

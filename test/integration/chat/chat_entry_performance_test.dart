@@ -142,6 +142,39 @@ void main() {
         .setMockMethodCallHandler(sdkChannel, null);
   });
 
+  testWidgets(
+      'offline deliveries before history and after sync enter chat once',
+      (tester) async {
+    final logic = open();
+    await tester.idle();
+    im.recvOfflineMessage(_entryMessage('during-history', time: 2));
+    calls.last.complete([_entryMessage('initial', time: 1)]);
+    await tester.pump();
+    expect(logic.messageList.map((m) => m.clientMsgID),
+        ['initial', 'during-history']);
+    im.imSdkStatus(IMSdkStatus.syncStart);
+    im.imSdkStatus(IMSdkStatus.syncEnded);
+    await tester.idle();
+    calls.last.complete([
+      _entryMessage('initial', time: 1),
+      _entryMessage('during-history', time: 2),
+    ]);
+    await tester.pump();
+    final historyCalls = calls.length;
+    im.recvOfflineMessage(_entryMessage('late-offline', time: 3));
+    im.recvOfflineMessage(_entryMessage('late-offline', time: 3));
+    im.recvOfflineMessage(
+        _entryMessage('other-chat', time: 4)..sendID = 'other');
+    expect(logic.messageList.map((m) => m.clientMsgID),
+        ['initial', 'during-history', 'late-offline']);
+    expect(calls, hasLength(historyCalls));
+    final app = Get.find<AppController>() as EntryTestApp;
+    expect(app.notifications, isEmpty);
+    im.recvNewMessage(_entryMessage('late-offline', time: 3));
+    expect(logic.messageList, hasLength(3));
+    logic.onDelete();
+  });
+
   testWidgets('large offline gap preserves the reader and exposes newer paging',
       (tester) async {
     final logic = await mountHistoryChat(tester, commonList: true);
@@ -165,6 +198,10 @@ void main() {
     expect(logic.newMessages.unseenCount.value, 0);
     expect(logic.historyNewerHasMore.value, isTrue);
     expect(logic.viewingHistory.value, isTrue);
+    im.recvOfflineMessage(_entryMessage('after-offline-sync', time: 2000));
+    expect(logic.messageList.length, 30);
+    expect(logic.scrollingCacheMessageList.single.clientMsgID,
+        'after-offline-sync');
     expect(tester.takeException(), isNull);
     logic.onDelete();
     await tester.pumpWidget(const SizedBox.shrink());
@@ -387,21 +424,23 @@ void main() {
       (tester) async {
     final logic = open();
     await tester.pumpWidget(const SizedBox.shrink());
-    expect(im.onRecvNewMessage, isNotNull);
-    expect(im.onRecvC2CReadReceipt, isNotNull);
+    expect(im.chatMessageEvents.hasListener, isTrue);
+    expect(im.c2cReadReceipts.hasListener, isTrue);
     expect(im.onSignalingMessage, isNotNull);
     expect(im.imSdkStatusPublishSubject.hasListener, isTrue);
     expect(im.deletedMessages.hasListener, isTrue);
-    final ownedCallback = im.onRecvNewMessage!;
+    final ownedCallback = im.publishLocalChatMessage;
+    final ownedOfflineCallback = im.recvOfflineMessage;
     logic.onDelete();
-    expect(im.onRecvNewMessage, isNull);
-    expect(im.onRecvC2CReadReceipt, isNull);
+    expect(im.chatMessageEvents.hasListener, isFalse);
+    expect(im.c2cReadReceipts.hasListener, isFalse);
     expect(im.onSignalingMessage, isNull);
     expect(im.imSdkStatusPublishSubject.hasListener, isFalse);
     expect(im.deletedMessages.hasListener, isFalse);
     expect(im.revokedMessages.hasListener, isFalse);
     expect(im.conversationChangedSubject.hasListener, isFalse);
     ownedCallback(_entryMessage('late-callback'));
+    ownedOfflineCallback(_entryMessage('late-offline-callback'));
     calls.single.complete([_entryMessage('late-history')]);
     await tester.pumpWidget(const SizedBox.shrink());
     expect(logic.messageList, isEmpty);
@@ -409,29 +448,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('closing the previous route preserves successor route callbacks',
+  testWidgets('closing the successor preserves the previous route subscription',
       (tester) async {
     final first = open(_entryConversation(id: 'first'));
     await tester.pumpWidget(const SizedBox.shrink());
     final second = open(_entryConversation(id: 'second'));
     await tester.pumpWidget(const SizedBox.shrink());
-    final messageCallback = im.onRecvNewMessage;
-    final receiptCallback = im.onRecvC2CReadReceipt;
-    final signalingCallback = im.onSignalingMessage;
-    first.onDelete();
-    expect(identical(im.onRecvNewMessage, messageCallback), isTrue);
-    expect(identical(im.onRecvC2CReadReceipt, receiptCallback), isTrue);
-    expect(identical(im.onSignalingMessage, signalingCallback), isTrue);
-    messageCallback!(_entryMessage('received-by-successor'));
-    expect(first.messageList, isEmpty);
-    expect(second.messageList.single.clientMsgID, 'received-by-successor');
+    final messageCallback = im.publishLocalChatMessage;
+    final offlineCallback = im.recvOfflineMessage;
+    second.onDelete();
+    expect(im.chatMessageEvents.hasListener, isTrue);
+    expect(im.c2cReadReceipts.hasListener, isTrue);
+    expect(im.onSignalingMessage, isNull);
+    messageCallback(_entryMessage('received-by-previous'));
+    offlineCallback(_entryMessage('received-by-previous'));
+    expect(second.messageList, isEmpty);
+    expect(first.messageList.single.clientMsgID, 'received-by-previous');
     calls[0].complete([_entryMessage('old-route-result')]);
     calls[1].complete([]);
     await tester.pumpWidget(const SizedBox.shrink());
-    expect(first.messageList, isEmpty);
-    expect(second.messageList.single.clientMsgID, 'received-by-successor');
-    second.onDelete();
-    expect(im.onRecvNewMessage, isNull);
+    expect(second.messageList, isEmpty);
+    expect(first.messageList.map((message) => message.clientMsgID),
+        contains('received-by-previous'));
+    first.onDelete();
+    expect(im.chatMessageEvents.hasListener, isFalse);
     expect(im.onSignalingMessage, isNull);
   });
 
@@ -488,6 +528,8 @@ void main() {
     logic.inputCtrl.text = 'final draft';
     logic.onDelete();
     await tester.idle();
+    calls.single.complete([]);
+    await tester.pump();
     expect(draftCalls, hasLength(1));
     expect(draftCalls.single['conversationID'], 'chat');
     expect(jsonDecode(draftCalls.single['draftText'])['text'], 'final draft');
@@ -500,6 +542,8 @@ void main() {
     logic.onDelete();
     OpenIM.iMManager.userID = 'another-account';
     await tester.idle();
+    calls.single.complete([]);
+    await tester.pump();
     expect(draftCalls, isEmpty);
   });
 
@@ -722,15 +766,18 @@ void main() {
     final logic = await mountHistoryChat(tester);
     await scrollAway(tester, logic);
     im.recvNewMessage(_entryMessage('before-account-change', time: 31));
-    final ownedCallback = im.onRecvNewMessage!;
+    final ownedCallback = im.publishLocalChatMessage;
     OpenIM.iMManager.userID = 'another-account';
     ownedCallback(_entryMessage('late-other-account', time: 32));
+    im.recvOfflineMessage(_entryMessage('late-offline-account', time: 33));
     logic.onChatViewportChanged(['before-account-change'], 0);
 
     expect(logic.newMessages.unseenCount.value, 1);
     expect(logic.newMessages.awayFromLatest.value, isTrue);
     expect(logic.messageList.map((message) => message.clientMsgID),
         isNot(contains('late-other-account')));
+    expect(logic.messageList.map((message) => message.clientMsgID),
+        isNot(contains('late-offline-account')));
     await tester.pumpWidget(const SizedBox.shrink());
     logic.onDelete();
     expect(logic.newMessages.unseenCount.value, 0);
@@ -748,19 +795,22 @@ void main() {
     final logic = await mountHistoryChat(tester);
     await scrollAway(tester, logic);
     im.recvNewMessage(_entryMessage('before-token-change', time: 31));
-    final ownedCallback = im.onRecvNewMessage!;
+    final ownedCallback = im.publishLocalChatMessage;
     await DataSp.putLoginCertificate(LoginCertificate.fromJson({
       'userID': 'self',
       'chatToken': 'renewed-token',
       'imToken': 'im-token',
     }));
     ownedCallback(_entryMessage('late-token', time: 32));
+    im.recvOfflineMessage(_entryMessage('late-offline-token', time: 33));
     logic.onChatViewportChanged(['before-token-change'], 0);
 
     expect(logic.newMessages.unseenCount.value, 1);
     expect(logic.newMessages.awayFromLatest.value, isTrue);
     expect(logic.messageList.map((message) => message.clientMsgID),
         isNot(contains('late-token')));
+    expect(logic.messageList.map((message) => message.clientMsgID),
+        isNot(contains('late-offline-token')));
     await tester.pumpWidget(const SizedBox.shrink());
     logic.onDelete();
     expect(logic.newMessages.unseenCount.value, 0);
@@ -772,7 +822,7 @@ void main() {
     final logic = await mountHistoryChat(tester);
     await scrollAway(tester, logic);
     im.recvNewMessage(_entryMessage('pending-at-close', time: 31));
-    final ownedCallback = im.onRecvNewMessage!;
+    final ownedCallback = im.publishLocalChatMessage;
     await tester.pumpWidget(const SizedBox.shrink());
     logic.onDelete();
 

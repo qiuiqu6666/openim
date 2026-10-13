@@ -16,6 +16,9 @@ class ChatHistorySearchBar extends StatelessWidget {
     required this.onSubmitted,
     required this.onCancel,
     this.autofocus = false,
+    this.focusNode,
+    this.hintText,
+    this.cancelColor,
   });
 
   final TextEditingController controller;
@@ -23,6 +26,9 @@ class ChatHistorySearchBar extends StatelessWidget {
   final ValueChanged<String> onSubmitted;
   final VoidCallback onCancel;
   final bool autofocus;
+  final FocusNode? focusNode;
+  final String? hintText;
+  final Color? cancelColor;
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +84,7 @@ class ChatHistorySearchBar extends StatelessWidget {
                       builder: (context, value, _) => TextField(
                         key: const ValueKey('chat-history-search-input'),
                         controller: controller,
+                        focusNode: focusNode,
                         autofocus: autofocus,
                         textInputAction: TextInputAction.search,
                         textAlignVertical: TextAlignVertical.center,
@@ -87,7 +94,8 @@ class ChatHistorySearchBar extends StatelessWidget {
                         onSubmitted: (value) =>
                             onSubmitted(graphemeTrim(value)),
                         decoration: InputDecoration(
-                          hintText: chatHistorySearchText(context, 'search'),
+                          hintText: hintText ??
+                              chatHistorySearchText(context, 'search'),
                           hintStyle: style.copyWith(color: secondaryText),
                           prefixIcon: Icon(
                             Icons.search,
@@ -162,7 +170,7 @@ class ChatHistorySearchBar extends StatelessWidget {
                     child: Text(
                       cancelLabel,
                       style: TextStyle(
-                        color: primaryText,
+                        color: cancelColor ?? primaryText,
                         fontSize: ChatHistorySearchTokens.cancelFontSize,
                       ),
                     ),

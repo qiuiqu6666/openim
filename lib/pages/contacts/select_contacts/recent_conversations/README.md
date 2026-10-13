@@ -20,6 +20,8 @@
 
 `RecentConversationPreviewController` 由现有选择控制器按需创建并在关闭时释放。只从共享 `ConversationLogic.list` 查找同一会话的最新对象，保持可选择对象不变；共享列表移除会话后不回退旧摘要。读取还校验创建时账号、chatToken 和共享源的有效登录会话，避免使用失效账号数据。
 
+`RecentConversationDirectory` 对群成员资格最多同时执行四个 SDK 查询，每项等待最多五秒；单个失败保留其余已确认会话，失败群不作为收件人。选择页显示加载和重试入口，重试替换结果而不重复添加。账号、凭证或读取版本变化后不发布过期结果。
+
 撤回、删除沿用已有 `IMController` 广播与 `ChatHistoryCache` 删除标记；本模块只订阅既有广播以更新摘要，关闭时取消自身订阅，不新增 SDK listener。私密消息及嵌套引用/合并消息的私密内容复用 `ConversationPeekLoader.containsPrivateContent` 判断，只展示占位；私密会话草稿也仅展示占位。过期和撤回消息不展示原正文。
 
 `recent_conversation_preview.dart` 负责安全摘要和展示前缀，控制器负责共享状态更新和订阅所有权。没有消息时保留空副行，未读与草稿状态仍按真实数据展示。正式数据仅来自当前 OpenIM 会话及草稿，测试数据只用于测试与预览。

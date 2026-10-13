@@ -1,5 +1,8 @@
 import 'updates/conversation_update_buffer.dart';
+import 'updates/conversation_row_equality.dart';
+import 'editing/conversation_read_batch.dart';
 import 'updates/conversation_latest_sync.dart';
+import 'updates/conversation_snapshot_reader.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -15,6 +18,7 @@ import '../../core/controller/im_controller.dart';
 import '../../core/im_callback.dart';
 import '../../core/conversation_reads/conversation_read_projection.dart';
 import '../../core/conversation_reads/conversation_read_request.dart';
+import '../../core/conversation_reads/conversation_read_recovery.dart';
 import '../../routes/app_navigator.dart';
 import '../../services/legacy_identity/legacy_group_identity.dart';
 import '../../services/chat_history_cache.dart';
@@ -27,6 +31,9 @@ import 'drafts/conversation_draft_text.dart';
 import 'legacy_cleanup/legacy_service_conversation_cleanup.dart';
 import 'group_identity/legacy_group_conversation_projection.dart';
 import 'summary/conversation_latest_message_text.dart';
+import 'summary/conversation_incremental_order.dart';
+import 'summary/conversation_feed_snapshot.dart';
+import 'settings/conversation_settings_projection.dart';
 import 'unread/conversation_unread_count.dart';
 import 'unread/conversation_unread_sync.dart';
 
@@ -40,6 +47,9 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final list = <ConversationInfo>[].obs;
   final folders = <ChatFolder>[].obs;
   final states = <String, ChatConversationState>{}.obs;
+  ConversationFeedSnapshotCache? _feedCache;
+  ConversationFeedSnapshot get feedSnapshot =>
+      (_feedCache ??= ConversationFeedSnapshotCache(list, states)).read();
   final organizerLoading = false.obs;
   final organizerError = RxnString();
   int _organizerSyncAt = 0;
@@ -53,6 +63,12 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   int _listGeneration = 0;
   int _clearGeneration = 0;
   bool _readingList = false;
+  final _snapshots = ConversationSnapshotReader();
+  Future<void>? _listRequest;
+  bool _listFirstPageOnly = false;
+  bool _fullReadQueued = false;
+  int _structureRevision = 0;
+  final _snapshotSortState = <String, (bool, int)>{};
   bool _reconcileUnreadPending = false;
   final _listLoading = false.obs;
   final _listFailed = false.obs;
@@ -60,6 +76,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final _changesDuringRead = <String, ConversationInfo?>{};
   final _deletions = ConversationDeletionGuard();
   final _readProjection = ConversationReadProjection();
+  final _settingsDuringRead = ConversationSettingsProjection();
   final _groupProjection = LegacyGroupConversationProjection();
   final LegacyServiceConversationCleanup _legacyCleanup;
   Future<void>? _legacyMutation;
@@ -83,11 +100,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final onChangeConversations = <String, ConversationInfo>{};
   late final _updates = ConversationUpdateBuffer(
     publish: onChanged,
-    delay: () => Duration(
-        milliseconds: imStatus.value == IMSdkStatus.syncStart ||
-                imStatus.value == IMSdkStatus.syncProgress
-            ? 80
-            : 16),
+    delay: () => const Duration(milliseconds: 80),
   );
   late final _unreadSync = ConversationUnreadSync(
     isActive: () => _sessionActive,
@@ -102,6 +115,17 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   void queueChanges(List<ConversationInfo> changes) {
     if (!_sessionActive) return;
+    if (_readingList) {
+      for (final info in changes) {
+        final previous = _snapshotSortState[info.conversationID];
+        final next = (info.isPinned == true, info.latestMsgSendTime ?? 0);
+        if (previous != null &&
+            ((previous.$1 && !next.$1) || next.$2 < previous.$2)) {
+          ++_structureRevision;
+        }
+        _snapshotSortState[info.conversationID] = next;
+      }
+    }
     _latestSync
         .conversationsChanged(changes.map((info) => info.conversationID));
     if (_readingList) {
@@ -118,7 +142,9 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   late final _latestSync = ConversationLatestSync(
     isActive: () => _sessionActive,
     flushChanges: _updates.flush,
-    publish: onChanged,
+    // The query excludes rows changed while it was in flight. Its current SDK
+    // zero can therefore reconcile a count outside an older read projection.
+    publish: (rows) => onChanged(rows, authoritativeUnread: true),
   );
 
   @override
@@ -138,7 +164,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         .listen(_unreadSync.onTotalUnreadChanged));
     _subscriptions.add(imLogic.conversationReadRequestSubject
         .listen(onConversationReadRequested));
-    _subscriptions.add(imLogic.imSdkStatusSubject.listen((value) {
+    void handleSdkStatus(({IMSdkStatus status, bool reInstall, int? progress}) value) {
       if (!_sessionActive) return;
       final status = value.status;
       final previousStatus = imStatus.value;
@@ -155,26 +181,26 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         _retryFailedList();
       }
 
-      if (status == IMSdkStatus.syncStart ||
-          status == IMSdkStatus.syncProgress) {
-        if (status == IMSdkStatus.syncStart) reInstall = appReInstall;
-        if (status == IMSdkStatus.syncStart && reInstall) {
+      if (status == IMSdkStatus.syncStart) {
+        if (reInstall && !appReInstall) EasyLoading.dismiss();
+        reInstall = appReInstall;
+        if (reInstall) {
           EasyLoading.showProgress(0, status: StrRes.synchronizing);
         }
+      }
+      if (status == IMSdkStatus.syncProgress && appReInstall) reInstall = true;
+      if (status == IMSdkStatus.syncProgress && reInstall && progress != null) {
+        final percent = progress.clamp(0, 100);
+        EasyLoading.showProgress(percent / 100.0,
+            status: '${StrRes.synchronizing}($percent%)');
       }
 
       Logger.print(
           'IM SDK Status: $status, reinstall: $reInstall, progress: $progress');
 
-      if (status == IMSdkStatus.syncProgress && reInstall) {
-        final p = (progress!).toDouble() / 100.0;
-
-        EasyLoading.showProgress(p,
-            status: '${StrRes.synchronizing}(${(p * 100.0).truncate()}%)');
-      } else if (status == IMSdkStatus.syncEnded ||
-          status == IMSdkStatus.syncFailed) {
+      if (status == IMSdkStatus.syncEnded || status == IMSdkStatus.syncFailed) {
         _updates.flush();
-        EasyLoading.dismiss();
+        if (reInstall) EasyLoading.dismiss();
         // A normal login also needs a snapshot after sync: the first local
         // read may have been empty or failed before the SDK became ready.
         // Ignore repeated finish callbacks so a query cannot start a read loop.
@@ -185,16 +211,25 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         }
         reInstall = false;
       }
-    }));
+    }
+    _subscriptions.add(imLogic.imSdkStatusSubject.listen(handleSdkStatus));
+    final initialSync = imLogic.initialSyncState;
+    if (initialSync != null) handleSdkStatus(initialSync);
     super.onInit();
   }
 
   @override
   void onClose() {
+    if (reInstall) EasyLoading.dismiss();
+    _feedCache?.dispose();
+    _feedCache = null;
     _closed = true;
     _reconcileUnreadPending = false;
     _unreadSync.close();
     _latestSync.close();
+    _snapshots.close();
+    _snapshotSortState.clear();
+    _fullReadQueued = false;
     _updates.close();
     ++_listGeneration;
     ++_clearGeneration;
@@ -202,6 +237,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     _deletions.clear();
     _readProjection.clear();
     _groupProjection.clear();
+    _settingsDuringRead.clear();
     WidgetsBinding.instance.removeObserver(this);
     _businessSubscription?.cancel();
     for (final subscription in _subscriptions) {
@@ -292,7 +328,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     });
   }
 
-  void onChanged(List<ConversationInfo> newList) {
+  void onChanged(List<ConversationInfo> newList,
+      {bool authoritativeUnread = false}) {
     if (!_sessionActive || newList.isEmpty) return;
     _latestSync
         .conversationsChanged(newList.map((info) => info.conversationID));
@@ -302,8 +339,17 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     };
     for (final info in newList) {
       if (!_deletions.allows(info)) continue;
-      accepted.add(_readProjection.project(info,
-          current: currentByID[info.conversationID]));
+      final projected = _readProjection.project(
+          _settingsDuringRead.project(info),
+          current: currentByID[info.conversationID],
+          authoritativeUnread: authoritativeUnread);
+      accepted.add(projected);
+      if (!authoritativeUnread &&
+          _readProjection.takeReconciliationSignal(info, projected)) {
+        // A protected zero is a reconciliation signal even when the aggregate
+        // total hasn't changed. Never turn the callback itself into authority.
+        _refreshReadConversation(info.conversationID);
+      }
     }
     if (accepted.isEmpty) return;
     if (_readingList) {
@@ -316,12 +362,16 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         onChangeConversations[info.conversationID] = info;
       }
     }
+    // Preserve read fences and reconciliation above even for duplicate rows.
+    final changedIDs = <String>{};
     for (final info in accepted) {
+      if (sameConversationData(currentByID[info.conversationID], info)) continue;
       currentByID[info.conversationID] = info;
+      changedIDs.add(info.conversationID);
     }
+    if (changedIDs.isEmpty) return;
     final merged = _groupProjection.project(currentByID.values);
-    OpenIM.iMManager.conversationManager.simpleSort(merged);
-    list.value = merged;
+    list.value = mergeConversationOrder(list, merged, changedIDs);
   }
 
   String getConversationID(ConversationInfo info) {
@@ -369,15 +419,25 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     return getUnreadCount(info) > 0;
   }
 
+  final _pendingMarkReads = <String, Future<void>>{};
   Future<void> markConversationRead(ConversationInfo info) async {
     if (!_sessionActive) throw StateError('Session is no longer active');
     if (info.unreadCount == 0) return;
     final request = ConversationReadRequest.capture(info);
     final projecting = onConversationReadRequested(request);
     try {
-      await OpenIM.iMManager.conversationManager
-          .markConversationMessageAsRead(conversationID: info.conversationID)
-          .timeout(const Duration(seconds: 10));
+      final id = info.conversationID;
+      final pending = _pendingMarkReads.putIfAbsent(id, () {
+        final native = OpenIM.iMManager.conversationManager
+            .markConversationMessageAsRead(conversationID: id)
+            .then<void>((_) {});
+        unawaited(native.then<void>((_) => _pendingMarkReads.remove(id),
+            onError: (Object _, StackTrace __) {
+          _pendingMarkReads.remove(id);
+        }));
+        return native;
+      });
+      await pending.timeout(const Duration(seconds: 10));
       request.complete(true);
       await projecting;
     } catch (_) {
@@ -387,12 +447,63 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  final markingAllRead = false.obs;
+  final readBatchProgress = ''.obs;
+  Future<void> markReadScope(bool Function(ConversationInfo) includes) async {
+    if (markingAllRead.value || !_sessionActive) return;
+    markingAllRead.value = true;
+    readBatchProgress.value = '准备中…';
+    final generation = _clearGeneration;
+    bool current() => _sessionActive && generation == _clearGeneration;
+    final reader =
+        ConversationSnapshotReader(timeout: const Duration(minutes: 2));
+    try {
+      final rows = await reader.read(
+          firstPageOnly: false,
+          isCurrent: current,
+          structureRevision: () => _structureRevision,
+          observePage: (_) {},
+          waitForMutation: _legacyMutation);
+      if (!current()) return;
+      final failed = await runConversationReadBatch(
+          conversations: rows.where(includes).toList(),
+          isCurrent: current,
+          markRead: markConversationRead,
+          progress: (done, total) =>
+              readBatchProgress.value = '$done / $total');
+      if (!current()) return;
+      await _loadConversationList(firstPageOnly: false, reconcileUnread: true);
+      if (current() && failed > 0) {
+        IMViews.showToast('$failed 个会话未完成已读，请稍后重试');
+      }
+    } catch (error) {
+      if (current()) IMViews.showErrorToast(error);
+    } finally {
+      reader.close();
+      markingAllRead.value = false;
+      readBatchProgress.value = '';
+    }
+  }
+
   Future<void> onConversationReadRequested(
       ConversationReadRequest request) async {
     if (!_sessionActive) return;
     final clearing = _clearGeneration;
     final succeeded = await request.result;
-    if (!succeeded || !_sessionActive || clearing != _clearGeneration) return;
+    bool current() =>
+        _sessionActive && clearing == _clearGeneration && request.isCurrent;
+    if (!current()) return;
+    if (!succeeded) {
+      try {
+        await ConversationReadRecovery().recover(request, isCurrent: current);
+      } catch (error) {
+        Logger.print('Conversation read recovery failed: $error');
+      }
+      // A partial ID recovery is not a full read confirmation. Ask the SDK for
+      // the remaining unread count, including any message received after exit.
+      if (current()) _refreshReadConversation(request.conversationID);
+      return;
+    }
     _readProjection.confirm(request);
     var changed = false;
     for (final info in list) {
@@ -402,7 +513,16 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       }
     }
     if (changed) list.refresh();
+    if (list.any((info) =>
+        info.conversationID == request.conversationID &&
+        info.unreadCount > 0)) {
+      _refreshReadConversation(request.conversationID);
+    }
   }
+
+  void _refreshReadConversation(String conversationID) =>
+      _latestSync.requestRefresh(ConversationRefreshRequest(
+          accountID: _accountID, conversationID: conversationID));
 
   bool isNotDisturb(ConversationInfo info) =>
       info.recvMsgOpt == _receiveWithoutNotification;
@@ -415,9 +535,13 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         ConversationReq(isPinned: pinned),
       );
       if (!_sessionActive) return;
+      ++_structureRevision;
       _updates.flush();
       _latestSync.conversationsChanged([info.conversationID]);
       info.isPinned = pinned;
+      if (_readingList) {
+        _settingsDuringRead.pinned(info.conversationID, pinned);
+      }
       for (final conversation in list) {
         if (conversation.conversationID == info.conversationID) {
           conversation.isPinned = pinned;
@@ -427,7 +551,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       _sortConversationList();
       list.refresh();
     } catch (error) {
-      if (_sessionActive) IMViews.showToast(error.toString());
+      if (_sessionActive) IMViews.showErrorToast(error);
     }
   }
 
@@ -445,6 +569,10 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       _latestSync.conversationsChanged([info.conversationID]);
       info.recvMsgOpt =
           enabled ? _receiveWithoutNotification : _receiveMessages;
+      if (_readingList) {
+        _settingsDuringRead.receiveOption(
+            info.conversationID, info.recvMsgOpt!);
+      }
       for (final conversation in list) {
         if (conversation.conversationID == info.conversationID) {
           conversation.recvMsgOpt = info.recvMsgOpt;
@@ -453,13 +581,14 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       }
       list.refresh();
     } catch (error) {
-      if (_sessionActive) IMViews.showToast(error.toString());
+      if (_sessionActive) IMViews.showErrorToast(error);
     }
   }
 
   Future<void> deleteConversation(ConversationInfo info,
       {bool propagateError = false}) async {
     if (!_sessionActive || !_deletions.begin(info)) return;
+    ++_structureRevision;
     _latestSync.discard(info);
     _updates.remove(info.conversationID);
     onChangeConversations.remove(info.conversationID);
@@ -471,6 +600,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         conversationID: info.conversationID,
       );
       if (!_sessionActive || clearing != _clearGeneration) return;
+      ++_structureRevision;
       _deletions.complete(info.conversationID);
       if (_readingList) _changesDuringRead[info.conversationID] = null;
       ChatHistoryCache.removeConversation(
@@ -480,7 +610,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     } catch (error) {
       if (_sessionActive && clearing == _clearGeneration) {
         onChanged([_deletions.fail(info.conversationID) ?? info]);
-        if (!propagateError) IMViews.showToast(error.toString());
+        if (!propagateError) IMViews.showErrorToast(error);
       }
       if (propagateError) rethrow;
     } finally {
@@ -495,7 +625,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       case IMSdkStatus.syncStart:
       case IMSdkStatus.synchronizing:
       case IMSdkStatus.syncProgress:
-        return StrRes.synchronizing;
+        return StrRes.connecting;
       case IMSdkStatus.syncFailed:
         return StrRes.syncFailed;
       case IMSdkStatus.connecting:
@@ -565,36 +695,82 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   Future<void> _loadConversationList(
       {required bool firstPageOnly,
       bool useCachedFirstPage = false,
-      bool reconcileUnread = false}) async {
-    if (!_sessionActive) return;
+      bool reconcileUnread = false}) {
+    if (!_sessionActive) return Future.value();
     if (reconcileUnread) _reconcileUnreadPending = true;
+    final pending = _listRequest;
+    if (pending != null) {
+      if (!firstPageOnly && _listFirstPageOnly) _fullReadQueued = true;
+      return pending;
+    }
+    final completer = Completer<void>();
+    final clearing = _clearGeneration;
+    _listRequest = completer.future;
+    _listFirstPageOnly = firstPageOnly;
+    void finish() {
+      if (identical(_listRequest, completer.future)) {
+        _listRequest = null;
+        _fullReadQueued = false;
+        _listFirstPageOnly = false;
+      }
+    }
+
+    unawaited(Future<void>.sync(() async {
+      await _readConversationSnapshot(
+          firstPageOnly: firstPageOnly, useCachedFirstPage: useCachedFirstPage);
+      if (_fullReadQueued && _sessionActive && clearing == _clearGeneration) {
+        _fullReadQueued = false;
+        _listFirstPageOnly = false;
+        await _readConversationSnapshot(firstPageOnly: false);
+      }
+    }).then<void>((_) {
+      finish();
+      completer.complete();
+    }, onError: (Object error, StackTrace stack) {
+      finish();
+      completer.completeError(error, stack);
+    }));
+    return completer.future;
+  }
+
+  Future<void> _readConversationSnapshot(
+      {required bool firstPageOnly, bool useCachedFirstPage = false}) async {
+    if (!_sessionActive) return;
     final generation = ++_listGeneration;
     _readingList = true;
     _listLoading.value = true;
     _listFailed.value = false;
     _changesDuringRead.clear();
+    _settingsDuringRead.clear();
+    _snapshotSortState.clear();
+    for (final info in list) {
+      _snapshotSortState[info.conversationID] =
+          (info.isPinned == true, info.latestMsgSendTime ?? 0);
+    }
     try {
       // Only an already-started local mutation may delay a list read. History
       // checks run in the background and cannot shift SDK pagination offsets.
-      final mutation = _legacyMutation;
-      if (mutation != null) {
-        try {
-          await mutation;
-        } catch (_) {
-          // Cleanup handles its own failure; the list must still be read.
-        }
-      }
       if (!_sessionActive || generation != _listGeneration) return;
       final cached = firstPageOnly && useCachedFirstPage
           ? homeLogic.conversationsAtFirstPage
           : const <ConversationInfo>[];
       final usesCachedSnapshot =
           firstPageOnly && useCachedFirstPage && cached.isNotEmpty;
-      final snapshot = firstPageOnly
-          ? usesCachedSnapshot
-              ? List<ConversationInfo>.of(cached)
-              : await getConversationFirstPage()
-          : await _request(generation);
+      final snapshot = usesCachedSnapshot
+          ? List<ConversationInfo>.of(cached)
+          : await _snapshots.read(
+              firstPageOnly: firstPageOnly,
+              isCurrent: () => _sessionActive && generation == _listGeneration,
+              structureRevision: () => _structureRevision,
+              waitForMutation: _legacyMutation,
+              observePage: (rows) {
+                for (final info in rows) {
+                  _snapshotSortState.putIfAbsent(
+                      info.conversationID,
+                      () =>
+                          (info.isPinned == true, info.latestMsgSendTime ?? 0));
+                }
+              });
       if (!_sessionActive || generation != _listGeneration) return;
       final byID = {
         for (final info in snapshot
@@ -614,7 +790,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       };
       final merged = _groupProjection
           .project(byID.values)
-          .map((info) => _readProjection.project(info,
+          .map((info) => _readProjection.project(
+              _settingsDuringRead.project(info),
               current: currentByID[info.conversationID],
               authoritativeUnread: _reconcileUnreadPending &&
                   !usesCachedSnapshot &&
@@ -624,6 +801,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       _latestSync
           .conversationsChanged(merged.map((info) => info.conversationID));
       list.value = merged;
+      if (!firstPageOnly) onChangeConversations.clear();
       if (_reconcileUnreadPending && !usesCachedSnapshot) {
         _reconcileUnreadPending = false;
         _unreadSync.snapshotReconciled(
@@ -645,10 +823,16 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       if (generation == _listGeneration) {
         _readingList = false;
         _changesDuringRead.clear();
+        _settingsDuringRead.clear();
+        _snapshotSortState.clear();
         _unreadSync.snapshotFinished();
         if (_sessionActive) {
           _listLoading.value = false;
-          refreshController.refreshCompleted();
+          if (_listFailed.value) {
+            refreshController.refreshFailed();
+          } else {
+            refreshController.refreshCompleted();
+          }
         }
       }
     }
@@ -680,6 +864,10 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     ChatHistoryCache.clear();
     ++_listGeneration;
     ++_clearGeneration;
+    ++_structureRevision;
+    _listRequest = null;
+    _fullReadQueued = false;
+    _snapshotSortState.clear();
     _readingList = false;
     _listLoading.value = false;
     _listFailed.value = false;
@@ -687,6 +875,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     _deletions.clear();
     _readProjection.clear();
     _groupProjection.clear();
+    _settingsDuringRead.clear();
     list.clear();
     folders.clear();
     states.clear();
@@ -743,7 +932,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     } catch (error) {
       if (_sessionActive) {
         organizerError.value = error.toString();
-        IMViews.showToast(error.toString());
+        IMViews.showErrorToast(error);
       }
     } finally {
       if (_sessionActive) {
@@ -775,7 +964,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       _applyState(error.current);
       IMViews.showToast('此会话已在另一台设备更新，请重试');
     } catch (error) {
-      if (_sessionActive) IMViews.showToast(error.toString());
+      if (_sessionActive) IMViews.showErrorToast(error);
     }
     return false;
   }
@@ -795,7 +984,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       _upsertFolder(created);
       return true;
     } catch (error) {
-      if (_sessionActive) IMViews.showToast(error.toString());
+      if (_sessionActive) IMViews.showErrorToast(error);
       return false;
     }
   }
@@ -812,7 +1001,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       _upsertFolder(updated, expected: current);
       return true;
     } catch (error) {
-      if (_sessionActive) IMViews.showToast(error.toString());
+      if (_sessionActive) IMViews.showErrorToast(error);
       return false;
     }
   }
@@ -828,7 +1017,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       await refreshOrganizer();
       return _sessionActive;
     } catch (error) {
-      if (_sessionActive) IMViews.showToast(error.toString());
+      if (_sessionActive) IMViews.showErrorToast(error);
       return false;
     }
   }
@@ -863,40 +1052,13 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       return true;
     } catch (error) {
       if (_sessionActive) {
-        IMViews.showToast(error.toString());
+        IMViews.showErrorToast(error);
         await refreshOrganizer();
       }
       return false;
     } finally {
       _reorderingFolders = false;
     }
-  }
-
-  Future<List<ConversationInfo>> _request(int generation) async {
-    final temp = <ConversationInfo>[];
-
-    while (_sessionActive && generation == _listGeneration) {
-      var result =
-          await OpenIM.iMManager.conversationManager.getConversationListSplit(
-        offset: temp.length,
-        count: pageSize,
-      );
-      if (!_sessionActive || generation != _listGeneration) return temp;
-      if (onChangeConversations.isNotEmpty) {
-        for (int i = 0; i < result.length; i++) {
-          final info = result[i];
-          result[i] = onChangeConversations[info.conversationID] ?? info;
-        }
-      }
-      temp.addAll(result);
-
-      if (result.length < pageSize) {
-        break;
-      }
-    }
-    if (generation == _listGeneration) onChangeConversations.clear();
-
-    return temp;
   }
 
   bool isValidConversation(ConversationInfo info) {

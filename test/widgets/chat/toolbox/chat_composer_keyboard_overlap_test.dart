@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,8 +14,10 @@ const _slot = ValueKey('chat-toolbox-panel-slot');
 const _voice = ValueKey('keyboard-test-voice');
 
 Future<void> _keyboard(WidgetTester tester, double height) async {
-  tester.view.viewInsets = FakeViewPadding(bottom: height);
-  tester.view.padding = FakeViewPadding(bottom: height > 0 ? 0 : 34);
+  final ratio = tester.view.devicePixelRatio;
+  tester.view.viewInsets = FakeViewPadding(bottom: height * ratio);
+  tester.view.padding =
+      FakeViewPadding(bottom: math.max(0, 34 - height) * ratio);
   await tester.pump();
 }
 
@@ -35,7 +38,7 @@ void main() {
 
   for (final brightness in Brightness.values) {
     for (final mode in ['tools', 'emoji', 'voice']) {
-      testWidgets('${brightness.name} $mode waits for native keyboard to close',
+      testWidgets('${brightness.name} $mode takes over the keyboard space',
           (tester) async {
         final focus = FocusNode();
         final controller = TextEditingController();
@@ -62,6 +65,7 @@ void main() {
         focus.requestFocus();
         await tester.pump();
         await _keyboard(tester, 320);
+        final panelHeight = mode == 'emoji' ? 314.0 : 282.0;
         expect(
             MediaQuery.viewInsetsOf(tester.element(find.byType(ChatInputBox)))
                 .bottom,
@@ -74,6 +78,7 @@ void main() {
         }));
         await tester.pump();
         _expectNoPanels(tester);
+        final keyboardTop = tester.getTopLeft(find.byType(ChatInputBox)).dy;
         expect(focus.hasFocus, isFalse);
         const draft = TextEditingValue(
             text: '未发送草稿', selection: TextSelection.collapsed(offset: 2));
@@ -81,10 +86,25 @@ void main() {
         // Simulate several frames of an iOS keyboard dismissal.
         for (final height in [240.0, 110.0, 1.0]) {
           await _keyboard(tester, height);
-          _expectNoPanels(tester);
+          // Scaffold + panel must occupy max(keyboard, panel), not their sum,
+          // and the input must never drop to the bottom between the two.
+          expect(tester.getTopLeft(find.byType(ChatInputBox)).dy,
+              closeTo(keyboardTop + 320 - math.max(height, panelHeight), .1));
+          expect(find.byType(ChatToolBox),
+              mode == 'tools' ? findsOneWidget : findsNothing);
+          expect(find.byType(ChatEmojiPanel),
+              mode == 'emoji' ? findsOneWidget : findsNothing);
+          expect(find.byKey(_voice),
+              mode == 'voice' ? findsOneWidget : findsNothing);
+          expect(tester.takeException(), isNull);
         }
         await _keyboard(tester, 0);
+        final settledTop = tester.getTopLeft(find.byType(ChatInputBox)).dy;
+        expect(settledTop, closeTo(keyboardTop + 320 - panelHeight, .1));
         await tester.pumpAndSettle();
+        expect(tester.getTopLeft(find.byType(ChatInputBox)).dy, settledTop,
+            reason:
+                'no second panel-opening animation after keyboard dismissal');
         expect(find.byType(ChatToolBox),
             mode == 'tools' ? findsOneWidget : findsNothing);
         expect(find.byType(ChatEmojiPanel),
@@ -108,6 +128,32 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+  }
+
+  for (final ratio in [1.0, 3.0]) {
+    testWidgets('keyboard dismissal has no safe-area rebound at DPR $ratio',
+        (tester) async {
+      await mountToolbox(tester,
+          const ChatInputBox(toolbox: SizedBox(), voiceRecordBar: SizedBox()),
+          safeBottom: 34, bottom: true);
+      tester.view.devicePixelRatio = ratio;
+      tester.view.physicalSize = Size(375 * ratio, 812 * ratio);
+      tester.view.viewPadding = FakeViewPadding(bottom: 34 * ratio);
+      await _keyboard(tester, 320);
+      final initialTop = tester.getTopLeft(find.byType(ChatInputBox)).dy;
+      for (final height in [240.0, 110.0, 34.0, 20.0, 1.0, 0.0]) {
+        await _keyboard(tester, height);
+        expect(tester.getTopLeft(find.byType(ChatInputBox)).dy,
+            closeTo(initialTop + 320 - math.max(height, 34), .1));
+      }
+      final finalTop = tester.getTopLeft(find.byType(ChatInputBox)).dy;
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.getTopLeft(find.byType(ChatInputBox)).dy, finalTop);
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.byType(ChatInputBox)).dy, finalTop);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
   }
 
   testWidgets('rapid mode changes and forced close cancel pending panels',
@@ -184,10 +230,8 @@ void main() {
     expect(tester.getSize(find.byKey(_slot)).height, lessThan(282));
     await _keyboard(tester, 320);
     _expectNoPanels(tester);
-    tester.binding
-        .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    tester.binding
-        .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     _expectNoPanels(tester);
     // Tapping the input cancels the pending panel even if the keyboard was

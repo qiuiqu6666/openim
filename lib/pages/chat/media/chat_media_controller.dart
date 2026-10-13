@@ -12,6 +12,7 @@ import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:wechat_camera_picker/wechat_camera_picker.dart';
 
 import 'upload/ordered_media_batch.dart';
+import 'upload/chat_media_outbox.dart';
 import 'upload/chat_media_upload.dart';
 import 'video/chat_video_preparation.dart';
 
@@ -31,8 +32,10 @@ class ChatMediaController {
     required Future<void> Function(File, int) previewVoice,
     required this.closeToolbox,
     this.onTransfer,
+    this.acceptSendTask,
     this.onUploadFailed,
     Future<List<AssetEntity>?> Function()? pickAssets,
+    Future<AssetEntity?> Function()? pickCamera,
     Future<File?> Function(File)? compressImage,
     void Function()? onPreparationFailed,
   })  : _conversationID = conversationID,
@@ -44,10 +47,12 @@ class ChatMediaController {
         _stageMessage = stageMessage,
         _previewAndSendVoice = previewVoice,
         _pickAssets = pickAssets,
+        _pickCamera = pickCamera,
         _compressImage = compressImage ?? IMUtils.compressImageAndGetFile,
         _onPreparationFailed =
             onPreparationFailed ?? (() => IMViews.showToast(StrRes.sendFailed));
 
+  final MediaSendTask Function()? acceptSendTask;
   final String Function() _conversationID;
   final bool Function() _isClosed, _sendingMuted, _isInvalidGroup, _voiceBusy;
   final MediaMessageSender _sendMessage;
@@ -57,6 +62,7 @@ class ChatMediaController {
   final void Function(Message, ChatTransferStatus)? onTransfer;
   final void Function(Message)? onUploadFailed;
   final Future<List<AssetEntity>?> Function()? _pickAssets;
+  final Future<AssetEntity?> Function()? _pickCamera;
   final Future<File?> Function(File) _compressImage;
   final void Function() _onPreparationFailed;
   final tempMessages = <Message>[];
@@ -74,14 +80,36 @@ class ChatMediaController {
   }
 
   Future<List<Message>> searchMediaMessage() async {
-    final messageList = await OpenIM.iMManager.messageManager
-        .searchLocalMessages(
-            conversationID: _conversationID(),
-            messageTypeList: [MessageType.picture, MessageType.video],
-            count: 500);
-    return messageList.searchResultItems?.first.messageList?.reversed
-            .toList() ??
-        [];
+    final conversation = _conversationID();
+    final account = OpenIM.iMManager.userID;
+    final messages = <String, Message>{};
+    for (var page = 1; !isClosed; page++) {
+      final result = await OpenIM.iMManager.messageManager.searchLocalMessages(
+          conversationID: conversation,
+          messageTypeList: [MessageType.picture, MessageType.video],
+          pageIndex: page,
+          count: 200);
+      if (isClosed ||
+          _conversationID() != conversation ||
+          OpenIM.iMManager.userID != account) {
+        return [];
+      }
+      final batch = [
+        for (final item in result.searchResultItems ?? <SearchResultItems>[])
+          ...?item.messageList,
+      ];
+      var added = 0;
+      for (final message in batch) {
+        final id = message.clientMsgID;
+        if (id != null && id.isNotEmpty && !messages.containsKey(id)) {
+          messages[id] = message;
+          added++;
+        }
+      }
+      if (batch.length < 200 || added == 0) break;
+    }
+    return messages.values.toList()
+      ..sort((a, b) => (a.sendTime ?? 0).compareTo(b.sendTime ?? 0));
   }
 
   Future sendPicture({required String path, bool sendNow = true}) async {
@@ -95,18 +123,20 @@ class ChatMediaController {
     }
   }
 
-  Future<Message?> _preparePicture(String path) async {
-    if (isClosed) return null;
+  Future<Message?> _preparePicture(String path,
+      {bool Function()? cancelled}) async {
+    final stopped = cancelled ?? () => isClosed;
+    if (stopped()) return null;
     // Keep the source and compression target unique while earlier photos upload.
     final original = await _retainAttachment(path);
-    if (isClosed) return null;
+    if (stopped()) return null;
     if (await original.length() == 0) {
       throw StateError('Image file is empty');
     }
     var file = original;
     try {
       final compressed = await _compressImage(original);
-      if (isClosed) return null;
+      if (stopped()) return null;
       if (compressed != null &&
           await compressed.exists() &&
           await compressed.length() > 0) {
@@ -117,12 +147,12 @@ class ChatMediaController {
       Logger.print('Image compression failed; using retained source',
           onlyConsole: true);
     }
-    if (isClosed) return null;
+    if (stopped()) return null;
     final message =
         await OpenIM.iMManager.messageManager.createImageMessageFromFullPath(
       imagePath: file.path,
     );
-    if (isClosed) return null;
+    if (stopped()) return null;
     return message;
   }
 
@@ -143,7 +173,7 @@ class ChatMediaController {
                   : point.description);
       if (!isClosed) await _sendMessage(message);
     } catch (error) {
-      IMViews.showToast(error.toString());
+      IMViews.showErrorToast(error);
     }
   }
 
@@ -155,17 +185,17 @@ class ChatMediaController {
         _voiceBusy()) {
       return;
     }
-    _pickingAttachment = true;
+    final releaseSelection = _lockAttachmentSelection();
     try {
       final assets = await (_pickAssets?.call() ?? _selectAlbumAssets());
       if (assets != null && assets.isNotEmpty && !isClosed) {
         closeToolbox();
-        await _sendSelectedAssets(assets);
+        await _sendSelectedAssets(assets, onPrepared: releaseSelection);
       }
     } catch (_) {
       if (!isClosed) _onPreparationFailed();
     } finally {
-      _pickingAttachment = false;
+      releaseSelection();
     }
   }
 
@@ -194,60 +224,84 @@ class ChatMediaController {
                 return true;
               }));
 
-  Future<void> _sendSelectedAssets(List<AssetEntity> assets) async {
+  Future<void> _sendSelectedAssets(List<AssetEntity> assets,
+      {required void Function() onPrepared}) async {
     final quality = assets.any((asset) => asset.type == AssetType.video)
         ? await chooseChatVideoQuality()
         : ChatVideoQuality.original;
     if (quality == null || isClosed) return;
+    // Only picker/quality dialogs are exclusive. Local preparation and upload
+    // must not prevent opening the next attachment picker.
+    final task = acceptSendTask?.call();
+    bool stopped() => task != null ? !task.current : isClosed;
+    onPrepared();
     final ready = List.generate(assets.length, (_) => Completer<Message?>());
     final messages = <int, Message>{};
-    preparingCount.value = assets.length;
+    preparingCount.value += assets.length;
     Future<void> prepareLocal() async {
       try {
         for (var index = 0; index < assets.length; index++) {
           Message? message;
           try {
-            if (!isClosed) {
-              message = await _prepareAsset(assets[index], quality: quality);
-              if (message != null && !isClosed) {
+            if (!stopped()) {
+              message = await _prepareAsset(assets[index],
+                  quality: quality, cancelled: stopped);
+              if (message != null && !stopped()) {
                 messages[index] = message;
-                _stageMessage(message);
-                onTransfer?.call(message,
-                    const ChatTransferStatus(ChatTransferStage.queued));
+                if (task != null) {
+                  task.stage(message);
+                } else if (!isClosed) {
+                  _stageMessage(message);
+                }
+                if (!isClosed) {
+                  onTransfer?.call(message,
+                      const ChatTransferStatus(ChatTransferStage.queued));
+                }
               }
             }
           } catch (_) {
-            if (!isClosed) _onPreparationFailed();
+            // Accepted work may fail before the SDK can create a message.
+            // Report that failure even if its original route has gone away.
+            if (task?.current == true || !isClosed) _onPreparationFailed();
           } finally {
             ready[index].complete(message);
-            if (!isClosed) preparingCount.value--;
+            if (!_closed) preparingCount.value--;
           }
         }
       } finally {
-        preparingCount.value = 0;
+        onPrepared();
       }
     }
 
     final local = prepareLocal();
     final uploader = ChatMediaUpload(
-        isClosed: () => isClosed,
-        onTransfer: (message, state) => onTransfer?.call(message, state));
+        isClosed: stopped,
+        onTransfer: (message, state) {
+          task?.transfer(message, state);
+          if (!isClosed) onTransfer?.call(message, state);
+        });
     await runOrderedMediaBatch<int>(
       List.generate(assets.length, (index) => index),
       prepare: (index) async {
         final message = await ready[index].future;
-        if (message != null && !isClosed) await uploader.prepare(message);
+        if (message != null && !stopped()) await uploader.prepare(message);
       },
       send: (index) async {
         final message = messages[index];
         if (message != null) {
-          await _sendMessage(message, addToUI: false, resetInput: false);
+          if (task != null) {
+            await task.send(message);
+          } else {
+            await _sendMessage(message, addToUI: false, resetInput: false);
+          }
         }
       },
       onError: (index, error) {
         final message = messages[index];
         if (message != null) {
+          task?.failed(message);
           message.status = MessageStatus.failed;
+          if (isClosed) return;
           if (onUploadFailed != null) {
             onUploadFailed!(message);
           } else {
@@ -255,12 +309,22 @@ class ChatMediaController {
           }
         }
       },
-      isClosed: () => isClosed,
+      isClosed: stopped,
     );
     await local;
   }
 
   bool _pickingAttachment = false;
+  void Function() _lockAttachmentSelection() {
+    _pickingAttachment = true;
+    var released = false;
+    return () {
+      if (released) return;
+      released = true;
+      _pickingAttachment = false;
+    };
+  }
+
   Future<File> _retainAttachment(String path) async {
     final name = p.basename(path);
     final directory = Directory('${Config.cachePath}/outgoing_media');
@@ -273,22 +337,27 @@ class ChatMediaController {
 
   Future<void> onTapFile() => _pickAttachment(false);
   Future<void> onTapCamera() async {
-    if (_pickingAttachment || _voiceBusy() || isClosed) return;
-    _pickingAttachment = true;
+    if (_pickingAttachment ||
+        _voiceBusy() ||
+        isClosed ||
+        sendingMuted ||
+        isInvalidGroup) return;
+    final releaseSelection = _lockAttachmentSelection();
     try {
-      final asset = await CameraPicker.pickFromCamera(Get.context!,
-          pickerConfig: const CameraPickerConfig(
-              enableRecording: true,
-              enableAudio: true,
-              maximumRecordingDuration: Duration(seconds: 60)));
+      final asset = await (_pickCamera?.call() ??
+          CameraPicker.pickFromCamera(Get.context!,
+              pickerConfig: const CameraPickerConfig(
+                  enableRecording: true,
+                  enableAudio: true,
+                  maximumRecordingDuration: Duration(seconds: 60))));
       if (asset != null && !isClosed) {
         closeToolbox();
-        await _sendSelectedAssets([asset]);
+        await _sendSelectedAssets([asset], onPrepared: releaseSelection);
       }
     } catch (_) {
       if (!isClosed) _onPreparationFailed();
     } finally {
-      _pickingAttachment = false;
+      releaseSelection();
     }
   }
 
@@ -301,7 +370,7 @@ class ChatMediaController {
         isInvalidGroup) {
       return;
     }
-    _pickingAttachment = true;
+    final releaseSelection = _lockAttachmentSelection();
     final accountID = OpenIM.iMManager.userID;
     final token = DataSp.chatToken;
     File? unclaimedAudio;
@@ -341,6 +410,7 @@ class ChatMediaController {
             .createFileMessageFromFullPath(
                 filePath: file.path, fileName: selected.name);
       }
+      releaseSelection();
       if (!isClosed) await _sendMessage(message);
     } catch (_) {
       IMViews.showToast(StrRes.sendFailed);
@@ -350,7 +420,7 @@ class ChatMediaController {
           if (await unclaimedAudio.exists()) await unclaimedAudio.delete();
         } catch (_) {}
       }
-      _pickingAttachment = false;
+      releaseSelection();
     }
   }
 
@@ -361,11 +431,13 @@ class ChatMediaController {
   }
 
   Future<Message?> _prepareAsset(AssetEntity asset,
-      {ChatVideoQuality quality = ChatVideoQuality.original}) async {
+      {ChatVideoQuality quality = ChatVideoQuality.original,
+      bool Function()? cancelled}) async {
+    final stopped = cancelled ?? () => isClosed;
     Logger.print(
         '--------assets type-----${asset.type} create time: ${asset.createDateTime}');
     final originalFile = await asset.file;
-    if (isClosed) return null;
+    if (stopped()) return null;
     if (originalFile == null) {
       throw StateError('Selected asset file is unavailable');
     }
@@ -373,15 +445,15 @@ class ChatMediaController {
     Logger.print('--------assets path-----$path');
     switch (asset.type) {
       case AssetType.image:
-        return _preparePicture(path);
+        return _preparePicture(path, cancelled: stopped);
       case AssetType.video:
         final prepared = await prepareChatVideo(originalFile, quality);
-        if (isClosed) return null;
+        if (stopped()) return null;
         final saved = await _retainAttachment(prepared.path);
-        if (isClosed) return null;
+        if (stopped()) return null;
         final thumbnail =
             await asset.thumbnailDataWithSize(const ThumbnailSize(640, 640));
-        if (isClosed) return null;
+        if (stopped()) return null;
         if (thumbnail == null) {
           throw StateError('Video thumbnail unavailable');
         }
@@ -390,7 +462,7 @@ class ChatMediaController {
         final mimeType = prepared.path != path
             ? 'video/mp4'
             : await asset.mimeTypeAsync ?? 'video/mp4';
-        if (isClosed) return null;
+        if (stopped()) return null;
         final message = await OpenIM.iMManager.messageManager
             .createVideoMessageFromFullPath(
                 videoPath: saved.path,
@@ -399,7 +471,7 @@ class ChatMediaController {
                     ? 1
                     : asset.videoDuration.inSeconds,
                 snapshotPath: snapshot.path);
-        if (isClosed) return null;
+        if (stopped()) return null;
         return message;
       default:
         throw StateError('Unsupported asset type');

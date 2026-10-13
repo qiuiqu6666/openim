@@ -168,7 +168,7 @@ void main() {
     expect(
         locations.settings,
         isA<AppleSettings>().having(
-            (e) => e.allowBackgroundLocationUpdates, 'background GPS', false));
+            (e) => e.allowBackgroundLocationUpdates, 'background GPS', true));
     await _closeWidgetLocations(tester, locations);
   });
 
@@ -192,6 +192,16 @@ void main() {
     expect(locations.cancels, 1);
     expect(locations.cachedReads, 0);
     await _closeWidgetLocations(tester, locations);
+  });
+
+  test('foreground-only location permission never starts background GPS',
+      () async {
+    locations.permission = LocationPermission.whileInUse;
+    expect(await source.locate('background-only', cancelToken: CancelToken()),
+        isNull);
+    expect(locations.listens, 0);
+    expect(locations.permissionRequests, 0);
+    expect(locations.cachedReads, 0);
   });
 
   testWidgets('GPS cancellation and dispose release stream without late point',
@@ -277,7 +287,7 @@ class _Locations extends GeolocatorPlatform {
         onListen: () => listens++, onCancel: () => cancels++);
   }
 
-  var permission = LocationPermission.whileInUse;
+  var permission = LocationPermission.always;
   var permissionRequests = 0;
   var cachedReads = 0;
   var listens = 0;

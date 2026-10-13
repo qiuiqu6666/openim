@@ -4,7 +4,7 @@
 
 群类型按 `ex.gameType` 数字区分：0 普通群、1 三公游戏、2六合彩代理、3六合彩开奖、4 三公代理。类型为 3 时，右侧开奖把手与工具箱「开奖记录」直接显示，不要求 `enabled`、`drawHistoryEntry` 或机器码先配置。公开开奖统一使用代码内固定机器码 `GZKH-DJ3M-VKSB`，不依赖群绑定中的机器码。其他类型保留既有显式开奖开关，代理与反水权限仍由原权限链判断。群类型更新会重建 Host 上下文并关闭旧预览，回归见 `mark_six_entry_visibility_test.dart`。
 
-类型为 2 的六合彩代理群进群时读取 `GET /me/robot/groups/{URL编码groupId}`。服务端成功外壳的 `data` 为 `groupId/bound/enabled/machineCodeMasked`；未绑定同样返回成功且 `bound=false`。浮动入口只按当前会话的 `bound=true` 显示，`enabled=false` 不覆盖这个入口条件，也不受旧公开功能开关影响。查／反、历仍分别使用有效个人能力 `canOpenAgent`、`canViewRebateHistory`；没有业务权限时点击入口提示「暂无代理功能权限」。遮蔽机器码只记录显示信息，不作为真实开奖机器码或私人授权。
+类型为 2 的六合彩代理群，浮动入口和工具箱代理入口均按当前有效会话及有效个人能力 `canOpenAgent=true` 显示，不依赖群绑定状态、绑定查询是否完成或旧公开功能开关。查／反使用 `canOpenAgent`，历仍需 `canViewRebateHistory`；没有有效代理权限时隐藏类型 2 代理入口。进群仍读取 `GET /me/robot/groups/{URL编码groupId}` 获取绑定信息，但 `bound/enabled` 不控制入口显示。遮蔽机器码不作为真实开奖机器码或私人授权。
 
 群绑定读取独立放在 `agent/binding`，不随能力版本更新重复请求；离开／换群／换账号／换服务／群类型变化时取消旧读取，后台取消，恢复前台重新查询。进群绑定查询无需 `X-Group-Id`，使用路径中的当前 App 群 ID 和现有 Chat 认证。
 

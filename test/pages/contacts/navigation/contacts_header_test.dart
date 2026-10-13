@@ -111,9 +111,6 @@ void main() {
     final bodyBuilds = h.bodyBuilds;
     for (final status in [
       IMSdkStatus.connecting,
-      IMSdkStatus.syncStart,
-      IMSdkStatus.synchronizing,
-      IMSdkStatus.syncProgress,
     ]) {
       statuses.add(status);
       await tester.pump();
@@ -130,11 +127,10 @@ void main() {
     }
     for (final status in [
       IMSdkStatus.connectionFailed,
-      IMSdkStatus.syncFailed,
     ]) {
       statuses.add(status);
       await tester.pump();
-      expect(find.text('通讯录'), findsOneWidget);
+      expect(find.text(StrRes.connectionFailed), findsOneWidget);
       expect(find.byIcon(Icons.error_outline_rounded), findsOneWidget);
       expect(find.byType(FadingArcSpinner), findsNothing);
       expect(_line, findsNothing);
@@ -142,6 +138,10 @@ void main() {
     }
     for (final status in [
       IMSdkStatus.connectionSucceeded,
+      IMSdkStatus.syncStart,
+      IMSdkStatus.synchronizing,
+      IMSdkStatus.syncProgress,
+      IMSdkStatus.syncFailed,
       IMSdkStatus.syncEnded,
     ]) {
       statuses.add(status);

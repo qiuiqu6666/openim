@@ -17,9 +17,11 @@ class FundRecipientPicker extends StatefulWidget {
     super.key,
     required this.groupID,
     this.memberLoader,
+    this.friendLoader,
   });
   final String groupID;
   final FundMemberLoader? memberLoader;
+  final Future<List<FriendInfo>> Function(List<String> ids)? friendLoader;
 
   @override
   State<FundRecipientPicker> createState() => _FundRecipientPickerState();
@@ -28,6 +30,7 @@ class FundRecipientPicker extends StatefulWidget {
 class _FundRecipientPickerState extends State<FundRecipientPicker> {
   final _search = TextEditingController();
   final _items = <GroupMembersInfo>[];
+  final _remarks = <String, String>{};
   Timer? _debounce;
   int _version = 0, _offset = 0;
   bool _loading = false, _more = true;
@@ -96,7 +99,36 @@ class _FundRecipientPickerState extends State<FundRecipientPicker> {
           OpenIM.iMManager.userID != _ownerID) {
         return;
       }
+      final idsToQuery = members
+          .map((member) => member.userID)
+          .whereType<String>()
+          .where((id) => id.isNotEmpty && id != _ownerID)
+          .toSet()
+          .toList();
+      final remarks = <String, String>{};
+      if (idsToQuery.isNotEmpty) {
+        try {
+          final friends = await (widget.friendLoader?.call(idsToQuery) ??
+                  OpenIM.iMManager.friendshipManager
+                      .getFriendsInfo(userIDList: idsToQuery))
+              .timeout(const Duration(seconds: 5));
+          for (final friend in friends) {
+            final remark = friend.remark?.trim() ?? '';
+            if (friend.userID != null && remark.isNotEmpty) {
+              remarks[friend.userID!] = remark;
+            }
+          }
+        } catch (_) {
+          // Member selection remains available if friend metadata is unavailable.
+        }
+      }
+      if (!mounted ||
+          version != _version ||
+          OpenIM.iMManager.userID != _ownerID) {
+        return;
+      }
       setState(() {
+        _remarks.addAll(remarks);
         _offset += members.length;
         _more = members.length == FundTokens.memberPageSize;
         final ids = _items.map((m) => m.userID).toSet();
@@ -127,15 +159,15 @@ class _FundRecipientPickerState extends State<FundRecipientPicker> {
   Widget build(BuildContext context) {
     final cs = FundPageColors.of(context);
     return Scaffold(
-      backgroundColor: cs.bg,
+      backgroundColor: cs.card,
       appBar: GlassAppBar(
         toolbarHeight: kToolbarHeight,
-        backgroundColor: cs.bg,
+        backgroundColor: cs.card,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
-        systemOverlayStyle: AppSystemBars.styleFor(cs.bg),
+        systemOverlayStyle: AppSystemBars.styleFor(cs.card),
         leading: IconButton(
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           icon: Icon(Icons.arrow_back_ios_new_rounded,
@@ -193,7 +225,21 @@ class _FundRecipientPickerState extends State<FundRecipientPicker> {
                 }
                 return false;
               },
-              child: ListView.builder(
+              child: ListView.separated(
+                separatorBuilder: (_, index) => index < _items.length - 1
+                    ? ColoredBox(
+                        color: cs.card,
+                        child: Divider(
+                          height: 1,
+                          thickness: 0.5,
+                          indent: AppTokens.s4 +
+                              FundTokens.memberAvatarSize +
+                              AppTokens.s4,
+                          endIndent: AppTokens.s4,
+                          color: cs.line,
+                        ),
+                      )
+                    : const SizedBox.shrink(),
                 itemCount: _items.length + 1,
                 itemBuilder: (_, index) {
                   if (index == _items.length) {
@@ -225,29 +271,33 @@ class _FundRecipientPickerState extends State<FundRecipientPicker> {
                         : const SizedBox.shrink();
                   }
                   final member = _items[index];
-                  final name = member.nickname?.isNotEmpty == true
-                      ? member.nickname!
-                      : settingsText(context, zh: '群成员', en: 'Group member');
-                  return ListTile(
-                    key: ValueKey('fund-member-${member.userID}'),
-                    leading: AvatarView(
-                        url: member.faceURL,
-                        text: name,
-                        width: FundTokens.memberAvatarSize,
-                        height: FundTokens.memberAvatarSize,
-                        isCircle: true),
-                    title: Text(name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: cs.text,
-                            fontSize: FundTokens.memberTitleFontSize)),
-                    onTap: () {
-                      if (OpenIM.iMManager.userID == _ownerID) {
-                        Navigator.of(context).pop(member);
-                      }
-                    },
-                  );
+                  final name = _remarks[member.userID] ??
+                      (member.nickname?.isNotEmpty == true
+                          ? member.nickname!
+                          : settingsText(context,
+                              zh: '群成员', en: 'Group member'));
+                  return Material(
+                      color: cs.card,
+                      child: ListTile(
+                        key: ValueKey('fund-member-${member.userID}'),
+                        leading: AvatarView(
+                            url: member.faceURL,
+                            text: name,
+                            width: FundTokens.memberAvatarSize,
+                            height: FundTokens.memberAvatarSize,
+                            isCircle: true),
+                        title: Text(name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: cs.text,
+                                fontSize: FundTokens.memberTitleFontSize)),
+                        onTap: () {
+                          if (OpenIM.iMManager.userID == _ownerID) {
+                            Navigator.of(context).pop(member);
+                          }
+                        },
+                      ));
                 },
               ),
             ),

@@ -193,34 +193,140 @@ void main() {
     expect(reads, isEmpty);
   });
 
-  testWidgets('read failure is silent and does not poll; next signal can retry',
+  testWidgets(
+      'a transient read failure retries without sending another message',
       (tester) async {
     sync.observeMessage(_message('first'));
     await tester.pump(ConversationLatestSync.settleDelay);
     replies.single.completeError(StateError('offline'));
     await tester.pump();
-    await tester.pump(const Duration(minutes: 1));
-    expect(reads, hasLength(1));
-    expect(published, isEmpty);
-    sync.observeMessage(_message('retry'));
+    await tester.pump(const Duration(seconds: 1));
     await tester.pump(ConversationLatestSync.settleDelay);
     expect(reads, hasLength(2));
-    replies.last.complete([]);
+    expect(published, isEmpty);
+    replies.last.complete([
+      ConversationInfo(conversationID: 'peer', latestMsg: _message('first'))
+    ]);
     await tester.pump();
+    expect(published.single.single.latestMsg?.clientMsgID, 'first');
+    await tester.pump(const Duration(minutes: 1));
+    expect(reads, hasLength(2));
   });
 
-  testWidgets('hung read times out and a later signal is still served',
+  testWidgets('timed out read keeps its native slot until its reply arrives',
       (tester) async {
     sync.observeMessage(_message('first'));
     await tester.pump(ConversationLatestSync.settleDelay);
     await tester.pump(const Duration(seconds: 5));
     sync.observeMessage(_message('next'));
     await tester.pump(ConversationLatestSync.settleDelay);
-    expect(reads, hasLength(2));
-    replies.last.complete([ConversationInfo(conversationID: 'peer')]);
+    expect(reads, hasLength(1));
     replies.first.complete([ConversationInfo(conversationID: 'old')]);
     await tester.pump();
+    expect(reads, hasLength(2));
+    replies.last.complete([ConversationInfo(conversationID: 'peer')]);
+    await tester.pump();
     expect(published.single.single.conversationID, 'peer');
+  });
+
+  testWidgets(
+      'persistent errors stop after two retries; new events can recover',
+      (tester) async {
+    sync.observeMessage(_message('first'));
+    await tester.pump(ConversationLatestSync.settleDelay);
+    for (var attempt = 0; attempt < 3; attempt++) {
+      expect(reads, hasLength(attempt + 1));
+      replies.last.completeError(StateError('offline'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(ConversationLatestSync.settleDelay);
+    }
+    await tester.pump(const Duration(minutes: 2));
+    expect(reads, hasLength(3));
+    expect(published, isEmpty);
+    sync.observeMessage(_message('next'));
+    await tester.pump(ConversationLatestSync.settleDelay);
+    expect(reads, hasLength(4));
+    replies.last.complete([ConversationInfo(conversationID: 'peer')]);
+    await tester.pump();
+  });
+
+  for (final invalidate in [
+    'close',
+    'reset',
+    'account',
+    'delete',
+    'callback'
+  ]) {
+    testWidgets('$invalidate cancels a failed read awaiting retry',
+        (tester) async {
+      sync.observeMessage(_message('first'));
+      await tester.pump(ConversationLatestSync.settleDelay);
+      replies.single.completeError(StateError('offline'));
+      await tester.pump();
+      final row = ConversationInfo(
+          conversationID: 'peer',
+          userID: 'peer',
+          conversationType: ConversationType.single,
+          latestMsg: _message('first'));
+      switch (invalidate) {
+        case 'close':
+          sync.close();
+        case 'reset':
+          sync.reset();
+        case 'account':
+          OpenIM.iMManager.userID = 'another';
+        case 'delete':
+          sync.discard(row);
+        case 'callback':
+          sync.conversationsUpdated([row]);
+      }
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(ConversationLatestSync.settleDelay);
+      expect(reads, hasLength(1));
+      expect(published, isEmpty);
+    });
+  }
+
+  testWidgets(
+      'failed group ID resolution retries without re-reading other rows',
+      (tester) async {
+    sync.close();
+    var groupAttempts = 0;
+    sync = ConversationLatestSync(
+      isActive: () => true,
+      publish: published.add,
+      flushChanges: () {},
+      resolveID: (request) async {
+        if (request.sourceID == 'group' && ++groupAttempts == 1) {
+          throw StateError('SDK temporarily unavailable');
+        }
+        return request.sourceID!;
+      },
+      read: (ids) async {
+        reads.add(ids);
+        return ids
+            .map((id) =>
+                ConversationInfo(conversationID: id, isPinned: id == 'group'))
+            .toList();
+      },
+    );
+    sync.observeMessage(_message('single'));
+    sync.observeMessage(
+        _message('group-msg', type: ConversationType.superGroup));
+    await tester.pump(ConversationLatestSync.settleDelay);
+    expect(reads, [
+      ['peer']
+    ]);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(ConversationLatestSync.settleDelay);
+    expect(reads, [
+      ['peer'],
+      ['group']
+    ]);
+    expect(published.last.single.isPinned, isTrue);
+    await tester.pump(const Duration(minutes: 1));
+    expect(reads, hasLength(2));
   });
 
   testWidgets('large bursts use bounded batches without dropping targets',

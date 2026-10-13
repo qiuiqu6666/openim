@@ -55,7 +55,7 @@ void main() {
   }
 
   testWidgets(
-      'ellipsis starts after twenty visible characters, including emoji',
+      'full nicknames remain visible including emoji',
       (tester) async {
     const nineteen = '1234567890123456789';
     const emoji = '👩🏽‍💻';
@@ -63,9 +63,9 @@ void main() {
       ('京888888群转账可用', '京888888群转账可用'),
       (nineteen, nineteen),
       ('$nineteen$emoji', '$nineteen$emoji'),
-      ('$nineteen$emoji甲', '$nineteen$emoji…'),
-      ('$_twentyCharacters甲', '$_twentyCharacters…'),
-      ('${nineteen}e\u0301尾', '${nineteen}e\u0301…'),
+      ('$nineteen$emoji甲', '$nineteen$emoji甲'),
+      ('$_twentyCharacters甲', '$_twentyCharacters甲'),
+      ('${nineteen}e\u0301尾', '${nineteen}e\u0301尾'),
     ]) {
       await mountMarkdown(tester, _message(source));
       expect(_visibleNickname(tester), visible);
@@ -107,7 +107,7 @@ void main() {
         tester,
         const ChatNicknameView(
             nickname: '$_twentyCharacters甲', timeStr: '08:30'));
-    expect(_visibleNickname(tester), startsWith('$_twentyCharacters…'));
+    expect(_visibleNickname(tester), startsWith('$_twentyCharacters甲'));
     expect(_visibleNickname(tester), endsWith('08:30'));
     await mountMarkdown(tester, const ChatNicknameView(timeStr: '08:30'));
     expect(_visibleNickname(tester), '08:30');

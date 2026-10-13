@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -222,10 +223,8 @@ void main() {
     expect(local.seq, 7);
   });
 
-  for (final succeeded in [true, false]) {
-    test(
-        'delivery ${succeeded ? 'success' : 'failure'} wins over stale history',
-        () async {
+  for (final outcome in ['success', 'rejected', 'unconfirmed']) {
+    test('delivery $outcome is preserved across stale history', () async {
       final local = _message(MessageStatus.sending);
       final h = _History(local);
       final transport = Completer<Message>();
@@ -245,8 +244,11 @@ void main() {
       addTearDown(h.loader.close);
       final sending = delivery.send(local, addToUI: false);
       final loading = h.loader.refresh();
-      if (succeeded) {
+      if (outcome == 'success') {
         transport.complete(_message(MessageStatus.succeeded, seq: 7));
+      } else if (outcome == 'rejected') {
+        transport.completeError(
+            PlatformException(code: SDKErrorCode.parameterError.toString()));
       } else {
         transport.completeError(TimeoutException('transport'));
       }
@@ -255,8 +257,14 @@ void main() {
       await loading;
 
       expect(h.messages.single, same(local));
-      expect(local.status,
-          succeeded ? MessageStatus.succeeded : MessageStatus.failed);
+      expect(
+          local.status,
+          switch (outcome) {
+            'success' => MessageStatus.succeeded,
+            'rejected' => MessageStatus.failed,
+            _ => MessageStatus.sending,
+          },
+          reason: 'A transport timeout does not prove server rejection.');
     });
   }
 }

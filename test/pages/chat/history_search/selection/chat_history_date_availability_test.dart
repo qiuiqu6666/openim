@@ -8,6 +8,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/history_search/chat_history_search_source.dart';
+import 'package:openim/pages/chat/history_search/cloud/chat_history_cloud_sync.dart';
 import 'package:openim/pages/chat/history_search/selection/chat_history_date_page.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -52,6 +53,14 @@ class _DateSource implements ChatHistorySearchSource {
     if (respond != null) return respond!(day);
     return days.contains(day) ? [_message(day)] : [];
   }
+}
+
+class _CloudDateSource extends _DateSource implements ChatHistoryCloudSource {
+  @override
+  bool get cloudHasMore => true;
+  @override
+  Future<void> supplement(
+      String conversationID, bool Function() isCurrent) async {}
 }
 
 class _PickerFixture {
@@ -152,6 +161,16 @@ void _testPicker(String description, Future<void> Function(WidgetTester) body) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  _testPicker('cloud dates remain searchable when local history is empty',
+      (tester) async {
+    final fixture = _PickerFixture(_CloudDateSource(), initialDate: _today);
+    await _mount(tester, fixture);
+    expect(_enabled(tester, _today), isTrue);
+    expect(_canConfirm(tester), isTrue);
+    await tester.tap(find.byKey(_confirmKey));
+    await tester.pumpAndSettle();
+    expect(fixture.returned, _today);
+  });
   setUp(() {
     Get.testMode = true;
   });

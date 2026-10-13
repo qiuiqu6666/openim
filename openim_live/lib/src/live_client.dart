@@ -44,6 +44,19 @@ class OpenIMLiveClient implements RTCBridge {
 
   SystemCallDescriptor? get currentSystemCall => _owner?.call;
 
+  void serverAccepted(String roomID) {
+    if (currentRoomID == roomID) _owner?.session.peerAccepted();
+  }
+
+  /// Server reconciliation must not enter user hangup/error callbacks.
+  Future<void> endCallLocally(String roomID, CallState state) async {
+    final owner = _owner;
+    if (currentRoomID != roomID || owner == null) return;
+    _holder?.remove();
+    _holder = null;
+    await owner.session.end(state, notifyPeer: false, localOnly: true);
+  }
+
   Future<bool> acceptActiveCall(String roomID) async {
     final owner = _owner;
     if (!isBusy || currentRoomID != roomID || owner == null) return false;
@@ -235,6 +248,7 @@ class OpenIMLiveClient implements RTCBridge {
       onIncomingWaitingEnded: onIncomingWaitingEnded,
       onClosed: () => unawaited(_finish(generation)),
       onTerminated: (result) async {
+        if (result.localOnly) return;
         switch (result.state) {
           case CallState.networkError:
             await onError?.call(result.error ?? StateError('Call disconnected'),

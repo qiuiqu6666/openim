@@ -1,5 +1,7 @@
 # 群直播
 
+`playback/live_playback_controller.dart` 只在初始化、比例、错误和首次有效进度变化时转发播放器通知，纯 position/buffered 更新不重建整个边看边聊表面。静音、暂停、可见性和凭证状态仍由各自流程通知，原生 VideoPlayer 自身的渲染监听保持不变。本次未构建或运行测试，首播/全屏/换源/凭证过期仍待真机验证。
+
 入口为 `GroupLiveFeatureHost`（聊天正文前普通 Column）和
 `GroupLiveModule.openManage/openWatch`。页面及图片来自本地 reference-99chat 的真实
 `group_live_top_banner.dart`、`group_live_inline_watch_banner.dart`、`group_live_authorize_page.dart`、
@@ -60,7 +62,7 @@ ID 均按 URI 组件编码；预约时间发送 UTC ISO-8601。管理只能使�
 直播业务返回的有效摘要同步到账号共享仓库；current 仅返回真实场次或 active=false 时，独立的公开显示状态也会更新角标，不伪造群摘要或 revision。
 公开投影只用于展示，不授予管理、推流或打赏权限。权限更新或普通父级重建不会重建未变化的同场次 DTO，已接受的场次版本和状态继续保留；实际公开状态变化仍更新入口，结束或换场释放旧观看状态。
 会话、归档和“我的群组”共用 `GroupLiveListScope`：实际可见头像报告群 ID，`GroupLiveListSync` 去重并最多 2 并发查询单群 current。打开列表、切回标签和恢复前台立即校准；无完整摘要的直播变更通知合并 250ms 后定向补查，完整摘要直接更新。
-参考 99chat `group_live_index_sync_service.dart`，列表显示期间每 45 秒仅为可见群兜底检查；隐藏标签、路由覆盖、后台、最后一个可见来源离开及账号失效会取消请求和计时。单个群滚出再进入复用成功缓存，失败负缓存 30 秒，界面重建不重复查询。
+参考 99chat `group_live_index_sync_service.dart`，列表显示期间每 90 秒仅为可见群兜底检查；隐藏标签、路由覆盖、后台、最后一个可见来源离开及账号失效会取消请求和计时。单个群滚出再进入复用成功缓存，失败负缓存 30 秒，界面重建不重复查询。
 没有摘要的 current 显示状态能抵抗 SDK 单纯缺摘要；新有效群摘要、明确损坏的数据、退群及退出账号仍清除旧显示状态。业务群版本、个人权限和播放凭据继续各自维护。
 查询按群、账号和 API 实例隔离，关闭或切换时取消；较新群摘要取消旧读取，避免结束或换场后被迟到结果恢复。
 聊天入口调用 current 时传入已显示场次作为 `minimumSession`。同场次响应的低版本在回写群摘要、发布公开投影或通知任何共享观察者之前被拒绝，不能先让入口回退再恢复。合法的 `active:false` 和新场次响应仍正常生效，并继续受账号、群与摘要版本守卫约束。

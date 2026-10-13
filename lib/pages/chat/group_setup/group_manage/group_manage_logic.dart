@@ -65,7 +65,7 @@ class GroupManageLogic extends GetxController {
         groupSetupLogic.imLogic.groupInfoUpdatedSubject.add(group);
       }
     } catch (error) {
-      if (isCurrent()) IMViews.showToast(error.toString());
+      if (isCurrent()) IMViews.showErrorToast(error);
     } finally {
       if (!_closed && !isClosed) busy.value = false;
     }

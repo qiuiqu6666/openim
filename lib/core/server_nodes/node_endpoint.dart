@@ -8,15 +8,11 @@ class NodeEndpoint {
   factory NodeEndpoint.current() => NodeEndpoint(
       chatApi: Config.appAuthUrl, imApi: Config.imApiUrl, imWs: Config.imWsUrl);
 
-  static const primary = NodeEndpoint(
-      chatApi: 'https://99chatapi.99chat.vip',
-      imApi: 'https://99imapi.99chat.vip',
-      imWs: 'wss://websocket.99chat.vip');
   static const direct = NodeEndpoint(
-      chatApi: 'http://129.226.192.93:10008',
-      imApi: 'http://129.226.192.93:10002',
-      imWs: 'ws://129.226.192.93:10001');
-  static const builtIn = [primary, direct];
+      chatApi: 'http://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:10008',
+      imApi: 'http://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:10002',
+      imWs: 'ws://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:10001');
+  static const builtIn = [direct];
 
   final String chatApi, imApi, imWs;
   String get signature => [chatApi, imApi, imWs]

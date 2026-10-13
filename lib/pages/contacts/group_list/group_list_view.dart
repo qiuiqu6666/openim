@@ -116,7 +116,7 @@ class GroupListPage extends StatelessWidget {
     final chinese = Localizations.localeOf(context).languageCode == 'zh';
     final strings = RefreshLocalizations.of(context)?.currentLocalization ??
         (chinese ? ChRefreshString() : EnRefreshString());
-    return SmartRefresher(
+    final list = SmartRefresher(
       key: created ? logic.iCreateGlobalKey : logic.iJoinGlobalKey,
       controller: created
           ? logic.iCreateRefreshController
@@ -152,6 +152,11 @@ class GroupListPage extends StatelessWidget {
             )
           : _buildList(groups, showCount: logic.isComplete(created)),
     );
+    final limit = logic.canLoadMore(created) ? null : 0.0;
+    return RefreshConfiguration.of(context) == null
+        ? RefreshConfiguration(maxUnderScrollExtent: limit, child: list)
+        : RefreshConfiguration.copyAncestor(
+            context: context, maxUnderScrollExtent: limit, child: list);
   }
 
   ListView _buildList(List<GroupInfo> groups,

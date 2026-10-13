@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../../routes/app_navigator.dart';
-import '../../../../services/chat_history_cache.dart';
 import '../../../../services/chat_message_sender.dart';
 import '../../../../services/favorite_send_coordinator.dart';
 import '../../../../services/messaging/message_send_session.dart';
@@ -18,6 +17,16 @@ class FriendSetupLogic extends GetxController {
   final userProfilesLogic =
       Get.find<UserProfilePanelLogic>(tag: GetTags.userProfile);
   late String userID;
+  final _accountID = OpenIM.iMManager.userID;
+  final _token = DataSp.chatToken;
+  bool _deleting = false;
+  bool _friendDeleted = false;
+  bool get _active =>
+      !isClosed &&
+      !userProfilesLogic.isClosed &&
+      _accountID == OpenIM.iMManager.userID &&
+      _token == DataSp.chatToken &&
+      conversationLogic.isSessionActive;
 
   @override
   void onInit() {
@@ -55,51 +64,63 @@ class FriendSetupLogic extends GetxController {
     });
   }
 
-  void deleteFromFriendList() async {
-    var confirm = await Get.dialog(CustomDialog(
-      title: StrRes.areYouSureDelFriend,
-      rightText: StrRes.delete,
-    ));
-    if (confirm) {
+  Future<void> deleteFromFriendList() async {
+    if (!_active || _deleting) return;
+    final peer = userProfilesLogic.userInfo.value.userID;
+    if (peer == null || peer.isEmpty) return;
+    _deleting = true;
+    try {
+      final confirm = await Get.dialog<bool>(CustomDialog(
+        title: StrRes.areYouSureDelFriend,
+        rightText: StrRes.delete,
+      ));
+      if (confirm != true || !_active) return;
       await LoadingView.singleton.wrap(asyncFunction: () async {
-        await observeUserActivity(
-            'friend_delete',
-            () => OpenIM.iMManager.friendshipManager.deleteFriend(
-                  userID: userProfilesLogic.userInfo.value.userID!,
-                ));
-        userProfilesLogic.userInfo.update((val) {
-          val?.isFriendship = false;
-        });
-
-        final userIDList = [
-          userProfilesLogic.userInfo.value.userID,
-          OpenIM.iMManager.userID,
-        ];
-        userIDList.sort();
-        final conversationID = 'si_${userIDList.join('_')}';
-        final accountID = OpenIM.iMManager.userID;
-
-        await OpenIM.iMManager.conversationManager
-            .deleteConversationAndDeleteAllMsg(conversationID: conversationID);
-
+        if (!_active) return;
+        final conversation = conversationLogic.list.firstWhereOrNull(
+                (info) => info.isSingleChat && info.userID == peer) ??
+            await OpenIM.iMManager.conversationManager.getOneConversation(
+                sourceID: peer, sessionType: ConversationType.single);
+        if (!_active) return;
+        if (!_friendDeleted) {
+          await observeUserActivity(
+              'friend_delete',
+              () => OpenIM.iMManager.friendshipManager
+                  .deleteFriend(userID: peer));
+          if (!_active) return;
+          _friendDeleted = true;
+          userProfilesLogic.userInfo.update((val) => val?.isFriendship = false);
+        }
+        await conversationLogic.deleteConversation(conversation,
+            propagateError: true);
+        if (!_active) return;
         if (Get.isRegistered<ChatLogic>(tag: GetTags.chat)) {
           final chat = Get.find<ChatLogic>(tag: GetTags.chat);
           if (!chat.isClosed &&
-              chat.conversationInfo.conversationID == conversationID) {
+              chat.conversationInfo.conversationID ==
+                  conversation.conversationID) {
             chat.clearAllMessage();
           }
         }
-        ChatHistoryCache.removeConversation(accountID, conversationID);
-
-        conversationLogic.list
-            .removeWhere((e) => e.conversationID == conversationID);
       });
-
+      if (!_active) return;
       if (userProfilesLogic.offAllWhenDelFriend == true) {
         AppNavigator.startBackMain();
       } else {
         Get.back();
       }
+    } catch (error) {
+      if (_active) {
+        IMViews.showToast(_friendDeleted
+            ? (Get.locale?.languageCode == 'en'
+                ? 'Friend deleted. Could not clear chat history. Please retry.'
+                : '好友已删除，聊天记录清理失败，请重试。')
+            : (Get.locale?.languageCode == 'en'
+                ? 'Could not delete friend. Please retry.'
+                : '删除好友失败，请重试。'));
+      }
+    } finally {
+      _deleting = false;
     }
   }
 

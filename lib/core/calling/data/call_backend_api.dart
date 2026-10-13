@@ -6,8 +6,11 @@ import '../../push/apns/apns_platform.dart';
 import '../../push/apns/apns_token_api.dart';
 
 class CallBackendException implements Exception {
-  const CallBackendException(this.code);
+  const CallBackendException(this.code, {this.httpStatus});
   final int code;
+  final int? httpStatus;
+  bool get authorizationFailed =>
+      const [401, 403].contains(code) || const [401, 403].contains(httpStatus);
   @override
   String toString() => 'Call service unavailable ($code)';
 }
@@ -31,17 +34,19 @@ class CallBackendApi {
 
   final String accountID, token, deviceID, baseUrl;
   final Dio _dio;
+  bool get isCurrent => DataSp.userID == accountID &&
+      DataSp.chatToken == token && Config.callingUrl == baseUrl;
 
   static Future<CallBackendApi> current() async {
     final account = DataSp.userID, token = DataSp.chatToken;
-    final url = Config.appAuthUrl;
+    final url = Config.callingUrl;
     if (account == null || account.isEmpty || token == null || token.isEmpty) {
       throw const CallBackendException(401);
     }
     final device = await DataSp.ensureLoginDeviceID();
     if (DataSp.userID != account ||
         DataSp.chatToken != token ||
-        Config.appAuthUrl != url) {
+        Config.callingUrl != url) {
       throw const CallBackendException(401);
     }
     return CallBackendApi(
@@ -50,11 +55,26 @@ class CallBackendApi {
 
   Future<Map<String, dynamic>> request(
       String path, Map<String, dynamic> data) async {
-    final response = await _dio.post<Object?>('$baseUrl/calling/$path',
-        data: data,
-        options: Options(
-            headers: {'token': token, 'operationID': const Uuid().v4()},
-            followRedirects: false));
+    if (!isCurrent) throw const CallBackendException(401);
+    final Response<Object?> response;
+    try {
+      response = await _dio.post<Object?>('$baseUrl/calling/$path',
+          data: data,
+          options: Options(
+              contentType: Headers.jsonContentType,
+              headers: {'token': token, 'operationID': const Uuid().v4()},
+              followRedirects: false));
+    } on DioException catch (error) {
+      final body = error.response?.data;
+      final code = body is Map ? body['errCode'] : null;
+      if (error.response != null) {
+        throw CallBackendException(code is int && code != 0
+            ? code : error.response!.statusCode ?? -1,
+            httpStatus: error.response!.statusCode);
+      }
+      rethrow;
+    }
+    if (!isCurrent) throw const CallBackendException(401);
     final raw = response.data;
     if (raw is! Map || raw['errCode'] is! int) {
       throw const CallBackendException(-1);
@@ -84,7 +104,10 @@ class CallBackendApi {
   }
 
   Future<Map<String, dynamic>> status(String room) =>
-      request('status', {'callID': room});
+      request('status', {'callID': room, 'deviceID': deviceID});
+  Future<Map<String, dynamic>> heartbeat(String room) =>
+      request('heartbeat', {'callID': room, 'deviceID': deviceID});
+  Future<Map<String, dynamic>> currentCall() => request('current', {});
   Future<Map<String, dynamic>> action(String room, String action) => request(
       'action', {'callID': room, 'deviceID': deviceID, 'action': action});
   Future<Map<String, dynamic>> invite(InvitationInfo invitation) => request(

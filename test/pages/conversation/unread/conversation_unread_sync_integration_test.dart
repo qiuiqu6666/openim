@@ -127,6 +127,9 @@ void main() {
     reads = [];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdk, (call) {
+      // These tests control full snapshot calibration. Targeted repair has
+      // its own real-query tests in chat_conversation_read_test.dart.
+      if (call.method == 'getMultipleConversation') return Future.value('[]');
       // Reconciliation invokes this handler from inside tester.pump. Use the
       // synchronous matcher so native callbacks do not nest test async guards.
       expectSync(call.method, 'getConversationListSplit');
@@ -151,6 +154,20 @@ void main() {
 
   void complete(int index, List<ConversationInfo> rows) =>
       reads[index].complete(_json(rows));
+
+  testWidgets('duplicate callback preserves feed snapshot; changed metadata publishes',
+      (tester) async {
+    logic.onChanged([_row()]);
+    final originalList = logic.list.value;
+    final originalSnapshot = logic.feedSnapshot;
+    logic.onChanged([_row()]);
+    expect(identical(logic.list.value, originalList), isTrue);
+    expect(identical(logic.feedSnapshot, originalSnapshot), isTrue);
+    logic.onChanged([_row()..showName = 'renamed']);
+    expect(logic.list.single.showName, 'renamed');
+    expect(identical(logic.list.value, originalList), isFalse);
+    expect(identical(logic.feedSnapshot, originalSnapshot), isFalse);
+  });
 
   Future<void> flush(WidgetTester tester) async {
     // Subject delivery and the resulting MethodChannel call cross separate
@@ -189,7 +206,7 @@ void main() {
 
     im.conversationChanged([_row(unread: 4)]);
     await flush(tester);
-    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 80));
     await flush(tester);
     expect(logic.list.single.unreadCount, 4,
         reason: 'The same message target has a count beyond the local ack.');
@@ -280,7 +297,7 @@ void main() {
     expect(reads, hasLength(2));
   });
 
-  testWidgets('a newer ordinary read inherits pending unread authority',
+  testWidgets('an ordinary refresh shares pending unread calibration authority',
       (tester) async {
     await confirmThenIncrease(tester);
     await total(tester, 0);
@@ -289,21 +306,20 @@ void main() {
 
     final refreshing = logic.onRefresh();
     await flush(tester);
-    expect(reads, hasLength(3));
-    complete(2, [_row(unread: 0)]);
+    expect(reads, hasLength(2),
+        reason: 'The refresh shares the in-flight SDK snapshot.');
+    complete(1, [_row(unread: 0)]);
     await flush(tester);
     await refreshing;
     expect(logic.list.single.unreadCount, 0,
         reason: 'The latest SDK snapshot must retain calibration authority.');
     expect(_groupBadge(logic), 0);
 
-    complete(1, [_row(unread: 4)]);
-    await flush(tester);
     await tester.pump(const Duration(seconds: 1));
     await flush(tester);
-    expect(reads, hasLength(3));
+    expect(reads, hasLength(2));
     expect(logic.list.single.unreadCount, 0,
-        reason: 'The superseded calibration cannot restore its stale count.');
+        reason: 'Coalescing must not discard unread calibration authority.');
     expect(tester.takeException(), isNull);
   });
 

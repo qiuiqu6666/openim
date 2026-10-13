@@ -41,7 +41,7 @@ MessageNotificationPresentation _presentation({
 }) =>
     MessageNotificationPresentation(
       title: group ? 'Team' : 'Alice',
-      body: group ? 'Bob: SDK message' : 'SDK message',
+      body: 'SDK message',
       avatarURL: 'https://example.invalid/avatar.png',
       isGroup: group,
       senderName: group ? 'Bob' : 'Alice',
@@ -79,48 +79,34 @@ void main() {
     expect(channels.bridgeCalls, isEmpty);
   });
 
-  test('Android serializes single-chat MessagingStyle and cached file avatar',
+  test('Android serializes single-chat title/content and cached file avatar',
       () async {
     final notifier = channels.use(TargetPlatform.android);
     final timestamp = DateTime.fromMillisecondsSinceEpoch(1700000000000);
     await _show(notifier, avatarPath: '/cache/alice.png', timestamp: timestamp);
     final args = channels.arguments('show');
     final android = _map(args['platformSpecifics']);
-    final style = _map(android['styleInformation']);
-    final message = _map((style['messages']! as List).single);
-    final sender = _map(message['person']);
     expect(args['id'], 42);
     expect(args['payload'], _target().encode());
-    expect(android['style'], AndroidNotificationStyle.messaging.index);
-    expect(style['groupConversation'], isFalse);
-    expect(style['conversationTitle'], 'Alice');
-    expect(_map(style['person'])['key'], 'self');
-    expect(_map(style['person'])['name'], 'Me');
-    expect(message['text'], 'SDK message');
-    expect(message['timestamp'], timestamp.millisecondsSinceEpoch);
-    expect(sender['name'], 'Alice');
-    expect(sender['icon'], '/cache/alice.png');
-    expect(sender['iconSource'], 1); // FLN 18 bitmapFilePath.
+    expect(android['style'], AndroidNotificationStyle.defaultStyle.index);
+    expect(args['title'], 'Alice');
+    expect(args['body'], 'SDK message');
     expect(android['largeIcon'], '/cache/alice.png');
     expect(android['largeIconBitmapSource'], 1); // FLN 18 filePath.
     expect(channels.assetReads, 0);
   });
 
-  test('Android group style preserves group title and real sender identity',
+  test('Android group banner shows group title and content without sender row',
       () async {
     final notifier = channels.use(TargetPlatform.android);
     await _show(notifier,
         group: true, avatarPath: '/cache/team.png', senderID: 'bob');
-    final style = _map(_map(
-        channels.arguments('show')['platformSpecifics'])['styleInformation']);
-    final message = _map((style['messages']! as List).single);
-    expect(style['groupConversation'], isTrue);
-    expect(style['conversationTitle'], 'Team');
-    // MessagingStyle renders the sender itself; the policy prefix is removed.
-    expect(message['text'], 'SDK message');
-    expect(_map(message['person'])['name'], 'Bob');
-    expect(_map(message['person'])['key'], 'bob');
-    expect(_map(message['person'])['icon'], '/cache/team.png');
+    final args = channels.arguments('show');
+    final android = _map(args['platformSpecifics']);
+    expect(android['style'], AndroidNotificationStyle.defaultStyle.index);
+    expect(args['title'], 'Team');
+    expect(args['body'], 'SDK message');
+    expect(android['largeIcon'], '/cache/team.png');
   });
 
   test('Android missing avatars use the platform logo and load its bytes once',
@@ -131,12 +117,8 @@ void main() {
     expect(channels.assetReads, 1);
     for (final call in channels.pluginCalls.where((c) => c.method == 'show')) {
       final android = _map(_map(call.arguments)['platformSpecifics']);
-      final style = _map(android['styleInformation']);
-      final sender = _map(_map((style['messages']! as List).single)['person']);
       expect(android['largeIcon'], orderedEquals(_png));
       expect(android['largeIconBitmapSource'], 2); // FLN 18 byteArray.
-      expect(sender['icon'], _logo);
-      expect(sender['iconSource'], 3); // FLN 18 flutterBitmapAsset.
     }
   });
 

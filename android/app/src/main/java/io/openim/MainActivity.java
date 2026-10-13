@@ -19,6 +19,7 @@ import io.openim.calling.CallPictureInPictureBridge;
 import io.openim.location.NativeChatLocationMapFactory;
 
 public class MainActivity extends FlutterFragmentActivity {
+    private io.openim.messaging.NativeNotificationBridge nativeNotificationBridge;
     private MethodChannel inviteChannel;
     private LiveCastBridge liveCastBridge;
     private CallPictureInPictureBridge callPipBridge;
@@ -29,6 +30,7 @@ public class MainActivity extends FlutterFragmentActivity {
     @Override
     public void configureFlutterEngine(FlutterEngine flutterEngine) {
         super.configureFlutterEngine(flutterEngine);
+        nativeNotificationBridge = new io.openim.messaging.NativeNotificationBridge(this, flutterEngine);
         chatLocationMapFactory = new NativeChatLocationMapFactory(
                 getLifecycle(), flutterEngine.getDartExecutor().getBinaryMessenger());
         flutterEngine.getPlatformViewsController().getRegistry().registerViewFactory(
@@ -79,6 +81,7 @@ public class MainActivity extends FlutterFragmentActivity {
 
     @Override
     public void cleanUpFlutterEngine(FlutterEngine flutterEngine) {
+        if (nativeNotificationBridge != null) { nativeNotificationBridge.dispose(); nativeNotificationBridge = null; }
         if (chatLocationMapFactory != null) {
             chatLocationMapFactory.dispose();
             chatLocationMapFactory = null;
@@ -128,6 +131,7 @@ public class MainActivity extends FlutterFragmentActivity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if (nativeNotificationBridge != null) nativeNotificationBridge.onIntent(intent);
         pendingInvite = intent.getDataString();
         if (inviteChannel == null || pendingInvite == null) return;
         final String value = pendingInvite;

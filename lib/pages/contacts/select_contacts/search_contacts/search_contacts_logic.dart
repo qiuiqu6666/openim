@@ -88,7 +88,7 @@ class SelectContactsFromSearchLogic extends CommonSearchLogic {
     } catch (error) {
       if (active() &&
           !handleSessionAuthFailure(error, account: account, token: token)) {
-        IMViews.showToast(error.toString());
+        IMViews.showErrorToast(error);
       }
     }
   }

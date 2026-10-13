@@ -131,6 +131,21 @@ void main() {
     await runtime.dispose();
   });
 
+  test('local-only cleanup still waits for media and releases old audio', () async {
+    final media = Completer<void>();
+    cleanup = () => media.future;
+    var completed = false;
+    final ending = runtime.endSession(waitForRemote: false)
+        .then((_) => completed = true);
+    await flush();
+    expect(completed, isFalse);
+    media.complete();
+    await ending;
+    expect(platform.operations.any((operation) =>
+        operation.$1 == 'releaseAudioSession' &&
+        operation.$2?['accountID'] == 'me'), isTrue);
+  });
+
   test('installs handler readiness again after authenticating native owner',
       () {
     final methods =

@@ -201,17 +201,18 @@ final class IOSVoIPCallBridge: NSObject, PKPushRegistryDelegate {
             }
             result(coordinator.completeAction(actionID: id, accountID: accountID, sessionKey: sessionKey,
                                               succeeded: args["succeeded"] as? Bool == true))
-        case "markConnected", "endCall", "setAudioEnabled", "requestAnswer", "requestMute", "setSpeakerphone":
+        case "markAccepted", "markConnected", "endCall", "setAudioEnabled", "requestAnswer", "requestMute", "setSpeakerphone":
             guard matches(args), let room = nonemptyRoom(args) else {
                 result(Self.error("session_changed")); return
             }
             guard let record = coordinator.call(roomID: room, accountID: accountID) else {
-                if call.method == "endCall" || call.method == "markConnected" { result(nil) }
+                if call.method == "endCall" || call.method == "markConnected" || call.method == "markAccepted" { result(nil) }
                 else { result(false) }
                 return
             }
             guard record.sessionKey == sessionKey else { result(Self.error("session_changed")); return }
             if call.method == "markConnected" { coordinator.markConnected(record); result(nil) }
+            else if call.method == "markAccepted" { coordinator.markAccepted(record); result(nil) }
             else if call.method == "requestAnswer" { coordinator.requestAnswer(record) { result($0) } }
             else if call.method == "requestMute" {
                 guard let muted = args["muted"] as? Bool else { result(false); return }

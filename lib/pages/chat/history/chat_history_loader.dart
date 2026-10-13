@@ -1,9 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'chat_history_read_gate.dart';
+import 'chat_history_window.dart';
 
-typedef ChatHistoryReader = Future<AdvancedMessage> Function(
-    {required int count, Message? startMsg});
+export 'chat_history_read_gate.dart' show ChatHistoryReader;
 
 /// Coordinates the SDK's first page, older pages and refreshes for one route.
 /// The route retains ownership of its existing observable message list.
@@ -17,8 +18,10 @@ class ChatHistoryLoader {
     required this.onStateChanged,
     this.onLoaded,
     this.preserveReading,
+    this.canTrimHistory,
     this.pageSize = 40,
-  });
+    Duration readTimeout = const Duration(seconds: 30),
+  }) : _reads = ChatHistoryReadGate(timeout: readTimeout);
 
   final ChatHistoryReader fetch;
   final ChatHistoryReader? fetchNewer;
@@ -28,7 +31,9 @@ class ChatHistoryLoader {
   final void Function() onStateChanged;
   final void Function()? onLoaded;
   final bool Function()? preserveReading;
+  final bool Function(bool older)? canTrimHistory;
   final int pageSize;
+  final ChatHistoryReadGate _reads;
 
   bool loading = false;
   bool loaded = false;
@@ -51,6 +56,18 @@ class ChatHistoryLoader {
   Future<bool> Function()? _retry;
 
   Future<bool> retry() => _retry?.call() ?? loadOlder();
+
+  /// Recovery shares the native read limit but does not move the reading
+  /// window's older/newer cursors or replace its visible rows.
+  Future<AdvancedMessage> readNewerForRecovery(
+      {required int count, Message? startMsg}) {
+    final reader = fetchNewer;
+    if (_closed || reader == null) {
+      return Future.error(StateError('Chat history is unavailable'));
+    }
+    return _reads.read(reader,
+        count: count, startMsg: startMsg, revision: _generation);
+  }
 
   bool holdCurrentWindow() {
     if (_closed || fetchNewer == null || viewingHistory) return viewingHistory;
@@ -96,12 +113,14 @@ class ChatHistoryLoader {
     final completer = Completer<bool>();
     _queuedRefresh = completer.future;
     pending.then((_) async {
+      // This refresh is starting now. A sync signal received after its SDK
+      // snapshot starts must be able to queue one subsequent, fresher read.
+      if (identical(_queuedRefresh, completer.future)) _queuedRefresh = null;
       if (_closed || generation != _generation) {
         completer.complete(false);
       } else {
         completer.complete(await _start(refresh: true));
       }
-      if (identical(_queuedRefresh, completer.future)) _queuedRefresh = null;
     });
     return completer.future;
   }
@@ -159,8 +178,10 @@ class ChatHistoryLoader {
     try {
       final count = (pageSize / 2).ceil().clamp(1, pageSize);
       final pages = await Future.wait([
-        fetch(count: count, startMsg: target),
-        newer(count: count, startMsg: target),
+        _reads.read(fetch,
+            count: count, startMsg: target, revision: generation),
+        _reads.read(newer,
+            count: count, startMsg: target, revision: generation),
       ]);
       if (_closed || generation != _generation) return false;
       if (removedIDs.contains(target.clientMsgID)) {
@@ -224,11 +245,12 @@ class ChatHistoryLoader {
             .lastOrNull;
       }
       if (_newerCursor == null) return false;
-      final result = await fetchNewer!(count: pageSize, startMsg: _newerCursor);
+      final result = await _reads.read(fetchNewer!,
+          count: pageSize, startMsg: _newerCursor, revision: generation);
       if (_closed || generation != _generation) return false;
       final page = merge(result.messageList ?? [], removedIDs: removedIDs);
       _historicalIDs.addAll(page.map((m) => m.clientMsgID));
-      final combined = merge([...messages(), ..._reconcile(page, before)],
+      var combined = merge([...messages(), ..._reconcile(page, before)],
           removedIDs: removedIDs);
       _newerCursor = page.lastOrNull ?? _newerCursor;
       hasNewer = result.isEnd != true;
@@ -237,6 +259,22 @@ class ChatHistoryLoader {
         _windowViewingHistory = false;
         _historicalIDs.clear();
         _latestAnchor = _newerCursor;
+      }
+      if (canTrimHistory?.call(false) == true) {
+        final bounded = trimChatHistoryWindow(combined, older: false);
+        if (bounded.length != combined.length) {
+          combined = bounded;
+          _cursor =
+              combined.where((m) => !_isPendingSend(m.status)).firstOrNull;
+          hasMore = true;
+          if (viewingHistory) {
+            _historicalIDs
+              ..clear()
+              ..addAll(combined
+                  .where((m) => !_isPendingSend(m.status))
+                  .map((m) => m.clientMsgID));
+          }
+        }
       }
       replace(combined, false, false);
       return hasNewer;
@@ -297,8 +335,10 @@ class ChatHistoryLoader {
         hasMore = false;
         return false;
       }
-      final result = await fetch(
-          count: pageSize, startMsg: firstPage || refresh ? null : _cursor);
+      final result = await _reads.read(fetch,
+          count: pageSize,
+          startMsg: firstPage || refresh ? null : _cursor,
+          revision: generation);
       if (_closed || generation != _generation) return false;
       final page = result.messageList ?? <Message>[];
       if (_windowViewingHistory && !latest) {
@@ -341,8 +381,7 @@ class ChatHistoryLoader {
         retained = current.where((m) => _compare(m, oldest) < 0);
       }
       final reconciled = _reconcile(page, snapshot);
-      final combined = merge(
-          [...retained, ...reconciled, ...pending, ...arrived],
+      var combined = merge([...retained, ...reconciled, ...pending, ...arrived],
           removedIDs: removedIDs);
       final pageCursor =
           page.where((m) => !removedIDs.contains(m.clientMsgID)).firstOrNull;
@@ -365,6 +404,21 @@ class ChatHistoryLoader {
         _newerCursor = null;
       }
       if (firstPage || refresh) _latestAnchor = page.lastOrNull;
+      if (!firstPage &&
+          !refresh &&
+          fetchNewer != null &&
+          canTrimHistory?.call(true) == true) {
+        final bounded = trimChatHistoryWindow(combined, older: true);
+        if (bounded.length != combined.length) {
+          combined = bounded;
+          final persisted = combined.where((m) => !_isPendingSend(m.status));
+          _newerCursor = persisted.lastOrNull;
+          _historicalIDs
+            ..clear()
+            ..addAll(persisted.map((m) => m.clientMsgID));
+          viewingHistory = _windowViewingHistory = hasNewer = true;
+        }
+      }
       replace(combined, firstPage || discontinuous, refresh);
       onLoaded?.call();
       return latest ? true : hasMore;
@@ -428,8 +482,17 @@ class ChatHistoryLoader {
   static int _compare(Message a, Message b) {
     final time = (a.sendTime ?? a.createTime ?? 0)
         .compareTo(b.sendTime ?? b.createTime ?? 0);
-    return time != 0 ? time : (a.seq ?? 0).compareTo(b.seq ?? 0);
+    if (time != 0) return time;
+    final aSequence = a.seq ?? 0;
+    final bSequence = b.seq ?? 0;
+    // An unsequenced live row is provisional, not older than every persisted
+    // message in the same second. Keep it after the known sequence range.
+    if (aSequence <= 0) return bSequence <= 0 ? 0 : 1;
+    if (bSequence <= 0) return -1;
+    return aSequence.compareTo(bSequence);
   }
+
+  static int compareMessageOrder(Message a, Message b) => _compare(a, b);
 
   static List<Message> merge(Iterable<Message> values,
       {Set<String> removedIDs = const {}}) {
@@ -439,11 +502,19 @@ class ChatHistoryLoader {
       if (id != null && removedIDs.contains(id)) continue;
       unique[id ?? message] = message;
     }
-    return unique.values.toList()..sort(_compare);
+    // List.sort is not stable. Preserve arrival order explicitly when neither
+    // same-time row has a server sequence, including across history merges.
+    final indexed = unique.values.indexed.toList();
+    indexed.sort((a, b) {
+      final order = _compare(a.$2, b.$2);
+      return order != 0 ? order : a.$1.compareTo(b.$1);
+    });
+    return indexed.map((entry) => entry.$2).toList();
   }
 
   void close() {
     _closed = true;
+    _reads.close();
     _invalidate();
     _retry = null;
     _windowRetry = false;
@@ -452,6 +523,7 @@ class ChatHistoryLoader {
 
   void _invalidate() {
     _generation++;
+    _reads.invalidate(_generation);
     _request = null;
     _queuedRefresh = null;
     _changingWindow = false;

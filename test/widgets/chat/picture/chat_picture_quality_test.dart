@@ -136,7 +136,7 @@ void main() {
       final decoded = (await tester.runAsync(() => _decode(widget.image)))!;
       final displayed = tester.getSize(find.byType(ChatPictureView));
       expect(displayed.width, 90);
-      expect(displayed.height, closeTo(90 * 5 / 3, .01));
+      expect(displayed.height, closeTo(90 * 1.8, .01));
       expect(decoded.width, (90 * dpr).toInt());
       expect(decoded.height, (1080 * dpr).toInt());
 
@@ -156,6 +156,28 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('portrait bubble height stays capped around the old threshold',
+      (tester) async {
+    for (final height in [1500, 1799, 1800, 1801, 7200]) {
+      final message = Message()
+        ..pictureElem =
+            PictureElem(sourcePicture: PictureInfo(width: 600, height: height));
+      await tester.pumpWidget(MaterialApp(
+          builder: (context, child) {
+            ScreenUtil.init(context, designSize: const Size(375, 812));
+            return child!;
+          },
+          home: Scaffold(
+              body: Center(
+                  child: ChatPictureView(
+                      message: message,
+                      isISend: false,
+                      maxDisplayWidth: 90)))));
+      expect(tester.getSize(find.byType(ChatPictureView)), const Size(90, 162));
+      expect(tester.takeException(), isNull);
+    }
+  });
 
   testWidgets('ordinary photo remains proportionate with a small decode',
       (tester) async {

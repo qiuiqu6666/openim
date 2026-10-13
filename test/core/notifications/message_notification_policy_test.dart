@@ -230,10 +230,10 @@ void main() {
         'https://example.com/sender.png');
   });
 
-  test('group detail uses group identity and a sender prefix', () {
+  test('group detail uses group identity without a sender prefix', () {
     final presentation = _present(conversation: _group())!;
     expect(presentation.title, 'Team');
-    expect(presentation.body, 'Alice: SDK message body');
+    expect(presentation.body, 'SDK message body');
     expect(presentation.avatarURL, 'https://example.com/group.png');
     expect(presentation.isGroup, isTrue);
     expect(_present(conversation: _group()..faceURL = null)!.avatarURL, isNull,

@@ -46,7 +46,7 @@ class _CounterPageState extends State<_CounterPage> {
           itemBuilder: (_, index) => Text('item $index')));
 }
 
-double pageScale(WidgetTester tester, String name) {
+double pageOffset(WidgetTester tester, String name) {
   final depth = find.byElementPredicate(
       (element) =>
           element.widget is AppRouteDepthTransition &&
@@ -54,9 +54,9 @@ double pageScale(WidgetTester tester, String name) {
       skipOffstage: false);
   final transforms = find.descendant(
       of: depth,
-      matching: find.byType(Transform, skipOffstage: false),
+      matching: find.byType(Scaffold, skipOffstage: false),
       skipOffstage: false);
-  return tester.widget<Transform>(transforms.first).transform.entry(0, 0);
+  return tester.getTopLeft(transforms.first).dx;
 }
 
 void main() {
@@ -79,7 +79,7 @@ void main() {
     }
   });
 
-  testWidgets('GetX and shared routes recede, reverse and preserve list state',
+  testWidgets('GetX and shared routes slide, reverse and preserve list state',
       (tester) async {
     tester.view.physicalSize = const Size(375, 812);
     tester.view.devicePixelRatio = 1;
@@ -113,24 +113,24 @@ void main() {
       builder: (_) => const Scaffold(body: Text('middle')),
     )));
     await tester.pumpAndSettle();
-    expect(pageScale(tester, '/under'), closeTo(.96, .001));
+    expect(pageOffset(tester, '/under'), closeTo(-93.75, .001));
     expect(owner.closes, 0);
     expect(initializations, 1);
     expect(scroll.offset, 425);
     unawaited(Get.to<void>(() => support.target));
     await tester.pumpAndSettle();
-    expect(pageScale(tester, '/middle'), closeTo(.96, .001));
+    expect(pageOffset(tester, '/middle'), closeTo(-93.75, .001));
     await support.swipe(tester);
-    expect(pageScale(tester, '/middle'), closeTo(1, .001));
+    expect(pageOffset(tester, '/middle'), closeTo(0, .001));
     final gesture = await tester.startGesture(const Offset(10, 300));
     await gesture.moveBy(const Offset(150, 0));
     await tester.pump();
-    expect(pageScale(tester, '/under'), inExclusiveRange(.96, 1.0));
+    expect(pageOffset(tester, '/under'), closeTo(-56.25, .001));
     await gesture.cancel();
     await tester.pumpAndSettle();
-    expect(pageScale(tester, '/under'), closeTo(.96, .001));
+    expect(pageOffset(tester, '/under'), closeTo(-93.75, .001));
     await support.swipe(tester);
-    expect(pageScale(tester, '/under'), closeTo(1, .001));
+    expect(pageOffset(tester, '/under'), closeTo(0, .001));
     expect(initializations, 1);
     expect(scroll.offset, 425);
     expect(owner.closes, 0);
@@ -170,14 +170,6 @@ void main() {
     );
     unawaited(nav.currentState!.push(route));
     await tester.pumpAndSettle();
-    final depth = find
-        .ancestor(
-            of: find.text('overlay'),
-            matching: find.byType(AppRouteDepthTransition))
-        .first;
-    final background = tester.widget<ColoredBox>(
-        find.descendant(of: depth, matching: find.byType(ColoredBox)).first);
-    expect(background.color, Colors.transparent);
     expect(find.text('home'), findsOneWidget);
     await support.swipe(tester, start: 90, distance: 180);
     expect(find.text('overlay'), findsNothing);

@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import '../../services/moments_repository.dart';
+import '../../services/media/file_hasher.dart';
 import 'moments_widgets.dart';
 import 'presentation/moments_secondary_layout.dart';
 
@@ -33,6 +34,7 @@ class _MomentsCoverPageState extends State<MomentsCoverPage> {
   MomentMedia? _uploaded;
   String _clientMediaId = const Uuid().v4();
   MomentsSettings? _settings;
+  final _fileHasher = FileHasher();
   bool get _current => widget.repository.isSessionCurrent(_scope);
   bool get _unknown => _pending != _PendingCover.none;
   @override
@@ -45,6 +47,7 @@ class _MomentsCoverPageState extends State<MomentsCoverPage> {
 
   void _repositoryChanged() {
     if (mounted && !_current) {
+      _fileHasher.dispose();
       _evictPreview();
       setState(() {
         _file = null;
@@ -60,6 +63,7 @@ class _MomentsCoverPageState extends State<MomentsCoverPage> {
   @override
   void dispose() {
     widget.repository.removeListener(_repositoryChanged);
+    _fileHasher.dispose();
     _evictPreview();
     super.dispose();
   }
@@ -67,6 +71,15 @@ class _MomentsCoverPageState extends State<MomentsCoverPage> {
   void _evictPreview() {
     final file = _file;
     if (file != null) unawaited(FileImage(file).evict());
+  }
+
+  Future<String> _hashFile(File file) async {
+    final cancel = CancelToken();
+    try {
+      return await _fileHasher.hash(file, cancelToken: cancel);
+    } finally {
+      cancel.cancel('Cover hash finished');
+    }
   }
 
   Future<void> _load() async {
@@ -128,16 +141,16 @@ class _MomentsCoverPageState extends State<MomentsCoverPage> {
         throw const MomentsException('Unsupported image',
             code: 'UNSUPPORTED_MEDIA_TYPE');
       }
-      if (await file.length() >
+      final size = await file.length();
+      if (size >
           (widget.repository.capabilities?.maxImageBytes ?? 10485760)) {
         throw const MomentsException('Image too large',
             code: 'IMAGE_TOO_LARGE');
       }
-      final bytes = await file.readAsBytes();
-      if (bytes.isEmpty) {
+      if (size <= 0) {
         throw const MomentsException('Image unreadable', code: 'IMAGE_INVALID');
       }
-      final digest = sha256.convert(bytes).toString();
+      final digest = await _hashFile(file);
       if (!mounted || !_current) return;
       _evictPreview();
       setState(() {
@@ -214,9 +227,9 @@ class _MomentsCoverPageState extends State<MomentsCoverPage> {
       if (confirmingSetting && await _confirmSetting(reset: false)) return;
       if (!mounted || !_current) return;
       confirmingSetting = false;
-      final bytes = await _file!.readAsBytes();
+      final digest = await _hashFile(_file!);
       if (!mounted || !_current) return;
-      if (sha256.convert(bytes).toString() != _fileDigest) {
+      if (digest != _fileDigest) {
         throw const MomentsException('Selected file changed',
             code: 'COVER_IMAGE_CHANGED');
       }

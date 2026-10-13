@@ -84,6 +84,8 @@ class ChatGroupController {
           },
   );
   String? avatarFor(Message message) => _senderAvatars.faceFor(message);
+  String? nicknameFor(Message message) => _senderAvatars.nicknameFor(message);
+  void refreshSenderIdentity(String? id) => _senderAvatars.refreshMember(id);
   void updateSenderAvatar(String? id, String? face) =>
       _senderAvatars.update(id, face);
   final _removedMemberIDs = <String>{};
@@ -371,6 +373,7 @@ class ChatGroupController {
   }
 
   void _putMemberInfo(GroupMembersInfo member) {
+    _senderAvatars.updateNickname(member.userID, member.nickname);
     _senderAvatars.update(member.userID, member.faceURL);
     final id = member.userID;
     if (id != null && id.isNotEmpty) memberUpdateInfoMap[id] = member;

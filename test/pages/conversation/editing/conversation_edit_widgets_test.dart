@@ -20,6 +20,44 @@ Widget _host({required bool dark, required Widget child}) => MaterialApp(
 
 void main() {
   for (final dark in [false, true]) {
+    testWidgets('edit background reaches bottom across safe insets ($dark)',
+        (tester) async {
+      for (final inset in [0.0, 24.0, 34.0]) {
+        await tester.pumpWidget(MaterialApp(
+          theme:
+              ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
+          home: MediaQuery(
+            data: MediaQueryData(
+              padding: EdgeInsets.only(bottom: inset),
+              viewPadding: EdgeInsets.only(bottom: inset),
+            ),
+            child: Scaffold(
+              bottomNavigationBar: ConversationEditActionBar(
+                hasSelection: false,
+                busy: false,
+                onMarkRead: () {},
+                onArchive: () {},
+                onDelete: () {},
+              ),
+            ),
+          ),
+        ));
+        final bar = find.byType(ConversationEditActionBar);
+        final background =
+            find.descendant(of: bar, matching: find.byType(Material)).first;
+        final screenBottom = tester.getRect(find.byType(Scaffold)).bottom;
+        expect(tester.getRect(background).bottom, screenBottom);
+        expect(tester.getSize(background).height,
+            ConversationEditTokens.actionBarHeight + inset);
+        expect(
+            tester
+                .getRect(
+                    find.byKey(const ValueKey('conversation-edit-mark-read')))
+                .bottom,
+            screenBottom - inset);
+      }
+    });
+
     testWidgets('edit actions follow selection and busy state ($dark)',
         (tester) async {
       final actions = <String>[];

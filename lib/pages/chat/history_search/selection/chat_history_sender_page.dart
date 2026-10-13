@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:math' as math;
 
-import 'package:azlistview/azlistview.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -13,6 +11,7 @@ import '../../../contacts/contacts_logic.dart';
 import '../../../contacts/presence/contact_presence_policy.dart';
 import '../../../contacts/presence_label.dart';
 import 'chat_history_sender_directory.dart';
+import 'chat_history_sender_preloader.dart';
 import 'chat_history_sender_source.dart';
 
 class ChatHistorySenderPage extends StatefulWidget {
@@ -34,10 +33,9 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
   static const _pageSize = 50;
   static const _searchDelay = Duration(milliseconds: 300);
   final _search = TextEditingController();
-  final _members = <ChatHistorySender>[];
-  List<ChatHistorySenderRow> _directory = [];
-  final _itemScroll = ItemScrollController();
-  final _itemPositions = ItemPositionsListener.create();
+  final _directory = ChatHistorySenderDirectory();
+  var _itemScroll = ItemScrollController();
+  var _itemPositions = ItemPositionsListener.create();
   int _directoryVersion = 0;
   late final ChatHistorySenderSource _source;
   late final String _ownerID;
@@ -45,6 +43,7 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
   final _registeredPresence = <String>{};
   bool _hasPresenceOwner = false, _routeActive = true, _appActive = true;
   Timer? _debounce;
+  late final ChatHistorySenderPreloader _preloader;
   int _generation = 0, _offset = 0;
   bool _loading = false, _hasMore = true, _failed = false;
   bool _accountChanged = false;
@@ -54,6 +53,16 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
     super.initState();
     _source = widget.source ?? OpenIMChatHistorySenderSource();
     _ownerID = _source.currentUserID;
+    _preloader = ChatHistorySenderPreloader(
+      load: _load,
+      canLoad: () =>
+          mounted &&
+          !_accountChanged &&
+          _hasMore &&
+          !_loading &&
+          !_failed &&
+          _debounce?.isActive != true,
+    );
     _contacts =
         Get.isRegistered<ContactsLogic>() ? Get.find<ContactsLogic>() : null;
     _appActive = WidgetsBinding.instance.lifecycleState == null ||
@@ -70,13 +79,17 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
     _routeActive = (ModalRoute.isCurrentOf(context) ?? true) &&
         TickerMode.valuesOf(context).enabled;
     _syncPresence();
+    _syncPreload();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appActive = state == AppLifecycleState.resumed;
     _syncPresence();
+    _syncPreload();
   }
+
+  void _syncPreload() => _preloader.setActive(_routeActive && _appActive);
 
   bool get _canReadPresence =>
       !_accountChanged &&
@@ -96,7 +109,7 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
                   position.itemTrailingEdge > 0 &&
                   position.index >= 0 &&
                   position.index < _directory.length)
-                _directory[position.index].sender.userID,
+                _directory[position.index].userID,
           }
         : const <String>{};
     if (_hasPresenceOwner &&
@@ -116,11 +129,11 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
     if (mounted) {
       ++_generation;
       _debounce?.cancel();
+      _preloader.cancel();
       setState(() {
         _accountChanged = true;
-        _members.clear();
-        _directory = [];
-        ++_directoryVersion;
+        _directory.clear();
+        _resetViewport();
         _loading = false;
         _hasMore = false;
       });
@@ -131,17 +144,18 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
 
   void _searchChanged(String value) {
     _debounce?.cancel();
+    _preloader.cancel();
     if (!_checkAccount()) return;
     ++_generation;
     setState(() {
-      _members.clear();
-      _directory = [];
-      ++_directoryVersion;
+      _directory.clear();
+      _resetViewport();
       _offset = 0;
       _hasMore = true;
       _loading = true;
       _failed = false;
     });
+    _preloader.resetInteraction();
     _syncPresence();
     _debounce = Timer(_searchDelay, () => _load(replace: true));
   }
@@ -149,10 +163,17 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
   Future<void> _load({bool replace = false}) async {
     if (!mounted || (_loading && !replace) || !_checkAccount()) return;
     final generation = ++_generation;
-    setState(() {
+    var refresh = _directory.isEmpty || _failed;
+    void startLoading() {
       _loading = true;
       _failed = false;
-    });
+    }
+
+    if (refresh) {
+      setState(startLoading);
+    } else {
+      startLoading();
+    }
     try {
       final page = await _source.load(
         conversationID: widget.conversationID,
@@ -161,65 +182,61 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
         count: _pageSize,
       );
       if (!mounted || generation != _generation || !_checkAccount()) return;
-      // New pages may insert letters above the visible row. Keep that sender
-      // anchored while refreshing the alphabetical projection.
-      final visible = _itemPositions.itemPositions.value
-          .where((position) =>
-              position.itemTrailingEdge > 0 &&
-              position.itemLeadingEdge >= 0 &&
-              position.index < _directory.length)
-          .toList()
-        ..sort((a, b) => a.index.compareTo(b.index));
-      final anchor = visible.isEmpty ? null : visible.first;
-      final anchorID =
-          anchor == null ? null : _directory[anchor.index].sender.userID;
-      setState(() {
-        _hasMore = page.hasMore && page.nextOffset > _offset;
-        _offset = page.nextOffset;
-        final seen = _members.map((member) => member.userID).toSet();
-        _members.addAll(page.items.where(
-            (member) => member.userID.isNotEmpty && seen.add(member.userID)));
-        _directory =
-            buildChatHistorySenderDirectory(_members, previous: _directory);
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && generation == _generation) _syncPresence();
-      });
-      if (anchorID != null) {
+      // A request can finish during a drag or after the page is covered. Keep
+      // its result pending until the list is idle before appending new rows.
+      while (!_preloader.isIdle) {
+        if (!await _preloader.waitUntilIdle() ||
+            !mounted ||
+            generation != _generation ||
+            !_checkAccount()) return;
+      }
+      final added = _directory.addPage(page.items);
+      _hasMore = page.hasMore && page.nextOffset > _offset;
+      _offset = page.nextOffset;
+      if (added) {
+        refresh = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted ||
-              generation != _generation ||
-              !_itemScroll.isAttached) {
-            return;
-          }
-          final index =
-              _directory.indexWhere((row) => row.sender.userID == anchorID);
-          if (index >= 0) {
-            _itemScroll.jumpTo(
-                index: index,
-                alignment: anchor!.itemLeadingEdge.clamp(0.0, 1.0));
-          }
+          if (mounted && generation == _generation) _syncPresence();
         });
       }
     } catch (_) {
       if (mounted && generation == _generation && _checkAccount()) {
-        setState(() => _failed = true);
+        _failed = true;
+        refresh = true;
       }
     } finally {
       if (mounted && generation == _generation) {
-        setState(() => _loading = false);
+        if (refresh) {
+          setState(() => _loading = false);
+          // Let the newly appended batch paint before continuing.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && generation == _generation) _preloader.schedule();
+          });
+        } else {
+          _loading = false;
+        }
       }
     }
+  }
+
+  void _resetViewport() {
+    _itemPositions.itemPositions.removeListener(_syncPresence);
+    _itemPositions = ItemPositionsListener.create();
+    _itemPositions.itemPositions.addListener(_syncPresence);
+    _itemScroll = ItemScrollController();
+    ++_directoryVersion;
   }
 
   @override
   void dispose() {
     ++_generation;
+    _preloader.dispose();
     FriendDisplayPreferences.changes.removeListener(_syncPresence);
     _itemPositions.itemPositions.removeListener(_syncPresence);
     WidgetsBinding.instance.removeObserver(this);
     if (_hasPresenceOwner) _contacts?.setDirectoryPresenceVisible(this, null);
     _registeredPresence.clear();
+    _directory.clear();
     _debounce?.cancel();
     _search.dispose();
     super.dispose();
@@ -267,21 +284,17 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
             onChanged: _searchChanged,
             onCleared: () => _searchChanged(''),
           ),
-          if (_loading) const LinearProgressIndicator(),
+          if (_loading && _directory.isEmpty) const LinearProgressIndicator(),
           Expanded(
             child: NotificationListener<ScrollNotification>(
               onNotification: (event) {
-                if (event is ScrollStartNotification &&
-                    event.dragDetails != null) {
-                  FocusScope.of(context).unfocus();
-                }
-                if (event is ScrollUpdateNotification &&
-                    event.metrics.extentAfter < AppTokens.listItemHeight * 3 &&
-                    _hasMore &&
-                    !_loading &&
-                    !_failed &&
-                    _debounce?.isActive != true) {
-                  unawaited(_load());
+                if (event is ScrollStartNotification) {
+                  _preloader.setScrolling(true);
+                  if (event.dragDetails != null) {
+                    FocusScope.of(context).unfocus();
+                  }
+                } else if (event is ScrollEndNotification) {
+                  _preloader.setScrolling(false);
                 }
                 return false;
               },
@@ -289,7 +302,17 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
                   ? Align(
                       alignment: Alignment.topCenter, child: _footer(context))
                   : Column(children: [
-                      Expanded(child: _buildDirectory(context)),
+                      Expanded(
+                        child: Listener(
+                          onPointerDown: (event) => _preloader
+                              .pointerChanged(event.pointer, down: true),
+                          onPointerUp: (event) => _preloader
+                              .pointerChanged(event.pointer, down: false),
+                          onPointerCancel: (event) => _preloader
+                              .pointerChanged(event.pointer, down: false),
+                          child: _buildDirectory(context),
+                        ),
+                      ),
                       _footer(context),
                     ]),
             ),
@@ -300,61 +323,22 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
   }
 
   Widget _buildDirectory(BuildContext context) {
-    final theme = Theme.of(context);
-    final scale = MediaQuery.textScalerOf(context);
-    final sectionHeight = scale.scale(AppTokens.captionFontSize) + AppTokens.s5;
-    final tags = SuspensionUtil.getTagIndexList(_directory);
-    return LayoutBuilder(builder: (context, constraints) {
-      final indexHeight = math.min(scale.scale(AppTokens.s4) + AppTokens.s3,
-          constraints.maxHeight / tags.length);
-      final indexStyle = theme.textTheme.bodySmall;
-      final indexFont = math.min(
-          AppTokens.s4,
-          math.max(1.0, indexHeight - AppTokens.s2) /
-              ((scale.scale(AppTokens.s4) / AppTokens.s4) *
-                  (indexStyle?.height ?? 1.2)));
-      return AzListView(
-        key: ValueKey('chat-history-sender-index-$_directoryVersion'),
-        data: _directory,
-        itemCount: _directory.length,
-        itemScrollController: _itemScroll,
-        itemPositionsListener: _itemPositions,
-        padding: const EdgeInsets.only(right: AppTokens.s8),
-        itemBuilder: (context, index) {
-          final member = _directory[index].sender;
-          return ListenableBuilder(
-              listenable: FriendDisplayPreferences.changes,
-              builder: (_, __) => _contacts == null
-                  ? _buildMember(context, member)
-                  : Obx(() => _buildMember(context, member)));
-        },
-        susItemHeight: sectionHeight,
-        susItemBuilder: (_, index) => Container(
-          key: ValueKey(
-              'chat-history-sender-section-${_directory[index].getSuspensionTag()}'),
-          height: sectionHeight,
-          padding: const EdgeInsets.symmetric(horizontal: AppTokens.s5),
-          alignment: AlignmentDirectional.centerStart,
-          color:
-              AppTokens.surfaceAlt(dark: theme.brightness == Brightness.dark),
-          child: Text(_directory[index].getSuspensionTag(),
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        ),
-        indexBarData: tags,
-        indexBarWidth: AppTokens.s8,
-        indexBarItemHeight: indexHeight,
-        indexBarMargin: const EdgeInsets.only(right: AppTokens.s2),
-        indexBarOptions: directoryIndexBarOptions(
-          textStyle: indexStyle?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant, fontSize: indexFont),
-          selectTextStyle: indexStyle?.copyWith(
-              color: AppTokens.onAccent, fontSize: indexFont),
-          accentColor: AppTokens.accent,
-          hapticFeedback: true,
-        ),
-      );
-    });
+    return ScrollablePositionedList.builder(
+      key: ValueKey('chat-history-sender-list-$_directoryVersion'),
+      itemCount: _directory.length,
+      itemScrollController: _itemScroll,
+      itemPositionsListener: _itemPositions,
+      padding: EdgeInsets.zero,
+      itemBuilder: (context, index) {
+        final member = _directory[index];
+        return ListenableBuilder(
+            key: ValueKey(member.userID),
+            listenable: FriendDisplayPreferences.changes,
+            builder: (_, __) => _contacts == null
+                ? _buildMember(context, member)
+                : Obx(() => _buildMember(context, member)));
+      },
+    );
   }
 
   Widget _buildMember(BuildContext context, ChatHistorySender member) {
@@ -410,7 +394,7 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
   }
 
   Widget _footer(BuildContext context) {
-    if (_loading) return const SizedBox(height: AppTokens.listItemHeight);
+    if (_loading) return const SizedBox.shrink();
     if (_accountChanged) {
       return Padding(
         padding: const EdgeInsets.all(AppTokens.s7),
@@ -418,16 +402,14 @@ class _ChatHistorySenderPageState extends State<ChatHistorySenderPage>
             textAlign: TextAlign.center),
       );
     }
-    if (_failed || _hasMore) {
+    if (_failed) {
       return TextButton(
-        key: ValueKey(
-            _failed ? 'chat-history-sender-retry' : 'chat-history-sender-more'),
+        key: const ValueKey('chat-history-sender-retry'),
         onPressed: _load,
-        child: Text(chatHistorySearchText(
-            context, _failed ? 'membersFailed' : 'loadMore')),
+        child: Text(chatHistorySearchText(context, 'membersFailed')),
       );
     }
-    if (_members.isEmpty) {
+    if (_directory.isEmpty && !_hasMore) {
       return Padding(
         padding: const EdgeInsets.all(AppTokens.s7),
         child: Text(chatHistorySearchText(context, 'noMembers'),

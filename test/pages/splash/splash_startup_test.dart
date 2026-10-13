@@ -14,6 +14,9 @@ import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _App extends GetxController implements AppController {
+  Future<void>? updateCheck;
+  @override
+  Future<void> autoCheckVersionUpgrade() => updateCheck ?? Future.value();
   @override
   Future<void> onApplicationSessionReady({bool authenticated = false}) async {}
 
@@ -67,6 +70,46 @@ void main() {
         .setMockMethodCallHandler(sdk, null);
     Get.reset();
   });
+  for (final authenticated in [true, false]) {
+    testWidgets('update gate blocks startup authenticated=$authenticated',
+        (tester) async {
+      final update = Completer<void>();
+      (Get.find<AppController>() as _App).updateCheck = update.future;
+      if (!authenticated) await DataSp.removeLoginCertificate();
+      final im = Get.put<IMController>(_IM()) as _IM;
+      await tester.pumpWidget(GetMaterialApp(initialRoute: '/', getPages: [
+        GetPage(name: '/', page: () => const Scaffold(body: Text('splash'))),
+        GetPage(
+            name: AppRoutes.home,
+            page: () => const Scaffold(body: Text('main ready'))),
+        GetPage(
+            name: AppRoutes.login,
+            page: () => const Scaffold(body: Text('login'))),
+      ]));
+      final logic = SplashLogic()
+        ..onInit()
+        ..onReady();
+      im.initializedSubject.add(true);
+      im.initializedSubject.add(true);
+      await tester.pump(const Duration(seconds: 2));
+      expect(im.loginCalls, 0);
+      expect(find.text('splash'), findsOneWidget);
+      expect(find.text('main ready'), findsNothing);
+      expect(find.text('login'), findsNothing);
+      // An optional update can finish; a mandatory dialog never releases this
+      // gate merely because its external download URL was opened.
+      update.complete();
+      await tester.pump();
+      if (authenticated) {
+        expect(im.loginCalls, 1);
+        im.reply.complete();
+      }
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text(authenticated ? 'main ready' : 'login'), findsOneWidget);
+      logic.onClose();
+    });
+  }
   testWidgets(
       'auto-login navigates immediately without awaiting the first 400 conversations',
       (tester) async {
@@ -89,7 +132,9 @@ void main() {
           name: AppRoutes.login,
           page: () => const Scaffold(body: Text('login'))),
     ]));
-    final logic = SplashLogic()..onInit();
+    final logic = SplashLogic()
+      ..onInit()
+      ..onReady();
     im.initializedSubject.add(true);
     im.initializedSubject.add(true);
     await tester.pump();

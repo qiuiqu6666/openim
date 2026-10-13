@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'message_notification_actions.dart';
+import 'native_android_notifications.dart';
 import 'message_notification_policy.dart';
 import 'message_notification_sound.dart';
 import 'message_notification_target.dart';
@@ -13,6 +14,7 @@ import 'message_notification_target.dart';
 class SystemMessageNotifier {
   SystemMessageNotifier(this.plugin, {TargetPlatform? platform})
       : _platform = platform ?? defaultTargetPlatform;
+  final nativeAndroid = NativeAndroidNotifications();
   final FlutterLocalNotificationsPlugin plugin;
   final TargetPlatform _platform;
   static const _bridge = MethodChannel('openim_chat_notifications');
@@ -43,6 +45,7 @@ class SystemMessageNotifier {
       ),
       onDidReceiveNotificationResponse: onResponse,
     );
+    await nativeAndroid.initialize(onResponse);
     final launch = await plugin.getNotificationAppLaunchDetails();
     if (launch?.didNotificationLaunchApp == true &&
         launch?.notificationResponse != null) {
@@ -74,6 +77,7 @@ class SystemMessageNotifier {
   }
 
   Future<void> clearSession(String? sessionKey) async {
+    await nativeAndroid.clear(sessionKey);
     if (_platform != TargetPlatform.iOS) return;
     try {
       await _bridge.invokeMethod('clearSession', {'sessionKey': sessionKey});
@@ -150,30 +154,6 @@ class SystemMessageNotifier {
             .load('assets/img/99chat_logo.png')
             .then((data) => data.buffer.asUint8List())))
         : FilePathAndroidBitmap(avatarPath);
-    final personIcon = avatarPath == null
-        ? const FlutterBitmapAssetAndroidIcon('assets/img/99chat_logo.png')
-        : BitmapFilePathAndroidIcon(avatarPath);
-    final style = MessagingStyleInformation(
-      Person(key: target.accountID, name: 'Me'),
-      conversationTitle: presentation.title,
-      groupConversation: presentation.isGroup,
-      messages: [
-        Message(
-            presentation.isGroup &&
-                    presentation.senderName.isNotEmpty &&
-                    presentation.body.startsWith('${presentation.senderName}: ')
-                ? presentation.body
-                    .substring(presentation.senderName.length + 2)
-                : presentation.body,
-            timestamp ?? DateTime.now(),
-            Person(
-                name: presentation.isGroup
-                    ? presentation.senderName
-                    : presentation.title,
-                key: senderID ?? target.sourceID,
-                icon: personIcon)),
-      ],
-    );
     if (isCurrent?.call() == false) return;
     await plugin.show(
       id,
@@ -189,7 +169,6 @@ class SystemMessageNotifier {
           importance: Importance.max,
           priority: Priority.high,
           category: AndroidNotificationCategory.message,
-          styleInformation: style,
           largeIcon: avatar,
           playSound: sound,
           sound: sound
@@ -234,6 +213,9 @@ class SystemMessageNotifier {
     );
   }
 
-  Future<void> cancel(int id) => plugin.cancel(id);
+  Future<void> cancel(int id) async {
+    await nativeAndroid.cancel(id);
+    await plugin.cancel(id);
+  }
   Future<void> cancelAll() => plugin.cancelAll();
 }

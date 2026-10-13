@@ -146,7 +146,7 @@ class AddContactsBySearchLogic extends GetxController {
       if (_active(generation, keyword, account, token)) {
         refreshCtrl.loadFailed();
         if (!handleSessionAuthFailure(error, account: account, token: token)) {
-          IMViews.showToast(error.toString());
+          IMViews.showErrorToast(error);
         }
       }
     } finally {
@@ -183,7 +183,7 @@ class AddContactsBySearchLogic extends GetxController {
         groupInfoList.value = list;
     } catch (error) {
       if (_active(generation, keyword, account, token)) {
-        IMViews.showToast(error.toString());
+        IMViews.showErrorToast(error);
       }
     }
   }

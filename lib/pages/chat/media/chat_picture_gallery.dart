@@ -58,6 +58,7 @@ class ChatPictureGallery {
     final sources = <MediaSource>[];
     final mappedMessages = <Message>[];
     var initialIndex = -1;
+    final addedIDs = <String>{};
 
     Future<void> add(Message message, {required bool isSelected}) async {
       if (isStickerVideoMessage(message)) return;
@@ -77,6 +78,8 @@ class ChatPictureGallery {
               picture?.snapshotPicture?.url,
             ]);
       if (file == null && url == null) return;
+      final id = message.clientMsgID;
+      if (id != null && id.isNotEmpty && !addedIDs.add(id)) return;
 
       if (isSelected) {
         initialIndex = sources.length;

@@ -9,6 +9,7 @@ import '../selection/message_selection_drag_region.dart';
 import '../selection/message_selection_row.dart';
 import '../arrival/chat_message_arrival_animations.dart';
 import 'chat_message_tile.dart';
+import '../chat_message_index.dart';
 
 /// Shared SDK timeline: route-specific presentation keeps pagination, receipts,
 /// selection, viewport tracking and scroll ownership with the existing chat.
@@ -34,6 +35,9 @@ class _ChatMessageListState extends State<ChatMessageList>
     with TickerProviderStateMixin {
   ChatLogic get logic => widget.logic;
   late ChatMessageArrivalAnimations _arrivals;
+  final _messageIndex = ChatMessageIndex();
+  Worker? _indexWorker;
+  bool _indexDirty = true;
 
   void _arrivalChanged() {
     if (mounted) setState(() {});
@@ -46,6 +50,8 @@ class _ChatMessageListState extends State<ChatMessageList>
   }
 
   void _attach() {
+    _indexDirty = true;
+    _indexWorker = ever(logic.messageList, (_) => _indexDirty = true);
     _arrivals = ChatMessageArrivalAnimations(
         vsync: this, arrivals: logic.messageArrivals);
     logic.messageArrivals.addListener(_arrivalChanged);
@@ -57,12 +63,14 @@ class _ChatMessageListState extends State<ChatMessageList>
     if (oldWidget.logic != logic) {
       oldWidget.logic.messageArrivals.removeListener(_arrivalChanged);
       _arrivals.dispose();
+      _indexWorker?.dispose();
       _attach();
     }
   }
 
   @override
   void dispose() {
+    _indexWorker?.dispose();
     logic.messageArrivals.removeListener(_arrivalChanged);
     _arrivals.dispose();
     super.dispose();
@@ -75,15 +83,20 @@ class _ChatMessageListState extends State<ChatMessageList>
         TickerMode.valuesOf(context).enabled &&
         ModalRoute.of(context)?.isCurrent != false;
     return Obx(() {
+      // SDK state transitions invalidate receipt visibility even when rows and
+      // their geometry stay unchanged. Rebuild the real viewport so it reports
+      // a fresh painted observation after a sync/connection barrier changes.
+      logic.syncStatus.value;
       final latestRows = widget.latestRows;
       final sdkCount = logic.messageList.length;
       final focusedID = logic.focusedMessageID.value;
       final count = sdkCount + latestRows.length;
-      final sdkIDs = List<String>.generate(sdkCount,
-          (index) => logic.messageList[sdkCount - 1 - index].clientMsgID ?? '');
-      final sdkIndices = {
-        for (var index = 0; index < sdkCount; index++) sdkIDs[index]: index,
-      };
+      if (_indexDirty || _messageIndex.ids.length != sdkCount) {
+        _messageIndex.sync(logic.messageList);
+        _indexDirty = false;
+      }
+      final sdkIDs = _messageIndex.ids;
+      final sdkIndices = _messageIndex.indices;
       final transientSlots = <int, List<ChatTransientRow>>{};
       for (final row in latestRows) {
         final anchor = sdkIndices[row.anchorMessageID];
@@ -99,7 +112,7 @@ class _ChatMessageListState extends State<ChatMessageList>
               ],
             ];
       final transientByID = {for (final row in latestRows) row.id: row};
-      final persistedIDs = sdkIDs.toSet();
+      final persistedIDs = _messageIndex.persisted;
       _arrivals.sync(persistedIDs, enabled: motionEnabled);
       final indices = latestRows.isEmpty
           ? sdkIndices

@@ -5,6 +5,7 @@ import 'package:rxdart/rxdart.dart';
 
 import 'controller/app_controller.dart';
 import 'conversation_reads/conversation_read_request.dart';
+import 'session/message_events.dart';
 import '../services/chat_history_cache.dart';
 import '../services/fund/fund_refresh_events.dart';
 import '../pages/ai_assistant/streaming/diagnostics/assistant_stream_log.dart';
@@ -34,6 +35,18 @@ mixin IMCallback {
 
   /// Observers share incoming SDK messages without replacing the chat callback.
   final receivedMessages = PublishSubject<Message>();
+  final chatMessageEvents = PublishSubject<ChatMessageEvent>(sync: true);
+  final c2cReadReceipts = PublishSubject<List<ReadReceiptInfo>>(sync: true);
+  final historyRecoverySignals = PublishSubject<void>();
+
+  void publishChatMessage(Message message, ChatMessageSource source) =>
+      chatMessageEvents.addSafely(ChatMessageEvent(message, source));
+
+  void publishLocalChatMessage(Message message) {
+    publishChatMessage(message, ChatMessageSource.local);
+    onRecvNewMessage?.call(message);
+  }
+
   Function(RevokedInfo info)? onRecvMessageRevoked;
 
   Function(List<ReadReceiptInfo> list)? onRecvC2CReadReceipt;
@@ -99,8 +112,15 @@ mixin IMCallback {
       ReplaySubject<({IMSdkStatus status, bool reInstall, int? progress})>(
           maxSize: 1);
 
+  ({IMSdkStatus status, bool reInstall, int? progress})? _initialSyncState;
+  String? _initialSyncUserID;
+  ({IMSdkStatus status, bool reInstall, int? progress})? get initialSyncState =>
+      _initialSyncUserID == DataSp.userID ? _initialSyncState : null;
+
   IMSdkStatus? _currentSdkStatus;
   IMSdkStatus? get currentSdkStatus => _currentSdkStatus;
+  IMSdkStatus? _connectionStatus;
+  IMSdkStatus? get currentConnectionStatus => _connectionStatus;
 
   final imSdkStatusPublishSubject =
       PublishSubject<({IMSdkStatus status, bool reInstall, int? progress})>();
@@ -111,7 +131,27 @@ mixin IMCallback {
 
   void imSdkStatus(IMSdkStatus status,
       {bool reInstall = false, int? progress}) {
+    if (_initialSyncUserID != DataSp.userID) {
+      _initialSyncState = null;
+      _initialSyncUserID = DataSp.userID;
+    }
+    if (status == IMSdkStatus.syncStart) {
+      _initialSyncState =
+          reInstall ? (status: status, reInstall: true, progress: 0) : null;
+    } else if (status == IMSdkStatus.syncProgress &&
+        _initialSyncState != null) {
+      reInstall = true;
+      _initialSyncState = (status: status, reInstall: true, progress: progress);
+    } else if (status == IMSdkStatus.syncEnded ||
+        status == IMSdkStatus.syncFailed) {
+      _initialSyncState = null;
+    }
     _currentSdkStatus = status;
+    if (status == IMSdkStatus.connecting ||
+        status == IMSdkStatus.connectionFailed ||
+        status == IMSdkStatus.connectionSucceeded) {
+      _connectionStatus = status;
+    }
     imSdkStatusSubject
         .add((status: status, reInstall: reInstall, progress: progress));
     imSdkStatusPublishSubject
@@ -127,6 +167,10 @@ mixin IMCallback {
 
   void userTokenInvalid() {
     onKickedOfflineSubject.add(KickoffType.userTokenInvalid);
+  }
+
+  void userTokenExpired() {
+    onKickedOfflineSubject.add(KickoffType.userTokenExpired);
   }
 
   void selfInfoUpdated(UserInfo user) {
@@ -154,13 +198,16 @@ mixin IMCallback {
   }
 
   void recvC2CMessageReadReceipt(List<ReadReceiptInfo> list) {
+    c2cReadReceipts.addSafely(list);
     onRecvC2CReadReceipt?.call(list);
   }
 
   void recvNewMessage(Message msg) {
     AssistantStreamLog.received(msg,
-        source: 'normal', hasReceiver: onRecvNewMessage != null);
+        source: 'normal',
+        hasReceiver: chatMessageEvents.hasListener || onRecvNewMessage != null);
     receivedMessages.addSafely(msg);
+    publishChatMessage(msg, ChatMessageSource.live);
     FundRefreshEvents.observeMessage(msg);
     if (msg.contentType == MessageType.custom &&
         msg.customElem?.description == 'assistantStream') {
@@ -173,8 +220,11 @@ mixin IMCallback {
 
   void recvOfflineMessage(Message msg) {
     AssistantStreamLog.received(msg,
-        source: 'offline', hasReceiver: onRecvNewMessage != null);
+        source: 'offline',
+        hasReceiver:
+            chatMessageEvents.hasListener || onRecvOfflineMessage != null);
     receivedMessages.addSafely(msg);
+    publishChatMessage(msg, ChatMessageSource.offline);
     FundRefreshEvents.observeMessage(msg);
     if (msg.contentType == MessageType.custom &&
         msg.customElem?.description == 'assistantStream') {
@@ -298,6 +348,9 @@ mixin IMCallback {
     customBusinessMessageSubject.close();
     inputStateChangedSubject.close();
     receivedMessages.close();
+    chatMessageEvents.close();
+    c2cReadReceipts.close();
+    historyRecoverySignals.close();
     initializedSubject.close();
     friendApplicationChangedSubject.close();
     friendAddSubject.close();

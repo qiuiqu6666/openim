@@ -47,54 +47,34 @@ void main() {
   });
   tearDown(() => controller.dispose());
 
-  test(
-      'manual test refreshes both routes independently and retains active node',
+  test('manual test probes only the direct route and refreshes its status',
       () async {
-    final primary = _Transport()..gate = Completer<void>();
     final direct = _Transport()..gate = Completer<void>();
-    final adapters = [primary, direct];
-    var next = 0;
     final all = NodeProbeController(
-        readEndpoint: () => NodeEndpoint.primary,
-        clientFactory: () => Dio()..httpClientAdapter = adapters[next++ % 2]);
+        readEndpoint: () => NodeEndpoint.direct,
+        clientFactory: () => Dio()..httpClientAdapter = direct);
     all.didChangeAppLifecycleState(AppLifecycleState.resumed);
     addTearDown(all.dispose);
     final work = all.test();
     expect(identical(work, all.test()), isTrue);
-    await Future.wait([primary.started.future, direct.started.future]);
-    expect(primary.requests.single.uri.host, '99chatapi.99chat.vip');
+    await direct.started.future;
     expect(direct.requests.single.uri.toString(),
         'http://129.226.192.93:10008/chat/platform');
-    expect(all.pending, hasLength(2));
-    final directFinished = Completer<void>();
-    all.addListener(() {
-      if (all.results.containsKey(NodeEndpoint.direct.signature) &&
-          !directFinished.isCompleted) {
-        directFinished.complete();
-      }
-    });
+    expect(all.pending, {NodeEndpoint.direct.signature});
     direct.gate!.complete();
-    await directFinished.future;
+    await work;
     expect(all.results[NodeEndpoint.direct.signature]?.status,
         NodeProbeStatus.normal);
-    expect(all.pending, {NodeEndpoint.primary.signature});
-    expect(all.testing, isTrue);
-    primary.body = {'errCode': 1};
-    primary.gate!.complete();
-    await work;
-    expect(all.results[NodeEndpoint.primary.signature]?.status,
-        NodeProbeStatus.abnormal);
-    expect(all.endpoint.signature, NodeEndpoint.primary.signature);
+    expect(all.pending, isEmpty);
+    expect(all.testing, isFalse);
+    expect(all.results, hasLength(1));
+    expect(all.endpoint.signature, NodeEndpoint.direct.signature);
     expect(all.testedAt, isNotNull);
     direct.code = 503;
-    primary.body = {'errCode': 0, 'data': <String, dynamic>{}};
     await all.test();
-    expect(primary.requests, hasLength(2));
     expect(direct.requests, hasLength(2));
     expect(all.results[NodeEndpoint.direct.signature]?.status,
         NodeProbeStatus.abnormal);
-    expect(all.results[NodeEndpoint.primary.signature]?.status,
-        NodeProbeStatus.normal);
   });
 
   test('manual probe validates public response without account credentials',

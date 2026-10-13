@@ -220,6 +220,8 @@ final class ChatCommunicationNotificationBridge {
                     // Retain response/category, per-conversation grouping and
                     // alert choices; updating(from:) may replace these fields.
                     updated.title = original.title
+                    // Communication intents add a group subtitle; keep only conversation title and body.
+                    updated.subtitle = ""
                     updated.body = original.body
                     updated.categoryIdentifier = original.categoryIdentifier
                     updated.threadIdentifier = original.threadIdentifier

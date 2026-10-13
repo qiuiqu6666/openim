@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import 'agent_avatar_directory.dart';
 
-/// Uses the IM identity, never the displayed player number, to resolve a photo.
+/// Uses the verified IM identity, never the legacy player WXID, for photos.
 class AgentUserAvatar extends StatefulWidget {
   const AgentUserAvatar({
     super.key,
@@ -19,7 +19,7 @@ class AgentUserAvatar extends StatefulWidget {
   final String name;
   final double size;
 
-  String get userID => _first(['imUserId', 'imUserID', 'userId', 'userID']);
+  String get userID => _first(['imUserId', 'imUserID']);
   String get fallbackURL =>
       _first(['avatarUrl', 'avatarURL', 'faceURL', 'faceUrl']);
   String _first(List<String> keys) {
@@ -48,6 +48,7 @@ class _AgentUserAvatarState extends State<AgentUserAvatar> {
   void didUpdateWidget(AgentUserAvatar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.userID != oldWidget.userID ||
+        widget.fallbackURL != oldWidget.fallbackURL ||
         widget.directory != oldWidget.directory) {
       _load();
     }
@@ -58,9 +59,15 @@ class _AgentUserAvatarState extends State<AgentUserAvatar> {
     final directory = widget.directory;
     final userID = widget.userID;
     _url = directory.peek(userID);
+    if (userID.isEmpty) {
+      _url = widget.fallbackURL;
+      return;
+    }
     unawaited(directory.resolve(userID).then((url) {
       if (!mounted || request != _request || !directory.current) return;
-      setState(() => _url = url);
+      setState(() => _url = url?.trim().isNotEmpty == true
+          ? url
+          : widget.fallbackURL);
     }));
   }
 
@@ -69,6 +76,8 @@ class _AgentUserAvatarState extends State<AgentUserAvatar> {
         width: widget.size,
         height: widget.size,
         text: widget.name,
-        url: widget.directory.current ? _url ?? widget.fallbackURL : null,
+        url: widget.directory.current
+            ? (_url?.trim().isNotEmpty == true ? _url : widget.fallbackURL)
+            : null,
       );
 }

@@ -15,6 +15,7 @@ import '../pages/favorites/data/favorite_mutation_outbox.dart';
 import '../pages/favorites/data/favorite_mutation_replayer.dart';
 import '../pages/favorites/data/favorite_archive_retry_recovery.dart';
 import '../pages/favorites/data/favorite_media_upload.dart';
+import '../pages/favorites/data/favorite_media_fingerprint.dart';
 
 export 'favorite_api.dart';
 export '../pages/favorites/data/favorite_mutation_outbox.dart';
@@ -42,6 +43,7 @@ class FavoriteRepository extends ChangeNotifier {
   /// Optional storage fault hook. Production uses SharedPreferences directly.
   final Future<bool> Function(String key, String value)? cacheWriter;
   Future<void> _cacheWrites = Future<void>.value();
+  final _mediaFingerprint = FavoriteMediaFingerprint();
   final List<FavoriteItem> _items = [];
   final List<FavoriteTag> _tags = [];
   final Set<String> _deletedIDs = {};
@@ -202,7 +204,11 @@ class FavoriteRepository extends ChangeNotifier {
           commit: (page) async {
             _guard(scope);
             final previous = _syncState;
-            _syncState = previous.apply(page);
+            final next = previous.apply(page);
+            // An unchanged empty poll has no checkpoint to persist. Pages that
+            // advance the watermark still keep the existing durable ordering.
+            if (identical(next, previous)) return;
+            _syncState = next;
             try {
               await _saveCache(scope, strict: true);
             } catch (_) {
@@ -303,6 +309,7 @@ class FavoriteRepository extends ChangeNotifier {
     final token = api.sessionToken;
     if (_accountKey == key && _token == token) return;
     _sessionCancel.cancel();
+    _mediaFingerprint.cancelActive();
     _listCancel?.cancel();
     _tagCancel?.cancel();
     stopPolling();
@@ -1336,12 +1343,16 @@ class FavoriteRepository extends ChangeNotifier {
     final baseKey = 'media:${kind.wireName}:$filePath:$name';
     final original = File(filePath);
     String key;
-    if (await original.exists()) {
+    final originalExists = await original.exists();
+    _guard(scope);
+    if (originalExists) {
       int size;
-      Digest hash;
+      String hash;
       try {
-        size = await original.length();
-        hash = await sha256.bind(original.openRead()).first;
+        final fingerprint = await _mediaFingerprint.read(original,
+            kind: kind, cancelToken: _sessionCancel);
+        size = fingerprint.size;
+        hash = fingerprint.hash;
       } on FileSystemException {
         _guard(scope);
         throw const FavoriteApiException(20056, '本地原文件不可用，请重新选择图片或文件');
@@ -1599,6 +1610,7 @@ class FavoriteRepository extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _sessionCancel.cancel();
+    _mediaFingerprint.dispose();
     _listCancel?.cancel();
     _tagCancel?.cancel();
     stopPolling();

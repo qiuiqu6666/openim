@@ -37,7 +37,11 @@ class PersonalSticker {
   final int updatedAt;
 
   bool get isVideo => mediaType == 'video';
-  String get previewURL => isVideo ? thumbnailURL ?? '' : mediaURL;
+  String get previewURL => thumbnailURL?.isNotEmpty == true
+      ? thumbnailURL!
+      : isVideo
+          ? ''
+          : mediaURL;
 
   Map<String, dynamic> toJson() => {
         'id': id,

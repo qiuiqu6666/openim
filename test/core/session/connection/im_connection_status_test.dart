@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -12,6 +13,12 @@ import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _App extends GetxController implements AppController {
+  @override
+  void beginBadgeSession(String accountID, String token) {}
+
+  @override
+  void clearBadgeSession() {}
+
   @override
   void clearMessageNotificationSession() {}
 
@@ -38,6 +45,10 @@ Future<void> _credentials(String account, {String? token}) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+          const MethodChannel('dev.fluttercommunity.plus/connectivity_status'),
+          (_) async => null);
   const channel = MethodChannel('flutter_openim_sdk');
   late _IM logic;
   late String nativeAccount;
@@ -80,6 +91,10 @@ void main() {
           nativeLogged = false;
           nativeStatusOverride = null;
           return null;
+        case 'setAppBackgroundStatus':
+        case 'networkStatusChanged':
+          nativeCalls.add(call.method);
+          return null;
         default:
           throw StateError(call.method);
       }
@@ -99,6 +114,39 @@ void main() {
     Get.reset();
   });
 
+  testWidgets('foreground reconnect rechecks sync without waiting for a send',
+      (tester) async {
+    // Own the status subscription and its timers in the widget test clock.
+    logic.onClose();
+    logic = _IM();
+    await logic.login('first', 'first-im');
+    logic.imSdkStatus(IMSdkStatus.connectionSucceeded);
+    await tester.pump(const Duration(seconds: 3));
+    nativeCalls.clear();
+    logic.imSdkStatus(IMSdkStatus.syncEnded);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    expect(nativeCalls, isEmpty,
+        reason: 'A healthy sync finish must not start another metadata sync.');
+    nativeCalls.clear();
+    // The OS still reports the same network and the app never backgrounds.
+    logic.imSdkStatus(IMSdkStatus.connecting);
+    logic.imSdkStatus(IMSdkStatus.connectionSucceeded);
+    logic.imSdkStatus(IMSdkStatus.syncStart);
+    logic.imSdkStatus(IMSdkStatus.syncEnded);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    logic.imSdkStatus(IMSdkStatus.syncEnded);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(nativeCalls, ['setAppBackgroundStatus']);
+    expect(logic.currentSdkStatus, IMSdkStatus.syncEnded);
+    // No forced socket close, re-login or recurring fast checks on success.
+    await tester.pump(const Duration(seconds: 3));
+    expect(nativeCalls, ['setAppBackgroundStatus']);
+    logic.onClose();
+  });
+
   Future<void> restartDartSession() async {
     logic.onClose();
     await Future<void>.delayed(Duration.zero);
@@ -109,8 +157,66 @@ void main() {
     logic = _IM();
   }
 
+  testWidgets('sync failures retry every three seconds without closing transport',
+      (tester) async {
+    logic.onClose();
+    logic = _IM();
+    await logic.login('first', 'first-im');
+    logic.imSdkStatus(IMSdkStatus.connectionSucceeded);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    nativeCalls.clear();
+    for (var i = 0; i < 4; i++) {
+      logic.imSdkStatus(IMSdkStatus.syncStart);
+      logic.imSdkStatus(IMSdkStatus.syncFailed);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      expect(nativeCalls, hasLength(i));
+      await tester.pump(const Duration(seconds: 1));
+      expect(nativeCalls, hasLength(i + 1));
+    }
+    expect(logic.currentConnectionStatus, IMSdkStatus.connectionSucceeded);
+    expect(logic.currentSdkStatus, IMSdkStatus.syncFailed);
+    expect(nativeCalls, everyElement('setAppBackgroundStatus'));
+    // A missing new failure callback must not disable retries.
+    await tester.pump(const Duration(seconds: 3));
+    expect(nativeCalls, hasLength(5));
+    logic.imSdkStatus(IMSdkStatus.syncEnded);
+    await tester.pump();
+    await tester.pump(const Duration(minutes: 1));
+    expect(nativeCalls, hasLength(5));
+    logic.onClose();
+  });
+
+  test('sync completion cannot erase a real transport failure', () {
+    logic.imSdkStatus(IMSdkStatus.connectionFailed);
+    logic.imSdkStatus(IMSdkStatus.syncEnded);
+    expect(logic.currentConnectionStatus, IMSdkStatus.connectionFailed);
+  });
+
   test('cold startup does not log out an already logged-out native SDK', () {
     expect(nativeCalls, ['login:first']);
+  });
+
+  test('foreground wakes native connection without login or fake success',
+      () async {
+    logic.imSdkStatus(IMSdkStatus.connectionFailed);
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await Future<void>.delayed(Duration.zero);
+    expect(nativeCalls, [
+      'login:first',
+      'networkStatusChanged',
+      'setAppBackgroundStatus',
+    ]);
+    expect(logic.currentSdkStatus, IMSdkStatus.connectionFailed);
+    await logic.logout();
+    final afterLogout = List<String>.of(nativeCalls);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await Future<void>.delayed(Duration.zero);
+    expect(nativeCalls, afterLogout);
   });
 
   for (final nativeStatus in [LoginStatus.logged, LoginStatus.logging]) {

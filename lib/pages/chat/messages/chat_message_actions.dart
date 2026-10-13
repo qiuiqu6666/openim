@@ -64,7 +64,7 @@ class ChatMessageActions {
       );
       if (!_isClosed()) _removeMessageByID(clientMsgID);
     } catch (error) {
-      IMViews.showToast(error.toString());
+      IMViews.showErrorToast(error);
     }
   }
 

@@ -9,6 +9,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:openim/core/im_callback.dart';
 import '../../support/conversation_live_fixture.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/pages/conversation/conversation_organizer.dart';
@@ -25,6 +26,10 @@ class _ConversationLogic extends GetxController
   @override
   final popCtrl = CustomPopupMenuController();
   final connection = 'ready'.obs;
+  @override
+  final markingAllRead = false.obs;
+  @override
+  final readBatchProgress = ''.obs;
   int searches = 0;
 
   @override
@@ -189,6 +194,7 @@ void main() {
       await tester.tap(find.text('搜索'));
       expect(logic.searches, 1);
       logic.connection.value = 'connecting';
+      logic.imStatus.value = IMSdkStatus.connecting;
       await tester.pump();
       expect(find.text('正在连接'), findsOneWidget);
       expect(find.text('消息'), findsNothing);
@@ -199,15 +205,25 @@ void main() {
       expect(spinner.size, closeTo(15.84, .001));
       expect(spinner.color, AppTokens.accent);
 
-      logic.connection.value = StrRes.synchronizing;
-      await tester.pump();
-      expect(find.text(StrRes.synchronizing), findsOneWidget);
-      expect(find.text('正在连接'), findsNothing);
-      expect(find.byType(FadingArcSpinner), findsOneWidget);
+      for (final status in [
+        IMSdkStatus.syncStart,
+        IMSdkStatus.synchronizing,
+        IMSdkStatus.syncProgress,
+        IMSdkStatus.syncFailed,
+        IMSdkStatus.syncEnded,
+      ]) {
+        logic.imStatus.value = status;
+        await tester.pump();
+        expect(find.text('消息'), findsOneWidget);
+        expect(find.byType(FadingArcSpinner), findsNothing);
+        expect(find.byIcon(Icons.error_outline_rounded), findsNothing);
+        expect(line, findsOneWidget);
+      }
 
       logic.connection.value = 'failed';
+      logic.imStatus.value = IMSdkStatus.connectionFailed;
       await tester.pumpAndSettle();
-      expect(find.text('消息'), findsOneWidget);
+      expect(find.text(StrRes.connectionFailed), findsOneWidget);
       expect(find.byIcon(Icons.error_outline_rounded), findsOneWidget);
       expect(find.byType(FadingArcSpinner), findsNothing);
       expect(line, findsNothing);
@@ -235,12 +251,14 @@ void main() {
     final logic = Get.put<ConversationLogic>(_ConversationLogic())
         as _ConversationLogic;
     logic.connection.value = 'connecting';
+    logic.imStatus.value = IMSdkStatus.connecting;
     await tester.pumpWidget(_host(dark: false));
     await tester.pump();
     expect(find.text('正在连接'), findsOneWidget);
 
     await tester.pumpWidget(_host(dark: false, liveUpdatesActive: false));
     logic.connection.value = 'ready';
+    logic.imStatus.value = IMSdkStatus.connectionSucceeded;
     await tester.pump();
     await tester.pumpWidget(_host(dark: false));
     await tester.pumpAndSettle();
@@ -364,6 +382,7 @@ void main() {
       Styles.isDark = dark;
       final key = GlobalKey();
       logic.connection.value = 'ready';
+      logic.imStatus.value = IMSdkStatus.connectionSucceeded;
       await tester.pumpWidget(_host(dark: dark, boundaryKey: key));
       await tester.pumpAndSettle();
       await tester.runAsync(() => precacheImage(
@@ -373,6 +392,11 @@ void main() {
           ));
       for (var row = 0; row < 3; row++) {
         logic.connection.value = ['ready', 'connecting', 'failed'][row];
+        logic.imStatus.value = [
+          IMSdkStatus.connectionSucceeded,
+          IMSdkStatus.connecting,
+          IMSdkStatus.connectionFailed,
+        ][row];
         await tester.pump(const Duration(milliseconds: 90));
         final image = await _snapshot(tester, key);
         images.add(image);

@@ -1,5 +1,7 @@
 # 朋友圈页面模块
 
+封面选择与上传前的文件一致性校验复用 `services/media/file_hasher.dart`：只把路径送入流式摘要 worker，页面关闭或账号失效会取消。仍校验两次以防选择后原件被替换，不把原图完整字节传入 UI Isolate。本批静态优化未构建/测试，实际 CPU、内存及取消效果待真机验证。
+
 入口是「我的 → 社区广场」。`moments_page.dart` 组合好友动态流及个人相册，`moments_detail_page.dart` 组合当前授权的详情与评论分页。页面继续使用 `MomentsRepository`、当前登录的业务 token、真实能力握手及 OpenIM 好友关系；样式调整不替换后端契约。
 
 ## 页面与组件归属

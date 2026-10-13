@@ -19,6 +19,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _App extends GetxController implements AppController {
   @override
+  void beginBadgeSession(String accountID, String token) {}
+
+  @override
+  void clearBadgeSession() {}
+
+  @override
   bool get isRunningBackground => false;
 
   @override
@@ -117,6 +123,10 @@ Future<void> _credentials(String account) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+          const MethodChannel('dev.fluttercommunity.plus/connectivity_status'),
+          (_) async => null);
   const sdk = MethodChannel('flutter_openim_sdk');
   late _Profiles profiles;
   late List<String> nativeCalls;

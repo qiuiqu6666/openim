@@ -155,6 +155,18 @@ class CacheController extends GetxController {
   }
 
   static CallRecords _merge(CallRecords existing, CallRecords incoming) {
+    final result = _mergeShared(existing, incoming);
+    if (existing.state == 'otherAccepted' || incoming.state == 'otherAccepted') {
+      // This device never joined. A later shared completed record must not
+      // replace its local outcome or turn it into a missed call.
+      result.state = 'otherAccepted';
+      result.success = false;
+      result.duration = 0;
+    }
+    return result;
+  }
+
+  static CallRecords _mergeShared(CallRecords existing, CallRecords incoming) {
     if (incoming.updatedAt > 0 || existing.updatedAt > 0) {
       final result =
           (incoming.updatedAt >= existing.updatedAt ? incoming : existing)
@@ -245,7 +257,7 @@ class CacheController extends GetxController {
       } else {
         records[index] = _merge(records[index], snapshot);
       }
-      if (report && snapshot.callID.isNotEmpty) {
+      if (report && snapshot.callID.isNotEmpty && snapshot.state != 'otherAccepted') {
         entry.pending[snapshot.recordKey] = snapshot;
       }
       await _commit(box, account, entry, isSessionCurrent: isSessionCurrent);

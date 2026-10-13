@@ -6,7 +6,6 @@ import 'package:openim_common/openim_common.dart';
 import '../contacts/contacts_view.dart';
 import '../conversation/conversation_view.dart';
 import '../conversation/conversation_logic.dart';
-import '../conversation/unread/conversation_unread_count.dart';
 import '../mine/mine_view.dart';
 import '../mine/widgets/mine_hot_eco.dart';
 import '../wallet/wallet_tab_shell.dart';
@@ -208,13 +207,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  int _unreadCount({required bool groupChats}) =>
-      sumNotifiableConversationUnread(
-        conversationLogic.list,
-        groupChats: groupChats,
-        isArchived: conversationLogic.isArchived,
-        unreadCountFor: conversationLogic.getUnreadCount,
-      );
+  int _unreadCount({required bool groupChats}) {
+    final snapshot = conversationLogic.feedSnapshot;
+    return groupChats ? snapshot.groupUnread : snapshot.singleUnread;
+  }
 
   Widget _walletNavIcon(Color color) => ColorFiltered(
         colorFilter: ColorFilter.mode(color, BlendMode.srcATop),

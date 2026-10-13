@@ -11,6 +11,12 @@ import java.io.File;
 /** Prepares native SQLite before Flutter plugins or the OpenIM SDK start. */
 public final class OpenIMApplication extends Application {
     @Override
+    public void onCreate() {
+        super.onCreate();
+        io.openim.messaging.NativeMessageNotifications.get(this);
+    }
+
+    @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
         // OpenIM bundles its own SQLite. Android's framework SQLite temporary

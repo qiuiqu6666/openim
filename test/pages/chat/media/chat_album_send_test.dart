@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -18,6 +19,29 @@ class _Asset extends AssetEntity {
 
   @override
   Future<File?> get file => localFile;
+}
+
+class _Files extends FilePicker {
+  int calls = 0;
+
+  @override
+  Future<FilePickerResult?> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    bool allowCompression = false,
+    int compressionQuality = 0,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+  }) async {
+    calls++;
+    return null;
+  }
 }
 
 Future<void> _until(bool Function() condition) async {
@@ -53,6 +77,11 @@ void main() {
   late int pickerCalls;
   late int toolboxClosed;
   late bool sdkFailure;
+  late Future<List<AssetEntity>?> Function() pick;
+  late int cameraCalls;
+  late _Files files;
+  late Future<String> Function() upload;
+  late int uploadCalls;
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('chat-album-send-');
@@ -65,8 +94,15 @@ void main() {
     paths = [];
     failures = pickerCalls = toolboxClosed = 0;
     sdkFailure = false;
+    cameraCalls = 0;
+    pick = () async => selected;
+    files = _Files();
+    FilePicker.platform = files;
     compress = (file) async => file;
     deliver = (_) async {};
+    uploadCalls = 0;
+    upload = () async =>
+        jsonEncode({'url': 'https://im.test/object/media/image.png'});
     media = ChatMediaController(
       conversationID: () => 'chat',
       isClosed: () => OpenIM.iMManager.userID != 'self',
@@ -84,7 +120,11 @@ void main() {
       closeToolbox: () => toolboxClosed++,
       pickAssets: () async {
         pickerCalls++;
-        return selected;
+        return pick();
+      },
+      pickCamera: () async {
+        cameraCalls++;
+        return null;
       },
       compressImage: (file) => compress(file),
       onPreparationFailed: () => failures++,
@@ -92,7 +132,8 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'uploadFile') {
-        return jsonEncode({'url': 'https://im.test/object/media/image.png'});
+        uploadCalls++;
+        return upload();
       }
       expect(call.method, 'createImageMessageFromFullPath');
       final path = (call.arguments as Map)['imagePath'] as String;
@@ -132,10 +173,15 @@ void main() {
     expect(sends, ['image-1']);
     expect(staged, hasLength(1));
     expect(media.preparingCount.value, 1);
-    expect(media.pickingAttachment, isTrue);
+    expect(media.pickingAttachment, isFalse);
     expect(toolboxClosed, 1);
+    selected = [];
     await media.onTapAlbum();
-    expect(pickerCalls, 1, reason: 'Repeated taps must not duplicate a batch');
+    await media.onTapCamera();
+    await media.onTapFile();
+    expect(pickerCalls, 2);
+    expect(cameraCalls, 1);
+    expect(files.calls, 1);
     nextFile.complete(photo);
     await pending;
     expect(sends, ['image-1', 'image-2']);
@@ -143,6 +189,51 @@ void main() {
     expect(media.preparingCount.value, 0);
     expect(media.pickingAttachment, isFalse);
     expect(failures, 0);
+  });
+
+  test('upload permits another selection and cannot release its newer lock',
+      () async {
+    final upload = Completer<void>();
+    final nextSelection = Completer<List<AssetEntity>?>();
+    deliver = (message) =>
+        message.clientMsgID == 'image-1' ? upload.future : Future<void>.value();
+    selected = [_Asset('first', Future.value(photo))];
+    final first = media.onTapAlbum();
+    await _until(() => sends.isNotEmpty);
+    expect(media.pickingAttachment, isFalse);
+    pick = () => nextSelection.future;
+    final second = media.onTapAlbum();
+    await _until(() => pickerCalls == 2);
+    expect(media.pickingAttachment, isTrue);
+    upload.complete();
+    await first;
+    expect(media.pickingAttachment, isTrue,
+        reason: 'Old upload must not unlock a new selection');
+    await media.onTapAlbum();
+    expect(pickerCalls, 2);
+    nextSelection.complete([_Asset('second', Future.value(photo))]);
+    await second;
+    expect(sends, ['image-1', 'image-2']);
+    expect(media.pickingAttachment, isFalse);
+  });
+
+  test('overlapping preparation keeps the remaining batch count', () async {
+    final firstFile = Completer<File?>();
+    final secondFile = Completer<File?>();
+    selected = [_Asset('first', firstFile.future)];
+    final first = media.onTapAlbum();
+    await _until(() => media.preparingCount.value == 1);
+    selected = [_Asset('second', secondFile.future)];
+    final second = media.onTapAlbum();
+    await _until(() => media.preparingCount.value == 2);
+    firstFile.complete(photo);
+    await first;
+    expect(media.preparingCount.value, 1);
+    secondFile.complete(photo);
+    await second;
+    expect(media.preparingCount.value, 0);
+    expect(sends, hasLength(2));
+    expect(paths.toSet(), hasLength(2));
   });
 
   test('slow receipt does not block later bubbles and sends stay ordered',
@@ -253,6 +344,32 @@ void main() {
     expect(sends, ['image-1']);
     expect(media.preparingCount.value, 0);
   });
+
+  for (final leaveChat in [false, true]) {
+    test('upload success after page close=$leaveChat submission evidence',
+        () async {
+      final response = Completer<String>();
+      upload = () => response.future;
+      selected = [_Asset('pending-upload', Future.value(photo))];
+      final pending = media.onTapAlbum();
+      await _until(() => uploadCalls == 1);
+      expect(staged, hasLength(1));
+      expect(staged.single.status, MessageStatus.sending);
+      expect(sends, isEmpty);
+      if (leaveChat) media.close();
+      response.complete(
+          jsonEncode({'url': 'https://im.test/object/media/image.png'}));
+      await pending;
+      expect(sends, leaveChat ? isEmpty : ['image-1']);
+      expect(failures, 0);
+      if (leaveChat) {
+        // Current behavior: the upload succeeds, but neither submission nor
+        // failure handling runs, leaving the staged DTO marked as sending.
+        expect(staged.single.status, MessageStatus.sending);
+        expect(staged.single.pictureElem!.sourcePicture!.url, isNull);
+      }
+    });
+  }
 
   test('unexpected delivery failure does not stall the next image', () async {
     deliver = (message) async {

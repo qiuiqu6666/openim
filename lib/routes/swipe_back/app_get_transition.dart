@@ -30,7 +30,7 @@ class AppGetTransition extends CustomTransition {
       animation: route?.animation ?? animation,
       secondaryAnimation: secondaryAnimation,
       pushCurve: AppSwipeBackTokens.curve,
-      popCurve: AppSwipeBackTokens.curve,
+      popCurve: AppSwipeBackTokens.reverseCurve,
       edgeStartWidthPx: edgeWidth,
       enableBackGesture: enableBackGesture,
       child: child,

@@ -41,6 +41,16 @@ class _Adapter implements HttpClientAdapter {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('header API probe does not substitute a gateway probe for SDK state',
+      () async {
+    final adapter = _Adapter();
+    final result = await NodeAvailabilityProbe(
+            clientFactory: () => Dio()..httpClientAdapter = adapter)
+        .check(NodeEndpoint.direct, includeGateway: false);
+    expect(result.available, isTrue);
+    expect(adapter.requests.map((request) => request.uri.port).toSet(),
+        {10008, 10002});
+  });
   test('probes every service with no login credentials or redirects', () async {
     final adapter = _Adapter();
     final result = await NodeAvailabilityProbe(
@@ -75,7 +85,7 @@ void main() {
     final result = await NodeAvailabilityProbe(
             timeout: const Duration(milliseconds: 20),
             clientFactory: () => Dio()..httpClientAdapter = adapter)
-        .check(NodeEndpoint.primary);
+        .check(NodeEndpoint.direct);
     expect(result.available, isFalse);
     expect(adapter.closed, isTrue);
     adapter.gate!.complete();

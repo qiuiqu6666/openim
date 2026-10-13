@@ -93,7 +93,6 @@ void main() {
       'groups': 1,
       'conversations': 1,
       'messages': 1,
-      'files': 1,
     });
     source.updates.add([_item('冬', draft: '')]);
     await Future<void>.delayed(const Duration(milliseconds: 100));

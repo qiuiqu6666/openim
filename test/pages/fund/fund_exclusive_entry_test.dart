@@ -119,6 +119,7 @@ void main() {
       await _open(tester, api, dark: dark);
       final form = _form(tester);
       expect(form.biz, FundPacketBiz.exclusive);
+      expect(form.currency, FundCurrency.bi99);
       expect(form.isGroup, isTrue);
       expect(form.isMultiple, isFalse);
       expect(form.recipientID, 'target');

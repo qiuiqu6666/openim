@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import '../../../services/fund_models.dart';
 import 'fund_send_tokens.dart';
+import '../../wallet/widgets/wallet_coin_logo.dart';
+import '../../wallet/wallet_repository.dart';
 
 class FundCoinIcon extends StatelessWidget {
   const FundCoinIcon({super.key, required this.currency, required this.size});
@@ -10,6 +12,9 @@ class FundCoinIcon extends StatelessWidget {
   final double size;
   @override
   Widget build(BuildContext context) {
+    if (currency == FundCurrency.trx) {
+      return WalletCoinLogo(type: CoinType.trx, size: size);
+    }
     if (currency == FundCurrency.bi99) {
       return ClipOval(
           child: Image.asset('assets/img/platform_99.webp',

@@ -24,6 +24,7 @@ class ChatTimelineController {
     required this.onFirstLoaded,
     this.timelineTimeMarker,
     this.preserveReading,
+    this.canTrimHistory,
     this.pageSize = 40,
     String Function()? currentAccountID,
     bool Function()? isSessionCurrent,
@@ -43,6 +44,7 @@ class ChatTimelineController {
   final VoidCallback onFirstLoaded;
   final void Function(List<Message> messages)? timelineTimeMarker;
   final bool Function()? preserveReading;
+  final bool Function(bool older)? canTrimHistory;
   final int pageSize;
   final String Function() _currentAccountID;
   final bool Function() _isSessionCurrent;
@@ -63,6 +65,7 @@ class ChatTimelineController {
   bool _timelineDirty = true;
   bool _identityDirty = true;
   bool _appending = false;
+  Message? _lastLiveAnchor;
   final _identities = <String?>{};
 
   bool containsMessage(String? id) {
@@ -90,6 +93,7 @@ class ChatTimelineController {
     fetch: fetch,
     fetchNewer: fetchNewer,
     preserveReading: preserveReading,
+    canTrimHistory: canTrimHistory,
     messages: () => messageList,
     removedIDs: removedIDs,
     onStateChanged: _syncHistoryState,
@@ -155,6 +159,9 @@ class ChatTimelineController {
 
   void _replaceHistory(List<Message> messages, bool firstPage, bool refresh) {
     if (_closed) return;
+    // Retain the last observed live edge when installing an older date window.
+    _rememberRecoveryAnchor(messageList);
+    _rememberRecoveryAnchor(messages);
     final offset = captureOffset();
     messageList.value = messages
         .map((m) => ChatHistoryCache.applyRevocation(accountID, m))
@@ -189,18 +196,63 @@ class ChatTimelineController {
 
   Future<bool> refresh() => _closed ? Future.value(false) : _history.refresh();
 
+  Future<AdvancedMessage> readNewerForRecovery(
+          {required int count, Message? startMsg}) =>
+      _history.readNewerForRecovery(count: count, startMsg: startMsg);
+
+  Message? get recoveryAnchor {
+    _rememberRecoveryAnchor(messageList);
+    _rememberRecoveryAnchor(scrollingCacheMessageList);
+    return _lastLiveAnchor;
+  }
+
+  void _rememberRecoveryAnchor(Iterable<Message> messages) {
+    for (final message in messages) {
+      if (message.clientMsgID?.isNotEmpty != true ||
+          (message.seq ?? 0) <= 0 ||
+          message.contentType == MessageType.typing ||
+          message.status == MessageStatus.sending ||
+          message.status == MessageStatus.failed) {
+        continue;
+      }
+      if (_lastLiveAnchor == null || message.seq! > _lastLiveAnchor!.seq!) {
+        _lastLiveAnchor = message;
+      }
+    }
+  }
+
   static const automaticWindowLimit = 600;
   static const bufferedWindowLimit = 100;
 
   /// Publish append and automatic eviction together, retaining retry rows.
   void appendIncoming(Message message, {required bool trim}) {
+    _rememberRecoveryAnchor([message]);
     if (_identityDirty) containsMessage(message.clientMsgID);
-    var next = [...messageList, message];
+    var next = List<Message>.of(messageList);
+    var insertion = next.length;
+    if (next.isNotEmpty &&
+        ChatHistoryLoader.compareMessageOrder(message, next.last) < 0) {
+      var low = 0, high = next.length;
+      while (low < high) {
+        final middle = (low + high) >> 1;
+        if (ChatHistoryLoader.compareMessageOrder(next[middle], message) <= 0) {
+          low = middle + 1;
+        } else {
+          high = middle;
+        }
+      }
+      insertion = low;
+    }
+    next.insert(insertion, message);
+    var retainedIncoming = true;
     var evicted = false;
     if (trim &&
         !_history.viewingHistory &&
         next.length > automaticWindowLimit) {
       final start = next.length - automaticWindowLimit;
+      retainedIncoming = insertion >= start ||
+          message.status == MessageStatus.sending ||
+          message.status == MessageStatus.failed;
       final retained = <Message>[
         for (var i = 0; i < next.length; i++)
           if (i >= start ||
@@ -223,7 +275,7 @@ class ChatTimelineController {
     } finally {
       _appending = false;
     }
-    _identities.add(message.clientMsgID);
+    if (retainedIncoming) _identities.add(message.clientMsgID);
     if (evicted) _history.didTrimLatest();
   }
 
@@ -235,6 +287,7 @@ class ChatTimelineController {
   }
 
   void bufferIncoming(Message message) {
+    _rememberRecoveryAnchor([message]);
     scrollingCacheMessageList.add(message);
     if (scrollingCacheMessageList.length > bufferedWindowLimit) {
       scrollingCacheMessageList.removeAt(0);
@@ -306,6 +359,7 @@ class ChatTimelineController {
   /// the returned IDs while this owner clears its own lists and snapshot.
   Set<String> clear() {
     if (_closed) return <String>{};
+    _lastLiveAnchor = null;
     _history.clear();
     _cacheTimer?.cancel();
     final ids = [...messageList, ...scrollingCacheMessageList]

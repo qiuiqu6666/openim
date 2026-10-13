@@ -16,7 +16,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 3.0.1+2024
+version: 3.0.1+2025
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -121,6 +121,8 @@ dependencies:
   focus_detector_v2: ^3.1.0+1
   persistent_bottom_nav_bar_v2: ^5.3.1
   flutter_openim_sdk: ^3.8.3+hotfix.12
+  gameshield_bridge:
+    path: local_plugin/gameshield_bridge
 
   openim_common:
     path: openim_common
@@ -130,6 +132,9 @@ dependencies:
   webview_flutter: 4.13.1
 
 dependency_overrides:
+  # Keep the Flutter API while pinning native Core to patch.15 in our adapter.
+  flutter_openim_sdk:
+    path: local_plugin/flutter_openim_sdk
   video_player_android:
     path: local_plugin/video_player_android
   # Apply real connection/header/body timeouts; upstream 5.0.1 discards timeout.

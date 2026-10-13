@@ -13,7 +13,7 @@ class GroupLiveListSync {
     required this.store,
     required this.userID,
     required this.sessionCurrent,
-    this.interval = const Duration(seconds: 45),
+    this.interval = const Duration(seconds: 90),
     this.maxConcurrent = 2,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now {

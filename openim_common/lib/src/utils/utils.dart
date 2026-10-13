@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'media/video_gallery/video_gallery_action.dart';
+
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:azlistview/azlistview.dart';
 import 'package:common_utils/common_utils.dart';
@@ -902,6 +904,11 @@ class IMUtils {
                     case 'networkError':
                       content = StrRes.networkAnomaly;
                       break;
+                    case 'otherAccepted':
+                      content = Get.locale?.languageCode == 'en'
+                          ? 'Answered on another device'
+                          : '已在其他设备接听';
+                      break;
                     default:
                       break;
                   }
@@ -1205,7 +1212,9 @@ class IMUtils {
                   thumbnail: message.videoElem!.snapshotUrl
                           ?.adjustThumbnailAbsoluteString(960) ??
                       '',
-                  file: File(message.videoElem!.videoPath!),
+                  file: message.videoElem?.videoPath?.isNotEmpty == true
+                      ? File(message.videoElem!.videoPath!)
+                      : null,
                   tag: message.clientMsgID,
                   isVideo: true,
                 )
@@ -1214,32 +1223,51 @@ class IMUtils {
                   thumbnail: message.pictureElem!.snapshotPicture?.url
                           ?.adjustThumbnailAbsoluteString(960) ??
                       '',
-                  file: File(message.pictureElem!.sourcePath!),
+                  file: message.pictureElem?.sourcePath?.isNotEmpty == true
+                      ? File(message.pictureElem!.sourcePath!)
+                      : null,
                   tag: message.clientMsgID,
                 )
         ];
 
+    final videoSave = VideoGalleryAction();
+    final owner = (DataSp.userID, DataSp.imToken);
+    var previewOpen = true;
+    var saving = false;
+    bool canSave() => previewOpen && owner == (DataSp.userID, DataSp.imToken);
     final mb = MediaBrowser(
       sources: mediaSources,
       showGallery: showGallery,
       showCounter: showCounter,
       initialIndex: initialIndex,
       onSave: (index) async {
-        final source = mediaSources[index];
-        final file = source.file;
-        if (source.bytes != null) {
-          await saveImageBytes(source.bytes!);
-        } else if (file != null && file.existsSync()) {
-          try {
-            await HttpUtil.saveFileToGallerySaver(file);
-          } catch (error) {
-            Logger.print('saveImage failed: $error');
+        if (saving || !canSave()) return;
+        saving = true;
+        try {
+          final source = mediaSources[index];
+          final file = source.file;
+          if (source.isVideo) {
+            await videoSave.save(
+                file: file,
+                url: source.url,
+                bytes: source.bytes,
+                isCurrent: canSave);
+          } else if (source.bytes != null) {
+            await saveImageBytes(source.bytes!);
+          } else if (file != null && file.existsSync()) {
+            try {
+              await HttpUtil.saveFileToGallerySaver(file);
+            } catch (error) {
+              Logger.print('saveImage failed: $error');
+              IMViews.showToast(StrRes.saveFailed);
+            }
+          } else if (source.url != null && source.url!.isNotEmpty) {
+            await saveImage(context, source.url!);
+          } else {
             IMViews.showToast(StrRes.saveFailed);
           }
-        } else if (source.url != null && source.url!.isNotEmpty) {
-          saveImage(context, source.url!);
-        } else {
-          IMViews.showToast(StrRes.saveFailed);
+        } finally {
+          saving = false;
         }
       },
       onAutoPlay: (index) => onAutoPlay != null ? onAutoPlay(index) : false,
@@ -1249,7 +1277,8 @@ class IMUtils {
       onViewInChat: onViewInChat,
       muted: muted,
     );
-    return Navigator.of(context).push(
+    return Navigator.of(context)
+        .push(
       PageRouteBuilder(
         opaque: false,
         pageBuilder: (context, animation, secondaryAnimation) {
@@ -1259,10 +1288,14 @@ class IMUtils {
           return FadeTransition(opacity: animation, child: child);
         },
       ),
-    );
+    )
+        .whenComplete(() {
+      previewOpen = false;
+      videoSave.dispose();
+    });
   }
 
-  static void saveImage(BuildContext ctx, String url) async {
+  static Future<void> saveImage(BuildContext ctx, String url) async {
     EasyLoading.show(dismissOnTap: true);
     try {
       final imageFile = await getCachedImageFile(url);

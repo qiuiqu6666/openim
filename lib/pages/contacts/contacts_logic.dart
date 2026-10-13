@@ -76,6 +76,8 @@ class ContactsLogic extends GetxController
   final friendApplicationList = <UserInfo>[];
   final friends = <ISUserInfo>[].obs;
   final friendsLoading = true.obs;
+  final friendsLoadFailed = false.obs;
+  bool _friendsLoaded = false;
   final stars = StarFriendStore();
   final presence = PresenceStore();
   StreamSubscription<UserStatusInfo>? _presenceSubscription;
@@ -162,6 +164,7 @@ class ContactsLogic extends GetxController
   StreamSubscription<FriendInfo>? _friendAddedSub;
   StreamSubscription<FriendInfo>? _friendDeletedSub;
   StreamSubscription<FriendInfo>? _friendChangedSub;
+  StreamSubscription<BlacklistInfo>? _blacklistSub;
   StreamSubscription<dynamic>? _syncSub;
   int _loadGeneration = 0;
   Future<void>? _friendsLoad;
@@ -194,8 +197,15 @@ class ContactsLogic extends GetxController
     _friendAddedSub = imLogic.friendAddSubject.listen(_upsertFriend);
     _friendDeletedSub = imLogic.friendDelSubject.listen(_removeFriend);
     _friendChangedSub = imLogic.friendInfoChangedSubject.listen(_upsertFriend);
+    _blacklistSub = imLogic.blacklistChangedSubject.listen((_) {
+      if (!_inactive) unawaited(loadFriends());
+    });
     _syncSub = imLogic.imSdkStatusPublishSubject.listen((event) {
-      if (event.status == IMSdkStatus.syncEnded) loadFriends();
+      if (event.status == IMSdkStatus.syncEnded ||
+          (event.status == IMSdkStatus.connectionSucceeded &&
+              friendsLoadFailed.value)) {
+        unawaited(loadFriends());
+      }
       if (event.status == IMSdkStatus.syncEnded ||
           event.status == IMSdkStatus.connectionSucceeded) {
         unawaited(stars.refresh());
@@ -217,7 +227,10 @@ class ContactsLogic extends GetxController
   /// A picker joins the initial load without requesting another full reload.
   Future<void> ensureFriendsLoaded() => _inactive
       ? Future.value()
-      : _friendsLoad ?? (friendsLoading.value ? loadFriends() : Future.value());
+      : _friendsLoad ??
+          (!_friendsLoaded || friendsLoadFailed.value
+              ? loadFriends()
+              : Future.value());
 
   Future<void> loadFriends() {
     if (_inactive) return Future.value();
@@ -228,6 +241,7 @@ class ContactsLogic extends GetxController
       return pending;
     }
     friendsLoading.value = true;
+    friendsLoadFailed.value = false;
     return _friendsLoad = _loadFriendsUntilCurrent().whenComplete(() {
       _friendsLoad = null;
       _friendChangesDuringLoad.clear();
@@ -267,6 +281,9 @@ class ContactsLogic extends GetxController
           await _publishDirectory();
         }
       } catch (_) {
+        if (!_inactive && generation == _loadGeneration) {
+          friendsLoadFailed.value = true;
+        }
         // Keep the last visible directory when the SDK is temporarily offline.
       }
     } while (!_inactive && _reloadFriendsPending);
@@ -336,9 +353,12 @@ class ContactsLogic extends GetxController
                 ..namePinyin = name.namePinyin
                 ..isShowSuspension = name.showHeader,
           ];
+          _friendsLoaded = true;
+          friendsLoadFailed.value = false;
           unawaited(refreshPresence(force: false));
         }
       } catch (_) {
+        if (!_inactive) friendsLoadFailed.value = true;
         // Keep the visible directory if indexing fails. A later event or sync
         // can retry without starting an unbounded worker loop.
       }
@@ -371,6 +391,7 @@ class ContactsLogic extends GetxController
     _friendAddedSub?.cancel();
     _friendDeletedSub?.cancel();
     _friendChangedSub?.cancel();
+    _blacklistSub?.cancel();
     _syncSub?.cancel();
     PackageBridge.selectContactsBridge = null;
     PackageBridge.viewUserProfileBridge = null;

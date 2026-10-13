@@ -1,5 +1,7 @@
 # 收藏界面维护入口
 
+性能路径：`data/favorite_media_fingerprint.dart` 持有仓储级串行摘要队列，复用 `services/media/file_hasher.dart` 的可取消流式 worker；哈希前和上传前使用 `FavoriteMediaUploader.validateFileSize` 的同一大小规则。仓储切换账号时取消活动摘要，排队项检查所属账号的取消令牌；设备同步与收藏不共用同一个 worker 实例。`favorite_sync_state.dart` 对空事件且相同水位返回原状态，仓储跳过该页无变化写入，水位推进和真实变更仍严格持久化。仓储本次只作现有流程接线，不扩大超长文件职责。本批未构建或运行测试，验证边界见全局性能审计报告。
+
 `navigation/favorites_app_bar.dart` 统一正式收藏、草稿与能力检测页的导航配置，复用公共 `GlassAppBar` 的玻璃背景、状态栏和安全区。对照 99chat 收藏列表的居中标题及返回入口，编辑／完成使用主题色与明确的禁用状态；大字号时导航高度随文字增长。路由返回和编辑回调仍由现有页面持有。
 
 `widgets/favorite_capability_gate.dart` 复用仓储的账号级 quota 能力，双能力确认前不构建正式收藏内容；错误可重试，不使用本地收藏替代。`favorite_p0.dart` 集中定义当前开放类型。

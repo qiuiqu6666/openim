@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../chat_delayed_status_view.dart';
+
 enum ChatTransferStage { queued, uploading, confirming, unknown }
 
 @immutable
@@ -24,22 +26,35 @@ class ChatTransferStatusView extends StatelessWidget {
       ValueListenableBuilder<ChatTransferStatus?>(
         valueListenable: status,
         builder: (context, value, _) {
-          final label = switch (value?.stage) {
+          final statusColor =
+              color ?? Theme.of(context).colorScheme.onSurfaceVariant;
+          if (value == null || value.stage == ChatTransferStage.confirming) {
+            return Semantics(
+              label: 'chatSendConfirming'.tr,
+              child: ChatDelayedStatusView(
+                isSending: true,
+                delay: false,
+                color: statusColor,
+              ),
+            );
+          }
+          final label = switch (value.stage) {
             ChatTransferStage.queued => 'chatMediaQueued'.tr,
-            ChatTransferStage.uploading => value?.percent == null
+            ChatTransferStage.uploading => value.percent == null
                 ? 'chatMediaUploading'.tr
-                : '${'chatMediaUploading'.tr} ${value!.percent}%',
+                : '${'chatMediaUploading'.tr} ${value.percent}%',
             ChatTransferStage.unknown => 'chatSendCheck'.tr,
             _ => 'chatSendConfirming'.tr,
           };
           return GestureDetector(
-            onTap: value?.stage == ChatTransferStage.unknown ? onCheck : null,
+            onTap: value.stage == ChatTransferStage.unknown ? onCheck : null,
             child: Text(label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: color ??
-                        Theme.of(context).colorScheme.onSurfaceVariant)),
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(color: statusColor)),
           );
         },
       );

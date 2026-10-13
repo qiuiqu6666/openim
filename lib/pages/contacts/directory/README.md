@@ -7,4 +7,6 @@
 - `ContactsLogic` 合并好友增删改，80 ms 批次只发布本地目录；初始化、同步结束和显式刷新仍从 OpenIM SDK 分页读取，保留 `filterBlack: true`。
 - 索引任务串行合并；查询期间的增删改覆盖旧查询，关闭或账号/登录凭证变化后不发布结果。控制器关闭时释放名字缓存。
 
+首次 SDK 或索引失败使用 `friendsLoadFailed` 保留真实失败状态；主通讯录页脚提供重试，选择器请求目录时重试未成功完成的加载。确认空目录不会重复查询；没有旧目录且重试仍失败时，选择器收到失败而非成功空列表。黑名单变化由账号级 `ContactsLogic` 统一刷新过滤后的目录，子好友列表订阅目录发布，避免同一事件触发重复全量查询。
+
 测试位于 `test/pages/contacts/directory/` 和 `test/pages/contacts/contacts_logic_test.dart`，全局事件流程保留在 `test/global_performance_regression_test.dart`。

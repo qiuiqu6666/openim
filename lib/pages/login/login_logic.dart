@@ -11,6 +11,7 @@ import '../../routes/app_navigator.dart';
 import '../../services/auth_credentials/auth_credentials_store.dart';
 import '../../widgets/auth/auth_form_rules.dart';
 import '../../widgets/auth/auth_copy.dart';
+import '../../widgets/auth/feedback/auth_notice.dart';
 import 'device_verification/data/password_device_login_attempt.dart';
 import 'device_verification/device_verification_flow.dart';
 import 'validation/login_form_feedback.dart';
@@ -462,6 +463,7 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
       Logger.print('Login failed');
       if (ownsFeedback()) {
         _feedback.recordFailure(e, Urls.login);
+        showAuthNotice(formError!);
       }
     } finally {
       passwordAttempt?.close();
@@ -513,6 +515,7 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
     } catch (error) {
       if (!_closed && !isClosed && revision == _inputRevision) {
         _feedback.recordFailure(error, Urls.getVerificationCode);
+        showAuthNotice(formError!);
       }
       return false;
     }

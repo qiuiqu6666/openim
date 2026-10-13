@@ -1,5 +1,6 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
+import 'cloud/chat_history_cloud_sync.dart';
 
 /// Filters for one conversation's local message history.
 class ChatHistorySearchQuery {
@@ -111,7 +112,24 @@ abstract class ChatHistorySearchSource {
   });
 }
 
-class OpenIMChatHistorySearchSource implements ChatHistorySearchSource {
+class OpenIMChatHistorySearchSource
+    implements ChatHistorySearchSource, ChatHistoryCloudSource {
+  late final _cloud = ChatHistoryCloudSync((id, cursor, count) async {
+    _checkSession();
+    final page = await OpenIM.iMManager.messageManager
+        .getAdvancedHistoryMessageList(
+            conversationID: id, startMsg: cursor, count: count);
+    _checkSession();
+    return page;
+  });
+
+  @override
+  bool get cloudHasMore => _cloud.hasMore;
+
+  @override
+  Future<void> supplement(String conversationID, bool Function() isCurrent) =>
+      _cloud.load(conversationID, isCurrent);
+
   String? _userID;
   String? _token;
   bool _sessionCaptured = false;

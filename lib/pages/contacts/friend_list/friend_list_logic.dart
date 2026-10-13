@@ -52,9 +52,9 @@ class FriendListLogic extends GetxController {
     _subscriptions.add(imLoic.blacklistChangedSubject.listen((_) {
       if (!_active) return;
       final owner = _owner;
-      if (owner != null) {
-        unawaited(owner.loadFriends());
-      } else {
+      // The account directory owns blacklist refreshes. Its publication above
+      // updates this page, without starting a second full query for one event.
+      if (owner == null) {
         unawaited(_getFriendList());
       }
     }));

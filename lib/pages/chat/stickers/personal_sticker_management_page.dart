@@ -4,6 +4,7 @@ import 'package:openim_common/openim_common.dart'
     show AppSystemBars, AppTokens, GlassAppBar, showAppConfirm;
 
 import 'personal_sticker_store.dart';
+import 'personal_sticker_thumbnail.dart';
 
 class PersonalStickerManagementPage extends StatefulWidget {
   const PersonalStickerManagementPage({
@@ -94,8 +95,8 @@ class _PersonalStickerManagementPageState
                 borderRadius: BorderRadius.circular(12),
               ),
               clipBehavior: Clip.antiAlias,
-              child: Image.network(
-                item.previewURL,
+              child: PersonalStickerThumbnail(
+                item.isVideo ? item.previewURL : item.mediaURL,
                 fit: BoxFit.contain,
                 errorBuilder: (context, _, __) => SizedBox(
                   height: 200,
@@ -307,7 +308,7 @@ class _PersonalStickerManagementPageState
                             padding: const EdgeInsets.all(4),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(5),
-                              child: Image.network(item.previewURL,
+                              child: PersonalStickerThumbnail(item.previewURL,
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, __, ___) =>
                                       const Icon(Icons.broken_image_outlined)),
@@ -375,7 +376,7 @@ class _PersonalStickerManagementPageState
                             borderRadius: BorderRadius.circular(8),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.network(item.previewURL,
+                              child: PersonalStickerThumbnail(item.previewURL,
                                   width: 76,
                                   height: 76,
                                   fit: BoxFit.cover,

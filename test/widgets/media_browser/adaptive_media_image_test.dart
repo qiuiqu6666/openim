@@ -38,8 +38,10 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
-ExtendedImageGestureState _gesture(WidgetTester tester) => tester
-    .state<ExtendedImageGestureState>(find.byType(ExtendedImageGesture).first);
+ExtendedImageGestureState _gesture(WidgetTester tester) =>
+    tester.state<ExtendedImageGestureState>(find
+        .byWidgetPredicate((widget) => widget is ExtendedImageGesture)
+        .first);
 
 void _phone(WidgetTester tester) {
   tester.view.physicalSize = const Size(375, 812);
@@ -49,6 +51,34 @@ void _phone(WidgetTester tester) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('continuous held swipes release gallery drag across long photos',
+      (tester) async {
+    _phone(tester);
+    final bytes = (await tester.runAsync(() => _png(const Size(120, 2400))))!;
+    await tester.pumpWidget(renderTestHost(MediaBrowser(
+      initialIndex: 0,
+      sources: List.generate(
+          5, (i) => MediaSource(thumbnail: '', bytes: bytes, tag: 'held-$i')),
+    )));
+    await _settle(tester);
+    var previous = 0;
+    for (final index in [1, 2, 3, 2, 1]) {
+      final forward = index > previous;
+      final gesture =
+          await tester.startGesture(Offset(forward ? 340 : 35, 400));
+      for (var step = 0; step < 22; step++) {
+        await gesture.moveBy(Offset(forward ? -16 : 16, 0));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      await gesture.up();
+      await _settle(tester);
+      expect(find.text('${index + 1}/5'), findsOneWidget,
+          reason: 'target $index from $previous');
+      expect(tester.takeException(), isNull);
+      previous = index;
+    }
+  });
 
   for (final shape in {
     'exact screen': const Size(375, 812),
@@ -241,7 +271,8 @@ void main() {
       await _settle(tester);
       await tester.timedDragFrom(
           Offset(viewport.width * .8, viewport.height / 2),
-          Offset(-viewport.width * .7, 0),
+          Offset(-viewport.width * .7,
+              viewport.width < 600 ? viewport.width * .36 : 0),
           const Duration(milliseconds: 500));
       await _settle(tester);
       expect(find.text('2/2'), findsOneWidget);
@@ -356,6 +387,139 @@ void main() {
     expect(find.text('2/2'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('long image keeps a curved reading drag on the same page',
+      (tester) async {
+    _phone(tester);
+    final bytes = (await tester.runAsync(() => _png(const Size(120, 2400))))!;
+    final pages = <int>[];
+    await tester.pumpWidget(renderTestHost(MediaBrowser(
+      initialIndex: 0,
+      sources: [
+        MediaSource(thumbnail: '', bytes: bytes, tag: 'long'),
+        MediaSource(thumbnail: '', bytes: renderTestPng(), tag: 'next'),
+      ],
+      onPageChanged: pages.add,
+    )));
+    await _settle(tester);
+    final drag = await tester.startGesture(const Offset(300, 600));
+    for (var i = 0; i < 5; i++) {
+      await drag.moveBy(const Offset(-3, -25));
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    // The finger curves almost horizontally mid-swipe, as on a real phone.
+    for (var i = 0; i < 10; i++) {
+      await drag.moveBy(const Offset(-22, -3));
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    await drag.up();
+    await tester.pumpAndSettle();
+    expect(pages, isEmpty);
+    expect(find.text('1/2'), findsOneWidget);
+    expect(
+        _gesture(tester).gestureDetails!.destinationRect!.top, lessThan(-80));
+    // The lock belongs only to that gesture: a new horizontal swipe still works.
+    await tester.timedDragFrom(const Offset(300, 400), const Offset(-500, 0),
+        const Duration(milliseconds: 400));
+    await _settle(tester);
+    expect(pages, [1]);
+    expect(tester.takeException(), isNull);
+  },
+      variant:
+          TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
+
+  testWidgets('long image returns to top then pulls down to close',
+      (tester) async {
+    _phone(tester);
+    final bytes = (await tester.runAsync(() => _png(const Size(120, 2400))))!;
+    await tester.pumpWidget(renderTestHost(const Text('chat')));
+    Navigator.of(tester.element(find.text('chat')))
+        .push(MaterialPageRoute<void>(
+      builder: (_) => MediaBrowser(initialIndex: 0, sources: [
+        MediaSource(thumbnail: '', bytes: bytes, tag: 'long'),
+        MediaSource(thumbnail: '', bytes: renderTestPng(), tag: 'next'),
+      ]),
+    ));
+    await _settle(tester);
+    await tester.timedDragFrom(const Offset(180, 600), const Offset(0, -180),
+        const Duration(milliseconds: 800));
+    await tester.pumpAndSettle();
+    expect(
+        _gesture(tester).gestureDetails!.destinationRect!.top, lessThan(-100));
+    await tester.timedDragFrom(const Offset(180, 250), const Offset(0, 400),
+        const Duration(milliseconds: 800));
+    await tester.pumpAndSettle();
+    expect(find.byType(MediaBrowser), findsOneWidget,
+        reason:
+            'A drag starting inside the image scrolls, even if it reaches top');
+    expect(
+        _gesture(tester).gestureDetails!.destinationRect!.top, closeTo(0, .01));
+    // A cancelled pull does not leave the dismissal or direction lock stuck.
+    await tester.timedDragFrom(const Offset(180, 250), const Offset(0, 70),
+        const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(find.byType(MediaBrowser), findsOneWidget);
+    await tester.timedDragFrom(const Offset(180, 250), const Offset(0, 350),
+        const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(find.byType(MediaBrowser), findsNothing);
+    expect(find.text('chat'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  },
+      variant:
+          TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
+
+  testWidgets('long image pinch cancels a pull and zoomed drag does not close',
+      (tester) async {
+    _phone(tester);
+    final bytes = (await tester.runAsync(() => _png(const Size(120, 2400))))!;
+    await tester.pumpWidget(renderTestHost(const Text('chat')));
+    Navigator.of(tester.element(find.text('chat')))
+        .push(MaterialPageRoute<void>(
+      builder: (_) => MediaBrowser(initialIndex: 0, sources: [
+        MediaSource(thumbnail: '', bytes: bytes),
+      ]),
+    ));
+    await _settle(tester);
+    final left = await tester.startGesture(const Offset(140, 250), pointer: 1);
+    for (var i = 0; i < 4; i++) {
+      await left.moveBy(const Offset(0, 25));
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    final right = await tester.startGesture(const Offset(260, 350), pointer: 2);
+    await tester.pump();
+    await left.moveBy(const Offset(-25, 0));
+    await right.moveBy(const Offset(25, 0));
+    await tester.pump();
+    await left.up();
+    await right.up();
+    await tester.pumpAndSettle();
+    expect(find.byType(MediaBrowser), findsOneWidget);
+    expect(
+        tester
+            .state<ExtendedImageSlidePageState>(
+                find.byType(ExtendedImageSlidePage))
+            .offset,
+        Offset.zero);
+    // Reset to reading width and then double-tap to a deliberate zoom.
+    _gesture(tester).reset();
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(180, 250));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(const Offset(180, 250));
+    await tester.pumpAndSettle();
+    expect(_gesture(tester).gestureDetails!.destinationRect!.width,
+        closeTo(750, .01));
+    for (var i = 0; i < 3; i++) {
+      await tester.timedDragFrom(const Offset(180, 250), const Offset(0, 350),
+          const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+    }
+    expect(find.byType(MediaBrowser), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  },
+      variant:
+          TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
 
   testWidgets('long image double tap zooms relative to reading width',
       (tester) async {

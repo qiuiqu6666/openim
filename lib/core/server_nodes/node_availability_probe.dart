@@ -25,7 +25,8 @@ class NodeAvailabilityProbe {
   final Dio Function() _clientFactory;
   final Duration timeout;
 
-  Future<NodeAvailability> check(NodeEndpoint node) async {
+  Future<NodeAvailability> check(NodeEndpoint node,
+      {bool includeGateway = true}) async {
     final watch = Stopwatch()..start();
     final client = _clientFactory();
     final token = CancelToken();
@@ -43,7 +44,7 @@ class NodeAvailabilityProbe {
         PlatformConfigService.fetch(
             client: client, baseUrl: chat.toString(), cancelToken: token),
         _api(client, api, token),
-        _gateway(client, ws, token),
+        if (includeGateway) _gateway(client, ws, token),
       ], eagerError: true)
           .timeout(timeout);
       available = true;

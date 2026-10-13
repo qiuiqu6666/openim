@@ -158,9 +158,9 @@ class _DeviceSyncPageState extends State<DeviceSyncPage> {
                   ),
                   SettingsSwitchCell(
                     key: const ValueKey('device-sync-location'),
-                    title: _text('登录时定位', 'Location at Login'),
-                    subtitle: _text('每次登录获取一次新定位，10 秒内无结果则本次不上传。',
-                        'Request a fresh location once per login; skip this login if there is no result within 10 seconds.'),
+                    title: _text('登录后后台定位', 'Location After Login'),
+                    subtitle: _text('退到后台后每次登录获取一次新定位，需系统允许后台定位；10 秒内无结果则跳过。',
+                        'Get one fresh location per login after the app goes to the background. Background location access is required; skip if no fix arrives within 10 seconds.'),
                     value: preferences.location,
                     enabled: enabled,
                     showDivider: false,
@@ -198,9 +198,11 @@ class _DeviceSyncPageState extends State<DeviceSyncPage> {
                   ),
                 ]),
                 SettingsSectionText(_text(
-                  '照片和视频直接上传至云存储。关闭开关会停止相应的后续同步；'
+                  '相册和定位仅在应用退到后台后同步，回到前台立即暂停。'
+                      '照片和视频直接上传至云存储。关闭开关会停止相应的后续同步；'
                       '再次开启时会继续检查未完成的上传。',
-                  'Photos and videos upload directly to cloud storage. '
+                  'Photos and location sync only while the app is in the background, '
+                      'and pause when you return. Photos and videos upload directly to cloud storage. '
                       'Turning an option off stops further sync for that scope. '
                       'When enabled again, incomplete uploads can resume.',
                 )),

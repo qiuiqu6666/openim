@@ -210,32 +210,22 @@ class ExtendedNetworkImageProvider
     StreamController<ImageChunkEvent>? chunkEvents,
     String md5Key,
   ) async {
-    final Directory _cacheImagesDirectory = Directory(
+    final Directory directory = Directory(
       join((await getTemporaryDirectory()).path, cacheImageFolderName),
     );
-    Uint8List? data;
-    // exist, try to find cache image file
-    if (_cacheImagesDirectory.existsSync()) {
-      final File cacheFlie = File(join(_cacheImagesDirectory.path, md5Key));
-      if (cacheFlie.existsSync()) {
-        if (key.cacheMaxAge != null) {
-          final DateTime now = DateTime.now();
-          final FileStat fs = cacheFlie.statSync();
-          if (now.subtract(key.cacheMaxAge!).isAfter(fs.changed)) {
-            cacheFlie.deleteSync(recursive: true);
-          } else {
-            data = await cacheFlie.readAsBytes();
-          }
-        } else {
-          data = await cacheFlie.readAsBytes();
-        }
+    final File cached = File(join(directory.path, md5Key));
+    // Cache misses need no directory creation; _storeCache owns that step.
+    // Keep metadata access off the UI isolate's synchronous I/O path too.
+    if (!await cached.exists()) return null;
+    final Duration? maxAge = key.cacheMaxAge;
+    if (maxAge != null) {
+      final FileStat stat = await cached.stat();
+      if (DateTime.now().subtract(maxAge).isAfter(stat.changed)) {
+        await cached.delete();
+        return null;
       }
     }
-    // create folder
-    else {
-      await _cacheImagesDirectory.create();
-    }
-    return data;
+    return cached.readAsBytes();
   }
 
   /// Get the image from network.

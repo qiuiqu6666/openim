@@ -80,7 +80,7 @@ Future<void> _mount(WidgetTester tester,
     double textScale = 1}) async {
   Get.testMode = true;
   Styles.isDark = dark;
-  Get.put(GlobalSearchLogic(source: _SearchSource(items)));
+  Get.put(GlobalSearchLogic(source: _SearchSource(items))).index.value = 3;
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -188,20 +188,15 @@ void main() {
     });
 
     testWidgets(
-        'search navigation has centered title and blue back arrow: $dark',
+        'search header has inline cancel without navigation bar: $dark',
         (tester) async {
       await _mount(tester, dark: dark, items: []);
-      final appBar = tester.widget<GlassAppBar>(find.byType(GlassAppBar));
-      expect(appBar.centerTitle, isTrue);
-      final arrow = find.byIcon(Icons.arrow_back_ios_new_rounded);
-      expect(arrow, findsOneWidget);
-      expect(tester.widget<Icon>(arrow).color, AppTokens.accent);
-      final title = find.descendant(
-          of: find.byType(GlassAppBar), matching: find.text(StrRes.search));
-      final center = tester.getCenter(title);
-      expect(center.dx, closeTo(375 / 2, 1));
-      final back = find.ancestor(of: arrow, matching: find.byType(IconButton));
-      expect(tester.widget<IconButton>(back).onPressed, isNotNull);
+      expect(find.byType(GlassAppBar), findsNothing);
+      final cancel = find.byKey(const ValueKey('chat-history-search-cancel'));
+      expect(cancel, findsOneWidget);
+      expect(tester.widget<GestureDetector>(cancel).onTap, isNotNull);
+      expect(tester.getRect(cancel).left,
+          greaterThan(tester.getRect(find.byType(TextField)).right));
       expect(tester.takeException(), isNull);
     });
   }

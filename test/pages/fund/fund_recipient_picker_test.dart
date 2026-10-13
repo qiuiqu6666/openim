@@ -21,7 +21,8 @@ void main() {
   tearDown(Get.reset);
 
   Future<void> open(WidgetTester tester, FundMemberLoader loader,
-      {ValueChanged<GroupMembersInfo?>? onSelected}) async {
+      {ValueChanged<GroupMembersInfo?>? onSelected,
+      Future<List<FriendInfo>> Function(List<String>)? friendLoader}) async {
     final nav = GlobalKey<NavigatorState>();
     await tester.pumpWidget(ScreenUtilInit(
       designSize: const Size(375, 812),
@@ -39,12 +40,28 @@ void main() {
     ));
     nav.currentState!
         .push<GroupMembersInfo>(MaterialPageRoute(
-            builder: (_) =>
-                FundRecipientPicker(groupID: 'group', memberLoader: loader)))
+            builder: (_) => FundRecipientPicker(
+                groupID: 'group',
+                memberLoader: loader,
+                friendLoader: friendLoader ?? (_) async => [])))
         .then((value) => onSelected?.call(value));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
   }
+
+  testWidgets('remarks take priority and member rows have dividers',
+      (tester) async {
+    await open(tester,
+        (_, __, ___) async => [member('a', 'Nickname'), member('b', 'Other')],
+        friendLoader: (ids) async {
+      expect(ids, ['a', 'b']);
+      return [FriendInfo(userID: 'a', remark: 'My remark')];
+    });
+    expect(find.text('My remark'), findsOneWidget);
+    expect(find.text('Nickname'), findsNothing);
+    expect(find.text('Other'), findsOneWidget);
+    expect(find.byType(Divider), findsOneWidget);
+  });
 
   testWidgets('shows reference avatar rows and returns one actual SDK member',
       (tester) async {

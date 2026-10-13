@@ -11,11 +11,13 @@ class MainTabTitle extends StatelessWidget {
       this.busy = false,
       this.busyLabel,
       this.failed = false,
+      this.failureLabel,
       this.color,
       this.keyPrefix = 'main-tab-title'});
   final String title;
   final bool busy, failed;
   final String? busyLabel;
+  final String? failureLabel;
   final Color? color;
   final String keyPrefix;
 
@@ -40,7 +42,9 @@ class MainTabTitle extends StatelessWidget {
             (Localizations.localeOf(context).languageCode == 'zh'
                 ? '正在连接'
                 : 'Connecting')
-        : title;
+        : failed
+            ? failureLabel ?? title
+            : title;
     return Padding(
       padding: const EdgeInsets.only(top: AppTokens.s2),
       child: Column(

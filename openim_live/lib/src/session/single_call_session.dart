@@ -14,10 +14,11 @@ class CallAttempt {
 
 class CallTermination {
   const CallTermination(this.state, this.duration, this.notifyPeer,
-      {this.error, this.stackTrace});
+      {this.error, this.stackTrace, this.localOnly = false});
   final CallState state;
   final int duration;
   final bool notifyPeer;
+  final bool localOnly;
   final Object? error;
   final StackTrace? stackTrace;
 }
@@ -46,6 +47,7 @@ class SingleCallSession extends ChangeNotifier {
   CallState state;
   bool active = true;
   bool _connecting = false, _transportReady = false, _peerPresent = false;
+  bool _accepted = false;
   bool _disposed = false;
   int _generation = 0;
   DateTime? _connectedAt;
@@ -59,7 +61,7 @@ class SingleCallSession extends ChangeNotifier {
       : _now().difference(_connectedAt!).inSeconds.clamp(0, 86400);
 
   void armDeadline() {
-    if (!active || connected || _deadline != null) return;
+    if (!active || connected || _accepted || _deadline != null) return;
     _deadline = Timer(ringingTimeout, () => unawaited(end(CallState.timeout)));
   }
 
@@ -83,7 +85,7 @@ class SingleCallSession extends ChangeNotifier {
       _connecting = false;
       if (_peerPresent) {
         peerConnected();
-      } else if (outgoing) {
+      } else if (outgoing && !_accepted) {
         state = CallState.call;
         _changed();
       }
@@ -95,7 +97,14 @@ class SingleCallSession extends ChangeNotifier {
   }
 
   void peerAccepted() {
-    if (!active || connected) return;
+    if (!active || connected || _accepted) return;
+    _accepted = true;
+    _deadline?.cancel();
+    // Accepted is not connected. Replace the invitation deadline with a
+    // bounded media connection deadline; repeated notices cannot extend it.
+    _deadline = Timer(connectionTimeout, () => unawaited(end(
+        CallState.networkError,
+        error: TimeoutException('Accepted call media did not connect'))));
     state = CallState.connecting;
     _changed();
   }
@@ -124,11 +133,12 @@ class SingleCallSession extends ChangeNotifier {
   }
 
   Future<void> end(CallState outcome,
-      {bool notifyPeer = true, Object? error, StackTrace? stackTrace}) {
+      {bool notifyPeer = true, bool localOnly = false,
+      Object? error, StackTrace? stackTrace}) {
     if (_ending != null) return _ending!;
     // Invalidating the lease precedes every await and external callback.
     final result = CallTermination(outcome, duration, notifyPeer,
-        error: error, stackTrace: stackTrace);
+        error: error, stackTrace: stackTrace, localOnly: localOnly);
     active = false;
     ++_generation;
     _deadline?.cancel();

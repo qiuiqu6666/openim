@@ -4,6 +4,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../services/chat_history_cache.dart';
+import '../../../core/session/queries/sdk_query_gate.dart';
 
 typedef LatestHistoryReader = Future<AdvancedMessage> Function(
     String conversationID, int count);
@@ -39,6 +40,8 @@ class ChatHistoryPrefetcher {
   final int Function(String, String) _conversationRevision;
   final Duration lifetime;
   final _requests = <(String, String?, int, String, int), _PreparedHistory>{};
+  final _reads = SdkQueryGate<AdvancedMessage>(limit: 2);
+  static const _readTimeout = Duration(seconds: 30);
 
   (String, String?, int, String, int) _key(String id) {
     final account = accountID();
@@ -52,12 +55,11 @@ class ChatHistoryPrefetcher {
         conversation.isPrivateChat == true) {
       return;
     }
-    if (_requests.containsKey(key)) return;
+    if (_requests.containsKey(key) || _reads.isFull) return;
     while (_requests.length >= 12) {
       _requests.remove(_requests.keys.first)?.expiry.cancel();
     }
-    final request =
-        _PreparedHistory(Future.sync(() => fetch(key.$4, count)), count);
+    final request = _PreparedHistory(_read(key, count), count);
     _requests[key] = request;
     request.expiry = Timer(lifetime, () {
       if (identical(_requests[key], request)) _requests.remove(key);
@@ -79,14 +81,14 @@ class ChatHistoryPrefetcher {
     if (conversation.isPrivateChat == true ||
         request == null ||
         request.count != count) {
-      return fetch(conversation.conversationID, count);
+      return _read(key, count);
     }
     final result = await request.result;
     if (key.$1 != accountID() || key.$2 != token()) {
       throw StateError('Chat session changed during history preparation');
     }
     if (key.$3 != epoch()) {
-      return fetch(conversation.conversationID, count);
+      return _read(_key(conversation.conversationID), count);
     }
     if (key.$5 != _conversationRevision(key.$1, key.$4)) {
       return AdvancedMessage(messageList: [], isEnd: true, errCode: 0);
@@ -97,6 +99,12 @@ class ChatHistoryPrefetcher {
         .toList();
     return result;
   }
+
+  Future<AdvancedMessage> _read(
+          (String, String?, int, String, int) key, int count) =>
+      _reads.run(Object(), () => fetch(key.$4, count),
+          timeout: _readTimeout,
+          isCurrent: () => key.$1 == accountID() && key.$2 == token());
 
   void clear() {
     for (final request in _requests.values) {

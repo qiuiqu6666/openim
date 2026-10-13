@@ -11,6 +11,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:openim_live/openim_live.dart';
 
 class EntryTestApp extends GetxController implements AppController {
+  final notifications = <Message>[];
   @override
   Future<void> onApplicationSessionReady({bool authenticated = false}) async {}
 
@@ -22,7 +23,9 @@ class EntryTestApp extends GetxController implements AppController {
 
   @override
   Future<void> showNotification(Message message,
-      {bool showNotification = true}) async {}
+      {bool showNotification = true}) async {
+    notifications.add(message);
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

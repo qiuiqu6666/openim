@@ -13,6 +13,12 @@ class FavoriteSyncState {
     if (page.syncAt < syncAt || (page.hasMore && page.syncAt <= syncAt)) {
       throw const FormatException('Favorite change watermark did not advance');
     }
+    if (page.events.isEmpty && !page.hasMore) {
+      return page.syncAt == syncAt
+          ? this
+          : FavoriteSyncState(
+              syncAt: page.syncAt, items: items, tombstones: tombstones);
+    }
     final next = Map<String, FavoriteItem>.from(items);
     final deleted = Map<String, int>.from(tombstones);
     var latestTime = syncAt;

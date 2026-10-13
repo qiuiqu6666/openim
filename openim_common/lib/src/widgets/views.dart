@@ -18,13 +18,15 @@ import 'package:uuid/uuid.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:wechat_camera_picker/wechat_camera_picker.dart';
 
+import '../utils/http/transport_error_messages.dart';
+
 class IMViews {
   IMViews._();
 
   static Future showToast(String msg, {Duration? duration}) {
     if (msg.trim().isNotEmpty) {
       return EasyLoading.showToast(
-        msg,
+        TransportErrorMessages.toastText(msg),
         duration: duration,
         maskType: EasyLoadingMaskType.none,
         dismissOnTap: false,
@@ -32,6 +34,14 @@ class IMViews {
     } else {
       return Future.value();
     }
+  }
+
+  static Future showErrorToast(Object error,
+      {String? path, String? fallback, Duration? duration}) {
+    if (HttpUtil.isSilentError(error, path: path)) return Future.value();
+    return showToast(
+        HttpUtil.errorMessage(error, path: path, fallback: fallback),
+        duration: duration);
   }
 
   static Widget buildHeader([double distance = 60]) => WaterDropMaterialHeader(

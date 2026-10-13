@@ -288,14 +288,14 @@ void main() {
         streamID: 'active', index: 0, text: '关闭前的片段'));
     await tester.pump();
     expect(stream('active'), findsOneWidget);
-    final ownedCallback = fixture.im.onRecvNewMessage!;
+    final ownedCallback = fixture.im.publishLocalChatMessage;
     await tester.pumpWidget(const SizedBox.shrink());
     logic.onDelete();
     final closedSnapshots = [
       for (final snapshot in logic.assistantStreams.snapshots)
         (snapshot.streamID, snapshot.text),
     ];
-    expect(fixture.im.onRecvNewMessage, isNull);
+    expect(fixture.im.chatMessageEvents.hasListener, isFalse);
     ownedCallback(aiOpenimStreamFragment('late-chunk',
         streamID: 'active', index: 1, text: '关闭后不应显示'));
     ownedCallback(aiOpenimStreamFinal('late-final', '关闭后不应写入', 'active'));
@@ -521,7 +521,7 @@ void main() {
     fixture.im.recvNewMessage(aiOpenimStreamFragment('accepted',
         streamID: 'current', index: 0, text: '当前账号的预览'));
     await tester.pump();
-    final ownedCallback = fixture.im.onRecvNewMessage!;
+    final ownedCallback = fixture.im.publishLocalChatMessage;
     OpenIM.iMManager.userID = 'another-account';
     ownedCallback(aiOpenimStreamFragment('after-account-change',
         streamID: 'current', index: 1, text: '切换账号后不能接上'));

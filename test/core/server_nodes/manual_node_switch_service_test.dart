@@ -13,7 +13,7 @@ void main() {
   Completer<void>? gate;
   late ManualNodeSwitchService service;
   setUp(() {
-    current = NodeEndpoint.primary;
+    current = NodeEndpoint.direct;
     session = 'account';
     available = allowed = active = true;
     failTarget = failRecovery = false;
@@ -31,8 +31,8 @@ void main() {
         expect(sameSession(), isTrue);
         connections.add(node);
         current = node;
-        if ((node == NodeEndpoint.direct && failTarget) ||
-            (node == NodeEndpoint.primary && failRecovery)) {
+        if ((connections.length == 1 && failTarget) ||
+            (connections.length > 1 && failRecovery)) {
           throw StateError('connection failed');
         }
       },
@@ -51,13 +51,13 @@ void main() {
     available = false;
     await expectLater(change(), throwsA(NodeSwitchFailure.unavailable));
     expect(connections, isEmpty);
-    expect(current, NodeEndpoint.primary);
+    expect(current, NodeEndpoint.direct);
   });
   test('failed target reconnect restores previous route', () async {
     failTarget = true;
     await expectLater(change(), throwsA(NodeSwitchFailure.connectionFailed));
-    expect(connections, [NodeEndpoint.direct, NodeEndpoint.primary]);
-    expect(current, NodeEndpoint.primary);
+    expect(connections, [NodeEndpoint.direct, NodeEndpoint.direct]);
+    expect(current, NodeEndpoint.direct);
   });
   test('failed rollback is not reported as restored', () async {
     failTarget = failRecovery = true;
@@ -113,5 +113,15 @@ void main() {
         imWs: 'wss://custom.example');
     await expectLater(change(), throwsA(NodeSwitchFailure.unavailable));
     expect(connections, isEmpty);
+  });
+  test('removed domain node cannot be selected manually', () async {
+    const removed = NodeEndpoint(
+        chatApi: 'https://99chatapi.99chat.vip',
+        imApi: 'https://99imapi.99chat.vip',
+        imWs: 'wss://websocket.99chat.vip');
+    await expectLater(service.switchTo(removed, isActive: () => active),
+        throwsA(NodeSwitchFailure.unavailable));
+    expect(connections, isEmpty);
+    expect(current, NodeEndpoint.direct);
   });
 }

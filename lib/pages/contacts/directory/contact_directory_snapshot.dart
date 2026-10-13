@@ -10,8 +10,11 @@ Future<List<ISUserInfo>> loadContactDirectorySnapshot() async {
   if (Get.isRegistered<ContactsLogic>()) {
     final owner = Get.find<ContactsLogic>();
     if (owner.isCurrentSession) {
-      if (owner.friends.isEmpty) await owner.ensureFriendsLoaded();
+      await owner.ensureFriendsLoaded();
       if (!owner.isCurrentSession) return [];
+      if (owner.friendsLoadFailed.value && owner.friends.isEmpty) {
+        throw StateError('Contact directory is unavailable');
+      }
       return owner.friends.toList(growable: false);
     }
   }

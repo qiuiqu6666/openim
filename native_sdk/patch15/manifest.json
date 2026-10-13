@@ -1,0 +1,55 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "5cfba3b573f6a3ad7275f7f4bd879ef6e11078d5d973b01440ca335934be56d0",
+  "created": "2026-10-13",
+  "source_path": "E:\\openim\\sdk-source\\openim-sdk-core-recovery",
+  "go_version": "1.24.0",
+  "native_binary_integrated": true,
+  "checks": {
+    "targeted_tests": "passed",
+    "go_vet": "passed",
+    "windows_build_all_cgo_0": "passed",
+    "android_arm64_core_compile_cgo_1": "passed",
+    "official_server_integration": "unavailable: local OpenIM service not running",
+    "ios_framework": "official archive prepared; build not run",
+    "race_detector": "not run",
+    "android_aar_build": "passed recovery.10, 4 ABIs",
+    "android_app_build": "passed recovery.10, debug x86_64 3.0.1+2038; installed emulator-5554 preserving data",
+    "android_runtime_version": "recovery.10 observed in emulator PID 15805",
+    "flutter_recovery_regressions": "67 passed, 4 existing failures reproduced with original sync overlay; 48 connection/chat overlap tests pass",
+    "connection_repair": "7 new Core tests and 1 new Flutter outage test passed",
+    "sync_priority": "42 Core tests passed; vet and Windows full build passed; 27 patch files match native build source",
+    "sync_terminal_lifetime": "44 Core tests passed, includes terminal callback lifetime and self-notification preemption; vet and Windows full build passed",
+    "initial_sync_traffic": "46 Core tests passed; first login commits initial batch and 20 queued pushes; conversation bootstrap resists live updates; vet and full Windows build passed",
+    "sync_tail_recovery": "Core packages passed; equal-time merge and persisted repair tests passed; 18 reference server messages present after emulator upgrade; B final equal-time preview verification pending account switch",
+    "initial_sync_overlay": "state replay/account isolation regression passed; analyze has four pre-existing info diagnostics; broader account-isolation suite has two unresolved live-delta failures",
+    "prelogin_state": "prelogin late userID regression fixed using persisted credential owner; fresh uninitialized SDK and initial-sync replay tests passed",
+    "metadata_watchdog": "common/network/interaction/conversation tests passed; vet and full Windows build passed; idle cancellation and progress extension tested; fresh-device end-to-end pending"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "aar_sha256": "c6d054a514ac8999185b4628bd75b2216154379e342fb6c9ffad20bf76e43eae",
+    "ndk": "28.2.13676358",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.10",
+    "sdk_version": "v3.8.3-patch.15+recovery.10",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1"
+  },
+  "ios": {
+    "pod_resolution_and_build": "Pending macOS/Xcode",
+    "archive_sha256": "1a8f011820b5e282396328b2fbac294e8011ecc891d68e45e680186cf3822f69",
+    "framework_prepared": true,
+    "recovery_patch_included": false,
+    "archive_url": "https://github.com/openimsdk/openim-sdk-core/releases/download/v3.8.3-patch.15/openim-sdk-core_v3.8.3-patch.15_iOS_xcframework.zip",
+    "version": "v3.8.3-patch.15"
+  }
+}

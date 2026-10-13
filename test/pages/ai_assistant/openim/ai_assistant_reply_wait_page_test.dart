@@ -414,7 +414,7 @@ void main() {
     final oldLogic = await mount(tester);
     await send(tester, '旧账号还在等待的请求');
     expect(waitingText(), findsOneWidget);
-    final oldCallback = fixture.im.onRecvNewMessage!;
+    final oldCallback = fixture.im.publishLocalChatMessage;
     await tester.pumpWidget(const SizedBox.shrink());
     oldLogic.onDelete();
     expect(oldLogic.assistantStreams.snapshots, isEmpty);

@@ -140,9 +140,7 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
         c.capabilitiesCurrent() &&
         (robotAgentGroup || (enabled && feature.rebateHistoryEntry)) &&
         cap.canViewRebateHistory;
-    final showAgent = robotAgentGroup
-        ? c.sessionCurrent() && (_robotBinding?.bound ?? false)
-        : agent || history;
+    final showAgent = robotAgentGroup ? agent : agent || history;
     final overlay = !draw && !showAgent
         ? const SizedBox.shrink()
         : Positioned.fill(child: LayoutBuilder(builder: (context, constraints) {

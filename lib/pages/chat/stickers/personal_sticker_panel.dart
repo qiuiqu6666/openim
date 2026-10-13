@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart' show AppTokens;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../../routes/swipe_back/app_page_route.dart';
 
 import 'personal_sticker_store.dart';
+import 'personal_sticker_thumbnail.dart';
 import 'personal_sticker_management_page.dart';
 import 'dice/chat_dice_tile.dart';
 
@@ -51,23 +53,12 @@ class _PersonalStickerPanelState extends State<PersonalStickerPanel> {
     }
   }
 
-  void _openManagement() => Navigator.of(context).push(PageRouteBuilder<void>(
-        pageBuilder: (_, __, ___) => PersonalStickerManagementPage(
+  void _openManagement() =>
+      Navigator.of(context).push(AppMaterialPageRoute<void>(
+        builder: (_) => PersonalStickerManagementPage(
           store: widget.store,
           onAdd: widget.onAdd,
         ),
-        transitionsBuilder: (_, animation, __, child) => SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          )),
-          child: child,
-        ),
-        transitionDuration: const Duration(milliseconds: 300),
-        reverseTransitionDuration: const Duration(milliseconds: 250),
       ));
 
   @override
@@ -180,7 +171,7 @@ class _PersonalStickerPanelState extends State<PersonalStickerPanel> {
                             }
                           },
                           child: Stack(fit: StackFit.expand, children: [
-                            Image.network(item.previewURL,
+                            PersonalStickerThumbnail(item.previewURL,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Icon(
                                     Icons.broken_image_outlined,

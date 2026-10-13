@@ -1,6 +1,6 @@
 # 启动页
 
-`splash_view.dart` 仍通过现有 GetX 绑定取得 `SplashLogic`，初始化订阅、自动登录和进入登录页/首页的流程不变。`widgets/splash_artwork.dart` 只负责显示启动画面，不执行网络请求，也不增加等待时间。
+`splash_view.dart` 通过现有 GetX 绑定取得 `SplashLogic`。页面就绪且 SDK 初始化完成后，先等待共享的自动更新检查，再恢复登录或进入登录页。并发检查复用同一个 Future，强制更新弹窗未关闭时不执行登录及页面跳转，打开外部下载链接也不放行；可选更新关闭后继续。检查失败沿用现有放行策略。`widgets/splash_artwork.dart` 只负责显示启动画面，不执行网络请求。
 
 启动图来自 99chat `d7c3c65` 的 `assets/splash_new.webp`，原图保存在 `assets/splash_99chat.webp`。按参考 `lib/src/launch_page.dart` 居中、等比铺满整个视口，亮暗主题共用同一品牌图，复用 `AppSystemBars` 处理透明系统栏和浅色图标。图片裁切遵循 `BoxFit.cover`，不拉伸，也不在图上额外叠加内容。
 

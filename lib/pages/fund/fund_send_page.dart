@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:openim/routes/swipe_back/app_page_route.dart';
+import 'recipient/fund_recipient_remark.dart';
 // Adapted from qiuiqu6666/99chat, revision d7c3c65 (Apache-2.0).
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -89,11 +93,33 @@ class _FundSendPageState extends State<FundSendPage>
   late final String _accountID;
   late final String _serverURL;
   String? _sessionToken;
-  FundCurrency _currency = FundCurrency.usdt;
+  FundCurrency _currency = FundCurrency.bi99;
   FundPacketBiz _biz = FundPacketBiz.normal;
   List<FundBalance> _balances = [];
   Map<String, dynamic>? _pending;
   String? _recvID, _recvName, _error;
+  String? _remarkUserID, _recipientRemark;
+  int _remarkVersion = 0;
+  String? get _recipientDisplayName =>
+      _remarkUserID == _recvID ? (_recipientRemark ?? _recvName) : _recvName;
+
+  Future<void> _refreshRecipientRemark() async {
+    final id = _recvID;
+    final version = ++_remarkVersion;
+    if (id == null || id.isEmpty || !_sameAccount) return;
+    final remark = await loadFundRecipientRemark(id);
+    if (!mounted ||
+        !_sameAccount ||
+        version != _remarkVersion ||
+        id != _recvID) {
+      return;
+    }
+    setState(() {
+      _remarkUserID = id;
+      _recipientRemark = remark;
+    });
+  }
+
   String? _recvFaceURL;
   String? _recipientType, _recipientAccount, _recipientAreaCode;
   bool _loading = true, _submitting = false, _passwordSet = false;
@@ -150,6 +176,7 @@ class _FundSendPageState extends State<FundSendPage>
     _serverURL = Config.appAuthUrl;
     _transferRecipients =
         widget.transferRecipientSource ?? FundTransferRecipientSource();
+    if (widget.internalWithdrawal) _currency = FundCurrency.usdt;
     if (widget.initialCurrency != null) {
       _currency = widget.initialCurrency!;
       _currencyInitialized = true;
@@ -219,7 +246,9 @@ class _FundSendPageState extends State<FundSendPage>
         _recvName = pending['recipientName'] as String?;
       }
       FundCurrency? preferredCurrency;
-      if (!_currencyInitialized && _pending == null) {
+      if (widget.internalWithdrawal &&
+          !_currencyInitialized &&
+          _pending == null) {
         try {
           preferredCurrency = await _paymentPreferences.read();
         } catch (_) {
@@ -238,10 +267,13 @@ class _FundSendPageState extends State<FundSendPage>
         if (!_currencyInitialized) {
           if (_pending == null) {
             final available = _balances.map((balance) => balance.currency);
+            final defaultCurrency = widget.internalWithdrawal
+                ? FundCurrency.usdt
+                : FundCurrency.bi99;
             _currency = available.contains(preferredCurrency)
                 ? preferredCurrency!
-                : available.contains(FundCurrency.usdt) || _balances.isEmpty
-                    ? FundCurrency.usdt
+                : available.contains(defaultCurrency) || _balances.isEmpty
+                    ? defaultCurrency
                     : _balances.first.currency;
           }
           _currencyInitialized = true;
@@ -262,6 +294,7 @@ class _FundSendPageState extends State<FundSendPage>
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+      if (mounted && _sameAccount) _refreshRecipientRemark();
     }
   }
 
@@ -642,6 +675,9 @@ class _FundSendPageState extends State<FundSendPage>
         ModalRoute.of(context)?.isCurrent != true) {
       return;
     }
+    // Release the fund form's keyboard before the chat route becomes active.
+    FocusScope.of(context).unfocus();
+    unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.hide'));
     IMViews.showToast(_text(
       widget.isRedPacket ? '红包已发出' : '转账成功，已直接到账',
       widget.isRedPacket
@@ -740,7 +776,7 @@ class _FundSendPageState extends State<FundSendPage>
           available: _balance?.available.displayDecimal ?? '—',
           recipient: _multiple
               ? _text('群红包', 'Group packet')
-              : (_recvName ?? _text('聊天对象', 'Chat recipient')),
+              : (_recipientDisplayName ?? _text('聊天对象', 'Chat recipient')),
           paymentDetails: () => FundPaymentDetails(
               total: draft.total,
               available: _balances
@@ -1063,7 +1099,7 @@ class _FundSendPageState extends State<FundSendPage>
           passwordSet: _passwordSet,
           available: _balance?.available.displayDecimal ?? '0.00',
           arrivalAmount: _total?.displayDecimal ?? '0.00',
-          recipientName: _recvName,
+          recipientName: _recipientDisplayName,
           recipientFaceURL: _recvFaceURL,
           error: _error,
           onEdited: () => setState(() => _error = null),
@@ -1102,7 +1138,7 @@ class _FundSendPageState extends State<FundSendPage>
           total: _total,
           balance: _balance,
           recipientID: _recvID,
-          recipientName: _recvName,
+          recipientName: _recipientDisplayName,
           recipientFaceURL: _recvFaceURL,
           error: _error,
           onEdited: () => setState(() => _error = null),

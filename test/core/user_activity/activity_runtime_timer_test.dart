@@ -11,7 +11,7 @@ void main() {
     await DataSp.init();
   });
 
-  testWidgets('30 second scheduling pauses in background and stops on disposal',
+  testWidgets('60 second scheduling pauses in background and stops on disposal',
       (tester) async {
     final runtime = ActivityRuntime.instance;
     runtime.dispose();
@@ -25,7 +25,7 @@ void main() {
 
     runtime.configure(sessionReady: ready);
     runtime.configure(sessionReady: ready);
-    await tester.pump(const Duration(seconds: 29));
+    await tester.pump(const Duration(seconds: 59));
     expect(checks, 0);
     await tester.pump(const Duration(seconds: 1));
     expect(checks, 1);
@@ -37,7 +37,7 @@ void main() {
 
     runtime.setForeground(true);
     runtime.setForeground(true);
-    await tester.pump(const Duration(seconds: 29));
+    await tester.pump(const Duration(seconds: 59));
     expect(checks, 1);
     await tester.pump(const Duration(seconds: 1));
     expect(checks, 2);

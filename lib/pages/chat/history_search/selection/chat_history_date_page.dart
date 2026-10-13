@@ -5,6 +5,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../chat_history_search_source.dart';
+import '../cloud/chat_history_cloud_sync.dart';
 import '../chat_history_search_strings.dart';
 import 'date_availability/chat_history_date_availability_controller.dart';
 
@@ -38,6 +39,9 @@ class _ChatHistoryDatePageState extends State<ChatHistoryDatePage>
   int _calendarVersion = 0;
   bool _confirming = false;
   bool _appActive = true;
+
+  bool get _cloudSearch => _dates.source is ChatHistoryCloudSource;
+  bool _canSearchDate(DateTime day) => _cloudSearch || _dates.hasMessages(day);
 
   bool get _current => mounted && _appActive && _sameSession();
 
@@ -99,7 +103,7 @@ class _ChatHistoryDatePageState extends State<ChatHistoryDatePage>
     final initial = _pendingInitial;
     if (initial != null && DateUtils.isSameMonth(initial, month)) {
       _pendingInitial = null;
-      if (_dates.hasMessages(initial)) {
+      if (_canSearchDate(initial)) {
         setState(() {
           _selected = initial;
           _displayedMonth = DateTime(initial.year, initial.month);
@@ -112,7 +116,7 @@ class _ChatHistoryDatePageState extends State<ChatHistoryDatePage>
     final selected = _selected;
     if (selected != null &&
         DateUtils.isSameMonth(selected, month) &&
-        !_dates.hasMessages(selected)) {
+        !_canSearchDate(selected)) {
       _clearSelection();
     }
   }
@@ -132,7 +136,7 @@ class _ChatHistoryDatePageState extends State<ChatHistoryDatePage>
         _confirming ||
         _dates.loading ||
         _dates.failed ||
-        !_dates.hasMessages(day)) {
+        !_canSearchDate(day)) {
       return;
     }
     setState(() => _selected = DateUtils.dateOnly(day));
@@ -145,7 +149,11 @@ class _ChatHistoryDatePageState extends State<ChatHistoryDatePage>
         _dates.loading ||
         _dates.failed ||
         day == null ||
-        !_dates.hasMessages(day)) {
+        !_canSearchDate(day)) {
+      return;
+    }
+    if (_cloudSearch) {
+      Navigator.of(context).pop<DateTime>(day);
       return;
     }
     setState(() => _confirming = true);
@@ -153,9 +161,9 @@ class _ChatHistoryDatePageState extends State<ChatHistoryDatePage>
     if (!mounted) return;
     setState(() => _confirming = false);
     if (!_current || _dates.loading) return;
-    if (exists && _dates.hasMessages(day)) {
+    if (exists && _canSearchDate(day)) {
       Navigator.of(context).pop<DateTime>(day);
-    } else if (!_dates.failed && !_dates.hasMessages(day)) {
+    } else if (!_dates.failed && !_canSearchDate(day)) {
       _clearSelection();
     }
   }
@@ -208,14 +216,14 @@ class _ChatHistoryDatePageState extends State<ChatHistoryDatePage>
                     key: const ValueKey('chat-history-date-calendar'),
                     initialDate: _selected != null &&
                             _current &&
-                            _dates.hasMessages(_selected!)
+                            _canSearchDate(_selected!)
                         ? _selected
                         : null,
                     firstDate: _firstDate,
                     lastDate: _today,
                     currentDate: _today,
                     selectableDayPredicate: (day) =>
-                        _current && _dates.hasMessages(day),
+                        _current && _canSearchDate(day),
                     onDateChanged: _chooseDate,
                     onDisplayedMonthChanged: (month) {
                       _pendingInitial = null;
@@ -257,7 +265,7 @@ class _ChatHistoryDatePageState extends State<ChatHistoryDatePage>
                         _dates.loading ||
                         _dates.failed ||
                         _selected == null ||
-                        !_dates.hasMessages(_selected!)
+                        !_canSearchDate(_selected!)
                     ? null
                     : _confirm,
                 child: Text(MaterialLocalizations.of(context).okButtonLabel),

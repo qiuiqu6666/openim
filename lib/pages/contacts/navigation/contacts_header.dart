@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../core/im_callback.dart';
+import '../../../core/session/connection/widgets/connection_health_title.dart';
 import '../../home/home_quick_actions.dart';
 import '../../home/quick_actions/home_contact_actions.dart';
 
@@ -14,6 +16,7 @@ class ContactsHeader extends StatefulWidget implements PreferredSizeWidget {
     required this.onScan,
     this.sdkStatus,
     this.initialStatus,
+    this.apiAvailable,
     this.toolbarHeight = kToolbarHeight,
   });
 
@@ -22,6 +25,7 @@ class ContactsHeader extends StatefulWidget implements PreferredSizeWidget {
   final VoidCallback onScan;
   final Stream<IMSdkStatus>? sdkStatus;
   final IMSdkStatus? initialStatus;
+  final ValueListenable<bool?>? apiAvailable;
   final double toolbarHeight;
 
   @override
@@ -72,24 +76,11 @@ class _ContactsHeaderState extends State<ContactsHeader> {
         initialData: widget.initialStatus,
         builder: (context, snapshot) {
           final status = snapshot.data;
-          return MainTabTitle(
+          return ConnectionHealthTitle(
             keyPrefix: 'contacts-title',
             title: StrRes.contacts,
-            busy: const {
-              IMSdkStatus.connecting,
-              IMSdkStatus.syncStart,
-              IMSdkStatus.synchronizing,
-              IMSdkStatus.syncProgress,
-            }.contains(status),
-            busyLabel: const {
-              IMSdkStatus.syncStart,
-              IMSdkStatus.synchronizing,
-              IMSdkStatus.syncProgress,
-            }.contains(status)
-                ? StrRes.synchronizing
-                : null,
-            failed: status == IMSdkStatus.connectionFailed ||
-                status == IMSdkStatus.syncFailed,
+            connection: status ?? IMSdkStatus.connectionSucceeded,
+            apiAvailable: widget.apiAvailable,
           );
         },
       ),

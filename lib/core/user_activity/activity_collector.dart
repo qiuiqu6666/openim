@@ -8,6 +8,7 @@ typedef ActivityUpload = Future<bool> Function(
 
 /// Bounded, memory-only analytics. Never retries a business operation.
 class ActivityCollector {
+  static const heartbeatInterval = Duration(seconds: 60);
   ActivityCollector(
       {required this.upload, required this.newID, DateTime Function()? now})
       : now = now ?? DateTime.now;
@@ -135,7 +136,7 @@ class ActivityCollector {
     }
     if (_foreground &&
         (_lastHeartbeat == null ||
-            now().difference(_lastHeartbeat!) >= const Duration(seconds: 30))) {
+            now().difference(_lastHeartbeat!) >= heartbeatInterval)) {
       _lastHeartbeat = now();
       _add('heartbeat');
     }

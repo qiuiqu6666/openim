@@ -4,6 +4,11 @@ import 'package:openim_common/src/apis/auth/legacy_password_envelope.dart';
 import 'dart:convert';
 
 void main() {
+  test('new deployment supports encrypted legacy login only on Chat port', () {
+    const host = 'lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com';
+    expect(LegacyPasswordEnvelope.permits(Uri.parse('http://$host:10008/account/login')), isTrue);
+    expect(LegacyPasswordEnvelope.permits(Uri.parse('http://$host:10002/account/login')), isFalse);
+  });
   const request = <String, dynamic>{
     'account': 'owner',
     'password': 'synthetic-md5',

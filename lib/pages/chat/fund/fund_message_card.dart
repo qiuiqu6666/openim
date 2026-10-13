@@ -229,12 +229,14 @@ class FundMessageCard extends StatelessWidget {
                                         children: [
                                           Text(
                                             title,
-                                            maxLines: largeText
+                                            maxLines: largeText ||
+                                                    _usesRecipientAvatar
                                                 ? null
                                                 : message.isPacket
                                                     ? 1
                                                     : 2,
-                                            overflow: largeText
+                                            overflow: largeText ||
+                                                    _usesRecipientAvatar
                                                 ? null
                                                 : TextOverflow.ellipsis,
                                             style: TextStyle(

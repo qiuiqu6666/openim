@@ -1,14 +1,23 @@
 const Map<String, String> en_US = {
+  'videoSavePreparing': 'Preparing to save video…',
+  'videoSaveDownloading': 'Downloading video',
+  'videoSavePermissionDenied': 'Allow adding videos to Photos, then retry.',
+  'videoSaveDownloadFailed': 'Video download failed. Check your connection and retry.',
+  'videoSaveInvalid': 'The video is invalid or its format cannot be saved.',
+  'videoSaveTimedOut': 'Saving timed out. Check Photos before retrying.',
+  'videoSaveWriting': 'The video is still being saved. Check Photos shortly.',
+  'videoSaveUnsupported': 'Saving videos to Photos is not supported on this platform.',
   'diceLabel': 'Dice',
   'dicePoint': '@value points',
   'apiRegistrationUnavailable': 'Registration is currently unavailable',
   'apiRequestFailed': 'The request failed. Please try again later.',
   'apiRequestFailedWithCode':
       'The request failed (code: @code). Please try again later.',
-  'apiRequestTimeout': 'The request timed out. Please try again.',
+  'apiRequestTimeout':
+      'The server is taking longer to respond. Please try again later.',
   'apiNetworkUnavailable':
       'Could not connect. Check your network and try again.',
-  'apiServiceUnavailable': 'The server is unavailable. Please try again later.',
+  'apiServiceUnavailable': 'The service is unavailable. Please try again later.',
   'apiCaptchaNotPassed': 'Human verification failed. Please try again.',
   'apiVerificationCodeNotSent':
       'The verification code was not sent. Please try again later.',
@@ -38,6 +47,7 @@ const Map<String, String> en_US = {
   'chatSelectionForwardLimit':
       'Select up to 30 messages to forward separately.',
   'chatSelectionMergeLimit': 'Select up to 100 messages to forward together.',
+  'chatMessageDeleteConfirm': 'Delete this message?',
   'chatSelectionDeleteConfirm': 'Delete @count selected messages?',
   'chatSelectionDeleteFailed':
       'Some messages could not be deleted. Please retry.',
@@ -178,7 +188,8 @@ const Map<String, String> en_US = {
   'sdkSearchOlder': 'Load older messages',
   'globalSearchOpenConversation': 'Open conversation',
   'globalSearchConversations': 'Conversations',
-  'globalSearchHint': 'Search contacts, groups and local messages',
+  'globalSearchHint': 'Search contacts, groups and messages',
+  'globalSearchScopeHint': 'Search contacts, groups, conversations and messages',
   'globalSearchClear': 'Clear search',
   'globalSearchFailed': 'Could not search this category. Please retry.',
   'globalSearchMatchCount': '%s matches',
@@ -231,6 +242,7 @@ const Map<String, String> en_US = {
   'chatDateHistoryEmpty': 'No local messages found for this date',
   'chatDateHistoryFailed': 'Could not find messages. Tap the time to retry.',
   'chatSearchMore': 'Load more',
+  'chatSearchNoMore': 'No more messages',
   'personalContactCard': 'Contact card',
   'contactCardChooseFriend': 'Choose Friend',
   'contactCardNoContacts': 'No contacts',
@@ -959,8 +971,7 @@ const Map<String, String> en_US = {
 };
 
 const Map<String, String> errorMessages = {
-  '500':
-      'Internal server error, usually due to an internal network issue, please check if all server nodes are running normally',
+  '500': 'The service is unavailable. Please try again later.',
   '1001':
       'Parameter error, please check if body and header parameters are correct',
   '1002':

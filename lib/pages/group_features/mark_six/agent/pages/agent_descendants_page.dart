@@ -1,4 +1,3 @@
-import 'package:openim/routes/swipe_back/app_page_route.dart';
 // Layout adapted from 99chat agent_rebate_descendants_page.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'dart:async';
@@ -25,10 +24,12 @@ class _AgentDescendantsPageState extends State<AgentDescendantsPage> {
   late final _avatars = AgentAvatarDirectory(widget.featureContext);
   final _search = TextEditingController();
   String _keyword = '', _sort = 'balance';
+
   bool get allowed =>
       widget.featureContext.sessionCurrent() &&
       widget.featureContext.capabilitiesCurrent() &&
       widget.featureContext.capabilities.markSix.canOpenAgent;
+
   @override
   void initState() {
     super.initState();
@@ -72,9 +73,7 @@ class _AgentDescendantsPageState extends State<AgentDescendantsPage> {
                                           setState(() => _keyword = value),
                                       textInputAction: TextInputAction.search,
                                       decoration: InputDecoration(
-                                          hintText: _state.hasMore
-                                              ? '搜索已加载的昵称或编号'
-                                              : '搜索昵称或编号',
+                                          hintText: '搜索昵称或编号',
                                           prefixIcon:
                                               const Icon(Icons.search_rounded),
                                           suffixIcon: _keyword.isEmpty
@@ -94,9 +93,8 @@ class _AgentDescendantsPageState extends State<AgentDescendantsPage> {
                                               const EdgeInsets.symmetric(
                                                   horizontal: 12, vertical: 8),
                                           border: OutlineInputBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                      MarkSixStyle.radius),
+                                              borderRadius: BorderRadius.circular(
+                                                  MarkSixStyle.radius),
                                               borderSide: BorderSide.none))),
                                   const SizedBox(height: 8),
                                   Row(children: [
@@ -112,15 +110,13 @@ class _AgentDescendantsPageState extends State<AgentDescendantsPage> {
                                     ])
                                       Expanded(
                                           child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 2),
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 2),
                                               child: ChoiceChip(
                                                   label: SizedBox(
                                                       width: double.infinity,
                                                       child: Text(sort.$2,
-                                                          textAlign: TextAlign
-                                                              .center)),
+                                                          textAlign: TextAlign.center)),
                                                   selected: _sort == sort.$1,
                                                   onSelected: (_) => setState(
                                                       () => _sort = sort.$1))))
@@ -138,76 +134,54 @@ class _AgentDescendantsPageState extends State<AgentDescendantsPage> {
                                         : RefreshIndicator(
                                             onRefresh: () =>
                                                 _state.load(force: true),
-                                            child: ListView(
+                                            child: ListView.builder(
+                                                // Full snapshot, lazy visible rows.
                                                 physics:
                                                     const AlwaysScrollableScrollPhysics(),
                                                 padding:
                                                     const EdgeInsets.all(16),
-                                                children: [
-                                                  Text('共 ${_state.total} 人',
-                                                      style: TextStyle(
-                                                          fontSize: 13,
-                                                          color:
-                                                              style.secondary)),
-                                                  const SizedBox(height: 8),
-                                                  if (rows.isEmpty)
-                                                    MarkSixEmpty(
-                                                        message: _keyword
-                                                                .isEmpty
-                                                            ? '当前暂无直属下级'
-                                                            : '未找到匹配昵称或编号的下级'),
-                                                  for (final row in rows)
-                                                    AgentDescendantTile(
+                                                itemCount: 1 +
+                                                    (rows.isEmpty ? 1 : rows.length) +
+                                                    (_state.error != null ? 1 : 0),
+                                                itemBuilder: (context, index) {
+                                                  if (index == 0) {
+                                                    return Padding(
+                                                        padding: const EdgeInsets.only(bottom: 8),
+                                                        child: Text(
+                                                            _keyword.isEmpty
+                                                                ? '共 ${_state.total} 人'
+                                                                : '找到 ${rows.length} 人（共 ${_state.total} 人）',
+                                                            style: TextStyle(
+                                                                fontSize: 13,
+                                                                color: style.secondary)));
+                                                  }
+                                                  if (rows.isEmpty && index == 1) {
+                                                    return MarkSixEmpty(
+                                                        message: _keyword.isEmpty
+                                                            ? '当前暂无下级'
+                                                            : '未找到匹配昵称或编号的下级');
+                                                  }
+                                                  if (rows.isNotEmpty && index <= rows.length) {
+                                                    final row = rows[index - 1];
+                                                    return AgentDescendantTile(
                                                         avatars: _avatars,
-                                                        key: ValueKey(
-                                                            row.$1['userId']),
+                                                        key: ValueKey(row.$1['userId']),
                                                         item: row.$1,
                                                         depth: row.$2,
                                                         onTap: () {
-                                                          if (!allowed ||
-                                                              !_state.current) {
-                                                            return;
-                                                          }
-                                                          Navigator.of(context).push(AppMaterialPageRoute<
-                                                                  void>(
+                                                          if (!allowed || !_state.current) return;
+                                                          Navigator.of(context).push(MaterialPageRoute<void>(
                                                               builder: (_) => AgentDescendantDetailPage(
-                                                                  featureContext:
-                                                                      widget
-                                                                          .featureContext,
-                                                                  userID:
-                                                                      '${row.$1['userId']}',
-                                                                  initialItem:
-                                                                      row.$1,
-                                                                  loadedItems:
-                                                                      _state
-                                                                          .items)));
-                                                        }),
-                                                  if (_state.error != null)
-                                                    Text(_state.error!,
-                                                        style: TextStyle(
-                                                            color:
-                                                                style.error)),
-                                                  if (_state.loading)
-                                                    Center(
-                                                        child: LoadingView
-                                                            .indicator(
-                                                                size: 24))
-                                                  else if (_state
-                                                          .hasMore ||
-                                                      _state.error != null)
-                                                    TextButton(
-                                                        onPressed: () =>
-                                                            _state.load(
-                                                                more: _state
-                                                                    .hasMore,
-                                                                force: _state
-                                                                        .error !=
-                                                                    null),
-                                                        child: Text(
-                                                            _state.error != null
-                                                                ? '重试'
-                                                                : '加载更多')),
-                                                ]))),
+                                                                  featureContext: widget.featureContext,
+                                                                  userID: '${row.$1['userId']}',
+                                                                  initialItem: row.$1,
+                                                                  loadedItems: _state.items)));
+                                                        });
+                                                  }
+                                                  return TextButton(
+                                                      onPressed: () => _state.load(force: true),
+                                                      child: Text(_state.error ?? '重试'));
+                                                }))),
                           ])));
       });
 }

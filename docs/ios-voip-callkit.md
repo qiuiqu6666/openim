@@ -68,23 +68,33 @@ Every request uses the existing **Chat token** in `token` and a unique
 | POST | `/calling/voip/register` | `deviceID`, hexadecimal `token`, `bundleID`, `environment` (`production` / `development`) |
 | POST | `/calling/voip/unregister` | `deviceID`; removal is scoped to the authenticated account and session |
 | POST | `/calling/invite` | `deviceID`, original `invitation`; validates caller, friendship and blocks, persists state and queues VoIP |
-| POST | `/calling/status` | `callID`; only the two participants may read state |
+| POST | `/calling/status` | `callID`, `deviceID`; read-only for either account's devices, does not renew leases |
+| POST | `/calling/heartbeat` | `callID`, `deviceID`; only the accepted caller/answering devices renew their own lease |
+| POST | `/calling/current` | `{}`; returns `data.call` snapshot or null for session/foreground recovery |
 | POST | `/calling/action` | `callID`, `deviceID`, `action` (`accept`, `reject`, `cancel`, `hangup`), original `invitation` for cancellation races |
 
 Responses use `{ "errCode": 0, "data": ... }`. Call data contains `state`,
 `recipientUserID`, server-resolved `callerName` / `calleeName`, `invitation`,
-`expiresAt`, `updatedAt` and `answeredDeviceID` after acceptance. States are
+`expiresAt`, `updatedAt`, `revision`, `reason`, `callerDeviceID` and `answeredDeviceID` after acceptance. States are
 `ringing`, `accepted`, `rejected`, `cancelled`, `ended`, `expired`.
 HTTP 200 alone is not success. A competing answer/terminal-state conflict uses
 `errCode: 409`; a missing legacy call uses `errCode: 404`.
 
 The existing OpenIM 200–204 signals and RTC room are retained. Updated Android
-and iOS callers persist transitions before sending their SDK signals. Active Android and iOS calls renew the server
-lease every 10 seconds; a 45-second lease releases abandoned calls after both
-processes disappear. A
+and iOS callers persist transitions before sending their SDK signals. After
+acceptance, only the actual caller and winning answering device renew their own
+lease every 10 seconds. Either participant's 45-second lease expiring ends the
+call; one participant cannot keep the other alive. A
 cancel-before-invite tombstone prevents late HTTP completion resurrecting a call.
-An old caller can still make an online SDK call, but cannot start offline VoIP:
-both sides must use the updated app for the complete offline flow.
+An invitation without an authoritative ringing server record is no longer
+admitted, including a 404 response. Both sides need the server-backed flow.
+
+The shared `CallStateRuntime` consumes `callStateChanged` only from the SDK
+business-notification stream and verifies it with status. Per-room revisions
+prevent regression and revival. Server terminal/answered-elsewhere cleanup is
+local-only and never invokes user hangup. Accepted cancels the original native
+invitation expiry but does not mark media connected. See the
+[client implementation and pending device checks](call-multi-device-sync-2026-10-12.md).
 
 On iOS, native PushKit reports CallKit immediately with the pushed nickname.
 After authenticated SDK startup, `IOSVoIPBackend` queries server state and

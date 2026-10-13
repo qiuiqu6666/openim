@@ -15,6 +15,7 @@ class ConversationEditActionBar extends StatelessWidget {
     required this.onArchive,
     required this.onDelete,
     this.unarchive = false,
+    this.readProgress = '',
   });
 
   final bool hasSelection;
@@ -23,24 +24,25 @@ class ConversationEditActionBar extends StatelessWidget {
   final VoidCallback onArchive;
   final VoidCallback onDelete;
   final bool unarchive;
+  final String readProgress;
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final chinese = Localizations.localeOf(context).languageCode == 'zh';
-    return SafeArea(
-      top: false,
-      child: Material(
-        color: ConversationEditTokens.actionBarBackground(dark: dark),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(
-                color: ConversationEditTokens.divider(dark: dark),
-                width: ConversationEditTokens.dividerWidth,
-              ),
+    return Material(
+      color: ConversationEditTokens.actionBarBackground(dark: dark),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: ConversationEditTokens.divider(dark: dark),
+              width: ConversationEditTokens.dividerWidth,
             ),
           ),
+        ),
+        child: SafeArea(
+          top: false,
           child: SizedBox(
             height: ConversationEditTokens.actionBarHeight,
             child: Row(
@@ -52,9 +54,11 @@ class ConversationEditActionBar extends StatelessWidget {
                     key: const ValueKey('conversation-edit-mark-read'),
                     dark: dark,
                     onPressed: busy ? null : onMarkRead,
-                    label: chinese
-                        ? (hasSelection ? '标记已读' : '全部已读')
-                        : (hasSelection ? 'Mark as read' : 'Read all'),
+                    label: readProgress.isNotEmpty
+                        ? readProgress
+                        : chinese
+                            ? (hasSelection ? '标记已读' : '全部已读')
+                            : (hasSelection ? 'Mark as read' : 'Read all'),
                   ),
                 ),
                 Expanded(

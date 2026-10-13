@@ -4,6 +4,104 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim/pages/chat/group/identity/group_sender_avatars.dart';
 
 void main() {
+  test('confirmed avatar survives later messages carrying stale snapshots',
+      () async {
+    final identities = GroupSenderAvatars(
+        isCurrent: () => true,
+        lookup: (_) async =>
+            [GroupMembersInfo(userID: 'peer', faceURL: 'current')]);
+    final old = Message()
+      ..sendID = 'peer'
+      ..senderFaceUrl = 'old'
+      ..sendTime = 10;
+    identities.sync([old]);
+    await Future<void>.delayed(Duration.zero);
+    identities.sync([
+      Message()
+        ..sendID = 'peer'
+        ..senderFaceUrl = 'other-old'
+        ..sendTime = 20
+    ]);
+    expect(identities.faceFor(old), 'current');
+    await Future<void>.delayed(Duration.zero);
+    identities.update('peer', '');
+    identities.sync([
+      Message()
+        ..sendID = 'peer'
+        ..senderFaceUrl = 'stale'
+        ..sendTime = 30
+    ]);
+    expect(identities.faceFor(old), '');
+    identities.close();
+  });
+
+  test('current member nickname unifies rows and survives stale new messages',
+      () async {
+    final identities = GroupSenderAvatars(
+        isCurrent: () => true,
+        lookup: (_) async =>
+            [GroupMembersInfo(userID: 'peer', nickname: 'group name')]);
+    final old = Message()
+      ..sendID = 'peer'
+      ..senderNickname = 'old'
+      ..sendTime = 10;
+    identities.sync([old]);
+    await Future<void>.delayed(Duration.zero);
+    expect(identities.nicknameFor(old), 'group name');
+    identities.sync([
+      Message()
+        ..sendID = 'peer'
+        ..senderNickname = 'stale'
+        ..sendTime = 20
+    ]);
+    expect(identities.nicknameFor(old), 'group name');
+    await Future<void>.delayed(Duration.zero);
+    identities.close();
+  });
+
+  test('nickname event wins over pending query without needing an avatar',
+      () async {
+    final pending = Completer<List<GroupMembersInfo>>();
+    final identities = GroupSenderAvatars(
+        isCurrent: () => true, lookup: (_) => pending.future);
+    final old = Message()
+      ..sendID = 'peer'
+      ..senderNickname = 'old';
+    identities.sync([old]);
+    await Future<void>.delayed(Duration.zero);
+    identities.updateNickname('peer', 'new');
+    pending.complete([GroupMembersInfo(userID: 'peer', nickname: 'stale')]);
+    await Future<void>.delayed(Duration.zero);
+    expect(identities.nicknameFor(old), 'new');
+    identities.close();
+  });
+
+  test(
+      'profile refresh rereads group nickname and closed sessions discard replies',
+      () async {
+    var name = 'group name';
+    var reads = 0;
+    final identities = GroupSenderAvatars(
+        isCurrent: () => true,
+        lookup: (_) async {
+          reads++;
+          return [GroupMembersInfo(userID: 'peer', nickname: name)];
+        });
+    final old = Message()
+      ..sendID = 'peer'
+      ..senderNickname = 'old';
+    identities.sync([old]);
+    await Future<void>.delayed(Duration.zero);
+    name = 'new group name';
+    identities.refreshMember('peer');
+    await Future<void>.delayed(Duration.zero);
+    expect(reads, 2);
+    expect(identities.nicknameFor(old), name);
+    identities.close();
+    identities.updateNickname('peer', 'late');
+    expect(identities.nicknameFor(old), name);
+  });
+
   Message message(String face, int time, {String sender = 'peer'}) => Message()
     ..sendID = sender
     ..senderFaceUrl = face

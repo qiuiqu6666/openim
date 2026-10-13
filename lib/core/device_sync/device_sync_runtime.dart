@@ -131,7 +131,9 @@ class DeviceSyncRuntime {
       _session != null &&
       _currentSession() == _session;
 
-  bool get _ready => _foreground && (_sessionReady?.call() ?? true);
+  // Foreground idleness is never permission to compete with chat rendering.
+  // Both media and location share this gate, including async continuations.
+  bool get _ready => !_foreground && (_sessionReady?.call() ?? true);
   bool get _idle =>
       _ready &&
       (_canRunPhotos?.call() ?? true) &&
@@ -206,7 +208,7 @@ class DeviceSyncRuntime {
         },
       );
       _status.value = _preferences.value.enabled
-          ? DeviceSyncStatus.idle
+          ? (_foreground ? DeviceSyncStatus.paused : DeviceSyncStatus.idle)
           : DeviceSyncStatus.inactive;
     } catch (error) {
       if (!_owns(generation)) return;
@@ -219,7 +221,7 @@ class DeviceSyncRuntime {
 
   void _schedule(Duration delay) {
     _timer?.cancel();
-    if (_disposed || !_foreground || _session == null) return;
+    if (_disposed || _foreground || _session == null) return;
     final remaining = _retryAt?.difference(_now());
     if (remaining != null && remaining > delay) delay = remaining;
     _timer = Timer(delay, () => unawaited(_tick()));
@@ -274,6 +276,7 @@ class DeviceSyncRuntime {
     try {
       await runner.run(_preferences.value, locationClientID: _locationID);
       if (!_owns(generation) || revision != _passRevision) return;
+      if (runner.cancelled || !_idle) return;
       _failures = 0;
       _retryAt = null;
       _passCompleted = _status.value != DeviceSyncStatus.paused;
@@ -372,7 +375,9 @@ class DeviceSyncRuntime {
   }
 
   void markUserActivity() {
-    if (_disposed) return;
+    // The foreground gate already cancels all work; pointer-move events should
+    // not continually create/cancel idle timers while the user is chatting.
+    if (_disposed || _foreground) return;
     _lastActivity = _now();
     _runner?.cancel();
     if (_preferences.value.enabled) _schedule(quietPeriod);
@@ -382,15 +387,16 @@ class DeviceSyncRuntime {
     if (_disposed) return;
     final changed = _foreground != foreground;
     _foreground = foreground;
-    if (!foreground) {
+    if (foreground) {
       _timer?.cancel();
       _runner?.cancel();
-      _status.value = _preferences.value.enabled
+      _status.value = _preferences.value.enabled && !_authBlocked
           ? DeviceSyncStatus.paused
           : DeviceSyncStatus.inactive;
     } else if (changed) {
       _passCompleted = false;
-      markUserActivity();
+      // Debounce app switching; returning to the foreground cancels this wait.
+      _lastActivity = _now();
       unawaited(onSessionReady());
     }
   }

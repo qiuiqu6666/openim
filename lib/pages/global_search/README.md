@@ -19,3 +19,6 @@
 `global_search_layout_test.dart` 用真实页面和控制器、测试数据源覆盖首次搜索/切换分类的分区标题与首行、大字窄屏、各类群头像、加载高度稳定、清除和局部失败重试。传入 `--dart-define=GLOBAL_SEARCH_PREVIEW=docs/previews` 时导出实际结果页的亮暗 Android/iOS 预览（正常测试跳过导出）。
 
 新增回归归 `test/pages/global_search/`，历史通用查询回归仍保留在 `test/global_search_test.dart`。
+# 云端历史补齐
+
+全局聊天记录分类在本地结果后主动通过 SDK 分批补齐历史，再更新搜索结果；未查完时提供继续加载。账号、查询和页面生命周期隔离及批量上限见 [cloud/README.md](cloud/README.md)。这不是后端全量关键词搜索，也不承诺能恢复超出服务器保留期限或账号权限的消息。

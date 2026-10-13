@@ -122,10 +122,13 @@ void main() {
     final jump = h.window.jumpToMessage(target);
     expect(h.olderCursors, [null, 'cached-target'],
         reason: 'A cached row has no installed SDK paging boundaries yet');
-    expect(h.newerCursors, ['cached-target']);
+    expect(h.newerCursors, isEmpty,
+        reason: 'Startup and the older half already occupy both native slots.');
     expect(h.window.seeking.value, isTrue);
 
     targetOlder.complete(_page([_message('before', 49)]));
+    await tester.pump();
+    expect(h.newerCursors, ['cached-target']);
     targetNewer.complete(_page([_message('after', 51)]));
     expect(await _paint(tester, jump), isTrue);
     expect(h.positions.targets, ['cached-target']);
@@ -180,10 +183,13 @@ void main() {
     final jump = h.window.jumpToMessage(target);
     expect(h.olderCursors, [null, null, 'loaded-target'],
         reason: 'An in-flight refresh must not replace the positioned window');
-    expect(h.newerCursors, ['loaded-target']);
+    expect(h.newerCursors, isEmpty,
+        reason: 'The superseded refresh still occupies its native slot.');
     expect(h.window.seeking.value, isTrue);
 
     targetOlder.complete(_page([_message('before', 49)]));
+    await tester.pump();
+    expect(h.newerCursors, ['loaded-target']);
     targetNewer.complete(_page([_message('after', 51)]));
     expect(await _paint(tester, jump), isTrue);
     expect(h.positions.targets, ['loaded-target']);

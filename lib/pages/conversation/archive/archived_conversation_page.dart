@@ -333,9 +333,15 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
             bottomNavigationBar: _editor.editing
                 ? ConversationEditActionBar(
                     hasSelection: hasSelection,
-                    busy: _editor.busy,
+                    busy: _editor.busy || _logic.markingAllRead.value,
+                    readProgress: _logic.readBatchProgress.value,
                     unarchive: true,
-                    onMarkRead: () => _actions.markRead(conversations),
+                    onMarkRead: () {
+                      final group = widget.groupChats;
+                      _actions.markRead(conversations, scope: (info) =>
+                          _logic.isArchived(info) &&
+                          (group ? info.isGroupChat : info.isSingleChat));
+                    },
                     onArchive: () => _actions.unarchive(conversations),
                     onDelete: () => _actions.delete(context, conversations),
                   )

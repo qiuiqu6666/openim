@@ -47,7 +47,9 @@ mixin OpenIMLive {
   DateTime? _connectedAt;
   String? _outgoingWaitingStoppedRoomID;
   String? _incomingWaitingStoppedRoomID;
+  String? _serverAcceptedRoomID;
   Future<SignalingCertificate>? _pickupRequest;
+  final _terminalRequests = <String, Future<void>>{};
   bool _isRunningBackground = false;
   bool _liveInitialized = false;
   bool _liveClosing = false;
@@ -56,6 +58,72 @@ mixin OpenIMLive {
   Future<void>? _closeLiveRequest;
 
   bool get isBusy => OpenIMLiveClient().isBusy || _guard.activeRoomID != null;
+  String? get activeCallRoomID => _activeSignal?.invitation?.roomID;
+
+  /// Called only by the application's authenticated server-state reconciler.
+  /// No ordinary 200..204 message is allowed to bypass peer validation here.
+  Future<void> applyServerCallState({required String accountID,
+      required String roomID, required String state, String? reason,
+      bool answeredElsewhere = false, InvitationInfo? verifiedInvitation}) async {
+    final signal = _activeSignal;
+    final generation = _sessionGeneration;
+    if (_liveClosed || accountID != OpenIM.iMManager.userID) return;
+    if (signal == null || signal.invitation?.roomID != roomID) {
+      // A cold PushKit call may be answered elsewhere before Dart creates its
+      // media owner. Record the local result without admitting a new call.
+      if (!answeredElsewhere || verifiedInvitation == null ||
+          !validCallInvitation(verifiedInvitation) ||
+          verifiedInvitation.roomID != roomID ||
+          verifiedInvitation.sessionType != ConversationType.single ||
+          !verifiedInvitation.inviteeUserIDList!.contains(accountID)) return;
+      _bindAccount(accountID);
+      if (!_guard.finish(roomID, accountID)) return;
+      final observed = SignalingInfo(userID: verifiedInvitation.inviterUserID,
+          invitation: verifiedInvitation);
+      _roomAccounts[roomID] = accountID;
+      try {
+        await _writeFinal(observed, CallState.otherAccepted, accountID, 0);
+      } finally {
+        if (activeCallRoomID != roomID) _roomAccounts.remove(roomID);
+      }
+      return;
+    }
+    if (_owner(signal) != accountID) return;
+    if (state == 'accepted' && !answeredElsewhere) {
+      _serverAcceptedRoomID = roomID;
+      _pendingTimeout?.cancel();
+      _outgoingWaitingStoppedRoomID = roomID;
+      _incomingWaitingStoppedRoomID = roomID;
+      OpenIMLiveClient().serverAccepted(roomID);
+      await _stopSound();
+      return;
+    }
+    if (!answeredElsewhere &&
+        !const ['rejected', 'cancelled', 'ended', 'expired'].contains(state)) return;
+    if (!_guard.finish(roomID, accountID)) return;
+    final incoming = signal.invitation!.inviterUserID != accountID;
+    final outcome = answeredElsewhere ? CallState.otherAccepted : switch (state) {
+      'rejected' => incoming ? CallState.reject : CallState.beRejected,
+      'cancelled' => incoming ? CallState.beCanceled : CallState.cancel,
+      'expired' => CallState.timeout,
+      _ => reason == 'heartbeat_timeout' || reason == 'rtc_disconnected'
+          ? CallState.networkError : CallState.beHangup,
+    };
+    _pendingTimeout?.cancel();
+    _pendingTimeout = null;
+    _pendingInvitation = null;
+    _outgoingWaitingStoppedRoomID = roomID;
+    _incomingWaitingStoppedRoomID = roomID;
+    onCallReleased(roomID);
+    // Capture/write the outcome before media cleanup clears the active signal.
+    final recorded = _writeFinal(signal, outcome, accountID, 0,
+        generation: generation, endedAt: DateTime.now());
+    final closing = OpenIMLiveClient().endCallLocally(roomID, outcome);
+    await Future.wait([_stopSound(), recorded, closing]);
+    if (generation == _sessionGeneration && activeCallRoomID == roomID) {
+      _releaseRoom(signal);
+    }
+  }
 
   @protected
   SystemCallAdapter? get systemCallAdapter => null;
@@ -449,10 +517,10 @@ mixin OpenIMLive {
     _pendingInvitation = null;
     _pendingTimeout?.cancel();
     await _stopSound();
+    await _sendSignal(CustomMessageType.callingAccept, signal);
+    _ensureCurrent(signal);
     final certificate = await requestRtcCertificate(
         signal.invitation!.roomID!, _owner(signal)!);
-    _ensureCurrent(signal);
-    await _sendSignal(CustomMessageType.callingAccept, signal);
     _ensureCurrent(signal);
     return certificate;
   }
@@ -478,6 +546,26 @@ mixin OpenIMLive {
   Future<void> _endSignal(SignalingInfo signal, CallState state, int? type,
       {int duration = 0,
       bool requireActive = true,
+      bool showSendError = true}) {
+    final room = signal.invitation?.roomID;
+    if (room == null) return Future.value();
+    final generation = _sessionGeneration;
+    final pending = _terminalRequests[room];
+    if (pending != null) return pending;
+    late Future<void> request;
+    request = _finishSignal(signal, state, type, duration: duration,
+        requireActive: requireActive, showSendError: showSendError).whenComplete(() {
+      if (identical(_terminalRequests[room], request)) _terminalRequests.remove(room);
+      if (generation == _sessionGeneration && activeCallRoomID != room) {
+        onCallReleased(room);
+      }
+    });
+    return _terminalRequests[room] = request;
+  }
+
+  Future<void> _finishSignal(SignalingInfo signal, CallState state, int? type,
+      {int duration = 0,
+      bool requireActive = true,
       bool showSendError = true}) async {
     final owner = _owner(signal);
     final room = signal.invitation?.roomID;
@@ -485,9 +573,8 @@ mixin OpenIMLive {
     if (owner == null || room == null || _guard.isEnded(room)) return;
     if (requireActive && !_guard.matches(room, owner)) return;
     final isActiveRoom = _guard.activeRoomID == room;
-    // Claim before an awaited send: double taps/signals cannot send a second
-    // terminal signal or write a second final record.
-    if (!_guard.finish(room, owner)) return;
+    // The per-room future merges user actions. The server may win while this
+    // request is pending; claim the local final record only after it returns.
     final endedAt = DateTime.now();
     if (isActiveRoom) await _stopSound();
     if (type != null) {
@@ -495,6 +582,8 @@ mixin OpenIMLive {
         await _sendSignal(type, signal,
             requireActive: false, terminalState: state.name);
       } catch (error) {
+        if (error is CallRequestCancelled || _guard.isEnded(room)) return;
+        state = CallState.networkError;
         if (error is! CallRequestCancelled &&
             showSendError &&
             !_liveClosing &&
@@ -504,6 +593,7 @@ mixin OpenIMLive {
         }
       }
     }
+    if (generation != _sessionGeneration || !_guard.finish(room, owner)) return;
     await _writeFinal(signal, state, owner, duration,
         generation: generation, endedAt: endedAt);
   }
@@ -541,6 +631,11 @@ mixin OpenIMLive {
         _liveClosed ||
         generation != _sessionGeneration) {
       throw const CallRequestCancelled();
+    }
+    if (_serverAcceptedRoomID == invitation.roomID &&
+        (type == CustomMessageType.callingReject ||
+            type == CustomMessageType.callingCancel)) {
+      type = CustomMessageType.callingHungup;
     }
     final message = await OpenIM.iMManager.messageManager.createCustomMessage(
       data: encodeCallSignal(type, invitation, terminalState: terminalState),
@@ -610,6 +705,7 @@ mixin OpenIMLive {
       SignalingInfo signal, String owner, Object error, Object? stack) async {
     if (_isCurrent(signal)) await _stopSound();
     if (error is CallRequestCancelled ||
+        _guard.isEnded(signal.invitation!.roomID!) ||
         owner != OpenIM.iMManager.userID ||
         _liveClosed) return;
     Logger.print('Call failed: ${error.runtimeType}');
@@ -618,7 +714,7 @@ mixin OpenIMLive {
     await _endSignal(
         signal,
         CallState.networkError,
-        connected
+        connected || _serverAcceptedRoomID == signal.invitation!.roomID
             ? CustomMessageType.callingHungup
             : outgoing
                 ? CustomMessageType.callingCancel
@@ -746,8 +842,10 @@ mixin OpenIMLive {
     _run(_stopSound());
     _outgoingWaitingStoppedRoomID = null;
     _incomingWaitingStoppedRoomID = null;
+    _serverAcceptedRoomID = null;
     _sessionGeneration++;
     _guard.reset(owner);
+    _terminalRequests.clear();
     _roomAccounts.clear();
     _peerProfiles.clear();
   }
@@ -760,6 +858,7 @@ mixin OpenIMLive {
     if (_activeSignal?.invitation?.roomID != room) return;
     _activeSignal = null;
     _connectedAt = null;
+    _serverAcceptedRoomID = null;
     _outgoingWaitingStoppedRoomID = null;
     _incomingWaitingStoppedRoomID = null;
     _pendingInvitation = null;
@@ -793,11 +892,13 @@ mixin OpenIMLive {
     _pendingInvitation = null;
     _activeSignal = null;
     _connectedAt = null;
+    _serverAcceptedRoomID = null;
     _outgoingWaitingStoppedRoomID = null;
     _incomingWaitingStoppedRoomID = null;
     _pickupRequest = null;
     _sessionGeneration++;
     _guard.reset();
+    _terminalRequests.clear();
     _roomAccounts.clear();
     _peerProfiles.clear();
     _liveClosing = wasClosing;

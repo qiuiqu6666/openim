@@ -16,6 +16,7 @@ import '../../group/announcements/announcement_mention_link.dart';
 import '../../media/chat_picture_gallery.dart';
 import '../../media/chat_media_message_locator.dart';
 import '../../media/widgets/chat_video_thumbnail.dart';
+import '../../media/widgets/chat_video_play_indicator.dart';
 import '../../stickers/sticker_video_bubble.dart';
 import '../../stickers/sticker_video_message.dart';
 import '../../../group_features/sangong/widgets/sangong_message_actions.dart';
@@ -99,6 +100,7 @@ class ChatMessageTile extends StatelessWidget {
             ? logic.faceUrl.value
             : logic.getNewestFaceURL(message),
         leftAvatar: leftAvatar,
+        avatarSize: 36,
         textContentBuilder: textContentBuilder,
         rightNickname: logic.senderName,
         rightFaceUrl: OpenIM.iMManager.userInfo.faceURL,
@@ -317,8 +319,17 @@ class ChatMessageTile extends StatelessWidget {
             IMViews.showToast('sdkExpired'.tr);
             return;
           }
-          final gallery = await ChatPictureGallery.fromMessages(
-              logic.messageList.toList(), message);
+          final stored = await logic.searchMediaMessage();
+          if (!current() || !context.mounted) return;
+          final media = <String, Message>{};
+          for (final item in [...stored, ...logic.messageList, message]) {
+            final id = item.clientMsgID;
+            if (id != null && id.isNotEmpty) media[id] = item;
+          }
+          final ordered = media.values.toList()
+            ..sort((a, b) => (a.sendTime ?? 0).compareTo(b.sendTime ?? 0));
+          final gallery =
+              await ChatPictureGallery.fromMessages(ordered, message);
           if (!current() || !context.mounted) return;
           if (gallery.sources.isEmpty) {
             IMViews.showToast('mediaMessageUnavailable'.tr);
@@ -410,9 +421,7 @@ class ChatMessageTile extends StatelessWidget {
             url: video?.snapshotUrl,
             width: 120.w,
           ),
-          const Center(
-              child:
-                  Icon(Icons.play_circle_fill, color: Colors.white, size: 36)),
+          const Center(child: ChatVideoPlayIndicator()),
         ]),
       );
     } else {

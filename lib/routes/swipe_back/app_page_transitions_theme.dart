@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 
 import 'app_swipe_back_tokens.dart';
 import 'app_swipe_back_transition.dart';
+import 'app_route_depth_transition.dart';
 
 /// Covers existing MaterialPageRoute call sites without changing their
 /// navigator, business scope, result or lifecycle ownership.
 class AppPageTransitionsBuilder extends PageTransitionsBuilder {
   const AppPageTransitionsBuilder();
+
+  @override
+  DelegatedTransitionBuilder? get delegatedTransition =>
+      AppRouteDepthTransition.delegatedTransition;
 
   @override
   Duration get transitionDuration => AppSwipeBackTokens.transitionDuration;
@@ -33,7 +38,7 @@ class AppPageTransitionsBuilder extends PageTransitionsBuilder {
       animation: animation,
       secondaryAnimation: secondaryAnimation,
       pushCurve: AppSwipeBackTokens.curve,
-      popCurve: AppSwipeBackTokens.curve,
+      popCurve: AppSwipeBackTokens.reverseCurve,
       edgeStartWidthPx: AppSwipeBackTokens.edgeWidth,
       enableBackGesture: true,
       child: child,

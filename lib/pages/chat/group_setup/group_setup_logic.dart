@@ -15,14 +15,13 @@ import '../../../core/controller/im_controller.dart';
 import '../../../core/im_callback.dart';
 import '../../../routes/app_navigator.dart';
 import '../../../services/chat_history_cache.dart';
-import '../../contacts/select_contacts/select_contacts_logic.dart';
 import '../../conversation/conversation_logic.dart';
 import '../chat_logic.dart';
 import '../chat_setup/chat_history_search_page.dart';
 import 'edit_name/edit_name_logic.dart';
-import 'group_member_list/group_member_list_logic.dart';
 import '../group/identity/group_member_identity.dart';
 import 'members/group_member_preview_controller.dart';
+import 'members/group_member_operations.dart';
 import 'loading/group_setup_membership.dart';
 
 typedef GroupSetupPermissionContext = ({
@@ -73,6 +72,15 @@ class GroupSetupLogic extends GetxController {
   final lock = Lock();
   final isJoinedGroup = false.obs;
   final avatar = Rx<File?>(null);
+  late final _memberOperations = GroupMemberOperations(
+    captureCurrent: () {
+      final context = capturePermissionContext();
+      return () => isPermissionContextCurrent(context);
+    },
+    groupInfo: () => groupInfo.value,
+    canRemove: () => isOwnerOrAdmin,
+    refreshMembers: getGroupMembers,
+  );
 
   @override
   void onInit() {
@@ -205,6 +213,7 @@ class GroupSetupLogic extends GetxController {
     _permissionGeneration++;
     membership.dispose();
     _memberPreview.dispose();
+    _memberOperations.close();
     _guSub.cancel();
     _mASub.cancel();
     _mDSub.cancel();
@@ -596,7 +605,7 @@ class GroupSetupLogic extends GetxController {
       if (!_isCurrentGroupSession) return;
       AppNavigator.startBackMain();
     } catch (error) {
-      if (_isCurrentGroupSession) IMViews.showToast(error.toString());
+      if (_isCurrentGroupSession) IMViews.showErrorToast(error);
     }
   }
 
@@ -639,48 +648,9 @@ class GroupSetupLogic extends GetxController {
     }
   }
 
-  Future<void> addMember() async {
-    final result = await AppNavigator.startSelectContacts(
-      action: SelAction.addMember,
-      groupID: groupInfo.value.groupID,
-    );
+  Future<void> addMember() => _memberOperations.inviteMembers();
 
-    final list = IMUtils.convertSelectContactsResultToUserID(result);
-    if (list is List<String>) {
-      try {
-        await LoadingView.singleton.wrap(
-          asyncFunction: () => observeUserActivity(
-              'group_invite',
-              () => OpenIM.iMManager.groupManager.inviteUserToGroup(
-                    groupID: groupInfo.value.groupID,
-                    userIDList: list,
-                    reason: 'Come on baby',
-                  )),
-        );
-      } catch (_) {}
-      getGroupMembers();
-    }
-  }
-
-  Future<void> removeMember() async {
-    final list = await AppNavigator.startGroupMemberList(
-      groupInfo: groupInfo.value,
-      opType: GroupMemberOpType.del,
-    );
-    if (list is List<GroupMembersInfo>) {
-      var removeUidList = list.map((e) => e.userID!).toList();
-      try {
-        await LoadingView.singleton.wrap(
-          asyncFunction: () => OpenIM.iMManager.groupManager.kickGroupMember(
-            groupID: groupInfo.value.groupID,
-            userIDList: removeUidList,
-            reason: 'Get out baby',
-          ),
-        );
-      } catch (_) {}
-      getGroupMembers();
-    }
-  }
+  Future<void> removeMember() => _memberOperations.removeMembers();
 
   void viewMemberInfo(GroupMembersInfo membersInfo) =>
       AppNavigator.startUserProfilePane(

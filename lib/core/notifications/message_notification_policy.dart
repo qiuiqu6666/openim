@@ -137,11 +137,6 @@ abstract final class MessageNotificationPolicy {
       final detail = _oneLine(IMUtils.parseMsg(message));
       if (detail.isNotEmpty) body = detail;
     }
-    if (preview == MessageNotificationPreview.detail &&
-        isGroup &&
-        senderName.isNotEmpty) {
-      body = '$senderName: $body';
-    }
     return MessageNotificationPresentation(
       title: title,
       body: body,

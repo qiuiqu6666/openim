@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'chat_toolbox_tokens.dart';
+import '../composer/chat_composer_panel_viewport.dart';
 
 /// Keeps the composer safe area stable while revealing the mobile more panel.
 class ChatComposerToolboxSlot extends StatelessWidget {
@@ -11,6 +12,7 @@ class ChatComposerToolboxSlot extends StatelessWidget {
     required this.collapsedHeight,
     required this.child,
     this.animate = true,
+    this.keyboardHeight = 0,
   });
 
   final bool visible;
@@ -18,28 +20,19 @@ class ChatComposerToolboxSlot extends StatelessWidget {
   final double collapsedHeight;
   final Widget child;
   final bool animate;
+  final double keyboardHeight;
 
   @override
   Widget build(BuildContext context) {
     final panelHeight = ChatToolboxTokens.panelHeight + safeBottom;
-    return AnimatedContainer(
-      key: const ValueKey('chat-toolbox-panel-slot'),
-      duration: animate && !MediaQuery.disableAnimationsOf(context)
-          ? ChatToolboxTokens.panelAnimationDuration
-          : Duration.zero,
-      curve: Curves.easeOutCubic,
-      height: visible ? panelHeight : collapsedHeight,
-      alignment: Alignment.topCenter,
-      decoration: const BoxDecoration(),
-      clipBehavior: Clip.hardEdge,
-      child: visible
-          ? OverflowBox(
-              alignment: Alignment.topCenter,
-              minHeight: panelHeight,
-              maxHeight: panelHeight,
-              child: child,
-            )
-          : const SizedBox.shrink(),
+    return ChatComposerPanelViewport(
+      viewportKey: const ValueKey('chat-toolbox-panel-slot'),
+      visible: visible,
+      panelHeight: panelHeight,
+      collapsedHeight: collapsedHeight,
+      keyboardHeight: keyboardHeight,
+      animate: animate,
+      child: child,
     );
   }
 }

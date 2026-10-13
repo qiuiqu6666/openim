@@ -25,7 +25,7 @@ class NativeMediaFile {
       } finally {
         await input.close();
       }
-      final extension = _extension(header);
+      final extension = extensionForHeader(header);
       if (extension == null ||
           file.path.toLowerCase().endsWith('.$extension')) {
         return file;
@@ -56,7 +56,7 @@ class NativeMediaFile {
     }
   }
 
-  static String? _extension(List<int> header) {
+  static String? extensionForHeader(List<int> header) {
     if (header.length >= 12 &&
         ascii.decode(header.sublist(4, 8), allowInvalid: true) == 'ftyp') {
       final brand = ascii.decode(header.sublist(8, 12), allowInvalid: true);

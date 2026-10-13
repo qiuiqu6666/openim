@@ -12,6 +12,9 @@ import 'emoji/chat_emoji_compatibility.dart';
 enum _EmojiSection { all, favorites, gestures, builtin }
 
 class ChatEmojiPanel extends StatefulWidget {
+  static double heightFor(BuildContext context) =>
+      math.min(280.h, MediaQuery.sizeOf(context).height * .36);
+
   const ChatEmojiPanel({
     super.key,
     required this.onEmojiSelected,
@@ -136,7 +139,7 @@ class _ChatEmojiPanelState extends State<ChatEmojiPanel> {
     };
     final showingStickers = stickerPanel != null;
     return Container(
-      height: math.min(280.h, MediaQuery.sizeOf(context).height * .36),
+      height: ChatEmojiPanel.heightFor(context),
       color: panelColor,
       child: Column(children: [
         Container(

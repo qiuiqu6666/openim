@@ -11,6 +11,7 @@ import '../../../core/im_callback.dart';
 import '../../conversation/conversation_logic.dart';
 import '../../group_features/data/group_feature_runtime.dart';
 import 'search/group_list_search.dart';
+import 'group_directory_changes.dart';
 
 class GroupListLogic extends GetxController {
   GroupListLogic({
@@ -51,23 +52,118 @@ class GroupListLogic extends GetxController {
   final _loading = <bool, bool>{true: false, false: false};
   final _hasMore = <bool, bool>{true: true, false: true};
   StreamSubscription? _syncSubscription;
+  final _groupSubscriptions = <StreamSubscription>[];
+  final _changes = GroupDirectoryChanges();
+  late final String _sessionAccount = _currentUserID();
+  late final String? _sessionToken = DataSp.chatToken;
+  Timer? _directoryTimer;
+  bool _refreshingDirectory = false;
+  bool _directoryRefreshPending = false;
   bool _disposed = false;
+  bool get _active =>
+      !_disposed &&
+      !isClosed &&
+      _currentUserID() == _sessionAccount &&
+      DataSp.chatToken == _sessionToken;
 
   @override
   void onInit() {
+    _sessionAccount;
+    _sessionToken;
     super.onInit();
+    final im =
+        Get.isRegistered<IMController>() ? Get.find<IMController>() : null;
+    if (im != null) {
+      _groupSubscriptions.addAll([
+        im.joinedGroupAddedSubject
+            .listen((group) => _recordGroup(group, joined: true)),
+        im.joinedGroupDeletedSubject
+            .listen((group) => _removeGroup(group.groupID)),
+        im.groupInfoUpdatedSubject.listen(_recordGroup),
+        im.memberDeletedSubject.listen((member) {
+          if (member.userID == _sessionAccount && member.groupID != null) {
+            _removeGroup(member.groupID!);
+          }
+        }),
+        im.memberAddedSubject.listen((member) {
+          if (_active && member.userID == _sessionAccount) {
+            _scheduleDirectoryRefresh();
+          }
+        }),
+      ]);
+    }
     _syncSubscription =
         (Get.isRegistered<IMController>() ? Get.find<IMController>() : null)
             ?.imSdkStatusPublishSubject
             .listen((event) {
       if (event.status == IMSdkStatus.syncEnded) {
-        iCreatedInitial();
-        iJoinedInitial();
-        _search?.run();
+        _scheduleDirectoryRefresh();
       }
     });
     iCreatedInitial();
     iJoinedInitial();
+  }
+
+  void _recordGroup(GroupInfo group, {bool joined = false}) {
+    if (!_active) return;
+    if (!joined && _changes.isRemoved(group.groupID)) return;
+    if (group.status == 2) {
+      _removeGroup(group.groupID);
+      return;
+    }
+    final previous = [...iCreatedList, ...iJoinedList]
+        .firstWhereOrNull((row) => row.groupID == group.groupID);
+    final updated = GroupInfo.fromJson({
+      ...?previous?.toJson(),
+      for (final entry in group.toJson().entries)
+        if (entry.value != null) entry.key: entry.value,
+    });
+    _changes.record(group.groupID, updated,
+        allowInsert: joined || previous != null);
+    _publishLiveChanges();
+    _scheduleDirectoryRefresh();
+  }
+
+  void _removeGroup(String id) {
+    if (!_active) return;
+    _changes.record(id, null);
+    _publishLiveChanges();
+    _scheduleDirectoryRefresh();
+  }
+
+  void _publishLiveChanges() {
+    iCreatedList.assignAll(
+        _changes.project(iCreatedList, created: true, owner: _sessionAccount));
+    iJoinedList.assignAll(
+        _changes.project(iJoinedList, created: false, owner: _sessionAccount));
+  }
+
+  void _scheduleDirectoryRefresh() {
+    if (!_active) return;
+    _directoryRefreshPending = true;
+    if (_refreshingDirectory) return;
+    _directoryTimer ??= Timer(const Duration(milliseconds: 80), () {
+      _directoryTimer = null;
+      unawaited(_refreshDirectory());
+    });
+  }
+
+  Future<void> _refreshDirectory() async {
+    if (!_active) return;
+    _refreshingDirectory = true;
+    _directoryRefreshPending = false;
+    final revision = _changes.revision;
+    try {
+      await Future.wait([iCreatedInitial(), iJoinedInitial()]);
+      if (!_active) return;
+      if (!loadFailed[true]! && !loadFailed[false]!) {
+        _changes.confirmedThrough(revision);
+      }
+      await _search?.run();
+    } finally {
+      _refreshingDirectory = false;
+      if (_directoryRefreshPending && _active) _scheduleDirectoryRefresh();
+    }
   }
 
   void switchTab(int i) => index.value = i;
@@ -92,8 +188,7 @@ class GroupListLogic extends GetxController {
   }
 
   Future<void> _load({required bool iCreate, required bool refresh}) async {
-    if (_disposed ||
-        (!refresh && (_loading[iCreate]! || !_hasMore[iCreate]!))) {
+    if (!_active || (!refresh && (_loading[iCreate]! || !_hasMore[iCreate]!))) {
       return;
     }
     // A refresh supersedes any older refresh or pagination request.
@@ -126,8 +221,12 @@ class GroupListLogic extends GetxController {
             DataSp.chatToken != token) {
           return;
         }
-        for (final group in page) {
-          if (group.groupID.isNotEmpty &&
+        for (final row in page) {
+          // Apply an owner transfer before filtering the SDK page into tabs.
+          // An initial page may predate the event while both tabs are empty.
+          final group = _changes.projectGroup(row);
+          if (group != null &&
+              group.groupID.isNotEmpty &&
               (group.ownerUserID == userID) == iCreate) {
             groups[group.groupID] = group;
             received.add(group);
@@ -139,7 +238,8 @@ class GroupListLogic extends GetxController {
         if (!hasMore || groups.length > previousLength) break;
       }
       _seedGroups(received);
-      target.assignAll(groups.values);
+      target.assignAll(
+          _changes.project(groups.values, created: iCreate, owner: userID));
       if (iCreate) {
         iCreatedOffset = offset;
       } else {
@@ -171,6 +271,11 @@ class GroupListLogic extends GetxController {
   @override
   void onClose() {
     _disposed = true;
+    _directoryTimer?.cancel();
+    for (final subscription in _groupSubscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _changes.clear();
     _syncSubscription?.cancel();
     _search?.dispose();
     iCreateRefreshController.dispose();

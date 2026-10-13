@@ -21,12 +21,32 @@ class ChatExpiringContent extends StatefulWidget {
   State<ChatExpiringContent> createState() => _ChatExpiringContentState();
 }
 
-class _ChatExpiringContentState extends State<ChatExpiringContent> {
+class _ChatExpiringContentState extends State<ChatExpiringContent>
+    with WidgetsBindingObserver {
   Timer? timer;
+  bool _visible = false;
+  bool _foreground = true;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final state = WidgetsBinding.instance.lifecycleState;
+    _foreground = state == null || state == AppLifecycleState.resumed;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _visible =
+        TickerMode.of(context) && (ModalRoute.isCurrentOf(context) ?? true);
     _schedule();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _schedule();
+    if (_foreground && mounted) setState(() {});
   }
 
   @override
@@ -37,8 +57,17 @@ class _ChatExpiringContentState extends State<ChatExpiringContent> {
 
   void _schedule() {
     timer?.cancel();
+    timer = null;
     final end = ChatExpiringContent.deadline(widget.message);
     if (end != null && end.isAfter(DateTime.now())) {
+      if (!_visible || !_foreground) {
+        // Stop display ticks, but mask content at the absolute deadline even
+        // behind a translucent route. SDK deletion remains independent.
+        timer = Timer(end.difference(DateTime.now()), () {
+          if (mounted) setState(() {});
+        });
+        return;
+      }
       timer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!mounted) return;
         setState(() {});
@@ -49,6 +78,7 @@ class _ChatExpiringContentState extends State<ChatExpiringContent> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     super.dispose();
   }

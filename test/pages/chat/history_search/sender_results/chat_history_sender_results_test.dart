@@ -256,9 +256,9 @@ void main() {
       });
       await mount(tester, source, brightness: brightness);
       final scrollable = find.byType(Scrollable).first;
-      await tester.scrollUntilVisible(more, 500,
+      await tester.scrollUntilVisible(retry, 500,
           scrollable: scrollable, maxScrolls: 20);
-      await tester.tap(more);
+      expect(more, findsNothing);
       await tester.pumpAndSettle();
       expect(retry, findsOneWidget);
       expect(find.text('消息 first-29'), findsOneWidget,

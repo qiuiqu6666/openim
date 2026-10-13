@@ -12,6 +12,7 @@ import 'package:openim/pages/chat/chat_logic.dart';
 import 'package:openim/pages/chat/history/chat_history_prefetcher.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/pages/conversation/updates/conversation_latest_sync.dart';
+import 'package:openim/pages/conversation/unread/conversation_unread_sync.dart';
 import 'package:openim/pages/group_features/data/group_feature_runtime.dart';
 import 'package:openim/pages/home/home_logic.dart';
 import 'package:openim/services/chat_history_cache.dart';
@@ -71,6 +72,8 @@ void main() {
   late bool chatOpened;
   late Map<String, ConversationInfo> storedRows;
   late List<String> calls;
+  late List<MethodCall> recoveryReads;
+  late Completer<void> recoveryResult;
 
   int unreadSource() => conversations.list
       .fold(0, (total, row) => total + conversations.getUnreadCount(row));
@@ -106,6 +109,8 @@ void main() {
         row.conversationID: row,
     };
     calls = [];
+    recoveryReads = [];
+    recoveryResult = Completer<void>();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdk, (call) {
       calls.add(call.method);
@@ -120,6 +125,10 @@ void main() {
         final acknowledgement = Completer<void>();
         acknowledgements.add(acknowledgement);
         return acknowledgement.future;
+      }
+      if (call.method == 'markMessagesAsReadByMsgID') {
+        recoveryReads.add(call);
+        return recoveryResult.future;
       }
       if (call.method == 'getConversationIDBySessionType') {
         return Future.value('chat');
@@ -145,6 +154,7 @@ void main() {
   tearDown(() async {
     if (chatOpened && !chat.isClosed) chat.onDelete();
     if (!conversations.isClosed) conversations.onDelete();
+    if (!recoveryResult.isCompleted) recoveryResult.complete();
     for (final acknowledgement in acknowledgements) {
       if (!acknowledgement.isCompleted) acknowledgement.complete();
     }
@@ -201,10 +211,81 @@ void main() {
     im.recvNewMessage(message);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
+    // The production feed coalesces metadata callbacks for 80 ms. Assert the
+    // published row after that batch, while the read ACK is still pending.
+    await tester.pump(const Duration(milliseconds: 80));
   }
 
   ConversationInfo getTarget() =>
       conversations.list.firstWhere((row) => row.conversationID == 'chat');
+
+  for (final duplicateTotal in [false, true]) {
+    testWidgets(
+        'return reconciles increased unread after ACK, duplicate total: $duplicateTotal',
+        (tester) async {
+      await mountChat(tester);
+      if (duplicateTotal) {
+        im.unreadMsgCountEventSubject.add(7);
+        await tester.pump();
+        await tester.pump(ConversationUnreadSync.settleDelay);
+        await tester.pumpAndSettle();
+      }
+      final latest = _message('viewed-tall', 31);
+      await receive(tester, latest, unread: 1);
+      expect(nativeReads, hasLength(1));
+      Get.routing.current = '/home';
+      chat.onDelete();
+      await tester.pumpWidget(badgeSource());
+      im.conversationChanged([_conversation(latest, unread: 2)]);
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(getTarget().unreadCount, 2);
+      acknowledgements.single.complete();
+      await tester.pump();
+      storedRows['chat'] = _conversation(latest, unread: 0);
+      im.conversationChanged([_conversation(latest, unread: 0)]);
+      if (duplicateTotal) im.unreadMsgCountEventSubject.add(7);
+      await tester.pump(const Duration(milliseconds: 80));
+      await tester.pump(ConversationLatestSync.settleDelay);
+      await tester.pumpAndSettle();
+      expect(calls, contains('getMultipleConversation'));
+      expect(getTarget().unreadCount, 0);
+      expect(recoveryReads, isEmpty);
+    });
+  }
+
+  for (final newArrival in [false, true]) {
+    testWidgets(
+        'failed read after return recovers only captured IDs, new arrival: $newArrival',
+        (tester) async {
+      await mountChat(tester);
+      final seen = _message('viewed-tall', 31);
+      await receive(tester, seen, unread: 1);
+      expect(paintedIDs.last, contains('viewed-tall'));
+      Get.routing.current = '/home';
+      chat.onDelete();
+      await tester.pumpWidget(badgeSource());
+      final latest = newArrival ? _message('unseen-after-exit', 32) : seen;
+      if (newArrival) {
+        im.conversationChanged([_conversation(latest, unread: 2)]);
+        await tester.pump(const Duration(milliseconds: 80));
+      }
+      acknowledgements.single
+          .completeError(PlatformException(code: 'NETWORK_FAILURE'));
+      await tester.pump();
+      await tester.pump();
+      expect(recoveryReads, hasLength(1));
+      expect((recoveryReads.single.arguments as Map)['messageIDList'],
+          ['viewed-tall']);
+      storedRows['chat'] = _conversation(latest, unread: newArrival ? 1 : 0);
+      recoveryResult.complete();
+      await tester.pumpAndSettle();
+      await tester.pump(ConversationLatestSync.settleDelay);
+      await tester.pumpAndSettle();
+      expect(nativeReads, hasLength(1));
+      expect(getTarget().unreadCount, newArrival ? 1 : 0);
+      expect(getTarget().latestMsg!.clientMsgID, latest.clientMsgID);
+    });
+  }
 
   testWidgets(
       'received latest reaches the feed without a conversation callback',
@@ -304,6 +385,8 @@ void main() {
     Get.routing.current = '/conversations';
     await tester.pumpWidget(badgeSource());
     chat.onDelete();
+    await tester.pumpAndSettle();
+    await tester.pump(ConversationLatestSync.settleDelay);
     await tester.pumpAndSettle();
     expect(nativeReads, hasLength(1));
     expect(getTarget().unreadCount, 2);

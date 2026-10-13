@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
 import 'chat_history_search_source.dart';
+import 'cloud/chat_history_cloud_sync.dart';
 
 /// Owns one search page's state; dispose it with its page.
 class ChatHistorySearchController extends ChangeNotifier {
@@ -36,7 +37,12 @@ class ChatHistorySearchController extends ChangeNotifier {
   bool get loading => _loading;
   bool get failed => _failed;
   bool get hasSearched => _hasSearched;
-  bool get hasMore => _hasSearched && (_pending.isNotEmpty || _rawHasMore);
+  bool get hasMore =>
+      _hasSearched &&
+      (_pending.isNotEmpty ||
+          _rawHasMore ||
+          (source is ChatHistoryCloudSource &&
+              (source as ChatHistoryCloudSource).cloudHasMore));
 
   /// Clearing the input also invalidates any in-flight keyword search.
   void clear() {
@@ -91,7 +97,25 @@ class ChatHistorySearchController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      while (collected.length < pageSize && rawHasMore) {
+      final cloud = source is ChatHistoryCloudSource
+          ? source as ChatHistoryCloudSource
+          : null;
+      if (cloud != null &&
+          cloud.cloudHasMore &&
+          collected.isEmpty &&
+          (rawPage == 1 || !rawHasMore)) {
+        await cloud.supplement(conversationID, () => _isCurrent(generation));
+        if (!_isCurrent(generation)) return;
+        // SDK hydration changes local offsets. Rescan and deduplicate instead
+        // of applying an old offset to the newly populated database.
+        rawPage = 1;
+        rawHasMore = true;
+      }
+      var scanned = 0;
+      while (collected.length < pageSize &&
+          rawHasMore &&
+          (cloud == null || scanned < 10)) {
+        scanned++;
         final messages = await source.search(
           conversationID: conversationID,
           query: query,

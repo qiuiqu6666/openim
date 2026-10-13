@@ -15,6 +15,8 @@ class ConversationEditController extends ChangeNotifier {
   bool _editing = false;
   bool _busy = false;
   bool _disposed = false;
+  int _editGeneration = 0;
+  int get editGeneration => _editGeneration;
   Completer<void>? _cancelExecution;
   final _selectedIds = <String>{};
 
@@ -32,6 +34,7 @@ class ConversationEditController extends ChangeNotifier {
       return;
     }
     _editing = !_editing;
+    _editGeneration++;
     if (!_editing) _selectedIds.clear();
     notifyListeners();
   }
@@ -81,6 +84,10 @@ class ConversationEditController extends ChangeNotifier {
       for (final conversation in targets) {
         if (!current()) return;
         await Future.any<void>([action(conversation), cancelled.future]);
+        if (!current()) return;
+        // A partial retry owns only unfinished targets. A deleted ID may have
+        // been recreated by a new message before the user retries this batch.
+        if (_selectedIds.remove(conversation.conversationID)) notifyListeners();
       }
       if (!current()) return;
       _editing = false;

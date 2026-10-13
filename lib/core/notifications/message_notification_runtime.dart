@@ -328,12 +328,19 @@ class MessageNotificationRuntime {
       await notifier.requestPermission();
     }
     if (_sessionCurrent(session, epoch)) {
+      await notifier.nativeAndroid.configure(
+        accountID: session.accountID,
+        sessionKey: session.sessionKey,
+        activeConversationID: activeConversationID(),
+        suppressSound: suppressSound?.call() == true,
+      );
       await _actions.processPending();
       await _processRemoteTaps();
     }
   }
 
   Future<void> receive(sdk.Message message) async {
+    if (notifier.nativeAndroid.ownsNotifications) return;
     final session = currentSession();
     final epoch = _epoch;
     if (_closed ||
@@ -559,6 +566,16 @@ class MessageNotificationRuntime {
     // Profile preference hydration can finish after SDK sync/home navigation.
     // Its same-account event must also resume clicks waiting on that readiness.
     unawaited(_safe(() => onSessionReady()));
+    final session = currentSession();
+    if (session != null && notifier.nativeAndroid.ownsNotifications) {
+      // Do not lose a setting change behind an already running session prepare.
+      unawaited(_safe(() => notifier.nativeAndroid.configure(
+            accountID: session.accountID,
+            sessionKey: session.sessionKey,
+            activeConversationID: activeConversationID(),
+            suppressSound: suppressSound?.call() == true,
+          )));
+    }
     if (stopForegroundAlerts != null) unawaited(_safe(stopForegroundAlerts!));
     for (final entry in _targets.entries.toList()) {
       if (!_owns(entry.value)) continue;
@@ -627,7 +644,7 @@ class MessageNotificationRuntime {
 
   void close() {
     if (_closed) return;
-    invalidateSession();
+    if (!notifier.nativeAndroid.ownsNotifications) invalidateSession();
     _closed = true;
     unawaited(_preferencesSubscription.cancel());
     _actions.close();

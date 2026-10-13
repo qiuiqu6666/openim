@@ -83,9 +83,9 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>使用 Face ID 验证身份，以开启生物识别支付或解锁应用。</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>请点击“好”以允许访问。若不允许，你将无法使用聊天时发送定位等功能。</string>
+	<string>用于聊天时发送位置。</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>请点击“好”以允许访问。若不允许，你将无法使用聊天时发送定位等功能。</string>
+	<string>用于聊天时发送位置。</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>请点击“好”以允许访问。若不允许，你将无法使用聊天时发送定位等功能。</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -107,6 +107,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<string>location</string>
 		<string>remote-notification</string>
 		<string>voip</string>
 	</array>

@@ -27,8 +27,7 @@ class ChatPictureView extends StatefulWidget {
 }
 
 class _ChatPictureViewState extends State<ChatPictureView> {
-  static const _longImageAspectRatio = 3 / 5;
-  static const _longImageHeightRatio = 3.0;
+  static const _longImageAspectRatio = 1 / 1.8;
 
   String? _inputPath;
   String? _sourcePath;
@@ -101,16 +100,19 @@ class _ChatPictureViewState extends State<ChatPictureView> {
     final sourceSize = ChatPictureQuality.sourceSize(picture);
     final width = sourceSize.width;
     final height = sourceSize.height;
+    final isLongImage = height >= width / _longImageAspectRatio;
     // Square and landscape attachments need room for their content; keep portrait/long
     // images compact and preserve explicit sizing used by conversation peeks.
     final limit =
-        (widget.maxDisplayWidth ?? (width >= height ? 120.w : pictureWidth))
+        (widget.maxDisplayWidth ??
+                (width >= height ? 120.w : pictureWidth) *
+                    (isLongImage ? 1.0 : 1.2))
             .clamp(0.0, constraints.maxWidth);
     var displayWidth = width < limit ? width : limit;
     var displayHeight = displayWidth * height / width;
     // Choose the visible top crop before fitting the bubble's height. Fitting
     // the entire long image first collapses its width to an unreadable strip.
-    if (height / width > _longImageHeightRatio) {
+    if (displayHeight > displayWidth / _longImageAspectRatio) {
       displayHeight = displayWidth / _longImageAspectRatio;
     }
     final heightLimit = widget.maxDisplayHeight;

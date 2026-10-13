@@ -124,6 +124,8 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <service android:name="io.openim.messaging.IMService" android:exported="false" android:stopWithTask="false" />
+
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
             android:exported="false" />

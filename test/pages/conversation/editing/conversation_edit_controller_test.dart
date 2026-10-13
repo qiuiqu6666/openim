@@ -145,6 +145,41 @@ void main() {
     expect(actedOn, ['visible-selected']);
   });
 
+  test('partial batch failure retains only failed and unstarted conversations',
+      () async {
+    final controller = ConversationEditController()..toggleEditing();
+    addTearDown(controller.dispose);
+    for (final id in ['accepted', 'failed', 'unstarted']) {
+      controller.toggleSelection(id);
+    }
+    await expectLater(
+        controller.execute(
+          conversations: [
+            _conversation('accepted'),
+            _conversation('failed'),
+            _conversation('unstarted')
+          ],
+          action: (info) async {
+            if (info.conversationID == 'failed')
+              throw StateError('SDK action failed');
+          },
+        ),
+        throwsA(isA<StateError>()));
+    expect(controller.editing, isTrue);
+    expect(controller.selectedIds, {'failed', 'unstarted'});
+    final retried = <String>[];
+    await controller.execute(
+      // A fresh message could recreate the already deleted ID before retry.
+      conversations: [
+        _conversation('accepted'),
+        _conversation('failed'),
+        _conversation('unstarted')
+      ],
+      action: (info) async => retried.add(info.conversationID),
+    );
+    expect(retried, ['failed', 'unstarted']);
+  });
+
   test('the first failure stops execution and retains the selection', () async {
     final controller = ConversationEditController()..toggleEditing();
     addTearDown(controller.dispose);

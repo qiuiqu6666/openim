@@ -125,7 +125,7 @@ void main() {
     }
   });
 
-  testWidgets('verification errors use the shared toast in the current locale',
+  testWidgets('verification errors use the shared alert in the current locale',
       (tester) async {
     await tester.pumpWidget(
         GetMaterialApp(builder: EasyLoading.init(), home: RegisterPage()));
@@ -136,9 +136,11 @@ void main() {
     final chinese =
         HttpUtil.errorMessage(logic.failure, path: Urls.checkVerificationCode);
     expect(find.text(chinese), findsOneWidget);
+    expect(find.byType(AppAlertDialog<void>), findsOneWidget);
     expect(find.textContaining('English verification details'), findsNothing);
     expect(logic.errorFor(RegistrationField.code), isNull);
-    await EasyLoading.dismiss(animation: false);
+    await tester.tap(find.text(StrRes.determine));
+    await tester.pumpAndSettle();
     Get.locale = const Locale('en', 'US');
     await logic.next();
     await tester.pumpAndSettle();

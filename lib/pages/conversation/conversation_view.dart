@@ -1,5 +1,6 @@
 import 'package:openim/routes/swipe_back/app_page_route.dart';
-import '../mine/settings/widgets/settings_widgets.dart' show showSettingsConfirm;
+import '../mine/settings/widgets/settings_widgets.dart'
+    show showSettingsConfirm;
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -8,6 +9,10 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'conversation_logic.dart';
+import 'summary/conversation_row_indices.dart';
+import '../../core/im_callback.dart';
+import '../../core/controller/im_controller.dart';
+import '../../core/session/connection/widgets/connection_health_title.dart';
 import 'archive/archived_conversation_page.dart';
 import 'conversation_organizer.dart';
 import 'folders/conversation_folder_bar.dart';
@@ -46,6 +51,10 @@ class ConversationPage extends StatefulWidget {
 }
 
 class _ConversationPageState extends State<ConversationPage> {
+  IMSdkStatus? _headerConnection(IMSdkStatus fallback) =>
+      Get.isRegistered<IMController>()
+          ? Get.find<IMController>().currentConnectionStatus
+          : fallback;
   static const _orangeAction = Color(0xFFF5A623);
   static const _folderAction = Color(0xFF32ADE6);
   static const _muteAction = Color(0xFF006EFF);
@@ -64,6 +73,7 @@ class _ConversationPageState extends State<ConversationPage> {
   late final _folders = ConversationFolderController(logic: logic);
   final Map<String, SlidableController> _slideControllers = {};
   Widget? _cachedFeed;
+  final _rowIndices = ConversationRowIndices();
   final _folderUnread = <String, int>{};
   final _notifiableFolders = <String>{};
 
@@ -161,8 +171,16 @@ class _ConversationPageState extends State<ConversationPage> {
       ConversationEditActionBar(
           hasSelection: conversations
               .any((info) => _editor.selectedIds.contains(info.conversationID)),
-          busy: _editor.busy,
-          onMarkRead: () => _editActions.markRead(conversations),
+          busy: _editor.busy || logic.markingAllRead.value,
+          readProgress: logic.readBatchProgress.value,
+          onMarkRead: () {
+            final folder = _folders.selectedFolderID;
+            final group = widget.groupChats;
+            _editActions.markRead(conversations,
+                scope: (info) => folder != null
+                    ? logic.folderID(info) == folder
+                    : (group ? info.isGroupChat : info.isSingleChat));
+          },
           onArchive: () => _editActions.archive(conversations),
           onDelete: () => _editActions.delete(context, conversations));
 
@@ -184,7 +202,8 @@ class _ConversationPageState extends State<ConversationPage> {
     final confirmed = await showSettingsConfirm(
       context,
       title: StrRes.delete,
-      message: '${StrRes.delete} "${logic.getShowName(info)}"?\n${StrRes.confirmClearChatHistory}',
+      message:
+          '${StrRes.delete} "${logic.getShowName(info)}"?\n${StrRes.confirmClearChatHistory}',
       confirmText: StrRes.delete,
       destructive: true,
     );
@@ -243,33 +262,28 @@ class _ConversationPageState extends State<ConversationPage> {
       // Observe the O(1) list length even when returning the cached subtree.
       logic.list.length;
       if (!widget.liveUpdatesActive && _cachedFeed != null) return _cachedFeed!;
-      final archivedConversations = <ConversationInfo>[];
-      final conversations = <ConversationInfo>[];
-      _folderUnread.clear();
-      _notifiableFolders.clear();
-      for (final info in logic.list) {
-        final inTab = widget.groupChats ? info.isGroupChat : info.isSingleChat;
-        if (logic.isArchived(info)) {
-          if (inTab) archivedConversations.add(info);
-          continue;
-        }
-        final folder = logic.folderID(info);
-        if (folder != null) {
-          final unread = logic.getUnreadCount(info);
-          _folderUnread.update(folder, (count) => count + unread,
-              ifAbsent: () => unread);
-          if (unread > 0 && !logic.isNotDisturb(info)) {
-            _notifiableFolders.add(folder);
-          }
-        }
-        if (_folders.selectedFolderID != null
-            ? folder == _folders.selectedFolderID
-            : inTab) {
-          conversations.add(info);
-        }
-      }
+      final snapshot = logic.feedSnapshot;
+      final archivedConversations = widget.groupChats
+          ? snapshot.archivedGroups
+          : snapshot.archivedSingles;
+      final conversations = _folders.selectedFolderID != null
+          ? snapshot.folders[_folders.selectedFolderID] ?? <ConversationInfo>[]
+          : widget.groupChats
+              ? snapshot.groups
+              : snapshot.singles;
+      _folderUnread
+        ..clear()
+        ..addAll(snapshot.folderUnread);
+      _notifiableFolders
+        ..clear()
+        ..addAll(snapshot.notifiableFolders);
       _publishEditBar(
           _editor.editing ? _buildEditActionBar(conversations) : null);
+      final archiveOffset =
+          archivedConversations.isNotEmpty && _folders.selectedFolderID == null
+              ? 1
+              : 0;
+      final rowIndices = _rowIndices.read(conversations, offset: archiveOffset);
       return _cachedFeed = Scaffold(
         backgroundColor: ConversationFeedStyle.background(context),
         appBar: GlassAppBar(
@@ -290,17 +304,16 @@ class _ConversationPageState extends State<ConversationPage> {
                   : AppTokens.surfaceLight),
           title: GestureDetector(
             onDoubleTap: _scrollToTop,
-            child: MainTabTitle(
+            child: ConnectionHealthTitle(
               title: widget.groupChats
                   ? StrRes.groupChat
                   : (Localizations.localeOf(context).languageCode == 'zh'
                       ? '消息'
                       : 'Messages'),
-              busy: logic.imSdkStatus != null && !logic.isFailedSdkStatus,
-              busyLabel: logic.imSdkStatus == StrRes.synchronizing
-                  ? StrRes.synchronizing
+              connection: _headerConnection(logic.imStatus.value),
+              apiAvailable: Get.isRegistered<IMController>()
+                  ? Get.find<IMController>().apiConnectionHealth?.available
                   : null,
-              failed: logic.isFailedSdkStatus,
             ),
           ),
           actions: [
@@ -404,6 +417,7 @@ class _ConversationPageState extends State<ConversationPage> {
                               folderSelected: _folders.selectedFolderID != null,
                             )
                           : ListView.builder(
+                              findChildIndexCallback: (key) => rowIndices[key],
                               controller: _feedScrollController,
                               padding: EdgeInsets.only(
                                   bottom: MediaQuery.paddingOf(context).bottom),

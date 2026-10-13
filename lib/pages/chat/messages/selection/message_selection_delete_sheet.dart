@@ -4,12 +4,15 @@ import 'package:openim_common/openim_common.dart';
 
 /// 99chat's delete confirmation uses the native bottom action sheet.
 abstract final class MessageSelectionDeleteSheet {
-  static Future<bool> show(BuildContext context, int count) async {
+  static Future<bool> show(BuildContext context, int count,
+      {bool singleMessage = false}) async {
     final confirmed = await showCupertinoModalPopup<bool>(
       context: context,
       builder: (context) => CupertinoActionSheet(
         key: const ValueKey('message-selection-delete-sheet'),
-        title: Text('chatSelectionDeleteConfirm'.trParams({'count': '$count'})),
+        title: Text(singleMessage
+            ? 'chatMessageDeleteConfirm'.tr
+            : 'chatSelectionDeleteConfirm'.trParams({'count': '$count'})),
         actions: [
           CupertinoActionSheetAction(
             isDestructiveAction: true,

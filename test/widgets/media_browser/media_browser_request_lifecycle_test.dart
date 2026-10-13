@@ -22,6 +22,48 @@ class _PendingImage extends ViewerImageProvider {
 }
 
 void main() {
+  testWidgets('idle warmup is bounded and chrome changes keep the pager intact',
+      (tester) async {
+    final requests = <_PendingImage>[];
+    final budgets = <int>[];
+    await tester.pumpWidget(renderTestHost(MediaBrowser(
+      initialIndex: 3,
+      sources: List.generate(
+          8,
+          (i) => MediaSource(
+              url: 'https://images.test/$i',
+              thumbnail: 'https://images.test/$i')),
+      imageProviderFactory: (url, pixels) {
+        budgets.add(pixels);
+        final request = _PendingImage(url);
+        requests.add(request);
+        return request;
+      },
+    )));
+    await tester.pump();
+    final pager = tester.widget<ExtendedImageGesturePageView>(
+        find.byType(ExtendedImageGesturePageView));
+    expect(requests, hasLength(1));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(requests.map((r) => r.url),
+        ['https://images.test/3', 'https://images.test/4']);
+    expect(budgets.last, lessThanOrEqualTo(2048 * 2048));
+    await tester.tapAt(const Offset(400, 300));
+    await tester.pump();
+    expect(
+        identical(
+            pager,
+            tester.widget<ExtendedImageGesturePageView>(
+                find.byType(ExtendedImageGesturePageView))),
+        isTrue);
+    await tester.pump(const Duration(seconds: 2));
+    expect(requests, hasLength(2),
+        reason: 'Only one pending warmup owns a slot');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    expect(requests.every((r) => r.cancelled), isTrue);
+  });
+
   testWidgets(
       'rapid traversal requests only current original and releases on exit',
       (tester) async {

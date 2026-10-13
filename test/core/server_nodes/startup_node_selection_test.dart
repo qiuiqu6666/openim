@@ -18,37 +18,59 @@ void main() {
     StartupNodeSelection.last = null;
   });
 
-  test('falls back as one route and preserves other settings and credentials',
+  test('retired domain node uses direct even offline and preserves credentials',
       () async {
-    await DataSp.putServerConfig({'logLevel': '4'});
+    await DataSp.putServerConfig({
+      'authUrl': 'https://99chatapi.99chat.vip',
+      'apiUrl': 'https://99imapi.99chat.vip',
+      'wsUrl': 'wss://websocket.99chat.vip',
+      'logLevel': '4',
+    });
     await DataSp.putLoginCertificate(LoginCertificate.fromJson({
       'userID': 'u',
       'imToken': 'im-secret',
       'chatToken': 'chat-secret',
     }));
-    final selected = await StartupNodeSelector(
-            probe: (node) async => result(node, node == NodeEndpoint.primary))
-        .select();
-    expect(selected.selected, NodeEndpoint.primary);
-    expect(NodeEndpoint.current().signature, NodeEndpoint.primary.signature);
+    final probed = <NodeEndpoint>[];
+    final selected = await StartupNodeSelector(probe: (node) async {
+      probed.add(node);
+      return result(node, false);
+    }).select();
+    expect(probed, [NodeEndpoint.direct]);
+    expect(selected.selected.signature, NodeEndpoint.direct.signature);
+    expect(NodeEndpoint.current().signature, NodeEndpoint.direct.signature);
     expect(DataSp.getServerConfig()?['logLevel'], '4');
     expect(DataSp.imToken, 'im-secret');
     expect(DataSp.chatToken, 'chat-secret');
   });
 
-  test(
-      'each launch rechecks and returns to the default direct route when restored',
-      () async {
-    await StartupNodeSelector(
-            probe: (node) async => result(node, node == NodeEndpoint.primary))
-        .select();
+  test('each launch rechecks only the direct route', () async {
     final probed = <NodeEndpoint>[];
+    await StartupNodeSelector(probe: (node) async {
+      probed.add(node);
+      return result(node, false);
+    }).select();
     final selected = await StartupNodeSelector(probe: (node) async {
       probed.add(node);
       return result(node, true);
     }).select();
-    expect(probed, NodeEndpoint.builtIn.reversed.toList());
+    expect(probed, [NodeEndpoint.direct, NodeEndpoint.direct]);
     expect(selected.selected, NodeEndpoint.direct);
+    expect(NodeEndpoint.current().signature, NodeEndpoint.direct.signature);
+  });
+
+  test('saved production IP migrates to new hostname with the same ports', () async {
+    await DataSp.putServerConfig({
+      'serverIP': '129.226.192.93',
+      'authUrl': 'http://129.226.192.93:10008',
+      'apiUrl': 'http://129.226.192.93:10002',
+      'wsUrl': 'ws://129.226.192.93:10001',
+    });
+    const host = 'lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com';
+    expect(Config.serverIp, host);
+    expect(Config.appAuthUrl, 'http://$host:10008');
+    expect(Config.imApiUrl, 'http://$host:10002');
+    expect(Config.imWsUrl, 'ws://$host:10001');
     expect(NodeEndpoint.current().signature, NodeEndpoint.direct.signature);
   });
 
@@ -93,16 +115,20 @@ void main() {
     });
     final first = selector.select();
     expect(identical(first, selector.select()), isTrue);
-    expect(calls, 2);
+    expect(calls, 1);
     gate.complete();
     await first;
     await selector.select();
-    expect(calls, 4);
+    expect(calls, 2);
   });
 
   test('an endpoint changed during probing is not overwritten', () async {
     final gate = Completer<void>();
-    var current = NodeEndpoint.primary;
+    var current = NodeEndpoint.direct;
+    const custom = NodeEndpoint(
+        chatApi: 'https://custom.test/chat',
+        imApi: 'https://custom.test/api',
+        imWs: 'wss://custom.test/ws');
     final selector = StartupNodeSelector(
         readCurrent: () => current,
         apply: (_) async => fail('Stale selection was persisted'),
@@ -111,26 +137,28 @@ void main() {
           return result(node, true);
         });
     final pending = selector.select();
-    current = NodeEndpoint.direct;
+    current = custom;
     gate.complete();
-    expect((await pending).selected, NodeEndpoint.direct);
+    expect((await pending).selected, custom);
   });
 
-  test('failed persistence retains the effective current endpoint', () async {
-    final selected = await StartupNodeSelector(
-            readCurrent: () => NodeEndpoint.primary,
-            apply: (_) async => throw StateError('disk unavailable'),
-            probe: (node) async => result(node, node == NodeEndpoint.direct))
-        .select();
-    expect(selected.selected, NodeEndpoint.primary);
-  });
-
-  test('unexpected probe failure does not prevent another node from working',
+  test('persist stores the direct route and retains other server settings',
       () async {
-    final selected = await StartupNodeSelector(probe: (node) async {
-      if (node == NodeEndpoint.primary) throw StateError('unreachable');
-      return result(node, true);
-    }).select();
-    expect(selected.selected, NodeEndpoint.direct);
+    await DataSp.putServerConfig({'logLevel': '4', 'serverIP': 'custom-value'});
+    await StartupNodeSelector.persist(NodeEndpoint.direct);
+    expect(DataSp.getServerConfig(), {
+      'authUrl': NodeEndpoint.direct.chatApi,
+      'apiUrl': NodeEndpoint.direct.imApi,
+      'wsUrl': NodeEndpoint.direct.imWs,
+      'logLevel': '4',
+      'serverIP': 'custom-value',
+    });
+  });
+
+  test('unexpected probe failure does not prevent startup', () async {
+    final selected = await StartupNodeSelector(
+        probe: (_) async => throw StateError('unreachable')).select();
+    expect(selected.selected.signature, NodeEndpoint.direct.signature);
+    expect(selected.checks.single.available, isFalse);
   });
 }

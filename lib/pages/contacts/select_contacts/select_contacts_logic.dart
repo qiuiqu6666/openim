@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -7,6 +9,7 @@ import 'package:openim_common/openim_common.dart';
 
 import 'select_contacts_view.dart';
 import 'recent_conversations/recent_conversation_preview_controller.dart';
+import 'recent_conversations/recent_conversation_directory.dart';
 import 'selection/contact_selection_policy.dart';
 import '../../official_account/widgets/official_account_name_label.dart';
 
@@ -24,9 +27,11 @@ enum SelAction {
 
 class SelectContactsLogic extends GetxController
     implements OrganizationMultiSelBridge {
-  SelectContactsLogic()
+  SelectContactsLogic({Future<bool> Function(String)? isJoinedGroup})
       : _onPicked = null,
-        _selectionCurrent = null;
+        _selectionCurrent = null,
+        _recentDirectory = RecentConversationDirectory(isJoinedGroup ??
+            ((id) => OpenIM.iMManager.groupManager.isJoinedGroup(groupID: id)));
 
   /// Reuses the existing single-contact/group pages without a send dialog.
   /// This controller is owned by the caller, not registered over an active
@@ -35,7 +40,9 @@ class SelectContactsLogic extends GetxController
     required ValueChanged<Object> onPicked,
     required bool Function() isCurrent,
   })  : _onPicked = onPicked,
-        _selectionCurrent = isCurrent {
+        _selectionCurrent = isCurrent,
+        _recentDirectory = RecentConversationDirectory(
+            (id) => OpenIM.iMManager.groupManager.isJoinedGroup(groupID: id)) {
     action = SelAction.carte;
     openSelectedSheet = false;
   }
@@ -43,7 +50,13 @@ class SelectContactsLogic extends GetxController
   final ValueChanged<Object>? _onPicked;
   final bool Function()? _selectionCurrent;
   bool get isSingleSelection => _onPicked != null;
-  bool get selectionCurrent => !isClosed && (_selectionCurrent?.call() ?? true);
+  late final _accountID = OpenIM.iMManager.userID;
+  late final _sessionToken = DataSp.chatToken;
+  bool get selectionCurrent =>
+      !isClosed &&
+      _accountID == OpenIM.iMManager.userID &&
+      _sessionToken == DataSp.chatToken &&
+      (_selectionCurrent?.call() ?? true);
   final checkedList = <String, dynamic>{}.obs;
   final defaultCheckedIDList = <String>{}.obs;
   List<String>? excludeIDList;
@@ -51,6 +64,10 @@ class SelectContactsLogic extends GetxController
   late bool openSelectedSheet;
   String? groupID;
   final conversationList = <ConversationInfo>[].obs;
+  final recentLoading = false.obs;
+  final recentLoadFailed = false.obs;
+  final RecentConversationDirectory _recentDirectory;
+  int _recentGeneration = 0;
   String? ex;
   UserInfo? sharedContact;
   String? cardRecipientName;
@@ -82,6 +99,9 @@ class SelectContactsLogic extends GetxController
 
   @override
   void onInit() {
+    // Routes bind after login; constructing an unmounted picker needs no SDK.
+    _accountID;
+    _sessionToken;
     if (isSingleSelection) {
       super.onInit();
       return;
@@ -105,6 +125,7 @@ class SelectContactsLogic extends GetxController
 
   @override
   void onClose() {
+    ++_recentGeneration;
     _recentPreviews?.dispose();
     inputCtrl.dispose();
     recentScrollController.dispose();
@@ -113,7 +134,7 @@ class SelectContactsLogic extends GetxController
 
   @override
   void onReady() {
-    _queryConversationList();
+    unawaited(reloadRecentConversations());
     if (openSelectedSheet) viewSelectedContactsList();
     super.onReady();
   }
@@ -151,27 +172,24 @@ class SelectContactsLogic extends GetxController
       : ContactSelectionPolicy.allowsVisible(info,
           showNotificationAccounts: action == SelAction.forward);
 
-  _queryConversationList() async {
-    if (!hiddenConversations) {
-      final cons = Get.find<ConversationLogic>().list;
-
-      final futures = cons.map((con) async {
-        if (!isVisible(con)) return null;
-        if (con.isGroupChat) {
-          final result = await OpenIM.iMManager.groupManager
-              .isJoinedGroup(groupID: con.groupID!);
-          return result ? con : null;
-        }
-        return con.conversationType == ConversationType.notification
-            ? null
-            : con;
-      }).toList();
-
-      final results = await Future.wait(futures);
-      final filteredCons =
-          results.where((con) => con != null).cast<ConversationInfo>().toList();
-
-      conversationList.addAll(filteredCons);
+  Future<void> reloadRecentConversations() async {
+    if (!selectionCurrent || hiddenConversations) return;
+    final generation = ++_recentGeneration;
+    bool current() => selectionCurrent && generation == _recentGeneration;
+    recentLoading.value = true;
+    recentLoadFailed.value = false;
+    try {
+      final result = await _recentDirectory.load(
+          List<ConversationInfo>.of(Get.find<ConversationLogic>().list),
+          isVisible: isVisible,
+          isCurrent: current);
+      if (!current()) return;
+      conversationList.assignAll(result.rows);
+      recentLoadFailed.value = result.failed;
+    } catch (_) {
+      if (current()) recentLoadFailed.value = true;
+    } finally {
+      if (current()) recentLoading.value = false;
     }
   }
 

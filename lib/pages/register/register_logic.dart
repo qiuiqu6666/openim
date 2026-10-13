@@ -1,3 +1,4 @@
+import '../../widgets/auth/feedback/auth_notice.dart';
 import 'package:openim/pages/mine/settings/widgets/account_code_request.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -196,7 +197,7 @@ class RegisterLogic extends GetxController {
       );
     } catch (error) {
       if (session.isCurrent) {
-        IMViews.showToast(
+        showAuthNotice(
             HttpUtil.errorMessage(error, path: Urls.checkVerificationCode));
       }
     } finally {

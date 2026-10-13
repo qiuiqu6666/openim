@@ -18,6 +18,19 @@ Message picture(String id, String url) => Message()
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('duplicate media does not inflate count or shift the selected index',
+      () async {
+    final first = picture('first', 'https://example.com/first.png');
+    final selected = picture('selected', 'https://example.com/selected.png');
+    final gallery = await ChatPictureGallery.fromMessages(
+      [first, first, selected, selected],
+      selected,
+    );
+    expect(gallery.sources.length, 2);
+    expect(gallery.initialIndex, 1);
+    expect(gallery.messageAt(1)?.clientMsgID, 'selected');
+  });
+
   test('loopback media uses the IM API while action messages keep SDK URLs',
       () async {
     SharedPreferences.setMockInitialValues({});

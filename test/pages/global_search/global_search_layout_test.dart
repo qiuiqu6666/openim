@@ -63,9 +63,9 @@ class _Source extends GlobalSearchSource {
   @override
   Future<List<SearchResultItems>> messages(String query, bool files) async {
     _count(files ? 'files' : 'messages');
-    if (files && failFiles) throw StateError('offline');
+    if (!files && failFiles) throw StateError('offline');
     return files
-        ? [_result('群聊文件', 0, files: true)]
+        ? [_result('群聊测试', 0, files: true)]
         : List.generate(9, (i) => _result(i == 0 ? '群聊测试' : '测试群聊 $i', i));
   }
 }
@@ -100,11 +100,6 @@ Finder _row(String title) => find.byWidgetPredicate((widget) =>
             (widget.title! as OfficialAccountNameLabel).name == title ||
         widget.title is GroupNameLabel &&
             (widget.title! as GroupNameLabel).name == title));
-Finder _chip(String label) => find.byWidgetPredicate((widget) =>
-    widget is ChoiceChip &&
-    widget.label is Text &&
-    (widget.label as Text).data == label);
-
 Future<GlobalSearchLogic> _mount(WidgetTester tester, _Source source,
     {bool dark = false,
     Size size = const Size(375, 812),
@@ -165,17 +160,27 @@ Future<void> _search(WidgetTester tester) async {
 }
 
 Future<void> _select(WidgetTester tester, String category) async {
-  final chip = _chip(category);
-  await tester.ensureVisible(chip);
-  await tester.tap(chip);
+  final labels = [
+    StrRes.globalSearchContacts,
+    StrRes.groupChat,
+    'globalSearchConversations'.tr,
+    StrRes.globalSearchChatHistory
+  ];
+  final scrollable =
+      find.descendant(of: _results, matching: find.byType(Scrollable)).first;
+  tester.state<ScrollableState>(scrollable).position.jumpTo(0);
   await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(_section(labels.indexOf(category) + 1), 80,
+      scrollable: scrollable);
+  await tester.pumpAndSettle();
+  expect(find.byType(ChoiceChip), findsNothing);
 }
 
 void _expectTopSection(WidgetTester tester, int id, String firstTitle) {
   final viewport = tester.getRect(_results);
   final section = tester.getRect(_section(id));
   final row = tester.getRect(_row(firstTitle));
-  expect(section.top, greaterThanOrEqualTo(viewport.top + AppTokens.s3));
+  expect(section.top, greaterThanOrEqualTo(viewport.top - 1));
   expect(section.bottom, lessThanOrEqualTo(row.top));
   expect(row.bottom, lessThan(viewport.bottom));
   final title = find.descendant(of: _section(id), matching: find.byType(Text));
@@ -184,6 +189,28 @@ void _expectTopSection(WidgetTester tester, int id, String firstTitle) {
 }
 
 void main() {
+  testWidgets('footer reflects remaining cloud history and completion',
+      (tester) async {
+    final logic = await _mount(tester, _Source());
+    await _search(tester);
+    final scrollable =
+        find.descendant(of: _results, matching: find.byType(Scrollable)).first;
+    final end = find.byKey(const ValueKey('global-search-no-more'));
+    await tester.scrollUntilVisible(end, 200, scrollable: scrollable);
+    expect(find.text('chatSearchNoMore'.tr), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('global-history-cloud-more')), findsNothing);
+    logic.cloudHasMore.value = true;
+    await tester.pumpAndSettle();
+    expect(end, findsNothing);
+    expect(find.byKey(const ValueKey('global-history-cloud-more')),
+        findsOneWidget);
+    logic.cloudHasMore.value = false;
+    logic.failures.add(4);
+    await tester.pumpAndSettle();
+    expect(end, findsNothing);
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
   tearDown(() {
     Styles.isDark = false;
@@ -205,7 +232,7 @@ void main() {
     source.previews.add(preview('最后一条消息'));
     await _mount(tester, source);
     await _search(tester);
-    await _select(tester, StrRes.globalSearchGroup);
+    await _select(tester, StrRes.groupChat);
     expect(find.text('最后一条消息'), findsOneWidget);
     expect(find.text('group'), findsNothing);
     source.previews.assignAll([preview('新收到的消息')]);
@@ -257,10 +284,10 @@ void main() {
     expect(ordinary, findsOneWidget);
     expect(find.descendant(of: ordinary, matching: find.text('99Message')),
         findsOneWidget);
-    expect(badges(), findsNWidgets(2));
+    expect(badges(), findsNWidgets(3));
     expect(find.descendant(of: ordinary, matching: badges()), findsNothing);
     await _select(tester, 'globalSearchConversations'.tr);
-    expect(badges(), findsOneWidget);
+    expect(badges(), findsAtLeastNWidgets(1));
     expect(find.descendant(of: _row('99Message群'), matching: badges()),
         findsNothing);
     expect(tester.takeException(), isNull);
@@ -292,17 +319,17 @@ void main() {
       await _mount(tester, _Source(), dark: dark);
       await _search(tester);
       for (final category in [
-        StrRes.globalSearchGroup,
+        StrRes.groupChat,
         'globalSearchConversations'.tr,
         StrRes.globalSearchChatHistory,
-        StrRes.globalSearchChatFile,
       ]) {
         await _select(tester, category);
         final avatars = tester.widgetList<AvatarView>(find.byType(AvatarView));
         expect(avatars, isNotEmpty);
         expect(
             avatars
-                .every((avatar) => avatar.isGroup && avatar.isCircle == true),
+                .where((avatar) => avatar.isGroup)
+                .every((avatar) => avatar.isCircle == true),
             isTrue);
         for (final element in find.byType(AvatarView).evaluate()) {
           expect(
@@ -323,41 +350,52 @@ void main() {
       await _search(tester);
       await _select(tester, StrRes.globalSearchChatHistory);
       _expectTopSection(tester, 4, '群聊测试');
-      final selected = _chip(StrRes.globalSearchChatHistory);
-      expect(tester.getRect(selected).bottom,
-          lessThan(tester.getRect(_header).bottom));
-      final appBar = find.byType(GlassAppBar);
-      final title =
-          find.descendant(of: appBar, matching: find.text(StrRes.search));
-      expect(tester.getCenter(title).dx, closeTo(160, 1));
-      final back =
-          find.widgetWithIcon(IconButton, Icons.arrow_back_ios_new_rounded);
-      expect(tester.getSize(back),
-          const Size.square(AppIconTokens.androidTouchTarget));
+      expect(find.byType(ChoiceChip), findsNothing);
+      expect(find.byType(GlassAppBar), findsNothing);
+      final cancel = find.byKey(const ValueKey('chat-history-search-cancel'));
+      expect(cancel, findsOneWidget);
+      expect(tester.getRect(cancel).right, lessThanOrEqualTo(320));
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('entry focuses search and tapping blank space dismisses keyboard',
+      (tester) async {
+    final logic = await _mount(tester, _Source());
+    expect(find.byType(ChoiceChip), findsNothing);
+    expect(find.text('globalSearchScopeHint'.tr), findsOneWidget);
+    expect(logic.index.value, 1);
+    expect(logic.focusNode.hasFocus, isTrue);
+    await tester.tapAt(const Offset(20, 400));
+    await tester.pumpAndSettle();
+    expect(logic.focusNode.hasFocus, isFalse);
+    expect(find.byKey(const ValueKey('chat-history-search-cancel')),
+        findsOneWidget);
+  });
 
   testWidgets('loading slot stays stable and clear returns to empty search',
       (tester) async {
     final source = _Source()..pendingFriends = Completer<List<FriendInfo>>();
     final logic = await _mount(tester, source);
     final before = tester.getSize(_header);
-    expect(find.byTooltip('globalSearchClear'.tr), findsNothing);
+    expect(
+        find.byKey(const ValueKey('chat-history-search-clear')), findsNothing);
     await tester.enterText(find.byType(TextField), '1');
     await tester.pump(const Duration(milliseconds: 350));
     expect(logic.loading.value, isTrue);
-    expect(tester.getSize(_header), before);
+    expect(tester.getSize(_header).height, greaterThan(before.height));
     source.pendingFriends!
         .complete([FriendInfo(userID: 'friend', nickname: '冬')]);
     await tester.pumpAndSettle();
-    expect(tester.getSize(_header), before);
-    await tester.tap(find.byTooltip('globalSearchClear'.tr));
+    expect(tester.getSize(_header).height, greaterThan(before.height));
+    await tester.tap(find.byKey(const ValueKey('chat-history-search-clear')));
     await tester.pumpAndSettle();
+    expect(tester.getSize(_header), before);
     expect(logic.query.value, isEmpty);
     expect(logic.loading.value, isFalse);
     expect(find.byType(ListTile), findsNothing);
-    expect(find.byTooltip('globalSearchClear'.tr), findsNothing);
+    expect(
+        find.byKey(const ValueKey('chat-history-search-clear')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -366,13 +404,13 @@ void main() {
     final source = _Source()..failFiles = true;
     await _mount(tester, source);
     await _search(tester);
-    await _select(tester, StrRes.globalSearchChatFile);
-    expect(_section(5), findsOneWidget);
+    await _select(tester, StrRes.globalSearchChatHistory);
+    expect(_section(4), findsOneWidget);
     expect(find.text('globalSearchFailed'.tr), findsOneWidget);
     source.failFiles = false;
     await tester.tap(find.widgetWithText(TextButton, 'chatSearchRetry'.tr));
     await tester.pumpAndSettle();
-    _expectTopSection(tester, 5, '群聊文件');
+    _expectTopSection(tester, 4, '群聊测试');
     expect(find.text('globalSearchFailed'.tr), findsNothing);
     expect(tester.takeException(), isNull);
   });

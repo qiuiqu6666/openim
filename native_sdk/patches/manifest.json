@@ -1,0 +1,10 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.12",
+  "commit": "101cf038eb114bc58bd9298dedeff33e3b1a73f2",
+  "patch": "0001-sdk-recovery.patch",
+  "patch_sha256": "028bdc8940e0895ab40410b4940ec6dd9903252b2b0231834ac93cfd166e5f2f",
+  "created": "2026-10-13",
+  "native_binary_integrated": false,
+  "build_or_tests_run": false
+}

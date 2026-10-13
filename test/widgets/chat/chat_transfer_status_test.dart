@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -28,7 +29,18 @@ void main() {
       expect(checks, 1);
       state.value = const ChatTransferStatus(ChatTransferStage.confirming);
       await tester.pump();
-      expect(find.text('等待确认'), findsOneWidget);
+      expect(find.text('等待确认'), findsNothing);
+      expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+          tester
+              .widget<CupertinoActivityIndicator>(
+                  find.byType(CupertinoActivityIndicator))
+              .animating,
+          isTrue);
+      state.value = const ChatTransferStatus(ChatTransferStage.unknown);
+      await tester.pump();
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       state.dispose();

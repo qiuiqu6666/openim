@@ -20,7 +20,7 @@ void main() {
     await DataSp.init();
     // Media resolution is tested against an explicit account endpoint, not the
     // deployment's changing default host.
-    await DataSp.putServerConfig({'apiUrl': 'https://99imapi.99chat.vip'});
+    await DataSp.putServerConfig({'apiUrl': 'https://im.example.test'});
   });
 
   test('ImageUtil gives its provider the accessible OpenIM object URL', () {
@@ -32,7 +32,7 @@ void main() {
     final provider = image.image as ExtendedNetworkImageProvider;
     expect(
       provider.url,
-      'https://99imapi.99chat.vip$_objectPath$_thumbnailQuery',
+      'https://im.example.test$_objectPath$_thumbnailQuery',
     );
     expect(provider.cache, isTrue);
   });
@@ -144,7 +144,7 @@ void main() {
 
     expect(thumbnail, '$_loopbackUrl$_thumbnailQuery');
     expect((image.image as ExtendedNetworkImageProvider).url,
-        'https://99imapi.99chat.vip$_objectPath$_thumbnailQuery');
+        'https://im.example.test$_objectPath$_thumbnailQuery');
   });
 
   test('MediaSource keeps local sources and action metadata', () {

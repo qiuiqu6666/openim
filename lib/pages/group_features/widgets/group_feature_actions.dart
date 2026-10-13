@@ -53,8 +53,9 @@ class GroupFeatureActions {
             icon: '',
             symbol: Icons.history_rounded,
             onTap: () => MarkSixModule.openDrawHistory(context, feature)),
-      if (games.markSix.enabled &&
-          games.markSix.agentEntry &&
+      if (feature.capabilitiesCurrent() &&
+          (feature.gameType == GroupGameType.markSixAgent ||
+              (games.markSix.enabled && games.markSix.agentEntry)) &&
           caps.markSix.canOpenAgent)
         ToolboxItemInfo(
             text: '六合彩代理',

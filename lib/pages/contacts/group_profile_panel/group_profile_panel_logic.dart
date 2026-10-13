@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:collection/collection.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
+import 'package:openim_common/openim_common.dart';
 
 import '../../../core/controller/im_controller.dart';
 import '../../../routes/app_navigator.dart';
@@ -19,9 +19,18 @@ class GroupProfilePanelLogic extends GetxController {
   late Rx<GroupInfo> groupInfo;
   late JoinGroupMethod joinGroupMethod;
 
-  late StreamSubscription sub;
-  late StreamSubscription joinedGroupAddedSub;
-  late StreamSubscription memberAddedSub;
+  final _subscriptions = <StreamSubscription>[];
+  final _accountID = OpenIM.iMManager.userID;
+  final _token = DataSp.chatToken;
+  bool _closed = false;
+  int _membershipRevision = 0;
+  int _infoRevision = 0;
+  int _membersRevision = 0;
+  bool get _active =>
+      !_closed &&
+      !isClosed &&
+      _accountID == OpenIM.iMManager.userID &&
+      _token == DataSp.chatToken;
 
   @override
   void onInit() {
@@ -29,76 +38,113 @@ class GroupProfilePanelLogic extends GetxController {
         groupID:
             LegacyGroupIdentity.canonical(Get.arguments['groupID'] as String)));
     joinGroupMethod = Get.arguments['joinGroupMethod'];
-    sub = imLogic.groupApplicationChangedSubject.listen(_onChanged);
-    joinedGroupAddedSub = imLogic.joinedGroupAddedSubject.listen(_onChanged);
-    memberAddedSub = imLogic.memberAddedSubject.listen(_onChanged);
-    _checkGroup();
-    _getGroupInfo();
-    _getMembers();
+    _subscriptions.addAll([
+      imLogic.groupApplicationChangedSubject.listen(_onChanged),
+      imLogic.joinedGroupAddedSubject.listen(_onChanged),
+      imLogic.memberAddedSubject.listen(_onChanged),
+      imLogic.joinedGroupDeletedSubject.listen((group) {
+        if (_active && group.groupID == groupInfo.value.groupID) {
+          _setJoined(false);
+        }
+      }),
+      imLogic.memberDeletedSubject.listen((member) {
+        if (_active &&
+            member.groupID == groupInfo.value.groupID &&
+            member.userID == _accountID) {
+          _setJoined(false);
+        }
+      }),
+      imLogic.groupInfoUpdatedSubject.listen((group) {
+        if (_active && group.groupID == groupInfo.value.groupID) {
+          ++_infoRevision;
+          groupInfo.value = group;
+          if (group.status == 2) _setJoined(false);
+        }
+      }),
+    ]);
+    unawaited(_checkGroup());
+    unawaited(_getGroupInfo());
+    unawaited(_getMembers());
     super.onInit();
   }
 
-  _onChanged(dynamic value) {
+  void _onChanged(dynamic value) {
+    if (!_active) return;
     if (value is GroupApplicationInfo) {
-      if (value.groupID == groupInfo.value.groupID && value.handleResult == 1) {
-        if (!isJoined.value) {
-          isJoined.value = true;
-          _getGroupInfo();
-          _getMembers();
-        }
+      if (value.groupID == groupInfo.value.groupID &&
+          value.userID == _accountID &&
+          value.handleResult == 1) {
+        _setJoined(true);
       }
     } else if (value is GroupInfo) {
       if (value.groupID == groupInfo.value.groupID) {
-        if (!isJoined.value) {
-          isJoined.value = true;
-          _getGroupInfo();
-          _getMembers();
-        }
+        _setJoined(true);
       }
     } else if (value is GroupMembersInfo) {
       if (value.groupID == groupInfo.value.groupID &&
-          value.userID == OpenIM.iMManager.userID) {
-        if (!isJoined.value) {
-          isJoined.value = true;
-          _getGroupInfo();
-          _getMembers();
-        }
+          value.userID == _accountID) {
+        _setJoined(true);
       }
     }
   }
 
-  _getGroupInfo() async {
-    var list = await OpenIM.iMManager.groupManager.getGroupsInfo(
-      groupIDList: [groupInfo.value.groupID],
-    );
-    var info = list.firstOrNull;
-    if (null != info) {
-      groupInfo.update((val) {
-        val?.groupName = info.groupName;
-        val?.faceURL = info.faceURL;
-        val?.memberCount = info.memberCount;
-        val?.groupType = info.groupType;
-        val?.createTime = info.createTime;
-        val?.notification = info.notification;
-      });
+  void _setJoined(bool joined) {
+    ++_membershipRevision;
+    ++_membersRevision;
+    isJoined.value = joined;
+    if (!joined) {
+      members.clear();
+      return;
+    }
+    unawaited(_getGroupInfo());
+    unawaited(_getMembers());
+  }
+
+  Future<void> _getGroupInfo() async {
+    final revision = ++_infoRevision;
+    try {
+      final list = await OpenIM.iMManager.groupManager.getGroupsInfo(
+        groupIDList: [groupInfo.value.groupID],
+      );
+      if (!_active || revision != _infoRevision) return;
+      final info =
+          list.firstWhereOrNull((g) => g.groupID == groupInfo.value.groupID);
+      if (null != info) {
+        groupInfo.value = info;
+        if (info.status == 2) _setJoined(false);
+      }
+    } catch (_) {
+      if (_active) Logger.print('Group profile metadata is unavailable');
     }
   }
 
-  _checkGroup() async {
-    isJoined.value = await OpenIM.iMManager.groupManager.isJoinedGroup(
-      groupID: groupInfo.value.groupID,
-    );
+  Future<void> _checkGroup() async {
+    final revision = ++_membershipRevision;
+    try {
+      final joined = await OpenIM.iMManager.groupManager.isJoinedGroup(
+        groupID: groupInfo.value.groupID,
+      );
+      if (_active && revision == _membershipRevision) isJoined.value = joined;
+    } catch (_) {
+      if (_active) Logger.print('Group profile membership is unavailable');
+    }
   }
 
-  _getMembers() async {
-    var list = await OpenIM.iMManager.groupManager.getGroupMemberList(
-      groupID: groupInfo.value.groupID,
-      count: 10,
-    );
-    members.assignAll(list);
+  Future<void> _getMembers() async {
+    final revision = ++_membersRevision;
+    try {
+      final list = await OpenIM.iMManager.groupManager.getGroupMemberList(
+        groupID: groupInfo.value.groupID,
+        count: 10,
+      );
+      if (_active && revision == _membersRevision) members.assignAll(list);
+    } catch (_) {
+      if (_active) Logger.print('Group profile members are unavailable');
+    }
   }
 
-  enterGroup() async {
+  Future<void> enterGroup() async {
+    if (!_active) return;
     if (isJoined.value) {
       conversationLogic.toChat(
         groupID: groupInfo.value.groupID,
@@ -116,9 +162,11 @@ class GroupProfilePanelLogic extends GetxController {
 
   @override
   void onClose() {
-    sub.cancel();
-    joinedGroupAddedSub.cancel();
-    memberAddedSub.cancel();
+    _closed = true;
+    for (final subscription in _subscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _subscriptions.clear();
     super.onClose();
   }
 }

@@ -1,24 +1,21 @@
 import 'dart:async';
 
-import 'package:openim_common/openim_common.dart';
-
 import 'call_backend_api.dart';
 
-/// Keeps a live call's server lease on Android as well as iOS. If both apps
-/// disappear, the lease expires so a stale call cannot block the next caller.
+/// A lease belongs to one accepted participant, never to an observing device.
 class CallStateHeartbeat {
   static final _calls = <String, CallStateHeartbeat>{};
 
-  static void start(String room, CallBackendApi api) {
+  static void start(String room, CallBackendApi api,
+      {required void Function(Map<String, dynamic>) onSnapshot}) {
+    final old = _calls[room];
+    if (old != null && identical(old._api, api)) return;
     stop(room);
-    _calls[room] = CallStateHeartbeat._(room, api);
+    final value = _calls[room] = CallStateHeartbeat._(room, api, onSnapshot);
+    unawaited(value._tick());
   }
 
-  static void stop(String room) {
-    final old = _calls.remove(room);
-    old?._timer.cancel();
-    old?._api.close();
-  }
+  static void stop(String room) => _calls.remove(room)?._timer?.cancel();
 
   static void stopAll() {
     for (final room in _calls.keys.toList()) {
@@ -26,60 +23,31 @@ class CallStateHeartbeat {
     }
   }
 
-  static Future<void> finish(String room) async {
-    final old = _calls.remove(room);
-    if (old == null) return;
-    old._timer.cancel();
-    try {
-      final status = await old._api.status(room);
-      if (status['state'] == 'accepted') {
-        await old._api.action(room, 'hangup');
-      } else if (status['state'] == 'ringing') {
-        final invitation = status['invitation'];
-        if (invitation is Map) {
-          await old._api.action(
-              room,
-              invitation['inviterUserID'] == old._api.accountID
-                  ? 'cancel'
-                  : 'reject');
-        }
-      }
-    } catch (_) {
-      /* The server lease also releases abandoned calls. */
-    } finally {
-      old._api.close();
-    }
-  }
-
-  CallStateHeartbeat._(this._room, this._api) {
-    _timer =
-        Timer.periodic(const Duration(seconds: 10), (_) => unawaited(_tick()));
-  }
-
+  CallStateHeartbeat._(this._room, this._api, this._onSnapshot);
   final String _room;
   final CallBackendApi _api;
-  late final Timer _timer;
-  bool _pending = false;
+  final void Function(Map<String, dynamic>) _onSnapshot;
+  Timer? _timer;
+  bool get _current => identical(_calls[_room], this) && _api.isCurrent;
 
   Future<void> _tick() async {
-    if (_pending) return;
-    if (DataSp.userID != _api.accountID ||
-        DataSp.chatToken != _api.token ||
-        Config.appAuthUrl.replaceFirst(RegExp(r'/+$'), '') != _api.baseUrl) {
-      stop(_room);
+    if (!_current) {
+      if (identical(_calls[_room], this)) stop(_room);
       return;
     }
-    _pending = true;
+    var delay = const Duration(seconds: 10);
     try {
-      final state = await _api.status(_room);
-      if (identical(_calls[_room], this) &&
-          !const ['ringing', 'accepted'].contains(state['state'])) {
+      final value = await _api.heartbeat(_room);
+      if (_current) _onSnapshot(value);
+    } catch (_) {
+      // One failed request is not a remote hangup. Retry without overlap.
+      delay = const Duration(seconds: 3);
+    } finally {
+      if (_current) {
+        _timer = Timer(delay, () => unawaited(_tick()));
+      } else if (identical(_calls[_room], this)) {
         stop(_room);
       }
-    } catch (_) {
-      /* The bounded server lease tolerates transient failures. */
-    } finally {
-      _pending = false;
     }
   }
 }

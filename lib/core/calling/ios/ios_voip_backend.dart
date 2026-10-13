@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:openim_common/openim_common.dart';
 
 import '../data/call_backend_api.dart';
+import '../data/call_state_runtime.dart';
 import '../../push/apns/apns_platform.dart';
 import 'ios_call_invitation.dart';
 
@@ -28,16 +29,15 @@ class IOSVoIPBackend {
   Future<void>? _stopping;
   bool _logoutRequested = false;
   APNsDeviceToken? _token;
-  Timer? _poll, _retryBinding;
+  Timer? _retryBinding;
   Future<void> _binding = Future.value();
-  final _rooms = <String, bool>{};
   final _recovering = <String, Future<bool>>{};
   final _ended = <String>{};
   int _generation = 0;
-  bool _polling = false;
 
   bool _owns(CallBackendApi api, int generation) =>
-      identical(_api, api) && _generation == generation && isSessionCurrent();
+      identical(_api, api) && _generation == generation &&
+      isSessionCurrent() && api.isCurrent;
 
   Future<void> start(String accountID) async {
     await _stopping;
@@ -54,8 +54,6 @@ class IOSVoIPBackend {
     _pausedApi = null;
     _api = api;
     _ended.clear();
-    _poll?.cancel();
-    _poll = Timer.periodic(pollInterval, (_) => unawaited(_refresh()));
     bind(_token);
   }
 
@@ -79,7 +77,7 @@ class IOSVoIPBackend {
   }
 
   void monitor(String room, {required bool incoming}) {
-    if (!_ended.contains(room)) _rooms[room] = incoming;
+    if (!_ended.contains(room)) CallStateRuntime.instance.watchRoom(room);
   }
 
   Future<bool> recover(String room) {
@@ -95,9 +93,10 @@ class IOSVoIPBackend {
 
   Future<bool> _recover(String room) async {
     final api = _api, generation = _generation;
-    if (api == null || _ended.contains(room)) return false;
+    if (api == null || !_owns(api, generation) || _ended.contains(room)) return false;
     try {
-      final status = await api.status(room);
+      final snapshot = await CallStateRuntime.instance.status(room);
+      final status = snapshot.raw;
       if (!_owns(api, generation) || _ended.contains(room)) return false;
       if (status['state'] != 'ringing') {
         await endRemote(room);
@@ -119,46 +118,12 @@ class IOSVoIPBackend {
     } catch (error) {
       Logger.print('VoIP recovery unavailable: ${error.runtimeType}',
           onlyConsole: true);
-      if (_owns(api, generation)) await endRemote(room);
+      if (_owns(api, generation) && error is CallBackendException &&
+          (error.authorizationFailed || error.code == 404)) await endRemote(room);
       return false;
     }
   }
 
-  Future<void> _refresh() async {
-    final api = _api, generation = _generation;
-    if (api == null || _polling || !_owns(api, generation)) return;
-    _polling = true;
-    try {
-      for (final entry in _rooms.entries.toList()) {
-        try {
-          final value = await api.status(entry.key);
-          if (!_owns(api, generation)) return;
-          if (!_rooms.containsKey(entry.key)) continue;
-          final state = value['state'];
-          final answeredElsewhere = entry.value &&
-              state == 'accepted' &&
-              value['answeredDeviceID'] != api.deviceID;
-          if (answeredElsewhere ||
-              !const ['ringing', 'accepted'].contains(state)) {
-            forget(entry.key);
-            await endRemote(entry.key);
-          } else {
-            final name = value[entry.value ? 'callerName' : 'calleeName'];
-            if (name is String && name.trim().isNotEmpty) {
-              await updateName(entry.key, name);
-            }
-          }
-        } on CallBackendException catch (error) {
-          // An older online caller has no server record. Its SDK still owns end.
-          if (error.code == 404 && entry.value) _rooms.remove(entry.key);
-        } catch (_) {
-          /* A transient HTTP failure does not end a valid SDK call. */
-        }
-      }
-    } finally {
-      _polling = false;
-    }
-  }
 
   Future<void> invalidateToken() async {
     _token = null;
@@ -174,15 +139,22 @@ class IOSVoIPBackend {
 
   Future<void> rejectCold(String room) async {
     forget(room);
-    final api = _api;
-    if (api == null) return;
+    final api = _api, generation = _generation;
+    if (api == null || !_owns(api, generation)) return;
     try {
-      await api.action(room, 'reject');
-    } catch (_) {/* Already terminal. */}
+      final state = await CallStateRuntime.instance.status(room);
+      if (!_owns(api, generation) || !state.incoming(api.accountID)) return;
+      await CallStateRuntime.instance.persist(
+          CustomMessageType.callingReject, state.invitation);
+    } catch (error) {
+      Logger.print('Cold call rejection unavailable: ${error.runtimeType}',
+          onlyConsole: true);
+    } finally {
+      if (_owns(api, generation)) CallStateRuntime.instance.release(room);
+    }
   }
 
   void forget(String room) {
-    _rooms.remove(room);
     _ended.add(room);
     if (_ended.length > 256) _ended.remove(_ended.first);
   }
@@ -198,9 +170,7 @@ class IOSVoIPBackend {
     final api = _api ?? _pausedApi;
     _api = null;
     _pausedApi = null;
-    _poll?.cancel();
     _retryBinding?.cancel();
-    _rooms.clear();
     _ended.clear();
     _recovering.clear();
     late Future<void> stopping;

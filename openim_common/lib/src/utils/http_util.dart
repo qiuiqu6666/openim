@@ -9,6 +9,8 @@ import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'http/risk_feedback.dart';
+import 'http/transport_error_messages.dart';
+import 'media/video_gallery/video_gallery_action.dart';
 
 var dio = Dio();
 
@@ -90,31 +92,15 @@ class HttpUtil {
 
   /// Resolve at display time, so a locale switch affects an in-flight request.
   static String errorMessage(Object error, {String? path, String? fallback}) {
-    if (error is (int, String?)) {
-      return ApiErrorMessages.business(error.$1,
-          path: path, detail: error.$2 ?? '');
-    }
     if (error is DioException) {
       final response = _readResponse(error.response?.data);
       if (response != null && response.errCode != 0) {
         return businessErrorMessage(response,
             path: path ?? error.requestOptions.path);
       }
-      return switch (error.type) {
-        DioExceptionType.connectionTimeout ||
-        DioExceptionType.sendTimeout ||
-        DioExceptionType.receiveTimeout =>
-          ApiErrorMessages.timeout,
-        DioExceptionType.connectionError => ApiErrorMessages.network,
-        DioExceptionType.cancel => ApiErrorMessages.requestCancelled,
-        DioExceptionType.badResponse ||
-        DioExceptionType.badCertificate =>
-          ApiErrorMessages.serviceUnavailable,
-        _ => fallback ?? ApiErrorMessages.requestFailed,
-      };
     }
-    if (error is FormatException) return ApiErrorMessages.invalidResponse;
-    return fallback ?? ApiErrorMessages.requestFailed;
+    return TransportErrorMessages.message(error,
+        path: path, fallback: fallback);
   }
 
   static Future post(
@@ -298,34 +284,18 @@ class HttpUtil {
     Function(int count, int total)? onProgress,
     VoidCallback? onCompletion,
   }) async {
-    final name = url.substring(url.lastIndexOf('/') + 1);
-    final cachePath = await IMUtils.createTempFile(dir: 'video', name: name);
-
-    if (File(cachePath).existsSync()) {
+    final action = VideoGalleryAction();
+    try {
+      await action.save(
+        url: OpenIMMediaUrl.resolve(url, imApiUrl: Config.imApiUrl),
+        isCurrent: () => cancelToken?.isCancelled != true,
+        cancelToken: cancelToken,
+        onProgress: onProgress,
+      );
+    } finally {
+      action.dispose();
       onCompletion?.call();
-      return;
     }
-
-    return download(
-      url,
-      cachePath: cachePath,
-      cancelToken: cancelToken,
-      onProgress: (int count, int total) async {
-        onProgress?.call(count, total);
-        if (count == total) {
-          onCompletion?.call();
-          final result = await ImageGallerySaverPlus.saveFile(cachePath);
-          if (result != null) {
-            var tips = StrRes.saveSuccessfully;
-            if (Platform.isAndroid) {
-              final filePath = result['filePath'].split('//').last;
-              tips = '${StrRes.saveSuccessfully}:$filePath';
-            }
-            IMViews.showToast(tips);
-          }
-        }
-      },
-    );
   }
 
   static Future saveFileToGallerySaver(File file,

@@ -8,6 +8,7 @@ class ConversationReadProjection {
   static const _conversationLimit = 256;
   static const _targetsPerConversation = 8;
   final _confirmed = <String, List<ConversationReadRequest>>{};
+  final _reconcileZeros = <String, (String?, int?, int?, int)>{};
 
   void confirm(ConversationReadRequest request) {
     if (!request.hasTarget) return;
@@ -27,7 +28,9 @@ class ConversationReadProjection {
     if (targets.length > _targetsPerConversation) targets.removeAt(0);
     _confirmed[request.conversationID] = targets;
     if (_confirmed.length > _conversationLimit) {
-      _confirmed.remove(_confirmed.keys.first);
+      final oldest = _confirmed.keys.first;
+      _confirmed.remove(oldest);
+      _reconcileZeros.remove(oldest);
     }
   }
 
@@ -56,7 +59,29 @@ class ConversationReadProjection {
       return current;
     }
     incoming.unreadCount = 0;
+    _reconcileZeros.remove(incoming.conversationID);
     return incoming;
+  }
+
+  /// A rejected same-target zero needs a fresh SDK query, once per protected
+  /// state. SDK callbacks emitted by that query cannot create a repair loop.
+  bool takeReconciliationSignal(
+      ConversationInfo incoming, ConversationInfo projected) {
+    if (!_confirmed.containsKey(incoming.conversationID) ||
+        incoming.unreadCount != 0 ||
+        projected.unreadCount <= 0 ||
+        !_sameTarget(incoming, projected)) {
+      return false;
+    }
+    final snapshot = (
+      projected.latestMsg?.clientMsgID,
+      projected.latestMsg?.seq,
+      projected.latestMsgSendTime,
+      projected.unreadCount
+    );
+    if (_reconcileZeros[incoming.conversationID] == snapshot) return false;
+    _reconcileZeros[incoming.conversationID] = snapshot;
+    return true;
   }
 
   bool _sameTarget(ConversationInfo first, ConversationInfo second) =>
@@ -75,5 +100,8 @@ class ConversationReadProjection {
     return true;
   }
 
-  void clear() => _confirmed.clear();
+  void clear() {
+    _confirmed.clear();
+    _reconcileZeros.clear();
+  }
 }

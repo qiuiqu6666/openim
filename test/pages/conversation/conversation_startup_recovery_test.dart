@@ -125,6 +125,53 @@ void main() {
     expect(logic.canShowEmptyFeed, isFalse);
   }
 
+  for (final delivery in ['sync snapshot', 'late callback']) {
+    test('pinned group receives missing latest message through $delivery',
+        () async {
+      ConversationInfo group(String id, int seq, {bool pinned = false}) =>
+          ConversationInfo(
+            conversationID: 'sg_$id',
+            conversationType: ConversationType.superGroup,
+            groupID: id,
+            isPinned: pinned,
+            latestMsgSendTime: seq,
+            draftTextTime: 0,
+            latestMsg: Message(
+              clientMsgID: '$id-$seq',
+              groupID: id,
+              sessionType: ConversationType.superGroup,
+              contentType: MessageType.text,
+              sendID: 'peer',
+              seq: seq,
+              sendTime: seq,
+            ),
+          );
+      logic.onInit();
+      await flush();
+      complete(0, [group('pinned', 1, pinned: true), group('normal', 5)]);
+      await flush();
+      expect(logic.feedSnapshot.groups.first.latestMsg?.seq, 1);
+      im.imSdkStatus(IMSdkStatus.syncStart);
+      im.imSdkStatus(IMSdkStatus.syncEnded);
+      await flush();
+      complete(1, [
+        group('pinned', delivery == 'sync snapshot' ? 4 : 1, pinned: true),
+        group('normal', 6),
+      ]);
+      await flush();
+      if (delivery == 'late callback') {
+        logic.queueChanges([group('pinned', 4, pinned: true)]);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      expect(logic.list.map((row) => row.conversationID),
+          ['sg_pinned', 'sg_normal']);
+      expect(logic.feedSnapshot.groups.first.latestMsg?.clientMsgID, 'pinned-4');
+      expect(logic.feedSnapshot.groups.first.isPinned, isTrue);
+      expect(logic.feedSnapshot.groups.last.latestMsg?.seq, 6);
+      expect(reads, hasLength(2));
+    });
+  }
+
   for (final failure in [false, true]) {
     test('normal sync restores an initially empty/failed feed ($failure)',
         () async {

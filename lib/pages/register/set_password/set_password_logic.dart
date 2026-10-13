@@ -1,3 +1,4 @@
+import '../../../widgets/auth/feedback/auth_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -154,7 +155,7 @@ class SetPasswordLogic extends GetxController {
                 AuthFormRules.confirmPassword(pwdAgainCtrl.text, pwdCtrl.text)
             : null);
     if (error != null && hiddenFieldError != null) {
-      IMViews.showToast(hiddenFieldError);
+      showAuthNotice(hiddenFieldError);
     }
     return error == null;
   }
@@ -271,11 +272,11 @@ class SetPasswordLogic extends GetxController {
       if (session.isCurrent) {
         if (uploadingAvatar) {
           avatarUploadFailed.value = true;
-          IMViews.showToast(authText('账号已注册，头像上传失败，请重试',
+          showAuthNotice(authText('账号已注册，头像上传失败，请重试',
               'Account registered. Avatar upload failed. Please try again.'));
         } else {
           final message = HttpUtil.errorMessage(error, path: failurePath);
-          IMViews.showToast(_registered
+          showAuthNotice(_registered
               ? authText('账号已注册，请重试以继续完成：$message',
                   'Account registered. Please retry to finish: $message')
               : message);
@@ -344,7 +345,7 @@ class SetPasswordLogic extends GetxController {
       }
     } catch (_) {
       if (ownsSelection()) {
-        IMViews.showToast(
+        showAuthNotice(
             authText('无法选择头像，请重试', 'Could not select avatar. Try again.'));
       }
     } finally {

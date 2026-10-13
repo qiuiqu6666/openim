@@ -24,6 +24,8 @@ class RobotGroupBindingController extends ChangeNotifier
   int _generation = 0;
   Future<void>? _work;
   CancelToken? _token;
+  Timer? _retryTimer;
+  int _retryCount = 0;
 
   bool get current => !_disposed && context.sessionCurrent();
   bool get bound => current && binding?.bound == true;
@@ -47,6 +49,7 @@ class RobotGroupBindingController extends ChangeNotifier
       MarkSixApiDebugLog.event('合并正在进行的绑定查询', {'groupId': context.groupID});
       return pending;
     }
+    _retryTimer?.cancel();
     final generation = ++_generation;
     final token = _token = CancelToken();
     binding = null;
@@ -81,6 +84,7 @@ class RobotGroupBindingController extends ChangeNotifier
       }
       binding =
           RobotGroupBinding.fromJson(data, expectedGroupID: context.groupID);
+      _retryCount = 0;
       MarkSixApiDebugLog.event('绑定结果', {
         'groupId': context.groupID,
         'bound': binding!.bound,
@@ -94,7 +98,22 @@ class RobotGroupBindingController extends ChangeNotifier
         'currentResponse': _valid(generation),
         'showFloatingEntry': false,
       });
-      if (_valid(generation)) error = failure.toString();
+      if (_valid(generation)) {
+        error = failure.toString();
+        final status = failure is DioException ? failure.response?.statusCode : null;
+        // Retry only transport / overload failures; never bypass group or
+        // personal auth. A genuine 401/403/404 must stay rejected.
+        final transient = failure is DioException &&
+            (status == null || status == 408 || status == 429 || status >= 500);
+        if (transient && _retryCount < 3 && _foreground) {
+          final delays = <int>[2, 5, 12];
+          final wait = Duration(seconds: delays[_retryCount++]);
+          _retryTimer?.cancel();
+          _retryTimer = Timer(wait, () {
+            if (current && _foreground) unawaited(load());
+          });
+        }
+      }
     } finally {
       if (_valid(generation)) {
         loading = false;
@@ -107,6 +126,8 @@ class RobotGroupBindingController extends ChangeNotifier
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
     if (!_foreground) {
+      _retryTimer?.cancel();
+      _retryCount = 0;
       _generation++;
       _token?.cancel('Chat binding read suspended');
       _token = null;
@@ -122,6 +143,7 @@ class RobotGroupBindingController extends ChangeNotifier
   @override
   void dispose() {
     _disposed = true;
+    _retryTimer?.cancel();
     _generation++;
     _token?.cancel('Chat binding read closed');
     WidgetsBinding.instance.removeObserver(this);

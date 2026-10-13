@@ -236,6 +236,9 @@ void main() {
       _flush(time);
       time.elapse(const Duration(seconds: 45));
       _flush(time);
+      expect(fixture.reads, hasLength(1));
+      time.elapse(const Duration(seconds: 45));
+      _flush(time);
       expect(fixture.reads, hasLength(2));
       fixture.sync.setVisible('row', 'group#1', false);
       time.elapse(const Duration(minutes: 2));
@@ -265,7 +268,7 @@ void main() {
         _flush(time);
       }
       expect(fixture.reads, hasLength(1));
-      time.elapse(const Duration(seconds: 46));
+      time.elapse(const Duration(seconds: 91));
       fixture.sync.setVisible('row', 'group#1', false);
       fixture.sync.setVisible('row', 'group#1', true);
       _flush(time);

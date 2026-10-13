@@ -1,21 +1,18 @@
 import 'dart:async';
 
-import 'package:azlistview/azlistview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:openim/pages/chat/history_search/selection/chat_history_sender_directory.dart';
 import 'package:openim/pages/chat/history_search/selection/chat_history_sender_source.dart';
 import 'package:openim/pages/contacts/presence_label.dart';
 import 'package:openim/pages/contacts/presence_store.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import 'support/chat_history_sender_presence_fixture.dart';
 
 Finder _label(String id, Finder matching) =>
     find.descendant(of: senderPresenceRow(id), matching: matching);
-Finder _letter(String label) =>
-    find.descendant(of: find.byType(IndexBar), matching: find.text(label));
 
 Future<void> _query(WidgetTester tester, String text) async {
   await tester.enterText(find.byType(TextField), text);
@@ -201,8 +198,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-      'letter gestures update visible presence and return the same sender',
+  testWidgets('scrolling updates visible presence and returns the same sender',
       (tester) async {
     final source = SenderPresenceSource(members: [
       for (var i = 0; i < 20; i++)
@@ -217,30 +213,16 @@ void main() {
     }
     await fixture.open(tester);
     final owner = fixture.contacts.owners.keys.single;
-    final rows = tester
-        .widget<AzListView>(find.byType(AzListView))
-        .data
-        .cast<ChatHistorySenderRow>();
-    final firstD =
-        rows.firstWhere((row) => row.getSuspensionTag() == 'D').sender.userID;
-    final firstQ =
-        rows.firstWhere((row) => row.getSuspensionTag() == 'Q').sender.userID;
-    await tester.tap(_letter('Q'));
-    await tester.pumpAndSettle();
-    expect(senderPresenceRow(firstQ).hitTestable(), findsOneWidget);
-    expect(fixture.contacts.owners[owner], contains(firstQ));
-    expect(fixture.contacts.owners[owner], isNot(contains(firstD)));
-
-    final gesture = await tester.startGesture(tester.getCenter(_letter('Q')));
-    await gesture.moveTo(tester.getCenter(_letter('D')));
-    await gesture.moveBy(const Offset(0, -1));
-    await tester.pumpAndSettle();
-    expect(senderPresenceRow(firstD).hitTestable(), findsOneWidget);
-    await gesture.moveTo(tester.getCenter(_letter('#')));
-    await tester.pump();
-    await gesture.up();
+    expect(fixture.contacts.owners[owner], contains('d0'));
+    await tester.scrollUntilVisible(senderPresenceRow('other'), 400,
+        scrollable: find
+            .descendant(
+                of: find.byType(ScrollablePositionedList),
+                matching: find.byType(Scrollable))
+            .first);
     await tester.pumpAndSettle();
     expect(fixture.contacts.owners[owner], contains('other'));
+    expect(fixture.contacts.owners[owner], isNot(contains('d0')));
     await tester.tap(senderPresenceRow('other'));
     await tester.pumpAndSettle();
     expect(fixture.selected, same(source.members.last));

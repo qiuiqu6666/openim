@@ -241,7 +241,7 @@ class _GroupMemberPermissionsPageState
         if (picking && mounted) Navigator.of(context).pop([updated]);
       }
     } catch (error) {
-      IMViews.showToast(error.toString());
+      IMViews.showErrorToast(error);
       return false;
     } finally {
       if (mounted) setState(() => busy = null);

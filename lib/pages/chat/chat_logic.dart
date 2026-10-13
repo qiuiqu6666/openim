@@ -3,6 +3,7 @@ import 'messages/quote/chat_quote_navigation.dart';
 import 'media/chat_media_message_locator.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
+import 'messages/selection/message_selection_delete_sheet.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -37,10 +38,15 @@ import 'group/member_actions/chat_member_action_sheet.dart';
 import 'group/member_actions/chat_member_actions_controller.dart';
 import 'history/chat_timeline_controller.dart';
 import 'history/chat_history_prefetcher.dart';
+import 'history/chat_history_recovery.dart';
+import 'history/chat_latest_message_recovery.dart';
+import 'history/chat_background_message_recovery.dart';
 import 'history/date_jump/chat_date_jump_controller.dart';
 import 'history/date_jump/chat_date_window_controller.dart';
 import 'history/date_jump/widgets/chat_date_picker_dialog.dart';
 import 'media/chat_media_controller.dart';
+import 'media/upload/chat_media_outbox.dart';
+import 'media/upload/chat_media_outbox_binding.dart';
 import 'messages/chat_delivery_controller.dart';
 import 'messages/chat_message_actions.dart';
 import 'messages/revocation/chat_message_revocation.dart';
@@ -64,6 +70,10 @@ import 'voice/voice_transcription_controller.dart';
 class ChatLogic extends SuperController {
   late final fundNotices = FundNoticeIndex(messageList);
   bool _chatClosing = false;
+  bool _messagesWhileCovered = false;
+  int _coveredHistoryRevision = 0;
+  bool _routeWasCurrent = true;
+  Worker? _historyRecoveryWorker;
   String? _chatToken;
   String? _imToken;
   String? _chatRouteName;
@@ -72,7 +82,43 @@ class ChatLogic extends SuperController {
       _chatToken == DataSp.chatToken &&
       _imToken == DataSp.imToken;
   bool get _sessionInactive => _chatClosing || isClosed || !_sameAccount;
+  late final _historyRecovery = ChatHistoryRecovery(
+    isActive: () => _historyVisible,
+    hasError: () => historyError.value != null,
+    isLoading: () => historyLoading.value,
+    windowRevision: () => historyWindowRevision.value,
+    retry: () => _runHistoryRecovery(retry: true),
+  );
+  late final _latestMessageRecovery = ChatLatestMessageRecovery(
+    isClosed: () => _sessionInactive,
+    latestMessage: () => conversationInfo.latestMsg,
+    containsMessage: _timeline.containsMessage,
+    isRemoved: _removedMessageIDs.contains,
+    refresh: _loadHistoryForSyncEnd,
+    canRefresh: () =>
+        _historyVisible &&
+        !_dateWindow.buffering &&
+        historyError.value == null,
+  );
   final assistantStreams = AssistantStreamState();
+  late final _backgroundMessageRecovery = ChatBackgroundMessageRecovery(
+    anchor: () => _timeline.recoveryAnchor,
+    canRead: () =>
+        _historyVisible &&
+        !_dateWindow.seeking.value &&
+        !_dateWindow.returning.value &&
+        historyError.value == null,
+    readNewer: _timeline.readNewerForRecovery,
+    apply: (message, unseen) {
+      if (_removedMessageIDs.contains(message.clientMsgID) ||
+          message.hasExpired) {
+        return;
+      }
+      newMessages.recordRecovered(message, unseen: unseen);
+      _appendLiveMessage(message, recovered: true);
+    },
+    onError: (error) => debugPrint('Chat background message recovery: $error'),
+  );
   late final messageArrivals =
       ChatMessageArrivalController(currentUserID: () => _chatAccountID);
   late final ChatNewMessageTracker newMessages = ChatNewMessageTracker(
@@ -144,16 +190,19 @@ class ChatLogic extends SuperController {
     conversation: () => conversationInfo,
     isClosed: () => _sessionInactive,
     canReadConversation: () =>
+        !_messagesWhileCovered &&
         !messageArrivals.hasEntering &&
         !historyLoading.value &&
         historyError.value == null &&
         !viewingHistory.value &&
         syncStatus.value != IMSdkStatus.syncStart &&
         syncStatus.value != IMSdkStatus.syncProgress &&
-        syncStatus.value != IMSdkStatus.synchronizing &&
-        syncStatus.value != IMSdkStatus.syncFailed,
+        // A global sync failure can concern another conversation. A healthy
+        // local history and its painted latest still permit an SDK read; the
+        // receipt owner separately rejects a missing/unseen preview target.
+        syncStatus.value != IMSdkStatus.synchronizing,
     isActive: () =>
-        Get.currentRoute == _chatRouteName &&
+        (_messageRoute?.isCurrent ?? Get.currentRoute == _chatRouteName) &&
         (WidgetsBinding.instance.lifecycleState == null ||
             WidgetsBinding.instance.lifecycleState ==
                 AppLifecycleState.resumed),
@@ -174,6 +223,11 @@ class ChatLogic extends SuperController {
     attachmentBusy: () => _media.pickingAttachment,
   );
   late final ChatMediaController _media = ChatMediaController(
+    acceptSendTask: () => ChatMediaOutbox.instance.accept(FavoriteTarget(
+        conversationID: conversationInfo.conversationID,
+        userID: userID,
+        groupID: groupID,
+        sessionType: conversationInfo.conversationType)),
     onTransfer: (message, state) =>
         _delivery.updateTransfer(message.clientMsgID, state),
     onUploadFailed: (_) {
@@ -210,7 +264,13 @@ class ChatLogic extends SuperController {
     groupID: () => isGroupChat ? groupID : null,
     recipientName: () => isSingleChat ? nickname.value : null,
     recipientFaceURL: () => isSingleChat ? faceUrl.value : null,
-    closeToolbox: closeToolbox,
+    closeToolbox: () {
+      closeToolbox();
+      // Clear this route's focus history before pushing a fund page so
+      // popping it cannot automatically reopen the chat keyboard.
+      focusNode.enclosingScope?.unfocus();
+      focusNode.unfocus();
+    },
   );
   late final _favorites = ChatFavoritesController(
     messageList: messageList,
@@ -457,6 +517,20 @@ class ChatLogic extends SuperController {
     },
     onFirstLoaded: _getGroupInfoAfterLoadMessage,
     preserveReading: () => newMessages.awayFromLatest.value,
+    canTrimHistory: (older) {
+      if (_sessionInactive ||
+          messageSelection.active ||
+          _dateWindow.buffering ||
+          _messageRoute?.isCurrent != true ||
+          !scrollController.hasClients) {
+        return false;
+      }
+      final position = scrollController.position;
+      if (!position.hasContentDimensions) return false;
+      // Check again after the SDK page arrives: the reader may have moved.
+      final distance = older ? position.extentAfter : position.extentBefore;
+      return distance <= position.viewportDimension;
+    },
   );
   RxList<Message> get messageList => _timeline.messageList;
   List<Message> get scrollingCacheMessageList =>
@@ -489,7 +563,26 @@ class ChatLogic extends SuperController {
   bool get isMessageNavigationCurrent => !_sessionInactive;
   Route<dynamic>? get messageRoute => _messageRoute;
   void bindMessageRoute(Route<dynamic>? route) {
-    if (!_sessionInactive) _messageRoute = route;
+    if (_sessionInactive) return;
+    _messageRoute = route;
+    final current = route?.isCurrent != false;
+    if (!current && _routeWasCurrent && newMessages.awayFromLatest.value) {
+      _backgroundMessageRecovery.suspend();
+    }
+    if (current && !_routeWasCurrent) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_sessionInactive && route?.isCurrent == true) {
+          if (_messagesWhileCovered ||
+              historyError.value != null ||
+              _backgroundMessageRecovery.hasCheckpoint) {
+            unawaited(_loadHistoryForSyncEnd());
+          }
+          _historyRecovery.request(resetAttempts: true);
+          _latestMessageRecovery.conversationChanged(resetAttempts: true);
+        }
+      });
+    }
+    _routeWasCurrent = current;
   }
 
   late final _messageFocus = ChatMessageFocusController(
@@ -614,8 +707,11 @@ class ChatLogic extends SuperController {
 
     var isCurSingleChat = message.isSingleChat &&
         isSingleChat &&
-        (senderId == userID ||
-            senderId == OpenIM.iMManager.userID && receiverId == userID);
+        (senderId == userID &&
+                (receiverId == null ||
+                    receiverId.isEmpty ||
+                    receiverId == _chatAccountID) ||
+            senderId == _chatAccountID && receiverId == userID);
     var isCurGroupChat =
         message.isGroupChat && isGroupChat && groupID == groupId;
     return isCurSingleChat || isCurGroupChat;
@@ -678,6 +774,7 @@ class ChatLogic extends SuperController {
     // A size transition is a clipped slice until its final layout. Only that
     // full-height painted frame may count as seeing the message or start burn.
     readIDs = readIDs.where((id) => !messageArrivals.isEntering(id)).toList();
+    _backgroundMessageRecovery.observeVisible(readIDs);
     newMessages
         .updateScrollOffset(_dateWindow.buffering ? 2 : distanceFromLatest);
     if (_automaticTrimPending) _trimAutomaticWindow();
@@ -704,7 +801,7 @@ class ChatLogic extends SuperController {
     }
   }
 
-  void _appendLiveMessage(Message message) {
+  void _appendLiveMessage(Message message, {bool recovered = false}) {
     // Online deltas have no history, read receipt, unread count or message menu.
     if (AssistantStreamChunk.isStreamMessage(message)) {
       if (!_sessionInactive && _isAssistantReply(message)) {
@@ -755,6 +852,7 @@ class ChatLogic extends SuperController {
       newMessages.updateScrollOffset(distance, viewportConfirmed: false);
     }
     final followLatest = !newMessages.awayFromLatest.value;
+    if (!recovered) _backgroundMessageRecovery.observeLive(message);
     if (_dateWindow.buffering ||
         _timeline.holdForIncoming(awayFromLatest: !followLatest)) {
       newMessages.updateScrollOffset(2);
@@ -763,7 +861,8 @@ class ChatLogic extends SuperController {
       return;
     }
     messageArrivals.register(message,
-        enabled: followLatest &&
+        enabled: !recovered &&
+            followLatest &&
             !historyLoading.value &&
             syncStatus.value == IMSdkStatus.syncEnded &&
             _timeline.hasLoadedHistory &&
@@ -820,6 +919,16 @@ class ChatLogic extends SuperController {
     _chatToken = DataSp.chatToken;
     _imToken = DataSp.imToken;
     _timeline.initialize(prefetch: false);
+    _messageSubscriptions.add(bindMediaOutbox(
+        conversationID: conversationInfo.conversationID,
+        messages: messageList,
+        isClosed: () => _sessionInactive,
+        removedIDs: _removedMessageIDs,
+        onAdded: () {
+          _trimAutomaticWindow();
+          scrollBottom();
+        },
+        delivery: _delivery));
     _reconcileAssistantReplies();
     _messageSelectionWorker = ever(messageList, (_) {
       messageSelection.sync();
@@ -855,6 +964,17 @@ class ChatLogic extends SuperController {
     faceUrl.value = conversationInfo.faceURL ?? '';
     _appearance.initialize();
     _setSdkSyncDataListener();
+    _historyRecoveryWorker = ever(historyLoading, (bool loading) {
+      if (!loading) scheduleMicrotask(_historyRecovery.loadingSettled);
+    });
+    _messageSubscriptions.add(imLogic.historyRecoverySignals.listen((_) {
+      _backgroundMessageRecovery.restart();
+      // The immediate resume read can succeed before native persistence catches
+      // up. A wake must reconcile healthy windows too, not only failed reads.
+      if (historyError.value == null) unawaited(_loadHistoryForSyncEnd());
+      _historyRecovery.request(resetAttempts: true);
+      _latestMessageRecovery.conversationChanged(resetAttempts: true);
+    }));
     unawaited(onScrollToBottomLoad()
         .whenComplete(() => entryTrace?.mark('initial_history_finished')));
 
@@ -862,8 +982,9 @@ class ChatLogic extends SuperController {
       final obj = value.firstWhereOrNull(
           (e) => e.conversationID == conversationInfo.conversationID);
 
-      if (obj != null) {
+      if (!_sessionInactive && obj != null) {
         conversationInfo = obj;
+        _latestMessageRecovery.conversationChanged();
         _receipts.conversationChanged();
       }
     });
@@ -877,20 +998,34 @@ class ChatLogic extends SuperController {
           assistantChat: isSingleChat && userID == 'assistant',
           buffering: bufferingLiveMessages);
       if (currentChat) {
+        if (_messageRoute?.isCurrent == false &&
+            !AssistantStreamChunk.isStreamMessage(message) &&
+            message.contentType != MessageType.typing) {
+          if (!_removedMessageIDs.contains(message.clientMsgID) &&
+              !_timeline.containsMessage(message.clientMsgID)) {
+            _timeline.bufferIncoming(message);
+            _messagesWhileCovered = true;
+            ++_coveredHistoryRevision;
+          }
+          return;
+        }
         _appendLiveMessage(message);
       }
     };
-    imLogic.onRecvNewMessage = _ownedMessageCallback;
+    _messageSubscriptions.add(imLogic.chatMessageEvents
+        .listen((event) => _ownedMessageCallback?.call(event.message)));
 
     _ownedReceiptCallback =
         (receipts) => _receipts.applyC2CReceipt(receipts, userID);
-    imLogic.onRecvC2CReadReceipt = _ownedReceiptCallback;
+    _messageSubscriptions.add(imLogic.c2cReadReceipts
+        .listen((receipts) => _ownedReceiptCallback?.call(receipts)));
 
     _group.initialize();
 
     friendInfoChangedSub = imLogic.friendInfoChangedSubject.listen((value) {
       if (!_sessionInactive && !isSingleChat) {
         _group.updateSenderAvatar(value.userID, value.faceURL);
+        _group.refreshSenderIdentity(value.userID);
       }
       if (userID == value.userID) {
         nickname.value = value.getShowName();
@@ -910,6 +1045,7 @@ class ChatLogic extends SuperController {
     selfInfoUpdatedSub = imLogic.selfInfoUpdatedSubject.listen((value) {
       if (!_sessionInactive && !isSingleChat) {
         _group.updateSenderAvatar(value.userID, value.faceURL);
+        _group.refreshSenderIdentity(value.userID);
       }
       for (var msg in messageList) {
         if (msg.sendID == value.userID) {
@@ -1179,13 +1315,13 @@ class ChatLogic extends SuperController {
     newMessages.close();
     fundNotices.close();
     _timeline.close();
+    _historyRecovery.close();
+    _latestMessageRecovery.close();
+    _backgroundMessageRecovery.close();
+    _historyRecoveryWorker?.dispose();
     _receipts.close();
-    if (identical(imLogic.onRecvNewMessage, _ownedMessageCallback)) {
-      imLogic.onRecvNewMessage = null;
-    }
-    if (identical(imLogic.onRecvC2CReadReceipt, _ownedReceiptCallback)) {
-      imLogic.onRecvC2CReadReceipt = null;
-    }
+    _ownedMessageCallback = null;
+    _ownedReceiptCallback = null;
     if (identical(imLogic.onSignalingMessage, _ownedSignalingCallback)) {
       imLogic.onSignalingMessage = null;
     }
@@ -1221,6 +1357,10 @@ class ChatLogic extends SuperController {
   String? getShowTime(Message message) => _timeline.getShowTime(message);
 
   void clearAllMessage() {
+    _backgroundMessageRecovery.cancel();
+    _latestMessageRecovery.cancel();
+    ++_coveredHistoryRevision;
+    _messagesWhileCovered = false;
     _messageFocus.cancel();
     _dateJump.invalidate();
     _dateWindow.invalidate();
@@ -1233,9 +1373,24 @@ class ChatLogic extends SuperController {
     clearReply();
   }
 
-  Future<void> deleteMessage(Message message) => isOfficialNotificationChat
-      ? Future<void>.value()
-      : _actions.deleteMessage(message);
+  bool _confirmingMessageDeletion = false;
+  Future<void> deleteMessage(Message message) async {
+    final context = Get.context;
+    if (_confirmingMessageDeletion ||
+        _sessionInactive ||
+        isOfficialNotificationChat ||
+        context == null ||
+        !context.mounted) return;
+    _confirmingMessageDeletion = true;
+    try {
+      final confirmed = await MessageSelectionDeleteSheet.show(context, 1,
+          singleMessage: true);
+      if (!confirmed || _sessionInactive || !context.mounted) return;
+      await _actions.deleteMessage(message);
+    } finally {
+      _confirmingMessageDeletion = false;
+    }
+  }
 
   Future<void> reloadChatBackground() => _appearance.reload();
 
@@ -1261,7 +1416,8 @@ class ChatLogic extends SuperController {
     }
   }
 
-  String? getNewestNickname(Message message) => message.senderNickname;
+  String? getNewestNickname(Message message) =>
+      isSingleChat ? message.senderNickname : _group.nicknameFor(message);
   String? getNewestFaceURL(Message message) =>
       isSingleChat ? message.senderFaceUrl : _group.avatarFor(message);
 
@@ -1310,7 +1466,16 @@ class ChatLogic extends SuperController {
       _receipts.invalidateViewport();
       syncStatus.value = value.status;
       if (value.status == IMSdkStatus.syncEnded) {
+        _backgroundMessageRecovery.restart();
+        _historyRecovery.request(resetAttempts: true);
         unawaited(_loadHistoryForSyncEnd());
+        _latestMessageRecovery.conversationChanged(resetAttempts: true);
+      } else if (value.status == IMSdkStatus.connectionSucceeded) {
+        _historyRecovery.request(resetAttempts: true);
+        if (_backgroundMessageRecovery.hasCheckpoint) {
+          _backgroundMessageRecovery.restart();
+          unawaited(_loadHistoryForSyncEnd());
+        }
       }
     });
   }
@@ -1346,20 +1511,54 @@ class ChatLogic extends SuperController {
 
   void retryHistory() {
     if (_sessionInactive) return;
-    unawaited(_dateWindow.retry());
+    unawaited(_runHistoryRecovery(retry: true));
   }
 
-  Future<void> _loadHistoryForSyncEnd() async {
-    if (_sessionInactive ||
-        syncStatus.value == IMSdkStatus.syncStart ||
-        syncStatus.value == IMSdkStatus.syncProgress ||
-        syncStatus.value == IMSdkStatus.synchronizing) {
-      return;
+  bool get _historyVisible {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    return !_sessionInactive &&
+        _messageRoute?.isCurrent != false &&
+        (lifecycle == null || lifecycle == AppLifecycleState.resumed);
+  }
+
+
+  Future<bool> _loadHistoryForSyncEnd() => _runHistoryRecovery();
+
+  Future<bool> _runHistoryRecovery({bool retry = false}) async {
+    if (_sessionInactive) return false;
+    if (!_historyVisible) {
+      _messagesWhileCovered = true;
+      ++_coveredHistoryRevision;
+      return false;
     }
+    if (!retry && historyError.value != null) {
+      // Keep the failed paging/date action: a generic latest-page query would
+      // silently replace its retry target and could move the reading window.
+      _historyRecovery.request();
+      return false;
+    }
+    final coveredRevision = _coveredHistoryRevision;
     _receipts.invalidateViewport();
-    await _timeline.refresh();
+    final recoverGap = !retry && _backgroundMessageRecovery.hasCheckpoint;
+    final request = retry
+        ? _dateWindow.retry()
+        : recoverGap
+            ? _backgroundMessageRecovery.recover()
+            : _timeline.refresh();
+    final window = historyWindowRevision.value;
+    final recovered = await request;
+    final applied = (!recoverGap || recovered) &&
+        _historyVisible &&
+        window == historyWindowRevision.value &&
+        historyError.value == null;
+    if (applied && coveredRevision == _coveredHistoryRevision) {
+      _messagesWhileCovered = false;
+    }
     // Require a new painted observation after the recovery request completes.
     if (!_sessionInactive) messageList.refresh();
+    _historyRecovery.request();
+    if (applied) _latestMessageRecovery.conversationChanged();
+    return applied && !_dateWindow.buffering;
   }
 
   void _getGroupInfoAfterLoadMessage() {
@@ -1377,20 +1576,30 @@ class ChatLogic extends SuperController {
   void onDetached() {}
 
   @override
-  void onHidden() {}
+  void onHidden() => _captureBackgroundGap();
 
   @override
   void onInactive() {}
 
   @override
   void onPaused() {
+    _captureBackgroundGap();
     _receipts.invalidateViewport();
     unawaited(_composer.saveDraft());
   }
 
+  void _captureBackgroundGap() {
+    if (_sessionInactive) return;
+    // Even readers at the bottom can miss an entire offline interval. Keep
+    // its boundary before native wake/live events can advance the latest row.
+    _backgroundMessageRecovery.suspend();
+  }
+
   @override
   void onResumed() {
-    _loadHistoryForSyncEnd();
+    unawaited(_loadHistoryForSyncEnd());
+    _historyRecovery.request(resetAttempts: true);
+    _latestMessageRecovery.conversationChanged(resetAttempts: true);
     _funds.refreshVisible();
   }
 }

@@ -625,25 +625,6 @@ class Apis {
     );
   }
 
-  static Future<UpgradeInfoV2> checkUpgradeV2() {
-    return dio.post<Map<String, dynamic>>(
-      'https://www.pgyer.com/apiv2/app/check',
-      options: Options(
-        contentType: 'application/x-www-form-urlencoded',
-      ),
-      data: {
-        '_api_key': '',
-        'appKey': '',
-      },
-    ).then((resp) {
-      Map<String, dynamic> map = resp.data!;
-      if (map['code'] == 0) {
-        return UpgradeInfoV2.fromJson(map['data']);
-      }
-      return Future.error(map);
-    });
-  }
-
   static Future<Map<String, dynamic>> getClientConfig() async {
     return {
       'discoverPageURL': Config.discoverPageURL,

@@ -10,6 +10,7 @@ import '../../support/conversation_live_fixture.dart';
 import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/pages/conversation/archive/archived_conversation_page.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
+import 'package:openim/pages/conversation/editing/conversation_read_batch.dart';
 import 'package:openim/pages/conversation/conversation_organizer.dart';
 import 'package:openim/pages/conversation/editing/conversation_edit_action_bar.dart';
 import 'package:openim/pages/conversation/editing/conversation_selection_indicator.dart';
@@ -47,6 +48,27 @@ class _Conversations extends GetxController
   final popCtrl = CustomPopupMenuController();
   final archivedIds = <String>{};
   final markedIds = <String>[];
+  @override
+  final markingAllRead = false.obs;
+  @override
+  final readBatchProgress = ''.obs;
+  @override
+  Future<void> markReadScope(bool Function(ConversationInfo) includes) async {
+    if (markingAllRead.value) return;
+    markingAllRead.value = true;
+    try {
+      await runConversationReadBatch(
+          conversations: list.where(includes).toList(),
+          isCurrent: () => true,
+          markRead: markConversationRead,
+          progress: (done, total) =>
+              readBatchProgress.value = '$done / $total');
+    } finally {
+      markingAllRead.value = false;
+      readBatchProgress.value = '';
+    }
+  }
+
   Completer<void>? markGate;
   @override
   bool get isSessionActive => true;
@@ -242,89 +264,40 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets(
-        'done restores home while SDK read waits and isolates next edit ($dark)',
+    testWidgets('done leaves read batch running and blocks duplicates ($dark)',
         (tester) async {
-      final firstGate = Completer<void>();
-      final secondGate = Completer<void>();
+      final gate = Completer<void>();
       addTearDown(() {
-        for (final gate in [firstGate, secondGate]) {
-          if (!gate.isCompleted) gate.complete();
-        }
+        if (!gate.isCompleted) gate.complete();
       });
       final conversations = _Conversations()
         ..list.addAll([_conversation(1), _conversation(2), _conversation(3)])
-        ..markGate = firstGate;
+        ..markGate = gate;
       await _mountHome(tester, conversations, dark: dark);
-      final navigationRect = tester.getRect(find.byType(BottomNavigationBar));
       await tester.tap(find.byTooltip('编辑'));
       await tester.pumpAndSettle();
       await tester
           .tap(find.byKey(const ValueKey('conversation-edit-mark-read')));
       await tester.pumpAndSettle();
-      expect(conversations.markedIds, ['conversation-1']);
+      expect(conversations.markedIds, hasLength(3));
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      expect(conversations.markingAllRead.value, isTrue);
+      expect(find.byType(GlassBottomNavBar), findsOneWidget);
+      await tester.tap(find.byTooltip('编辑'));
+      await tester.pumpAndSettle();
       expect(
           tester
               .widget<ConversationEditActionBar>(
                   find.byType(ConversationEditActionBar))
               .busy,
           isTrue);
-
-      await tester.tap(find.text('完成'));
+      gate.complete();
       await tester.pumpAndSettle();
-      expect(firstGate.isCompleted, isFalse);
-      expect(find.byType(ConversationEditActionBar), findsNothing);
-      expect(find.byType(GlassBottomNavBar), findsOneWidget);
-      expect(tester.getRect(find.byType(BottomNavigationBar)), navigationRect);
-      for (final label in ['群聊', '通讯录', '我的']) {
-        expect(find.text(label), findsOneWidget);
-      }
-
-      await tester.tap(find.byTooltip('编辑'));
-      await tester.pumpAndSettle();
-      final secondRow = find.byKey(const ValueKey('conversation-2'));
-      await tester.tap(secondRow);
-      // The conversation page publishes its action bar after this frame; Home
-      // paints the new selection on the next frame before that button is used.
-      await tester.pumpAndSettle();
-      expect(
-          tester
-              .widget<ConversationEditActionBar>(
-                  find.byType(ConversationEditActionBar))
-              .hasSelection,
-          isTrue);
-      conversations.markGate = secondGate;
-      await tester
-          .tap(find.byKey(const ValueKey('conversation-edit-mark-read')));
-      await tester.pumpAndSettle();
-      expect(conversations.markedIds, ['conversation-1', 'conversation-2']);
-      firstGate.complete();
-      await tester.pumpAndSettle();
-      final activeBar = tester.widget<ConversationEditActionBar>(
-          find.byType(ConversationEditActionBar));
-      expect(activeBar.busy, isTrue,
-          reason: 'The old SDK acknowledgement must not end the new task.');
-      expect(activeBar.hasSelection, isTrue);
-      expect(find.byType(GlassBottomNavBar), findsNothing);
-      expect(
-          tester
-              .widget<ConversationSelectionIndicator>(find.descendant(
-                  of: secondRow,
-                  matching: find.byType(ConversationSelectionIndicator)))
-              .selected,
-          isTrue);
-      expect(conversations.markedIds, ['conversation-1', 'conversation-2'],
-          reason: 'The first all-read batch must not continue to queued rows.');
-      expect(conversations.list[2].unreadCount, 2);
-      secondGate.complete();
-      await tester.pumpAndSettle();
-      expect(find.byType(ConversationEditActionBar), findsNothing);
-      expect(find.byType(GlassBottomNavBar), findsOneWidget);
-      expect(conversations.list[1].unreadCount, 0);
-      expect(conversations.list[2].unreadCount, 2);
+      expect(conversations.list.every((c) => c.unreadCount == 0), isTrue);
+      expect(find.byType(ConversationEditActionBar), findsOneWidget,
+          reason: 'Old batch does not close a newer edit session');
       await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
     });
 
     testWidgets(

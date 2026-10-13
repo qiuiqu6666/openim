@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'media_browser/media_page_gesture.dart';
+import 'media_browser/gallery_image_precache.dart';
 
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/cupertino.dart';
@@ -75,6 +76,94 @@ class _MediaBrowserState extends State<MediaBrowser> {
   int currentIndex = 0;
   bool _showControls = true;
   bool _showGrid = false;
+  final _chromeTick = ValueNotifier(0);
+  final _pageTick = ValueNotifier(0);
+  final _galleryPrecache = ImagePreviewGalleryPrecache();
+  final _warmImages = <int, ImageProvider>{};
+  final _warmRequests = <int, ViewerImageProvider>{};
+  Timer? _precacheIdle;
+
+  void _notifyChrome() => _chromeTick.value++;
+
+  void _schedulePrecache() {
+    _precacheIdle?.cancel();
+    _galleryPrecache.invalidate();
+    _precacheIdle = Timer(const Duration(milliseconds: 150), () {
+      if (!mounted ||
+          _activePointers.isNotEmpty ||
+          (_pageController.hasClients &&
+              _pageController.position.isScrollingNotifier.value)) {
+        return;
+      }
+      for (final index in _warmImages.keys.toList()) {
+        if ((index - currentIndex).abs() > 3) {
+          _warmImages.remove(index)?.evict();
+          _warmRequests.remove(index)?.cancel();
+        }
+      }
+      _galleryPrecache.precacheAdjacent(
+        context: context,
+        centerIndex: currentIndex,
+        itemCount: widget.sources.length,
+        radius: 3,
+        resolveProvider: _warmProvider,
+      );
+    });
+  }
+
+  ImageProvider? _warmProvider(int index) {
+    final source = widget.sources[index];
+    if (source.isVideo || source.loading) return null;
+    return _warmImages.putIfAbsent(index, () {
+      final size = MediaQuery.sizeOf(context);
+      final dpr = MediaQuery.devicePixelRatioOf(context);
+      final width = (size.width * dpr).round().clamp(1, 2048);
+      final height = (size.height * dpr).round().clamp(1, 2048);
+      ImageProvider provider;
+      if (source.bytes != null) {
+        provider = MemoryImage(source.bytes!);
+      } else if (source.file != null) {
+        provider = FileImage(source.file!);
+      } else {
+        final url = source.url ?? source.thumbnail;
+        provider = _warmRequests.putIfAbsent(
+            index,
+            () =>
+                widget.imageProviderFactory?.call(url, width * height) ??
+                ViewerImageProvider(url, maxPixels: width * height));
+      }
+      return ResizeImage(provider,
+          width: width, height: height, policy: ResizeImagePolicy.fit);
+    });
+  }
+
+  bool _observeGalleryScroll(ScrollNotification notification) {
+    if (notification.depth != 0) return false;
+    if (notification is ScrollStartNotification) {
+      _precacheIdle?.cancel();
+      _galleryPrecache.invalidate();
+    } else if (notification is ScrollEndNotification) {
+      _schedulePrecache();
+    }
+    return false;
+  }
+
+  final _activePointers = <int>{};
+  int? _dragOrigin;
+
+  void _endPointer(int pointer) {
+    _activePointers.remove(pointer);
+    if (_activePointers.isNotEmpty) return;
+    // The image recognizer must receive up/cancel before its widget is removed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _activePointers.isNotEmpty) return;
+      _dragOrigin = null;
+      _pageTick.value++;
+      _schedulePrecache();
+      _retainCurrentRequests();
+    });
+  }
+
   final _localFiles = LocalMediaAvailability();
   late final ExtendedPageController _pageController;
   SystemUiOverlayStyle? _previousSystemUiStyle;
@@ -91,11 +180,26 @@ class _MediaBrowserState extends State<MediaBrowser> {
       shouldIgnorePointerWhenScrolling: true,
     );
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _schedulePrecache();
+    });
   }
 
   @override
   void dispose() {
     Logger.print('[MediaBrowser] dispose', fileName: 'media_browser.dart');
+    _precacheIdle?.cancel();
+    _galleryPrecache.dispose();
+    for (final image in _warmImages.values) {
+      image.evict();
+    }
+    for (final request in _warmRequests.values) {
+      request.cancel();
+    }
+    _warmImages.clear();
+    _warmRequests.clear();
+    _chromeTick.dispose();
+    _pageTick.dispose();
     _pageController.dispose();
     _localFiles.clear();
     for (final request in _imageRequests.values) {
@@ -122,6 +226,16 @@ class _MediaBrowserState extends State<MediaBrowser> {
       unchanged = identical(widget.sources[i], oldWidget.sources[i]);
     }
     if (unchanged) return;
+    _galleryPrecache.invalidate();
+    for (final image in _warmImages.values) {
+      image.evict();
+    }
+    for (final request in _warmRequests.values) {
+      request.cancel();
+    }
+    _warmImages.clear();
+    _warmRequests.clear();
+    _schedulePrecache();
     _localFiles.invalidateMissing();
     for (var index = 0; index < widget.sources.length; index++) {
       final source = widget.sources[index];
@@ -138,6 +252,11 @@ class _MediaBrowserState extends State<MediaBrowser> {
   void _retainCurrentRequests() {
     final source = widget.sources[currentIndex];
     final urls = {source.url, source.thumbnail};
+    final origin = _dragOrigin;
+    if (origin != null && origin < widget.sources.length) {
+      urls.addAll(
+          [widget.sources[origin].url, widget.sources[origin].thumbnail]);
+    }
     for (final url in _imageRequests.keys.toList()) {
       if (!urls.contains(url)) _imageRequests.remove(url)!.cancel();
     }
@@ -155,7 +274,6 @@ class _MediaBrowserState extends State<MediaBrowser> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final source = widget.sources[currentIndex];
     const background = Colors.black;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -187,216 +305,247 @@ class _MediaBrowserState extends State<MediaBrowser> {
               behavior: HitTestBehavior.opaque,
               onTap: widget.closeOnly
                   ? () => Navigator.of(context).pop()
-                  : () => setState(() => _showControls = !_showControls),
+                  : () {
+                      _showControls = !_showControls;
+                      _notifyChrome();
+                    },
               onLongPress: widget.closeOnly
                   ? () {}
                   : widget.onLongPress == null
                       ? null
                       : () => widget.onLongPress!(currentIndex),
-              child: ExtendedImageGesturePageView.builder(
-                shouldAccpetHorizontalOrVerticalDrag: acceptMediaPageDrag,
-                controller: _pageController,
-                itemCount: widget.sources.length,
-                onPageChanged: (int page) {
-                  setState(() => currentIndex = page);
-                  widget.onPageChanged?.call(page);
-                  _retainCurrentRequests();
-                },
-                itemBuilder: (BuildContext context, int index) {
-                  final s = widget.sources[index];
+              child: NotificationListener<ScrollNotification>(
+                onNotification: _observeGalleryScroll,
+                child: Listener(
+                  onPointerDown: (event) {
+                    if (_activePointers.isEmpty) _dragOrigin = currentIndex;
+                    _activePointers.add(event.pointer);
+                  },
+                  onPointerUp: (event) => _endPointer(event.pointer),
+                  onPointerCancel: (event) => _endPointer(event.pointer),
+                  child: ExtendedImageGesturePageView.builder(
+                    shouldAccpetHorizontalOrVerticalDrag: acceptMediaPageDrag,
+                    controller: _pageController,
+                    itemCount: widget.sources.length,
+                    onPageChanged: (int page) {
+                      currentIndex = page;
+                      _pageTick.value++;
+                      _notifyChrome();
+                      _schedulePrecache();
+                      widget.onPageChanged?.call(page);
+                      _retainCurrentRequests();
+                    },
+                    itemBuilder: (BuildContext context, int index) =>
+                        ValueListenableBuilder<int>(
+                            valueListenable: _pageTick,
+                            builder: (context, _, child) {
+                              final s = widget.sources[index];
 
-                  if (index != currentIndex) {
-                    return const SizedBox.expand();
-                  }
-                  return s.isVideo
-                      ? ExtendedImageSlidePageHandler(
-                          child: VideoPlayerView(
-                            key: ValueKey(s.tag ?? s.url),
-                            url: s.url,
-                            coverUrl: s.thumbnail,
-                            file: s.file,
-                            heroTag: s.tag,
-                            autoPlay: widget.onAutoPlay?.call(index) ?? false,
-                            muted: widget.closeOnly || widget.muted,
-                            showControls: !widget.closeOnly,
-                            looping: widget.closeOnly,
-                            onDownload: widget.closeOnly
-                                ? null
-                                : (url, file) =>
-                                    widget.onSave?.call(currentIndex),
-                          ),
-                          heroBuilderForSlidingPage: (result) => MediaVideoHero(
-                            tag: s.tag ?? s.thumbnail,
-                            child: result,
-                          ),
-                        )
-                      : HeroWidget(
-                          tag: s.tag ?? s.thumbnail,
-                          slideType: SlideType.onlyImage,
-                          slidePagekey: slidePagekey,
-                          child: _buildFullImage(s),
-                        );
-                },
+                              if (index != currentIndex &&
+                                  index != _dragOrigin) {
+                                return const SizedBox.expand();
+                              }
+                              return s.isVideo
+                                  ? ExtendedImageSlidePageHandler(
+                                      child: VideoPlayerView(
+                                        key: ValueKey(s.tag ?? s.url),
+                                        url: s.url,
+                                        coverUrl: s.thumbnail,
+                                        file: s.file,
+                                        heroTag: s.tag,
+                                        autoPlay:
+                                            widget.onAutoPlay?.call(index) ??
+                                                false,
+                                        muted: widget.closeOnly || widget.muted,
+                                        showControls: !widget.closeOnly,
+                                        looping: widget.closeOnly,
+                                        onDownload: widget.closeOnly
+                                            ? null
+                                            : (url, file) => widget.onSave
+                                                ?.call(currentIndex),
+                                      ),
+                                      heroBuilderForSlidingPage: (result) =>
+                                          MediaVideoHero(
+                                        tag: s.tag ?? s.thumbnail,
+                                        child: result,
+                                      ),
+                                    )
+                                  : HeroWidget(
+                                      tag: s.tag ?? s.thumbnail,
+                                      slideType: SlideType.onlyImage,
+                                      slidePagekey: slidePagekey,
+                                      child: _buildFullImage(s),
+                                    );
+                            }),
+                  ),
+                ),
               ),
             ),
           ),
-          if (widget.closeOnly)
-            Positioned(
-              top: 0,
-              right: 0,
-              child: SafeArea(
-                minimum: const EdgeInsets.all(12),
-                child: _roundAction(context,
-                    icon: Icons.close_rounded,
-                    tooltip:
-                        MaterialLocalizations.of(context).closeButtonTooltip,
-                    onPressed: () => Navigator.of(context).pop()),
-              ),
-            ),
-          if (_showControls && !widget.closeOnly)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Material(
-                color: Colors.transparent,
-                child: SafeArea(
-                  bottom: false,
-                  minimum: const EdgeInsets.symmetric(horizontal: 12),
-                  child: SizedBox(
-                    height: 72,
-                    child: Row(children: [
-                      Transform.translate(
-                        offset:
-                            Offset(0, (TitleBar.chatToolbarHeight - 72) / 2),
-                        child: _roundAction(context,
-                            icon: Icons.arrow_back_ios_new,
-                            tooltip: MaterialLocalizations.of(context)
-                                .backButtonTooltip,
-                            onPressed: () => Navigator.of(context).pop()),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Transform.translate(
-                          offset:
-                              Offset(0, (TitleBar.chatToolbarHeight - 72) / 2),
-                          child: Center(
-                            child: MediaPreviewGlass(
-                              borderRadius: BorderRadius.circular(28),
-                              child: Container(
-                                key: const ValueKey('media-preview-info'),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 4),
-                                child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (source.senderName?.isNotEmpty == true)
-                                        Text(source.senderName!,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                                color: Colors.white)),
-                                      if (widget.showCounter ||
-                                          source.sentAt != null)
-                                        Text(
-                                            [
-                                              if (source.sentAt != null)
-                                                _previewTime(source.sentAt),
-                                              if (widget.showCounter)
-                                                '${currentIndex + 1}/${widget.sources.length}',
-                                            ].join('  '),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                    color: Colors.white70)),
-                                    ]),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                          width: (MediaQuery.sizeOf(context).width * 0.105)
-                                  .clamp(42.0, 52.0) +
-                              12),
-                    ]),
-                  ),
-                ),
-              ),
-            ),
-          if (_showControls && !widget.closeOnly && source.isVideo)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                child: Container(
-                  height: MediaQuery.paddingOf(context).bottom + 96,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.72)
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          if (_showControls && !widget.closeOnly)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Material(
-                color: Colors.transparent,
-                child: SafeArea(
-                  top: false,
-                  minimum: const EdgeInsets.symmetric(horizontal: 12),
-                  child: SizedBox(
-                    height: 72,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      spacing: NavigationGlassTokens.gap,
-                      children: [
-                        if (widget.onForward != null)
-                          _roundAction(context,
-                              icon: Icons.ios_share,
-                              tooltip: '转发',
-                              onPressed: () => widget.onForward!(currentIndex)),
-                        if (widget.onSave != null)
-                          _roundAction(context,
-                              icon: Icons.download,
-                              tooltip: StrRes.saveToAlbum,
-                              onPressed: () => widget.onSave!(currentIndex)),
-                        if (widget.showGallery)
-                          _roundAction(context,
-                              icon: Icons.grid_view_rounded,
-                              tooltip: '图片和视频',
-                              onPressed: () =>
-                                  setState(() => _showGrid = true)),
-                        if (widget.onDelete != null ||
-                            widget.onViewInChat != null)
-                          _roundAction(context,
-                              icon: Icons.more_horiz,
-                              tooltip: 'mediaMore'.tr,
-                              onPressed: () => _showMoreMenu(context)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          if (_showGrid && !widget.closeOnly)
-            Positioned.fill(child: _buildGrid(context)),
+          Positioned.fill(
+              child: ValueListenableBuilder<int>(
+            valueListenable: _chromeTick,
+            builder: (context, _, child) => _buildChrome(context),
+          )),
         ]),
       ),
     );
+  }
+
+  Widget _buildChrome(BuildContext context) {
+    final source = widget.sources[currentIndex];
+    return Stack(children: [
+      if (widget.closeOnly)
+        Positioned(
+          top: 0,
+          right: 0,
+          child: SafeArea(
+            minimum: const EdgeInsets.all(12),
+            child: _roundAction(context,
+                icon: Icons.close_rounded,
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                onPressed: () => Navigator.of(context).pop()),
+          ),
+        ),
+      if (_showControls && !widget.closeOnly)
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: Material(
+            color: Colors.transparent,
+            child: SafeArea(
+              bottom: false,
+              minimum: const EdgeInsets.symmetric(horizontal: 12),
+              child: SizedBox(
+                height: 72,
+                child: Row(children: [
+                  Transform.translate(
+                    offset: Offset(0, (TitleBar.chatToolbarHeight - 72) / 2),
+                    child: _roundAction(context,
+                        icon: Icons.arrow_back_ios_new,
+                        tooltip:
+                            MaterialLocalizations.of(context).backButtonTooltip,
+                        onPressed: () => Navigator.of(context).pop()),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Transform.translate(
+                      offset: Offset(0, (TitleBar.chatToolbarHeight - 72) / 2),
+                      child: Center(
+                        child: MediaPreviewGlass(
+                          borderRadius: BorderRadius.circular(28),
+                          child: Container(
+                            key: const ValueKey('media-preview-info'),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 4),
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (source.senderName?.isNotEmpty == true)
+                                    Text(source.senderName!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                            color: Colors.white)),
+                                  if (widget.showCounter ||
+                                      source.sentAt != null)
+                                    Text(
+                                        [
+                                          if (source.sentAt != null)
+                                            _previewTime(source.sentAt),
+                                          if (widget.showCounter)
+                                            '${currentIndex + 1}/${widget.sources.length}',
+                                        ].join('  '),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(color: Colors.white70)),
+                                ]),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                      width: (MediaQuery.sizeOf(context).width * 0.105)
+                              .clamp(42.0, 52.0) +
+                          12),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      if (_showControls && !widget.closeOnly && source.isVideo)
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: IgnorePointer(
+            child: Container(
+              height: MediaQuery.paddingOf(context).bottom + 96,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.72)
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      if (_showControls && !widget.closeOnly)
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: Material(
+            color: Colors.transparent,
+            child: SafeArea(
+              top: false,
+              minimum: const EdgeInsets.symmetric(horizontal: 12),
+              child: SizedBox(
+                height: 72,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  spacing: NavigationGlassTokens.gap,
+                  children: [
+                    if (widget.onForward != null)
+                      _roundAction(context,
+                          icon: Icons.ios_share,
+                          tooltip: '转发',
+                          onPressed: () => widget.onForward!(currentIndex)),
+                    if (widget.onSave != null)
+                      _roundAction(context,
+                          icon: Icons.download,
+                          tooltip: StrRes.saveToAlbum,
+                          onPressed: () => widget.onSave!(currentIndex)),
+                    if (widget.showGallery)
+                      _roundAction(context,
+                          icon: Icons.grid_view_rounded,
+                          tooltip: '图片和视频', onPressed: () {
+                        _showGrid = true;
+                        _notifyChrome();
+                      }),
+                    if (widget.onDelete != null || widget.onViewInChat != null)
+                      _roundAction(context,
+                          icon: Icons.more_horiz,
+                          tooltip: 'mediaMore'.tr,
+                          onPressed: () => _showMoreMenu(context)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      if (_showGrid && !widget.closeOnly)
+        Positioned.fill(child: _buildGrid(context)),
+    ]);
   }
 
   Widget _buildNetworkImage(MediaSource s) => AdaptiveMediaImage(
@@ -407,7 +556,8 @@ class _MediaBrowserState extends State<MediaBrowser> {
               alignment: AlignmentDirectional.center,
               children: [
                 AdaptiveMediaImage(
-                  image: _image(s.thumbnail, thumbnail: true),
+                  image: _warmImages[currentIndex] ??
+                      _image(s.thumbnail, thumbnail: true),
                 ),
                 const CupertinoActivityIndicator(
                   radius: 15,
@@ -423,10 +573,11 @@ class _MediaBrowserState extends State<MediaBrowser> {
         },
       );
   void _selectGridPage(int index) {
-    setState(() {
-      currentIndex = index;
-      _showGrid = false;
-    });
+    currentIndex = index;
+    _showGrid = false;
+    _pageTick.value++;
+    _notifyChrome();
+    _schedulePrecache();
     _retainCurrentRequests();
     if (_pageController.hasClients) _pageController.jumpToPage(index);
   }
@@ -572,7 +723,10 @@ class _MediaBrowserState extends State<MediaBrowser> {
                     tooltip: zh ? '返回预览' : 'Back to preview',
                     color: AppTokens.accent,
                     icon: const Icon(Icons.chevron_left_rounded, size: 32),
-                    onPressed: () => setState(() => _showGrid = false),
+                    onPressed: () {
+                      _showGrid = false;
+                      _notifyChrome();
+                    },
                   )),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 56),

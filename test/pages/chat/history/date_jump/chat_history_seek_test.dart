@@ -194,12 +194,14 @@ void main() {
     );
     h.values = [_msg('latest', 100)];
     final first = h.loader.jumpTo(_msg('one', 10));
-    expect(await h.loader.jumpTo(_msg('two', 20)), isFalse);
-    expect(h.loader.viewingHistory, isFalse);
+    final replacement = h.loader.jumpTo(_msg('two', 20));
+    // Both earlier native reads must settle before the replacement can query.
+    expect(h.loader.loading, isTrue);
     expect(h.ids, ['latest']);
     firstOlder.complete(_page([_msg('stale', 9)]));
     firstNewer.complete(_page([_msg('stale-newer', 11)]));
     expect(await first, isFalse);
+    expect(await replacement, isFalse);
     expect(h.loader.viewingHistory, isFalse);
     expect(h.loader.error, isA<StateError>());
   });

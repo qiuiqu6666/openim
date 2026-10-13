@@ -4,18 +4,10 @@ import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim_common/openim_common.dart';
 
-const _longFailure =
-    '''PlatformException(channel-error, Unable to establish connection on channel: dev.flutter.pigeon.flutter_openim_sdk.IMManager.setGroupInfo, null, null)
-#0      IMManager.setGroupInfo (package:flutter_openim_sdk/src/pigeon.dart:1278:7)
-#1      GroupAnnouncementController.save (package:openim/pages/group/announcement.dart:112:16)
-<asynchronous suspension>
-#2      _AnnouncementPageState.submit (package:openim/pages/group/announcement_page.dart:219:5)
-<asynchronous suspension>
-#3      GestureRecognizer.invokeCallback (package:flutter/src/gestures/recognizer.dart:351:24)
-#4      TapGestureRecognizer.handleTapUp (package:flutter/src/gestures/tap.dart:653:11)
-#5      BaseTapGestureRecognizer._checkUp (package:flutter/src/gestures/tap.dart:307:5)
-#6      GestureBinding.handleEvent (package:flutter/src/gestures/binding.dart:499:20)
-<asynchronous suspension>''';
+const _longNotice = '''部分内容暂时无法加载，请检查网络连接后再次尝试。你可以继续查看已加载的消息，或稍后返回重新刷新列表。
+如果刚才正在发送消息，请先查看消息旁的发送状态，避免重复发送。尚未提交的输入内容可以保留，网络恢复后再继续操作。
+群组设置未能保存时，请稍后重新打开设置页面，确认当前状态后重试。若问题持续出现，可以通过设置中的帮助与反馈联系我们，并说明当时正在进行的操作。
+请确认设备已经连接到可用的无线网络或移动网络，再尝试刷新会话列表。等待期间仍然可以阅读已有的聊天记录。''';
 
 const _viewports = [
   (
@@ -182,7 +174,7 @@ void main() {
 
     for (final viewport in _viewports) {
       testWidgets(
-          'long platform stack fits ${viewport.name}, passes taps and expires / $dark',
+          'long notice fits ${viewport.name}, passes taps and expires / $dark',
           (tester) async {
         var taps = 0;
         await _mount(
@@ -198,12 +190,12 @@ void main() {
           safe: viewport.safe,
           keyboard: viewport.keyboard,
         );
-        final shown = IMViews.showToast(_longFailure);
+        final shown = IMViews.showToast(_longNotice);
         await tester.pumpAndSettle();
         await shown;
         _expectBoundedStack(
             tester, viewport.size, viewport.safe, viewport.keyboard);
-        await tester.tapAt(tester.getCenter(find.text(_longFailure)));
+        await tester.tapAt(tester.getCenter(find.text(_longNotice)));
         await tester.tapAt(const Offset(2, 2));
         expect(taps, 2);
         expect(EasyLoading.isShow, isTrue);
@@ -214,7 +206,7 @@ void main() {
       });
     }
 
-    testWidgets('long stack still permits scrolling with keyboard / $dark',
+    testWidgets('long notice still permits scrolling with keyboard / $dark',
         (tester) async {
       final scroll = ScrollController();
       await _mount(
@@ -230,11 +222,11 @@ void main() {
         safe: const EdgeInsets.only(top: 24, bottom: 34),
         keyboard: const EdgeInsets.only(bottom: 400),
       );
-      final shown = IMViews.showToast(_longFailure);
+      final shown = IMViews.showToast(_longNotice);
       await tester.pumpAndSettle();
       await shown;
       await tester.dragFrom(
-          tester.getCenter(find.text(_longFailure)), const Offset(0, -120));
+          tester.getCenter(find.text(_longNotice)), const Offset(0, -120));
       await tester.pump();
       expect(scroll.offset, greaterThan(50));
       expect(EasyLoading.isShow, isTrue);
@@ -244,12 +236,12 @@ void main() {
       scroll.dispose();
     });
 
-    testWidgets('long stack replacement retains new duration / $dark',
+    testWidgets('long notice replacement retains new duration / $dark',
         (tester) async {
       await _mount(tester, dark, const SizedBox.expand(),
           size: const Size(320, 640), textScale: 2);
       var shown =
-          IMViews.showToast(_longFailure, duration: const Duration(seconds: 1));
+          IMViews.showToast(_longNotice, duration: const Duration(seconds: 1));
       await tester.pumpAndSettle();
       await shown;
       await tester.pump(const Duration(milliseconds: 500));
@@ -257,7 +249,7 @@ void main() {
       await tester.pumpAndSettle();
       await shown;
       await tester.pump(const Duration(seconds: 1));
-      expect(find.text(_longFailure), findsNothing);
+      expect(find.text(_longNotice), findsNothing);
       expect(find.text('已保存'), findsOneWidget);
       expect(EasyLoading.isShow, isTrue);
       await tester.pump(const Duration(seconds: 3));
@@ -287,23 +279,23 @@ void main() {
         keyboard: keyboard,
       );
       var shown = EasyLoading.show(
-          status: _longFailure,
+          status: _longNotice,
           indicator:
               const SizedBox.square(dimension: 50, child: Icon(Icons.sync)));
       await tester.pumpAndSettle();
       await shown;
       _expectBoundedStack(tester, size, safe, keyboard);
-      await tester.tapAt(tester.getCenter(find.text(_longFailure)));
+      await tester.tapAt(tester.getCenter(find.text(_longNotice)));
       await tester.tapAt(const Offset(2, 2));
       await tester.tapAt(const Offset(638, 238));
       expect(taps, 0);
-      shown = EasyLoading.showProgress(.5, status: _longFailure);
+      shown = EasyLoading.showProgress(.5, status: _longNotice);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));
       await tester.pump(const Duration(milliseconds: 250));
       await shown;
       _expectBoundedStack(tester, size, safe, keyboard);
-      await tester.tapAt(tester.getCenter(find.text(_longFailure)));
+      await tester.tapAt(tester.getCenter(find.text(_longNotice)));
       await tester.tapAt(const Offset(2, 2));
       await tester.tapAt(const Offset(638, 238));
       expect(taps, 0);
@@ -344,7 +336,7 @@ void main() {
 
 void _expectBoundedStack(
     WidgetTester tester, Size size, EdgeInsets safe, EdgeInsets keyboard) {
-  final finder = find.text(_longFailure);
+  final finder = find.text(_longNotice);
   expect(finder, findsOneWidget);
   final paragraph = tester.renderObject<RenderParagraph>(finder);
   expect(paragraph.maxLines, 3);

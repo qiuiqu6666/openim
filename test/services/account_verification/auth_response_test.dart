@@ -132,7 +132,7 @@ void main() {
     }
     expect(failure, isA<DioException>());
     final chinese = HttpUtil.errorMessage(failure!);
-    expect(chinese, contains('超时'));
+    expect(chinese, '服务器响应较慢，请稍后重试');
     Get.locale = const Locale('en', 'US');
     expect(HttpUtil.errorMessage(failure), isNot(chinese));
     expect(

@@ -88,19 +88,25 @@ void main() {
       await tester.pump();
       await tester.pump();
       await tester.pump(Duration(milliseconds: interrupt ? 100 : 290));
-      expect(find.byType(ExtendedImageGesture), findsOneWidget);
+      expect(find.byWidgetPredicate((widget) => widget is ExtendedImageGesture),
+          findsOneWidget);
       expect(find.byType(CupertinoActivityIndicator), findsNothing);
 
       if (!interrupt) {
         // Inspect the handoff frame itself, before another pump can hide a flash.
         await tester.pump(const Duration(milliseconds: 10));
         expect(find.byType(CupertinoActivityIndicator), findsNothing);
-        expect(find.byType(ExtendedImageGesture), findsOneWidget);
+        expect(
+            find.byWidgetPredicate((widget) => widget is ExtendedImageGesture),
+            findsOneWidget);
         for (var frame = 0; frame < 4; frame++) {
           await tester.pump(const Duration(milliseconds: 16));
           expect(find.byType(CupertinoActivityIndicator), findsNothing,
               reason: 'No loading flash on handoff frame $frame');
-          expect(find.byType(ExtendedImageGesture), findsOneWidget);
+          expect(
+              find.byWidgetPredicate(
+                  (widget) => widget is ExtendedImageGesture),
+              findsOneWidget);
         }
       }
       Navigator.of(pageContext).pop();
@@ -144,7 +150,8 @@ void main() {
     )));
     await tester.pump();
     final preview = tester
-        .state<ExtendedImageGestureState>(find.byType(ExtendedImageGesture))
+        .state<ExtendedImageGestureState>(
+            find.byWidgetPredicate((widget) => widget is ExtendedImageGesture))
         .gestureDetails!
         .destinationRect!;
     expect(preview.left, closeTo(0, .01));
@@ -155,7 +162,8 @@ void main() {
     await tester.pump();
     await tester.pump();
     final loaded = tester
-        .state<ExtendedImageGestureState>(find.byType(ExtendedImageGesture))
+        .state<ExtendedImageGestureState>(
+            find.byWidgetPredicate((widget) => widget is ExtendedImageGesture))
         .gestureDetails!
         .destinationRect!;
     expect(loaded, rectMoreOrLessEquals(preview, epsilon: .01),

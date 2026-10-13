@@ -1,45 +1,27 @@
-import 'package:azlistview/azlistview.dart';
-
-import '../../../contacts/directory/contact_directory_indexer.dart';
 import 'chat_history_sender_source.dart';
 
-/// List projection only: selection always returns the original SDK-backed sender.
-class ChatHistorySenderRow extends ISuspensionBean {
-  ChatHistorySenderRow({required this.sender, required this.index}) {
-    isShowSuspension = index.showHeader;
-  }
+/// Keep the SDK's member order. Each page only appends new IDs, so loading more
+/// cannot move existing rows or replace the original sender used for selection.
+class ChatHistorySenderDirectory {
+  final _ids = <String>{};
+  final _members = <ChatHistorySender>[];
 
-  final ChatHistorySender sender;
-  final ContactNameIndex index;
+  int get length => _members.length;
+  bool get isEmpty => _members.isEmpty;
+  ChatHistorySender operator [](int index) => _members[index];
 
-  @override
-  String getSuspensionTag() => index.tagIndex ?? '#';
-}
-
-/// Call after loading/changing the directory, not from a widget's build method.
-/// The shared contact indexer owns pinyin, same-letter ordering and # placement.
-List<ChatHistorySenderRow> buildChatHistorySenderDirectory(
-  Iterable<ChatHistorySender> source, {
-  Iterable<ChatHistorySenderRow> previous = const [],
-}) {
-  final senders = <String, ChatHistorySender>{};
-  for (final sender in source) {
-    if (sender.userID.trim().isNotEmpty) {
-      senders.putIfAbsent(sender.userID, () => sender);
+  bool addPage(Iterable<ChatHistorySender> items) {
+    final previousLength = _members.length;
+    for (final member in items) {
+      if (member.userID.trim().isNotEmpty && _ids.add(member.userID)) {
+        _members.add(member);
+      }
     }
+    return _members.length != previousLength;
   }
-  final cached = {
-    for (final row in previous) row.sender.userID: row.index,
-  };
-  final indexed = buildContactNameIndex([
-    for (final sender in senders.values)
-      if (cached[sender.userID]?.displayName == sender.name)
-        cached[sender.userID]!
-      else
-        ContactNameIndex(userID: sender.userID, displayName: sender.name),
-  ]);
-  return [
-    for (final index in indexed)
-      ChatHistorySenderRow(sender: senders[index.userID]!, index: index),
-  ];
+
+  void clear() {
+    _ids.clear();
+    _members.clear();
+  }
 }

@@ -174,6 +174,6 @@ class ProcessGroupRequestsLogic extends GetxController {
         return;
       }
     }
-    IMViews.showToast(e.toString());
+    IMViews.showErrorToast(e);
   }
 }

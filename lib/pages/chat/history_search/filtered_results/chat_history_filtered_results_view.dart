@@ -70,14 +70,20 @@ class ChatHistoryFilteredResultsView extends StatelessWidget {
               ),
             );
           }
-          if (controller.results.isEmpty) {
+          if (controller.results.isEmpty &&
+              (!controller.hasMore || controller.failed)) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     chatHistorySearchText(
-                        context, controller.failed ? 'failed' : 'noData'),
+                        context,
+                        controller.failed
+                            ? 'failed'
+                            : controller.hasMore
+                                ? 'moreMessages'
+                                : 'noData'),
                     textAlign: TextAlign.center,
                     style: Theme.of(context)
                         .textTheme
@@ -92,33 +98,53 @@ class ChatHistoryFilteredResultsView extends StatelessWidget {
                       onPressed: controller.retry,
                       child: Text(chatHistorySearchText(context, 'retry')),
                     ),
+                  if (!controller.failed && controller.hasMore)
+                    _footer(context),
                 ],
               ),
             );
           }
-          return RefreshIndicator(
-            color: AppTokens.accent,
-            backgroundColor: AppTokens.surface(dark: dark),
-            onRefresh: onRefresh,
-            child: ListView.builder(
-              key: const PageStorageKey('chat-history-results-list'),
-              padding: const EdgeInsets.only(bottom: AppTokens.s7),
-              physics: const AlwaysScrollableScrollPhysics(),
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              itemCount: controller.results.length + 1,
-              itemBuilder: (context, index) {
-                if (index == controller.results.length) {
-                  return _footer(context);
-                }
-                final message = controller.results[index];
-                return ChatHistoryResultTile(
-                  key: ValueKey('chat-history-result-${message.clientMsgID}'),
-                  message: message,
-                  horizontalPadding: ChatHistorySearchTokens.horizontalPadding,
-                  showDivider: true,
-                  onTap: () => onMessage(message),
-                );
-              },
+          return NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification.depth == 0 &&
+                  notification.metrics.extentAfter < 160 &&
+                  ((notification is ScrollUpdateNotification &&
+                          (notification.scrollDelta ?? 0) > 0) ||
+                      (notification is OverscrollNotification &&
+                          notification.overscroll > 0)) &&
+                  !controller.loading &&
+                  !controller.failed &&
+                  controller.hasMore) {
+                controller.loadMore();
+              }
+              return false;
+            },
+            child: RefreshIndicator(
+              color: AppTokens.accent,
+              backgroundColor: AppTokens.surface(dark: dark),
+              onRefresh: onRefresh,
+              child: ListView.builder(
+                key: const PageStorageKey('chat-history-results-list'),
+                padding: const EdgeInsets.only(bottom: AppTokens.s7),
+                physics: const AlwaysScrollableScrollPhysics(),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                itemCount: controller.results.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == controller.results.length) {
+                    return _footer(context);
+                  }
+                  final message = controller.results[index];
+                  return ChatHistoryResultTile(
+                    key: ValueKey('chat-history-result-${message.clientMsgID}'),
+                    message: message,
+                    horizontalPadding:
+                        ChatHistorySearchTokens.horizontalPadding,
+                    showDivider: true,
+                    onTap: () => onMessage(message),
+                  );
+                },
+              ),
             ),
           );
         },
@@ -127,39 +153,24 @@ class ChatHistoryFilteredResultsView extends StatelessWidget {
   }
 
   Widget _footer(BuildContext context) {
-    if (!controller.hasMore && !controller.failed) {
-      return const SizedBox.shrink();
+    if (controller.failed) {
+      return Center(
+          child: TextButton(
+        key: const ValueKey('chat-history-retry'),
+        onPressed: controller.retry,
+        child: Text(chatHistorySearchText(context, 'retry')),
+      ));
     }
-    return Padding(
-      padding: const EdgeInsets.only(top: AppTokens.s3),
+    if (!controller.loading) return const SizedBox(height: AppTokens.s5);
+    return const Padding(
+      padding: EdgeInsets.all(AppTokens.s4),
       child: Center(
-        child: TextButton.icon(
-          key: ValueKey(
-              controller.failed ? 'chat-history-retry' : 'chat-history-more'),
-          style: TextButton.styleFrom(
-            foregroundColor: AppTokens.accent,
-            minimumSize: ChatHistoryFilteredResultsTokens.moreButtonSize,
-          ),
-          onPressed: controller.loading
-              ? null
-              : controller.failed
-                  ? controller.retry
-                  : controller.loadMore,
-          icon: controller.loading
-              ? const SizedBox.square(
-                  dimension: ChatHistoryFilteredResultsTokens.moreProgressSize,
-                  child: CircularProgressIndicator(
-                    color: AppTokens.accent,
-                    strokeWidth:
-                        ChatHistoryFilteredResultsTokens.progressStrokeWidth,
-                  ),
-                )
-              : const Icon(Icons.expand_more_rounded,
-                  size: ChatHistoryFilteredResultsTokens.moreIconSize),
-          label: Text(chatHistorySearchText(
-              context, controller.failed ? 'retry' : 'moreMessages')),
-        ),
-      ),
+          child: SizedBox.square(
+        dimension: ChatHistoryFilteredResultsTokens.moreProgressSize,
+        child: CircularProgressIndicator(
+            color: AppTokens.accent,
+            strokeWidth: ChatHistoryFilteredResultsTokens.progressStrokeWidth),
+      )),
     );
   }
 }

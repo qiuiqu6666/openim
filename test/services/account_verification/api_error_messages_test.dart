@@ -153,12 +153,12 @@ void main() {
 
   test('transport and successful envelopes with failed results stay localized',
       () {
-    expect(ApiErrorMessages.timeout, '请求超时，请稍后重试');
+    expect(ApiErrorMessages.timeout, '服务器响应较慢，请稍后重试');
     expect(ApiErrorMessages.captchaNotPassed, '人机验证未通过，请重试');
     expect(ApiErrorMessages.codeNotSent, '验证码未发送成功，请稍后重试');
     Get.locale = const Locale('en', 'US');
-    expect(
-        ApiErrorMessages.timeout, 'The request timed out. Please try again.');
+    expect(ApiErrorMessages.timeout,
+        'The server is taking longer to respond. Please try again later.');
     expect(ApiErrorMessages.captchaNotPassed,
         'Human verification failed. Please try again.');
     expect(ApiErrorMessages.codeNotSent,

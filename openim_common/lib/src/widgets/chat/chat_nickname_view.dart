@@ -11,18 +11,13 @@ class ChatNicknameView extends StatelessWidget {
   final String? nickname;
   final String? timeStr;
 
-  static const _maxNicknameCharacters = 20;
-
   @override
   Widget build(BuildContext context) {
     final name = nickname ?? '';
-    final prefix = graphemePrefix(name, _maxNicknameCharacters);
-    final displayName = prefix.length < name.length ? '$prefix…' : name;
     return Text.rich(
       TextSpan(
         children: [
-          if (null != nickname)
-            TextSpan(text: displayName, semanticsLabel: nickname),
+          if (null != nickname) TextSpan(text: name, semanticsLabel: nickname),
           if (name.isNotEmpty && timeStr?.isNotEmpty == true)
             WidgetSpan(
               child: SizedBox(width: 6.w),

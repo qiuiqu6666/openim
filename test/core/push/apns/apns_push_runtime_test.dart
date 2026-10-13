@@ -230,6 +230,37 @@ class _Fixture {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  for (final remoteFails in [false, true]) {
+    test('local cleanup waits for native but not remote / failure=$remoteFails',
+        () async {
+      final fixture = _Fixture();
+      final remote = Completer<void>(), native = Completer<void>();
+      addTearDown(fixture.dispose);
+      _releaseAtTearDown(remote);
+      _releaseAtTearDown(native);
+      await fixture.runtime.onSessionReady(authenticated: true);
+      final oldApi = fixture.api;
+      oldApi.deleteBarrier = remote;
+      oldApi.deleteFailures = remoteFails ? 1 : 0;
+      fixture.platform.unregisterBarrier = native;
+      var localDone = false, allDone = false;
+      final local = fixture.runtime.endSession(waitForRemote: false)
+          .then((_) => localDone = true);
+      final all = fixture.runtime.endSession().then((_) => allDone = true);
+      await _drain();
+      expect(localDone, isFalse);
+      native.complete();
+      await local;
+      expect(allDone, isFalse);
+      expect(fixture.platform.acceptsTaps, isFalse);
+      fixture.session = _session('bob');
+      remote.complete();
+      await all;
+      expect(oldApi.owner.accountID, 'alice');
+      expect(fixture.events, isNot(contains('delete:start:bob')));
+    });
+  }
+
   test('unsupported platforms do not install Apple listeners or bind',
       () async {
     final fixture = _Fixture(supported: false);

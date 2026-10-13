@@ -10,6 +10,22 @@ class FundCardRecipient {
 
   static Future<FundCardRecipient> resolve(
       String userID, String groupID) async {
+    // Resolve from the viewer's SDK friendship data. Never put this private
+    // display name into the shared order or message payload.
+    String? remark;
+    try {
+      final friends = await OpenIM.iMManager.friendshipManager
+          .getFriendsInfo(userIDList: [userID]);
+      for (final friend in friends) {
+        if (friend.userID == userID &&
+            friend.remark?.trim().isNotEmpty == true) {
+          remark = friend.remark!.trim();
+          break;
+        }
+      }
+    } catch (_) {
+      // Non-friends and unavailable local metadata fall back to SDK nicknames.
+    }
     if (groupID.isNotEmpty) {
       try {
         final members = await OpenIM.iMManager.groupManager
@@ -18,7 +34,7 @@ class FundCardRecipient {
           if (member.userID == userID) {
             return FundCardRecipient(
                 userID: userID,
-                name: member.nickname ?? '',
+                name: remark ?? member.nickname ?? '',
                 faceURL: member.faceURL ?? '');
           }
         }
@@ -32,10 +48,10 @@ class FundCardRecipient {
       if (user.userID == userID) {
         return FundCardRecipient(
             userID: userID,
-            name: user.nickname ?? '',
+            name: remark ?? user.nickname ?? '',
             faceURL: user.faceURL ?? '');
       }
     }
-    return FundCardRecipient(userID: userID);
+    return FundCardRecipient(userID: userID, name: remark ?? '');
   }
 }

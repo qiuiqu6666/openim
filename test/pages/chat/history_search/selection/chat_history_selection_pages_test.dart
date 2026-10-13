@@ -177,7 +177,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('pagination consumes source cursor and deduplicates sender rows',
+  testWidgets('automatic paging consumes cursor and deduplicates sender rows',
       (tester) async {
     final offsets = <int>[];
     final source = _Source((query, offset) async {
@@ -188,7 +188,7 @@ void main() {
     });
     await open(tester,
         ChatHistorySenderPage(conversationID: 'current-chat', source: source));
-    await tester.tap(find.byKey(const ValueKey('chat-history-sender-more')));
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
     expect(offsets, [0, 50]);
     expect(find.text('第一位'), findsOneWidget);

@@ -37,6 +37,16 @@ class FavoriteMediaTask {
 class FavoriteMediaUploader {
   const FavoriteMediaUploader(this.api);
   final FavoriteApi api;
+
+  static void validateFileSize(FavoriteKind kind, int size) {
+    final max = kind == FavoriteKind.image || kind == FavoriteKind.audio
+        ? 20 * 1024 * 1024
+        : 100 * 1024 * 1024;
+    if (size > max || size <= 0) {
+      throw const FavoriteApiException(20058, '文件超过大小限制');
+    }
+  }
+
   Future<FavoriteAsset> complete(
       {required FavoriteMediaTask task,
       required File file,
@@ -70,12 +80,7 @@ class FavoriteMediaUploader {
         throw const FavoriteApiException(20056, '本地原文件不可用，请重新选择图片或文件');
       }
       guard();
-      final max = kind == FavoriteKind.image || kind == FavoriteKind.audio
-          ? 20 * 1024 * 1024
-          : 100 * 1024 * 1024;
-      if (size > max || size <= 0) {
-        throw const FavoriteApiException(20058, '文件超过大小限制');
-      }
+      validateFileSize(kind, size);
       Future<FavoriteUploadSession> start() async {
         final request = requestID('init');
         await checkpoint();

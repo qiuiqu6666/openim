@@ -1,6 +1,8 @@
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/widgets.dart';
 
+import 'reading_image_gesture.dart';
+
 /// Shared full-screen sizing and gestures, independent of media ownership.
 /// Tall images open at viewport width; other images remain fully visible.
 class AdaptiveMediaImage extends StatefulWidget {
@@ -127,7 +129,14 @@ class _AdaptiveMediaImageState extends State<AdaptiveMediaImage>
             clearMemoryCacheWhenDispose: widget.clearMemoryCacheWhenDispose,
             enableLoadState: widget.loadStateChanged != null,
             handleLoadingProgress: true,
-            loadStateChanged: widget.loadStateChanged,
+            loadStateChanged: (state) {
+              final custom = widget.loadStateChanged?.call(state);
+              if (custom != null) return custom;
+              if (state.extendedImageLoadState == LoadState.completed) {
+                return ReadingImageGesture(state);
+              }
+              return null;
+            },
             initGestureConfigHandler: (state) =>
                 _gestureConfig(state, viewport),
             onDoubleTap: (state) => _doubleTap(state, viewport),

@@ -9,11 +9,15 @@ import 'package:openim_common/openim_common.dart';
 import 'package:openim_live/openim_live.dart';
 
 import '../im_callback.dart';
+import '../session/message_events.dart';
 import '../calling/data/call_signal_persistence.dart';
-import '../calling/data/call_state_heartbeat.dart';
+import '../calling/data/call_state_runtime.dart';
 import '../notifications/legacy_notification_preferences.dart';
 import '../notifications/message_notification_preferences.dart';
 import '../session/sdk_session_queue.dart';
+import '../session/connection/im_connection_recovery.dart';
+import '../session/connection/api_connection_health.dart';
+import '../session/connection/im_native_connection_wake.dart';
 import '../user_activity/activity_runtime.dart';
 import '../../services/account_privilege/account_privilege_runtime.dart';
 import '../session/session_request_errors.dart';
@@ -30,6 +34,9 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       : _loginStartTimeout = loginStartTimeout;
   final Duration _loginStartTimeout;
   final _sessionQueue = SdkSessionQueue();
+  IMConnectionRecovery? _connectionRecovery;
+  ApiConnectionHealth? apiConnectionHealth;
+  IMNativeConnectionWake? _nativeConnectionWake;
   late Rx<UserFullInfo> userInfo;
   bool _hasUserInfo = false;
   int? _profileSessionGeneration;
@@ -55,7 +62,71 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
 
   @override
   void onCallReleased(String roomID) =>
-      unawaited(CallStateHeartbeat.finish(roomID));
+      CallStateRuntime.instance.release(roomID);
+
+  @override
+  void receiveNewInvitation(SignalingInfo info) {
+    final invitation = info.invitation;
+    if (invitation == null ||
+        !validCallInvitation(invitation) ||
+        info.userID != invitation.inviterUserID) return;
+    final account = DataSp.userID, token = DataSp.chatToken;
+    unawaited(
+        CallStateRuntime.instance.admitIncoming(invitation).then((admitted) {
+      if (admitted &&
+          !isClosed &&
+          DataSp.userID == account &&
+          DataSp.chatToken == token) super.receiveNewInvitation(info);
+    }).catchError((Object error) {
+      Logger.print(
+          'Incoming call verification unavailable: ${error.runtimeType}');
+    }));
+  }
+
+  void _bindCallState() {
+    final runtime = CallStateRuntime.instance;
+    runtime.ready = () =>
+        !isClosed &&
+        currentSdkStatus == IMSdkStatus.syncEnded &&
+        DataSp.userID == OpenIM.iMManager.userID;
+    runtime.activeRoom = () => activeCallRoomID;
+    runtime.restoreIncoming = (value) => restoreIncomingCall(
+        SignalingInfo(
+            userID: value.invitation.inviterUserID,
+            invitation: value.invitation),
+        callerName: value.callerName);
+    runtime.onState = (value, deviceID) async {
+      final account = DataSp.userID, token = DataSp.chatToken;
+      if (account == null || account != OpenIM.iMManager.userID || isClosed)
+        return;
+      final elsewhere = value.answeredElsewhere(account, deviceID);
+      final local = applyServerCallState(
+          accountID: account,
+          roomID: value.room,
+          state: value.state,
+          reason: value.reason,
+          answeredElsewhere: elsewhere,
+          verifiedInvitation: value.invitation);
+      // Media must release its tracks before CallKit restores the audio session.
+      await local;
+      if (DataSp.userID != account || DataSp.chatToken != token || isClosed)
+        return;
+      if (value.terminal || elsewhere) {
+        await initLogic.closeSystemCallFromServer(value.room,
+            answeredElsewhere: elsewhere);
+      } else if (value.state == 'accepted' &&
+          value.participant(account, deviceID)) {
+        await initLogic.systemCallAccepted(value.room);
+      }
+    };
+    runtime.bind(
+        business: customBusinessMessageSubject.stream,
+        recovery: imSdkStatusPublishSubject
+            .where((event) =>
+                event.status == IMSdkStatus.connectionSucceeded ||
+                event.status == IMSdkStatus.syncEnded)
+            .map<void>((_) {}));
+  }
 
   @override
   IncomingCallPreferences preferencesForIncomingCall(String accountID) =>
@@ -75,6 +146,10 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
 
   @override
   void onClose() {
+    apiConnectionHealth?.close();
+    apiConnectionHealth = null;
+    _connectionRecovery?.close();
+    _nativeConnectionWake?.close();
     if (_privilegeListenerAttached) {
       AccountPrivilegeRuntime.store.removeListener(_syncAccountPrivilege);
       _privilegeListenerAttached = false;
@@ -82,8 +157,9 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     _callPreferencesBinding.close();
     if (!Get.isRegistered<IMController>() ||
         identical(Get.find<IMController>(), this)) {
-      CallStateHeartbeat.stopAll();
+      CallStateRuntime.instance.close();
       DeviceSyncRuntime.instance.resetSession();
+      initLogic.clearBadgeSession();
       ActivityRuntime.instance.resetConnection();
       AccountPrivilegeRuntime.store.reset();
     }
@@ -109,6 +185,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   @override
   void onInit() async {
     super.onInit();
+    _bindCallState();
     onCallRecord = (record, accountID) async {
       if (Get.isRegistered<CacheController>()) {
         await CallRecordsRuntime.repository
@@ -130,6 +207,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       wsAddr: Config.imWsUrl,
       dataDir: Config.cachePath,
       logLevel: Config.logLevel,
+      isLogStandardOutput: Config.logStandardOutput,
       logFilePath: Config.cachePath,
       listener: OnConnectListener(
         onConnecting: () {
@@ -146,7 +224,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
           imSdkStatus(IMSdkStatus.connectionSucceeded);
         },
         onKickedOffline: kickedOffline,
-        onUserTokenExpired: kickedOffline,
+        onUserTokenExpired: userTokenExpired,
         onUserTokenInvalid: userTokenInvalid,
       ),
     );
@@ -165,16 +243,20 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
         onRecvOfflineNewMessage: recvOfflineMessage,
         onRecvOnlineOnlyMessage: (msg) {
           AssistantStreamLog.received(msg,
-              source: 'online', hasReceiver: onRecvNewMessage != null);
+              source: 'online',
+              hasReceiver:
+                  chatMessageEvents.hasListener || onRecvNewMessage != null);
           if (msg.contentType == MessageType.custom &&
               msg.customElem?.description == 'assistantStream') {
             // Stream deltas are transient SDK data, never business notices.
+            publishChatMessage(msg, ChatMessageSource.onlineOnly);
             onRecvNewMessage?.call(msg);
             return;
           }
           if (msg.contentType == MessageType.typing) {
             // Online-only input hints belong to the open SDK conversation;
             // never turn them into persisted messages or business notices.
+            publishChatMessage(msg, ChatMessageSource.onlineOnly);
             onRecvNewMessage?.call(msg);
             return;
           }
@@ -282,6 +364,12 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   }
 
   Future login(String userID, String token) async {
+    apiConnectionHealth?.close();
+    apiConnectionHealth = null;
+    _connectionRecovery?.close();
+    _connectionRecovery = null;
+    _nativeConnectionWake?.close();
+    _nativeConnectionWake = null;
     // The SDK reuses an already logged-in session without another connection
     // callback. Do not replace that session's last real connection/sync state.
     // Logged-in alone is not proof of a live socket: preserve failures too.
@@ -308,6 +396,9 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       final pending = _sessionQueue.login(
           () async {
             ActivityRuntime.instance.beginConnection(userID, token);
+            // Native unread callbacks may arrive before Dart login completes.
+            initLogic.beginBadgeSession(userID, token);
+            CallStateRuntime.instance.activate();
             final user = await OpenIM.iMManager.login(
               userID: userID,
               token: token,
@@ -338,6 +429,39 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
           (UserFullInfo.fromJson(user.toJson())..isPrivileged = false).obs;
       _hasUserInfo = true;
       _profileSessionGeneration = generation;
+      bool isCurrentConnection() =>
+          !isClosed &&
+          _sessionQueue.isCurrent(generation!) &&
+          _profileSessionGeneration == generation &&
+          DataSp.userID == userID &&
+          DataSp.imToken == token;
+      apiConnectionHealth = ApiConnectionHealth(isCurrent: isCurrentConnection)..start();
+      final nativeWake = _nativeConnectionWake = IMNativeConnectionWake(
+          channel: OpenIM.iMManager.channel,
+          isCurrentSession: isCurrentConnection,
+          isDisconnected: () =>
+              currentConnectionStatus == IMSdkStatus.connectionFailed);
+      _connectionRecovery = IMConnectionRecovery(
+        isCurrent: isCurrentConnection,
+        syncRecoverySignals: imSdkStatusPublishSubject
+            .distinct((before, after) => before.status == after.status)
+            .where((event) =>
+                event.status == IMSdkStatus.connectionSucceeded ||
+                event.status == IMSdkStatus.connecting ||
+                event.status == IMSdkStatus.connectionFailed ||
+                event.status == IMSdkStatus.syncFailed)
+            .map<void>((_) {}),
+        isDisconnected: () =>
+            currentConnectionStatus == IMSdkStatus.connecting ||
+            currentConnectionStatus == IMSdkStatus.connectionFailed,
+        isSyncFailed: () => currentSdkStatus == IMSdkStatus.syncFailed,
+        wake: nativeWake.wake,
+        onWakeSucceeded: () => historyRecoverySignals.addSafely(null),
+        onError: (error) =>
+            Logger.print('IM reconnect wake unavailable: ${error.runtimeType}'),
+      )..start();
+      CallStateRuntime.instance.activate();
+      CallStateRuntime.instance.recover();
       if (!_privilegeListenerAttached) {
         AccountPrivilegeRuntime.store.addListener(_syncAccountPrivilege);
         _privilegeListenerAttached = true;
@@ -359,6 +483,13 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   Future<void>? _pendingLogout;
 
   Future<void> logout() {
+    apiConnectionHealth?.close();
+    apiConnectionHealth = null;
+    _connectionRecovery?.close();
+    _connectionRecovery = null;
+    _nativeConnectionWake?.close();
+    _nativeConnectionWake = null;
+    CallStateRuntime.instance.reset();
     imSdkStatus(IMSdkStatus.connecting);
     ActivityRuntime.instance.resetConnection();
     AccountPrivilegeRuntime.store.reset();
@@ -381,8 +512,12 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
 
   Future<void> _logoutSafely() async {
     // Login preparation can call this directly when replacing a native account.
+    initLogic.clearBadgeSession();
+    CallStateRuntime.instance.reset();
     DeviceSyncRuntime.instance.resetSession();
-    if (Platform.isIOS) await initLogic.endRemotePushSession(logout: false);
+    if (Platform.isIOS) {
+      await initLogic.endRemotePushSession(logout: false, waitForRemote: false);
+    }
     // End media/signaling while the old SDK account still owns the call.
     // The session queue prevents a new account from logging in during cleanup.
     try {

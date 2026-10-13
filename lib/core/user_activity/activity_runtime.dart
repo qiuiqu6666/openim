@@ -63,7 +63,7 @@ class ActivityRuntime {
 
   void _startTimer() {
     if (!_foreground || _ready == null) return;
-    _timer ??= Timer.periodic(const Duration(seconds: 30), (_) {
+    _timer ??= Timer.periodic(ActivityCollector.heartbeatInterval, (_) {
       sessionReadyNow();
       collector.tick();
     });

@@ -13,6 +13,7 @@ mixin UpgradeManger {
   UpgradeInfoV2? upgradeInfoV2;
   var isShowUpgradeDialog = false;
   var isNowIgnoreUpdate = false;
+  Future<void>? _automaticUpdateCheck;
   final subject = PublishSubject<double>();
   final notificationService = NotificationService();
 
@@ -49,17 +50,19 @@ mixin UpgradeManger {
     if (context != null) await checkPlatformUpdate(context);
   }
 
-  Future<void> autoCheckVersionUpgrade() async {
-    if (isShowUpgradeDialog || isNowIgnoreUpdate) return;
+  Future<void> autoCheckVersionUpgrade() {
+    // Startup must join an existing check, not treat its visible dialog as
+    // permission to navigate. A required update keeps this future pending.
+    if (_automaticUpdateCheck != null) return _automaticUpdateCheck!;
+    if (isNowIgnoreUpdate) return Future.value();
     final context = Get.context;
-    if (context == null) return;
+    if (context == null) return Future.value();
     isShowUpgradeDialog = true;
-    try {
-      await checkPlatformUpdate(context, automatic: true);
-    } finally {
+    return _automaticUpdateCheck =
+        checkPlatformUpdate(context, automatic: true).whenComplete(() {
       isShowUpgradeDialog = false;
       isNowIgnoreUpdate = true;
-    }
+    });
   }
 
   bool get canUpdate =>

@@ -11,6 +11,7 @@ import 'builtin/chat_builtin_sticker.dart';
 import 'builtin/chat_builtin_sticker_sender.dart';
 import 'dice/chat_dice_sender.dart';
 import 'personal_sticker_store.dart';
+import 'personal_sticker_media_picker.dart';
 import 'sticker_video_message.dart';
 
 /// Owns personal sticker collection retries and sticker delivery.
@@ -22,11 +23,13 @@ class ChatStickerController {
     required Future Function(Message) sendMessage,
     Future Function(Message)? sendBuiltinMessage,
     required this.closeToolbox,
+    PersonalStickerStore? stickerStore,
   })  : _isClosed = isClosed,
         _sendingMuted = sendingMuted,
         _isInvalidGroup = isInvalidGroup,
         _sendMessage = sendMessage,
-        _sendBuiltinMessage = sendBuiltinMessage ?? sendMessage;
+        _sendBuiltinMessage = sendBuiltinMessage ?? sendMessage,
+        personalStickers = stickerStore ?? PersonalStickerStore();
 
   final bool Function() _isClosed, _sendingMuted, _isInvalidGroup;
   final Future Function(Message) _sendMessage;
@@ -34,8 +37,14 @@ class ChatStickerController {
   ChatBuiltinStickerSender? _builtin;
   ChatDiceSender? _dice;
   final void Function() closeToolbox;
-  final personalStickers = PersonalStickerStore();
-  ({String url, String requestID})? _pendingSticker;
+  final PersonalStickerStore personalStickers;
+  ({
+    String url,
+    String requestID,
+    String? account,
+    String? token
+  })? _pendingSticker;
+  bool _addingPersonalSticker = false;
   bool _closed = false;
   bool get isClosed => _closed || _isClosed();
   bool get sendingMuted => _sendingMuted();
@@ -88,8 +97,9 @@ class ChatStickerController {
       }
     } catch (e) {
       if (!isClosed && account == DataSp.userID && token == DataSp.chatToken) {
-        IMViews.showToast(
-            e is StickerApiException ? '添加失败：${e.message}' : '添加失败，请重试');
+        IMViews.showErrorToast(
+            e is StickerApiException ? (e.code, e.message) : e,
+            fallback: '添加失败，请重试');
       }
     } finally {
       _addingMessageSticker = false;
@@ -153,14 +163,24 @@ class ChatStickerController {
           .createFaceMessage(index: -1, data: url);
       if (!isClosed) await _sendMessage(message);
     } catch (error) {
-      IMViews.showToast(error.toString());
+      IMViews.showErrorToast(error);
     }
   }
 
   Future<void> addPersonalSticker() async {
-    if (isClosed) return;
+    if (isClosed || _addingPersonalSticker) return;
+    final account = DataSp.userID;
+    final token = DataSp.chatToken;
+    bool current() =>
+        !isClosed && account == DataSp.userID && token == DataSp.chatToken;
+    _addingPersonalSticker = true;
     try {
       var pending = _pendingSticker;
+      if (pending != null &&
+          (pending.account != account || pending.token != token)) {
+        _pendingSticker = null;
+        pending = null;
+      }
       if (pending != null) {
         final context = Get.context;
         if (context == null || !context.mounted) return;
@@ -168,23 +188,20 @@ class ChatStickerController {
           context,
           barrierDismissible: true,
           title: '上次收藏未完成',
-          message: '重试上次收藏，或选择新的文件？',
-          actions: const [AppAction('选择新文件', false), AppAction('重试', true)],
+          message: '重试上次收藏，或从相册重新选择？',
+          actions: const [AppAction('重新选择', false), AppAction('重试', true)],
         );
-        if (retry == null || isClosed) return;
+        if (retry == null || !current()) return;
         if (!retry) {
           _pendingSticker = null;
           pending = null;
         }
       }
       if (pending == null) {
-        final picked = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4'],
-        );
-        final file = picked?.files.single;
-        if (file?.path == null || isClosed) return;
-        final maxSize = file!.extension?.toLowerCase() == 'mp4'
+        final file = await pickPersonalStickerMedia(
+            context: Get.context, isCurrent: current);
+        if (file == null || !current()) return;
+        final maxSize = file.extension?.toLowerCase() == 'mp4'
             ? 20 * 1024 * 1024
             : 10 * 1024 * 1024;
         if (file.size > maxSize) {
@@ -192,28 +209,42 @@ class ChatStickerController {
           return;
         }
         final result = await LoadingView.singleton.wrap(
-          asyncFunction: () => OpenIM.iMManager.uploadFile(
-            id: const Uuid().v4(),
-            filePath: file.path!,
-            fileName: file.name,
-          ),
+          asyncFunction: () async {
+            if (!current()) return null;
+            return OpenIM.iMManager.uploadFile(
+              id: const Uuid().v4(),
+              filePath: file.path!,
+              fileName: file.name,
+            );
+          },
         );
-        if (isClosed) return;
+        if (!current()) return;
         final data = result is String ? jsonDecode(result) : result;
         final url = data['url'] as String?;
         if (url == null || url.isEmpty) throw StateError('上传未返回文件地址');
-        pending = (url: url, requestID: const Uuid().v4());
+        pending = (
+          url: url,
+          requestID: const Uuid().v4(),
+          account: account,
+          token: token
+        );
         _pendingSticker = pending;
       }
       await personalStickers.add(pending.url, pending.requestID);
+      if (!current()) return;
       _pendingSticker = null;
     } on StickerApiException catch (error) {
+      if (!current()) return;
       if ([1001, 20012, 20021, 20022, 20023].contains(error.code)) {
         _pendingSticker = null;
       }
-      IMViews.showToast('收藏失败：$error');
+      IMViews.showErrorToast((error.code, error.message));
     } catch (error) {
-      IMViews.showToast('收藏失败：$error');
+      if (current()) {
+        IMViews.showErrorToast(error, fallback: '收藏失败，请稍后重试');
+      }
+    } finally {
+      _addingPersonalSticker = false;
     }
   }
 

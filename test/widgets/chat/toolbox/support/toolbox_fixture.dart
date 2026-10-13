@@ -51,6 +51,7 @@ Future<void> mountToolbox(WidgetTester tester, Widget child,
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   tester.view.padding = FakeViewPadding(bottom: safeBottom);
+  tester.view.viewPadding = FakeViewPadding(bottom: safeBottom);
   addTearDown(tester.view.reset);
   final wasDark = Styles.isDark;
   Styles.isDark = brightness == Brightness.dark;

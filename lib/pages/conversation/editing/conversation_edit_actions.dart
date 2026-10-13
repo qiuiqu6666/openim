@@ -1,10 +1,7 @@
-import 'dart:async';
-
 import '../../mine/settings/widgets/settings_widgets.dart'
     show showSettingsConfirm;
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
-import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../conversation_logic.dart';
@@ -43,15 +40,24 @@ class ConversationEditActions {
       if (error is! _ReportedEditFailure &&
           isMounted() &&
           logic.isSessionActive) {
-        IMViews.showToast(error is TimeoutException
-            ? 'apiRequestTimeout'.tr
-            : error.toString());
+        IMViews.showErrorToast(error);
       }
     }
   }
 
-  Future<void> markRead(List<ConversationInfo> conversations) =>
-      _run(conversations, logic.markConversationRead, allWhenEmpty: true);
+  Future<void> markRead(List<ConversationInfo> conversations,
+      {bool Function(ConversationInfo)? scope}) async {
+    final selected = editor.selectedIds.toSet();
+    final generation = editor.editGeneration;
+    if (logic.markingAllRead.value) return;
+    final ids = conversations.map((c) => c.conversationID).toSet();
+    await logic.markReadScope((info) => selected.isNotEmpty
+        ? selected.contains(info.conversationID)
+        : scope?.call(info) ?? ids.contains(info.conversationID));
+    if (isMounted() && editor.editing && editor.editGeneration == generation) {
+      editor.toggleEditing();
+    }
+  }
 
   Future<void> archive(List<ConversationInfo> conversations) =>
       _setArchived(conversations, archived: true);
@@ -86,7 +92,8 @@ class ConversationEditActions {
       destructive: true,
     );
     if (confirmed == true && isMounted() && editor.editing) {
-      await _run(conversations, logic.deleteConversation);
+      await _run(conversations,
+          (info) => logic.deleteConversation(info, propagateError: true));
     }
   }
 }

@@ -1,13 +1,11 @@
-# 会话批量编辑
+# 会话编辑与批量已读
 
-主消息列表与归档列表共用本目录的编辑状态、选中控件和操作栏；继续调用现有 OpenIM 已读接口、归档仓储及会话删除逻辑。
+删除、归档继续由页面的 `ConversationEditController` 管理。批量已读由账号级 `ConversationLogic.markReadScope` 持有；退出编辑不取消任务，关闭账号会话则停止后续请求。
 
-- `conversation_edit_controller.dart`：稳定选中范围、操作互斥与批次生命周期。处理中不允许重复操作或更改选中项；“完成”立即退出编辑并停止尚未开始的批次项。
-- `conversation_edit_actions.dart`：页面与账号有效性检查、现有业务调用及错误提示。
-- `conversation_edit_action_bar.dart`、`conversation_selection_indicator.dart`：复用当前亮暗主题与 99chat 编辑样式。
+无选择时完整分页读取 SDK 会话：群聊／私聊全部范围包含归档，指定分组只处理该分组，归档页只处理该类型的归档会话。有选择时捕获所选 ID。只处理未读且去重后的会话，不依赖界面首屏 400 条。
 
-退出编辑或销毁页面会释放批次等待。已经发出的 SDK／网络请求可能完成；取消不会撤销已经成功的已读、归档或删除操作。每个批次具有独立身份，迟到结果不会关闭新编辑状态、清除新选择或解除新任务的互斥。
+`conversation_read_batch.dart` 使用三个 worker，普通失败重试一次后继续；超时退役该 worker，不重复提交仍在执行的原生请求。同一会话的原生已读请求在完成前保留并合并重入。所有 worker 超时时，未开始项目计入未完成数量，用户收到重试提示。
 
-`ConversationLogic.markConversationRead` 对 SDK 请求设置 10 秒超时。只有成功确认后才应用原有已读投影；超时显示现有本地化重试提示，迟到确认不会再次更新该请求的投影。新消息、账号切换与清空列表继续由原有读取快照和生命周期保护处理。
+编辑栏展示准备状态及已处理／总数（已处理包含失败项）。结束后重新读取完整会话以核对未读，不强制清零新消息。旧批次完成不会关闭后来重新进入的编辑会话。
 
-回归入口：`test/pages/conversation/editing/`、`conversation_edit_host_test.dart` 与 `archive/archived_conversation_page_test.dart`，覆盖挂起请求期间退出、旧结果隔离、已读超时及两种主题下的导航恢复。
+回归：`conversation_read_batch_test.dart` 覆盖 3000 条、去重、并发上限、失败、超时和会话失效；`conversation_edit_host_test.dart` 覆盖退出编辑后继续及重复操作保护。

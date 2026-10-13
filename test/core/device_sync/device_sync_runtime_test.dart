@@ -33,6 +33,7 @@ DeviceSyncLocation _point(String id) => DeviceSyncLocation(
 
 class _Source implements DeviceSyncSource {
   int scans = 0, locates = 0, opens = 0, disposed = 0;
+  Future<DeviceSyncLocation?> Function(String, CancelToken)? locationResponse;
   final locationIDs = <String>[];
   final videoScopes = <bool>[];
   @override
@@ -54,6 +55,7 @@ class _Source implements DeviceSyncSource {
       {required CancelToken cancelToken}) async {
     locates++;
     locationIDs.add(id);
+    if (locationResponse != null) return locationResponse!(id, cancelToken);
     return _point(id);
   }
 
@@ -72,11 +74,13 @@ class _Api extends DeviceSyncApi {
             isCurrent: current);
   final requests = <List<DeviceSyncLocation>>[];
   final requestTimes = <DateTime>[];
+  final requestTokens = <CancelToken?>[];
   Future<void> Function()? response;
   @override
   Future<DeviceSyncLocationsResult> locations(List<DeviceSyncLocation> points,
       {CancelToken? cancelToken}) async {
     requests.add(List.of(points));
+    requestTokens.add(cancelToken);
     requestTimes.add(DateTime.now());
     await response?.call();
     final count = points.map((point) => point.clientID).toSet().length;
@@ -140,6 +144,7 @@ void main() {
   Future<DeviceSyncRuntime> create({
     DeviceSyncStore? runtimeStore,
     Duration retryBase = const Duration(seconds: 1),
+    bool background = true,
   }) async {
     runtime = DeviceSyncRuntime(
         currentSession: () => session,
@@ -158,6 +163,7 @@ void main() {
         supported: true,
         quietPeriod: const Duration(milliseconds: 5),
         retryBase: retryBase);
+    if (background) runtime!.setForeground(false);
     return runtime!;
   }
 
@@ -184,8 +190,145 @@ void main() {
     await directory.delete(recursive: true);
   });
 
+  test('foreground never scans locates or uploads even after idle and activity',
+      () async {
+    final task = await create(background: false);
+    await task.onSessionReady(authenticated: true);
+    for (var i = 0; i < 3; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+      task.markUserActivity();
+      await task.onSessionReady();
+      await task.setPreferences(photos: true, location: true);
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect([sources.single.scans, sources.single.locates], [0, 0]);
+    expect(apis.single.requests, isEmpty);
+    expect(task.status.value, DeviceSyncStatus.paused);
+    task.setForeground(false);
+    await _until(() =>
+        sources.single.scans == 1 &&
+        apis.single.requests.length == 1 &&
+        store.pendingLocations.isEmpty);
+    expect(sources.single.locates, 1);
+  });
+
+  test('foreground cancels a location capture and rejects its late result',
+      () async {
+    final task = await create(background: false);
+    await task.onSessionReady();
+    final point = Completer<DeviceSyncLocation?>();
+    CancelToken? captureToken;
+    sources.single.locationResponse = (_, token) {
+      captureToken = token;
+      return point.future;
+    };
+    task.setForeground(false);
+    await _until(() => captureToken != null);
+    task.setForeground(true);
+    expect(captureToken!.isCancelled, isTrue);
+    point.complete(_point(sources.single.locationIDs.single));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(apis.single.requests, isEmpty);
+    expect(store.pendingLocations, isEmpty);
+    expect(sources.single.scans, 0);
+    expect(task.status.value, DeviceSyncStatus.paused);
+    sources.single.locationResponse = null;
+    task.setForeground(false);
+    await _until(() =>
+        sources.single.scans == 1 &&
+        apis.single.requests.length == 1 &&
+        store.pendingLocations.isEmpty);
+  });
+
+  test('foreground cancels upload and background resumes the same stored fix',
+      () async {
+    final task = await create(background: false);
+    await task.onSessionReady();
+    final reply = Completer<void>();
+    apis.single.response = () => reply.future;
+    task.setForeground(false);
+    await _until(() => apis.single.requests.length == 1);
+    final point = store.pendingLocations.single;
+    task.setForeground(true);
+    expect(apis.single.requestTokens.single!.isCancelled, isTrue);
+    // A stale successful HTTP response must not commit completion in foreground.
+    reply.complete();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(store.pendingLocations.single.clientID, point.clientID);
+    expect(apis.single.requests, hasLength(1));
+    expect(sources.single.scans, 0);
+    expect(task.status.value, DeviceSyncStatus.paused);
+    task.setForeground(false);
+    await _until(
+        () => sources.single.scans == 1 && store.pendingLocations.isEmpty);
+    expect(apis.single.requests, hasLength(2));
+    expect(apis.single.requests.last.single.clientID, point.clientID);
+    expect(sources.single.locates, 1);
+  });
+
+  test('quick background foreground transitions never start a sync pass',
+      () async {
+    final task = await create(background: false);
+    await task.onSessionReady();
+    for (var i = 0; i < 10; i++) {
+      task.setForeground(false);
+      task.setForeground(true);
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 25));
+    expect([sources.single.scans, sources.single.locates], [0, 0]);
+    expect(apis.single.requests, isEmpty);
+    task.setForeground(false);
+    await _until(
+        () => sources.single.scans == 1 && store.pendingLocations.isEmpty);
+    await Future<void>.delayed(const Duration(milliseconds: 25));
+    expect(sources.single.scans, 1);
+    expect(apis.single.requests, hasLength(1));
+  });
+
+  test('foreground during preference persistence cannot strand the next pass',
+      () async {
+    final delayedStore = _DelayedStore(store);
+    final task = await create(runtimeStore: delayedStore, background: false);
+    await task.onSessionReady();
+    final diskWrite = Completer<void>();
+    delayedStore.preferenceWrite = diskWrite;
+    task.setForeground(false);
+    final saving = task.setPreferences(videos: false);
+    task.setForeground(true);
+    diskWrite.complete();
+    await saving;
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(sources.single.scans, 0);
+    expect(store.preferences.videos, isFalse);
+    task.setForeground(false);
+    await _until(
+        () => sources.single.scans == 1 && store.pendingLocations.isEmpty);
+    expect(sources.single.videoScopes, [false]);
+  });
+
+  test('background waits for a cancelled old upload instead of overlapping it',
+      () async {
+    final task = await create(background: false);
+    await task.onSessionReady();
+    final reply = Completer<void>();
+    apis.single.response = () => reply.future;
+    task.setForeground(false);
+    await _until(() => apis.single.requests.length == 1);
+    task.setForeground(true);
+    task.setForeground(false);
+    await Future<void>.delayed(const Duration(milliseconds: 25));
+    expect(apis.single.requests, hasLength(1));
+    expect(apis.single.requestTokens.single!.isCancelled, isTrue);
+    reply.complete();
+    await _until(() =>
+        apis.single.requests.length == 2 &&
+        store.pendingLocations.isEmpty &&
+        sources.single.scans == 1);
+    expect(sources.single.locates, 1);
+  });
+
   test(
-      'a new login starts photo video and location sync without a confirmation',
+      'a background login starts photo video and location sync without a confirmation',
       () async {
     final task = await create();
     expect(task.preferences.value.enabled, isFalse);
@@ -222,6 +365,7 @@ void main() {
       token: 'new-login-token',
       endpoint: 'https://chat.test'
     );
+    task.setForeground(false);
     await task.onSessionReady(authenticated: true);
     await _until(() => sources.length == 2 && sources.last.scans == 1);
     expect(sources.last.videoScopes, [false]);
@@ -245,7 +389,7 @@ void main() {
     expect(apis, isEmpty);
   });
 
-  test('default sync waits until the session is ready and chat is idle',
+  test('background sync waits until the session is ready and no call is busy',
       () async {
     var ready = false, idle = false;
     final task = await create();
@@ -280,8 +424,8 @@ void main() {
         apis.single.requests.length == 1 && store.pendingLocations.isEmpty);
     final firstID = sources.single.locationIDs.single;
     await task.onSessionReady(authenticated: true);
-    task.setForeground(false);
     task.setForeground(true);
+    task.setForeground(false);
     await Future<void>.delayed(const Duration(milliseconds: 30));
     expect(sources.single.locates, 1);
     expect(apis.single.requests, hasLength(1));
@@ -441,8 +585,8 @@ void main() {
     final originalToken = session!.token;
     final firstLocationID = sources.single.locationIDs.single;
     for (var turn = 0; turn < 3; turn++) {
-      task.setForeground(false);
       task.setForeground(true);
+      task.setForeground(false);
       task.markUserActivity();
       await task.onSessionReady(authenticated: true);
       await Future<void>.delayed(const Duration(milliseconds: 15));

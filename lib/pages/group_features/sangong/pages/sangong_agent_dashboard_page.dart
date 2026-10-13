@@ -43,20 +43,7 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
   @override
   void initState() {
     super.initState();
-    _accountSession.runtime.http.agentDataRevision
-        .addListener(_onAgentDataChanged);
     _load();
-  }
-
-  @override
-  void dispose() {
-    _accountSession.runtime.http.agentDataRevision
-        .removeListener(_onAgentDataChanged);
-    super.dispose();
-  }
-
-  void _onAgentDataChanged() {
-    if (_isCurrentSession) _load();
   }
 
   Future<void> _load() async {

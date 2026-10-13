@@ -19,7 +19,7 @@ class AppMaterialPageRoute<T> extends PageRouteBuilder<T>
     super.opaque = true,
     this.edgeStartWidthPx = AppSwipeBackTokens.edgeWidth,
     this.pushCurve = AppSwipeBackTokens.curve,
-    this.popCurve = AppSwipeBackTokens.curve,
+    this.popCurve = AppSwipeBackTokens.reverseCurve,
     this.enableFullScreenBackGesture = true,
     Duration transitionDuration = AppSwipeBackTokens.transitionDuration,
     Duration reverseTransitionDuration = AppSwipeBackTokens.transitionDuration,

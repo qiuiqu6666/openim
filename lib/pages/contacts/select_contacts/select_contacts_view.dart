@@ -90,6 +90,30 @@ class SelectContactsPage extends StatelessWidget {
                     ),
                     itemExtent: 56.h,
                   ),
+                  if (logic.recentLoading.value)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.all(AppTokens.s3),
+                        child: Center(
+                            child: SizedBox.square(
+                          dimension: AppTokens.s5,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )),
+                      ),
+                    ),
+                  if (logic.recentLoadFailed.value)
+                    SliverToBoxAdapter(
+                      child: Center(
+                          child: TextButton(
+                        onPressed: logic.recentLoading.value
+                            ? null
+                            : logic.reloadRecentConversations,
+                        child: Text(
+                            Localizations.localeOf(context).languageCode == 'zh'
+                                ? '会话加载失败，点击重试'
+                                : 'Could not load chats. Retry'),
+                      )),
+                    ),
                   if (conversations.isNotEmpty)
                     SliverToBoxAdapter(
                       child: Container(

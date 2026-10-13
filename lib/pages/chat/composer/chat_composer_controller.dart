@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -7,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'formatted_message_page.dart';
+import 'chat_draft.dart';
 
 enum ComposerMemberSelection { mention, directional }
 
@@ -79,6 +79,7 @@ class ChatComposerController {
   final Map<String, String> _mentions = {};
   Timer? _draftTimer;
   Timer? _typingTimer;
+  DateTime? _lastTypingReport;
   Future<void> _draftWrites = Future<void>.value();
   String _previousInput = '';
   String _previousCommittedInput = '';
@@ -106,22 +107,12 @@ class ChatComposerController {
 
   void restoreDraft(String? draft) {
     if (_closed || draft == null || draft.isEmpty) return;
-    var text = draft;
-    _mentions.clear();
-    try {
-      final data = jsonDecode(draft);
-      if (data is Map && data['text'] is String) {
-        text = data['text'];
-        final storedMentions = data['mentions'];
-        if (storedMentions is Map) {
-          for (final entry in storedMentions.entries) {
-            if (entry.key is String && entry.value is String) {
-              _mentions[entry.key] = entry.value;
-            }
-          }
-        }
-      }
-    } catch (_) {/* Legacy drafts contain plain text. */}
+    final restored = ChatDraft.decode(draft);
+    final text = restored.text;
+    _mentions
+      ..clear()
+      ..addAll(restored.mentions);
+    quotedMessage.value = restored.quote;
     _restoringDraft = true;
     try {
       inputCtrl.value = TextEditingValue(
@@ -135,9 +126,8 @@ class ChatComposerController {
 
   Future<void> saveDraft() {
     if (_closed) return _draftWrites;
-    final text = inputCtrl.text;
     final draft =
-        text.isEmpty ? '' : jsonEncode({'text': text, 'mentions': _mentions});
+        ChatDraft(inputCtrl.text, _mentions, quotedMessage.value).encode();
     final id = conversationID();
     _draftWrites = _draftWrites.then((_) => persistDraft(id, draft)).catchError(
       (Object error) {
@@ -153,10 +143,18 @@ class ChatComposerController {
 
   void _onInputChanged() {
     if (_closed || _restoringDraft) return;
+    final textChanged = inputCtrl.text != _previousInput;
     inputChanged();
-    onTypingChanged(true);
+    if (!textChanged) return;
+    final now = DateTime.now();
+    if (_lastTypingReport == null ||
+        now.difference(_lastTypingReport!) >= const Duration(seconds: 1)) {
+      onTypingChanged(true);
+      _lastTypingReport = now;
+    }
     _typingTimer?.cancel();
     _typingTimer = Timer(const Duration(seconds: 1), () {
+      _lastTypingReport = null;
       if (!_closed) onTypingChanged(false);
     });
   }
@@ -312,13 +310,16 @@ class ChatComposerController {
     if (_closed) return;
     _quoteRevision++;
     quotedMessage.value = message;
+    unawaited(saveDraft());
     focusNode.requestFocus();
   }
 
   void clearReply() {
     if (!_closed) {
       _quoteRevision++;
+      final hadQuote = quotedMessage.value != null;
       quotedMessage.value = null;
+      if (hadQuote) unawaited(saveDraft());
     }
   }
 

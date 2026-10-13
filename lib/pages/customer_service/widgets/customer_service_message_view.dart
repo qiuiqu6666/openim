@@ -140,6 +140,15 @@ class CustomerServiceMessageView extends StatelessWidget {
       required String name}) {
     final video = kind == 'video';
     final image = kind == 'image';
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final decodeWidth = (CustomerServiceTokens.mediaWidth * pixelRatio)
+        .ceil()
+        .clamp(1, 1024)
+        .toInt();
+    final decodeHeight = (CustomerServiceTokens.mediaHeight * pixelRatio)
+        .ceil()
+        .clamp(1, 1024)
+        .toInt();
     return InkWell(
       onTap: () => onOpenMedia(
           url: url,
@@ -159,18 +168,29 @@ class CustomerServiceMessageView extends StatelessWidget {
               height: CustomerServiceTokens.mediaHeight,
               child: Stack(fit: StackFit.expand, children: [
                 if (path.isNotEmpty && image)
-                  Image.file(File(path),
+                  ImageUtil.fileImage(
+                      file: File(path),
+                      cacheWidth: decodeWidth,
+                      cacheHeight: decodeHeight,
+                      resizePolicy: ResizeImagePolicy.fit,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => _placeholder(context))
+                      errorWidget: _placeholder(context))
                 else if ((video ? thumbnail : url).startsWith('http'))
                   ImageUtil.networkImage(
                       url: video ? thumbnail : url,
+                      cacheWidth: decodeWidth,
+                      cacheHeight: decodeHeight,
+                      resizePolicy: ResizeImagePolicy.fit,
                       fit: BoxFit.contain,
                       errorWidget: _placeholder(context))
                 else if (video && thumbnail.isNotEmpty)
-                  Image.file(File(thumbnail),
+                  ImageUtil.fileImage(
+                      file: File(thumbnail),
+                      cacheWidth: decodeWidth,
+                      cacheHeight: decodeHeight,
+                      resizePolicy: ResizeImagePolicy.fit,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => _placeholder(context))
+                      errorWidget: _placeholder(context))
                 else
                   _placeholder(context),
                 if (video)

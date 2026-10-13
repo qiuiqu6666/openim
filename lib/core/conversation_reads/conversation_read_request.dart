@@ -1,13 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'package:openim_common/openim_common.dart'
+    show ConversationRefreshRequest;
 
 /// Captures the exact conversation target before its native read is sent.
 /// Completion reports the SDK outcome without retaining a mutable SDK model.
 class ConversationReadRequest {
   ConversationReadRequest.capture(ConversationInfo info,
-      {Message? visibleLatestMessage, int knownUnreadCount = 0})
+      {Message? visibleLatestMessage,
+      int knownUnreadCount = 0,
+      Iterable<String> retryMessageIDs = const []})
       : conversationID = info.conversationID,
+        _session = ConversationRefreshRequest(
+            accountID: OpenIM.iMManager.userID,
+            conversationID: info.conversationID),
+        retryMessageIDs = List.unmodifiable(retryMessageIDs.toSet()),
         latestMsgSendTime = visibleLatestMessage == null
             ? info.latestMsgSendTime
             : visibleLatestMessage.sendTime ?? info.latestMsgSendTime,
@@ -22,6 +30,12 @@ class ConversationReadRequest {
         _previewUnreadCount = info.unreadCount;
 
   final String conversationID;
+  final ConversationRefreshRequest _session;
+  bool get isCurrent => _session.isCurrent;
+
+  /// Ordinary, sequenced messages captured before sending. Never a permission
+  /// to repeat a whole-conversation read after the route has gone away.
+  final List<String> retryMessageIDs;
   final int? latestMsgSendTime;
   final String? messageID;
   final int? messageSequence;

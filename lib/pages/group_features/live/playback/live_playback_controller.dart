@@ -30,6 +30,7 @@ class LivePlaybackController extends ChangeNotifier {
   final LiveVideoFactory _factory;
   final _closed = StreamController<void>.broadcast();
   VideoPlayerController? player;
+  (bool, double, String?)? _playerPresentation;
   Timer? _startup;
   late final LiveCredentialRenewal _renewal;
   final _surfaces = <Object, ({bool visible, Object? owner})>{};
@@ -113,6 +114,7 @@ class LivePlaybackController extends ChangeNotifier {
     _startup?.cancel();
     final old = player;
     player = null;
+    _playerPresentation = null;
     old?.removeListener(_changed);
     await old?.dispose();
     if (!current || !_canDisplay || generation != _generation) return;
@@ -154,24 +156,28 @@ class LivePlaybackController extends ChangeNotifier {
 
   void _changed() {
     if (!current || player == null) return;
-    if (_expiredCredentials) {
-      notifyListeners();
+    if (_expiredCredentials) return;
+    final value = player!.value;
+    final presentation =
+        (value.isInitialized, value.aspectRatio, value.errorDescription);
+    final presentationChanged = presentation != _playerPresentation;
+    _playerPresentation = presentation;
+    if (value.hasError) {
+      if (presentationChanged) _failed(StateError('直播播放异常，请重试'));
       return;
     }
-    final value = player!.value;
-    if (value.hasError) {
-      _failed(StateError('直播播放异常，请重试'));
-      return;
-    } else if (!ready &&
-        value.isInitialized &&
-        value.position > Duration.zero) {
+    final becameReady =
+        !ready && value.isInitialized && value.position > Duration.zero;
+    if (becameReady) {
       // video_player exposes position, not a first-rendered-frame callback.
       ready = true;
       loading = false;
       error = null;
       _startup?.cancel();
     }
-    notifyListeners();
+    // The live surface uses initialization/aspect/error and our first-progress
+    // readiness state, not every position/buffered-range update.
+    if (presentationChanged || becameReady) notifyListeners();
   }
 
   void _failed(Object failure) {

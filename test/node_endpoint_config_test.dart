@@ -16,15 +16,19 @@ void main() {
   }
 
   test('default endpoints use the requested direct route', expectDirect);
-  test('selected domain fallback remains effective for this launch', () async {
+  test('saved retired domain node resolves to the direct route', () async {
     await DataSp.putServerConfig({
       'authUrl': 'https://99chatapi.99chat.vip',
       'apiUrl': 'https://99imapi.99chat.vip',
       'wsUrl': 'wss://websocket.99chat.vip',
     });
-    expect(Config.appAuthUrl, 'https://99chatapi.99chat.vip');
-    expect(Config.imApiUrl, 'https://99imapi.99chat.vip');
-    expect(Config.imWsUrl, 'wss://websocket.99chat.vip');
+    expectDirect();
+    await DataSp.putServerConfig({
+      'authUrl': ' https://99chatapi.99chat.vip/ ',
+      'apiUrl': 'https://99imapi.99chat.vip/',
+      'wsUrl': 'wss://websocket.99chat.vip/',
+    });
+    expectDirect();
   });
   test('selected direct fallback remains effective for this launch', () async {
     await DataSp.putServerConfig({

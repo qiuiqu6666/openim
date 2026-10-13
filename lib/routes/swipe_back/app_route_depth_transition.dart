@@ -1,21 +1,18 @@
 import 'package:flutter/material.dart';
+import 'app_route_slide.dart';
 import 'app_swipe_back_tokens.dart';
 
+/// Subtle parallax and dimming of the page being covered, without scaling.
 class AppRouteDepthTransition extends StatelessWidget {
-  const AppRouteDepthTransition({
-    super.key,
-    required this.animation,
-    required this.child,
-    this.curve = defaultCurve,
-    this.reverseCurve = defaultCurve,
-  });
-
+  const AppRouteDepthTransition(
+      {super.key,
+      required this.animation,
+      required this.child,
+      this.curve = defaultCurve,
+      this.reverseCurve = AppSwipeBackTokens.reverseCurve});
   static const Duration transitionDuration =
       AppSwipeBackTokens.transitionDuration;
   static const Curve defaultCurve = AppSwipeBackTokens.curve;
-  static const double recededScale = AppSwipeBackTokens.recededScale;
-  static const double maximumScrimOpacity = AppSwipeBackTokens.scrimOpacity;
-
   final Animation<double> animation;
   final Widget child;
   final Curve curve;
@@ -33,42 +30,10 @@ class AppRouteDepthTransition extends StatelessWidget {
               animation: secondaryAnimation, child: child);
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
+  Widget build(BuildContext context) => AppRouteSlide(
       animation: animation,
-      child: child,
-      builder: (context, child) {
-        final activeCurve =
-            animation.status == AnimationStatus.reverse ? reverseCurve : curve;
-        final progress = MediaQuery.disableAnimationsOf(context)
-            ? 0.0
-            : activeCurve.transform(animation.value.clamp(0.0, 1.0));
-        final scrimOpacity = maximumScrimOpacity * progress;
-        return ColoredBox(
-          color: ModalRoute.of(context)?.opaque == false
-              ? Colors.transparent
-              : Theme.of(context).scaffoldBackgroundColor,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Transform.scale(
-                scale: 1.0 - (1.0 - recededScale) * progress,
-                child: child!,
-              ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: ColoredBox(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .scrim
-                        .withValues(alpha: scrimOpacity),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+      curve: curve,
+      reverseCurve: reverseCurve,
+      incoming: false,
+      child: child);
 }

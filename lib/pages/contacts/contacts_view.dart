@@ -12,6 +12,7 @@ import 'directory/widgets/contacts_search_bar.dart';
 import 'presence_label.dart';
 import 'presence/contact_presence_policy.dart';
 import '../../core/controller/im_controller.dart';
+import '../../core/im_callback.dart';
 import 'navigation/contacts_header.dart';
 import '../official_account/widgets/official_account_name_label.dart';
 
@@ -39,11 +40,19 @@ class ContactsPage extends StatelessWidget {
           onCreateGroup: logic.createContactsGroup,
           onScan: logic.scanContacts,
           initialStatus: Get.isRegistered<IMController>()
-              ? Get.find<IMController>().currentSdkStatus
+              ? Get.find<IMController>().currentConnectionStatus ??
+                  IMSdkStatus.connecting
+              : null,
+          apiAvailable: Get.isRegistered<IMController>()
+              ? Get.find<IMController>().apiConnectionHealth?.available
               : null,
           sdkStatus: Get.isRegistered<IMController>()
               ? Get.find<IMController>()
                   .imSdkStatusSubject
+                  .where((event) =>
+                      event.status == IMSdkStatus.connecting ||
+                      event.status == IMSdkStatus.connectionFailed ||
+                      event.status == IMSdkStatus.connectionSucceeded)
                   .map((event) => event.status)
                   .distinct()
               : null,
@@ -255,7 +264,14 @@ class ContactsPage extends StatelessWidget {
               ? const SizedBox.square(
                   dimension: 20,
                   child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(label, style: Styles.ts_8E9AB0_13sp)),
+              : logic.friendsLoadFailed.value
+                  ? TextButton(
+                      onPressed: logic.loadFriends,
+                      child: Text(chinese
+                          ? '联系人加载失败，点击重试'
+                          : 'Could not load contacts. Retry'),
+                    )
+                  : Text(label, style: Styles.ts_8E9AB0_13sp)),
     );
   }
 }

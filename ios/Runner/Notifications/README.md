@@ -4,6 +4,8 @@
 
 ## 调用契约
 
+通知展示仅使用会话标题和消息正文；在通信头像更新后显式清空系统生成的 subtitle，避免群消息出现第三行。Dart 通知策略不再给群正文拼接发送人昵称，真实发送人身份仍保留在通信 intent 中。
+
 MethodChannel 为 `openim_chat_notifications`，由主 Flutter engine 的 `AppDelegate` 创建并持有。
 
 | 方法 | 参数 | 行为 |

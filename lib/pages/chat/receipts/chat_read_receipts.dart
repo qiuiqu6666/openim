@@ -157,7 +157,18 @@ class ChatReadReceipts {
     // Capture the actual painted target, rather than the older preview.
     final request = ConversationReadRequest.capture(info,
         visibleLatestMessage: fromViewport ? latest : null,
-        knownUnreadCount: fromViewport ? _knownUnreadCount(info) : 0);
+        knownUnreadCount: fromViewport ? _knownUnreadCount(info) : 0,
+        retryMessageIDs: fromViewport && info.isPrivateChat != true
+            ? _visibleIDs
+                .map((id) => _messagesByID[id])
+                .whereType<Message>()
+                .where((message) =>
+                    _incomingContent(message) &&
+                    (message.seq ?? 0) > 0 &&
+                    message.attachedInfoElem?.isPrivateChat != true &&
+                    message.clientMsgID?.isNotEmpty == true)
+                .map((message) => message.clientMsgID!)
+            : const []);
     final targetID = latest?.clientMsgID;
     _sdkInFlight[targetID] = (_sdkInFlight[targetID] ?? 0) + 1;
     _onConversationRead?.call(request);
@@ -325,7 +336,11 @@ class ChatReadReceipts {
             conversationID: conversationInfo.conversationID,
             messageIDList: [id]);
       } else {
-        await markConversationRead(message.seq ?? 0);
+        // Hearing one older voice does not prove the newer conversation was
+        // seen. Its local voiceHeard flag is independent from SDK unread.
+        final voice = message.contentType == MessageType.voice;
+        if (voice && !_latestIsVisible) return;
+        await _markConversationRead(message.seq ?? 0, requireVisible: voice);
       }
       if (isClosed) return;
       message.isRead = true;

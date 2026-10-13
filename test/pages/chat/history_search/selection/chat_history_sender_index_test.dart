@@ -7,10 +7,10 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/history_search/selection/chat_history_date_page.dart';
-import 'package:openim/pages/chat/history_search/selection/chat_history_sender_directory.dart';
 import 'package:openim/pages/chat/history_search/selection/chat_history_sender_page.dart';
 import 'package:openim/pages/chat/history_search/selection/chat_history_sender_source.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 typedef _Loader = Future<ChatHistorySenderPageData> Function(String, int);
 
@@ -43,10 +43,13 @@ ChatHistorySenderPageData _page(List<ChatHistorySender> items,
     );
 
 Finder _row(String id) => find.byKey(ValueKey('chat-history-sender-$id'));
-Finder _letter(String letter) =>
-    find.descendant(of: find.byType(IndexBar), matching: find.text(letter));
-AzListView _directory(WidgetTester tester) =>
-    tester.widget<AzListView>(find.byType(AzListView));
+ScrollablePositionedList _directory(WidgetTester tester) => tester
+    .widget<ScrollablePositionedList>(find.byType(ScrollablePositionedList));
+Finder _scrollable() => find
+    .descendant(
+        of: find.byType(ScrollablePositionedList),
+        matching: find.byType(Scrollable))
+    .first;
 
 Future<void> _open<T>(
   WidgetTester tester,
@@ -97,7 +100,7 @@ void main() {
 
   for (final brightness in Brightness.values) {
     testWidgets(
-        'sender index sorts Chinese and Latin names as D/Q/# ($brightness)',
+        'sender list keeps SDK order without alphabet sections ($brightness)',
         (tester) async {
       final source = _Source((_, __) async => _page([
             _sender('other', '🍀'),
@@ -108,18 +111,15 @@ void main() {
       await _open(tester,
           ChatHistorySenderPage(conversationID: 'current-chat', source: source),
           brightness: brightness);
-      expect(_directory(tester).indexBarData, ['D', 'Q', '#']);
-      expect(_directory(tester).data.map((item) => item.getSuspensionTag()),
-          ['D', 'D', 'Q', '#']);
-      expect(_letter('D'), findsOneWidget);
-      expect(_letter('Q'), findsOneWidget);
-      expect(_letter('#'), findsOneWidget);
-      expect(tester.getTopLeft(_row('david')).dy,
-          lessThan(tester.getTopLeft(_row('qian')).dy));
-      expect(tester.getTopLeft(_row('ding')).dy,
+      expect(_directory(tester).itemCount, 4);
+      expect(find.byType(AzListView), findsNothing);
+      expect(find.byType(IndexBar), findsNothing);
+      expect(tester.getTopLeft(_row('other')).dy,
           lessThan(tester.getTopLeft(_row('qian')).dy));
       expect(tester.getTopLeft(_row('qian')).dy,
-          lessThan(tester.getTopLeft(_row('other')).dy));
+          lessThan(tester.getTopLeft(_row('ding')).dy));
+      expect(tester.getTopLeft(_row('ding')).dy,
+          lessThan(tester.getTopLeft(_row('david')).dy));
       expect(tester.takeException(), isNull);
     });
 
@@ -143,7 +143,7 @@ void main() {
     });
   }
 
-  testWidgets('tapping and dragging letters jumps to real long-list sections',
+  testWidgets('long sender lists remain reachable by scrolling without letters',
       (tester) async {
     final source = _Source((_, __) async => _page([
           for (var i = 0; i < 20; i++)
@@ -154,34 +154,17 @@ void main() {
         ]));
     await _open(tester,
         ChatHistorySenderPage(conversationID: 'current-chat', source: source));
-    final rows = _directory(tester).data.cast<ChatHistorySenderRow>();
-    final firstD =
-        rows.firstWhere((row) => row.getSuspensionTag() == 'D').sender.userID;
-    final firstQ =
-        rows.firstWhere((row) => row.getSuspensionTag() == 'Q').sender.userID;
-    expect(_row(firstD).hitTestable(), findsOneWidget);
-    expect(_row(firstQ).hitTestable(), findsNothing);
-    await tester.tap(_letter('Q'));
-    await tester.pumpAndSettle();
-    expect(_row(firstQ).hitTestable(), findsOneWidget);
-    expect(_row(firstD).hitTestable(), findsNothing);
-
-    final gesture = await tester.startGesture(tester.getCenter(_letter('Q')));
-    await gesture.moveTo(tester.getCenter(_letter('D')));
-    // First movement wins the vertical drag arena; continue moving within D
-    // to deliver the update, as a finger sliding over the index does.
-    await gesture.moveBy(const Offset(0, -1));
-    await tester.pumpAndSettle();
-    expect(_row(firstD).hitTestable(), findsOneWidget);
-    await gesture.moveTo(tester.getCenter(_letter('#')));
-    await tester.pump();
-    await gesture.up();
+    expect(_row('d0').hitTestable(), findsOneWidget);
+    expect(_row('other').hitTestable(), findsNothing);
+    await tester.scrollUntilVisible(_row('other'), 400,
+        scrollable: _scrollable());
     await tester.pumpAndSettle();
     expect(_row('other').hitTestable(), findsOneWidget);
+    expect(_row('d0').hitTestable(), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('search resets alphabet and removes stale sections',
+  testWidgets('search resets the sender list and removes stale rows',
       (tester) async {
     final searched = Completer<ChatHistorySenderPageData>();
     final source = _Source((query, offset) async {
@@ -193,44 +176,63 @@ void main() {
     });
     await _open(tester,
         ChatHistorySenderPage(conversationID: 'current-chat', source: source));
-    expect(_directory(tester).indexBarData, ['D', 'Q', '#']);
+    expect(_directory(tester).itemCount, 3);
     await tester.enterText(find.byType(TextField), '钱');
     await tester.pump(const Duration(milliseconds: 310));
-    expect(_letter('D'), findsNothing);
+    expect(_row('d'), findsNothing);
     searched.complete(_page([_sender('q2', '钱小明')]));
     await tester.pumpAndSettle();
-    expect(_directory(tester).indexBarData, ['Q']);
-    expect(_letter('D'), findsNothing);
-    expect(_letter('#'), findsNothing);
+    expect(_directory(tester).itemCount, 1);
+    expect(_row('d'), findsNothing);
+    expect(_row('other'), findsNothing);
     expect(_row('q2'), findsOneWidget);
     expect(_row('q'), findsNothing);
     await tester.enterText(find.byType(TextField), 'none');
     await tester.pump(const Duration(milliseconds: 310));
     await tester.pumpAndSettle();
     expect(find.byType(IndexBar), findsNothing);
-    expect(find.byType(AzListView), findsNothing);
+    expect(find.byType(ScrollablePositionedList), findsNothing);
   });
 
   testWidgets(
-      'paging updates alphabet while retaining SDK cursor and selected sender',
+      'background pages append without reordering or recreating the viewport',
       (tester) async {
     final offsets = <int>[];
+    final middle = Completer<ChatHistorySenderPageData>();
+    final last = Completer<ChatHistorySenderPageData>();
     final source = _Source((query, offset) async {
       offsets.add(offset);
-      return offset == 0
-          ? _page([_sender('d', '丁一')], nextOffset: 50, hasMore: true)
-          : _page([_sender('q', '钱七'), _sender('other', '🍀')], nextOffset: 52);
+      if (offset == 0) {
+        return _page([_sender('d', '丁一')], nextOffset: 50, hasMore: true);
+      }
+      return offset == 50 ? middle.future : last.future;
     });
     ChatHistorySender? selected;
     await _open<ChatHistorySender>(tester,
         ChatHistorySenderPage(conversationID: 'current-chat', source: source),
         selected: (value) => selected = value);
-    expect(_directory(tester).indexBarData, ['D']);
-    await tester.tap(find.byKey(const ValueKey('chat-history-sender-more')));
+    expect(_directory(tester).itemCount, 1);
+    final initialState = tester.state(find.byType(ScrollablePositionedList));
+    final initialTop = tester.getTopLeft(_row('d')).dy;
+    await tester.pump(const Duration(milliseconds: 400));
+    middle.complete(_page([_sender('a', 'Alice'), _sender('q', '钱七')],
+        nextOffset: 100, hasMore: true));
     await tester.pumpAndSettle();
     expect(offsets, [0, 50]);
-    expect(_directory(tester).indexBarData, ['D', 'Q', '#']);
-    await tester.tap(_letter('Q'));
+    expect(_directory(tester).itemCount, 3);
+    expect(tester.getTopLeft(_row('d')).dy,
+        lessThan(tester.getTopLeft(_row('a')).dy));
+    expect(tester.getTopLeft(_row('d')).dy, initialTop);
+    await tester.pump(const Duration(milliseconds: 400));
+    last.complete(_page([_sender('d-before', 'David'), _sender('other', '🍀')],
+        nextOffset: 102));
+    // The very first completed frame must already have the correct anchor.
+    await tester.pump();
+    expect(offsets, [0, 50, 100]);
+    expect(_directory(tester).itemCount, 5);
+    expect(tester.state(find.byType(ScrollablePositionedList)),
+        same(initialState));
+    expect(tester.getTopLeft(_row('d')).dy, closeTo(initialTop, 1));
     await tester.pumpAndSettle();
     await tester.tap(_row('q'));
     await tester.pumpAndSettle();
@@ -239,7 +241,7 @@ void main() {
   });
 
   testWidgets(
-      'small screen and large text keep full alphabet and long names usable',
+      'small screen and large text keep the full-width member list usable',
       (tester) async {
     final source = _Source((_, __) async => _page([
           for (var code = 65; code <= 90; code++)
@@ -250,13 +252,14 @@ void main() {
     await _open(tester,
         ChatHistorySenderPage(conversationID: 'current-chat', source: source),
         size: const Size(320, 568), scale: 2);
-    expect(_directory(tester).indexBarData, hasLength(27));
+    expect(_directory(tester).itemCount, 27);
     expect(tester.takeException(), isNull);
-    final bar = tester.getRect(find.byType(IndexBar));
-    expect(bar.left, greaterThanOrEqualTo(0));
-    expect(bar.right, lessThanOrEqualTo(320));
-    expect(bar.bottom, lessThanOrEqualTo(568));
-    await tester.tap(_letter('Z'));
+    expect(find.byType(IndexBar), findsNothing);
+    final list = tester.getRect(find.byType(ScrollablePositionedList));
+    expect(list.left, greaterThanOrEqualTo(0));
+    expect(list.right, lessThanOrEqualTo(320));
+    expect(list.bottom, lessThanOrEqualTo(568));
+    await tester.scrollUntilVisible(_row('90'), 250, scrollable: _scrollable());
     await tester.pumpAndSettle();
     expect(_row('90').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);

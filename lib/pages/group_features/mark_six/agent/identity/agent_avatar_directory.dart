@@ -65,8 +65,9 @@ class AgentAvatarDirectory {
         if (!current) break;
         final urls = {
           for (final user in users)
-            if (ids.contains(user.userID))
-              user.userID!: user.faceURL?.trim() ?? '',
+            if (ids.contains(user.userID) &&
+                user.faceURL?.trim().isNotEmpty == true)
+              user.userID!: user.faceURL!.trim(),
         };
         for (final id in ids) {
           _cache.remove(id);
@@ -93,7 +94,6 @@ class AgentAvatarDirectory {
 
     _cancelLookup = () => finish([]);
     // Optional photos must never block the business list or show a toast.
-    // Consume late SDK results, but release the page's wait on disposal.
     Future.sync(() => _loadUsers(ids))
         .then(finish, onError: (Object _, StackTrace __) => finish([]));
     try {

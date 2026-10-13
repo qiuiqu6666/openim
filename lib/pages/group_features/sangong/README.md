@@ -80,3 +80,7 @@
 用户代理群：`agents/user_group/` 在用户详情复用 `AppDialog.prompt` 输入群 ID，`agents/data/` 保存个人归属。按旧 99chat 的 `AgentRebateApi.bindAgentChatGroup` 保存行为迁移，保留 OpenIM 原始群 ID。无需预先群级绑定或目标群管理员身份，入口根据登录用户＋群 ID 定位所属厅。接口与迁移说明见 `docs/sangong-go-v2-api.md` 的 6.1 节。
 
 固定厅代理入口：`agents/halls/` 维护厅模型、归属加载页及所属厅标签，复用现有代理总览、团队、个人页及权限保护。`SangongAgentHallPage` 校验唯一厅后直接打开页面，拥有独立运行上下文并在离开时释放；不保留选厅偏好或切换入口。`SangongPageRoute` 为子详情传递固定上下文。此入口承接旧 99chat 的单一群归属体验；服务端保证群级唯一，个人访问仍需明确授权。测试在 `test/pages/group_features/sangong/agents/halls/`，协议见文档 6.2 节。
+
+## Automatic refresh boundary
+
+Only the chat status banner and floating controls acquire SangongRealtimeScope for three-second snapshots and trusted state messages. Business routes use SangongScope without polling. Agent dashboard and team pages no longer reload on global agentDataRevision notifications. Entry loading, manual refresh, query changes and local operation completion remain available. Account, tenant and permission invalidation listeners remain mandatory.

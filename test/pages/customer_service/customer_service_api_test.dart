@@ -80,9 +80,9 @@ void main() {
 
   test('uses the approved deployment and permits explicit configuration', () {
     const defaults = CustomerServiceConfig();
-    expect(defaults.normalizedBaseUrl, 'http://129.226.192.93:8815');
+    expect(defaults.normalizedBaseUrl, 'http://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815');
     expect(defaults.inboxIdentifier, 'JucC6gvPuKjfzZxLtT5ftaiQ');
-    expect(defaults.cableUri.toString(), 'ws://129.226.192.93:8815/cable');
+    expect(defaults.cableUri.toString(), 'ws://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815/cable');
     expect(config.cableUri.toString(), 'wss://support.example/kefu/cable');
   });
 

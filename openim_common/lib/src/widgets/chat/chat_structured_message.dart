@@ -87,8 +87,12 @@ class ChatStructuredMessage extends StatelessWidget {
                 IMViews.showToast('sdkRecordTooDeep'.tr);
                 return;
               }
-              Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) =>
+              // Keep this navigator while using the host's shared GetX motion.
+              Navigator.of(context).push(GetPageRoute<void>(
+                  customTransition: Get.customTransition,
+                  transitionDuration: Get.defaultTransitionDuration,
+                  popGesture: false,
+                  page: () =>
                       _MergedHistory(message: message, depth: depth + 1)));
             }
           : _openLocation,

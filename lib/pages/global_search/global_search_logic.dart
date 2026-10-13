@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import '../conversation/conversation_logic.dart';
 import '../group_features/data/group_feature_store.dart';
+import 'cloud/global_history_cloud_search.dart';
 
 class GlobalSearchSource {
   Iterable<ConversationInfo> get currentConversations =>
@@ -62,8 +63,17 @@ class GlobalSearchSource {
 }
 
 class GlobalSearchLogic extends GetxController {
-  GlobalSearchLogic({GlobalSearchSource? source})
-      : source = source ?? GlobalSearchSource();
+  GlobalSearchLogic(
+      {GlobalSearchSource? source,
+      GlobalHistoryCloudSearch Function()? cloudFactory})
+      : source = source ?? GlobalSearchSource(),
+        _cloudFactory = cloudFactory ??
+            (source == null ? (() => GlobalHistoryCloudSearch()) : null);
+  final GlobalHistoryCloudSearch Function()? _cloudFactory;
+  GlobalHistoryCloudSearch? _cloud;
+  final cloudLoading = false.obs;
+  final cloudHasMore = false.obs;
+  String? _searchAccount, _searchToken;
   final GlobalSearchSource source;
   final searchCtrl = TextEditingController();
   final focusNode = FocusNode();
@@ -75,7 +85,7 @@ class GlobalSearchLogic extends GetxController {
   final failures = <int>{}.obs;
   final loading = false.obs;
   final query = ''.obs;
-  final index = 0.obs;
+  final index = 1.obs;
   Timer? _debounce;
   Timer? _conversationTimer;
   List<ConversationInfo>? _latestConversations;
@@ -122,6 +132,9 @@ class GlobalSearchLogic extends GetxController {
   }
 
   void clearList() {
+    _cloud = null;
+    cloudLoading.value = false;
+    cloudHasMore.value = false;
     contactsList.clear();
     groupList.clear();
     conversations.clear();
@@ -139,6 +152,12 @@ class GlobalSearchLogic extends GetxController {
     clearList();
     loading.value = key.isNotEmpty;
     if (key.isEmpty) return;
+    if (_cloudFactory != null) {
+      _searchAccount = OpenIM.iMManager.userID;
+      _searchToken = OpenIM.iMManager.token;
+    }
+    _cloud = _cloudFactory?.call();
+    cloudHasMore.value = _cloud?.hasMore ?? false;
     bool active() => !_closed && version == _generation;
     Future<void> section<T>(
         int id, Future<List<T>> Function() fetch, RxList<T> output) async {
@@ -158,9 +177,47 @@ class GlobalSearchLogic extends GetxController {
       section(2, () => source.groups(key), groupList),
       section(3, () => source.conversations(key), conversations),
       section(4, () => source.messages(key, false), textSearchResultItems),
-      section(5, () => source.messages(key, true), fileSearchResultItems),
     ]);
     if (active()) loading.value = false;
+    if (active()) await loadMoreCloud(singleBatch: true);
+  }
+
+  Future<void> loadMoreCloud({bool singleBatch = false}) async {
+    final cloud = _cloud;
+    if (_closed || cloud == null || !cloud.hasMore || cloudLoading.value) {
+      return;
+    }
+    final generation = _generation;
+    final keyword = query.value;
+    bool current() =>
+        !_closed &&
+        generation == _generation &&
+        identical(_cloud, cloud) &&
+        _searchAccount == OpenIM.iMManager.userID &&
+        _searchToken == OpenIM.iMManager.token;
+    if (!current()) return;
+    cloudLoading.value = true;
+    failures.remove(4);
+    try {
+      do {
+        await cloud.supplement(current);
+        if (!current()) return;
+        final results = await source.messages(keyword, false);
+        if (!current()) return;
+        textSearchResultItems.assignAll(results);
+        if (singleBatch || !cloud.hasMore) break;
+        // Empty matching batches are not extra result pages. Keep scanning
+        // serially, yielding between batches and honoring query/session changes.
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+      } while (current() && cloud.hasMore);
+    } catch (_) {
+      if (current()) failures.add(4);
+    } finally {
+      if (current()) {
+        cloudHasMore.value = cloud.hasMore;
+        cloudLoading.value = false;
+      }
+    }
   }
 
   @override

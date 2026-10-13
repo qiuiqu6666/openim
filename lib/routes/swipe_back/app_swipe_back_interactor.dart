@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_back_gesture_recognizer.dart';
+import 'app_back_settlement.dart';
 import 'app_swipe_back_tokens.dart';
 
 /// Route-owned gesture state shared by GetX, Material and wallet navigation.
@@ -99,17 +100,27 @@ class _AppSwipeBackInteractorState extends State<AppSwipeBackInteractor> {
         (velocity > AppSwipeBackTokens.velocity ||
             distance > width * AppSwipeBackTokens.distanceFraction);
     if (!shouldPop || !_allowed(duringDrag: true)) {
-      _cancel();
+      _cancel(velocity: velocity);
       return;
     }
     _dragging = false;
     _popRequested = true;
     // Rechecked synchronously above, including PopScope and local history.
     _navigator!.pop();
-    _finishUserGesture();
+    final controller = _controller!;
+    if (controller.isAnimating) {
+      controller.animateBackWith(AppBackSettlement(
+        position: controller.value,
+        target: 0,
+        velocity: -velocity / width,
+        width: width,
+      ));
+    } else {
+      _finishUserGesture();
+    }
   }
 
-  void _cancel() {
+  void _cancel({double velocity = 0}) {
     if (!_dragging) return;
     _dragging = false;
     final controller = _controller!;
@@ -117,12 +128,20 @@ class _AppSwipeBackInteractorState extends State<AppSwipeBackInteractor> {
     // resurrect the outgoing page by starting a snap-back in that case.
     if (_route?.isCurrent != true ||
         controller.status == AnimationStatus.reverse) {
-      _finishUserGesture();
+      if (!controller.isAnimating) _finishUserGesture();
       return;
     }
-    controller.animateTo(1,
-        duration: AppSwipeBackTokens.cancelDuration,
-        curve: AppSwipeBackTokens.curve);
+    final width = MediaQuery.sizeOf(context).width;
+    if (width <= 0 || MediaQuery.disableAnimationsOf(context)) {
+      controller.value = 1;
+    } else {
+      controller.animateWith(AppBackSettlement(
+        position: controller.value,
+        target: 1,
+        velocity: -velocity / width,
+        width: width,
+      ));
+    }
     if (!controller.isAnimating) _finishUserGesture();
   }
 

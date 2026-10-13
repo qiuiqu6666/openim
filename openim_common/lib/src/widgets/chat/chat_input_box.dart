@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:openim_common/openim_common.dart';
 import 'chat_emoji_panel.dart';
 import 'chat_composer_palette.dart';
 import 'toolbox/chat_composer_toolbox_slot.dart';
+import 'composer/chat_composer_panel_viewport.dart';
 import '../../res/chat_voice_tokens.dart';
 
 const double kInputBoxMinHeight =
@@ -68,13 +70,19 @@ class _ChatInputBoxState extends State<ChatInputBox>
   final _fallbackFocusNode = FocusNode();
   FocusNode get _focusNode => widget.focusNode ?? _fallbackFocusNode;
   ui.FlutterView? _view;
-  bool _keyboardVisible = false;
+  double _keyboardHeight = 0;
+  bool _panelTakingOverKeyboard = false;
+  bool get _keyboardVisible => _keyboardHeight > 0;
+
+  double get _nativeKeyboardHeight =>
+      (_view?.viewInsets.bottom ?? 0) / (_view?.devicePixelRatio ?? 1);
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _view = View.of(context);
-    _keyboardVisible = _view!.viewInsets.bottom > 0;
+    _keyboardHeight = _nativeKeyboardHeight;
+    if (!_keyboardVisible) _panelTakingOverKeyboard = false;
   }
 
   @override
@@ -86,9 +94,12 @@ class _ChatInputBoxState extends State<ChatInputBox>
   }
 
   void _syncKeyboardVisibility() {
-    final visible = (_view?.viewInsets.bottom ?? 0) > 0;
-    if (mounted && visible != _keyboardVisible) {
-      setState(() => _keyboardVisible = visible);
+    final height = _nativeKeyboardHeight;
+    if (mounted && height != _keyboardHeight) {
+      setState(() {
+        _keyboardHeight = height;
+        if (!_keyboardVisible) _panelTakingOverKeyboard = false;
+      });
     }
   }
 
@@ -98,6 +109,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
         _toolsVisible = false;
         _emojiVisible = false;
         _leftKeyboardButton = false;
+        _panelTakingOverKeyboard = false;
       });
     }
   }
@@ -173,12 +185,15 @@ class _ChatInputBoxState extends State<ChatInputBox>
   Widget build(BuildContext context) {
     // Scaffold consumes MediaQuery.viewInsets when resizing its body. Observe
     // this FlutterView instead, including the native keyboard's closing frames.
-    // Keep the requested panel, but never allocate its height above a keyboard.
-    final safeBottom =
-        _keyboardVisible ? 0.0 : MediaQuery.paddingOf(context).bottom;
-    final toolsVisible = _toolsVisible && !_keyboardVisible;
-    final emojiVisible = _emojiVisible && !_keyboardVisible;
-    final voiceVisible = _leftKeyboardButton && !_keyboardVisible;
+    // Use the persistent safe area, including while the keyboard covers it.
+    // Each slot subtracts the inset already consumed by the Scaffold.
+    final safeBottom = math.max(
+        (_view?.viewPadding.bottom ?? 0) / (_view?.devicePixelRatio ?? 1),
+        MediaQuery.paddingOf(context).bottom);
+    final showPanel = !_keyboardVisible || _panelTakingOverKeyboard;
+    final toolsVisible = _toolsVisible && showPanel;
+    final emojiVisible = _emojiVisible && showPanel;
+    final voiceVisible = _leftKeyboardButton && showPanel;
     final alternatePanelVisible = emojiVisible || voiceVisible;
     final content = _inputBlocked
         ? ChatDisableInputBox(
@@ -313,22 +328,27 @@ class _ChatInputBoxState extends State<ChatInputBox>
                 safeBottom: safeBottom,
                 collapsedHeight: alternatePanelVisible ? 0 : safeBottom,
                 animate: !alternatePanelVisible && !_keyboardVisible,
-                child: widget.toolbox,
+                keyboardHeight: _keyboardHeight,
+                child: _withPanelSafeArea(widget.toolbox, safeBottom),
               ),
               if (emojiVisible)
-                Padding(
-                  padding: EdgeInsets.only(bottom: safeBottom),
-                  child: _emojiPanel,
+                ChatComposerPanelViewport(
+                  viewportKey: const ValueKey('chat-emoji-panel-slot'),
+                  visible: true,
+                  panelHeight: ChatEmojiPanel.heightFor(context) + safeBottom,
+                  keyboardHeight: _keyboardHeight,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: safeBottom),
+                    child: _emojiPanel,
+                  ),
                 ),
               if (voiceVisible)
-                AnimatedContainer(
-                  key: const ValueKey('chat-voice-panel-slot'),
-                  duration: ChatVoiceTokens.panelAnimationDuration,
-                  curve: Curves.easeOutCubic,
-                  height: ChatVoiceTokens.panelHeight +
-                      MediaQuery.paddingOf(context).bottom,
-                  alignment: Alignment.topCenter,
-                  child: widget.voiceRecordBar,
+                ChatComposerPanelViewport(
+                  viewportKey: const ValueKey('chat-voice-panel-slot'),
+                  visible: true,
+                  panelHeight: ChatVoiceTokens.panelHeight + safeBottom,
+                  keyboardHeight: _keyboardHeight,
+                  child: _withPanelSafeArea(widget.voiceRecordBar, safeBottom),
                 ),
             ],
           );
@@ -363,6 +383,13 @@ class _ChatInputBoxState extends State<ChatInputBox>
       ),
     );
   }
+
+  Widget _withPanelSafeArea(Widget child, double safeBottom) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+            padding:
+                MediaQuery.paddingOf(context).copyWith(bottom: safeBottom)),
+        child: child,
+      );
 
   Widget _buildIconAction({
     required String tooltip,
@@ -525,6 +552,8 @@ class _ChatInputBoxState extends State<ChatInputBox>
   }
 
   void unfocus() {
+    _panelTakingOverKeyboard = _keyboardVisible &&
+        (_toolsVisible || _emojiVisible || _leftKeyboardButton);
     FocusScope.of(context).unfocus();
     // A pending iOS keyboard presentation can outlive the focus change.
     unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.hide'));

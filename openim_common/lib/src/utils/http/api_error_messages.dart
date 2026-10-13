@@ -18,6 +18,8 @@ abstract final class ApiErrorMessages {
     if (isSessionError(code)) {
       return sessionExpired;
     }
+    if (code == 408 || code == 504) return timeout;
+    if (code >= 500 && code <= 599) return serviceUnavailable;
     if (code == 1002 && _isRegistration(path)) {
       return _text('apiRegistrationUnavailable');
     }

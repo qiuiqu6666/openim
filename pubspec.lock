@@ -845,10 +845,9 @@ packages:
   flutter_openim_sdk:
     dependency: "direct main"
     description:
-      name: flutter_openim_sdk
-      sha256: b57d1fd63f52fa5cbd7c257fccc9d04902c266e96172f5112c00b428af2f2ff5
-      url: "https://pub.dev"
-    source: hosted
+      path: "local_plugin/flutter_openim_sdk"
+      relative: true
+    source: path
     version: "3.8.3+hotfix.12"
   flutter_picker_plus:
     dependency: transitive
@@ -1004,6 +1003,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
+  gameshield_bridge:
+    dependency: "direct main"
+    description:
+      path: "local_plugin/gameshield_bridge"
+      relative: true
+    source: path
+    version: "0.1.0"
   geoclue:
     dependency: transitive
     description:

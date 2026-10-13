@@ -19,6 +19,7 @@ import '../../routes/app_navigator.dart';
 import '../../routes/app_pages.dart';
 import '../../services/chat_message_sender.dart';
 import '../../services/favorite_send_coordinator.dart';
+import '../notifications/app_badge_coordinator.dart';
 import '../notifications/message_notification_runtime.dart';
 import '../notifications/message_notification_preferences.dart';
 import '../notifications/system_message_notifier.dart';
@@ -28,6 +29,7 @@ import '../device_sync/device_sync_runtime.dart';
 import '../user_activity/activity_runtime.dart';
 import '../push/apns/apns_push_runtime.dart';
 import '../calling/ios/ios_callkit_runtime.dart';
+import '../calling/data/call_state_runtime.dart';
 import 'im_controller.dart';
 
 class AppController extends GetxController with UpgradeManger {
@@ -71,6 +73,16 @@ class AppController extends GetxController with UpgradeManger {
       Get.find<IMController>().currentSdkStatus != IMSdkStatus.syncEnded;
 
   final _foregroundMessageAlerts = ForegroundMessageAlert();
+  late final _appBadges = AppBadgeCoordinator(
+    updateRemote: (count) async {
+      await OpenIM.iMManager.messageManager.setAppBadge(count);
+    },
+    isSystemSupported: AppBadgePlus.isSupported,
+    updateSystem: AppBadgePlus.updateBadge,
+    onError: (error) => Logger.print(
+        'Badge update unavailable: ${error.runtimeType}',
+        onlyConsole: true),
+  );
   bool _closed = false;
 
   late BaseDeviceInfo deviceInfo;
@@ -83,9 +95,12 @@ class AppController extends GetxController with UpgradeManger {
 
     final resumed = isRunningBackground && !run;
     isRunningBackground = run;
-    if (run) await _foregroundMessageAlerts.stop();
+    // Apply the sync gate before any await. A delayed background callback must
+    // not undo a newer foreground cancellation.
     DeviceSyncRuntime.instance.setForeground(!run);
     ActivityRuntime.instance.setForeground(!run);
+    if (run) await _foregroundMessageAlerts.stop();
+    if (_closed || isRunningBackground != run) return;
     if (Get.isRegistered<IMController>()) {
       final controller = Get.find<IMController>();
       if (!controller.backgroundSubject.isClosed) {
@@ -94,6 +109,8 @@ class AppController extends GetxController with UpgradeManger {
       if (!run) unawaited(controller.refreshMyFullInfo());
     }
     if (!run) unawaited(onApplicationSessionReady());
+    if (resumed) _appBadges.onForeground();
+    if (resumed) CallStateRuntime.instance.recover();
     if (resumed) unawaited(_apnsPush?.onForeground());
   }
 
@@ -107,7 +124,6 @@ class AppController extends GetxController with UpgradeManger {
           !_closed &&
           Get.isRegistered<IMController>() &&
           Get.find<IMController>().currentSdkStatus == IMSdkStatus.syncEnded &&
-          !AppRoutes.isConversationRoute(Get.currentRoute) &&
           !OpenIMLiveClient().isBusy &&
           rtcBridge?.hasConnection != true,
     );
@@ -299,6 +315,7 @@ class AppController extends GetxController with UpgradeManger {
   }
 
   void clearMessageNotificationSession() {
+    clearBadgeSession();
     ActivityRuntime.instance.endSession();
     NotificationSoundActivity.interruptPreviews();
     _notificationGeneration++;
@@ -306,10 +323,13 @@ class AppController extends GetxController with UpgradeManger {
     unawaited(endRemotePushSession());
   }
 
-  Future<void> endRemotePushSession({bool logout = true}) async {
+  Future<void> endRemotePushSession(
+      {bool logout = true, bool waitForRemote = true}) async {
     await Future.wait([
-      if (_apnsPush != null) _apnsPush!.endSession(logout: logout),
-      if (_iosCallKit != null) _iosCallKit!.endSession(logout: logout),
+      if (_apnsPush != null)
+        _apnsPush!.endSession(logout: logout, waitForRemote: waitForRemote),
+      if (_iosCallKit != null)
+        _iosCallKit!.endSession(logout: logout, waitForRemote: waitForRemote),
     ]);
   }
 
@@ -349,7 +369,7 @@ class AppController extends GetxController with UpgradeManger {
       return;
     }
     // Reuse the normal message callback for an already visible matching chat.
-    Get.find<IMController>().onRecvNewMessage?.call(sent);
+    Get.find<IMController>().publishLocalChatMessage(sent);
   }
 
   Future<void> stopForegroundMessageAlerts() {
@@ -357,31 +377,28 @@ class AppController extends GetxController with UpgradeManger {
     return _foregroundMessageAlerts.stop();
   }
 
-  void showBadge(int count) {
-    OpenIM.iMManager.messageManager.setAppBadge(count);
-
-    if (count == 0) {
-      removeBadge();
-    } else {
-      AppBadgePlus.isSupported().then((value) {
-        if (value) {
-          AppBadgePlus.updateBadge(count);
-        }
-      });
-    }
+  void beginBadgeSession(String accountID, String token) {
+    if (!_closed) _appBadges.beginSession((accountID, token));
   }
 
-  void removeBadge() {
-    AppBadgePlus.isSupported().then((value) {
-      if (value) {
-        AppBadgePlus.updateBadge(0);
-      }
-    });
+  Future<void> closeSystemCallFromServer(String room,
+      {bool answeredElsewhere = false}) async {
+    await _iosCallKit?.closeFromServer(room,
+        answeredElsewhere: answeredElsewhere);
   }
+
+  Future<void> systemCallAccepted(String room) async {
+    await _iosCallKit?.serverAccepted(room);
+  }
+
+  void clearBadgeSession() => _appBadges.resetSession();
+
+  void showBadge(int count) => _appBadges.setCount(count);
 
   @override
   void onClose() {
     _closed = true;
+    _appBadges.close();
     for (final subscription in _notificationConversationSubscriptions) {
       unawaited(subscription.cancel());
     }

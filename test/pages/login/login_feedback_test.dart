@@ -203,7 +203,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('visible form errors keep their cause when the language changes',
+  testWidgets('request errors use shared alerts in the current language',
       (tester) async {
     final logic = await _mount(tester, locale: const Locale('zh', 'CN'));
     logic.togglePasswordType();
@@ -213,6 +213,11 @@ void main() {
     await tester.pump();
     final chineseError = logic.formError!;
     expect(find.text(chineseError), findsOneWidget);
+    expect(find.byType(AppAlertDialog<void>), findsOneWidget);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(StrRes.determine));
+    await tester.pumpAndSettle();
+    expect(find.text(chineseError), findsNothing);
     expect(logic.accountError, isNull);
     expect(logic.codeError, isNull);
 
@@ -223,6 +228,8 @@ void main() {
       await tester.pump();
       await languageChange;
     });
+    await tester.pumpAndSettle();
+    await tester.runAsync(logic.getVerificationCode);
     await tester.pumpAndSettle();
     expect(logic.formError, isNot(chineseError));
     expect(find.text(logic.formError!), findsOneWidget);

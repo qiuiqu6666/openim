@@ -163,6 +163,22 @@ void main() {
     openPages.remove(page);
   }
 
+  test('initial sync survives connection callbacks and does not cross accounts', () async {
+    await DataSp.putLoginCertificate(LoginCertificate.fromJson({'userID':'A','imToken':'im-A','chatToken':'chat-A'}));
+    im.imSdkStatus(IMSdkStatus.syncStart, reInstall: true);
+    im.imSdkStatus(IMSdkStatus.connectionSucceeded);
+    expect(im.initialSyncState?.reInstall, isTrue);
+    expect(im.initialSyncState?.progress, 0);
+    im.imSdkStatus(IMSdkStatus.syncProgress, progress: 4);
+    expect(im.initialSyncState?.progress, 4);
+    expect((await im.imSdkStatusSubject.first).reInstall, isTrue);
+    await DataSp.putLoginCertificate(LoginCertificate.fromJson({'userID':'B','imToken':'im-B','chatToken':'chat-B'}));
+    expect(im.initialSyncState, isNull);
+    im.imSdkStatus(IMSdkStatus.syncStart, reInstall: true);
+    im.imSdkStatus(IMSdkStatus.syncFailed);
+    expect(im.initialSyncState, isNull);
+  });
+
   test('A to B to A never merges a previous account callback into the new feed',
       () async {
     final firstA = await openPage('account-A', [_row('A-snapshot')]);

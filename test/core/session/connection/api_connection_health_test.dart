@@ -1,0 +1,100 @@
+import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openim/core/session/connection/api_connection_health.dart';
+
+void main() {
+  testWidgets(
+      'API failures retry in three seconds and healthy checks slow down',
+      (tester) async {
+    var healthy = false;
+    var checks = 0;
+    final health = ApiConnectionHealth(
+        networkChanges: const Stream.empty(),
+        isCurrent: () => true,
+        check: () async {
+          checks++;
+          return healthy;
+        })
+      ..start();
+    await tester.pump();
+    expect(health.available.value, false);
+    await tester.pump(const Duration(seconds: 2));
+    expect(checks, 1);
+    healthy = true;
+    await tester.pump(const Duration(seconds: 1));
+    expect(checks, 2);
+    expect(health.available.value, true);
+    await tester.pump(const Duration(seconds: 29));
+    expect(checks, 2);
+    await tester.pump(const Duration(seconds: 1));
+    expect(checks, 3);
+    health.didChangeAppLifecycleState(AppLifecycleState.paused);
+    await tester.pump(const Duration(minutes: 1));
+    expect(checks, 3);
+    health.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(checks, 4);
+    health.close();
+    await tester.pump(const Duration(minutes: 1));
+    expect(checks, 4);
+  });
+
+  testWidgets('late API result cannot publish into an expired session',
+      (tester) async {
+    final pending = Completer<bool>();
+    var current = true;
+    final health = ApiConnectionHealth(
+        networkChanges: const Stream.empty(),
+        isCurrent: () => current,
+        check: () => pending.future)
+      ..start();
+    current = false;
+    pending.complete(true);
+    await tester.pump();
+    expect(health.available.value, isNull);
+    health.close();
+  });
+
+  testWidgets(
+      'failures back off, network recovery resets, and close unsubscribes',
+      (tester) async {
+    final network = StreamController<List<ConnectivityResult>>();
+    var checks = 0;
+    final health = ApiConnectionHealth(
+      isCurrent: () => true,
+      networkChanges: network.stream,
+      check: () async {
+        checks++;
+        return false;
+      },
+    )..start();
+    await tester.pump();
+    for (final seconds in [3, 6, 12, 30, 30]) {
+      final before = checks;
+      await tester.pump(Duration(seconds: seconds - 1));
+      expect(checks, before);
+      await tester.pump(const Duration(seconds: 1));
+      expect(checks, before + 1);
+    }
+    network.add([ConnectivityResult.wifi]);
+    await tester.pump();
+    expect(checks, 7);
+    await tester.pump(const Duration(seconds: 3));
+    expect(checks, 8);
+    health.didChangeAppLifecycleState(AppLifecycleState.paused);
+    network.add([ConnectivityResult.mobile]);
+    await tester.pump(const Duration(minutes: 1));
+    expect(checks, 8);
+    health.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(checks, 9);
+    await tester.pump(const Duration(seconds: 3));
+    expect(checks, 10);
+    health.close();
+    expect(network.hasListener, isFalse);
+    unawaited(network.close());
+    await tester.pump();
+  });
+}

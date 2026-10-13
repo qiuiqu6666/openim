@@ -2,6 +2,8 @@
 
 `GroupMemberPreviewController` 管理群设置页首屏的成员预览，不管理全量群成员和群人数。
 
+`GroupMemberOperations` 独立维护邀请/移除成员的选择、结果反馈及明确重试。当前 SDK 空成功响应与旧 SDK 逐成员结果由 `GroupMemberBatchResult` 解析；已确认成员不进入失败重试列表，缺失或失败回执保留。下一次邀请预选失败对象，下一次移除提供重试或重新选择。成员选择、发送前及回包后的账号/群/角色检查由父控制器捕获的权限上下文提供，关闭时释放重试状态。
+
 ## 接入与数据源
 
 - `GroupSetupLogic` 创建并持有控制器，提供 `memberList`、`membersLoading`、`membersFailed` 和 `getGroupMembers()` 给现有页面。

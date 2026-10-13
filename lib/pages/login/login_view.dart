@@ -189,10 +189,6 @@ class LoginPage extends StatelessWidget {
           ]));
 
   Widget _submission() => Column(children: [
-        if (logic.formError != null) ...[
-          const SizedBox(height: 8),
-          AuthFormMessage(text: logic.formError),
-        ],
         const SizedBox(height: AuthReferenceTokens.buttonGap),
         _button(),
         const SizedBox(height: 4),

@@ -8,12 +8,15 @@ import 'package:openim/pages/group_features/mark_six/agent/pages/agent_descendan
 import 'package:openim/pages/group_features/mark_six/widgets/mark_six_feature_host.dart';
 import 'package:openim/pages/group_features/models/group_feature_context.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:openim/pages/group_features/widgets/group_feature_actions.dart';
 
 import '../../../../../support/performance/render_test_fakes.dart';
+import '../../../../../support/account_privilege_fixture.dart';
 import '../../mark_six_fixtures.dart';
 
 const _groupID = 'group-test';
 const _robotPath = '/me/robot/groups/$_groupID';
+late FixtureAccountPrivilege _privilege;
 
 Map<String, dynamic> _binding(
         {String groupID = _groupID, bool bound = true, bool enabled = true}) =>
@@ -39,6 +42,7 @@ GroupFeatureContext _context(MarkSixFakeApi api,
       groupName: '测试代理群',
       currentUserID: userID,
       api: api,
+      accountPrivilege: _privilege,
       gameType: type,
       sessionCurrent: sessionCurrent ?? () => true,
       capabilitiesCurrent: capabilitiesCurrent ?? () => true,
@@ -69,7 +73,9 @@ Widget _host(GroupFeatureContext context,
           contextForToast,
           MarkSixFeatureHost(
             featureContext: context,
-            builder: (_, __, overlay) => Stack(children: [
+            builder: (hostContext, __, overlay) => Stack(children: [
+              for (final item in GroupFeatureActions.items(hostContext, context))
+                Text(item.text),
               const Positioned.fill(child: Text('实际聊天内容')),
               overlay,
             ]),
@@ -94,9 +100,13 @@ void _expectActions({required bool agent, required bool history}) {
 void main() {
   setUp(() {
     Get.testMode = true;
+    _privilege = FixtureAccountPrivilege(allowed: false);
     SharedPreferences.setMockInitialValues({});
   });
-  tearDown(() => Get.reset());
+  tearDown(() {
+    _privilege.dispose();
+    Get.reset();
+  });
 
   for (final brightness in Brightness.values) {
     testWidgets(
@@ -134,14 +144,15 @@ void main() {
   }
 
   testWidgets(
-      'unbound type 2 stays hidden with all legacy flags and permissions',
+      'unbound type 2 shows with permission and without legacy flags',
       (tester) async {
     final api =
         MarkSixFakeApi(respond: (_, __, ___, ____) => _binding(bound: false));
     await _mount(tester,
-        _context(api, legacyFlags: true, canAgent: true, canHistory: true));
-    expect(find.text('显'), findsNothing);
+        _context(api, canAgent: true, canHistory: true));
+    expect(find.text('显'), findsOneWidget);
     _expectActions(agent: false, history: false);
+    expect(find.text('六合彩代理'), findsOneWidget);
     expect(api.calls.single.path, _robotPath);
     expect(tester.takeException(), isNull);
   });
@@ -160,7 +171,7 @@ void main() {
 
   for (final wrongGroup in [true, false]) {
     testWidgets(
-        '${wrongGroup ? 'wrong group' : 'failed binding read'} never exposes type 2',
+        '${wrongGroup ? 'wrong group' : 'failed binding read'} does not block authorized type 2',
         (tester) async {
       final api = MarkSixFakeApi(respond: (_, __, ___, ____) {
         if (!wrongGroup) throw StateError('binding unavailable');
@@ -168,7 +179,7 @@ void main() {
       });
       await _mount(tester,
           _context(api, legacyFlags: true, canAgent: true, canHistory: true));
-      expect(find.text('显'), findsNothing);
+      expect(find.text('显'), findsOneWidget);
       _expectActions(agent: false, history: false);
       expect(api.calls.single.path, _robotPath);
       expect(tester.takeException(), isNull);
@@ -185,6 +196,8 @@ void main() {
         tester, _context(api, canAgent: true, legacyFlags: true, version: 2));
     await _mount(tester, _context(api, canAgent: true, version: 3));
     expect(api.calls, hasLength(1));
+    expect(find.text('显'), findsOneWidget);
+    expect(find.text('六合彩代理'), findsOneWidget);
 
     pending.complete(_binding());
     await tester.pumpAndSettle();
@@ -194,8 +207,9 @@ void main() {
     _expectActions(agent: true, history: false);
 
     await _mount(tester, _context(api, canHistory: true, version: 4));
-    _expectActions(agent: false, history: true);
-    expect(find.text('隐'), findsOneWidget);
+    _expectActions(agent: false, history: false);
+    expect(find.text('隐'), findsNothing);
+    expect(find.text('显'), findsNothing);
     expect(api.calls, hasLength(1));
     await _mount(
         tester, _context(api, canAgent: true, canHistory: true, version: 5));
@@ -206,7 +220,7 @@ void main() {
 
   for (final capabilitiesValid in [true, false]) {
     testWidgets(
-        'bound type 2 without effective permissions toasts and stays collapsed / valid=$capabilitiesValid',
+        'bound type 2 without effective permissions stays hidden / valid=$capabilitiesValid',
         (tester) async {
       final api = MarkSixFakeApi(respond: (_, __, ___, ____) => _binding());
       await _mount(
@@ -215,13 +229,9 @@ void main() {
               canAgent: !capabilitiesValid,
               canHistory: !capabilitiesValid,
               capabilitiesCurrent: () => capabilitiesValid));
-      expect(find.text('显'), findsOneWidget);
-      await tester.tap(find.text('显'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('暂无代理功能权限'), findsOneWidget);
-      expect(find.text('显'), findsOneWidget);
+      expect(find.text('显'), findsNothing);
       expect(find.text('隐'), findsNothing);
+      expect(find.text('六合彩代理'), findsNothing);
       _expectActions(agent: false, history: false);
       expect(api.calls.single.path, _robotPath);
       await EasyLoading.dismiss(animation: false);
