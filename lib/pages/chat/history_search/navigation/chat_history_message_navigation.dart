@@ -6,6 +6,9 @@ import 'package:openim_common/openim_common.dart';
 import '../../../../routes/app_navigator.dart';
 import '../../chat_logic.dart';
 import '../../media/chat_media_message_locator.dart';
+import '../cloud/chat_keyword_search_api.dart';
+import '../context/search_chat_window.dart';
+import '../context/search_context_api.dart';
 
 enum ChatHistoryNavigationFailure { unavailable, expired, failed }
 
@@ -35,6 +38,7 @@ typedef ChatHistoryStartChat = Future<void> Function(
 /// History loading and highlighting remain owned by [ChatLogic].
 class ChatHistoryMessageNavigation {
   ChatHistoryMessageNavigation({
+    this.contextApi,
     Future<Message?> Function(String conversationID, String clientMsgID)?
         findMessage,
     Future<ConversationInfo?> Function(String conversationID)? findConversation,
@@ -52,6 +56,7 @@ class ChatHistoryMessageNavigation {
   }
 
   final Future<Message?> Function(String, String) _findMessage;
+  final SearchContextApi? contextApi;
   final Future<ConversationInfo?> Function(String) _findConversation;
   final ChatHistoryActiveChat? Function(String) _currentChat;
   final ChatHistoryStartChat _startChat;
@@ -83,6 +88,10 @@ class ChatHistoryMessageNavigation {
         identical(entryRoute?.navigator, navigator);
 
     if (_opening || !entryCurrent()) return false;
+    if (message is CloudKeywordMessage &&
+        message.conversationID != conversationID) {
+      return false;
+    }
     final clientMsgID = message.clientMsgID?.trim() ?? '';
     if (conversationID.trim().isEmpty || clientMsgID.isEmpty) {
       _showFeedback(ChatHistoryNavigationFailure.unavailable);
@@ -99,7 +108,14 @@ class ChatHistoryMessageNavigation {
     try {
       // Search rows are snapshots. Revalidate the exact SDK identity before a
       // historical window can restore a message deleted after the search.
-      final target = await _findMessage(conversationID, clientMsgID);
+      final Message? target;
+      if (message is CloudKeywordMessage) {
+        final api = contextApi ?? SearchContextApi();
+        final page = await api.fetch(message, isCurrent: entryCurrent);
+        target = SearchChatTarget(SearchChatWindow(message, api, page));
+      } else {
+        target = await _findMessage(conversationID, clientMsgID);
+      }
       if (!entryCurrent()) return false;
       if (target == null || target.clientMsgID != clientMsgID) {
         _showFeedback(ChatHistoryNavigationFailure.unavailable);

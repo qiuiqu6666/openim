@@ -10,6 +10,10 @@ import '../conversation/conversation_logic.dart';
 import '../conversation/summary/conversation_latest_message_text.dart';
 import '../chat/chat_setup/chat_history_search_page.dart';
 import 'global_search_logic.dart';
+import '../chat/history_search/cloud/chat_keyword_search_api.dart';
+import '../chat/history_search/navigation/chat_history_message_navigation.dart';
+import '../chat/history_search/context/search_context_strings.dart';
+import '../chat/history_search/chat_history_search_strings.dart';
 import 'widgets/global_search_conversation_subtitle.dart';
 import 'widgets/global_search_contact_account.dart';
 import '../official_account/widgets/official_account_name_label.dart';
@@ -18,6 +22,7 @@ import '../group_features/identity/group_name_label.dart';
 class GlobalSearchPage extends StatelessWidget {
   GlobalSearchPage({super.key});
   final logic = Get.find<GlobalSearchLogic>();
+  late final _messageNavigation = ChatHistoryMessageNavigation();
   List<String> get tabs => [
         StrRes.globalSearchContacts,
         StrRes.groupChat,
@@ -69,7 +74,12 @@ class GlobalSearchPage extends StatelessWidget {
                   }
                   if (logic.failures.contains(id)) {
                     rows.add(ListTile(
-                        title: Text('globalSearchFailed'.tr),
+                        title: Text(id == 4 && logic.invalidKeyword
+                            ? chatHistorySearchText(context, 'keywordLength')
+                            : id == 4 && logic.searchError.value != null
+                                ? searchErrorText(
+                                    context, logic.searchError.value)
+                                : 'globalSearchFailed'.tr),
                         trailing: TextButton(
                             onPressed: id == 4 && logic.cloudHasMore.value
                                 ? logic.loadMoreCloud
@@ -147,11 +157,12 @@ class GlobalSearchPage extends StatelessWidget {
                             subtitleWidget: GlobalSearchConversationSubtitle(
                                 conversation: item)))
                         .toList());
-                section(
-                    4,
-                    logic.textSearchResultItems
-                        .map((item) => _messages(item, false))
-                        .toList());
+                section(4, [
+                  ...logic.cloudHits
+                      .map((message) => _cloudMessage(context, message)),
+                  ...logic.textSearchResultItems
+                      .map((item) => _messages(item, false))
+                ]);
                 if (logic.query.value.isNotEmpty &&
                     !logic.failures.contains(4) &&
                     (logic.cloudLoading.value || logic.cloudHasMore.value)) {
@@ -327,15 +338,41 @@ class GlobalSearchPage extends StatelessWidget {
   }
 
   Widget _row(String title, String subtitle, String? avatar, bool group,
-          VoidCallback tap, {Widget? subtitleWidget, Widget? titleWidget}) =>
+          VoidCallback tap,
+          {Widget? subtitleWidget, Widget? titleWidget, int? sentAt}) =>
       ListTile(
           contentPadding: const EdgeInsets.symmetric(
               horizontal: AppTokens.s5, vertical: AppTokens.s2),
           horizontalTitleGap: AppTokens.s4,
           leading: AvatarView(
               url: avatar, text: title, isGroup: group, isCircle: true),
-          title: titleWidget ??
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: sentAt == null
+              ? titleWidget ??
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis)
+              : LayoutBuilder(
+                  builder: (context, constraints) => Row(children: [
+                        Expanded(
+                            child: titleWidget ??
+                                Text(title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis)),
+                        const SizedBox(width: AppTokens.s3),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                              maxWidth: constraints.maxWidth * .4),
+                          child: Text(formatChatMessageTime(context, sentAt),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.end,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                      color: AppTokens.textSecondary(
+                                          dark: Theme.of(context).brightness ==
+                                              Brightness.dark))),
+                        ),
+                      ])),
           subtitle: subtitleWidget ??
               Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
           onTap: () {
@@ -359,6 +396,22 @@ class GlobalSearchPage extends StatelessWidget {
           isGroup: item.conversationType != ConversationType.single,
           initialQuery: logic.query.value,
           filesOnly: files));
-    });
+    }, sentAt: message?.sendTime);
+  }
+
+  Widget _cloudMessage(BuildContext context, CloudKeywordMessage message) {
+    final matches = logic.source.currentConversations
+        .where((c) => c.conversationID == message.conversationID);
+    final conversation = matches.isEmpty ? null : matches.first;
+    return _row(
+        conversation?.showName ?? message.conversationID,
+        message.summary,
+        conversation?.faceURL,
+        conversation?.isGroupChat ?? message.conversationID.startsWith('sg_'),
+        () => _messageNavigation.open(context,
+            conversationID: message.conversationID,
+            message: message,
+            isEntryCurrent: () => logic.cloudHits.contains(message)),
+        sentAt: message.sendTime);
   }
 }

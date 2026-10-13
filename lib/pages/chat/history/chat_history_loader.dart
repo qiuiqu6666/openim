@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'chat_history_read_gate.dart';
 import 'chat_history_window.dart';
+import '../history_search/context/search_chat_window.dart';
 
 export 'chat_history_read_gate.dart' show ChatHistoryReader;
 
@@ -34,6 +35,7 @@ class ChatHistoryLoader {
   final bool Function(bool older)? canTrimHistory;
   final int pageSize;
   final ChatHistoryReadGate _reads;
+  SearchChatWindow? _searchWindow;
 
   bool loading = false;
   bool loaded = false;
@@ -177,12 +179,26 @@ class ChatHistoryLoader {
     final before = _HistorySnapshot(messages());
     try {
       final count = (pageSize / 2).ceil().clamp(1, pageSize);
-      final pages = await Future.wait([
-        _reads.read(fetch,
-            count: count, startMsg: target, revision: generation),
-        _reads.read(newer,
-            count: count, startMsg: target, revision: generation),
-      ]);
+      final cloud = target is SearchChatTarget ? target.window : null;
+      final pages = cloud != null
+          ? [
+              AdvancedMessage(
+                  messageList: cloud.initial.messages
+                      .where((m) => m.seq! < target.seq!)
+                      .toList(),
+                  isEnd: cloud.initial.beforeEnd),
+              AdvancedMessage(
+                  messageList: cloud.initial.messages
+                      .where((m) => m.seq! > target.seq!)
+                      .toList(),
+                  isEnd: cloud.initial.afterEnd),
+            ]
+          : await Future.wait([
+              _reads.read(fetch,
+                  count: count, startMsg: target, revision: generation),
+              _reads.read(newer,
+                  count: count, startMsg: target, revision: generation),
+            ]);
       if (_closed || generation != _generation) return false;
       if (removedIDs.contains(target.clientMsgID)) {
         viewingHistory = previousHistory;
@@ -204,9 +220,10 @@ class ChatHistoryLoader {
         ..addAll(page.map((m) => m.clientMsgID));
       hasMore = pages[0].isEnd != true;
       hasNewer = pages[1].isEnd != true;
-      viewingHistory = hasNewer;
+      viewingHistory = cloud != null || hasNewer;
       _windowViewingHistory = viewingHistory;
       loaded = true;
+      _searchWindow = cloud;
       _latestAnchor = hasNewer ? null : _newerCursor;
       replace(combined, true, false);
       onLoaded?.call();
@@ -245,8 +262,11 @@ class ChatHistoryLoader {
             .lastOrNull;
       }
       if (_newerCursor == null) return false;
-      final result = await _reads.read(fetchNewer!,
-          count: pageSize, startMsg: _newerCursor, revision: generation);
+      final result = _searchWindow != null
+          ? await _searchWindow!
+              .read(false, () => !_closed && generation == _generation)
+          : await _reads.read(fetchNewer!,
+              count: pageSize, startMsg: _newerCursor, revision: generation);
       if (_closed || generation != _generation) return false;
       final page = merge(result.messageList ?? [], removedIDs: removedIDs);
       _historicalIDs.addAll(page.map((m) => m.clientMsgID));
@@ -254,13 +274,13 @@ class ChatHistoryLoader {
           removedIDs: removedIDs);
       _newerCursor = page.lastOrNull ?? _newerCursor;
       hasNewer = result.isEnd != true;
-      if (!hasNewer) {
+      if (!hasNewer && _searchWindow == null) {
         viewingHistory = false;
         _windowViewingHistory = false;
         _historicalIDs.clear();
         _latestAnchor = _newerCursor;
       }
-      if (canTrimHistory?.call(false) == true) {
+      if (_searchWindow == null && canTrimHistory?.call(false) == true) {
         final bounded = trimChatHistoryWindow(combined, older: false);
         if (bounded.length != combined.length) {
           combined = bounded;
@@ -335,10 +355,13 @@ class ChatHistoryLoader {
         hasMore = false;
         return false;
       }
-      final result = await _reads.read(fetch,
-          count: pageSize,
-          startMsg: firstPage || refresh ? null : _cursor,
-          revision: generation);
+      final result = _searchWindow != null && !latest && !refresh
+          ? await _searchWindow!
+              .read(true, () => !_closed && generation == _generation)
+          : await _reads.read(fetch,
+              count: pageSize,
+              startMsg: firstPage || refresh ? null : _cursor,
+              revision: generation);
       if (_closed || generation != _generation) return false;
       final page = result.messageList ?? <Message>[];
       if (_windowViewingHistory && !latest) {
@@ -397,6 +420,7 @@ class ChatHistoryLoader {
       }
       loaded = true;
       if (latest) {
+        _searchWindow = null;
         viewingHistory = false;
         _windowViewingHistory = false;
         _historicalIDs.clear();
@@ -406,6 +430,7 @@ class ChatHistoryLoader {
       if (firstPage || refresh) _latestAnchor = page.lastOrNull;
       if (!firstPage &&
           !refresh &&
+          _searchWindow == null &&
           fetchNewer != null &&
           canTrimHistory?.call(true) == true) {
         final bounded = trimChatHistoryWindow(combined, older: true);
@@ -513,6 +538,7 @@ class ChatHistoryLoader {
   }
 
   void close() {
+    _searchWindow = null;
     _closed = true;
     _reads.close();
     _invalidate();
@@ -532,6 +558,7 @@ class ChatHistoryLoader {
   /// The SDK has cleared the conversation. Discard all older query results,
   /// including refreshes queued before that operation completed.
   void clear() {
+    _searchWindow = null;
     _invalidate();
     _retry = null;
     _windowRetry = false;

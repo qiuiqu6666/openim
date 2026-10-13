@@ -6,6 +6,8 @@ import 'package:openim_common/openim_common.dart';
 import '../conversation/conversation_logic.dart';
 import '../group_features/data/group_feature_store.dart';
 import 'cloud/global_history_cloud_search.dart';
+import 'cloud/global_keyword_search_api.dart';
+import '../chat/history_search/cloud/chat_keyword_search_api.dart';
 
 class GlobalSearchSource {
   Iterable<ConversationInfo> get currentConversations =>
@@ -65,10 +67,21 @@ class GlobalSearchSource {
 class GlobalSearchLogic extends GetxController {
   GlobalSearchLogic(
       {GlobalSearchSource? source,
+      GlobalKeywordSearchApi? keywordApi,
       GlobalHistoryCloudSearch Function()? cloudFactory})
       : source = source ?? GlobalSearchSource(),
-        _cloudFactory = cloudFactory ??
-            (source == null ? (() => GlobalHistoryCloudSearch()) : null);
+        _globalApi = keywordApi ??
+            (source == null && cloudFactory == null
+                ? GlobalKeywordSearchApi()
+                : null),
+        _cloudFactory = cloudFactory;
+  final GlobalKeywordSearchApi? _globalApi;
+  bool get invalidKeyword =>
+      _globalApi != null &&
+      (query.value.runes.length < 2 || query.value.runes.length > 64);
+  final cloudHits = <CloudKeywordMessage>[].obs;
+  String _globalCursor = '';
+  final searchError = Rxn<int>();
   final GlobalHistoryCloudSearch Function()? _cloudFactory;
   GlobalHistoryCloudSearch? _cloud;
   final cloudLoading = false.obs;
@@ -132,6 +145,9 @@ class GlobalSearchLogic extends GetxController {
   }
 
   void clearList() {
+    cloudHits.clear();
+    _globalCursor = '';
+    searchError.value = null;
     _cloud = null;
     cloudLoading.value = false;
     cloudHasMore.value = false;
@@ -157,7 +173,7 @@ class GlobalSearchLogic extends GetxController {
       _searchToken = OpenIM.iMManager.token;
     }
     _cloud = _cloudFactory?.call();
-    cloudHasMore.value = _cloud?.hasMore ?? false;
+    cloudHasMore.value = _globalApi != null || (_cloud?.hasMore ?? false);
     bool active() => !_closed && version == _generation;
     Future<void> section<T>(
         int id, Future<List<T>> Function() fetch, RxList<T> output) async {
@@ -176,13 +192,17 @@ class GlobalSearchLogic extends GetxController {
       section(1, () => source.friends(key), contactsList),
       section(2, () => source.groups(key), groupList),
       section(3, () => source.conversations(key), conversations),
-      section(4, () => source.messages(key, false), textSearchResultItems),
+      if (_globalApi == null)
+        section(4, () => source.messages(key, false), textSearchResultItems)
+      else
+        _loadGlobal(),
     ]);
     if (active()) loading.value = false;
-    if (active()) await loadMoreCloud();
+    if (active() && _globalApi == null) await loadMoreCloud();
   }
 
   Future<void> loadMoreCloud() async {
+    if (_globalApi != null) return _loadGlobal();
     final cloud = _cloud;
     if (_closed || cloud == null || !cloud.hasMore || cloudLoading.value) {
       return;
@@ -221,6 +241,51 @@ class GlobalSearchLogic extends GetxController {
         cloudHasMore.value = cloud.hasMore;
         cloudLoading.value = false;
       }
+    }
+  }
+
+  Future<void> _loadGlobal() async {
+    if (_closed || cloudLoading.value || !cloudHasMore.value) return;
+    final generation = _generation;
+    final keyword = query.value;
+    bool current() => !_closed && generation == _generation;
+    cloudLoading.value = true;
+    failures.remove(4);
+    searchError.value = null;
+    var cursor = _globalCursor;
+    final seenCursors = <String>{cursor};
+    try {
+      while (current()) {
+        final page =
+            await _globalApi!.search(keyword, cursor, isCurrent: current);
+        if (!current()) return;
+        if (page.hasMore && !seenCursors.add(page.cursor)) {
+          throw const FormatException('Repeated cursor');
+        }
+        cursor = page.cursor;
+        if (page.items.isEmpty && page.hasMore) continue;
+        final ids =
+            cloudHits.map((m) => '${m.conversationID}:${m.seq}').toSet();
+        cloudHits.addAll(
+            page.items.where((m) => ids.add('${m.conversationID}:${m.seq}')));
+        _globalCursor = cursor;
+        cloudHasMore.value = page.hasMore;
+        break;
+      }
+    } on SearchApiException catch (error) {
+      if (current()) {
+        searchError.value = error.code;
+        if (error.code == 1001) {
+          _globalCursor = '';
+          cloudHits.clear();
+        }
+        if (error.invalidatesContext) cloudHits.clear();
+        failures.add(4);
+      }
+    } catch (_) {
+      if (current()) failures.add(4);
+    } finally {
+      if (current()) cloudLoading.value = false;
     }
   }
 

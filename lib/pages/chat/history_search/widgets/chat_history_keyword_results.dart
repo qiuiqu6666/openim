@@ -6,6 +6,7 @@ import '../chat_history_category.dart';
 import '../chat_history_search_controller.dart';
 import '../chat_history_search_strings.dart';
 import '../chat_history_search_tokens.dart';
+import '../context/search_context_strings.dart';
 import 'chat_history_result_tile.dart';
 import 'chat_history_search_shortcuts.dart';
 import 'chat_history_search_layout.dart';
@@ -113,7 +114,10 @@ class ChatHistoryKeywordResults extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: AppTokens.s7),
         child: Column(children: [
-          Text(chatHistorySearchText(context, 'failed'),
+          Text(
+              controller.searchError == null
+                  ? chatHistorySearchText(context, 'failed')
+                  : searchErrorText(context, controller.searchError),
               style: theme.textTheme.bodyMedium?.copyWith(color: muted)),
           TextButton(
             key: const ValueKey('chat-history-retry'),

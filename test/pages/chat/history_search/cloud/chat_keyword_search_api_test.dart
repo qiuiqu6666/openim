@@ -107,7 +107,7 @@ void main() {
         session: () => session,
         post: (_, body, __) async {
           requests.add(body);
-          if (fail) return {'errCode': 1001, 'errMsg': 'index unavailable'};
+          if (fail) return {'errCode': 503, 'errMsg': 'index unavailable'};
           return body['beforeSeq'] == 0
               ? page([result(80)], more: true, before: 80)
               : page([]);
@@ -159,8 +159,8 @@ void main() {
     await work;
     expect(controller.results, isEmpty);
     expect(controller.failed, isFalse);
-    await expectLater(
-        api.search(conversationID: 'sg_test', keyword: '会议'), throwsStateError);
+    await expectLater(api.search(conversationID: 'sg_test', keyword: '会议'),
+        throwsA(isA<SearchApiException>()));
     controller.dispose();
   });
 }

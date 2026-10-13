@@ -1,28 +1,17 @@
-# Global message history supplementation
+# Global text search
 
-The global history category first shows local keyword results, then calls
-`GlobalHistoryCloudSearch`. Each interaction discovers at most 50 SDK
-conversations and hydrates at most three conversations concurrently, one
-100-message history page each. Both the initial search and each load-more stop
-after this bounded batch, even when no matches are added. Subsequent interactions rotate through the remaining conversations
-and older cursors. This includes SDK conversations outside the home list's
-currently rendered window. It does not discover deleted/unauthorized chats.
+Production global text search uses `/msg/search_messages_global` with the current
+ordinary user's imToken. It no longer enumerates conversations or hydrates SDK
+history. Contact/group/conversation-name results retain their existing sources.
+The result list keeps server order, shows each matching summary as plain text,
+and opens the real chat at the validated HTTP context anchor.
 
-`getAdvancedHistoryMessageList` delegates missing-history retrieval and local
-storage to OpenIM; the client does not invent a cloud keyword-search endpoint.
-As each conversation finishes hydration, global local search runs again and
-replaces the result groups without waiting for slower conversations. These local
-refreshes are serialized to prevent older snapshots overwriting newer results,
-avoiding duplicate appended results. An explicit continuation remains while
-any conversation history or conversation-list page is unfinished. Server
-retention and the account's history permissions remain authoritative.
+Each query owns its opaque cursor. Empty pages with hasMore=true advance until
+results or completion; changed queries discard late responses. Pagination errors
+preserve rows and retry the same cursor, while expired cursors reset the search.
+There is no total-count claim. Deduplication uses conversationID+seq. All search
+HTTP requests share the serialized paced client documented in history_search.
 
-Each keyword search owns its scan. Query changes, disposal, account changes and
-token changes invalidate results and stop subsequent requests. Native requests
-already submitted can finish caching. Errors retain retryable cursors and the
-previous results. Contact/group/name searches retain their existing sources.
-
-Single-conversation keyword, sender, date, media, voice and file results use the
-shared `chat/history_search/cloud` path. The calendar allows cloud-capable dates
-even if its local availability probe has no messages; hydration occurs in the
-selected date's result page, not once for every calendar cell.
+The older GlobalHistoryCloudSearch implementation remains available only through
+explicit source/factory injection for compatibility tests. It is not the default
+production path and is never an automatic fallback for API failures.

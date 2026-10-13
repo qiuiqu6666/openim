@@ -4,7 +4,7 @@
 
 Production text keyword searches now use `/msg/search_messages` through
 `cloud/chat_keyword_search_api.dart`, with the signed-in SDK user's imToken and
-the configured OpenIM API base URL. The request contains no user identity field.
+the deployed HTTPS API base URL (`https://99imapi.99chat.vip`). The request contains no user identity field.
 Media/file and keywordless searches retain the existing SDK source. Test sources
 remain injectable; pass `keywordApi` to exercise the HTTP search controller path.
 
@@ -20,13 +20,24 @@ Results are `CloudKeywordMessage` projections. The `summary` field is rendered
 as plain Text and is never persisted as a full SDK message. API results contain
 sender IDs but not profiles, so rows can display IDs until profiles are available.
 
-Remaining integration boundary: the currently bundled Flutter/native SDK exposes
-history by local clientMsgID only, not a public sequence-based context fetch.
-Click navigation can revalidate locally stored results through the existing
-locator; cloud-only result positioning needs the companion SDK method/binary.
-Do not seed the SDK database with summaries or scan all intervening history to
-work around this. Live HTTP authorization and Android/iOS end-to-end validation
-have not been performed by the client tests.
+Cloud search hits validate `/msg/search_message_context` before navigating to
+the real chat route. `context/SearchChatWindow` supplies an in-memory history
+window with both HTTP cursors; it continues empty gaps without inserting SDK
+records. Existing chat positioning highlights the anchor. Returning to latest
+restores SDK history. Opening the chat uses its ordinary read-state behavior.
+Ordinary local search navigation keeps its existing SDK path.
+
+The standalone context preview remains available as a component. Its invalid
+anchor errors clear the preview; the chat window uses the existing history
+error and retry UI. Reopen a search result to obtain fresh expired cursors.
+`cloud/search_http_client.dart` serializes all three HTTP endpoint families with
+at least 1.1 seconds between starts; obsolete queued requests are skipped. Token
+errors use the existing IMController expiry/invalid-session callbacks. The base
+URL can be overridden for separate deployments with MESSAGE_SEARCH_API_URL.
+
+Coverage: `test/pages/chat/history_search/context`, `cloud/search_http_client_test.dart`,
+and `test/pages/global_search/cloud/global_keyword_search_test.dart`. Mock HTTP
+and widget tests are not live authorization or end-to-end latency measurements.
 
 ## Sender picker progressive loading (2026-10-12)
 

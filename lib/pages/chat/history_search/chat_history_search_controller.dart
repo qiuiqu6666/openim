@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'chat_history_search_source.dart';
 import 'cloud/chat_history_cloud_sync.dart';
 import 'cloud/chat_keyword_search_api.dart';
+import 'cloud/search_sender_profiles.dart';
 
 /// Owns one search page's state; dispose it with its page.
 class ChatHistorySearchController extends ChangeNotifier {
@@ -13,12 +15,15 @@ class ChatHistorySearchController extends ChangeNotifier {
     required this.conversationID,
     ChatHistorySearchSource? source,
     ChatKeywordSearchApi? keywordApi,
+    SearchSenderProfiles? senderProfiles,
     this.acceptResult,
-  })  : source = source ?? OpenIMChatHistorySearchSource(),
+  })  : _senderProfiles = senderProfiles ?? SearchSenderProfiles(),
+        source = source ?? OpenIMChatHistorySearchSource(),
         _keywordApi =
             keywordApi ?? (source == null ? ChatKeywordSearchApi() : null);
 
   final ChatKeywordSearchApi? _keywordApi;
+  final SearchSenderProfiles _senderProfiles;
   int _beforeSeq = 0, _snapshotSeq = 0;
   bool _keywordHasMore = true;
   bool get _usesKeywordApi =>
@@ -50,6 +55,7 @@ class ChatHistorySearchController extends ChangeNotifier {
   ChatHistorySearchQuery get query => _query;
   bool get loading => _loading;
   bool get failed => _failed;
+  int? searchError;
   bool get invalidKeyword =>
       _usesKeywordApi &&
       (_query.keyword.runes.length < 2 || _query.keyword.runes.length > 64);
@@ -76,6 +82,7 @@ class ChatHistorySearchController extends ChangeNotifier {
     _rawHasMore = true;
     _loading = false;
     _failed = false;
+    searchError = null;
     _hasSearched = false;
     notifyListeners();
   }
@@ -198,10 +205,12 @@ class ChatHistorySearchController extends ChangeNotifier {
     var snapshot = _snapshotSeq;
     _loading = true;
     _failed = false;
+    searchError = null;
     notifyListeners();
     try {
       while (_isCurrent(generation)) {
         final page = await _keywordApi!.search(
+            isCurrent: () => _isCurrent(generation),
             conversationID: conversationID,
             keyword: query.keyword,
             beforeSeq: before,
@@ -225,10 +234,21 @@ class ChatHistorySearchController extends ChangeNotifier {
         }
         final ids = _results.map((m) => m.clientMsgID).toSet();
         _results.addAll(matches.where((m) => ids.add(m.clientMsgID)));
+        unawaited(_resolveSenders(matches, generation));
         _beforeSeq = before;
         _snapshotSeq = snapshot;
         _keywordHasMore = page.hasMore;
         break;
+      }
+    } on SearchApiException catch (error) {
+      if (_isCurrent(generation)) {
+        searchError = error.code;
+        if (error.code == 1001) {
+          _beforeSeq = _snapshotSeq = 0;
+          _results.clear();
+        }
+        if (error.invalidatesContext) _results.clear();
+        _failed = true;
       }
     } catch (_) {
       if (_isCurrent(generation)) _failed = true;
@@ -246,5 +266,12 @@ class ChatHistorySearchController extends ChangeNotifier {
     _disposed = true;
     ++_generation;
     super.dispose();
+  }
+
+  Future<void> _resolveSenders(List<Message> messages, int generation) async {
+    bool current() =>
+        _isCurrent(generation) && _keywordApi!.client.sessionCurrent;
+    await _senderProfiles.enrich(messages, isCurrent: current);
+    if (current()) notifyListeners();
   }
 }
