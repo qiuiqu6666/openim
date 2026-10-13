@@ -1,3 +1,4 @@
+import '../login/desktop_authorization/widgets/desktop_login_banner.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import '../mine/settings/widgets/settings_widgets.dart'
     show showSettingsConfirm;
@@ -371,6 +372,7 @@ class _ConversationPageState extends State<ConversationPage> {
                 ),
               ),
             ),
+            if (!widget.groupChats) DesktopLoginBanner(active: widget.liveUpdatesActive),
             ConversationFolderBar(
               folders: _folders.displayFolders,
               selectedFolderID: _folders.selectedFolderID,
@@ -527,7 +529,11 @@ class _ConversationPageState extends State<ConversationPage> {
                         ),
                         if (unread > 0) ...[
                           SizedBox(width: 8.w),
-                          UnreadCountView(count: unread),
+                          UnreadCountView(
+                            count: unread,
+                            size: 22,
+                            fontSize: 12,
+                          ),
                         ],
                       ],
                     ),

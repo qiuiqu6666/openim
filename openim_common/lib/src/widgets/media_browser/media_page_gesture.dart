@@ -13,7 +13,9 @@ bool acceptMediaPageDrag(Map<int, VelocityTracker> trackers) {
   final accepted = _pageDragDirections[tracker];
   if (accepted != null) return accepted;
   final delta = tracker.getSamplesDelta();
-  if (delta.distance < kTouchSlop) return false;
-  return _pageDragDirections[tracker] =
-      delta.dx.abs() > delta.dy.abs();
+  // The page recognizer has already applied the device's touch slop before
+  // calling this predicate. A second fixed threshold lets the image's scale
+  // recognizer win on devices with a smaller slop, blocking fit-scale paging.
+  if (delta == Offset.zero) return false;
+  return _pageDragDirections[tracker] = delta.dx.abs() > delta.dy.abs();
 }

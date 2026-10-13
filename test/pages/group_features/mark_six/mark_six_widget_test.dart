@@ -45,6 +45,62 @@ Widget _host(MarkSixFakeApi api,
                 ])));
 
 void main() {
+  testWidgets('predictions automatically paginate and stop after last page',
+      (tester) async {
+    final pending = Completer<Map<String, dynamic>>();
+    Map<String, dynamic> response(String path, Map<String, dynamic> query) {
+      final result = markSixFixtureResponse(path, query);
+      if (path.endsWith('/predictions')) {
+        final data = result['data'] as Map<String, dynamic>;
+        final page = query['page'] as int;
+        data['hasMore'] = page == 1;
+        data['items'] = List.generate(
+            20,
+            (i) => {
+                  'issue': '${page * 100 + i}',
+                  'items': [
+                    {
+                      'attribute': 'special',
+                      'values': ['08'],
+                      'result': 'pending'
+                    }
+                  ]
+                });
+      }
+      return result;
+    }
+
+    final api = MarkSixFakeApi(respond: (_, path, query, __) {
+      if (path.endsWith('/predictions') && query['page'] == 2) {
+        return pending.future;
+      }
+      return response(path, query);
+    });
+    await _mount(tester, MarkSixPage(featureContext: markSixContext(api)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('智能预测'));
+    await tester.pumpAndSettle();
+    final scroll =
+        tester.widget<ListView>(find.byType(ListView).first).controller!;
+    expect(
+        api.calls.where((c) => c.path.endsWith('/predictions')), hasLength(1));
+    scroll.jumpTo(scroll.position.maxScrollExtent - 100);
+    await tester.pump();
+    await tester.pump();
+    scroll.jumpTo(scroll.position.maxScrollExtent);
+    await tester.pump();
+    expect(
+        api.calls.where((c) => c.path.endsWith('/predictions')), hasLength(2));
+    pending.complete(response('/predictions', {'page': 2, 'window': 40}));
+    await tester.pumpAndSettle();
+    scroll.jumpTo(scroll.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(find.text('已加载全部预测'), findsOneWidget);
+    expect(
+        api.calls.where((c) => c.path.endsWith('/predictions')), hasLength(2));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   setUp(() {
     Get.testMode = true;
     SharedPreferences.setMockInitialValues({});
@@ -297,10 +353,7 @@ void main() {
             tester, AgentCurrentPage(featureContext: markSixContext(api)),
             dark: dark);
         await tester.pumpAndSettle();
-        expect(
-            tester
-                .widget<FilledButton>(find.byType(FilledButton))
-                .onPressed,
+        expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
             isNotNull);
         expect(api.calls.where((c) => c.method == 'POST'), isEmpty);
         await tester.tap(find.text('申请反水'));

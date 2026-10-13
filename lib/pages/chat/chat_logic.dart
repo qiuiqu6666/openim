@@ -381,7 +381,7 @@ class ChatLogic extends SuperController {
     },
     onGroupProfileChanged: (name, face) {
       if (_sessionInactive) return;
-      nickname.value = name;
+      if (name.trim().isNotEmpty) nickname.value = name;
       faceUrl.value = face;
     },
   );
@@ -691,8 +691,9 @@ class ChatLogic extends SuperController {
 
   bool get isGroupChat => null != groupID && groupID!.trim().isNotEmpty;
 
-  String get memberStr =>
-      isSingleChat ? '' : 'groupMemberCountLabel'.trArgs(['$memberCount']);
+  String get memberStr => isSingleChat || !_group.memberCountKnown.value
+      ? ''
+      : 'groupMemberCountLabel'.trArgs(['$memberCount']);
 
   String? get senderName => isSingleChat
       ? OpenIM.iMManager.userInfo.nickname
@@ -968,6 +969,7 @@ class ChatLogic extends SuperController {
       if (!loading) scheduleMicrotask(_historyRecovery.loadingSettled);
     });
     _messageSubscriptions.add(imLogic.historyRecoverySignals.listen((_) {
+      _group.recover(resetAttempts: true);
       _backgroundMessageRecovery.restart();
       // The immediate resume read can succeed before native persistence catches
       // up. A wake must reconcile healthy windows too, not only failed reads.
@@ -1021,6 +1023,7 @@ class ChatLogic extends SuperController {
         .listen((receipts) => _ownedReceiptCallback?.call(receipts)));
 
     _group.initialize();
+    _group.recover();
 
     friendInfoChangedSub = imLogic.friendInfoChangedSubject.listen((value) {
       if (!_sessionInactive && !isSingleChat) {
@@ -1466,11 +1469,13 @@ class ChatLogic extends SuperController {
       _receipts.invalidateViewport();
       syncStatus.value = value.status;
       if (value.status == IMSdkStatus.syncEnded) {
+        _group.recover(resetAttempts: true);
         _backgroundMessageRecovery.restart();
         _historyRecovery.request(resetAttempts: true);
         unawaited(_loadHistoryForSyncEnd());
         _latestMessageRecovery.conversationChanged(resetAttempts: true);
       } else if (value.status == IMSdkStatus.connectionSucceeded) {
+        _group.recover(resetAttempts: true);
         _historyRecovery.request(resetAttempts: true);
         if (_backgroundMessageRecovery.hasCheckpoint) {
           _backgroundMessageRecovery.restart();
@@ -1521,7 +1526,6 @@ class ChatLogic extends SuperController {
         (lifecycle == null || lifecycle == AppLifecycleState.resumed);
   }
 
-
   Future<bool> _loadHistoryForSyncEnd() => _runHistoryRecovery();
 
   Future<bool> _runHistoryRecovery({bool retry = false}) async {
@@ -1562,8 +1566,8 @@ class ChatLogic extends SuperController {
   }
 
   void _getGroupInfoAfterLoadMessage() {
-    if (isGroupChat && ownerAndAdmin.isEmpty) {
-      unawaited(_group.loadAfterHistory());
+    if (isGroupChat) {
+      _group.recover();
     } else {
       _checkInBlacklist();
     }
@@ -1597,6 +1601,7 @@ class ChatLogic extends SuperController {
 
   @override
   void onResumed() {
+    _group.recover(resetAttempts: true);
     unawaited(_loadHistoryForSyncEnd());
     _historyRecovery.request(resetAttempts: true);
     _latestMessageRecovery.conversationChanged(resetAttempts: true);

@@ -179,10 +179,10 @@ class GlobalSearchLogic extends GetxController {
       section(4, () => source.messages(key, false), textSearchResultItems),
     ]);
     if (active()) loading.value = false;
-    if (active()) await loadMoreCloud(singleBatch: true);
+    if (active()) await loadMoreCloud();
   }
 
-  Future<void> loadMoreCloud({bool singleBatch = false}) async {
+  Future<void> loadMoreCloud() async {
     final cloud = _cloud;
     if (_closed || cloud == null || !cloud.hasMore || cloudLoading.value) {
       return;
@@ -198,18 +198,22 @@ class GlobalSearchLogic extends GetxController {
     if (!current()) return;
     cloudLoading.value = true;
     failures.remove(4);
-    try {
-      do {
-        await cloud.supplement(current);
+    // Publish fast conversations without waiting for the slowest history page.
+    // Serialize local searches so an older snapshot cannot replace a newer one.
+    Future<void> refresh = Future<void>.value();
+    Future<void> publish() {
+      refresh = refresh.then((_) async {
         if (!current()) return;
         final results = await source.messages(keyword, false);
-        if (!current()) return;
-        textSearchResultItems.assignAll(results);
-        if (singleBatch || !cloud.hasMore) break;
-        // Empty matching batches are not extra result pages. Keep scanning
-        // serially, yielding between batches and honoring query/session changes.
-        await Future<void>.delayed(const Duration(milliseconds: 16));
-      } while (current() && cloud.hasMore);
+        if (current()) textSearchResultItems.assignAll(results);
+      });
+      return refresh;
+    }
+
+    try {
+      // One interaction is one bounded batch, even if no new matches appear.
+      // Older history remains explicitly available through the next load-more.
+      await cloud.supplement(current, onProgress: publish);
     } catch (_) {
       if (current()) failures.add(4);
     } finally {

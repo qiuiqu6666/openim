@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../chat_history_search_tokens.dart';
+import '../cloud/chat_keyword_search_api.dart';
 import 'chat_history_search_layout.dart';
 
 /// Search summaries open the existing message context for playback/file actions.
@@ -38,7 +39,9 @@ class ChatHistoryResultTile extends StatelessWidget {
     final sender = name.isNotEmpty ? name : message.sendID?.trim() ?? '';
     final time = message.sendTime;
     final stamp = time == null ? '' : formatChatMessageTime(context, time);
-    final summary = IMUtils.parseMsg(message);
+    final summary = message is CloudKeywordMessage
+        ? (message as CloudKeywordMessage).summary
+        : IMUtils.parseMsg(message);
     final preview = Text(
       summary,
       maxLines: 2,

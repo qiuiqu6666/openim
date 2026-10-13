@@ -5,6 +5,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/widgets/qr_scanner/qr_scanner_labels.dart';
+import 'package:openim/widgets/qr_scanner/gallery/qr_gallery_labels.dart';
+import 'package:openim/widgets/qr_scanner/qr_gallery_service.dart';
 import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
 
 import 'support/wallet_scanner_fixture.dart';
@@ -72,7 +74,11 @@ void main() {
           await tester.tap(walletScannerAction('album'));
           await tester.pumpAndSettle();
           expect(h.results, isEmpty);
-          expect(find.text(message), findsOneWidget);
+          expect(
+              find.text(code == null
+                  ? QrScannerLabels(locale).failure(QrGalleryStatus.noCode)
+                  : message),
+              findsOneWidget);
           expect(h.native.cameraCalls, contains('resumeCamera'));
           await h.native.recognize(walletScannerAddress);
           await tester.pumpAndSettle();

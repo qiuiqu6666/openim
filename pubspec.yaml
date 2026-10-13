@@ -16,7 +16,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 3.0.1+2025
+version: 3.0.1+2026
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -58,6 +58,8 @@ dependencies:
   image_picker: ^1.0.4
   image: ^4.5.4
   zxing2: ^0.2.4
+  qr_image_decoder:
+    path: local_plugin/qr_image_decoder
   image_gallery_saver_plus: ^4.0.1
   azlistview: ^2.0.0
   lpinyin: ^2.0.3
@@ -130,6 +132,7 @@ dependencies:
     path: openim_live
   provider: 6.1.5+1
   webview_flutter: 4.13.1
+  flutter_zxing: 2.3.0
 
 dependency_overrides:
   # Keep the Flutter API while pinning native Core to patch.15 in our adapter.
@@ -147,6 +150,8 @@ dependency_overrides:
     path: local_plugin/uri_to_file
 
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   # Location picker boundary/interaction fixtures use the same coordinate type.
   latlong2: ^0.9.1
   # Exercise the existing local recorder's native lifecycle and custom surface.
@@ -177,6 +182,7 @@ flutter:
 
   # App-owned 99chat parity assets, including live artwork/tutorial and lottery balls.
   assets:
+    - lib/pages/login/desktop_authorization/assets/
     - assets/images/
     - assets/ai/
     - assets/img/

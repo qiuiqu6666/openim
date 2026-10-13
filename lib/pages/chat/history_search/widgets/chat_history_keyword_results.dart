@@ -102,6 +102,14 @@ class ChatHistoryKeywordResults extends StatelessWidget {
       );
     }
     if (controller.failed) {
+      if (controller.invalidKeyword) {
+        return Padding(
+          padding: const EdgeInsets.all(AppTokens.s7),
+          child: Text(chatHistorySearchText(context, 'keywordLength'),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(color: muted)),
+        );
+      }
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: AppTokens.s7),
         child: Column(children: [

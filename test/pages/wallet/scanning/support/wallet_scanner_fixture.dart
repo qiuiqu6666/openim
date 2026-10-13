@@ -41,9 +41,14 @@ class WalletScannerGallery extends QrGalleryService {
   }
 
   @override
-  Future<String?> readCode(String path) {
+  Future<QrGalleryResult> scan(String path,
+      {QrGalleryCancellation? cancellation,
+      Duration timeout = const Duration(seconds: 12)}) async {
     paths.add(path);
-    return read?.call(path) ?? Future<String?>.value();
+    final text = await read?.call(path);
+    return QrGalleryResult(
+        text == null ? QrGalleryStatus.noCode : QrGalleryStatus.success,
+        codes: text == null ? [] : [QrGalleryCode(text: text)]);
   }
 }
 

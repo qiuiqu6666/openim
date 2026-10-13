@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -52,33 +53,46 @@ void _phone(WidgetTester tester) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('continuous held swipes release gallery drag across long photos',
-      (tester) async {
-    _phone(tester);
-    final bytes = (await tester.runAsync(() => _png(const Size(120, 2400))))!;
-    await tester.pumpWidget(renderTestHost(MediaBrowser(
-      initialIndex: 0,
-      sources: List.generate(
-          5, (i) => MediaSource(thumbnail: '', bytes: bytes, tag: 'held-$i')),
-    )));
-    await _settle(tester);
-    var previous = 0;
-    for (final index in [1, 2, 3, 2, 1]) {
-      final forward = index > previous;
-      final gesture =
-          await tester.startGesture(Offset(forward ? 340 : 35, 400));
-      for (var step = 0; step < 22; step++) {
-        await gesture.moveBy(Offset(forward ? -16 : 16, 0));
-        await tester.pump(const Duration(milliseconds: 20));
-      }
-      await gesture.up();
+  for (final shape in [
+    const Size(120, 2400),
+    const Size(375, 812),
+    const Size(300, 300)
+  ]) {
+    testWidgets(
+        'continuous held swipes release gallery drag across photos $shape',
+        (tester) async {
+      _phone(tester);
+      final bytes = (await tester.runAsync(() => _png(shape)))!;
+      await tester.pumpWidget(renderTestHost(Builder(
+          builder: (context) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                  gestureSettings: const DeviceGestureSettings(touchSlop: 8)),
+              child: MediaBrowser(
+                initialIndex: 0,
+                sources: List.generate(
+                    5,
+                    (i) => MediaSource(
+                        thumbnail: '', bytes: bytes, tag: 'held-$i')),
+              )))));
       await _settle(tester);
-      expect(find.text('${index + 1}/5'), findsOneWidget,
-          reason: 'target $index from $previous');
-      expect(tester.takeException(), isNull);
-      previous = index;
-    }
-  });
+      var previous = 0;
+      for (final index in [1, 2, 3, 2, 1]) {
+        final forward = index > previous;
+        final gesture =
+            await tester.startGesture(Offset(forward ? 340 : 35, 400));
+        for (var step = 0; step < 88; step++) {
+          await gesture.moveBy(Offset(forward ? -4 : 4, 0));
+          await tester.pump(const Duration(milliseconds: 5));
+        }
+        await gesture.up();
+        await _settle(tester);
+        expect(find.text('${index + 1}/5'), findsOneWidget,
+            reason: 'target $index from $previous');
+        expect(tester.takeException(), isNull);
+        previous = index;
+      }
+    });
+  }
 
   for (final shape in {
     'exact screen': const Size(375, 812),

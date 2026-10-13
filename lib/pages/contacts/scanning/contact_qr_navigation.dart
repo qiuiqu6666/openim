@@ -1,3 +1,4 @@
+import '../../login/desktop_authorization/desktop_login_confirm_page.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -9,6 +10,11 @@ import '../group_profile_panel/group_profile_panel_logic.dart';
 Future<void> openScannedContact(Map<String, String> result,
     {required bool Function() isActive}) async {
   if (!isActive()) return;
+  final requestId = result['desktopLoginRequestId'];
+  if (requestId != null) {
+    await Get.to<void>(() => DesktopLoginConfirmPage(requestId: requestId));
+    return;
+  }
   final groupID = result['groupID'];
   if (groupID != null) {
     await openScannedGroup(groupID, isActive: isActive);

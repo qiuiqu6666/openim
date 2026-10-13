@@ -90,16 +90,16 @@ class _MarkSixPredictionsState extends State<MarkSixPredictions> {
       else if (c.predictionError != null)
         MarkSixEmpty(
             message: c.predictionError!,
-            onRetry: () => c.loadPredictions(force: true))
+            onRetry: () =>
+                c.loadPredictions(more: c.predictionPage > 0, force: true))
       else if (c.predictions.isEmpty)
         const MarkSixEmpty(message: '暂无预测')
       else
-        Center(
-            child: TextButton(
-                onPressed: c.predictionsHasMore
-                    ? () => c.loadPredictions(more: true)
-                    : null,
-                child: Text(c.predictionsHasMore ? '加载更多' : '已加载全部预测'))),
+        Padding(
+            padding: const EdgeInsets.all(16),
+            child: Center(
+                child: Text(c.predictionsHasMore ? '继续滑动加载更多' : '已加载全部预测',
+                    style: TextStyle(color: style.secondary)))),
     ]);
   }
 

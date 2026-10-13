@@ -10,11 +10,15 @@ Message msg(String id) =>
 
 class Source implements ChatHistorySearchSource, ChatHistoryCloudSource {
   int supplements = 0;
+  int totalPages = 2;
+  int? matchPage = 2;
+  Future<void> Function()? beforeSupplement;
   bool fail = false;
   @override
-  bool get cloudHasMore => supplements < 2;
+  bool get cloudHasMore => supplements < totalPages;
   @override
   Future<void> supplement(String id, bool Function() current) async {
+    await beforeSupplement?.call();
     if (fail) throw StateError('offline');
     if (current()) supplements++;
   }
@@ -25,10 +29,66 @@ class Source implements ChatHistorySearchSource, ChatHistoryCloudSource {
           required ChatHistorySearchQuery query,
           required int pageIndex,
           int count = 30}) async =>
-      [msg('local'), if (supplements == 2) msg('cloud')];
+      [
+        msg('local'),
+        if (matchPage != null && supplements >= matchPage!) msg('cloud')
+      ];
 }
 
 void main() {
+  test('clearing during continuation stops further history requests', () async {
+    final source = Source()
+      ..totalPages = 5
+      ..matchPage = null;
+    final controller =
+        ChatHistorySearchController(conversationID: 'group', source: source);
+    await controller.search(const ChatHistorySearchQuery(keyword: 'needle'));
+    final pending = Completer<void>();
+    source.beforeSupplement = () => pending.future;
+    final work = controller.loadMore();
+    controller.clear();
+    pending.complete();
+    await work;
+    expect(source.supplements, 1);
+    expect(controller.results, isEmpty);
+    expect(controller.hasMore, isFalse);
+    expect(controller.loading, isFalse);
+    controller.dispose();
+  });
+  test('load more exhausts nonmatching history and removes continuation',
+      () async {
+    final source = Source()
+      ..totalPages = 4
+      ..matchPage = null;
+    final controller =
+        ChatHistorySearchController(conversationID: 'group', source: source);
+    await controller.search(const ChatHistorySearchQuery(keyword: 'needle'));
+    await controller.loadMore();
+    expect(source.supplements, 4);
+    expect(controller.results.map((m) => m.clientMsgID), ['local']);
+    expect(controller.hasMore, isFalse);
+    expect(controller.loading, isFalse);
+    await controller.loadMore();
+    expect(source.supplements, 4);
+    controller.dispose();
+  });
+  test('load more crosses empty batches without skipping older matches',
+      () async {
+    final source = Source()
+      ..totalPages = 5
+      ..matchPage = 3;
+    final controller =
+        ChatHistorySearchController(conversationID: 'group', source: source);
+    await controller.search(const ChatHistorySearchQuery(keyword: 'needle'));
+    await controller.loadMore();
+    expect(source.supplements, 3);
+    expect(controller.results.map((m) => m.clientMsgID), ['local', 'cloud']);
+    expect(controller.hasMore, isTrue);
+    await controller.loadMore();
+    expect(source.supplements, 5);
+    expect(controller.hasMore, isFalse);
+    controller.dispose();
+  });
   test('pages SDK history from oldest cursor and stops only at isEnd',
       () async {
     final cursors = <String?>[];

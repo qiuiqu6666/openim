@@ -8,6 +8,9 @@ import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
 import 'qr_gallery_service.dart';
 import 'qr_scanner_labels.dart';
 import 'qr_scanner_overlay.dart';
+import 'gallery/qr_gallery_choice_sheet.dart';
+import 'gallery/qr_gallery_labels.dart';
+import 'content/qr_content_sheet.dart';
 
 export 'qr_gallery_service.dart';
 export 'qr_scanner_labels.dart';
@@ -21,12 +24,14 @@ class QrScannerPage<T> extends StatefulWidget {
       this.keyPrefix = 'qr',
       this.invalidCodeMessage,
       this.onMyQrTap,
+      this.showGeneralContent = false,
       this.gallery = const QrGalleryService()});
 
   final T? Function(String) parseCode;
   final String keyPrefix;
   final String Function(BuildContext)? invalidCodeMessage;
   final Future<void> Function()? onMyQrTap;
+  final bool showGeneralContent;
   final QrGalleryService gallery;
 
   @override
@@ -50,6 +55,9 @@ class _QrScannerPageState<T> extends State<QrScannerPage<T>>
   bool _permissionKnown = false;
   bool _denied = false;
   bool _galleryBusy = false;
+  bool _contentBusy = false;
+  String? _lastCameraContent;
+  QrGalleryCancellation? _galleryCancellation;
   bool _myQrBusy = false;
   bool _flashAvailable = false;
   bool _flashOn = false;
@@ -62,7 +70,8 @@ class _QrScannerPageState<T> extends State<QrScannerPage<T>>
       _ownsPage &&
       (_lifecycle == null || _lifecycle == AppLifecycleState.resumed);
 
-  bool get _canScan => _activePage && !_galleryBusy && !_myQrBusy && !_denied;
+  bool get _canScan =>
+      _activePage && !_galleryBusy && !_contentBusy && !_myQrBusy && !_denied;
 
   @override
   void initState() {
@@ -80,6 +89,7 @@ class _QrScannerPageState<T> extends State<QrScannerPage<T>>
     final current = ModalRoute.isCurrentOf(context) ?? true;
     if (current != _routeCurrent) {
       _routeCurrent = current;
+      // The result chooser deliberately covers this route. It owns no decode.
       if (!current) _releaseForegroundWaiter();
       _syncCamera();
     }
@@ -108,7 +118,15 @@ class _QrScannerPageState<T> extends State<QrScannerPage<T>>
   }
 
   Future<bool> _waitForForeground() async {
-    if (!_ownsPage || ModalRoute.of(context)?.isCurrent != true) return false;
+    if (!mounted ||
+        _closed ||
+        _handled ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return false;
+    }
+    // A sheet's Future completes before the inherited route dependency rebuilds.
+    // Read Navigator's live route state so the user's selection is not dropped.
+    _routeCurrent = true;
     if (!_activePage) {
       final pending = _foregroundReady ??= Completer<void>();
       await pending.future;
@@ -173,7 +191,14 @@ class _QrScannerPageState<T> extends State<QrScannerPage<T>>
           ModalRoute.of(context)?.isCurrent != true) {
         return;
       }
-      _returnCode(barcode.code);
+      final raw = barcode.code ?? '';
+      if (!_returnCode(raw) &&
+          widget.showGeneralContent &&
+          raw.trim().isNotEmpty &&
+          _lastCameraContent != raw) {
+        _lastCameraContent = raw;
+        unawaited(_showGeneralContent(raw));
+      }
     });
     unawaited(_refreshFlash(controller));
     _syncCamera();
@@ -246,8 +271,9 @@ class _QrScannerPageState<T> extends State<QrScannerPage<T>>
   }
 
   Future<void> _pickGallery() async {
-    if (!_activePage || _galleryBusy || _myQrBusy) return;
+    if (!_activePage || _galleryBusy || _contentBusy || _myQrBusy) return;
     setState(() => _galleryBusy = true);
+    final cancellation = _galleryCancellation = QrGalleryCancellation();
     _syncCamera();
     try {
       await _cameraWork;
@@ -255,10 +281,38 @@ class _QrScannerPageState<T> extends State<QrScannerPage<T>>
       final path = await widget.gallery.pickImage();
       // Native pickers may reply before Flutter receives the resumed event.
       // Retain the selected image until this route is foregrounded again.
-      if (path == null || !await _waitForForeground()) return;
-      final code = await widget.gallery.readCode(path);
+      if (path == null ||
+          cancellation.isCancelled ||
+          !await _waitForForeground()) {
+        return;
+      }
+      final result =
+          await widget.gallery.scan(path, cancellation: cancellation);
+      if (!identical(cancellation, _galleryCancellation)) return;
+      if (cancellation.isCancelled &&
+          result.status != QrGalleryStatus.timeout) {
+        return;
+      }
       if (!await _waitForForeground() || !mounted) return;
-      if (!_returnCode(code)) {
+      if (result.status == QrGalleryStatus.cancelled) return;
+      if (result.codes.isEmpty) {
+        _message(QrScannerLabels.of(context).failure(result.status));
+        return;
+      }
+      final code = result.codes.length == 1 && !result.partial
+          ? result.codes.single
+          : await chooseGalleryCode(context, result);
+      if (code == null ||
+          cancellation.isCancelled ||
+          !await _waitForForeground()) {
+        return;
+      }
+      if (!mounted) return;
+      if (!_returnCode(code.text)) {
+        if (widget.showGeneralContent && code.text.trim().isNotEmpty) {
+          await _showGeneralContent(code.text);
+          return;
+        }
         _message(widget.invalidCodeMessage?.call(context) ??
             QrScannerLabels.of(context).invalidCode);
       }
@@ -267,8 +321,26 @@ class _QrScannerPageState<T> extends State<QrScannerPage<T>>
         _message(QrScannerLabels.of(context).readImageFailed);
       }
     } finally {
+      if (identical(cancellation, _galleryCancellation)) {
+        _galleryCancellation = null;
+      }
       if (mounted && !_closed) {
         setState(() => _galleryBusy = false);
+        _syncCamera();
+      }
+    }
+  }
+
+  Future<void> _showGeneralContent(String raw) async {
+    if (!_activePage || _contentBusy) return;
+    setState(() => _contentBusy = true);
+    _syncCamera();
+    try {
+      await _cameraWork;
+      if (mounted && _activePage) await showQrContent(context, raw);
+    } finally {
+      if (mounted && !_closed) {
+        setState(() => _contentBusy = false);
         _syncCamera();
       }
     }
@@ -317,6 +389,7 @@ class _QrScannerPageState<T> extends State<QrScannerPage<T>>
   @override
   void dispose() {
     _closed = true;
+    _galleryCancellation?.cancel();
     _releaseForegroundWaiter();
     _startTimer?.cancel();
     _scanAnimation.dispose();
@@ -381,7 +454,11 @@ class _QrScannerPageState<T> extends State<QrScannerPage<T>>
                     : null,
                 flashOn: _flashOn,
               ),
-              if (_galleryBusy || !_permissionKnown || _denied || _cameraFailed)
+              if (!_contentBusy &&
+                  (_galleryBusy ||
+                      !_permissionKnown ||
+                      _denied ||
+                      _cameraFailed))
                 Positioned.fromRect(
                   rect: layout.scanWindow.deflate(AppTokens.s3),
                   child: _cameraState(),
@@ -397,7 +474,19 @@ class _QrScannerPageState<T> extends State<QrScannerPage<T>>
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(AppTokens.s4),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              if (_galleryBusy || (!_permissionKnown && !_cameraFailed))
+              if (_galleryBusy) ...[
+                if (!_contentBusy)
+                  const CircularProgressIndicator(
+                      color: QrScannerTokens.foreground),
+                const SizedBox(height: AppTokens.s3),
+                Text(QrScannerLabels.of(context).scanningImage,
+                    style: const TextStyle(color: QrScannerTokens.foreground)),
+                TextButton(
+                    onPressed: () => _galleryCancellation?.cancel(),
+                    style: TextButton.styleFrom(
+                        foregroundColor: QrScannerTokens.foreground),
+                    child: Text(QrScannerLabels.of(context).cancelScan)),
+              ] else if (!_permissionKnown && !_cameraFailed)
                 const CircularProgressIndicator(
                     color: QrScannerTokens.foreground)
               else ...[

@@ -26,7 +26,14 @@ class _PngGallery extends QrGalleryService {
   @override
   Future<String?> pickImage() async => path;
   @override
-  Future<String?> readCode(String path) => decoding = super.readCode(path);
+  Future<QrGalleryResult> scan(String path,
+      {QrGalleryCancellation? cancellation,
+      Duration timeout = const Duration(seconds: 12)}) {
+    final result =
+        super.scan(path, cancellation: cancellation, timeout: timeout);
+    decoding = result.then((value) => value.codes.single.text);
+    return result;
+  }
 }
 
 void main() {
@@ -88,6 +95,8 @@ void main() {
                     .decoding!
                     .timeout(const Duration(seconds: 5)),
                 _recipient);
+            // Let the page consume the multi-result API in the real async zone.
+            await Future<void>.delayed(Duration.zero);
           });
         } else {
           await native.recognize(' \n$_recipient  ');

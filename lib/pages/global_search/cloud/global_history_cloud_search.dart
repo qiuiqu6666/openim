@@ -24,7 +24,8 @@ class GlobalHistoryCloudSearch {
   bool _listed = false;
   bool get hasMore => !_listed || _queue.isNotEmpty;
 
-  Future<void> supplement(bool Function() current) async {
+  Future<void> supplement(bool Function() current,
+      {Future<void> Function()? onProgress}) async {
     if (!current()) return;
     // Discover another bounded page before cycling existing history. Chats
     // absent from the home list's rendered window must also be searched.
@@ -46,14 +47,17 @@ class GlobalHistoryCloudSearch {
       _offset += page.length;
       _listed = page.length < 50;
     }
-    final batchSize = _queue.length < 3 ? _queue.length : 3;
-    for (var index = 0; index < batchSize && current(); index++) {
-      final id = _queue.first;
+    // Independent conversations can hydrate together. Keep the batch bounded
+    // and leave failed cursors in the queue so retry never skips their history.
+    final batch = _queue.take(3).toList();
+    await Future.wait(batch.map((id) async {
+      if (!current()) return;
       final history = _histories[id]!;
       await history.load(id, current);
       if (!current()) return;
-      _queue.removeFirst();
+      _queue.remove(id);
       if (history.hasMore) _queue.addLast(id);
-    }
+      await onProgress?.call();
+    }));
   }
 }

@@ -25,13 +25,42 @@ class _MarkSixPageState extends State<MarkSixPage> {
   late final _controller = widget.controller ??
       MarkSixController(MarkSixRepository(widget.featureContext));
   int _tab = 0;
+  final _scrollController = ScrollController();
+  bool _paginationCheckScheduled = false;
   bool _closing = false;
   bool get _allowed => widget.featureContext.showMarkSixDrawHistory;
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_schedulePaginationCheck);
     _controller.addListener(_handleScopeChange);
     if (_allowed) _controller.attach();
+  }
+
+  void _schedulePaginationCheck() {
+    if (_paginationCheckScheduled) return;
+    _paginationCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _paginationCheckScheduled = false;
+      if (!mounted ||
+          _closing ||
+          _tab != 1 ||
+          !_controller.current ||
+          _controller.loading ||
+          _controller.predictionsLoading ||
+          _controller.predictionError != null ||
+          !_controller.predictionsHasMore ||
+          !_scrollController.hasClients ||
+          (WidgetsBinding.instance.lifecycleState != null &&
+              WidgetsBinding.instance.lifecycleState !=
+                  AppLifecycleState.resumed) ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      if (_scrollController.position.extentAfter <= 300) {
+        _controller.loadPredictions(more: true);
+      }
+    });
   }
 
   void _handleScopeChange() {
@@ -49,6 +78,7 @@ class _MarkSixPageState extends State<MarkSixPage> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _controller.removeListener(_handleScopeChange);
     _controller.setPredictionVisible(false);
     _controller.detach();
@@ -69,6 +99,7 @@ class _MarkSixPageState extends State<MarkSixPage> {
                 : ListenableBuilder(
                     listenable: _controller,
                     builder: (context, _) {
+                      _schedulePaginationCheck();
                       if (!_controller.current) {
                         return MarkSixEmpty(
                             message: _controller.scopeInvalidated
@@ -91,6 +122,7 @@ class _MarkSixPageState extends State<MarkSixPage> {
                             }
                           },
                           child: ListView(
+                              controller: _scrollController,
                               padding: const EdgeInsets.fromLTRB(10, 6, 10, 12),
                               physics: const AlwaysScrollableScrollPhysics(),
                               children: [

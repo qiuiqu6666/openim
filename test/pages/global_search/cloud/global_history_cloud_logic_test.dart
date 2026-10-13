@@ -35,6 +35,36 @@ void main() {
     OpenIM.iMManager.userID = 'self';
     OpenIM.iMManager.token = 'session';
   });
+  test('fast history publishes while another conversation is still pending',
+      () async {
+    final pending = <String, Completer<AdvancedMessage>>{};
+    final source = Source();
+    final logic = GlobalSearchLogic(
+        source: source,
+        cloudFactory: () => GlobalHistoryCloudSearch(
+            conversations: (_) async => List.generate(
+                3, (i) => ConversationInfo(conversationID: 'chat-$i')),
+            history: (id, _, __) =>
+                (pending[id] = Completer<AdvancedMessage>()).future));
+    logic.searchCtrl.text = 'needle';
+    final work = logic.search();
+    await Future<void>.delayed(Duration.zero);
+    expect(pending, hasLength(3));
+    source.hydrated = true;
+    pending['chat-1']!.complete(AdvancedMessage(isEnd: true));
+    await Future<void>.delayed(Duration.zero);
+    expect(logic.textSearchResultItems, hasLength(1));
+    expect(logic.cloudLoading.value, isTrue);
+    expect(source.searches, 2);
+    await logic.loadMoreCloud();
+    expect(pending, hasLength(3));
+    pending['chat-0']!.complete(AdvancedMessage(isEnd: true));
+    pending['chat-2']!.complete(AdvancedMessage(isEnd: true));
+    await work;
+    expect(logic.cloudLoading.value, isFalse);
+    expect(logic.cloudHasMore.value, isFalse);
+    logic.onClose();
+  });
   test('global query replaces local results after cloud hydration', () async {
     final source = Source();
     final logic = GlobalSearchLogic(
@@ -80,7 +110,7 @@ void main() {
     logic.onClose();
   });
   test(
-      'load more finishes history even when an intermediate batch adds matches',
+      'load more processes one batch and preserves continuation for older history',
       () async {
     var pages = 0;
     final source = Source();
@@ -100,6 +130,13 @@ void main() {
     logic.searchCtrl.text = 'missing';
     await logic.search();
     expect(pages, 1);
+    await logic.loadMoreCloud();
+    expect(pages, 2);
+    expect(logic.cloudHasMore.value, isTrue);
+    expect(logic.cloudLoading.value, isFalse);
+    expect(logic.textSearchResultItems, hasLength(1));
+    await logic.loadMoreCloud();
+    expect(pages, 3);
     await logic.loadMoreCloud();
     expect(pages, 4);
     expect(logic.cloudHasMore.value, isFalse);

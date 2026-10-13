@@ -15,6 +15,9 @@ come from the existing 99chat-aligned friend scanner, using public
 - `qr_gallery_service.dart`: existing `image_picker` selection and `compute`
   image decoding/ZXing recognition. It returns raw text without parsing business
   data; bounded image sizes, orientation, polarity and UTF-8 handling are retained.
+- `qr_screenshot_regions.dart`: lazy overlapping original-resolution windows
+  used after full-image recognition fails, preserving small QR modules in long
+  screenshots. Recognition tries local and global thresholds in the worker.
 - `qr_scanner_labels.dart`: simplified/traditional Chinese, English, Japanese
   and Korean labels. Chinese script/region selection matches the app language
   convention; unsupported languages use English.

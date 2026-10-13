@@ -5,14 +5,28 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
 import 'chat_history_search_source.dart';
 import 'cloud/chat_history_cloud_sync.dart';
+import 'cloud/chat_keyword_search_api.dart';
 
 /// Owns one search page's state; dispose it with its page.
 class ChatHistorySearchController extends ChangeNotifier {
   ChatHistorySearchController({
     required this.conversationID,
     ChatHistorySearchSource? source,
+    ChatKeywordSearchApi? keywordApi,
     this.acceptResult,
-  }) : source = source ?? OpenIMChatHistorySearchSource();
+  })  : source = source ?? OpenIMChatHistorySearchSource(),
+        _keywordApi =
+            keywordApi ?? (source == null ? ChatKeywordSearchApi() : null);
+
+  final ChatKeywordSearchApi? _keywordApi;
+  int _beforeSeq = 0, _snapshotSeq = 0;
+  bool _keywordHasMore = true;
+  bool get _usesKeywordApi =>
+      _keywordApi != null &&
+      _query.keyword.isNotEmpty &&
+      (_query.messageTypes.isEmpty ||
+          _query.messageTypes
+              .every(ChatKeywordSearchApi.contentTypes.contains));
 
   static const pageSize = 30;
   final String conversationID;
@@ -36,19 +50,26 @@ class ChatHistorySearchController extends ChangeNotifier {
   ChatHistorySearchQuery get query => _query;
   bool get loading => _loading;
   bool get failed => _failed;
+  bool get invalidKeyword =>
+      _usesKeywordApi &&
+      (_query.keyword.runes.length < 2 || _query.keyword.runes.length > 64);
   bool get hasSearched => _hasSearched;
   bool get hasMore =>
       _hasSearched &&
-      (_pending.isNotEmpty ||
-          _rawHasMore ||
-          (source is ChatHistoryCloudSource &&
-              (source as ChatHistoryCloudSource).cloudHasMore));
+      (_usesKeywordApi
+          ? _keywordHasMore
+          : (_pending.isNotEmpty ||
+              _rawHasMore ||
+              (source is ChatHistoryCloudSource &&
+                  (source as ChatHistoryCloudSource).cloudHasMore)));
 
   /// Clearing the input also invalidates any in-flight keyword search.
   void clear() {
     if (_disposed) return;
     ++_generation;
     _query = const ChatHistorySearchQuery();
+    _beforeSeq = _snapshotSeq = 0;
+    _keywordHasMore = true;
     _results.clear();
     _pending = [];
     _nextRawPage = 1;
@@ -64,6 +85,8 @@ class ChatHistorySearchController extends ChangeNotifier {
     final snapshot = query.snapshot();
     ++_generation;
     _query = snapshot;
+    _beforeSeq = _snapshotSeq = 0;
+    _keywordHasMore = true;
     _results.clear();
     _pending = [];
     _nextRawPage = 1;
@@ -74,15 +97,16 @@ class ChatHistorySearchController extends ChangeNotifier {
 
   Future<void> loadMore() async {
     if (_disposed || _loading || !hasMore) return;
-    await _load();
+    await _load(untilNewResult: true);
   }
 
   Future<void> retry() async {
     if (_disposed || _loading || !_failed) return;
-    await _load();
+    await _load(untilNewResult: true);
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool untilNewResult = false}) async {
+    if (_usesKeywordApi) return _loadKeyword();
     final generation = _generation;
     final query = _query;
     var rawPage = _nextRawPage;
@@ -100,41 +124,54 @@ class ChatHistorySearchController extends ChangeNotifier {
       final cloud = source is ChatHistoryCloudSource
           ? source as ChatHistoryCloudSource
           : null;
-      if (cloud != null &&
-          cloud.cloudHasMore &&
-          collected.isEmpty &&
-          (rawPage == 1 || !rawHasMore)) {
-        await cloud.supplement(conversationID, () => _isCurrent(generation));
-        if (!_isCurrent(generation)) return;
-        // SDK hydration changes local offsets. Rescan and deduplicate instead
-        // of applying an old offset to the newly populated database.
-        rawPage = 1;
-        rawHasMore = true;
-      }
-      var scanned = 0;
-      while (collected.length < pageSize &&
-          rawHasMore &&
-          (cloud == null || scanned < 10)) {
-        scanned++;
-        final messages = await source.search(
-          conversationID: conversationID,
-          query: query,
-          pageIndex: rawPage,
-          count: pageSize,
-        );
-        if (!_isCurrent(generation)) return;
-        ++rawPage;
-        rawHasMore = messages.length >= pageSize;
-        for (final message in messages) {
-          if (!query.accepts(message) || acceptResult?.call(message) == false) {
-            continue;
-          }
-          final id = message.clientMsgID;
-          if (id != null && id.isNotEmpty && !ids.add(id)) continue;
-          collected.add(message);
+      do {
+        if (cloud != null &&
+            cloud.cloudHasMore &&
+            collected.isEmpty &&
+            (rawPage == 1 || !rawHasMore)) {
+          await cloud.supplement(conversationID, () => _isCurrent(generation));
+          if (!_isCurrent(generation)) return;
+          // SDK hydration changes local offsets. Rescan and deduplicate instead
+          // of applying an old offset to the newly populated database.
+          rawPage = 1;
+          rawHasMore = true;
         }
-      }
-      if (!_isCurrent(generation)) return;
+        var scanned = 0;
+        while (collected.length < pageSize &&
+            rawHasMore &&
+            (cloud == null || scanned < 10)) {
+          scanned++;
+          final messages = await source.search(
+            conversationID: conversationID,
+            query: query,
+            pageIndex: rawPage,
+            count: pageSize,
+          );
+          if (!_isCurrent(generation)) return;
+          ++rawPage;
+          rawHasMore = messages.length >= pageSize;
+          for (final message in messages) {
+            if (!query.accepts(message) ||
+                acceptResult?.call(message) == false) {
+              continue;
+            }
+            final id = message.clientMsgID;
+            if (id != null && id.isNotEmpty && !ids.add(id)) continue;
+            collected.add(message);
+          }
+        }
+        if (!_isCurrent(generation)) return;
+        if (!untilNewResult ||
+            collected.isNotEmpty ||
+            (!rawHasMore && cloud?.cloudHasMore != true)) {
+          break;
+        }
+        // A history page without new matches is not a search result page.
+        // Keep the same loading operation active until there is something to
+        // show or the SDK confirms the end; query changes cancel further work.
+        await Future<void>.delayed(Duration.zero);
+        if (!_isCurrent(generation)) return;
+      } while (true);
       _results.addAll(collected.take(pageSize));
       _pending = collected.skip(pageSize).toList();
       _nextRawPage = rawPage;
@@ -153,6 +190,55 @@ class ChatHistorySearchController extends ChangeNotifier {
   }
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
+
+  Future<void> _loadKeyword() async {
+    final generation = _generation;
+    final query = _query;
+    var before = _beforeSeq;
+    var snapshot = _snapshotSeq;
+    _loading = true;
+    _failed = false;
+    notifyListeners();
+    try {
+      while (_isCurrent(generation)) {
+        final page = await _keywordApi!.search(
+            conversationID: conversationID,
+            keyword: query.keyword,
+            beforeSeq: before,
+            snapshotSeq: snapshot,
+            startTime: query.localStart?.millisecondsSinceEpoch ?? 0,
+            endTime: query.localEndExclusive?.millisecondsSinceEpoch ?? 0,
+            types: query.messageTypes.isEmpty
+                ? ChatKeywordSearchApi.contentTypes
+                : query.messageTypes);
+        if (!_isCurrent(generation)) return;
+        final matches = page.items
+            .where((m) => query.accepts(m) && acceptResult?.call(m) != false)
+            .toList();
+        before = page.beforeSeq;
+        snapshot = page.snapshotSeq;
+        // Empty candidate pages may still have older matches. Continue using
+        // the same snapshot, without fetching message history into the device.
+        if (matches.isEmpty && page.hasMore) {
+          await Future<void>.delayed(Duration.zero);
+          continue;
+        }
+        final ids = _results.map((m) => m.clientMsgID).toSet();
+        _results.addAll(matches.where((m) => ids.add(m.clientMsgID)));
+        _beforeSeq = before;
+        _snapshotSeq = snapshot;
+        _keywordHasMore = page.hasMore;
+        break;
+      }
+    } catch (_) {
+      if (_isCurrent(generation)) _failed = true;
+    } finally {
+      if (_isCurrent(generation)) {
+        _loading = false;
+        notifyListeners();
+      }
+    }
+  }
 
   @override
   void dispose() {

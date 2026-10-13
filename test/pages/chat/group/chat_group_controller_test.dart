@@ -14,6 +14,7 @@ class _GroupHarness {
     Future<List<GroupMembersInfo>> Function(String, String)? selfMember,
     Future<List<GroupMembersInfo>> Function(String)? admins,
     GroupInfo? Function(String)? readCachedGroupInfo,
+    Duration queryTimeout = const Duration(seconds: 15),
   }) {
     controller = ChatGroupController.withSources(
       groupID: () => groupID,
@@ -22,6 +23,7 @@ class _GroupHarness {
       clearInput: () => inputCleared++,
       onGroupProfileChanged: (name, face) => profiles.add((name, face)),
       reportError: errors.add,
+      queryTimeout: queryTimeout,
       nowSeconds: () => now,
       readCachedGroupInfo: readCachedGroupInfo,
       events: ChatGroupEvents(
@@ -106,6 +108,122 @@ class _GroupHarness {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('entry recovery loads metadata without any history callback',
+      (tester) async {
+    final h = _GroupHarness();
+    h.controller.initialize();
+    expect(h.controller.memberCountKnown.value, isFalse);
+    h.controller.recover();
+    h.controller.recover();
+    await tester.pump();
+    expect(h.profiles, [('My group', 'face')]);
+    expect(h.controller.memberCountKnown.value, isTrue);
+    expect(h.controller.memberCount.value, 5);
+    h.controller.recover(resetAttempts: true);
+    await tester.pump();
+    expect((h.joinedReads, h.profileReads, h.selfReads, h.adminReads),
+        (1, 1, 1, 1));
+    h.controller.close();
+  });
+
+  testWidgets('failed reads have finite retries and reconnect renews recovery',
+      (tester) async {
+    var offline = true;
+    final h = _GroupHarness(isJoined: (_) async {
+      if (offline) throw StateError('offline');
+      return true;
+    });
+    h.controller.initialize();
+    h.controller.recover();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 3));
+    expect(h.joinedReads, 3);
+    await tester.pump(const Duration(minutes: 1));
+    expect(h.joinedReads, 3);
+    offline = false;
+    h.controller.recover(resetAttempts: true);
+    await tester.pump();
+    expect(h.joinedReads, 4);
+    expect(h.controller.groupInfo?.groupName, 'My group');
+    h.controller.close();
+    await tester.pump(const Duration(minutes: 1));
+    expect(h.joinedReads, 4);
+  });
+
+  testWidgets('a timed-out profile releases the load but shares native work',
+      (tester) async {
+    final profile = Completer<List<GroupInfo>>();
+    final h = _GroupHarness(
+      groupInfo: (_) => profile.future,
+      queryTimeout: const Duration(seconds: 2),
+    );
+    h.controller.initialize();
+    var finished = false;
+    unawaited(h.controller.loadAfterHistory().then((_) => finished = true));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(finished, isTrue);
+    expect(h.errors.single, isA<TimeoutException>());
+    expect(h.controller.memberCountKnown.value, isFalse);
+    await tester.pump(const Duration(seconds: 1));
+    expect(h.profileReads, 1,
+        reason: 'Dart timeout is not native cancellation');
+    profile.complete(
+        [GroupInfo(groupID: 'group', groupName: 'Recovered', memberCount: 8)]);
+    await tester.pump();
+    expect(h.controller.groupInfo?.groupName, 'Recovered');
+    expect(h.controller.memberCount.value, 8);
+    h.controller.close();
+  });
+
+  testWidgets('empty metadata preserves the cached count and retries',
+      (tester) async {
+    var empty = true;
+    final h = _GroupHarness(
+      readCachedGroupInfo: (id) =>
+          GroupInfo(groupID: id, groupName: 'Cached', memberCount: 7),
+      groupInfo: (id) async => empty
+          ? []
+          : [GroupInfo(groupID: id, groupName: 'Fresh', memberCount: 9)],
+    );
+    h.controller.initialize();
+    h.controller.recover();
+    await tester.pump();
+    expect(h.controller.groupInfo?.groupName, 'Cached');
+    expect(h.controller.memberCount.value, 7);
+    empty = false;
+    await tester.pump(const Duration(seconds: 1));
+    expect(h.controller.groupInfo?.groupName, 'Fresh');
+    expect(h.controller.memberCount.value, 9);
+    h.controller.close();
+  });
+
+  testWidgets('leaving cancels retries and rejoining replaces an old load',
+      (tester) async {
+    final membership = Completer<bool>();
+    var first = true;
+    final h = _GroupHarness(isJoined: (_) {
+      if (first) {
+        first = false;
+        return membership.future;
+      }
+      return Future.value(true);
+    });
+    h.controller.initialize();
+    h.controller.recover();
+    h.left.add(GroupInfo(groupID: 'group'));
+    h.controller.recover(resetAttempts: true);
+    expect(h.joinedReads, 1);
+    h.joined.add(GroupInfo(groupID: 'group'));
+    membership.complete(false);
+    await tester.pump();
+    expect(h.joinedReads, 2);
+    expect(h.controller.isInGroup.value, isTrue);
+    expect(h.controller.groupInfo?.groupName, 'My group');
+    h.controller.close();
+  });
 
   test('message roles wait for a complete admin list and respect live changes',
       () async {
@@ -528,7 +646,8 @@ void main() {
     });
   }
 
-  test('explicit personal mute is confirmed even while the role is missing', () {
+  test('explicit personal mute is confirmed even while the role is missing',
+      () {
     final h = _GroupHarness();
     h.controller.initialize();
     h.groupChanged.add(GroupInfo(groupID: 'group', status: 3));

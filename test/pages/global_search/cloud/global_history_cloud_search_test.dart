@@ -12,6 +12,37 @@ void main() {
     OpenIM.iMManager.userID = 'self';
     OpenIM.iMManager.token = 'session';
   });
+  test('starts three histories together and keeps failed history retryable',
+      () async {
+    final pending = <String, Completer<AdvancedMessage>>{};
+    final cloud = GlobalHistoryCloudSearch(
+        conversations: (_) async => List.generate(
+            4, (i) => ConversationInfo(conversationID: 'chat-$i')),
+        history: (id, _, __) =>
+            (pending[id] = Completer<AdvancedMessage>()).future);
+    final first = cloud.supplement(() => true);
+    final failure = expectLater(first, throwsStateError);
+    await Future<void>.delayed(Duration.zero);
+    final started = pending.keys.toList();
+    for (final entry in pending.entries) {
+      if (entry.key == 'chat-0') {
+        entry.value.completeError(StateError('offline'));
+      } else {
+        entry.value.complete(AdvancedMessage(isEnd: true));
+      }
+    }
+    await failure;
+    expect(started, ['chat-0', 'chat-1', 'chat-2']);
+    pending.clear();
+    final retry = cloud.supplement(() => true);
+    await Future<void>.delayed(Duration.zero);
+    expect(pending.keys.toSet(), {'chat-0', 'chat-3'});
+    for (final page in pending.values) {
+      page.complete(AdvancedMessage(isEnd: true));
+    }
+    await retry;
+    expect(cloud.hasMore, isFalse);
+  });
   test('discovers conversations beyond first page and limits each batch',
       () async {
     final offsets = <int>[];

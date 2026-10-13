@@ -32,6 +32,44 @@ void main() {
 
   for (final dark in [false, true]) {
     testWidgets(
+        'multiple album codes require selection in ${dark ? "dark" : "light"}',
+        (tester) async {
+      final h = _ScannerHost(tester,
+          gallery: _Gallery(
+              pick: () async => '/fixture.png',
+              result: const QrGalleryResult(QrGalleryStatus.success,
+                  width: 1000,
+                  height: 1000,
+                  codes: [
+                    QrGalleryCode(text: _invite, corners: [
+                      Offset(10, 10),
+                      Offset(200, 10),
+                      Offset(200, 200),
+                      Offset(10, 200)
+                    ]),
+                    QrGalleryCode(text: _link, corners: [
+                      Offset(700, 700),
+                      Offset(900, 700),
+                      Offset(900, 900),
+                      Offset(700, 900)
+                    ])
+                  ])));
+      try {
+        await h.mount(dark: dark, textScale: 2);
+        await tester.tap(_action('album'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.text('选择二维码'), findsOneWidget);
+        expect(h.results, isEmpty);
+        await tester.tap(find.byKey(const ValueKey('qr-choice-1')));
+        await tester.pumpAndSettle();
+        expect(h.results.single?['userID'], 'album-peer');
+        expect(tester.takeException(), isNull);
+      } finally {
+        await h.close();
+      }
+    });
+    testWidgets(
         '${dark ? 'dark' : 'light'} scanner keeps preview and actions usable',
         (tester) async {
       final h = _ScannerHost(tester);
@@ -193,7 +231,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(FriendQrScanner), findsOneWidget);
       expect(h.results, isEmpty);
-      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.text('复制原文'), findsOneWidget);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
       expect(gallery.paths, ['/chosen.png']);
 
       code = _link;
@@ -343,6 +383,9 @@ void main() {
       expect(h.results, isEmpty);
       expect(find.byType(FriendQrScanner), findsOneWidget);
 
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
       await Future.wait([
         h.native.recognize(_invite),
         h.native.recognize(_invite),
@@ -467,10 +510,11 @@ void main() {
 }
 
 class _Gallery extends FriendQrGalleryService {
-  _Gallery({Future<String?> Function()? pick, this.read})
+  _Gallery({Future<String?> Function()? pick, this.read, this.result})
       : pick = pick ?? (() async => null);
   final Future<String?> Function() pick;
   final Future<String?> Function(String)? read;
+  final QrGalleryResult? result;
   int pickCalls = 0;
   final paths = <String>[];
 
@@ -481,9 +525,15 @@ class _Gallery extends FriendQrGalleryService {
   }
 
   @override
-  Future<String?> readCode(String path) {
+  Future<QrGalleryResult> scan(String path,
+      {QrGalleryCancellation? cancellation,
+      Duration timeout = const Duration(seconds: 12)}) async {
     paths.add(path);
-    return read?.call(path) ?? Future<String?>.value();
+    if (result != null) return result!;
+    final text = await read?.call(path);
+    return QrGalleryResult(
+        text == null ? QrGalleryStatus.noCode : QrGalleryStatus.success,
+        codes: text == null ? [] : [QrGalleryCode(text: text)]);
   }
 }
 

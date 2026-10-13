@@ -88,6 +88,17 @@ void main() {
     expect(await service.readCode(await save(blank, 'blank.png')), isNull);
   });
 
+  test('retains a small off-centre QR in a long screenshot', () async {
+    const payload = 'https://99chat.vip?group=@123456';
+    final source = image.Image(width: 1080, height: 12000);
+    image.fill(source, color: image.ColorRgb8(245, 245, 245));
+    final qr = _qrPixels(payload);
+    image.compositeImage(source,
+        image.copyResize(qr, width: qr.width ~/ 3, height: qr.height ~/ 3),
+        dstX: 730, dstY: 9320);
+    expect(await service.readCode(await save(source, 'long.png')), payload);
+  });
+
   test('returns null for an empty path, missing file, and invalid image',
       () async {
     final bad = File('${temp.path}/invalid.png');

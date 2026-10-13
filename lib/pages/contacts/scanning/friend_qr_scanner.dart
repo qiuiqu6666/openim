@@ -31,6 +31,7 @@ class _FriendQrScannerState extends State<FriendQrScanner> {
   @override
   Widget build(BuildContext context) => QrScannerPage<Map<String, String>>(
         parseCode: parseContactQrResult,
+        showGeneralContent: true,
         gallery: widget.gallery,
         keyPrefix: 'friend-qr',
         onMyQrTap: widget.onMyQrTap,

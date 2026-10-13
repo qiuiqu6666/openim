@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../core/controller/im_controller.dart';
+import '../../../core/session/queries/sdk_query_gate.dart';
 import 'chat_group_sources.dart';
 import 'identity/group_sender_avatars.dart';
 
@@ -47,6 +48,7 @@ class ChatGroupController {
     this.onGroupInfoApplied,
     this.readCachedGroupInfo,
     this.reportError,
+    this.queryTimeout = const Duration(seconds: 15),
     int Function()? nowSeconds,
   })  : _events = events,
         _queries = queries,
@@ -61,6 +63,7 @@ class ChatGroupController {
   final void Function(GroupInfo)? onGroupInfoApplied;
   final GroupInfo? Function(String groupID)? readCachedGroupInfo;
   final void Function(Object)? reportError;
+  final Duration queryTimeout;
   final ChatGroupEvents _events;
   final ChatGroupQueries _queries;
   final int Function() _nowSeconds;
@@ -93,6 +96,7 @@ class ChatGroupController {
   final _adminListLoaded = false.obs;
   final isInGroup = true.obs;
   final memberCount = 0.obs;
+  final memberCountKnown = false.obs;
   final announcement = ''.obs;
   final announcementVersion = ''.obs;
   final _muteRevision = 0.obs;
@@ -115,6 +119,12 @@ class ChatGroupController {
 
   Timer? _muteTimer;
   Future<void>? _loadRequest;
+  final _queryReads = SdkQueryGate<Object?>(limit: 4);
+  Timer? _retryTimer;
+  int _retryAttempts = 0;
+  bool _loadFailed = false;
+  bool _loaded = false;
+  bool _leftByEvent = false;
   bool _initialized = false;
   bool _closed = false;
   int _membershipRevision = 0;
@@ -203,7 +213,9 @@ class ChatGroupController {
         _removedMemberIDs.clear();
         _membershipRevision++;
         isInGroup.value = true;
-        unawaited(_loadJoinedGroup());
+        _leftByEvent = false;
+        _loaded = false;
+        recover(resetAttempts: true);
       }),
       _events.left.listen((info) {
         if (_matches(info.groupID)) _leaveGroup();
@@ -265,16 +277,56 @@ class ChatGroupController {
     _memberActionRevision.value++;
     _membershipRevision++;
     isInGroup.value = false;
+    _leftByEvent = true;
+    _loaded = false;
+    _retryTimer?.cancel();
     _adminListLoaded.value = false;
     clearInput();
   }
 
-  /// The page calls this after its first history page, without delaying history.
-  /// Overlapping calls share the same membership check and metadata requests.
+  /// Entry and reconnect recovery are independent of history availability.
+  /// Healthy metadata needs no repeated reads on history/sync notifications.
+  void recover({bool resetAttempts = false}) {
+    if (!_matches(groupID()) || _leftByEvent || _loaded) return;
+    if (resetAttempts) {
+      _retryAttempts = 0;
+      _retryTimer?.cancel();
+      _retryTimer = null;
+    }
+    unawaited(loadAfterHistory());
+  }
+
+  /// Retained for callers that await metadata; history is not a prerequisite.
+  /// Overlapping callers share one bounded membership/metadata load.
   Future<void> loadAfterHistory() {
-    if (!_matches(groupID())) return Future<void>.value();
-    return _loadRequest ??=
-        _checkMembershipAndLoad().whenComplete(() => _loadRequest = null);
+    if (!_matches(groupID()) || _leftByEvent) return Future<void>.value();
+    if (_loadRequest != null) return _loadRequest!;
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _loadFailed = false;
+    final revision = _membershipRevision;
+    return _loadRequest = _checkMembershipAndLoad().whenComplete(() {
+      _loadRequest = null;
+      if (!_matches(groupID()) || _leftByEvent) return;
+      if (revision != _membershipRevision) {
+        recover();
+      } else if (_loadFailed && _retryAttempts < 2) {
+        _retryTimer = Timer(Duration(seconds: _retryAttempts == 0 ? 1 : 3), () {
+          _retryTimer = null;
+          ++_retryAttempts;
+          recover();
+        });
+      }
+    });
+  }
+
+  Future<T> _read<T>(Object kind, Future<T> Function() query) async {
+    final id = groupID()!;
+    final user = currentUserID();
+    final membership = _membershipRevision;
+    return await _queryReads.run((kind, id, user, membership), query,
+        timeout: queryTimeout,
+        isCurrent: () => _queryStillCurrent(id, user, membership)) as T;
   }
 
   Future<void> _checkMembershipAndLoad() async {
@@ -282,12 +334,15 @@ class ChatGroupController {
     final userID = currentUserID();
     final revision = _membershipRevision;
     try {
-      final joined = await _queries.isJoined(id);
+      final joined = await _read('membership', () => _queries.isJoined(id));
       if (!_queryStillCurrent(id, userID, revision)) return;
       isInGroup.value = joined;
       if (joined) await _loadJoinedGroup();
+      if (_queryStillCurrent(id, userID, revision)) {
+        _loaded = joined && !_loadFailed;
+      }
     } catch (error) {
-      if (_queryStillCurrent(id, userID, revision)) _report(error);
+      if (_queryStillCurrent(id, userID, revision)) _loadError(error);
     }
   }
 
@@ -306,14 +361,17 @@ class ChatGroupController {
   Future<void> _queryGroupInfo(String id, String userID, int membership) async {
     final revision = _profileRevision;
     try {
-      final list = await _queries.groupInfo(id);
+      final list =
+          await _read(('profile', revision), () => _queries.groupInfo(id));
       if (!_queryStillCurrent(id, userID, membership) ||
           revision != _profileRevision) {
         return;
       }
-      _applyGroupInfo(list.firstOrNull);
+      final info = list.firstWhereOrNull((info) => info.groupID == id);
+      if (info == null) throw StateError('Group metadata is not available yet');
+      _applyGroupInfo(info);
     } catch (error) {
-      if (_queryStillCurrent(id, userID, membership)) _report(error);
+      if (_queryStillCurrent(id, userID, membership)) _loadError(error);
     }
   }
 
@@ -321,7 +379,8 @@ class ChatGroupController {
       String id, String userID, int membership) async {
     final revision = _selfRevision;
     try {
-      final list = await _queries.selfMember(id, userID);
+      final list = await _read(
+          ('self', revision), () => _queries.selfMember(id, userID));
       if (!_queryStillCurrent(id, userID, membership) ||
           revision != _selfRevision) {
         return;
@@ -334,7 +393,7 @@ class ChatGroupController {
       _refreshMute();
       messages.refresh();
     } catch (error) {
-      if (_queryStillCurrent(id, userID, membership)) _report(error);
+      if (_queryStillCurrent(id, userID, membership)) _loadError(error);
     }
   }
 
@@ -342,7 +401,8 @@ class ChatGroupController {
       String id, String userID, int membership) async {
     final revision = _adminRevision;
     try {
-      final list = await _queries.ownerAndAdmin(id);
+      final list =
+          await _read(('admins', revision), () => _queries.ownerAndAdmin(id));
       if (!_queryStillCurrent(id, userID, membership)) return;
       ownerAndAdmin
         ..clear()
@@ -355,7 +415,7 @@ class ChatGroupController {
       _adminListLoaded.value = true;
       messages.refresh();
     } catch (error) {
-      if (_queryStillCurrent(id, userID, membership)) _report(error);
+      if (_queryStillCurrent(id, userID, membership)) _loadError(error);
     }
   }
 
@@ -364,7 +424,10 @@ class ChatGroupController {
     announcementVersion.value = info?.notificationUpdateTime?.toString() ?? '';
     announcement.value = info?.notification ?? '';
     groupOwnerID = info?.ownerUserID;
-    memberCount.value = info?.memberCount ?? 0;
+    if (info?.memberCount case final int count) {
+      memberCount.value = count;
+      memberCountKnown.value = true;
+    }
     _refreshMute();
     if (info != null) {
       onGroupInfoApplied?.call(info);
@@ -467,9 +530,17 @@ class ChatGroupController {
     }
   }
 
+  void _loadError(Object error) {
+    _loadFailed = true;
+    _loaded = false;
+    _report(error);
+  }
+
   void close() {
     if (_closed) return;
     _closed = true;
+    _retryTimer?.cancel();
+    _queryReads.close();
     _membershipRevision++;
     _messageIndexWorker?.dispose();
     _senderAvatars.close();

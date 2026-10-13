@@ -1,5 +1,33 @@
 # Conversation history search
 
+## Conversation keyword API (2026-10-13)
+
+Production text keyword searches now use `/msg/search_messages` through
+`cloud/chat_keyword_search_api.dart`, with the signed-in SDK user's imToken and
+the configured OpenIM API base URL. The request contains no user identity field.
+Media/file and keywordless searches retain the existing SDK source. Test sources
+remain injectable; pass `keywordApi` to exercise the HTTP search controller path.
+
+The controller preserves the server snapshot and descending sequence cursor,
+continues empty candidate pages, and commits pagination only after a successful
+result page. Errors remain retryable with existing results retained; there is no
+silent local-history fallback. Query/disposal/session changes discard stale
+results. Keywords use the API's 2–64 Unicode-code-point limit. API timestamps are
+passed as milliseconds. Calendar filters still construct their existing local
+day boundaries before calling the API.
+
+Results are `CloudKeywordMessage` projections. The `summary` field is rendered
+as plain Text and is never persisted as a full SDK message. API results contain
+sender IDs but not profiles, so rows can display IDs until profiles are available.
+
+Remaining integration boundary: the currently bundled Flutter/native SDK exposes
+history by local clientMsgID only, not a public sequence-based context fetch.
+Click navigation can revalidate locally stored results through the existing
+locator; cloud-only result positioning needs the companion SDK method/binary.
+Do not seed the SDK database with summaries or scan all intervening history to
+work around this. Live HTTP authorization and Android/iOS end-to-end validation
+have not been performed by the client tests.
+
 ## Sender picker progressive loading (2026-10-12)
 
 The sender picker is now a plain member list, as requested. It has no alphabet

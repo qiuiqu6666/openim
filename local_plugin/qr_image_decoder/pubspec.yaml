@@ -1,0 +1,17 @@
+name: qr_image_decoder
+description: Bounded, local platform image decoding for album QR recognition.
+version: 1.0.0
+publish_to: none
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: chat.chat99.qr
+        pluginClass: QrImageDecoderPlugin
+      ios:
+        pluginClass: QrImageDecoderPlugin

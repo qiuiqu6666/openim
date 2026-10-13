@@ -16,6 +16,13 @@ String chatHistorySearchText(BuildContext context, String key) {
 }
 
 const _copy = <String, List<String>>{
+  'keywordLength': [
+    '请输入2–64个字符',
+    '請輸入2–64個字元',
+    'Enter 2–64 characters',
+    '2～64文字を入力してください',
+    '2~64자를 입력하세요'
+  ],
   'noData': ['暂无数据', '暫無資料', 'No data', 'データがありません', '데이터가 없습니다'],
   'media': ['媒体', '媒體', 'Media', 'メディア', '미디어'],
   'groupMembers': ['群成员', '群成員', 'Group members', 'グループメンバー', '그룹 멤버'],
