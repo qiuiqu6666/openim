@@ -135,6 +135,7 @@ void main() {
   late bool nativeLogged;
   Future<void> Function()? cleanup;
   String? rejectedLoginCode;
+  var statusQueries = 0;
   setUp(() async {
     Get.testMode = true;
     Get.put<AppController>(_App());
@@ -153,10 +154,12 @@ void main() {
     nativeLogged = false;
     cleanup = null;
     rejectedLoginCode = null;
+    statusQueries = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdk, (call) async {
       switch (call.method) {
         case 'getLoginStatus':
+          statusQueries++;
           return nativeLogged ? LoginStatus.logged : LoginStatus.logout;
         case 'login':
           nativeAccount = (call.arguments as Map)['userID'] as String;
@@ -191,6 +194,32 @@ void main() {
     expect(await logic.refreshMyFullInfo(), isFalse);
     expect(profiles.replies, isEmpty);
     logic.onClose();
+  });
+
+  testWidgets('route login skips duplicate cleanup and retains profile state',
+      (tester) async {
+    await tester.pumpWidget(GetMaterialApp(home: const Scaffold()));
+    await tester.runAsync(() async {
+      final logic = IMController();
+      await _credentials('first');
+      await logic.login('first', 'first-im');
+      await _flush();
+      profiles.complete(0, 'first', 'Existing nickname');
+      await _flush();
+      final profile = logic.userInfo;
+      await logic.logout();
+      final queriesAfterLogout = statusQueries;
+      // Route re-init clears the Dart SDK session cache too.
+      OpenIM.iMManager.isLogined = false;
+      await logic.loginAfterRouteChange('first', 'first-im');
+      // The SDK login itself verifies status once; no extra cleanup query.
+      expect(statusQueries, queriesAfterLogout + 1);
+      expect(identical(logic.userInfo, profile), isTrue);
+      expect(logic.userInfo.value.nickname, 'Existing nickname');
+      expect(DataSp.userID, 'first');
+      expect(DataSp.imToken, 'first-im');
+      logic.onClose();
+    });
   });
 
   testWidgets('login and entry refresh share one verified privilege read',

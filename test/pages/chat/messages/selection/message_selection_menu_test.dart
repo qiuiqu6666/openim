@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
+import 'package:openim/pages/chat/messages/refresh/chat_message_read_updates.dart';
 import 'package:openim/pages/chat/messages/selection/message_selection_controller.dart';
 import 'package:openim/pages/chat/messages/widgets/chat_message_tile.dart';
 import 'package:openim/pages/chat/voice/voice_transcription_controller.dart';
@@ -31,6 +33,10 @@ class _SelectionTileLogic extends GetxController implements ChatLogic {
 
   @override
   final messageList = <Message>[].obs;
+  @override
+  final messageReadUpdates = ChatMessageReadUpdates();
+  @override
+  ValueListenable<ChatTransferStatus?>? transferStatus(Message message) => null;
   @override
   final scaleFactor = 1.0.obs;
   @override
@@ -85,6 +91,7 @@ class _SelectionTileLogic extends GetxController implements ChatLogic {
   void clickLinkText(String url, Object? type) {}
 
   void disposeFixture() {
+    messageReadUpdates.close();
     messageSelection.dispose();
     voiceTranscriptions.dispose();
     voicePlayback.dispose();

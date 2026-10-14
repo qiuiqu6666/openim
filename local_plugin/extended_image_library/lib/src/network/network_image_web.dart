@@ -87,6 +87,7 @@ class ExtendedNetworkImageProvider
     this.cacheKey,
     this.printError = true,
     this.cacheRawData = false,
+    this.cancelWhenUnused = false,
     this.imageCacheName,
     this.cacheMaxAge,
     this.webHtmlElementStrategy = WebHtmlElementStrategy.never,
@@ -125,6 +126,9 @@ class ExtendedNetworkImageProvider
 
   @override
   final bool cacheRawData;
+
+  @override
+  final bool cancelWhenUnused;
 
   /// The name of [ImageCache], you can define custom [ImageCache] to store this provider.
   @override

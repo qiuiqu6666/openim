@@ -12,6 +12,7 @@ import 'package:get/get.dart';
 import 'package:openim/core/controller/app_controller.dart';
 import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
+import 'package:openim/pages/chat/history/date_jump/widgets/chat_date_image_calendar.dart';
 import 'package:openim/pages/chat/history/chat_history_prefetcher.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/services/chat_history_cache.dart';
@@ -123,7 +124,13 @@ class _Harness {
           final arguments = Map<String, dynamic>.from(call.arguments as Map);
           final query = _SearchCall(
               Map<String, dynamic>.from(arguments['filter'] as Map));
-          if (query.arguments['count'] == 1) {
+          final types = query.arguments['messageTypeList'] as List;
+          if (types.length == 1 && types.single == MessageType.picture) {
+            // The calendar also samples images; this fixture contains text only.
+            // Complete that cosmetic query instead of treating it as a pending
+            // timeline anchor lookup, which would keep the calendar loading.
+            query.complete([]);
+          } else if (query.arguments['count'] == 1) {
             dateProbes.add(query);
             _completeDateProbe(query);
           } else {
@@ -271,7 +278,7 @@ class _Harness {
   Future<void> openPicker(WidgetTester tester) async {
     await tester.tap(find.text(_tip));
     await tester.pumpAndSettle();
-    expect(find.byType(CalendarDatePicker), findsOneWidget);
+    expect(find.byType(ChatDateImageCalendar), findsOneWidget);
   }
 
   Future<void> selectDate(WidgetTester tester,
@@ -280,16 +287,16 @@ class _Harness {
     if (availableRecord != null) calendarRecords.add(availableRecord);
     await openPicker(tester);
     final selected = date ?? _day;
-    var picker =
-        tester.widget<CalendarDatePicker>(find.byType(CalendarDatePicker));
+    var picker = tester
+        .widget<ChatDateImageCalendar>(find.byType(ChatDateImageCalendar));
     if (!DateUtils.isSameMonth(
         picker.initialDate ?? picker.currentDate, selected)) {
       picker.onDisplayedMonthChanged!(DateTime(selected.year, selected.month));
       await tester.pumpAndSettle();
-      picker =
-          tester.widget<CalendarDatePicker>(find.byType(CalendarDatePicker));
+      picker = tester
+          .widget<ChatDateImageCalendar>(find.byType(ChatDateImageCalendar));
     }
-    expect(picker.selectableDayPredicate!(selected), isTrue);
+    expect(picker.selectableDayPredicate(selected), isTrue);
     picker.onDateChanged(selected);
     await tester.pump(const Duration(milliseconds: 20));
     await tester.pump(const Duration(milliseconds: 20));
@@ -441,7 +448,7 @@ void main() {
     expect(tester.state<ScaffoldState>(find.byKey(_chatKey)), same(scaffold));
     expect(harness.logic.inputCtrl, same(input));
     expect(input.text, '历史定位仍保留草稿');
-    expect(find.byType(CalendarDatePicker), findsNothing);
+    expect(find.byType(ChatDateImageCalendar), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

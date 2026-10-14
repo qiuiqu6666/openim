@@ -16,6 +16,12 @@ import 'route_history.dart';
 /// One coordinator for all node pages, reusing the existing SDK session owner.
 class ManualNodeSwitchRuntime {
   static final instance = ManualNodeSwitchService(
+    prepareTarget: (node) async {
+      if (node.signature == NodeEndpoint.shield.signature) {
+        if (!YoumengRuntime.enabled) throw NodeSwitchFailure.unavailable;
+        await YoumengRuntime.ensureReady();
+      }
+    },
     readSession: () {
       final user = DataSp.userID;
       final token = DataSp.imToken;
@@ -69,7 +75,7 @@ class ManualNodeSwitchRuntime {
       }
     });
     try {
-      await logic.login(user, token);
+      await logic.loginAfterRouteChange(user, token);
       checkSession();
       if (!await connected.future
           .timeout(const Duration(seconds: 15), onTimeout: () => false)) {
@@ -77,6 +83,7 @@ class ManualNodeSwitchRuntime {
       }
       checkSession();
       ActivityRuntime.instance.sessionRestored(user, token);
+      unawaited(logic.recoverMessagesAfterRouteChange());
       await RouteHistory.remember(node);
     } finally {
       await subscription.cancel();

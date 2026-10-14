@@ -11,6 +11,10 @@ import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'extended_network_image_provider.dart' as image_provider;
+import 'loading/image_load_scheduler.dart';
+import 'loading/cancellable_image_body.dart';
+import 'loading/managed_image_stream.dart';
+import 'loading/prepared_image_codec.dart';
 
 class ExtendedNetworkImageProvider
     extends ImageProvider<image_provider.ExtendedNetworkImageProvider>
@@ -30,6 +34,7 @@ class ExtendedNetworkImageProvider
     this.cacheKey,
     this.printError = true,
     this.cacheRawData = false,
+    this.cancelWhenUnused = false,
     this.cancelToken,
     this.imageCacheName,
     this.cacheMaxAge,
@@ -46,6 +51,9 @@ class ExtendedNetworkImageProvider
   /// data here.
   @override
   final bool cacheRawData;
+
+  @override
+  final bool cancelWhenUnused;
 
   /// The time limit to request image
   @override
@@ -100,6 +108,33 @@ class ExtendedNetworkImageProvider
     image_provider.ExtendedNetworkImageProvider key,
     ImageDecoderCallback decode,
   ) {
+    if (cancelWhenUnused) {
+      return ManagedImageStreamCompleter(
+        scale: key.scale,
+        label: key.url,
+        load: (signal, progress) {
+          final chunks = StreamController<ImageChunkEvent>();
+          chunks.stream.listen(progress);
+          return ImageLoadScheduler.shared
+              .run(
+                signal,
+                () => prepareImageCodec(
+                  () => _loadAsync(
+                    key as ExtendedNetworkImageProvider,
+                    chunks,
+                    decode,
+                    signal,
+                  ),
+                  signal,
+                ),
+              )
+              .whenComplete(() async {
+                signal.finish();
+                await chunks.close();
+              });
+        },
+      );
+    }
     // Ownership of this controller is handed off to [_loadAsync]; it is that
     // method's responsibility to close the controller's stream when the image
     // has been loaded or an error is thrown.
@@ -137,18 +172,22 @@ class ExtendedNetworkImageProvider
   Future<ui.Codec> _loadAsync(
     ExtendedNetworkImageProvider key,
     StreamController<ImageChunkEvent> chunkEvents,
-    ImageDecoderCallback decode,
-  ) async {
+    ImageDecoderCallback decode, [
+    ImageLoadSignal? signal,
+  ]) async {
+    signal?.check();
     assert(key == this);
     final String md5Key = cacheKey ?? keyToMd5(key.url);
     ui.Codec? result;
     if (cache) {
       try {
         final Uint8List? data = await _loadCache(key, chunkEvents, md5Key);
+        signal?.check();
         if (data != null) {
           result = await instantiateImageCodec(data, decode);
         }
       } catch (e) {
+        if (signal?.isCancelled ?? false) rethrow;
         if (printError) {
           print(e);
         }
@@ -157,21 +196,27 @@ class ExtendedNetworkImageProvider
 
     if (result == null) {
       try {
-        final Uint8List? data = await _loadNetwork(key, chunkEvents);
+        final Uint8List? data = await _loadNetwork(key, chunkEvents, signal);
+        signal?.check();
         if (data != null) {
           result = await instantiateImageCodec(data, decode);
-          if (cache) {
+          if (cache && !(signal?.isCancelled ?? false)) {
             // Persist only complete bytes that the decoder accepted.
             await _storeCache(data, md5Key);
           }
         }
       } catch (e) {
+        if (signal?.isCancelled ?? false) rethrow;
         if (printError) {
           print(e);
         }
       }
     }
 
+    if (signal?.isCancelled ?? false) {
+      result?.dispose();
+      throw const ImageLoadCancelled();
+    }
     //Failed to load
     if (result == null) {
       //result = await ui.instantiateImageCodec(kTransparentImage);
@@ -231,11 +276,15 @@ class ExtendedNetworkImageProvider
   /// Get the image from network.
   Future<Uint8List?> _loadNetwork(
     ExtendedNetworkImageProvider key,
-    StreamController<ImageChunkEvent>? chunkEvents,
-  ) async {
+    StreamController<ImageChunkEvent>? chunkEvents, [
+    ImageLoadSignal? signal,
+  ]) async {
     try {
       final Uri resolved = Uri.base.resolve(key.url);
-      final HttpClientResponse? response = await _tryGetResponse(resolved);
+      final HttpClientResponse? response = await _tryGetResponse(
+        resolved,
+        signal,
+      );
       if (response == null || response.statusCode != HttpStatus.ok) {
         if (response != null) {
           // The network may be only temporarily unavailable, or the file will be
@@ -243,7 +292,7 @@ class ExtendedNetworkImageProvider
           // fail to check the network again.
           final body =
               timeLimit == null ? response : response.timeout(timeLimit!);
-          await body.drain<void>();
+          await cancellableImageBody(body, signal).drain<void>();
         }
         return null;
       }
@@ -252,15 +301,25 @@ class ExtendedNetworkImageProvider
       // await-for cancels its subscription on timeout; partial files are never
       // written to the cache. Unknown/compressed lengths remain indeterminate.
       final builder = BytesBuilder(copy: false);
+      final progressClock = Stopwatch()..start();
+      var lastProgressMs = -100;
       final body = timeLimit == null ? response : response.timeout(timeLimit!);
       final decodedBody =
           response.compressionState ==
                   HttpClientResponseCompressionState.compressed
               ? gzip.decoder.bind(body)
               : body;
-      await for (final chunk in decodedBody) {
+      await for (final chunk in cancellableImageBody(decodedBody, signal)) {
+        signal?.check();
         builder.add(chunk);
-        if (chunkEvents != null && !chunkEvents.isClosed) {
+        final finalChunk =
+            response.contentLength > 0 &&
+            builder.length == response.contentLength;
+        if (chunkEvents != null &&
+            !chunkEvents.isClosed &&
+            (finalChunk ||
+                progressClock.elapsedMilliseconds - lastProgressMs >= 100)) {
+          lastProgressMs = progressClock.elapsedMilliseconds;
           chunkEvents.add(
             ImageChunkEvent(
               cumulativeBytesLoaded: builder.length,
@@ -288,37 +347,45 @@ class ExtendedNetworkImageProvider
       }
       return Future<Uint8List>.error(StateError('User cancel request $url.'));
     } catch (e) {
+      if (signal?.isCancelled ?? false) rethrow;
       if (printError) {
         print(e);
       }
-      // [ExtendedImage.clearMemoryCacheIfFailed] can clear cache
-      // Depending on where the exception was thrown, the image cache may not
-      // have had a chance to track the key in the cache at all.
-      // Schedule a microtask to give the cache a chance to add the key.
-      // scheduleMicrotask(() {
-      //   PaintingBinding.instance.imageCache.evict(key);
-      // });
-      // rethrow;
     } finally {
       await chunkEvents?.close();
     }
     return null;
   }
 
-  Future<HttpClientResponse> _getResponse(Uri resolved) async {
+  Future<HttpClientResponse> _getResponse(
+    Uri resolved, [
+    ImageLoadSignal? signal,
+  ]) async {
     var expired = false;
     final opening = httpClient.getUrl(resolved).then((request) {
-      if (expired) request.abort();
+      if (expired || (signal?.isCancelled ?? false)) {
+        // The awaiting task has already left; consume abort's response error.
+        request.close().ignore();
+        request.abort();
+      }
       return request;
     });
     final HttpClientRequest request;
     try {
       request =
-          await (timeLimit == null ? opening : opening.timeout(timeLimit!));
+          await (signal?.bind(
+                timeLimit == null ? opening : opening.timeout(timeLimit!),
+              ) ??
+              (timeLimit == null ? opening : opening.timeout(timeLimit!)));
     } on TimeoutException {
       expired = true;
       rethrow;
     }
+    signal?.check();
+    // Abort waiting headers; cancellableImageBody owns body cancellation.
+    final unregister = signal?.onCancel(
+      () => request.abort(const ImageLoadCancelled()),
+    );
     headers?.forEach((String name, String value) {
       request.headers.add(name, value);
     });
@@ -330,22 +397,30 @@ class ExtendedNetworkImageProvider
     } on TimeoutException {
       request.abort();
       rethrow;
+    } finally {
+      unregister?.call();
     }
   }
 
   // Http get with cancel, delay try again
-  Future<HttpClientResponse?> _tryGetResponse(Uri resolved) async {
+  Future<HttpClientResponse?> _tryGetResponse(
+    Uri resolved, [
+    ImageLoadSignal? signal,
+  ]) async {
+    signal?.check();
     cancelToken?.throwIfCancellationRequested();
     return await RetryHelper.tryRun<HttpClientResponse>(
       () {
+        signal?.check();
         return CancellationTokenSource.register(
           cancelToken,
-          _getResponse(resolved),
+          _getResponse(resolved, signal),
         );
       },
       cancelToken: cancelToken,
       timeRetry: timeRetry,
       retries: retries,
+      throwThenExpction: () => signal?.isCancelled ?? false,
     );
   }
 
@@ -358,6 +433,7 @@ class ExtendedNetworkImageProvider
         url == other.url &&
         scale == other.scale &&
         cacheRawData == other.cacheRawData &&
+        cancelWhenUnused == other.cancelWhenUnused &&
         timeLimit == other.timeLimit &&
         cancelToken == other.cancelToken &&
         timeRetry == other.timeRetry &&
@@ -374,6 +450,7 @@ class ExtendedNetworkImageProvider
     url,
     scale,
     cacheRawData,
+    cancelWhenUnused,
     timeLimit,
     cancelToken,
     timeRetry,

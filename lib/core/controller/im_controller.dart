@@ -363,7 +363,14 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     return initialized;
   }
 
-  Future login(String userID, String token) async {
+  Future login(String userID, String token) => _login(userID, token);
+
+  /// Only after the route coordinator has completed logout and SDK re-init.
+  Future loginAfterRouteChange(String userID, String token) =>
+      _login(userID, token, afterRouteChange: true);
+
+  Future _login(String userID, String token,
+      {bool afterRouteChange = false}) async {
     apiConnectionHealth?.close();
     apiConnectionHealth = null;
     _connectionRecovery?.close();
@@ -412,6 +419,9 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
           },
           startTimeout: _loginStartTimeout,
           prepare: () async {
+            // The coordinator already completed native teardown. Repeating it
+            // adds push/live-session cleanup and another native status query.
+            if (afterRouteChange) return;
             // Include retrying a failed native cleanup in the preparation deadline.
             // Hot restart clears Dart login/connection state while the native
             // SDK can remain logged in. Replace that orphaned session so login
@@ -428,8 +438,12 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       if (!_sessionQueue.isCurrent(generation) || isClosed) {
         throw SdkSessionCancelled();
       }
-      userInfo =
-          (UserFullInfo.fromJson(user.toJson())..isPrivileged = false).obs;
+      if (!afterRouteChange ||
+          !_hasUserInfo ||
+          userInfo.value.userID != userID) {
+        userInfo =
+            (UserFullInfo.fromJson(user.toJson())..isPrivileged = false).obs;
+      }
       _hasUserInfo = true;
       _profileSessionGeneration = generation;
       bool isCurrentConnection() =>
@@ -438,7 +452,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
           _profileSessionGeneration == generation &&
           DataSp.userID == userID &&
           DataSp.imToken == token;
-      apiConnectionHealth = ApiConnectionHealth(isCurrent: isCurrentConnection)..start();
+      apiConnectionHealth = ApiConnectionHealth(isCurrent: isCurrentConnection)
+        ..start();
       final nativeWake = _nativeConnectionWake = IMNativeConnectionWake(
           channel: OpenIM.iMManager.channel,
           isCurrentSession: isCurrentConnection,
@@ -484,6 +499,12 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   }
 
   Future<void>? _pendingLogout;
+
+  /// Incremental SDK sync and reconciliation of mounted chat windows. This
+  /// runs after reconnect, independently of the node switch UI completion.
+  Future<void> recoverMessagesAfterRouteChange() async {
+    await _connectionRecovery?.recoverNow();
+  }
 
   Future<void> logout() {
     resetNotificationReadiness();

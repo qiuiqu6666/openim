@@ -16,23 +16,25 @@ class ChatReadReceipts {
     bool Function()? isSessionActive,
     bool Function()? canReadConversation,
     void Function(ConversationReadRequest)? onConversationRead,
+    void Function(Set<String> messageIDs)? onReadStateChanged,
   })  : _now = now ?? DateTime.now,
         _conversation = conversation,
         _isClosed = isClosed,
         _isActive = isActive ?? (() => true),
         _canReadConversation = canReadConversation ?? (() => true),
         _isSessionActive = isSessionActive,
-        _onConversationRead = onConversationRead {
+        _onConversationRead = onConversationRead,
+        _onReadStateChanged = onReadStateChanged {
     _indexWorker = ever(messageList, (_) {
       _messageIndexDirty = true;
       _messageIndex.clear();
       if (!this.isClosed && _confirmedReads.isNotEmpty) {
-        var changed = false;
         for (final message in messageList) {
           final time = _confirmedReads[message.clientMsgID];
-          if (time != null) changed = _applyRead(message, time) || changed;
+          if (time != null && _applyRead(message, time)) {
+            _refreshReadState(message);
+          }
         }
-        if (changed) _refreshReadState();
       }
     });
   }
@@ -44,6 +46,7 @@ class ChatReadReceipts {
   final bool Function() _canReadConversation;
   final bool Function()? _isSessionActive;
   final void Function(ConversationReadRequest)? _onConversationRead;
+  final void Function(Set<String> messageIDs)? _onReadStateChanged;
   bool _closed = false;
   bool get isClosed => _closed || _isClosed();
   ConversationInfo get conversationInfo => _conversation();
@@ -78,7 +81,6 @@ class ChatReadReceipts {
 
   void applyC2CReceipt(List<ReadReceiptInfo> receipts, String? peerID) {
     if (isClosed || peerID == null || peerID.isEmpty) return;
-    var changed = false;
     for (final receipt in receipts) {
       if (receipt.userID != peerID) continue;
       final ids = receipt.msgIDList?.toSet() ?? <String>{};
@@ -89,12 +91,11 @@ class ChatReadReceipts {
           _confirmedReads.remove(_confirmedReads.keys.first);
         }
         final message = _messagesByID[id];
-        if (message != null) {
-          changed = _applyRead(message, time) || changed;
+        if (message != null && _applyRead(message, time)) {
+          _refreshReadState(message);
         }
       }
     }
-    if (changed) _refreshReadState();
   }
 
   void close() {
@@ -104,6 +105,7 @@ class ChatReadReceipts {
     _indexWorker.dispose();
     _messageIndex.clear();
     _confirmedReads.clear();
+    _pendingReadStateIDs.clear();
   }
 
   void markMessageAsRead(Message message, bool visible) {
@@ -127,6 +129,8 @@ class ChatReadReceipts {
   void invalidateViewport() {
     _viewportReadTimer?.cancel();
     _viewportReadTimer = null;
+    // A later route entry gets its first painted read immediately.
+    _lastViewportRead = null;
     _visibleIDs.clear();
     _atLatest = false;
   }
@@ -136,11 +140,25 @@ class ChatReadReceipts {
   final _sdkInFlight = <String?, int>{};
   String? _confirmedTargetID;
   Timer? _readRefreshTimer;
-  void _refreshReadState() {
-    if (_readRefreshTimer != null || isClosed) return;
+  final _pendingReadStateIDs = <String>{};
+  void _refreshReadState(Message message) {
+    if (isClosed) return;
+    final id = message.clientMsgID;
+    if (id == null || id.isEmpty) return;
+    _pendingReadStateIDs.add(id);
+    if (_readRefreshTimer != null) return;
     _readRefreshTimer = Timer(Duration.zero, () {
       _readRefreshTimer = null;
-      if (!isClosed) messageList.refresh();
+      final ids = Set<String>.unmodifiable(_pendingReadStateIDs);
+      _pendingReadStateIDs.clear();
+      if (isClosed || ids.isEmpty) return;
+      final publish = _onReadStateChanged;
+      if (publish != null) {
+        publish(ids);
+      } else {
+        // Consumers without row subscriptions retain the previous contract.
+        messageList.refresh();
+      }
     });
   }
 
@@ -282,8 +300,7 @@ class ChatReadReceipts {
       final elapsed = _lastViewportRead == null
           ? viewportReadInterval
           : _now().difference(_lastViewportRead!);
-      if (conversationInfo.groupID?.isNotEmpty == true &&
-          conversationInfo.isPrivateChat != true &&
+      if (conversationInfo.isPrivateChat != true &&
           !visible.any((m) => m.attachedInfoElem?.isPrivateChat == true) &&
           elapsed < viewportReadInterval) {
         _viewportReadTimer ??= Timer(viewportReadInterval - elapsed, () {
@@ -295,6 +312,8 @@ class ChatReadReceipts {
         });
         return;
       }
+      _viewportReadTimer?.cancel();
+      _viewportReadTimer = null;
       try {
         await _markConversationRead(0, requireVisible: true);
       } catch (error) {
@@ -315,7 +334,7 @@ class ChatReadReceipts {
           message.isRead != true) {
         message.isRead = true;
         message.hasReadTime = _timestamp;
-        _refreshReadState();
+        _refreshReadState(message);
       }
     }
     await Future.wait(privateReads);
@@ -370,7 +389,7 @@ class ChatReadReceipts {
       if (message.attachedInfoElem?.isPrivateChat == true) {
         message.attachedInfoElem?.hasReadTime = _timestamp;
       }
-      _refreshReadState();
+      _refreshReadState(message);
     } catch (error) {
       if (error is! _ConversationReadCancelled) {
         Logger.print('Mark read failed: $error');

@@ -209,6 +209,37 @@ void main() {
             'Reconciliation replaces the row without mutating its predecessor.');
   });
 
+  test('reconciled larger count cannot return through a delayed callback', () {
+    final projection = ConversationReadProjection()
+      ..confirm(ConversationReadRequest.capture(_row(unread: 1)));
+    final reconciled = projection.project(_row(unread: 0),
+        current: _row(unread: 4), authoritativeUnread: true);
+    final replay = projection.project(_row(unread: 4), current: reconciled);
+    expect(replay.unreadCount, 0);
+    final newMessage = projection.project(
+        _row(message: 'new', sequence: 11, time: 101, unread: 1),
+        current: replay);
+    expect(newMessage.unreadCount, 1);
+    expect(newMessage.latestMsg!.clientMsgID, 'new');
+  });
+
+  test('list stays clear after reconciliation and a delayed unread snapshot',
+      () async {
+    final target = _row(unread: 1);
+    logic.list.add(target);
+    await acknowledge(target);
+    logic.onChanged([_row(unread: 4)]);
+    expect(logic.list.single.unreadCount, 4);
+    logic.onChanged([_row(unread: 0)], authoritativeUnread: true);
+    expect(logic.list.single.unreadCount, 0);
+    logic.onChanged([_row(unread: 4)]);
+    expect(logic.list.single.unreadCount, 0);
+    logic.onChanged([
+      _row(message: 'arrived-after-exit', sequence: 11, time: 101, unread: 1)
+    ]);
+    expect(logic.list.single.unreadCount, 1);
+  });
+
   test('rejected zero repairs once per protected state without a callback loop',
       () {
     final projection = ConversationReadProjection()
@@ -230,6 +261,12 @@ void main() {
     expect(
         projection.takeReconciliationSignal(
             zero, projection.project(zero, current: changed)),
+        isFalse,
+        reason: 'The reconciled count must not request the same repair again.');
+    final newerCount = _row(unread: 6);
+    expect(
+        projection.takeReconciliationSignal(
+            zero, projection.project(zero, current: newerCount)),
         isTrue);
   });
 

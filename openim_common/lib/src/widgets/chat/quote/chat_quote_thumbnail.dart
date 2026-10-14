@@ -21,6 +21,7 @@ class ChatQuoteThumbnail extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!supports(message)) return const SizedBox.shrink();
     final picture = message.pictureElem;
+    final topPreview = ChatPicturePreviewMetadata.topCrop(message);
     final video = message.videoElem;
     final source = ChatPictureQuality.sourceSize(picture);
     final longPicture =
@@ -29,7 +30,10 @@ class ChatQuoteThumbnail extends StatelessWidget {
     final thumbnailPixels = (ChatQuoteTokens.thumbnailSize * pixelRatio).ceil();
     final decodeSize = longPicture
         ? ChatPictureQuality.decodeSize(
-            source: source,
+            source: topPreview == null
+                ? source
+                : Size(topPreview.width!.toDouble(),
+                    topPreview.height!.toDouble()),
             displayWidth: ChatQuoteTokens.thumbnailSize,
             devicePixelRatio: pixelRatio)
         : Size(thumbnailPixels.toDouble(), thumbnailPixels.toDouble());
@@ -47,9 +51,11 @@ class ChatQuoteThumbnail extends StatelessWidget {
         .whereType<String>()
         .where((value) => value.trim().isNotEmpty)
         .firstOrNull;
-    final url = longPicture
-        ? ChatPictureQuality.croppedSource(picture, decodeSize) ?? thumbnailUrl
-        : thumbnailUrl;
+    final url = topPreview?.url ??
+        (longPicture
+            ? ChatPictureQuality.croppedSource(picture, decodeSize) ??
+                thumbnailUrl
+            : thumbnailUrl);
     final dark = Theme.of(context).brightness == Brightness.dark;
     final placeholder = ColoredBox(
       color: AppTokens.surfaceAlt(dark: dark),
@@ -80,7 +86,7 @@ class ChatQuoteThumbnail extends StatelessWidget {
       borderRadius: BorderRadius.circular(ChatQuoteTokens.thumbnailRadius),
       child: SizedBox.square(
         dimension: ChatQuoteTokens.thumbnailSize,
-        child: !kIsWeb && path?.isNotEmpty == true
+        child: topPreview == null && !kIsWeb && path?.isNotEmpty == true
             ? ImageUtil.fileImage(
                 file: File(path!),
                 width: ChatQuoteTokens.thumbnailSize,

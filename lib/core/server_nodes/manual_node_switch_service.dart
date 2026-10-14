@@ -17,6 +17,7 @@ class ManualNodeSwitchService {
     required this.connect,
     NodeEndpoint Function()? readEndpoint,
     Future<NodeAvailability> Function(NodeEndpoint)? probe,
+    this.prepareTarget,
   })  : readEndpoint = readEndpoint ?? NodeEndpoint.current,
         probe = probe ?? NodeAvailabilityProbe().check;
 
@@ -24,6 +25,7 @@ class ManualNodeSwitchService {
   final bool Function() canSwitch;
   final NodeEndpoint Function() readEndpoint;
   final Future<NodeAvailability> Function(NodeEndpoint) probe;
+  final Future<void> Function(NodeEndpoint)? prepareTarget;
   final Future<void> Function(NodeEndpoint, bool Function()) connect;
   bool busy = false;
 
@@ -45,6 +47,11 @@ class ManualNodeSwitchService {
     busy = true;
     bool sameSession() => readSession() == session;
     try {
+      try {
+        await prepareTarget?.call(target);
+      } catch (_) {
+        throw NodeSwitchFailure.unavailable;
+      }
       final result = await probe(target);
       if (!sameSession() ||
           !isActive() ||

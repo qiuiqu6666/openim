@@ -10,7 +10,9 @@ public class CommonUtil {
             res["data"] = data
             res["errCode"] = errCode
             res["errMsg"] = errMsg
+            #if DEBUG
             print("native call flutter { method: \(method) type: \(type) }")
+            #endif
             channel.invokeMethod(method, arguments: res)
         }
     }

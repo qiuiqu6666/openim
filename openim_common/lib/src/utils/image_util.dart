@@ -55,6 +55,7 @@ class ImageUtil {
               retries: 1,
               timeRetry: const Duration(seconds: 1),
               printError: false,
+              cancelWhenUnused: true,
               cacheRawData: cacheRawData),
           _calculateCacheWidth(width, cacheWidth, lowMemory),
           _calculateCacheHeight(height, cacheHeight, lowMemory),
@@ -69,7 +70,7 @@ class ImageUtil {
         borderRadius: borderRadius,
         enableLoadState: true,
         clearMemoryCacheWhenDispose: clearMemoryCacheWhenDispose,
-        handleLoadingProgress: true,
+        handleLoadingProgress: loadProgress,
         clearMemoryCacheIfFailed: true,
         loadStateChanged: (ExtendedImageState state) {
           switch (state.extendedImageLoadState) {

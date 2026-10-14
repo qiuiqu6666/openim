@@ -6,6 +6,50 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/core/session/connection/im_connection_recovery.dart';
 
 void main() {
+  testWidgets('route catch-up starts immediately and retries a failed wake',
+      (tester) async {
+    var wakes = 0;
+    var reconciliations = 0;
+    final recovery = IMConnectionRecovery(
+      isCurrent: () => true,
+      isDisconnected: () => false,
+      wake: (_) async {
+        if (++wakes == 1) throw StateError('temporary sync failure');
+      },
+      onError: (_) {},
+      onWakeSucceeded: () => reconciliations++,
+      networkChanges: const Stream.empty(),
+    )..start();
+    await recovery.recoverNow();
+    expect(wakes, 1);
+    expect(reconciliations, 0);
+    await tester.pump(const Duration(seconds: 3));
+    expect(wakes, 2);
+    expect(reconciliations, 1);
+    recovery.close();
+  });
+
+  testWidgets('route catch-up cannot reconcile a successor session',
+      (tester) async {
+    var current = true;
+    var reconciliations = 0;
+    final pending = Completer<void>();
+    final recovery = IMConnectionRecovery(
+      isCurrent: () => current,
+      isDisconnected: () => false,
+      wake: (_) => pending.future,
+      onError: (error) => fail('$error'),
+      onWakeSucceeded: () => reconciliations++,
+      networkChanges: const Stream.empty(),
+    )..start();
+    final catchUp = recovery.recoverNow();
+    current = false;
+    pending.complete();
+    await catchUp;
+    expect(reconciliations, 0);
+    recovery.close();
+  });
+
   testWidgets(
       'sync signals coalesce and stop in background or expired sessions',
       (tester) async {

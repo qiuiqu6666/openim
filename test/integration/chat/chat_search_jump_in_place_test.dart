@@ -257,6 +257,9 @@ class _Harness {
         target,
       ], isEnd: false);
     }
+    // A pending initial latest page occupies one of the two native read slots.
+    // Completing the older half lets the queued newer half start.
+    await tester.idle();
     for (final query in newer.where(
         (query) => query.arguments['startClientMsgID'] == target.clientMsgID)) {
       query.complete([
@@ -286,18 +289,6 @@ class _Harness {
   }
 }
 
-void _chatTest(
-    String description, Future<void> Function(WidgetTester tester) body) {
-  testWidgets(description, (tester) async {
-    try {
-      await body(tester);
-    } finally {
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-    }
-  });
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late _Harness harness;
@@ -305,7 +296,21 @@ void main() {
     harness = _Harness();
     await harness.initialize();
   });
-  tearDown(() => harness.dispose());
+  void _chatTest(
+      String description, Future<void> Function(WidgetTester tester) body) {
+    testWidgets(description, (tester) async {
+      try {
+        await body(tester);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        // Complete mock SDK responses inside their owning fake-async zone.
+        // Otherwise the shared prefetcher's native slots survive a failed test
+        // even after its fixture has completed the underlying completers.
+        await harness.dispose();
+        await tester.pump(Duration.zero);
+      }
+    });
+  }
 
   for (final brightness in Brightness.values) {
     _chatTest(
@@ -402,8 +407,10 @@ void main() {
     await harness.mount(tester, _latest(),
         initialSearch: target, holdLatest: true);
     expect(harness.older, hasLength(2));
-    expect(harness.newer, hasLength(1));
+    expect(harness.newer, isEmpty,
+        reason: 'The initial latest read and older half occupy both slots.');
     await harness.completeAround(tester, target);
+    expect(harness.newer, hasLength(1));
     expectMessageInsideChatList(tester, target.clientMsgID!);
     expect(harness.logic.focusedMessageID.value, target.clientMsgID);
     final historyIDs = harness.ids;
@@ -422,8 +429,10 @@ void main() {
     await harness.mount(tester, _latest(),
         initialSearch: target, holdLatest: true, cacheSeed: [target]);
     expect(harness.older, hasLength(2));
-    expect(harness.newer, hasLength(1));
+    expect(harness.newer, isEmpty,
+        reason: 'The initial latest read and older half occupy both slots.');
     await harness.completeAround(tester, target);
+    expect(harness.newer, hasLength(1));
     expectMessageInsideChatList(tester, target.clientMsgID!);
     expect(harness.logic.focusedMessageID.value, target.clientMsgID);
     final historyIDs = harness.ids;

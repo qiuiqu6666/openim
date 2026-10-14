@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_openim_sdk/src/logger.dart';
@@ -36,7 +37,8 @@ class IMManager {
   void _addNativeCallback(MethodChannel _channel) {
     _channel.setMethodCallHandler((call) {
       try {
-        Logger.print('Flutter : $call');
+        // Guard before interpolation: callbacks can contain entire messages.
+        if (kDebugMode) Logger.print('Flutter : $call');
         if (call.method == ListenerType.connectListener) {
           String type = call.arguments['type'];
           switch (type) {
@@ -185,7 +187,7 @@ class IMManager {
           dynamic data = call.arguments['data'];
           switch (type) {
             case 'onSyncServerStart':
-              print('dart onSyncServerStart: $data');
+              if (kDebugMode) Logger.print('dart onSyncServerStart: $data');
               conversationManager.listener.syncServerStart(data);
               break;
             case 'onSyncServerProgress':
@@ -370,8 +372,7 @@ class IMManager {
           }
         }
       } catch (error, stackTrace) {
-        Logger.print(
-            "回调失败了。${call.method} ${call.arguments['type']} ${call.arguments['data']} $error $stackTrace");
+        Logger.error('SDK callback failed: ${call.method}', error, stackTrace);
       }
       return Future.value(null);
     });

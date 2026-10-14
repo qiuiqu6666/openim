@@ -55,7 +55,7 @@ class _ChatPictureViewState extends State<ChatPictureView> {
     _sourceUrl = IMUtils.isNotNullEmptyStr(picture?.bigPicture?.url)
         ? picture?.bigPicture?.url
         : picture?.sourcePicture?.url;
-    _snapshotUrl =
+    _snapshotUrl = ChatPicturePreviewMetadata.topCrop(widget.message)?.url ??
         picture?.snapshotPicture?.url?.adjustThumbnailAbsoluteString(960);
     final path = picture?.sourcePath;
     final messageID = widget.message.clientMsgID;
@@ -97,17 +97,17 @@ class _ChatPictureViewState extends State<ChatPictureView> {
 
   Widget _buildPicture(BuildContext context, BoxConstraints constraints) {
     final picture = widget.message.pictureElem;
+    final topPreview = ChatPicturePreviewMetadata.topCrop(widget.message);
     final sourceSize = ChatPictureQuality.sourceSize(picture);
     final width = sourceSize.width;
     final height = sourceSize.height;
     final isLongImage = height >= width / _longImageAspectRatio;
     // Square and landscape attachments need room for their content; keep portrait/long
     // images compact and preserve explicit sizing used by conversation peeks.
-    final limit =
-        (widget.maxDisplayWidth ??
-                (width >= height ? 120.w : pictureWidth) *
-                    (isLongImage ? 1.0 : 1.2))
-            .clamp(0.0, constraints.maxWidth);
+    final limit = (widget.maxDisplayWidth ??
+            (width >= height ? 120.w : pictureWidth) *
+                (isLongImage ? 1.0 : 1.2))
+        .clamp(0.0, constraints.maxWidth);
     var displayWidth = width < limit ? width : limit;
     var displayHeight = displayWidth * height / width;
     // Choose the visible top crop before fitting the bubble's height. Fitting
@@ -131,9 +131,11 @@ class _ChatPictureViewState extends State<ChatPictureView> {
     final alignment = cropped ? Alignment.topCenter : Alignment.center;
     final thumbnailURL =
         IMUtils.isNotNullEmptyStr(_snapshotUrl) ? _snapshotUrl : _sourceUrl;
-    final remoteURL = cropped
-        ? ChatPictureQuality.croppedSource(picture, decodeSize) ?? thumbnailURL
-        : thumbnailURL;
+    final remoteURL = topPreview?.url ??
+        (cropped
+            ? ChatPictureQuality.croppedSource(picture, decodeSize) ??
+                thumbnailURL
+            : thumbnailURL);
 
     // Only mount the next source after a failure, avoiding parallel downloads.
     final urls = <String>{
@@ -146,37 +148,47 @@ class _ChatPictureViewState extends State<ChatPictureView> {
         if (url.trim().isNotEmpty) url,
     }.toList();
 
-    Widget? remote([int index = 0]) => index < urls.length
-        ? ImageUtil.networkImage(
-            url: urls[index],
-            width: displayWidth,
-            height: displayHeight,
-            cacheWidth: cacheWidth,
-            cacheHeight: cacheHeight,
-            resizePolicy: ResizeImagePolicy.fit,
-            cacheRawData: false,
-            fit: BoxFit.fitWidth,
-            alignment: alignment,
-            errorWidget: remote(index + 1),
-          )
-        : null;
+    Widget? remote([int index = 0]) {
+      if (index >= urls.length) return null;
+      final previewSize = topPreview != null && urls[index] == topPreview.url
+          ? ChatPictureQuality.decodeSize(
+              source: Size(
+                  topPreview.width!.toDouble(), topPreview.height!.toDouble()),
+              displayWidth: displayWidth,
+              devicePixelRatio: pixelRatio)
+          : null;
+      return ImageUtil.networkImage(
+        url: urls[index],
+        width: displayWidth,
+        height: displayHeight,
+        cacheWidth: previewSize?.width.toInt() ?? cacheWidth,
+        cacheHeight: previewSize?.height.toInt() ?? cacheHeight,
+        resizePolicy: ResizeImagePolicy.fit,
+        cacheRawData: false,
+        fit: BoxFit.fitWidth,
+        alignment: alignment,
+        errorWidget: remote(index + 1),
+      );
+    }
 
-    final child = widget.isISend && _localPathValid
-        ? ImageUtil.fileImage(
-            file: File(_sourcePath!),
-            width: displayWidth,
-            height: displayHeight,
-            cacheWidth: cacheWidth,
-            cacheHeight: cacheHeight,
-            resizePolicy: ResizeImagePolicy.fit,
-            cacheRawData: false,
-            fit: BoxFit.fitWidth,
-            alignment: alignment,
-            errorWidget: remote(),
-          )
-        : _resolvingLocalPath
-            ? null
-            : remote();
+    final child = topPreview != null
+        ? remote()
+        : widget.isISend && _localPathValid
+            ? ImageUtil.fileImage(
+                file: File(_sourcePath!),
+                width: displayWidth,
+                height: displayHeight,
+                cacheWidth: cacheWidth,
+                cacheHeight: cacheHeight,
+                resizePolicy: ResizeImagePolicy.fit,
+                cacheRawData: false,
+                fit: BoxFit.fitWidth,
+                alignment: alignment,
+                errorWidget: remote(),
+              )
+            : _resolvingLocalPath
+                ? null
+                : remote();
     return ClipRRect(
       borderRadius: BorderRadius.circular(ChatBubbleTokens.radius),
       child: SizedBox(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -18,6 +20,7 @@ class _App extends GetxController implements AppController {
 class _IM extends IMController {
   final calls = <String>[];
   bool connectionWorks = true;
+  Completer<void>? recoveryWait;
   @override
   // Test owner does not start the native SDK automatically.
   // ignore: must_call_super
@@ -38,12 +41,18 @@ class _IM extends IMController {
   }
 
   @override
-  Future<void> login(String userID, String token) async {
+  Future<void> loginAfterRouteChange(String userID, String token) async {
     calls.add('login:$userID');
     expect(token, 'im-token');
     imSdkStatus(connectionWorks
         ? IMSdkStatus.connectionSucceeded
         : IMSdkStatus.connectionFailed);
+  }
+
+  @override
+  Future<void> recoverMessagesAfterRouteChange() async {
+    calls.add('recover');
+    await recoveryWait?.future;
   }
 }
 
@@ -87,6 +96,7 @@ void main() {
       'uninit',
       'init:${NodeEndpoint.direct.imApi}:${NodeEndpoint.direct.imWs}',
       'login:user',
+      'recover',
     ]);
     expect(Config.appAuthUrl, NodeEndpoint.direct.chatApi);
     expect(dio.options.baseUrl, NodeEndpoint.direct.imApi);
@@ -99,5 +109,13 @@ void main() {
     await expectLater(
         ManualNodeSwitchRuntime.reconnect(NodeEndpoint.direct, () => true),
         throwsA(NodeSwitchFailure.connectionFailed));
+    expect(logic.calls, isNot(contains('recover')));
+  });
+  test('message catch-up does not hold the route switch open', () async {
+    logic.recoveryWait = Completer<void>();
+    await ManualNodeSwitchRuntime.reconnect(NodeEndpoint.direct, () => true);
+    expect(logic.calls.last, 'recover');
+    expect(logic.recoveryWait!.isCompleted, isFalse);
+    logic.recoveryWait!.complete();
   });
 }

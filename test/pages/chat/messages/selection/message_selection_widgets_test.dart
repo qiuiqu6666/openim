@@ -282,14 +282,21 @@ void main() {
       fixture.controller.enter(messages.first);
       await fixture.mount(tester,
           brightness: brightness, textScale: 2, width: 320, realBubbles: true);
-      expect(find.byType(ChatItemView), findsNWidgets(2));
-      for (final bubble in find.byType(ChatItemView).evaluate()) {
-        final rect = tester.getRect(find.byWidget(bubble.widget));
+      // At 2x text scale the second row can be outside the lazy viewport.
+      // Exercise both real bubbles by scrolling each into view.
+      final scrollable = find.descendant(
+          of: find.byType(ListView), matching: find.byType(Scrollable));
+      for (final id in ['one', 'two']) {
+        final row = find.byKey(ValueKey('fixture-row-$id'));
+        await tester.scrollUntilVisible(row, 160, scrollable: scrollable);
+        final bubble =
+            find.descendant(of: row, matching: find.byType(ChatItemView));
+        expect(bubble, findsOneWidget);
+        final rect = tester.getRect(bubble);
         expect(rect.left, greaterThanOrEqualTo(48));
         expect(rect.right, lessThanOrEqualTo(320));
+        expect(_check(id), findsOneWidget);
       }
-      expect(_check('one'), findsOneWidget);
-      expect(_check('two'), findsOneWidget);
       expect(_action('all'), findsNothing);
       expect(tester.takeException(), isNull);
 

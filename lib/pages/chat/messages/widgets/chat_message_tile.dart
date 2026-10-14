@@ -40,7 +40,11 @@ class ChatMessageTile extends StatelessWidget {
   final String? copyText;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+      listenable: logic.messageReadUpdates.forMessage(message.clientMsgID),
+      builder: (_, __) => _build(context));
+
+  Widget _build(BuildContext context) {
     if (message.contentType == MessageType.revokeMessageNotification) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),

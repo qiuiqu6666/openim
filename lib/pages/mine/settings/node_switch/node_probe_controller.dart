@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
+import 'package:openim_common/openim_common.dart' show Config;
+import '../../../../core/youmeng/youmeng_runtime.dart';
 
 import '../../../../services/platform_config_service.dart';
 import '../../../../core/server_nodes/manual_node_switch_runtime.dart';
@@ -33,6 +35,7 @@ class NodeProbeController extends ChangeNotifier with WidgetsBindingObserver {
     final state = WidgetsBinding.instance.lifecycleState;
     _foreground = state == null || state == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
+    Config.networkRouteRevision.addListener(_routeChanged);
   }
 
   final NodeEndpoint Function() _readEndpoint;
@@ -53,6 +56,13 @@ class NodeProbeController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void>? _work;
   final Map<String, NodeProbeResult> results = {};
   final Set<String> pending = {};
+  List<NodeEndpoint> get nodes => NodeEndpoint.selectable(endpoint);
+
+  void _routeChanged() {
+    if (_disposed || switching) return;
+    endpoint = _readEndpoint();
+    notifyListeners();
+  }
 
   Future<NodeSwitchFailure?> switchTo(NodeEndpoint node) async {
     if (_disposed || !_foreground) return NodeSwitchFailure.sessionChanged;
@@ -65,7 +75,7 @@ class NodeProbeController extends ChangeNotifier with WidgetsBindingObserver {
     NodeSwitchFailure? failure;
     try {
       await _switchService.switchTo(node,
-          isActive: () => !_disposed && _foreground);
+          isActive: () => !_disposed && _foreground, allowShield: true);
       connectionUnconfirmed = false;
     } on NodeSwitchFailure catch (error) {
       failure = error;
@@ -92,7 +102,7 @@ class NodeProbeController extends ChangeNotifier with WidgetsBindingObserver {
     latencyMs = httpStatus = null;
     testedAt = null;
     results.clear();
-    final nodes = NodeEndpoint.candidates(endpoint);
+    final nodes = this.nodes;
     pending.clear();
     pending.addAll(nodes.map((node) => node.signature));
     final generation = ++_generation;
@@ -136,6 +146,15 @@ class NodeProbeController extends ChangeNotifier with WidgetsBindingObserver {
     var result = const NodeProbeResult(NodeProbeStatus.abnormal);
     final watch = Stopwatch()..start();
     try {
+      if (requested.signature == NodeEndpoint.shield.signature) {
+        if (!YoumengRuntime.enabled) {
+          result = const NodeProbeResult(NodeProbeStatus.unknown);
+          return;
+        }
+        await YoumengRuntime.ensureReady();
+        if (!_current(generation, active)) return;
+        watch.reset();
+      }
       final uri = Uri.tryParse(requested.chatApi);
       if (uri == null ||
           !const {'http', 'https'}.contains(uri.scheme) ||
@@ -186,6 +205,7 @@ class NodeProbeController extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    Config.networkRouteRevision.removeListener(_routeChanged);
     _disposed = true;
     _generation++;
     _token?.cancel('Node probe closed');

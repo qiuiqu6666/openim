@@ -33,9 +33,21 @@ class NodeEndpoint {
       imWs: 'ws://127.0.0.1:10001',
       customerServiceUrl: 'http://127.0.0.1:8815');
   static const builtIn = [direct, backup];
+  static List<NodeEndpoint> selectable(NodeEndpoint current) =>
+      [...builtIn, shield].any((node) => node.signature == current.signature)
+          ? [...builtIn, shield]
+          : [current];
 
   final String chatApi, imApi, imWs;
   final String? customerServiceUrl;
+
+  /// Compact support marker; custom deployments deliberately have no number.
+  String? get diagnosticCode {
+    if (signature == shield.signature) return '3';
+    final index = builtIn.indexWhere((node) => node.signature == signature);
+    return index < 0 ? null : '${index + 1}';
+  }
+
   String get signature => [chatApi, imApi, imWs]
       .map((value) => value.trim().replaceFirst(RegExp(r'/+$'), ''))
       .join('|');

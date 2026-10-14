@@ -29,6 +29,7 @@ export 'src/models/user_info.dart';
 export 'src/models/define.dart';
 export 'src/models/signaling_info.dart';
 export 'src/models/voice_transcription_state.dart';
+export 'src/models/media/chat_picture_preview_metadata.dart';
 export 'src/res/images.dart';
 export 'src/res/strings.dart';
 export 'src/res/app_tokens.dart';

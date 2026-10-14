@@ -46,6 +46,7 @@ void main() {
   late List<ConversationReadRequest> projections;
   late bool active;
   late bool canReadConversation;
+  late DateTime now;
 
   setUp(() {
     OpenIM.iMManager.userID = 'self';
@@ -55,8 +56,10 @@ void main() {
     projections = [];
     active = true;
     canReadConversation = true;
+    now = DateTime(2026);
     receipts = ChatReadReceipts(
       messageList: messages,
+      now: () => now,
       conversation: () => conversation,
       // The route supplies one session boundary to all extracted modules.
       isClosed: () => OpenIM.iMManager.userID != 'self',
@@ -199,6 +202,7 @@ void main() {
 
     final latest = _received('later-painted', 11);
     messages.add(latest);
+    now = now.add(ChatReadReceipts.viewportReadInterval);
     conversation = ConversationInfo(
         conversationID: 'chat', unreadCount: 2, latestMsg: latest);
     final readingLatest = receipts.markVisibleMessages(['later-painted']);
@@ -352,6 +356,7 @@ void main() {
     await failed;
     expect(latest.isRead, isFalse);
     expect(await projections.single.result, isFalse);
+    now = now.add(ChatReadReceipts.viewportReadInterval);
     final retry = receipts.markVisibleMessages(['latest']);
     await _flush();
     expect(calls, hasLength(2));
@@ -373,6 +378,7 @@ void main() {
     await first;
     conversation = ConversationInfo(
         conversationID: 'chat', unreadCount: 1, latestMsg: latest);
+    now = now.add(ChatReadReceipts.viewportReadInterval);
     receipts.conversationChanged();
     await _flush();
     expect(calls, hasLength(2));
@@ -459,6 +465,7 @@ void main() {
       await _flush();
       final second = _received('second', 11);
       messages.add(second);
+      now = now.add(ChatReadReceipts.viewportReadInterval);
       final readingSecond = receipts.markVisibleMessages(['second']);
       if (boundary == 'covered') {
         active = false;

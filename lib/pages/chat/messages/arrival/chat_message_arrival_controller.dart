@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
@@ -12,6 +14,7 @@ class ChatMessageArrivalController extends ChangeNotifier {
   final _pending = <String>{};
   final _entering = <String>{};
   final _cancelled = <String>{};
+  Timer? _quietTimer;
   bool _closed = false;
 
   void register(Message message, {required bool enabled}) {
@@ -25,10 +28,23 @@ class ChatMessageArrivalController extends ChangeNotifier {
         type == null ||
         type == MessageType.typing ||
         type >= 1000 ||
-        _entering.length >= ChatMessageArrivalTokens.maxConcurrent ||
-        !_entering.add(id)) {
+        _entering.contains(id)) {
       return;
     }
+    final continuous = _quietTimer != null;
+    _quietTimer?.cancel();
+    _quietTimer = Timer(ChatMessageArrivalTokens.quietPeriod, () {
+      _quietTimer = null;
+    });
+    if (continuous) {
+      // A same-frame batch drops unpainted entrances. If the first row already
+      // started, the existing cancellation path retains its read barrier until
+      // its full height has painted. Following rows keep their normal layout.
+      cancel();
+      return;
+    }
+    if (_entering.length >= ChatMessageArrivalTokens.maxConcurrent) return;
+    _entering.add(id);
     _pending.add(id);
     notifyListeners();
   }
@@ -58,7 +74,11 @@ class ChatMessageArrivalController extends ChangeNotifier {
   }
 
   void cancel() {
-    if (_closed || _entering.isEmpty) return;
+    if (_closed ||
+        _entering.isEmpty ||
+        (_pending.isEmpty && _entering.every(_cancelled.contains))) {
+      return;
+    }
     _entering.removeAll(_pending);
     _pending.clear();
     // Already laid-out rows keep the read barrier until the view paints their
@@ -70,6 +90,8 @@ class ChatMessageArrivalController extends ChangeNotifier {
   @override
   void dispose() {
     _closed = true;
+    _quietTimer?.cancel();
+    _quietTimer = null;
     _pending.clear();
     _entering.clear();
     _cancelled.clear();

@@ -26,6 +26,7 @@ abstract class ExtendedNetworkImageProvider
     String? cacheKey,
     bool printError,
     bool cacheRawData,
+    bool cancelWhenUnused,
     String? imageCacheName,
     Duration? cacheMaxAge,
     WebHtmlElementStrategy webHtmlElementStrategy,
@@ -54,6 +55,9 @@ abstract class ExtendedNetworkImageProvider
 
   /// Token to cancel network request
   CancellationToken? get cancelToken;
+
+  /// Bound work and cancel pending loads when no real image listener remains.
+  bool get cancelWhenUnused;
 
   /// Custom cache key
   String? get cacheKey;

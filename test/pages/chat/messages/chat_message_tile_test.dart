@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:extended_image/extended_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
+import 'package:openim/pages/chat/messages/refresh/chat_message_read_updates.dart';
 import 'package:openim/pages/chat/messages/widgets/chat_message_tile.dart';
 import 'package:openim/pages/chat/voice/voice_transcription_controller.dart';
 import 'package:openim_common/openim_common.dart';
@@ -31,6 +33,9 @@ Message _message({bool voice = false}) => Message.fromJson({
 /// Provides only the public UI facade. Constructing a real ChatLogic would
 /// unnecessarily register route/SDK dependencies for a message-row test.
 class _TileLogic extends GetxController implements ChatLogic {
+  @override
+  final messageReadUpdates = ChatMessageReadUpdates();
+
   _TileLogic(Message message, {Future<String> Function()? transcript}) {
     messageList.add(message);
     voiceTranscriptions = VoiceTranscriptionController(
@@ -82,6 +87,8 @@ class _TileLogic extends GetxController implements ChatLogic {
   @override
   String? getNewestFaceURL(Message message) => null;
   @override
+  ValueListenable<ChatTransferStatus?>? transferStatus(Message message) => null;
+  @override
   bool canForward(Message message) => message.contentType == MessageType.text;
   @override
   bool canFavorite(Message message) => showCollectionActions;
@@ -122,6 +129,7 @@ class _TileLogic extends GetxController implements ChatLogic {
   void clickLinkText(String url, Object? type) {}
 
   void disposeFixture() {
+    messageReadUpdates.close();
     voiceTranscriptions.dispose();
     voicePlayback.dispose();
     sendStatusSub.close();

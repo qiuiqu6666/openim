@@ -33,7 +33,7 @@ void main() {
   for (final dark in [false, true]) {
     for (final size in [const Size(320, 700), const Size(700, 320)]) {
       for (final scale in [1.0, 1.6]) {
-        testWidgets('single direct node dark=$dark size=$size scale=$scale',
+        testWidgets('node selection dark=$dark size=$size scale=$scale',
             (tester) async {
           tester.view.physicalSize = size;
           tester.view.devicePixelRatio = 1;
@@ -43,14 +43,21 @@ void main() {
           addTearDown(store.dispose);
           var active = NodeEndpoint.direct;
           var connections = 0;
+          var preparations = 0;
+          var probes = 0;
           final controller = NodeProbeController(
             readEndpoint: () => active,
             switchService: ManualNodeSwitchService(
               readEndpoint: () => active,
               readSession: () => 'user',
               canSwitch: () => true,
-              probe: (node) async =>
-                  NodeAvailability(node, available: true, latencyMs: 10),
+              prepareTarget: (_) async {
+                preparations++;
+              },
+              probe: (node) async {
+                probes++;
+                return NodeAvailability(node, available: true, latencyMs: 10);
+              },
               connect: (node, _) async {
                 connections++;
                 active = node;
@@ -81,7 +88,8 @@ void main() {
             ),
           ));
           expect(find.text('节点01'), findsOneWidget);
-          expect(find.text('节点02'), findsNothing);
+          expect(find.text('节点02'), findsOneWidget);
+          expect(find.text('节点03'), findsOneWidget);
           expect(find.text('异常'), findsNothing);
           expect(find.text('正常 (80ms)'), findsOneWidget);
           expect(find.byIcon(Icons.check_rounded), findsOneWidget);
@@ -104,6 +112,30 @@ void main() {
             await tester.pump(const Duration(seconds: 3));
             await tester.pumpAndSettle();
             expect(tester.takeException(), isNull);
+            await tester.tap(find.text('节点03'));
+            await tester.pumpAndSettle();
+            final notice = find.text('该节点仅在其他节点不可用时切换');
+            expect(notice, findsOneWidget);
+            expect(tester.getCenter(notice).dx, closeTo(size.width / 2, 1));
+            expect(tester.getCenter(notice).dy, closeTo(size.height / 2, 1));
+            expect(connections, 0);
+            expect(preparations, 0);
+            expect(probes, 0);
+            expect(active, NodeEndpoint.direct);
+            expect(find.text('切换中'), findsNothing);
+            expect(find.byKey(const ValueKey('node-notice-2')), findsNothing);
+            expect(
+                find.descendant(
+                    of: find.byKey(const ValueKey('node-row-0')),
+                    matching: find.byIcon(Icons.check_rounded)),
+                findsOneWidget);
+            await tester.pump(const Duration(seconds: 3));
+            await tester.pumpAndSettle();
+            expect(notice, findsNothing);
+            await tester.tap(find.text('节点02'));
+            await tester.pumpAndSettle();
+            expect(active, NodeEndpoint.backup);
+            expect(connections, 1);
           }
         });
       }

@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
+import '../preview/chat_top_picture_preview.dart';
+
 /// Uses the existing authenticated OpenIM uploader. Only complete remote media
 /// can enter SendMessageNotOss; clientMsgID and the normal delivery owner survive.
 class ChatMediaUpload {
@@ -42,10 +44,42 @@ class ChatMediaUpload {
       final source = picture.sourcePicture!;
       final url =
           await _upload('chat-media:$id', picture.sourcePath!, source.type);
+      PictureInfo? topPreview;
+      String? previewExtra;
+      if ((source.width ?? 0) > 0 &&
+          (source.height ?? 0) >
+              source.width! * ChatPicturePreviewMetadata.heightRatio &&
+          source.type?.toLowerCase() != 'image/gif' &&
+          ChatPicturePreviewMetadata.canAnnotate(message.ex)) {
+        ChatTopPicturePreview? preview;
+        try {
+          preview = await ChatTopPicturePreview.create(picture.sourcePath!,
+              isCancelled: isClosed);
+          if (preview != null && !isClosed()) {
+            final previewURL = await _upload(
+                'chat-top-preview:$id', preview.path, 'image/png');
+            topPreview = PictureInfo(
+                url: previewURL,
+                width: preview.width,
+                height: preview.height,
+                size: preview.length,
+                type: 'image/png');
+            previewExtra = ChatPicturePreviewMetadata.withTopCrop(message.ex,
+                sourceURL: url, previewURL: previewURL);
+          }
+        } catch (_) {
+          // Keep the original send working if the optional derivative fails.
+        } finally {
+          await preview?.dispose();
+        }
+      }
+      if (isClosed()) throw StateError('Chat closed');
       source.url = url;
       picture.bigPicture = PictureInfo.fromJson(source.toJson());
-      picture.snapshotPicture = PictureInfo.fromJson(source.toJson())
-        ..url = OpenIMMediaUrl.thumbnail(url, width: 640, height: 640);
+      picture.snapshotPicture = topPreview ??
+          (PictureInfo.fromJson(source.toJson())
+            ..url = OpenIMMediaUrl.thumbnail(url, width: 640, height: 640));
+      if (previewExtra != null) message.ex = previewExtra;
     } else if (message.contentType == MessageType.video) {
       final video = message.videoElem!;
       final snapshot =

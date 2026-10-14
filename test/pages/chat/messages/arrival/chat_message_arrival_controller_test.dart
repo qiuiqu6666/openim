@@ -1,6 +1,7 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/messages/arrival/chat_message_arrival_controller.dart';
+import 'package:openim/pages/chat/messages/arrival/chat_message_arrival_tokens.dart';
 
 Message _incoming(String? id, {String sender = 'peer', int? type}) => Message(
       clientMsgID: id,
@@ -103,33 +104,30 @@ void main() {
     expect(changes, 1);
   });
 
-  test('a burst has at most four entrances including already claimed rows', () {
+  test('a same-frame burst displays every row without queued entrances', () {
     final burst = List.generate(24, (index) => 'burst-$index');
     for (final id in burst) {
       arrivals.register(_incoming(id), enabled: true);
     }
 
-    final claimed = arrivals.takePending(burst.toSet());
-    expect(claimed, hasLength(4));
-    for (final id in burst.skip(4)) {
+    expect(arrivals.takePending(burst.toSet()), isEmpty);
+    for (final id in burst) {
       expect(arrivals.isEntering(id), isFalse, reason: id);
     }
-    arrivals.register(_incoming('while-full'), enabled: true);
-    expect(arrivals.isEntering('while-full'), isFalse);
-
-    arrivals.finish(claimed.first);
-    arrivals.register(_incoming('later-live'), enabled: true);
-    expect(arrivals.takePending({...burst, 'while-full', 'later-live'}),
-        ['later-live']);
-    expect(arrivals.isEntering('later-live'), isTrue);
+    expect(arrivals.hasEntering, isFalse);
+    expect(changes, 2,
+        reason:
+            'The first pending entrance is registered then cancelled once.');
   });
 
-  test(
+  testWidgets(
       'cancel drops unpainted pending rows but protects claimed rows until paint',
-      () {
+      (tester) async {
     arrivals.register(_incoming('active'), enabled: true);
-    arrivals.register(_incoming('pending'), enabled: true);
     expect(arrivals.takePending({'active'}), ['active']);
+    // Keep a claimed row as if its final paint is waiting behind a slow frame.
+    await tester.pump(ChatMessageArrivalTokens.quietPeriod);
+    arrivals.register(_incoming('pending'), enabled: true);
     final beforeCancel = changes;
 
     arrivals.cancel();
@@ -146,11 +144,12 @@ void main() {
     expect(arrivals.isEntering('active'), isFalse);
     expect(arrivals.isCancelled('active'), isFalse);
     expect(changes, beforeCancel + 2);
+    await tester.pump(ChatMessageArrivalTokens.quietPeriod);
   });
 
-  test(
+  testWidgets(
       'cancel before the first paint leaves no receipt barrier or queued motion',
-      () {
+      (tester) async {
     arrivals.register(_incoming('not-mounted'), enabled: true);
     arrivals.cancel();
 
@@ -158,9 +157,11 @@ void main() {
     expect(arrivals.isEntering('not-mounted'), isFalse);
     expect(arrivals.isCancelled('not-mounted'), isFalse);
 
+    await tester.pump(ChatMessageArrivalTokens.quietPeriod);
     arrivals.register(_incoming('next-live'), enabled: true);
     expect(arrivals.takePending({'not-mounted', 'next-live'}), ['next-live']);
     expect(arrivals.isCancelled('next-live'), isFalse);
+    await tester.pump(ChatMessageArrivalTokens.quietPeriod);
   });
 
   test('finishing a row before claim also removes its pending entrance', () {
@@ -172,21 +173,24 @@ void main() {
     expect(arrivals.isCancelled('deleted'), isFalse);
   });
 
-  test('deleted pending rows do not prevent later live entrances', () {
+  testWidgets('deleted pending rows do not prevent later live entrances',
+      (tester) async {
     for (var index = 0; index < 4; index++) {
       arrivals.register(_incoming('deleted-$index'), enabled: true);
     }
     arrivals.retain({});
+    await tester.pump(ChatMessageArrivalTokens.quietPeriod);
     arrivals.register(_incoming('next-live'), enabled: true);
     expect(arrivals.takePending({'next-live'}), ['next-live']);
     expect(arrivals.isEntering('deleted-0'), isFalse);
+    await tester.pump(ChatMessageArrivalTokens.quietPeriod);
   });
 
   test('disposing the route ignores late delivery and animation completion',
       () {
     arrivals.register(_incoming('active'), enabled: true);
-    arrivals.register(_incoming('pending'), enabled: true);
     expect(arrivals.takePending({'active'}), ['active']);
+    arrivals.register(_incoming('pending'), enabled: true);
     final beforeDispose = changes;
 
     arrivals.dispose();
@@ -201,5 +205,47 @@ void main() {
       expect(arrivals.isCancelled(id), isFalse, reason: id);
     }
     expect(changes, beforeDispose);
+  });
+
+  testWidgets('continuous traffic cancels once and quiet traffic enters again',
+      (tester) async {
+    arrivals.register(_incoming('first'), enabled: true);
+    expect(arrivals.takePending({'first'}), ['first']);
+    await tester.pump(const Duration(milliseconds: 80));
+    arrivals.register(_incoming('second'), enabled: true);
+    expect(arrivals.isEntering('first'), isTrue);
+    expect(arrivals.isCancelled('first'), isTrue);
+    expect(arrivals.isEntering('second'), isFalse);
+    final afterCancellation = changes;
+    for (var i = 0; i < 50; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      arrivals.register(_incoming('burst-$i'), enabled: true);
+      expect(arrivals.isEntering('burst-$i'), isFalse);
+    }
+    expect(changes, afterCancellation,
+        reason:
+            'Waiting for full paint must not publish repeated cancellation.');
+    arrivals.finish('first', notify: true);
+    expect(arrivals.hasEntering, isFalse);
+    await tester.pump(ChatMessageArrivalTokens.quietPeriod);
+    arrivals.register(_incoming('after-quiet'), enabled: true);
+    expect(arrivals.takePending({'after-quiet'}), ['after-quiet']);
+    await tester.pump(ChatMessageArrivalTokens.quietPeriod);
+  });
+
+  testWidgets('excluded traffic does not prolong the quiet interval',
+      (tester) async {
+    arrivals.register(_incoming('first'), enabled: true);
+    expect(arrivals.takePending({'first'}), ['first']);
+    arrivals.finish('first');
+    await tester.pump(const Duration(milliseconds: 400));
+    arrivals.register(_incoming('self', sender: 'self'), enabled: true);
+    arrivals.register(_incoming('covered'), enabled: false);
+    arrivals.register(_incoming('typing', type: MessageType.typing),
+        enabled: true);
+    await tester.pump(const Duration(milliseconds: 200));
+    arrivals.register(_incoming('after-quiet'), enabled: true);
+    expect(arrivals.takePending({'after-quiet'}), ['after-quiet']);
+    await tester.pump(ChatMessageArrivalTokens.quietPeriod);
   });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../../core/server_nodes/node_endpoint.dart';
@@ -30,6 +31,8 @@ class NodeSwitchPage extends StatefulWidget {
 class _NodeSwitchPageState extends State<NodeSwitchPage> {
   late final NodeProbeController _controller;
   late final bool _ownsController;
+  String? _noticeNode;
+  NodeSwitchFailure? _notice;
 
   @override
   void initState() {
@@ -60,9 +63,32 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
   }
 
   Future<void> _switchNode(NodeEndpoint node) async {
+    setState(() {
+      _notice = null;
+      _noticeNode = null;
+    });
+    if (node.signature == NodeEndpoint.shield.signature) {
+      await EasyLoading.showToast(
+        settingsText(context,
+            zh: '该节点仅在其他节点不可用时切换',
+            en: 'This node is used only when the other nodes are unavailable.'),
+        toastPosition: EasyLoadingToastPosition.center,
+        duration: const Duration(seconds: 2),
+        maskType: EasyLoadingMaskType.none,
+        dismissOnTap: false,
+      );
+      return;
+    }
     final failure = await _controller.switchTo(node);
     if (!mounted) return;
-    final (zh, en) = switch (failure) {
+    setState(() {
+      _notice = failure;
+      _noticeNode = node.signature;
+    });
+  }
+
+  String _noticeText(BuildContext context) {
+    final (zh, en) = switch (_notice) {
       null => ('节点切换成功', 'Node switched'),
       NodeSwitchFailure.busy => (
           '正在通话或处理连接，请稍后切换',
@@ -85,7 +111,7 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
           'Connection could not be restored. Check your network and restart the app.'
         ),
     };
-    showSettingsMessage(context, settingsText(context, zh: zh, en: en));
+    return settingsText(context, zh: zh, en: en);
   }
 
   Widget _nodeRow(BuildContext context, NodeEndpoint node, int index) {
@@ -131,35 +157,52 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
       key: ValueKey('node-row-$index'),
       selected: selected,
       child: InkWell(
-        onTap: _controller.testing || _controller.switching || selected
-            ? null
-            : () => _switchNode(node),
+        onTap: node.signature == NodeEndpoint.shield.signature
+            ? () => _switchNode(node)
+            : _controller.testing || _controller.switching || selected
+                ? null
+                : () => _switchNode(node),
         child: Container(
           constraints: BoxConstraints(
               minHeight: SettingsResponsive.listRowMinHeight(context)),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(children: [
-            Expanded(
-                child: Text(
-                    settingsText(context,
-                        zh: '节点${(index + 1).toString().padLeft(2, '0')}',
-                        en: 'Node ${(index + 1).toString().padLeft(2, '0')}'),
-                    style:
-                        TextStyle(color: AppTokens.textPrimary(dark: dark)))),
-            Expanded(
-              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                Icon(Icons.circle, size: 8, color: color),
-                const SizedBox(width: 6),
-                Flexible(child: Text(label, style: TextStyle(color: color))),
-                const SizedBox(width: 10),
-                SizedBox(
-                    width: 22,
-                    child: selected
-                        ? const Icon(Icons.check_rounded,
-                            color: AppTokens.accent, size: 22)
-                        : null),
-              ]),
-            ),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                  child: Text(
+                      settingsText(context,
+                          zh: '节点${(index + 1).toString().padLeft(2, '0')}',
+                          en: 'Node ${(index + 1).toString().padLeft(2, '0')}'),
+                      style:
+                          TextStyle(color: AppTokens.textPrimary(dark: dark)))),
+              Expanded(
+                child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  Icon(Icons.circle, size: 8, color: color),
+                  const SizedBox(width: 6),
+                  Flexible(child: Text(label, style: TextStyle(color: color))),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                      width: 22,
+                      child: selected
+                          ? const Icon(Icons.check_rounded,
+                              color: AppTokens.accent, size: 22)
+                          : null),
+                ]),
+              ),
+            ]),
+            if (_notice != null && _noticeNode == node.signature)
+              Padding(
+                padding: const EdgeInsets.only(top: AppTokens.s2),
+                child: Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      _noticeText(context),
+                      key: ValueKey('node-notice-$index'),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppTokens.textSecondary(dark: dark)),
+                    )),
+              ),
           ]),
         ),
       ),
@@ -172,7 +215,7 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
         builder: (context, _) {
           final dark = settingsIsDark(context);
           final sub = AppTokens.textSecondary(dark: dark);
-          final nodes = NodeEndpoint.candidates(_controller.endpoint);
+          final nodes = _controller.nodes;
           return SettingsScaffold(
             embedded: widget.embedded,
             title: settingsText(context, zh: '节点切换', en: 'Node Switch'),
@@ -183,7 +226,13 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
                   OutlinedButton.icon(
                     onPressed: _controller.testing || _controller.switching
                         ? null
-                        : _controller.test,
+                        : () {
+                            setState(() {
+                              _notice = null;
+                              _noticeNode = null;
+                            });
+                            _controller.test();
+                          },
                     style: OutlinedButton.styleFrom(
                         foregroundColor: AppTokens.accent,
                         side: BorderSide(
@@ -227,8 +276,8 @@ class _NodeSwitchPageState extends State<NodeSwitchPage> {
                 padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
                 child: Text(
                     settingsText(context,
-                        zh: '点击节点可立即切换并重新连接。每次启动 App 时仍会自动检测并选择可用节点。\n\n手动测速会重新检测所有节点，不会自动切换连接。通话中请稍后切换。',
-                        en: 'Tap a node to switch and reconnect. Each app launch still automatically selects an available node.\n\nSpeed Test checks every node without switching. Wait until your call ends before switching.'),
+                        zh: '点击节点01、02可切换并重新连接。节点03仅在其他节点不可用时自动切换。每次启动 App 时仍会自动检测并选择可用节点。\n\n手动测速会重新检测所有节点，不会自动切换连接。通话中请稍后切换。',
+                        en: 'Tap node 01 or 02 to switch and reconnect. Node 03 is selected automatically only when the other nodes are unavailable. Each app launch still automatically selects an available node.\n\nSpeed Test checks every node without switching. Wait until your call ends before switching.'),
                     style: TextStyle(color: sub, fontSize: 12, height: 1.45)),
               ),
             ],

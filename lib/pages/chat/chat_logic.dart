@@ -51,6 +51,7 @@ import 'messages/chat_delivery_controller.dart';
 import 'messages/chat_message_actions.dart';
 import 'messages/revocation/chat_message_revocation.dart';
 import 'messages/arrival/chat_message_arrival_controller.dart';
+import 'messages/refresh/chat_message_read_updates.dart';
 import 'messages/presentation/chat_message_presentation.dart';
 import 'messages/presentation/fund_notice_index.dart';
 import 'messages/forwarding/chat_forwarding_controller.dart';
@@ -68,6 +69,10 @@ import 'voice/voice_to_text_service.dart';
 import 'voice/voice_transcription_controller.dart';
 
 class ChatLogic extends SuperController {
+  ChatLogic({DateTime Function()? receiptNow}) : _receiptNow = receiptNow;
+
+  final DateTime Function()? _receiptNow;
+  final messageReadUpdates = ChatMessageReadUpdates();
   late final fundNotices = FundNoticeIndex(messageList);
   bool _chatClosing = false;
   bool _messagesWhileCovered = false;
@@ -96,9 +101,7 @@ class ChatLogic extends SuperController {
     isRemoved: _removedMessageIDs.contains,
     refresh: _loadHistoryForSyncEnd,
     canRefresh: () =>
-        _historyVisible &&
-        !_dateWindow.buffering &&
-        historyError.value == null,
+        _historyVisible && !_dateWindow.buffering && historyError.value == null,
   );
   final assistantStreams = AssistantStreamState();
   late final _backgroundMessageRecovery = ChatBackgroundMessageRecovery(
@@ -186,6 +189,7 @@ class ChatLogic extends SuperController {
     },
   );
   late final _receipts = ChatReadReceipts(
+    now: _receiptNow,
     messageList: messageList,
     conversation: () => conversationInfo,
     isClosed: () => _sessionInactive,
@@ -209,6 +213,9 @@ class ChatLogic extends SuperController {
     isSessionActive: () => _sameAccount,
     onConversationRead: (request) =>
         imLogic.conversationReadRequestSubject.addSafely(request),
+    onReadStateChanged: (ids) {
+      if (!_sessionInactive) messageReadUpdates.notify(ids);
+    },
   );
   late final ChatVoiceController _voice = ChatVoiceController(
     conversationID: conversationInfo.conversationID,
@@ -1327,6 +1334,7 @@ class ChatLogic extends SuperController {
     _backgroundMessageRecovery.close();
     _historyRecoveryWorker?.dispose();
     _receipts.close();
+    messageReadUpdates.close();
     _ownedMessageCallback = null;
     _ownedReceiptCallback = null;
     if (identical(imLogic.onSignalingMessage, _ownedSignalingCallback)) {
@@ -1430,6 +1438,7 @@ class ChatLogic extends SuperController {
         : null;
     return remark ?? _group.nicknameFor(message);
   }
+
   String? getNewestFaceURL(Message message) =>
       isSingleChat ? message.senderFaceUrl : _group.avatarFor(message);
 

@@ -6,6 +6,34 @@ import 'package:openim/core/session/connection/api_connection_health.dart';
 
 void main() {
   testWidgets(
+      'offline clears latency and prevents new probes until network returns',
+      (tester) async {
+    final network = StreamController<List<ConnectivityResult>>();
+    var checks = 0;
+    final health = ApiConnectionHealth(
+        isCurrent: () => true,
+        networkChanges: network.stream,
+        check: () async {
+          checks++;
+          return true;
+        })
+      ..start();
+    await tester.pump();
+    expect(health.latencyMs.value, isNotNull);
+    network.add([ConnectivityResult.none]);
+    await tester.pump();
+    expect(health.latencyMs.value, isNull);
+    expect(health.available.value, false);
+    await tester.pump(const Duration(seconds: 30));
+    expect(checks, 1);
+    network.add([ConnectivityResult.wifi]);
+    await tester.pump();
+    expect(checks, 2);
+    health.close();
+    unawaited(network.close());
+    await tester.pump();
+  });
+  testWidgets(
       'API failures retry in three seconds and healthy checks slow down',
       (tester) async {
     var healthy = false;
@@ -26,11 +54,13 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(checks, 2);
     expect(health.available.value, true);
-    await tester.pump(const Duration(seconds: 29));
+    expect(health.latencyMs.value, isNotNull);
+    await tester.pump(const Duration(seconds: 4));
     expect(checks, 2);
     await tester.pump(const Duration(seconds: 1));
     expect(checks, 3);
     health.didChangeAppLifecycleState(AppLifecycleState.paused);
+    expect(health.latencyMs.value, isNull);
     await tester.pump(const Duration(minutes: 1));
     expect(checks, 3);
     health.didChangeAppLifecycleState(AppLifecycleState.resumed);

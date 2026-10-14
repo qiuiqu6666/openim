@@ -58,6 +58,15 @@ class ConversationReadProjection {
                 _mayBeNewer(current, incoming))) {
       return current;
     }
+    if (authoritativeUnread &&
+        incoming.unreadCount == 0 &&
+        current != null &&
+        _sameTarget(current, incoming) &&
+        current.unreadCount > covering.unreadCount) {
+      // The fresh SDK query has reconciled this larger same-message count.
+      // Remember it too, otherwise the next buffered copy resurrects the badge.
+      confirm(ConversationReadRequest.capture(current));
+    }
     incoming.unreadCount = 0;
     _reconcileZeros.remove(incoming.conversationID);
     return incoming;

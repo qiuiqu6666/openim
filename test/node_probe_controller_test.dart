@@ -58,21 +58,23 @@ void main() {
     final work = all.test();
     expect(identical(work, all.test()), isTrue);
     await direct.started.future;
-    expect(direct.requests.single.uri.toString(),
-        'http://129.226.192.93:10008/chat/platform');
-    expect(all.pending, {NodeEndpoint.direct.signature});
+    await Future<void>.delayed(Duration.zero);
+    expect(direct.requests.map((request) => request.uri.toString()),
+        NodeEndpoint.builtIn.map((node) => '${node.chatApi}/chat/platform'));
+    expect(all.pending,
+        NodeEndpoint.builtIn.map((node) => node.signature).toSet());
     direct.gate!.complete();
     await work;
     expect(all.results[NodeEndpoint.direct.signature]?.status,
         NodeProbeStatus.normal);
     expect(all.pending, isEmpty);
     expect(all.testing, isFalse);
-    expect(all.results, hasLength(1));
+    expect(all.results, hasLength(3));
     expect(all.endpoint.signature, NodeEndpoint.direct.signature);
     expect(all.testedAt, isNotNull);
     direct.code = 503;
     await all.test();
-    expect(direct.requests, hasLength(2));
+    expect(direct.requests, hasLength(4));
     expect(all.results[NodeEndpoint.direct.signature]?.status,
         NodeProbeStatus.abnormal);
   });

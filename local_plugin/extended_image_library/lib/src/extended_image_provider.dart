@@ -5,6 +5,7 @@ import 'dart:ui' as ui show Codec, ImmutableBuffer;
 import 'package:extended_image_library/src/extended_resize_image_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' hide imageCache;
+import 'network/loading/managed_image_stream.dart';
 
 /// The cached raw image data
 Map<ExtendedImageProvider<dynamic>, Uint8List> rawImageDataMap =
@@ -105,13 +106,18 @@ mixin ExtendedImageProvider<T extends Object> on ImageProvider<T> {
       assert(identical(completer, stream.completer));
       return;
     }
-    final ImageStreamCompleter? completer = imageCache.putIfAbsent(
-      key,
-      () => loadImage(
+    final ImageStreamCompleter? completer = ImageLoadCacheContext.lookup(
+      () => imageCache.putIfAbsent(
         key,
-        PaintingBinding.instance.instantiateImageCodecWithSize,
+        () => loadImage(
+          key,
+          PaintingBinding.instance.instantiateImageCodecWithSize,
+        ),
+        onError: handleError,
       ),
-      onError: handleError,
+      () {
+        if (imageCache.statusForKey(key).pending) imageCache.evict(key);
+      },
     );
     if (completer != null) {
       stream.setCompleter(completer);

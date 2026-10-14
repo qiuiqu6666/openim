@@ -58,7 +58,7 @@ void main() {
                     width: limit,
                     child:
                         ChatPictureView(message: message, isISend: false)))));
-        final expected = (120 * screenWidth / 375).clamp(0.0, limit);
+        final expected = (120 * screenWidth / 375 * 1.2).clamp(0.0, limit);
         expect(
             find.descendant(
                 of: find.byType(ChatPictureView),
@@ -95,6 +95,7 @@ void main() {
       final resized = current.image as ExtendedResizeImage;
       urls.add((resized.imageProvider as ExtendedNetworkImageProvider).url);
       current = current.loadStateChanged!(_FailedImageState());
+      if (current is GestureDetector) current = current.child;
     }
     expect(urls, [
       'https://example.test/thumb?height=960&width=960&type=image',

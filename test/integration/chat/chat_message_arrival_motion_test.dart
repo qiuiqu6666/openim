@@ -15,6 +15,7 @@ import 'package:openim/pages/chat/chat_logic.dart';
 import 'package:openim/pages/chat/chat_view.dart';
 import 'package:openim/pages/chat/history/chat_history_prefetcher.dart';
 import 'package:openim/pages/chat/messages/arrival/chat_message_arrival_animations.dart';
+import 'package:openim/pages/chat/messages/arrival/chat_message_arrival_tokens.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/pages/group_features/data/group_feature_runtime.dart';
 import 'package:openim/services/chat_history_cache.dart';
@@ -186,7 +187,8 @@ void main() {
         latestMsg: historyCount == 0 ? null : _historyMessage(historyCount - 1),
       ),
     };
-    logic = Get.put<ChatLogic>(ChatLogic(), tag: GetTags.chat);
+    logic = Get.put<ChatLogic>(ChatLogic(receiptNow: tester.binding.clock.now),
+        tag: GetTags.chat);
     opened = true;
     await tester.idle();
     expect(histories, hasLength(1));
@@ -420,45 +422,36 @@ void main() {
     });
   });
 
-  testWidgets('same-frame SDK batch enters each new row once', (tester) async {
+  testWidgets('same-frame SDK batch paints full rows without entrance tickers',
+      (tester) async {
     await withChat(tester, () async {
       const first = 'batch-first', second = 'batch-second';
       im.recvNewMessage(_message(first, 81, incoming: true));
       im.recvNewMessage(_message(second, 82, incoming: true, tall: true));
+      expect(nativeReads, isEmpty);
       await tester.pump();
-      expect(_arrival(first), findsOneWidget);
-      expect(_arrival(second), findsOneWidget);
-      expect(_rowRect(tester, first).height, closeTo(0, 1));
-      expect(_rowRect(tester, second).height, closeTo(0, 1));
-      expectArrivalOrder(tester, first, second);
-      await tester.pump(_step);
-      final firstEarly = _rowRect(tester, first).height;
-      final secondEarly = _rowRect(tester, second).height;
-      expect(firstEarly, greaterThan(0));
-      expect(secondEarly, greaterThan(firstEarly));
-      expectArrivalOrder(tester, first, second);
-      expectNotRead(first);
-      expectNotRead(second);
-      await tester.pump(_step);
-      expect(_rowRect(tester, first).height, greaterThan(firstEarly));
-      expect(_rowRect(tester, second).height, greaterThan(secondEarly));
-      expectArrivalOrder(tester, first, second);
-      expectNotRead(second);
-      await tester.pump(_step);
-      await tester.pump(_completionTick);
       await tester.pump();
-      expect(_progress(tester, first), 1);
-      expect(_progress(tester, second), 1);
+      expect(_arrival(first), findsNothing);
+      expect(_arrival(second), findsNothing);
+      final firstComplete = _rowRect(tester, first);
+      final secondComplete = _rowRect(tester, second);
+      expect(firstComplete.height, greaterThan(0));
+      expect(secondComplete.height, greaterThan(firstComplete.height));
+      expect(logic.messageArrivals.hasEntering, isFalse);
       expectArrivalOrder(tester, first, second);
       expect(nativeReadContains(second), isTrue);
       expect(
           logic.messageList.where((m) => m.clientMsgID == first), hasLength(1));
       expect(logic.messageList.where((m) => m.clientMsgID == second),
           hasLength(1));
+      await tester.pump(_duration + _completionTick);
+      expect(_rowRect(tester, first), firstComplete);
+      expect(_rowRect(tester, second), secondComplete);
+      expect(tester.binding.transientCallbackCount, 0);
     });
   });
 
-  testWidgets('a second arrival keeps the first row animation and progress',
+  testWidgets('a second arrival ends motion only after full rows paint',
       (tester) async {
     await withChat(tester, () async {
       const first = 'overlap-first', second = 'overlap-second';
@@ -467,40 +460,49 @@ void main() {
       await tester.pump(_step);
       final animation = tester
           .widget<ChatMessageArrivalTransition>(_arrival(first))
-          .animation;
-      final firstProgress = animation.value;
+          .animation as AnimationController;
+      final firstFullHeight = tester.getSize(_item(first)).height;
       final firstHeight = _rowRect(tester, first).height;
+      final firstRender = tester.renderObject<RenderBox>(_arrival(first));
+      expect(firstHeight, lessThan(firstFullHeight));
+      final heightsAtRead = <double>[];
+      final subscription = im.conversationReadRequestSubject.listen((request) {
+        if (request.messageID == second) {
+          // Read the captured render object directly: tester geometry helpers
+          // cannot run from an asynchronous stream callback during pump.
+          heightsAtRead.add(firstRender.size.height);
+        }
+      });
+      addTearDown(subscription.cancel);
       im.recvNewMessage(_message(second, 82, incoming: true));
-      await tester.pump();
-      expect(
-          tester
-              .widget<ChatMessageArrivalTransition>(_arrival(first))
-              .animation,
-          same(animation));
-      expect(animation.value, closeTo(firstProgress, .001));
-      expect(_rowRect(tester, first).height, closeTo(firstHeight, .01));
-      expect(_rowRect(tester, second).height, closeTo(0, 1));
-      expectArrivalOrder(tester, first, second);
-      await tester.pump(_step);
-      expect(animation.value, greaterThan(firstProgress));
-      expect(_rowRect(tester, first).height, greaterThan(firstHeight));
-      expectArrivalOrder(tester, first, second);
+      await tester.idle();
+      expect(logic.messageArrivals.isEntering(first), isTrue);
+      expect(logic.messageArrivals.isCancelled(first), isTrue);
+      expect(logic.messageArrivals.isEntering(second), isFalse);
       expectNotRead(second);
-      await tester.pump(_step);
-      await tester.pump(_completionTick);
       await tester.pump();
-      final firstComplete = _rowRect(tester, first).height;
-      expect(_progress(tester, first), 1);
-      expect(_progress(tester, second), lessThan(1));
-      expectArrivalOrder(tester, first, second);
-      expectNotRead(second);
-      await tester.pump(_step);
-      await tester.pump(_completionTick);
+      expect(animation.isAnimating, isFalse);
+      expect(animation.value, 1);
+      expect(_rowRect(tester, first).height, closeTo(firstFullHeight, .01));
+      expect(_arrival(second), findsNothing);
+      expect(_rowRect(tester, second).height, greaterThan(0));
       await tester.pump();
-      expect(_rowRect(tester, first).height, closeTo(firstComplete, .01));
-      expect(_progress(tester, second), 1);
+      expect(logic.messageArrivals.hasEntering, isFalse);
       expectArrivalOrder(tester, first, second);
       expect(nativeReadContains(second), isTrue);
+      expect(heightsAtRead, isNotEmpty);
+      for (final height in heightsAtRead) {
+        expect(height, closeTo(firstFullHeight, .01));
+      }
+      final complete = _rowRect(tester, first);
+      final latest = _rowRect(tester, second);
+      final offset = logic.scrollController.offset;
+      await tester.pump(_duration + _completionTick);
+      await tester.pump();
+      expect(_rowRect(tester, first), complete);
+      expect(_rowRect(tester, second), latest);
+      expect(logic.scrollController.offset, closeTo(offset, .01));
+      expect(tester.binding.transientCallbackCount, 0);
     });
   });
 
@@ -742,30 +744,63 @@ void main() {
     });
   });
 
-  testWidgets('a burst beyond the animation limit cannot read partial rows',
+  testWidgets('a large same-frame burst retains all messages with full layout',
       (tester) async {
     await withChat(tester, () async {
       final ids = List.generate(17, (index) => 'burst-${index + 1}');
       for (var index = 0; index < ids.length; index++) {
         im.recvNewMessage(_message(ids[index], 81 + index, incoming: true));
       }
+      expect(nativeReads, isEmpty);
+      await tester.pump();
       await tester.pump();
       expect(logic.messageList.last.clientMsgID, ids.last);
-      expect(ids.where(logic.messageArrivals.isEntering), hasLength(4));
+      expect(ids.any(logic.messageArrivals.isEntering), isFalse);
+      expect(find.byType(ChatMessageArrivalTransition), findsNothing);
       expect(_arrival(ids.last), findsNothing);
       expect(_rowRect(tester, ids.last).height, greaterThan(0));
-      expect(nativeReads, isEmpty,
-          reason: 'The plain overflow row still shares the conversation gate.');
-      await tester.pump(_step);
-      expect(nativeReads, isEmpty);
-      await tester.pump(_step);
-      expect(nativeReads, isEmpty);
-      await tester.pump(_step);
-      expect(nativeReads, isEmpty);
-      await tester.pump(_completionTick);
+      expect(logic.messageList.where((m) => ids.contains(m.clientMsgID)),
+          hasLength(ids.length));
       await tester.pumpAndSettle();
       expect(ids.any(logic.messageArrivals.isEntering), isFalse);
       expect(nativeReadContains(ids.last), isTrue);
+    });
+  });
+
+  testWidgets('sustained traffic stays still and isolated entrances resume',
+      (tester) async {
+    await withChat(tester, () async {
+      for (var i = 0; i < 12; i++) {
+        final id = 'continuous-$i';
+        im.recvNewMessage(_message(id, 81 + i, incoming: true));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 80));
+        await tester.pump();
+        if (i > 0) {
+          expect(_arrival(id), findsNothing);
+          expect(logic.messageArrivals.hasEntering, isFalse);
+          expect(tester.binding.transientCallbackCount, 0);
+        }
+      }
+      expect(
+          logic.messageList
+              .where((m) => m.clientMsgID?.startsWith('continuous-') == true),
+          hasLength(12));
+      await tester.pump(ChatMessageArrivalTokens.quietPeriod);
+      await tester.pump();
+      expect(nativeReadContains('continuous-11'), isTrue);
+      const isolated = 'isolated-after-traffic';
+      im.recvNewMessage(_message(isolated, 93, incoming: true));
+      await tester.pump();
+      expect(_arrival(isolated), findsOneWidget);
+      expect(_progress(tester, isolated), 0);
+      expectNotRead(isolated);
+      await tester.pump(_duration);
+      await tester.pump(_completionTick);
+      await tester.pump();
+      expect(_progress(tester, isolated), 1);
+      expect(logic.messageArrivals.hasEntering, isFalse);
+      expect(nativeReadContains(isolated), isTrue);
     });
   });
 }

@@ -92,6 +92,13 @@ class IMConnectionRecovery with WidgetsBindingObserver {
     });
   }
 
+  /// Explicit catch-up after replacing a route, sharing retry and cancellation
+  /// ownership with foreground/network recovery.
+  Future<void> recoverNow() async {
+    await _wake();
+    _schedule();
+  }
+
   Future<void> _wake() async {
     if (!_active || !_foreground || _wakeWait != null || !isCurrent()) return;
     final cancelled = Completer<void>();

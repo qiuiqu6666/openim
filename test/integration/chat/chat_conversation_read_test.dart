@@ -185,7 +185,7 @@ void main() {
           .firstWhere((row) => row.conversationID == 'chat')
           .toJson()),
     };
-    chat = ChatLogic();
+    chat = ChatLogic(receiptNow: tester.binding.clock.now);
     chatOpened = true;
     chat.onInit();
     await tester.idle();
@@ -303,6 +303,11 @@ void main() {
     expect(getTarget().latestMsgSendTime, 31);
     expect(getTarget().unreadCount, 1);
     expect(conversations.getContent(getTarget()), 'newest-without-metadata');
+    // A repeated viewport notification may still be waiting for the ordinary
+    // single-chat read batch. Let its clock expire while the native ACK stays
+    // pending, and verify it joins the existing read rather than sending twice.
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(nativeReads, hasLength(1));
   });
 
   testWidgets(

@@ -13,6 +13,7 @@ import 'conversation_logic.dart';
 import 'summary/conversation_row_indices.dart';
 import '../../core/im_callback.dart';
 import '../../core/controller/im_controller.dart';
+import '../../core/server_nodes/node_endpoint.dart';
 import '../../core/session/connection/widgets/connection_health_title.dart';
 import 'archive/archived_conversation_page.dart';
 import 'conversation_organizer.dart';
@@ -315,6 +316,10 @@ class _ConversationPageState extends State<ConversationPage> {
               apiAvailable: Get.isRegistered<IMController>()
                   ? Get.find<IMController>().apiConnectionHealth?.available
                   : null,
+              latencyMs: Get.isRegistered<IMController>()
+                  ? Get.find<IMController>().apiConnectionHealth?.latencyMs
+                  : null,
+              routeMarker: () => NodeEndpoint.current().diagnosticCode,
             ),
           ),
           actions: [

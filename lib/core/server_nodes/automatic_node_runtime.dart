@@ -128,8 +128,6 @@ class AutomaticNodeRuntime extends GetxService with WidgetsBindingObserver {
         }
       }
       if (target == null && YoumengRuntime.enabled) {
-        await YoumengRuntime.ensureReady();
-        if (!active()) return;
         target = NodeEndpoint.shield;
       }
       if (target == null) return;
