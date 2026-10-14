@@ -1,8 +1,20 @@
-# Core SDK recovery.13：Android / iOS 共享源码
+# Core SDK recovery.14：Android / iOS 共享源码
 
-当前版本：`v3.8.3-patch.15+recovery.13`。在远端 `767a024` 的完整 Core 源码上补入恢复修复，保留累计已读、显式已读重放及撤回修复。
+当前版本：`v3.8.3-patch.15+recovery.14`。在远端 `767a024` 的完整 Core 源码上补入恢复修复，保留累计已读、显式已读重放及撤回修复。
 
 `ios-core-source/` 现在是 **Android 与 iOS 唯一共同构建输入**，目录名为兼容原路径而保留。两端脚本先校验 `ios-core-source-manifest.json` 中全部 357 个构建输入，再复制到独立目录；不重复应用补丁、不读取其他 SDK 工作目录，也不复制测试数据库或日志。`0001-background-message-recovery.patch` 保留从官方基线重建同一源码的能力。
+
+## recovery.14 已读通知兼容（2026-10-14）
+
+Android 与 iOS 共用累计已读处理。`seqs` 为空、`hasReadSeq > 0` 的回执沿已有 `doReadWatermark` 分页处理，不要求终点消息存在。新增修复将原生自身的显式 `seqs + hasReadSeq` 回执也送入该入口，避免恢复期间终点消息尚未入库或已本地删除时 `GetMessageBySeq` 阻断通知页。只标记正确发送方的已存消息；旧回执不能恢复已清零未读。真实数据库失败仍返回错误并保留通知游标重试。
+
+真机 recovery.13 部分日志已确认显式自身回执的 missing-row 错误；空 `seqs` 与显式回执是分别验证的场景。此次没有证明该修复覆盖原始消息恢复问题的全部根因，大历史积压、撤回引用缺失与目标水位刷新仍需要继续核对。
+
+新增通知页回归覆盖下一条回执执行、游标提交、失败后重试；SQLite 回归覆盖空列表及显式列表、缺失终点和旧回执。四个 Core 包竞态测试、两端 CGO=0 四包、CGO=1 消息与事务回归、15 项源码校验测试及干净官方基线补丁的 358 文件一致性校验通过。两端原生产物均已构建，应用及设备状态以 `manifest.json` 的 recovery.14 记录为准。
+
+Xcode 直接编译入口为 `ios/Runner.xcworkspace`。Pods 已解析本地 `OpenIMCore.xcframework`，`Verify shared OpenIM Core` 在每次编译前验证 recovery.14 源码与二进制凭据；旧 Framework 或源码漂移会停止构建。应用与通知扩展的 Xcode 构建号、Flutter 版本统一为 `3.0.1+2028`。不需要修改现有包名或签名配置。
+
+以下 recovery.13 实验记录保留为历史依据；原记录中的设备验收和产物版本不代表 recovery.14 已安装到手机。
 
 ## 本轮修复
 
@@ -76,3 +88,7 @@ Go 不在 PATH 时设置 `GO=/absolute/path/to/go`。脚本运行四包回归、
 本地证据：`E:/openim/artifacts/sdk-parity-fix-20261014/`；版本与执行状态见 `manifest.json`。旧版记录保留在 [history/README-before-recovery.13.md](history/README-before-recovery.13.md) 与 [history/recovery.12-readseq2.json](history/recovery.12-readseq2.json)，其中旧尾部策略及集成状态不适用于 recovery.13。
 
 回滚时回退整组源码、版本清单和对应平台产物，保留用户消息数据库及恢复记录，不清库、不回退已读状态。上游许可证保留于 `ios-core-source/LICENSE`。
+
+## macOS 构建补充（2026-10-14，335f4bc）
+
+iOS recovery.13 Framework 已构建并通过产物校验，包含真机 arm64 与模拟器 arm64/x86_64。源码校验器 15 项测试、CGO=0 四包测试、CGO=1 interaction/conversation_msg 与 SQLite 事务测试通过。iOS 网络状态策略与 4 个隧道恢复场景通过。Flutter 3.41.6 Release 未签名应用 3.0.1+2027 构建成功，包内 Core 版本已核对；哈希见 manifest.json。此前 Windows 记录中的 iOS 待构建状态由此补充更新。尚未安装真机或验证真实双设备消息恢复。

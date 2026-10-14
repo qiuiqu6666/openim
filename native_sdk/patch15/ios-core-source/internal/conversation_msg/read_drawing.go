@@ -237,6 +237,15 @@ func (c *Conversation) doReadDrawing(ctx context.Context, msg *sdkws.MsgData) er
 	if len(tips.Seqs) == 0 {
 		return c.doReadWatermark(ctx, msg, tips)
 	}
+	// Native self receipts also carry an authoritative cumulative watermark.
+	// The terminal row can be absent during recovery or after local deletion;
+	// requiring that row would poison this entire notification page. Reuse the
+	// bounded watermark path, including stale-unread and storage-error guards.
+	if tips.MarkAsReadUserID == c.loginUserID && tips.HasReadSeq > 0 {
+		if _, native := c.db.(readWatermarkStore); native {
+			return c.doReadWatermark(ctx, msg, tips)
+		}
+	}
 	conversation, err := c.db.GetConversation(ctx, tips.ConversationID)
 	if err != nil {
 		log.ZWarn(ctx, "GetConversation err", err, "conversationID", tips.ConversationID)

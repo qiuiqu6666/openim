@@ -21,6 +21,7 @@ type watermarkDB struct {
 	conversation       model_struct.LocalConversation
 	queryErr, writeErr error
 	queries            int
+	notificationSeq    int64
 }
 
 func (d *watermarkDB) GetMessageBySeq(_ context.Context, _ string, seq int64) (*model_struct.LocalChatLog, error) {
@@ -168,4 +169,67 @@ func TestReadWatermarkStorageFailuresRemainRetryable(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A notification page must continue past cumulative Android receipts even when
+// the terminal message has not arrived in the local database.
+func TestReadReceiptPageEmptySeqsAndMissingTerminal(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		t.Run(map[bool]string{false: "empty-seqs", true: "explicit-missing-terminal"}[explicit], func(t *testing.T) {
+			c, d, _ := watermarkFixture()
+			notices := []*sdkws.MsgData{watermarkNotice("self", 8), watermarkNotice("peer", 9)}
+			if explicit {
+				tips := &sdkws.MarkAsReadTips{ConversationID: "chat", MarkAsReadUserID: "self", HasReadSeq: 8, Seqs: []int64{1, 8}}
+				notices[0].Content = []byte(utils.StructToJsonString(sdk_struct.NotificationElem{Detail: utils.StructToJsonString(tips)}))
+			}
+			for i, n := range notices {
+				n.ContentType = constant.HasReadReceipt
+				n.Seq = int64(i + 101)
+			}
+			cmd := common.Cmd2Value{Ctx: context.Background(), Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: map[string]*sdkws.PullMsgs{"n_chat": {Msgs: notices}}}}
+			if err := c.doNotificationManager(cmd); err != nil {
+				t.Fatal(err)
+			}
+			if d.notificationSeq != 102 {
+				t.Fatalf("following receipt/page did not commit: %d", d.notificationSeq)
+			}
+			if !d.rows[1].IsRead || !d.rows[4].IsRead || d.conversation.UnreadCount != 1 {
+				t.Fatal("receipt state lost")
+			}
+			// A stale self receipt must not resurrect cleared unread counts.
+			d.conversation.UnreadCount = 0
+			if err := c.doNotificationManager(cmd); err != nil {
+				t.Fatal(err)
+			}
+			if d.conversation.UnreadCount != 0 {
+				t.Fatal("stale receipt resurrected unread")
+			}
+		})
+	}
+}
+func TestReadReceiptPageStorageFailureDoesNotCommit(t *testing.T) {
+	c, d, _ := watermarkFixture()
+	failure := errors.New("database unavailable")
+	d.queryErr = failure
+	notice := watermarkNotice("self", 8)
+	notice.ContentType = constant.HasReadReceipt
+	notice.Seq = 101
+	cmd := common.Cmd2Value{Ctx: context.Background(), Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: map[string]*sdkws.PullMsgs{"n_chat": {Msgs: []*sdkws.MsgData{notice}}}}}
+	if err := c.doNotificationManager(cmd); !errors.Is(err, failure) {
+		t.Fatalf("lost retryable failure: %v", err)
+	}
+	if d.notificationSeq != 0 {
+		t.Fatal("failed receipt advanced notification checkpoint")
+	}
+	d.queryErr = nil
+	if err := c.doNotificationManager(cmd); err != nil {
+		t.Fatal(err)
+	}
+	if d.notificationSeq != 101 {
+		t.Fatal("retry did not commit")
+	}
+}
+func (d *watermarkDB) SetNotificationSeq(_ context.Context, _ string, seq int64) error {
+	d.notificationSeq = seq
+	return nil
 }

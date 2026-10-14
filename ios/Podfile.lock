@@ -442,7 +442,7 @@ SPEC CHECKSUMS:
   flutter_keyboard_visibility: 4625131e43015dbbe759d9b20daaf77e0e3f6619
   flutter_local_notifications: 395056b3175ba4f08480a7c5de30cd36d69827e4
   flutter_native_splash: c32d145d68aeda5502d5f543ee38c192065986cf
-  flutter_openim_sdk: 6d7284953e16c05f0489d4e68c0cfc1d34b5af28
+  flutter_openim_sdk: 60000ceac83bc8b7fe4d826c2ec765001d04f476
   flutter_secure_storage_darwin: acdb3f316ed05a3e68f856e0353b133eec373a23
   flutter_webrtc: b0b2e04411747142962164a1cfa43a1af9a0afac
   flutter_zxing: fe1338b6d79b8a455d209a28381e336b6cfb4161
