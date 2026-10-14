@@ -64,13 +64,18 @@ class RecentCallTile extends StatelessWidget {
   final VoidCallback onDelete;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ContactNameBuilder(
+        enabled: record.roomType != 'group',
+        userID: record.roomType == 'group' ? record.groupID : record.userID,
+        nickname: record.nickname,
+        builder: _build,
+      );
+
+  Widget _build(BuildContext context, String name) {
     final dark = settingsIsDark(context);
     final secondary = AppTokens.textSecondary(dark: dark);
     final resultColor = record.isMissed ? RecentCallTokens.danger : secondary;
     final group = record.roomType == 'group';
-    final fallback = group ? record.groupID : record.userID;
-    final name = record.nickname.trim().isEmpty ? fallback : record.nickname;
     final direction = settingsText(context,
         zh: record.incomingCall ? '呼入' : '拨出',
         en: record.incomingCall ? 'Incoming' : 'Outgoing');

@@ -45,10 +45,14 @@ class SmallWindowView extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (null != userInfo)
-                      AvatarView(
-                        text: IMUtils.emptyStrToNull(userInfo!.remark) ??
-                            userInfo!.nickname,
-                        url: userInfo!.faceURL,
+                      ContactNameBuilder(
+                        userID: userInfo!.userID,
+                        nickname: userInfo!.nickname,
+                        fallbackRemark: userInfo!.remark,
+                        builder: (_, name) => AvatarView(
+                          text: name,
+                          url: userInfo!.faceURL,
+                        ),
                       ),
                     if (null != groupInfo)
                       AvatarView(

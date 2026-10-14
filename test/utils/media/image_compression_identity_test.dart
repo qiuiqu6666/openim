@@ -14,6 +14,7 @@ class _Paths extends PathProviderPlatform {
 }
 
 class _Compression extends UnsupportedFlutterImageCompress {
+  final formats = <CompressFormat>[];
   @override
   Future<XFile?> compressAndGetFile(String path, String targetPath,
       {int minWidth = 1920,
@@ -25,6 +26,7 @@ class _Compression extends UnsupportedFlutterImageCompress {
       CompressFormat format = CompressFormat.jpeg,
       bool keepExif = false,
       int numberOfRetries = 5}) async {
+    formats.add(format);
     await File(path).copy(targetPath);
     return XFile(targetPath);
   }
@@ -32,6 +34,31 @@ class _Compression extends UnsupportedFlutterImageCompress {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final extension in ['HEIC', 'heif', '']) {
+    test('JPEG conversion uses JPEG encoder and suffix for $extension',
+        () async {
+      final root = await Directory.systemTemp.createTemp('heif-conversion-');
+      final paths = PathProviderPlatform.instance;
+      final compression = FlutterImageCompressPlatform.instance;
+      final encoder = _Compression();
+      PathProviderPlatform.instance = _Paths(root.path);
+      FlutterImageCompressPlatform.instance = encoder;
+      addTearDown(() async {
+        PathProviderPlatform.instance = paths;
+        FlutterImageCompressPlatform.instance = compression;
+        await root.delete(recursive: true);
+      });
+      final input = await File(
+              '${root.path}/photo${extension.isEmpty ? '' : '.$extension'}')
+          .writeAsBytes([1, 2, 3]);
+      final output =
+          await IMUtils.compressImageAndGetFile(input, convertToJpeg: true);
+      expect(encoder.formats, [CompressFormat.jpeg]);
+      expect(output!.path, endsWith('/photo.jpg'));
+      expect(await input.readAsBytes(), [1, 2, 3]);
+    });
+  }
+
   test(
       'overlapping photos with identical names never overwrite prepared upload',
       () async {

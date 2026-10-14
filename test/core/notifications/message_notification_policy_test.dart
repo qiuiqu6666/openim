@@ -44,6 +44,7 @@ MessageNotificationPresentation? _present({
   String? activeConversationID,
   String currentUserID = 'self',
   int? globalRecvMsgOpt,
+  String? senderRemark,
   MessageNotificationPreferences preferences =
       const MessageNotificationPreferences(),
 }) =>
@@ -54,6 +55,7 @@ MessageNotificationPresentation? _present({
       isForeground: isForeground,
       activeConversationID: activeConversationID,
       globalRecvMsgOpt: globalRecvMsgOpt,
+      senderRemark: senderRemark,
       preferences: preferences,
     );
 
@@ -238,6 +240,54 @@ void main() {
     expect(presentation.isGroup, isTrue);
     expect(_present(conversation: _group()..faceURL = null)!.avatarURL, isNull,
         reason: 'A missing group avatar must not become a sender avatar');
+  });
+
+  test(
+      'friend remarks override sender names and single titles, keeping group identity',
+      () {
+    final message = _message();
+    final before = message.toJson();
+    final single = _present(message: message, senderRemark: '  老王⬇️  ')!;
+    expect(single.title, '老王⬇️');
+    expect(single.senderName, '老王⬇️');
+    expect(single.bannerBody, 'SDK message body');
+    final group = _present(
+        message: message, conversation: _group(), senderRemark: '老王⬇️')!;
+    expect(group.title, 'Team');
+    expect(group.senderName, '老王⬇️');
+    expect(group.body, 'SDK message body');
+    expect(group.bannerBody, '老王⬇️: SDK message body');
+    expect(message.toJson(), before);
+    expect(_present(senderRemark: ' \t\n ')!.senderName, 'Alice');
+  });
+
+  test('remarks obey anonymous, sender-only and private preview settings', () {
+    for (final foreground in [true, false]) {
+      final anonymous = _present(
+          isForeground: foreground,
+          senderRemark: '好友备注',
+          conversation: _group(),
+          preferences: const MessageNotificationPreferences(
+              openedPreview: MessageNotificationPreview.none,
+              closedPreview: MessageNotificationPreview.none))!;
+      expect(anonymous.senderName, isEmpty);
+      expect(anonymous.title, StrRes.offlineMessage);
+      expect(anonymous.bannerBody, StrRes.offlineMessage);
+      final senderOnly = _present(
+          isForeground: foreground,
+          senderRemark: '好友备注',
+          conversation: _group(),
+          preferences: const MessageNotificationPreferences(
+              openedPreview: MessageNotificationPreview.sender,
+              closedPreview: MessageNotificationPreview.sender))!;
+      expect(senderOnly.senderName, '好友备注');
+      expect(senderOnly.bannerBody, '好友备注: ${StrRes.offlineMessage}');
+      final private = _present(
+          isForeground: foreground,
+          senderRemark: '好友备注',
+          conversation: _group()..isPrivateChat = true)!;
+      expect(private.bannerBody, '好友备注: ${StrRes.offlineMessage}');
+    }
   });
 
   test('sender mode reveals identity without leaking the SDK body', () {

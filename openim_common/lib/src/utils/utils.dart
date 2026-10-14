@@ -163,16 +163,19 @@ class IMUtils {
   }
 
   static Future<File?> compressImageAndGetFile(File file,
-      {int quality = 80}) async {
-    var path = file.path;
-    var name = path.substring(path.lastIndexOf("/") + 1).toLowerCase();
+      {int quality = 80, bool convertToJpeg = false}) async {
+    var name = file.uri.pathSegments.last.toLowerCase();
 
     if (name.endsWith('.gif')) {
       return file;
     }
 
     CompressFormat format = CompressFormat.jpeg;
-    if (name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+    if (convertToJpeg) {
+      final extensionIndex = name.lastIndexOf('.');
+      name =
+          '${extensionIndex > 0 ? name.substring(0, extensionIndex) : name}.jpg';
+    } else if (name.endsWith(".jpg") || name.endsWith(".jpeg")) {
       format = CompressFormat.jpeg;
     } else if (name.endsWith(".png")) {
       format = CompressFormat.png;

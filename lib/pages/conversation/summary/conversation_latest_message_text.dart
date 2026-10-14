@@ -30,8 +30,8 @@ String conversationLatestMessageText(ConversationInfo info) {
   try {
     final latest = info.latestMsg;
     if (latest == null) return '';
-    final message = ChatHistoryCache.applyRevocation(
-        OpenIM.iMManager.userID, latest);
+    final message =
+        ChatHistoryCache.applyRevocation(OpenIM.iMManager.userID, latest);
     if (message.contentType == MessageType.revokeMessageNotification) {
       return ChatRevocationNotice.text(message, OpenIM.iMManager.userID);
     }
@@ -41,7 +41,8 @@ String conversationLatestMessageText(ConversationInfo info) {
     if (info.isSingleChat || message.sendID == OpenIM.iMManager.userID) {
       return text;
     }
-    final senderName = graphemeTrim(message.senderNickname ?? '');
+    final remark = ContactRemarkSource.current?.remarkFor(message.sendID);
+    final senderName = graphemeTrim(remark ?? message.senderNickname ?? '');
     // Some server-created messages omit the sender nickname.
     if (senderName.isEmpty) return text;
     return '$senderName: $text ';

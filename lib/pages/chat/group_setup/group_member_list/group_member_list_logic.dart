@@ -15,6 +15,7 @@ import '../group_member_order.dart';
 import '../../../contacts/presence_store.dart';
 import '../../group/identity/group_member_identity.dart';
 import 'group_member_identity_state.dart';
+import 'group_member_remark_search.dart';
 
 enum GroupMemberOpType {
   view,
@@ -85,17 +86,23 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
   final searchMore = false.obs;
   Timer? _searchTimer;
   int _searchVersion = 0, _searchOffset = 0;
-  List<GroupMembersInfo> get visibleMembers =>
-      (query.isEmpty ? memberList : searchResults)
-          .where((m) =>
-              !hiddenMember(m) &&
-              (!isDelMember ||
-                  (m.userID != OpenIM.iMManager.userID &&
-                      (isOwner
-                          ? m.roleLevel != GroupRoleLevel.owner
-                          : isAdmin && m.roleLevel == GroupRoleLevel.member))))
-          .toList()
-        ..sort(compareGroupMembers);
+  List<GroupMembersInfo> get visibleMembers => (query.isEmpty
+          ? memberList
+          : {
+              for (final member in [...memberList, ...searchResults])
+                member.userID: member,
+            }
+              .values
+              .where((member) => groupMemberMatchesQuery(member, query.value)))
+      .where((m) =>
+          !hiddenMember(m) &&
+          (!isDelMember ||
+              (m.userID != OpenIM.iMManager.userID &&
+                  (isOwner
+                      ? m.roleLevel != GroupRoleLevel.owner
+                      : isAdmin && m.roleLevel == GroupRoleLevel.member))))
+      .toList()
+    ..sort(compareGroupMembers);
 
   void searchChanged(String value) {
     if (!identity.isCurrentSession || isClosed) return;
@@ -120,6 +127,11 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
         (next && searching.value)) return;
     final version = ++_searchVersion;
     final identityGeneration = identity.generation;
+    final keyword = query.value;
+    bool current() =>
+        !isClosed &&
+        version == _searchVersion &&
+        identity.active(identityGeneration);
     if (!next) {
       _searchOffset = 0;
       searchResults.clear();
@@ -129,7 +141,7 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
     try {
       final results = await OpenIM.iMManager.groupManager.searchGroupMembers(
           groupID: groupInfo.groupID,
-          keywordList: [query.value],
+          keywordList: [keyword],
           isSearchUserID: true,
           isSearchMemberNickname: true,
           offset: _searchOffset,
@@ -137,14 +149,32 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
       if (isClosed ||
           version != _searchVersion ||
           !identity.active(identityGeneration)) return;
+      var remarkMatches = <GroupMembersInfo>[];
+      if (!next) {
+        try {
+          remarkMatches = await groupMembersMatchingRemarks(
+              groupID: groupInfo.groupID,
+              keyword: keyword,
+              isCurrent: current);
+        } catch (_) {
+          // Keep ordinary SDK search usable if an optional member lookup fails.
+        }
+      }
+      if (!current()) return;
+      final merged = {
+        for (final member in [...results, ...remarkMatches])
+          member.userID: member,
+      }.values.toList(growable: false);
       final enriched =
-          await identity.searchIdentities(groupInfo.groupID, results);
+          await identity.searchIdentities(groupInfo.groupID, merged);
       if (enriched == null ||
           isClosed ||
           version != _searchVersion ||
           !identity.active(identityGeneration)) return;
       _searchOffset += results.length;
-      searchResults.addAll(enriched);
+      final existing = searchResults.map((member) => member.userID).toSet();
+      searchResults
+          .addAll(enriched.where((member) => existing.add(member.userID)));
       searchMore.value = results.length == 50;
     } catch (_) {
       if (!isClosed &&
@@ -462,7 +492,10 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
 
   static _transferGroupRight(GroupMembersInfo membersInfo) async {
     var confirm = await Get.dialog(CustomDialog(
-      title: sprintf(StrRes.confirmTransferGroupToUser, [membersInfo.nickname]),
+      title: sprintf(StrRes.confirmTransferGroupToUser, [
+        ContactRemarkSource.displayName(membersInfo.userID,
+            nickname: membersInfo.nickname)
+      ]),
     ));
     if (confirm == true) {
       Get.back(result: membersInfo);

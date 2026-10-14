@@ -96,7 +96,7 @@ void main() {
     expect(channels.assetReads, 0);
   });
 
-  test('Android group banner shows group title and content without sender row',
+  test('Android group banner includes sender in content without an extra row',
       () async {
     final notifier = channels.use(TargetPlatform.android);
     await _show(notifier,
@@ -105,7 +105,7 @@ void main() {
     final android = _map(args['platformSpecifics']);
     expect(android['style'], AndroidNotificationStyle.defaultStyle.index);
     expect(args['title'], 'Team');
-    expect(args['body'], 'SDK message');
+    expect(args['body'], 'Bob: SDK message');
     expect(android['largeIcon'], '/cache/team.png');
   });
 
@@ -290,10 +290,22 @@ void main() {
     expect(args['payload'], _target(group: true).encode());
     expect(args['categoryIdentifier'], SystemMessageNotifier.replyCategory);
     expect(args['senderID'], 'bob');
+    expect(args['senderName'], 'Bob');
+    expect(args['body'], 'SDK message');
     expect(args['groupMemberCount'], 13);
     expect(args['conversationAvatarPath'], '/cache/team.png');
     expect(args['isGroup'], isTrue);
     expect(channels.pluginCalls, isEmpty);
+  });
+
+  test('iOS group fallback retains sender when no communication avatar exists',
+      () async {
+    final notifier = channels.use(TargetPlatform.iOS);
+    await _show(notifier, group: true);
+    final args = channels.arguments('show');
+    expect(args['title'], 'Team');
+    expect(args['body'], 'Bob: SDK message');
+    expect(channels.bridgeCalls, isEmpty);
   });
 
   for (final failure in ['false', 'platform-error', 'missing-plugin']) {

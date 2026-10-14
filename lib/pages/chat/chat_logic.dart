@@ -45,6 +45,7 @@ import 'history/date_jump/chat_date_jump_controller.dart';
 import 'history/date_jump/chat_date_window_controller.dart';
 import 'history/date_jump/widgets/chat_date_picker_dialog.dart';
 import 'media/chat_media_controller.dart';
+import 'media/chat_media_preview_session.dart';
 import 'media/upload/chat_media_outbox.dart';
 import 'media/upload/chat_media_outbox_binding.dart';
 import 'messages/chat_delivery_controller.dart';
@@ -74,6 +75,7 @@ class ChatLogic extends SuperController {
 
   final DateTime Function()? _receiptNow;
   final messageReadUpdates = ChatMessageReadUpdates();
+  final mediaPreviewSession = ChatMediaPreviewSession();
   late final fundNotices = FundNoticeIndex(messageList);
   bool _chatClosing = false;
   bool _messagesWhileCovered = false;
@@ -890,7 +892,8 @@ class ChatLogic extends SuperController {
     }
   }
 
-  Future<List<Message>> searchMediaMessage() => _media.searchMediaMessage();
+  Future<List<Message>> searchMediaMessage({bool Function()? continueLoading}) =>
+      _media.searchMediaMessage(continueLoading: continueLoading);
 
   @override
   void onReady() {

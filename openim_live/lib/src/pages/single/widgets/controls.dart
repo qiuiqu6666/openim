@@ -149,7 +149,14 @@ class _ControlsViewState extends State<ControlsView> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ContactNameBuilder(
+        userID: widget.userInfo?.userID ?? widget.userID,
+        nickname: widget.userInfo?.nickname,
+        fallbackRemark: widget.userInfo?.remark,
+        builder: _build,
+      );
+
+  Widget _build(BuildContext context, String nickname) {
     if (_state == CallState.beCalled && !widget.connected) {
       return IncomingCallView(
         userID: widget.userID,
@@ -163,9 +170,6 @@ class _ControlsViewState extends State<ControlsView> {
     final video = widget.callType == CallType.video && widget.connected;
     const foreground = CallSurfaceTokens.foreground;
     final secondary = CallSurfaceTokens.secondary;
-    final nickname = IMUtils.emptyStrToNull(widget.userInfo?.remark) ??
-        widget.userInfo?.nickname ??
-        '';
     final connecting = _state == CallState.connecting;
     final status = !widget.active
         ? StrRes.hangUp

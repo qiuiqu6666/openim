@@ -826,7 +826,9 @@ mixin OpenIMLive {
       incoming: incoming,
       invitation: invitation,
       deadline: callInviteDeadline(invitation),
-      peerName: _peerProfiles[peer]?.nickname,
+      peerName: ContactRemarkSource.displayName(peer,
+          nickname: _peerProfiles[peer]?.nickname,
+          fallbackRemark: _peerProfiles[peer]?.remark),
     );
   }
 

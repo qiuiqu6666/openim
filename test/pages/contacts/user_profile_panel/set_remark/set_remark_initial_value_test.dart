@@ -194,6 +194,50 @@ void main() {
     expect(logic.inputCtrl.text, '旧新备注追加');
     expect(logic.inputCtrl.selection.baseOffset, 2);
   });
+  testWidgets(
+      'first tap places caret at end and touch drag moves it without a handle',
+      (tester) async {
+    final logic = await _open(tester, remark: 'abcdefghijk');
+    final editable = find.byType(EditableText);
+    final start = tester.getTopLeft(editable) + const Offset(4, 12);
+    await tester.tapAt(start);
+    await tester.pump();
+    expect(logic.inputCtrl.selection.isCollapsed, isTrue);
+    expect(logic.inputCtrl.selection.baseOffset, logic.inputCtrl.text.length);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tapAt(start);
+    await tester.pump();
+    expect(logic.inputCtrl.selection.baseOffset, lessThan(3));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final dragStart = tester.getCenter(editable);
+    final gesture = await tester.startGesture(dragStart - const Offset(50, 0));
+    final beforeDrag = logic.inputCtrl.selection;
+    await gesture.moveBy(const Offset(1, 0));
+    await tester.pump();
+    expect(logic.inputCtrl.selection, beforeDrag);
+    await gesture.moveBy(const Offset(3, 0));
+    await tester.pump();
+    expect(logic.inputCtrl.selection.isCollapsed, isTrue);
+    expect(logic.inputCtrl.selection.baseOffset,
+        greaterThan(beforeDrag.baseOffset));
+    await gesture.moveBy(const Offset(60, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(20, 0));
+    await tester.pump();
+    expect(logic.inputCtrl.selection.isCollapsed, isTrue);
+    expect(logic.inputCtrl.selection.baseOffset, greaterThan(3));
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.moveBy(const Offset(-90, 0));
+    await tester.pump();
+    expect(logic.inputCtrl.selection.isCollapsed, isTrue);
+    expect(logic.inputCtrl.selection.baseOffset, lessThan(3));
+    expect(logic.inputCtrl.text, 'abcdefghijk');
+    await gesture.up();
+    await tester.pumpAndSettle();
+  },
+      variant: const TargetPlatformVariant(
+          {TargetPlatform.android, TargetPlatform.iOS}));
   testWidgets('empty remark appends to nickname and stays empty after clearing',
       (tester) async {
     final logic = await _open(tester);

@@ -1,5 +1,13 @@
 # 聊天通话入口
 
+## 备注展示
+
+呼出、连接中、已接通、全屏来电以及小窗/PiP 中的对方名称，统一通过
+`openim_common` 的 `ContactNameBuilder` 读取现有联系人备注；改名后立即更新，
+清空后回退公开昵称。它只组合已有布局，不持有信令、RTC 或额外 SDK 订阅。
+iOS 系统通话名称也使用同一只读接口解析，公开用户资料不再决定备注显示。
+覆盖测试为 `test/pages/chat/calling/call_contact_remark_test.dart`。
+
 `ChatCallController` 集中聊天页的通话选择、直接语音/视频呼叫和忙碌状态读取。它通过明确的 getter 获取用户 ID、名称、单聊状态、关闭状态和现有 RTC 忙碌状态，并使用现有 `IMController.call` 发起通话。
 
 模块沿用公共通话选择弹层、提示文本、OpenIMLive 和 SDK 信令流程，不拥有 RTC 连接。选择弹层返回时检查页面是否仍有效；页面负责提供涵盖关闭、退出账号和会话失效的 `isClosed`。

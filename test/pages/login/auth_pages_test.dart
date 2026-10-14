@@ -597,6 +597,27 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+      'password focus keeps account and password visible above keyboard',
+      (tester) async {
+    addTearDown(() => _unmount(tester));
+    for (final dark in [false, true]) {
+      await _mount(tester, LoginPage(), dark: dark, keyboard: 320);
+      await tester.tap(_field(login.phoneCtrl));
+      await tester.pumpAndSettle();
+      await tester.tap(_field(login.pwdCtrl));
+      await tester.pumpAndSettle();
+      final viewport = tester.getRect(find.byType(SingleChildScrollView).first);
+      final account =
+          tester.getRect(find.byKey(const ValueKey('login-account')));
+      final password = tester.getRect(_field(login.pwdCtrl));
+      expect(account.top, greaterThanOrEqualTo(viewport.top));
+      expect(password.bottom, lessThanOrEqualTo(812 - 320));
+      expect(login.pwdFocus!.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('reference forms remain scrollable on compact and keyboard views',
       (tester) async {
     addTearDown(() => _unmount(tester));

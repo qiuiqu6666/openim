@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:sprintf/sprintf.dart';
 
@@ -77,6 +78,54 @@ class ConversationFeedRow extends StatelessWidget {
         ? AppTokens.surfaceAlt(dark: _dark(context))
         : AppTokens.surface(dark: _dark(context));
   }
+
+  Widget _messagePreview(BuildContext context) {
+    final contacts = ContactRemarkSource.current;
+    if (contacts == null) {
+      return _previewText(context);
+    }
+    return Obx(() {
+      // Track edits even while a draft or a system summary hides the sender.
+      contacts.remarkFor(info.latestMsg?.sendID ?? '');
+      return _previewText(context);
+    });
+  }
+
+  Widget _previewText(BuildContext context) => MatchTextView(
+        text: logic.getContent(info),
+        textStyle: TextStyle(
+          fontSize: 14,
+          height: ConversationFeedStyle.lineHeight,
+          color: AppTokens.textSecondary(dark: _dark(context)),
+        ),
+        prefixSpan: TextSpan(
+          children: [
+            if (logic.getUnreadCount(info) > 0)
+              TextSpan(
+                text: '[${sprintf(StrRes.nPieces, [
+                      logic.getUnreadCount(info)
+                    ])}] ',
+                style: TextStyle(
+                    fontSize: 14,
+                    color: AppTokens.textSecondary(dark: _dark(context))),
+              ),
+            TextSpan(
+              text: conversationMentionTag(info),
+              style: TextStyle(fontSize: 14, color: Styles.c_FF381F),
+            ),
+            TextSpan(
+              text: logic.getPrefixTag(info),
+              style: Styles.ts_0089FF_14sp.copyWith(
+                color: info.draftText?.isNotEmpty == true
+                    ? Styles.c_FF381F
+                    : AppTokens.accent,
+              ),
+            ),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
 
   @override
   Widget build(BuildContext context) => Material(
@@ -217,46 +266,7 @@ class ConversationFeedRow extends StatelessWidget {
                           ],
                         ),
                         SizedBox(height: _spacing(6)),
-                        MatchTextView(
-                          text: logic.getContent(info),
-                          textStyle: TextStyle(
-                            fontSize: 14,
-                            height: ConversationFeedStyle.lineHeight,
-                            color: AppTokens.textSecondary(
-                                dark: Theme.of(context).brightness ==
-                                    Brightness.dark),
-                          ),
-                          prefixSpan: TextSpan(
-                            children: [
-                              if (logic.getUnreadCount(info) > 0)
-                                TextSpan(
-                                  text: '[${sprintf(StrRes.nPieces, [
-                                        logic.getUnreadCount(info)
-                                      ])}] ',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: AppTokens.textSecondary(
-                                          dark: Theme.of(context).brightness ==
-                                              Brightness.dark)),
-                                ),
-                              TextSpan(
-                                text: conversationMentionTag(info),
-                                style: TextStyle(
-                                    fontSize: 14, color: Styles.c_FF381F),
-                              ),
-                              TextSpan(
-                                text: logic.getPrefixTag(info),
-                                style: Styles.ts_0089FF_14sp.copyWith(
-                                  color: info.draftText?.isNotEmpty == true
-                                      ? Styles.c_FF381F
-                                      : AppTokens.accent,
-                                ),
-                              ),
-                            ],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        _messagePreview(context),
                       ],
                     ),
                   ),

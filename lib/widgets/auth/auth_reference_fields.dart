@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../text_input/caret_selection_controls.dart';
 import 'auth_copy.dart';
 import 'auth_reference_field_frame.dart';
 import 'auth_reference_input_decoration.dart';
 import 'auth_reference_tokens.dart';
 
-/// Scroll padding so focused fields stay above the keyboard in auth scroll views.
-EdgeInsets authFieldScrollPadding(BuildContext context) {
-  final bottom = MediaQuery.viewInsetsOf(context).bottom;
-  return EdgeInsets.fromLTRB(20, 20, 20, bottom + 120);
-}
+/// Flutter already accounts for keyboard insets when revealing the caret.
+/// Keep only a small gap so focusing the password does not hide the account.
+EdgeInsets authFieldScrollPadding(BuildContext context) =>
+    const EdgeInsets.all(20);
 
 /// The auth theme supplies the platform's font; field sizes share one token.
 TextStyle authFieldInputStyle(
@@ -207,6 +207,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
       showFill: widget.label == null,
       child: TextField(
         controller: widget.controller,
+        selectionControls: caretSelectionControls(context),
         autofillHints: widget.autofillHints,
         focusNode: _focusNode,
         autofocus: widget.autofocus,

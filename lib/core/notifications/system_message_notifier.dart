@@ -158,7 +158,7 @@ class SystemMessageNotifier {
     await plugin.show(
       id,
       presentation.title,
-      presentation.body,
+      presentation.bannerBody,
       NotificationDetails(
         android: AndroidNotificationDetails(
           sound
@@ -217,5 +217,6 @@ class SystemMessageNotifier {
     await nativeAndroid.cancel(id);
     await plugin.cancel(id);
   }
+
   Future<void> cancelAll() => plugin.cancelAll();
 }

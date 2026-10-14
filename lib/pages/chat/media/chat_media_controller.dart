@@ -15,6 +15,7 @@ import 'upload/ordered_media_batch.dart';
 import 'upload/chat_media_outbox.dart';
 import 'upload/chat_media_upload.dart';
 import 'video/chat_video_preparation.dart';
+import 'preparation/chat_media_asset_loader.dart';
 
 typedef MediaMessageSender = Future Function(Message message,
     {bool addToUI, bool resetInput});
@@ -37,6 +38,9 @@ class ChatMediaController {
     Future<List<AssetEntity>?> Function()? pickAssets,
     Future<AssetEntity?> Function()? pickCamera,
     Future<File?> Function(File)? compressImage,
+    this.assetReadTimeout = const Duration(seconds: 30),
+    this.imageCompressionTimeout = const Duration(seconds: 10),
+    this.messageCreationTimeout = const Duration(seconds: 15),
     void Function()? onPreparationFailed,
   })  : _conversationID = conversationID,
         _isClosed = isClosed,
@@ -48,7 +52,7 @@ class ChatMediaController {
         _previewAndSendVoice = previewVoice,
         _pickAssets = pickAssets,
         _pickCamera = pickCamera,
-        _compressImage = compressImage ?? IMUtils.compressImageAndGetFile,
+        _compressImage = compressImage ?? _compressChatImage,
         _onPreparationFailed =
             onPreparationFailed ?? (() => IMViews.showToast(StrRes.sendFailed));
 
@@ -65,6 +69,9 @@ class ChatMediaController {
   final Future<AssetEntity?> Function()? _pickCamera;
   final Future<File?> Function(File) _compressImage;
   final void Function() _onPreparationFailed;
+  final Duration assetReadTimeout,
+      imageCompressionTimeout,
+      messageCreationTimeout;
   final tempMessages = <Message>[];
   final preparingCount = 0.obs;
   bool _closed = false;
@@ -79,17 +86,19 @@ class ChatMediaController {
     preparingCount.value = 0;
   }
 
-  Future<List<Message>> searchMediaMessage() async {
+  Future<List<Message>> searchMediaMessage(
+      {bool Function()? continueLoading}) async {
     final conversation = _conversationID();
     final account = OpenIM.iMManager.userID;
     final messages = <String, Message>{};
-    for (var page = 1; !isClosed; page++) {
+    for (var page = 1; !isClosed && (continueLoading?.call() ?? true); page++) {
       final result = await OpenIM.iMManager.messageManager.searchLocalMessages(
           conversationID: conversation,
           messageTypeList: [MessageType.picture, MessageType.video],
           pageIndex: page,
           count: 200);
       if (isClosed ||
+          !(continueLoading?.call() ?? true) ||
           _conversationID() != conversation ||
           OpenIM.iMManager.userID != account) {
         return [];
@@ -135,7 +144,8 @@ class ChatMediaController {
     }
     var file = original;
     try {
-      final compressed = await _compressImage(original);
+      final compressed =
+          await _compressImage(original).timeout(imageCompressionTimeout);
       if (stopped()) return null;
       if (compressed != null &&
           await compressed.exists() &&
@@ -148,10 +158,11 @@ class ChatMediaController {
           onlyConsole: true);
     }
     if (stopped()) return null;
-    final message =
-        await OpenIM.iMManager.messageManager.createImageMessageFromFullPath(
-      imagePath: file.path,
-    );
+    final message = await OpenIM.iMManager.messageManager
+        .createImageMessageFromFullPath(
+          imagePath: file.path,
+        )
+        .timeout(messageCreationTimeout);
     if (stopped()) return null;
     return message;
   }
@@ -436,7 +447,8 @@ class ChatMediaController {
     final stopped = cancelled ?? () => isClosed;
     Logger.print(
         '--------assets type-----${asset.type} create time: ${asset.createDateTime}');
-    final originalFile = await asset.file;
+    final originalFile = await loadChatMediaAsset(asset,
+        timeout: assetReadTimeout, isCancelled: stopped);
     if (stopped()) return null;
     if (originalFile == null) {
       throw StateError('Selected asset file is unavailable');
@@ -478,3 +490,10 @@ class ChatMediaController {
     }
   }
 }
+
+Future<File?> _compressChatImage(File file) => IMUtils.compressImageAndGetFile(
+    file,
+    // The OpenIM core has no HEIF decoder. Export a real JPEG, with a matching
+    // suffix, before asking the SDK to create the image message.
+    convertToJpeg:
+        {'.heic', '.heif'}.contains(p.extension(file.path).toLowerCase()));

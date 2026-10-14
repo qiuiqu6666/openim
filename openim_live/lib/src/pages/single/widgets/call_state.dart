@@ -439,15 +439,17 @@ abstract class SignalState<T extends SignalView> extends State<T>
                             ColoredBox(
                               color: CallSurfaceTokens.background,
                               child: Center(
-                                child: AvatarView(
-                                  url: _smallScreenRemote
-                                      ? null
-                                      : userInfo?.faceURL,
-                                  text: _smallScreenRemote
-                                      ? StrRes.you
-                                      : userInfo?.remark ??
-                                          userInfo?.nickname ??
-                                          widget.userID,
+                                child: ContactNameBuilder(
+                                  userID: userInfo?.userID ?? widget.userID,
+                                  nickname: userInfo?.nickname,
+                                  fallbackRemark: userInfo?.remark,
+                                  builder: (_, name) => AvatarView(
+                                    url: _smallScreenRemote
+                                        ? null
+                                        : userInfo?.faceURL,
+                                    text:
+                                        _smallScreenRemote ? StrRes.you : name,
+                                  ),
                                 ),
                               ),
                             ),

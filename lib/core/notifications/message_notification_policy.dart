@@ -31,6 +31,10 @@ class MessageNotificationPresentation {
   final bool enableSound;
   final bool enableVibration;
   final String soundID;
+
+  /// Standard OS templates have no separate sender field for group messages.
+  String get bannerBody =>
+      isGroup && senderName.isNotEmpty ? '$senderName: $body' : body;
 }
 
 abstract final class MessageNotificationPolicy {
@@ -65,6 +69,7 @@ abstract final class MessageNotificationPolicy {
     String? activeConversationID,
     required MessageNotificationPreferences preferences,
     int? globalRecvMsgOpt,
+    String? senderRemark,
   }) {
     final flags = _attachedFlags(message);
     if (!accepts(
@@ -116,15 +121,19 @@ abstract final class MessageNotificationPolicy {
             message.sessionType == 2 ||
             _nonEmpty(conversation.groupID) != null ||
             _nonEmpty(message.groupID) != null;
-    final senderName = _oneLine(message.senderNickname ?? '');
+    final remark = _oneLine(senderRemark ?? '');
+    final senderName =
+        remark.isNotEmpty ? remark : _oneLine(message.senderNickname ?? '');
     final conversationName = _oneLine(conversation.showName ?? '');
-    final title = conversationName.isNotEmpty
-        ? conversationName
-        : isGroup
-            ? StrRes.groupChat
-            : senderName.isNotEmpty
-                ? senderName
-                : generic;
+    final title = !isGroup && remark.isNotEmpty
+        ? remark
+        : conversationName.isNotEmpty
+            ? conversationName
+            : isGroup
+                ? StrRes.groupChat
+                : senderName.isNotEmpty
+                    ? senderName
+                    : generic;
     final avatar = _nonEmpty(conversation.faceURL) ??
         (isGroup ? null : _nonEmpty(message.senderFaceUrl));
     final isPrivate = conversation.isPrivateChat == true ||

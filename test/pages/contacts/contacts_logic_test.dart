@@ -10,6 +10,7 @@ import 'package:openim/core/im_callback.dart';
 import 'package:openim/pages/contacts/contacts_logic.dart';
 import 'package:openim/pages/contacts/directory/contact_directory_indexer.dart';
 import 'package:openim/pages/home/home_logic.dart';
+import 'package:openim/pages/home/home_binding.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -55,6 +56,26 @@ void main() {
 
   tearDown(Get.reset);
 
+  test(
+      'home exposes the existing live contact directory with account isolation',
+      () async {
+    final contacts =
+        Get.put(ContactsLogic(fetchFriendsPage: (_, __) async => []));
+    HomeBinding().dependencies();
+    final source = ContactRemarkSource.current;
+    expect(source, same(contacts));
+    im.friendInfoChanged(FriendInfo(userID: 'sender', remark: '老王'));
+    await Future<void>.delayed(Duration.zero);
+    expect(source!.remarkFor('sender'), '老王');
+    contacts.applySavedRemark('sender', '新备注');
+    expect(source.remarkFor('sender'), '新备注');
+    contacts.applySavedRemark('sender', '');
+    expect(source.remarkFor('sender'), isNull);
+    OpenIM.iMManager.userID = 'other-account';
+    expect(ContactRemarkSource.current, isNull);
+    expect(source.remarkFor('sender'), isNull);
+  });
+
   testWidgets('saved remark refreshes historical sender without an SDK event',
       (tester) async {
     final page = Completer<List<FriendInfo>>();
@@ -65,8 +86,8 @@ void main() {
     )..onInit();
     addTearDown(() => logic.onDelete());
     final loading = logic.loadFriends();
-    await tester.pumpWidget(MaterialApp(home: Obx(() => Text(
-        logic.remarkFor('sender') ?? '原昵称'))));
+    await tester.pumpWidget(
+        MaterialApp(home: Obx(() => Text(logic.remarkFor('sender') ?? '原昵称'))));
     expect(find.text('原昵称'), findsOneWidget);
     logic.applySavedRemark('sender', '新备注');
     await tester.pump();
@@ -150,7 +171,8 @@ void main() {
     expect(logic.friends.every((friend) => friend.isShowSuspension), isTrue);
   });
 
-  test('sender remarks react to editing, clearing and friend removal', () async {
+  test('sender remarks react to editing, clearing and friend removal',
+      () async {
     final logic = ContactsLogic()..onInit();
     addTearDown(() => logic.onDelete());
     im.friendAdded(FriendInfo(userID: 'sender', remark: '老王'));
@@ -167,6 +189,26 @@ void main() {
     im.friendDeleted(FriendInfo(userID: 'sender'));
     await Future<void>.delayed(Duration.zero);
     expect(logic.remarkFor('sender'), isNull);
+  });
+
+  test('remark search follows live edits, deletion and the current account',
+      () async {
+    final logic = ContactsLogic()..onInit();
+    addTearDown(() => logic.onDelete());
+    im.friendAdded(
+        FriendInfo(userID: 'sender', nickname: '公开昵称', remark: 'Team 阿明'));
+    await Future<void>.delayed(Duration.zero);
+    expect(logic.matchingRemarkUserIDs(' team '), ['sender']);
+    expect(logic.matchingRemarkUserIDs('公开昵称'), isEmpty);
+    logic.applySavedRemark('sender', '新备注');
+    expect(logic.matchingRemarkUserIDs('team'), isEmpty);
+    expect(logic.matchingRemarkUserIDs('新备注'), ['sender']);
+    im.friendDeleted(FriendInfo(userID: 'sender'));
+    await Future<void>.delayed(Duration.zero);
+    expect(logic.matchingRemarkUserIDs('新备注'), isEmpty);
+    logic.applySavedRemark('sender', '恢复备注');
+    OpenIM.iMManager.userID = 'other-account';
+    expect(logic.matchingRemarkUserIDs('恢复备注'), isEmpty);
   });
 
   testWidgets(

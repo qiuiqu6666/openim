@@ -173,14 +173,17 @@ class GroupMemberListPage extends StatelessWidget {
                   width: 40.w,
                   height: 40.w,
                   url: membersInfo.faceURL,
-                  text: membersInfo.nickname,
+                  text: ContactRemarkSource.displayName(membersInfo.userID,
+                      nickname: membersInfo.nickname),
                 ),
                 10.horizontalSpace,
                 Expanded(
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(membersInfo.nickname ?? '',
+                        Text(
+                            ContactRemarkSource.displayName(membersInfo.userID,
+                                nickname: membersInfo.nickname),
                             style: Styles.ts_0C1C33_17sp,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis),
@@ -265,7 +268,8 @@ class GroupMemberListPage extends StatelessWidget {
                     ),
                     if (logic.checkedList.isNotEmpty) 4.verticalSpace,
                     logic.checkedList
-                        .map((e) => e.nickname ?? '')
+                        .map((e) => ContactRemarkSource.displayName(e.userID,
+                            nickname: e.nickname))
                         .join('、')
                         .toText
                       ..style = Styles.ts_8E9AB0_14sp
@@ -347,39 +351,43 @@ class SelectedMemberListView extends StatelessWidget {
     );
   }
 
-  Widget _buildItemView(GroupMembersInfo membersInfo) => Container(
-        height: 64.h,
-        padding: EdgeInsets.symmetric(horizontal: 16.w),
-        color: Styles.c_FFFFFF,
-        child: Row(
-          children: [
-            AvatarView(
-              url: membersInfo.faceURL,
-              text: membersInfo.nickname,
-            ),
-            10.horizontalSpace,
-            Expanded(
-              child: (membersInfo.nickname ?? '').toText
-                ..style = Styles.ts_0C1C33_17sp
-                ..maxLines = 1
-                ..overflow = TextOverflow.ellipsis,
-            ),
-            GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: () => logic.removeSelectedMember(membersInfo),
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 13.w, vertical: 4.h),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(2.r),
-                  border: Border.all(
-                    color: Styles.c_E8EAEF,
-                    width: 1,
+  Widget _buildItemView(GroupMembersInfo membersInfo) => ContactNameBuilder(
+      userID: membersInfo.userID,
+      nickname: membersInfo.nickname,
+      builder: (_, name) => Container(
+            height: 64.h,
+            padding: EdgeInsets.symmetric(horizontal: 16.w),
+            color: Styles.c_FFFFFF,
+            child: Row(
+              children: [
+                AvatarView(
+                  url: membersInfo.faceURL,
+                  text: name,
+                ),
+                10.horizontalSpace,
+                Expanded(
+                  child: name.toText
+                    ..style = Styles.ts_0C1C33_17sp
+                    ..maxLines = 1
+                    ..overflow = TextOverflow.ellipsis,
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () => logic.removeSelectedMember(membersInfo),
+                  child: Container(
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 13.w, vertical: 4.h),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(2.r),
+                      border: Border.all(
+                        color: Styles.c_E8EAEF,
+                        width: 1,
+                      ),
+                    ),
+                    child: StrRes.remove.toText..style = Styles.ts_0089FF_17sp,
                   ),
                 ),
-                child: StrRes.remove.toText..style = Styles.ts_0089FF_17sp,
-              ),
+              ],
             ),
-          ],
-        ),
-      );
+          ));
 }

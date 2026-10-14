@@ -1,5 +1,10 @@
 # 最近通话
 
+列表通过公共 `ContactNameBuilder` 将当前好友备注叠加到单人通话记录上，
+历史记录在修改或清空备注后同步更新；群通话继续使用群名。显示过程复用
+现有联系人目录，不改写历史记录，也不逐条查询 SDK。回归测试为
+`test/pages/mine/calls/recent_calls_remark_test.dart`。
+
 入口保留 `../recent_calls_page.dart` export。页面参考实际的
 `reference-99chat/lib/src/pages/recent_calls_page.dart`，复用 settings 的主题、
 头像、空状态、动作表、确认弹窗和现有通话入口，支持亮色、暗色和大文字。

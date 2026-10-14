@@ -19,6 +19,9 @@ class _Asset extends AssetEntity {
 
   @override
   Future<File?> get file => localFile;
+
+  @override
+  Future<File?> get originFile => localFile;
 }
 
 class _Files extends FilePicker {
@@ -82,6 +85,7 @@ void main() {
   late _Files files;
   late Future<String> Function() upload;
   late int uploadCalls;
+  late Future<void> Function() beforeCreate;
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('chat-album-send-');
@@ -101,6 +105,7 @@ void main() {
     compress = (file) async => file;
     deliver = (_) async {};
     uploadCalls = 0;
+    beforeCreate = () async {};
     upload = () async =>
         jsonEncode({'url': 'https://im.test/object/media/image.png'});
     media = ChatMediaController(
@@ -127,6 +132,9 @@ void main() {
         return null;
       },
       compressImage: (file) => compress(file),
+      assetReadTimeout: const Duration(milliseconds: 40),
+      imageCompressionTimeout: const Duration(milliseconds: 40),
+      messageCreationTimeout: const Duration(milliseconds: 40),
       onPreparationFailed: () => failures++,
     );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -138,6 +146,7 @@ void main() {
       expect(call.method, 'createImageMessageFromFullPath');
       final path = (call.arguments as Map)['imagePath'] as String;
       paths.add(path);
+      await beforeCreate();
       if (sdkFailure) {
         sdkFailure = false;
         throw PlatformException(code: 'invalid-image');
@@ -298,6 +307,56 @@ void main() {
     expect(sends, ['image-2']);
     expect(media.preparingCount.value, 0);
     expect(media.pickingAttachment, isFalse);
+  });
+
+  test('stalled compression falls back and ignores its late result', () async {
+    final compressed = Completer<File?>();
+    compress = (_) => compressed.future;
+    selected = [_Asset('stalled-compression', Future.value(photo))];
+    await media.onTapAlbum().timeout(const Duration(seconds: 3));
+    expect(sends, ['image-1']);
+    expect(await File(paths.single).readAsBytes(), [1, 2, 3]);
+    expect(failures, 0);
+    expect(media.preparingCount.value, 0);
+    compressed.complete(photo);
+    await Future<void>.delayed(Duration.zero);
+    expect(sends, ['image-1']);
+  });
+
+  test('stalled gallery resource fails once and later images still send',
+      () async {
+    final resource = Completer<File?>();
+    selected = [
+      _Asset('stalled-resource', resource.future),
+      _Asset('available', Future.value(photo)),
+    ];
+    await media.onTapAlbum().timeout(const Duration(seconds: 3));
+    expect(failures, 1);
+    expect(sends, ['image-1']);
+    expect(media.preparingCount.value, 0);
+    expect(media.pickingAttachment, isFalse);
+    resource.complete(photo);
+    await Future<void>.delayed(Duration.zero);
+    expect(sends, ['image-1']);
+    expect(staged, hasLength(1));
+  });
+
+  test('stalled SDK creation does not block later images or send a late ID',
+      () async {
+    final created = Completer<void>();
+    beforeCreate = () => paths.length == 1 ? created.future : Future.value();
+    selected = [
+      _Asset('stalled-sdk', Future.value(photo)),
+      _Asset('available', Future.value(photo)),
+    ];
+    await media.onTapAlbum().timeout(const Duration(seconds: 3));
+    expect(failures, 1);
+    expect(sends, ['image-2']);
+    expect(media.preparingCount.value, 0);
+    created.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(sends, ['image-2']);
+    expect(staged, hasLength(1));
   });
 
   for (final switchAccount in [false, true]) {

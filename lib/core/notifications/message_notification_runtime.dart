@@ -33,6 +33,7 @@ class MessageNotificationRuntime {
     required this.isForeground,
     required this.activeConversationID,
     required this.userInfo,
+    this.senderRemark,
     this.suppressSound,
     this.foregroundAlert,
     this.stopForegroundAlerts,
@@ -75,6 +76,7 @@ class MessageNotificationRuntime {
   final bool Function() isForeground;
   final String? Function() activeConversationID;
   final UserFullInfo? Function() userInfo;
+  final String? Function(String? userID)? senderRemark;
   final bool Function()? suppressSound;
   final ForegroundNotificationAlert? foregroundAlert;
   final Future<void> Function()? stopForegroundAlerts;
@@ -469,6 +471,7 @@ class MessageNotificationRuntime {
           isForeground: isForeground(),
           activeConversationID: activeConversationID(),
           preferences: MessageNotificationPreferences.read(accountID),
+          senderRemark: senderRemark?.call(message.sendID),
           globalRecvMsgOpt: userInfo()?.globalRecvMsgOpt);
 
   Future<void> _show(

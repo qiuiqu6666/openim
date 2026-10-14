@@ -315,16 +315,20 @@ class ChatMessageTile extends StatelessWidget {
         chatToken == DataSp.chatToken &&
         imToken == DataSp.imToken &&
         conversationID == logic.conversationInfo.conversationID;
+    bool canOpen() => current() && chatRoute?.isCurrent != false;
     return GestureDetector(
-      onTap: () async {
+      onTap: () => logic.mediaPreviewSession.run(() async {
         try {
-          if (!current()) return;
+          if (!canOpen()) return;
           if (message.hasExpired) {
             IMViews.showToast('sdkExpired'.tr);
             return;
           }
-          final stored = await logic.searchMediaMessage();
-          if (!current() || !context.mounted) return;
+          final stored = await logic.mediaPreviewSession.loadHistory(
+            (continueLoading) => logic.searchMediaMessage(
+                continueLoading: () => continueLoading() && canOpen()),
+          );
+          if (!canOpen() || !context.mounted) return;
           final media = <String, Message>{};
           for (final item in [...stored, ...logic.messageList, message]) {
             final id = item.clientMsgID;
@@ -334,7 +338,11 @@ class ChatMessageTile extends StatelessWidget {
             ..sort((a, b) => (a.sendTime ?? 0).compareTo(b.sendTime ?? 0));
           final gallery =
               await ChatPictureGallery.fromMessages(ordered, message);
-          if (!current() || !context.mounted) return;
+          if (!canOpen() || !context.mounted) return;
+          if (message.hasExpired) {
+            IMViews.showToast('sdkExpired'.tr);
+            return;
+          }
           if (gallery.sources.isEmpty) {
             IMViews.showToast('mediaMessageUnavailable'.tr);
             return;
@@ -396,7 +404,7 @@ class ChatMessageTile extends StatelessWidget {
         } finally {
           if (current()) logic.playOnce = false;
         }
-      },
+      }),
       child: MediaThumbnailHero(
         tag: message.clientMsgID!,
         child: _buildMediaContent(message),

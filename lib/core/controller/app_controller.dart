@@ -146,6 +146,7 @@ class AppController extends GetxController with UpgradeManger {
       userInfo: () => Get.isRegistered<IMController>()
           ? Get.find<IMController>().userInfo.value
           : null,
+      senderRemark: (userID) => ContactRemarkSource.current?.remarkFor(userID),
       suppressSound: () => shouldMuted,
       foregroundAlert: _foregroundMessageAlerts.play,
       stopForegroundAlerts: _foregroundMessageAlerts.stop,
@@ -200,9 +201,12 @@ class AppController extends GetxController with UpgradeManger {
                   invitation: value.invitation),
               callerName: value.callerName,
             ),
-        resolvePeerName: (userID) async => Get.isRegistered<IMController>()
-            ? (await Get.find<IMController>().onSyncUserInfo(userID))?.nickname
-            : null,
+        resolvePeerName: (userID) async {
+          if (!Get.isRegistered<IMController>()) return null;
+          final profile = await Get.find<IMController>().onSyncUserInfo(userID);
+          return ContactRemarkSource.displayName(userID,
+              nickname: profile?.nickname, fallbackRemark: profile?.remark);
+        },
         sessionReady: () =>
             !_closed &&
             Get.isRegistered<IMController>() &&

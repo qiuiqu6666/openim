@@ -8,6 +8,8 @@ export 'src/widgets/alert_dialog/app_alert_dialog.dart';
 
 export 'src/apis.dart';
 export 'src/bridge/package_bridge.dart';
+export 'src/contacts/contact_remark_source.dart';
+export 'src/widgets/contacts/contact_name_builder.dart';
 export 'src/config.dart';
 export 'src/config/runtime_network_route.dart';
 export 'src/conversation/conversation_refresh_events.dart';

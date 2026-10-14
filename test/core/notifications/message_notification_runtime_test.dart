@@ -28,6 +28,29 @@ void main() {
   });
   tearDown(Get.reset);
 
+  for (final group in [false, true]) {
+    for (final foreground in [false, true]) {
+      test(
+          'banner uses current sender remark on each arrival ($group/$foreground)',
+          () async {
+        final h = _Harness()..foreground = foreground;
+        await h.start();
+        h.remarks['peer'] = '老王';
+        final message = h.message('remark-1', group: group);
+        await h.runtime.receive(message);
+        expect(h.notifier.shown.last.presentation.senderName, '老王');
+        expect(h.notifier.shown.last.presentation.title, group ? 'Team' : '老王');
+        expect(message.senderNickname, 'Alice');
+        h.remarks['peer'] = '新备注';
+        await h.runtime.receive(h.message('remark-2', group: group));
+        expect(h.notifier.shown.last.presentation.senderName, '新备注');
+        h.remarks.remove('peer');
+        await h.runtime.receive(h.message('remark-3', group: group));
+        expect(h.notifier.shown.last.presentation.senderName, 'Alice');
+      });
+    }
+  }
+
   Map<String, dynamic> apns({
     String account = 'self',
     String message = 'apns-message',
@@ -1067,6 +1090,7 @@ class _Harness {
       isForeground: () => foreground,
       activeConversationID: () => activeConversationID,
       userInfo: () => user,
+      senderRemark: (userID) => remarks[userID],
       suppressSound: () => suppressed,
       foregroundAlert: (
           {required soundID,
@@ -1128,6 +1152,7 @@ class _Harness {
     bool Function() isCurrent
   })>[];
   String? activeConversationID;
+  final remarks = <String, String>{};
   String? avatarURL;
   int lookups = 0;
   int messageLists = 0;

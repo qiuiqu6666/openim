@@ -335,6 +335,15 @@ class GroupSetupPage extends StatelessWidget {
   }
 
   Widget _memberPreview(GroupMembersInfo member, double memberWidth) {
+    return ContactNameBuilder(
+      userID: member.userID,
+      nickname: member.nickname,
+      builder: (_, name) => _memberPreviewContents(member, memberWidth, name),
+    );
+  }
+
+  Widget _memberPreviewContents(
+      GroupMembersInfo member, double memberWidth, String name) {
     final isOwner = member.userID == logic.groupInfo.value.ownerUserID;
     final isAdmin = member.roleLevel == GroupRoleLevel.admin;
     return SizedBox(
@@ -346,7 +355,7 @@ class GroupSetupPage extends StatelessWidget {
               width: memberWidth * 0.72,
               height: memberWidth * 0.72,
               url: member.faceURL,
-              text: member.nickname,
+              text: name,
               isCircle: true),
           2.verticalSpace,
           if (isOwner || isAdmin)
@@ -362,7 +371,7 @@ class GroupSetupPage extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: memberWidth * 0.05),
-              child: Text(member.nickname ?? '',
+              child: Text(name,
                   maxLines: 1,
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,

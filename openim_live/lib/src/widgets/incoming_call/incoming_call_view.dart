@@ -54,12 +54,6 @@ class _IncomingCallViewState extends State<IncomingCallView>
     super.dispose();
   }
 
-  String get _name =>
-      IMUtils.emptyStrToNull(widget.userInfo?.remark?.trim()) ??
-      IMUtils.emptyStrToNull(widget.userInfo?.nickname?.trim()) ??
-      IMUtils.emptyStrToNull(widget.userInfo?.userID) ??
-      widget.userID;
-
   String _hint(BuildContext context) {
     final locale = Localizations.localeOf(context);
     final video = widget.callType == CallType.video;
@@ -76,7 +70,14 @@ class _IncomingCallViewState extends State<IncomingCallView>
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ContactNameBuilder(
+        userID: widget.userInfo?.userID ?? widget.userID,
+        nickname: widget.userInfo?.nickname,
+        fallbackRemark: widget.userInfo?.remark,
+        builder: _build,
+      );
+
+  Widget _build(BuildContext context, String name) {
     final padding = MediaQuery.paddingOf(context);
     final scaler = MediaQuery.textScalerOf(context);
     final bottom = math.max(IncomingCallTokens.actionBottom, padding.bottom);
@@ -137,10 +138,10 @@ class _IncomingCallViewState extends State<IncomingCallView>
                       width: IncomingCallTokens.avatarSize,
                       height: IncomingCallTokens.avatarSize,
                       url: widget.userInfo?.faceURL,
-                      text: _name,
+                      text: name,
                     ),
                     const SizedBox(height: IncomingCallTokens.nameGap),
-                    Text(_name,
+                    Text(name,
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

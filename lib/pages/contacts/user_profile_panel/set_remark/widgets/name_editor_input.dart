@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:openim_common/openim_common.dart';
+import '../../../../../widgets/text_input/caret_selection_controls.dart';
 
 class NameEditorInput extends StatefulWidget {
   const NameEditorInput({
@@ -31,7 +34,38 @@ class NameEditorInput extends StatefulWidget {
 }
 
 class _NameEditorInputState extends State<NameEditorInput> {
+  // A small intentional movement should move the caret before a normal swipe
+  // recognizer activates, while filtering incidental finger jitter.
+  static const double _caretDragSlop = 3;
   bool _startedEditing = false;
+  final _fieldKey = GlobalKey();
+  Offset? _dragOrigin;
+  Duration? _touchStarted;
+  bool _dragging = false;
+
+  RenderEditable? _editable(RenderObject? object) {
+    if (object is RenderEditable) return object;
+    RenderEditable? result;
+    object?.visitChildren((child) => result ??= _editable(child));
+    return result;
+  }
+
+  void _moveCaret(PointerMoveEvent event) {
+    final origin = _dragOrigin;
+    if (widget.saving || origin == null || _touchStarted == null) return;
+    // Leave long presses to the native text selection/menu gesture.
+    if (!_dragging) {
+      if (event.timeStamp - _touchStarted! > kLongPressTimeout) return;
+      if ((event.position.dx - origin.dx).abs() < _caretDragSlop) return;
+      _dragging = true;
+    }
+    final editable = _editable(_fieldKey.currentContext?.findRenderObject());
+    if (editable == null || !editable.hasFocus) return;
+    editable.selectPositionAt(
+      from: event.position,
+      cause: SelectionChangedCause.drag,
+    );
+  }
 
   void _startEditing() {
     if (_startedEditing) return;
@@ -54,67 +88,81 @@ class _NameEditorInputState extends State<NameEditorInput> {
     final saveEnabled = widget.saveEnabled;
     final keyboardType = widget.keyboardType;
     final inputStatus = widget.inputStatus;
-    return TextField(
-      controller: controller,
-      onTap: _startEditing,
-      enabled: !saving,
-      maxLength: maxLength,
-      keyboardType: keyboardType,
-      maxLines: 1,
-      textInputAction: TextInputAction.done,
-      onSubmitted: (_) {
-        if (!saving && saveEnabled) onSave();
+    return Listener(
+      onPointerDown: (event) {
+        _dragOrigin =
+            event.kind == PointerDeviceKind.touch ? event.position : null;
+        _touchStarted = event.timeStamp;
+        _dragging = false;
       },
-      style: TextStyle(color: Styles.c_0C1C33, fontSize: 16.sp),
-      decoration: InputDecoration(
-        hintText: hintText,
-        hintStyle: TextStyle(color: Styles.c_8E9AB0, fontSize: 16.sp),
-        filled: true,
-        fillColor: Styles.c_FFFFFF,
-        border: _border(),
-        enabledBorder: _border(),
-        focusedBorder: _border(),
-        counterText: '',
-        suffixIcon: ValueListenableBuilder<TextEditingValue>(
-          valueListenable: controller,
-          builder: (_, value, __) => Padding(
-            padding: EdgeInsets.only(left: 8.w, right: 18.w),
-            child: Center(
-              widthFactor: 1,
-              heightFactor: 1,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (showClearButton && value.text.isNotEmpty)
-                    IconButton(
-                      key: const ValueKey('name-editor-clear'),
-                      onPressed: saving
-                          ? null
-                          : () {
-                              _startedEditing = true;
-                              controller.clear();
-                            },
-                      tooltip: StrRes.clearAll,
-                      constraints: const BoxConstraints(
-                        minWidth: kMinInteractiveDimension,
-                        minHeight: kMinInteractiveDimension,
+      onPointerMove: _moveCaret,
+      onPointerUp: (_) => _dragOrigin = null,
+      onPointerCancel: (_) => _dragOrigin = null,
+      child: TextField(
+        key: _fieldKey,
+        controller: controller,
+        selectionControls: caretSelectionControls(context),
+        onTap: _startEditing,
+        enabled: !saving,
+        maxLength: maxLength,
+        keyboardType: keyboardType,
+        maxLines: 1,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) {
+          if (!saving && saveEnabled) onSave();
+        },
+        style: TextStyle(color: Styles.c_0C1C33, fontSize: 16.sp),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: TextStyle(color: Styles.c_8E9AB0, fontSize: 16.sp),
+          filled: true,
+          fillColor: Styles.c_FFFFFF,
+          border: _border(),
+          enabledBorder: _border(),
+          focusedBorder: _border(),
+          counterText: '',
+          suffixIcon: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (_, value, __) => Padding(
+              padding: EdgeInsets.only(left: 8.w, right: 18.w),
+              child: Center(
+                widthFactor: 1,
+                heightFactor: 1,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showClearButton && value.text.isNotEmpty)
+                      IconButton(
+                        key: const ValueKey('name-editor-clear'),
+                        onPressed: saving
+                            ? null
+                            : () {
+                                _startedEditing = true;
+                                controller.clear();
+                              },
+                        tooltip: StrRes.clearAll,
+                        constraints: const BoxConstraints(
+                          minWidth: kMinInteractiveDimension,
+                          minHeight: kMinInteractiveDimension,
+                        ),
+                        visualDensity: VisualDensity.standard,
+                        color: Styles.c_8E9AB0,
+                        icon: const Icon(Icons.cancel, size: AppTokens.s5),
                       ),
-                      visualDensity: VisualDensity.standard,
-                      color: Styles.c_8E9AB0,
-                      icon: const Icon(Icons.cancel, size: AppTokens.s5),
-                    ),
-                  if (inputStatus != null) ...[
-                    inputStatus,
-                    const SizedBox(width: AppTokens.s3),
+                    if (inputStatus != null) ...[
+                      inputStatus,
+                      const SizedBox(width: AppTokens.s3),
+                    ],
+                    Text('${value.text.characters.length}/$maxLength',
+                        style: Styles.ts_8E9AB0_13sp),
                   ],
-                  Text('${value.text.characters.length}/$maxLength',
-                      style: Styles.ts_8E9AB0_13sp),
-                ],
+                ),
               ),
             ),
           ),
+          contentPadding:
+              EdgeInsets.symmetric(horizontal: 18.w, vertical: 13.h),
         ),
-        contentPadding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 13.h),
       ),
     );
   }

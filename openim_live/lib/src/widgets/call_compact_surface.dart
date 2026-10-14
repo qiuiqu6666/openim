@@ -20,7 +20,14 @@ class CallCompactSurface extends StatelessWidget {
   final bool systemPip;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ContactNameBuilder(
+        userID: userInfo?.userID,
+        nickname: userInfo?.nickname,
+        fallbackRemark: userInfo?.remark,
+        builder: _build,
+      );
+
+  Widget _build(BuildContext context, String name) {
     final colors = Theme.of(context).colorScheme;
     final label = state == CallState.calling
         ? IMUtils.seconds2HMS(duration)
@@ -60,10 +67,7 @@ class CallCompactSurface extends StatelessWidget {
                                 if (systemPip && userInfo != null)
                                   Padding(
                                       padding: const EdgeInsets.only(top: 4),
-                                      child: Text(
-                                          userInfo!.remark ??
-                                              userInfo!.nickname ??
-                                              '',
+                                      child: Text(name,
                                           style: Theme.of(context)
                                               .textTheme
                                               .labelSmall,

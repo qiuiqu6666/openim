@@ -22,7 +22,11 @@ import 'scanning/contact_qr_navigation.dart';
 
 class ContactsLogic extends GetxController
     with WidgetsBindingObserver
-    implements ViewUserProfileBridge, SelectContactsBridge, ScanBridge {
+    implements
+        ViewUserProfileBridge,
+        SelectContactsBridge,
+        ScanBridge,
+        ContactRemarkSource {
   ContactsLogic({
     Future<List<FriendInfo>> Function(int offset, int count)? fetchFriendsPage,
     ContactDirectoryIndexer? directoryIndexer,
@@ -45,6 +49,7 @@ class ContactsLogic extends GetxController
       isClosed ||
       OpenIM.iMManager.userID != _accountID ||
       DataSp.chatToken != _sessionToken;
+  @override
   bool get isCurrentSession => !_inactive;
   final imLogic = Get.find<IMController>();
   static const _inviteChannel = MethodChannel('openim_friend_invites');
@@ -174,17 +179,32 @@ class ContactsLogic extends GetxController
   final _directory = <String, ISUserInfo>{}.obs;
 
   /// Reactive, constant-time lookup for sender labels in group conversations.
+  @override
   String? remarkFor(String? userID) {
+    // Keep observers attached while a closing session clears the directory.
+    final friend = _directory[userID];
     if (_inactive || userID == null) return null;
-    final remark = _directory[userID]?.remark?.trim();
+    final remark = friend?.remark?.trim();
     return remark == null || remark.isEmpty ? null : remark;
+  }
+
+  @override
+  Iterable<String> matchingRemarkUserIDs(String keyword) {
+    if (_inactive) return const [];
+    final query = keyword.trim().toLowerCase();
+    if (query.isEmpty) return const [];
+    return [
+      for (final entry in _directory.entries)
+        if (entry.value.remark?.trim().toLowerCase().contains(query) == true)
+          entry.key,
+    ];
   }
 
   /// Apply a server-confirmed edit even when the SDK profile event is delayed.
   void applySavedRemark(String userID, String remark) {
     if (_inactive) return;
-    final friend = FriendInfo.fromJson(
-        _directory[userID]?.toJson() ?? {'userID': userID});
+    final friend =
+        FriendInfo.fromJson(_directory[userID]?.toJson() ?? {'userID': userID});
     friend.remark = remark;
     _queueFriendChange(userID, friend);
   }
