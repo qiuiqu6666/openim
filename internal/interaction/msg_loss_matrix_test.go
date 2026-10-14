@@ -438,7 +438,7 @@ func TestLossMatrixTwoOnlineDevicesHotConversationDoesNotHideSilentGap(t *testin
 	if len(stored[0]["quiet_group"]) != 0 {
 		t.Fatal("current device replayed an already committed quiet conversation")
 	}
-	if !reflect.DeepEqual(stored[1]["quiet_group"], []int64{999, 1000}) {
+	if !reflect.DeepEqual(stored[1]["quiet_group"], []int64{1000, 999}) {
 		t.Fatalf("second device still needs a quiet-chat push: %v", stored[1]["quiet_group"])
 	}
 	for index, device := range devices {

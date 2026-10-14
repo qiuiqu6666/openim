@@ -701,11 +701,11 @@ func (m *MsgSyncer) triggerConversation(ctx context.Context, msgs map[string]*sd
 }
 
 // triggers a conversation with a new message.
-func (m *MsgSyncer) triggerReinstallConversation(ctx context.Context, msgs map[string]*sdkws.PullMsgs, total int) (err error) {
+func (m *MsgSyncer) triggerReinstallConversation(ctx context.Context, msgs map[string]*sdkws.PullMsgs, total int, notifyConversations ...bool) (err error) {
 	if len(msgs) > 0 {
 		err = common.SendCmdWithReceipt(ctx, common.Cmd2Value{
 			Cmd:   constant.CmdMsgSyncInReinstall,
-			Value: sdk_struct.CmdMsgSyncInReinstall{Msgs: msgs, Total: total},
+			Value: sdk_struct.CmdMsgSyncInReinstall{Msgs: msgs, Total: total, NotifyConversations: len(notifyConversations) > 0 && notifyConversations[0]},
 		}, m.conversationCh)
 		if err != nil {
 			log.ZError(ctx, "triggerCmdNewMsgCome err", err, "msgs", msgs)

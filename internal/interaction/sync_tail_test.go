@@ -17,21 +17,22 @@ func TestExistingOldestMessageLoadsOnlyLatestWindow(t *testing.T) {
 		committed += len(cmd.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs["chat"].Msgs)
 		return nil
 	})
-	next := int64(3895)
+	wantRanges := [][2]int64{{3994, 3994}, {3895, 3993}}
+	requestIndex := 0
 	requestWorker(t, conn, func(req Message) *GeneralWsResp {
 		p := &sdkws.PullMessageBySeqsReq{}
 		if err := proto.Unmarshal(req.Message.Data, p); err != nil {
 			panic(err)
 		}
 		r := p.SeqRanges[0]
-		if r.Begin != next || r.End-r.Begin+1 > 100 || r.Num != r.End-r.Begin+1 {
+		if requestIndex >= len(wantRanges) || [2]int64{r.Begin, r.End} != wantRanges[requestIndex] || r.Num != r.End-r.Begin+1 {
 			t.Errorf("wrong recovery range: %v", r)
 		}
 		var seqs []int64
 		for s := r.Begin; s <= r.End; s++ {
 			seqs = append(seqs, s)
 		}
-		next = r.End + 1
+		requestIndex++
 		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", seqs...)})
 	})
 	if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"chat": 3994}, 1); err != nil {
@@ -40,7 +41,7 @@ func TestExistingOldestMessageLoadsOnlyLatestWindow(t *testing.T) {
 	if m.syncedMaxSeqs["chat"] != 1 || !m.messageAlreadyCovered("chat", 3994) {
 		t.Fatal("sparse tail lost or falsely advanced continuous checkpoint")
 	}
-	if committed != 100 {
+	if committed != 100 || requestIndex != len(wantRanges) {
 		t.Fatalf("recovered %d/100 rows", committed)
 	}
 }

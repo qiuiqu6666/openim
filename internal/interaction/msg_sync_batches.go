@@ -22,6 +22,7 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 	var failures []error
 	totalPages := 0
 	refreshedBounds := make(map[string]bool)
+	visibleRanges := make(map[string][2]int64, len(ranges))
 	for id, r := range ranges {
 		// Boundary revalidation can perform network I/O for many conversations.
 		// Lend ownership between these checks as well as between message pages.
@@ -54,11 +55,40 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 			}
 		}
 		ids = append(ids, id)
+		visibleRanges[id] = visible
 		for _, page := range pending[id] {
 			totalPages += int((page[1]-page[0])/SplitPullMsgNum + 1)
 		}
+		if !IsNotification(id) && !m.messageAlreadyCovered(id, visible[1]) {
+			last := pending[id][len(pending[id])-1]
+			if last[0] < last[1] {
+				totalPages++ // The preview and remaining tail have separate receipts.
+			}
+		}
 	}
 	sort.Strings(ids)
+	previewTotal := 0
+	if reinstall {
+		previewTotal = totalPages
+	}
+	failedPreviews, err := m.syncLatestMessagePreviews(ctx, ids, visibleRanges, previewTotal)
+	if err != nil {
+		return err
+	}
+	for id, failure := range failedPreviews {
+		failures = append(failures, failure)
+		delete(pending, id) // Keep its durable target for the next attempt.
+	}
+	// Preview receipts cover only their own sequences. Recompute the recent
+	// gaps so backfill neither downloads that row again nor skips older gaps.
+	for id := range pending {
+		if !IsNotification(id) {
+			pending[id] = m.recentMissingRanges(id, visibleRanges[id])
+			if len(pending[id]) == 0 {
+				delete(pending, id)
+			}
+		}
+	}
 	for len(pending) > 0 {
 		for _, id := range ids {
 			if err := yieldMessageSyncPage(ctx); err != nil {

@@ -19,7 +19,7 @@ func (m *MsgSyncer) triggerSyncStart(ctx context.Context, flag int) error {
 }
 
 // A checkpoint is committed only for a fully covered, durably acknowledged page.
-func (m *MsgSyncer) commitPulledMessages(ctx context.Context, resp *sdkws.PullMessageBySeqsResp, ranges map[string][2]int64, reinstallTotal int) error {
+func (m *MsgSyncer) commitPulledMessages(ctx context.Context, resp *sdkws.PullMessageBySeqsResp, ranges map[string][2]int64, reinstallTotal int, notifyConversations ...bool) error {
 	if resp == nil {
 		return fmt.Errorf("message pull returned no response")
 	}
@@ -39,7 +39,7 @@ func (m *MsgSyncer) commitPulledMessages(ctx context.Context, resp *sdkws.PullMe
 		sort.Slice(rows.Msgs, func(i, j int) bool { return rows.Msgs[i].Seq < rows.Msgs[j].Seq })
 	}
 	if reinstallTotal > 0 {
-		err = m.triggerReinstallConversation(ctx, resp.Msgs, reinstallTotal)
+		err = m.triggerReinstallConversation(ctx, resp.Msgs, reinstallTotal, notifyConversations...)
 	} else {
 		if len(resp.Msgs) > 0 {
 			err = common.SendCmdWithReceipt(ctx, common.Cmd2Value{Cmd: constant.CmdNewMsgCome,

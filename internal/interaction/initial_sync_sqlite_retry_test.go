@@ -74,7 +74,7 @@ func TestInitialSQLiteSyncRetriesAfterMessageFailure(t *testing.T) {
 				if stage != "storage" && pulls == 1 {
 					return &GeneralWsResp{ErrCode: 10001, ErrMsg: "simulated connection loss"}
 				}
-				return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 1, 2, 3)})
+				return requestedRecoveryResponse(t, req)
 			})
 			m.startSync()
 			m.doConnected(ctx)

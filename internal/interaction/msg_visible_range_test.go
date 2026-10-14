@@ -85,6 +85,9 @@ func TestVisibilityRecoveryUsesFreshBoundaries(t *testing.T) {
 			if wantRows < 0 {
 				wantRows = 0
 			}
+			if tc.ambiguous {
+				wantRows = 1
+			} // The valid tail is visible; the unknown older gap remains pending.
 			if delivered != wantRows {
 				t.Fatalf("delivered=%d want=%d", delivered, wantRows)
 			}
