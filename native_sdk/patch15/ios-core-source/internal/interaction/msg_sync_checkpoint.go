@@ -19,6 +19,7 @@ const messageCheckpointTable = "sdk_message_coverage_v1"
 type messageCheckpoint struct {
 	Completed int64 `json:"completed"`
 	Target    int64 `json:"target"`
+	Delivered int64 `json:"delivered,omitempty"` // Observed delivery, never continuous coverage.
 	persisted bool
 }
 
@@ -56,7 +57,7 @@ func (m *MsgSyncer) loadMessageCheckpoints(ctx context.Context, ids []string) er
 			if err := json.Unmarshal([]byte(row.VersionID), &state); err != nil {
 				return fmt.Errorf("invalid message checkpoint %q: %w", id, err)
 			}
-			if state.Completed < 0 || state.Target < state.Completed {
+			if state.Completed < 0 || state.Target < state.Completed || state.Delivered < 0 {
 				return fmt.Errorf("invalid message checkpoint bounds %q", id)
 			}
 			state.persisted = true

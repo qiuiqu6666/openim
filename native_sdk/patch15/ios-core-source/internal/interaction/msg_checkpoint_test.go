@@ -116,11 +116,15 @@ func TestContiguousPushGapYieldsToBackgroundScheduler(t *testing.T) {
 	ctx := recoveryContext(t)
 	d := &recoveryVersionDB{installed: true}
 	m := &MsgSyncer{ctx: ctx, db: d, recvCh: make(chan common.Cmd2Value, 1), syncedMaxSeqs: map[string]int64{"chat": 3}}
-	// No transport: handling the push must only journal and schedule the gap.
+	// No transport: latest delivery must not wait for history network requests.
+	delivered := false
 	m.pushTriggerAndSync(ctx, recoveryMsgs("chat", 1003), func(context.Context, map[string]*sdkws.PullMsgs) error {
-		t.Fatal("noncontiguous push committed")
+		delivered = true
 		return nil
 	})
+	if !delivered {
+		t.Fatal("latest push was withheld")
+	}
 	if m.syncedMaxSeqs["chat"] != 3 || m.checkpoints["chat"].Target != 1003 {
 		t.Fatal("push consumed gap")
 	}

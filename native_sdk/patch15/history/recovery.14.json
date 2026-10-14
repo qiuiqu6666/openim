@@ -1,0 +1,62 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "sdk_version": "v3.8.3-patch.15+recovery.14",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "d9aa1f6bf87240a531045e1eded047e80a18df5bc0c0f6ba3960df4300a54bee",
+  "source_directory": "ios-core-source",
+  "source_manifest": "ios-core-source-manifest.json",
+  "source_sha256": "a2add2fd6ed3174778c3eeeb7db180434dabcacfb762eb44883229a20bec28b3",
+  "created": "2026-10-14",
+  "previous_release": "history/recovery.13.json",
+  "native_binary_integrated": true,
+  "checks": {
+    "core_race": "passed: common/network/interaction/conversation_msg with -race",
+    "core_no_cgo": "passed: four packages for both platform source builds",
+    "go_vet": "passed: conversation_msg",
+    "source_parity": "passed: 358 locked files equal patch applied to clean official base",
+    "android_aar_build": "passed: armeabi-v7a/arm64-v8a/x86/x86_64; version and receipt verified",
+    "ios_framework": "passed: device arm64 and simulator arm64/x86_64",
+    "device_runtime": "not tested for recovery.14",
+    "android_apk_build": "not completed: disk full during dependency download; Android four-ABI AAR passed",
+    "source_lock_tests": "passed: 15 Python source/artifact checks",
+    "read_receipt_compatibility": "passed: empty seqs, explicit missing terminal, stale unread replay, following notification cursor and SQLite; storage failure preserves retry",
+    "ios_app_build": "passed: Release no-codesign; embedded Core recovery.14 and build 2028 verified"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.14",
+    "sdk_version": "v3.8.3-patch.15+recovery.14",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": false,
+    "runtime_validation": "not tested for recovery.14",
+    "aar_sha256": "71776eeea3208f1af3c22d8f57303b2df796a3ed9badc891428f382024ead668"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.14",
+    "framework_prepared": true,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "not tested for recovery.14",
+    "framework_sha256": {
+      "ios-arm64/OpenIMCore.framework/OpenIMCore": "f28fd52211b03e5019f82675e0d39e454ab1e8f83dfc7d5d75df2a0a5cf313f9",
+      "ios-arm64_x86_64-simulator/OpenIMCore.framework/OpenIMCore": "5afee4c1740220e3c40d13403dd63022d0263c8bf02a946065e14841a10bde79"
+    },
+    "app_version": "3.0.1+2028",
+    "app_binary_sha256": "2265fef5ff5a6fa06905e43cf72f994591ec4ab9c21b1d742ef557988711ae7f",
+    "pod_resolution_and_build": "passed: Xcode Release via Flutter 3.41.6 no-codesign; app Core recovery.14 and build 2028 verified",
+    "app_validation_scope": "current working tree; no installation/signing validation"
+  },
+  "verification_evidence": "artifacts/read-receipt-recovery.14"
+}

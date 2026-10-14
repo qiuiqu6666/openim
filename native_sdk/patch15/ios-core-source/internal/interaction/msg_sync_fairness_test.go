@@ -153,7 +153,7 @@ func TestInitialHistoryYieldsLivePushBetweenPages(t *testing.T) {
 	defer cancel()
 	conn := &LongConnMgr{send: make(chan Message, 1)}
 	m := &MsgSyncer{ctx: ctx, db: &recoveryVersionDB{}, reinstalled: true, longConnMgr: conn, recvCh: make(chan common.Cmd2Value), conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{}}
-	pageStarted := make(chan int64, 3)
+	pageStarted := make(chan int64, 4)
 	releasePage := make(chan struct{})
 	liveStored := make(chan struct{}, 1)
 	receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
@@ -190,18 +190,22 @@ func TestInitialHistoryYieldsLivePushBetweenPages(t *testing.T) {
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	m.recvCh <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdConnSuccesss}
-	if got := <-pageStarted; got != 1 {
+	if got := <-pageStarted; got != 281 {
 		t.Fatal(got)
 	}
 	m.recvCh <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdPushMsg, Value: &sdkws.PushMessages{Msgs: recoveryMsgs("live", 1)}}
 	releasePage <- struct{}{}
-	if got := <-pageStarted; got != 101 {
+	if got := <-pageStarted; got != 1 {
 		t.Fatal(got)
 	}
 	select {
 	case <-liveStored:
 	default:
 		t.Fatal("live push waited for all history pages")
+	}
+	releasePage <- struct{}{}
+	if got := <-pageStarted; got != 101 {
+		t.Fatal(got)
 	}
 	releasePage <- struct{}{}
 	if got := <-pageStarted; got != 201 {

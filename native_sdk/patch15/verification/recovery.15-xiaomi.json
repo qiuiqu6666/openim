@@ -1,0 +1,38 @@
+{
+  "core_version": "v3.8.3-patch.15+recovery.15",
+  "application_version": "3.0.1+2029",
+  "device": "Xiaomi 2506BPN68G",
+  "source_sha256": "f8bda035ccbd5cff9bf93c12ba59faedd79f6f405b5565b6de5b0539c21becf8",
+  "patch_sha256": "a130f87aed740ea97d7b19439dbbcba477d69eff5ec73f5b5e3f33d04ec56a22",
+  "aar_sha256": "687b41eaf5c785b093862ed82c50add5480048961b8eed4761861e6cd66fccc0",
+  "apk_sha256": "69e5ed490e9d7170afe431b397de697578007d3f6d4022fefc73ac2e5d49c757",
+  "apk_native_matches_aar": true,
+  "live_latest_visible": true,
+  "offline_latest_visible_without_next_push": true,
+  "offline_marker_counts": {
+    "SDK14-OFF-11": 1,
+    "SDK14-OFF-12": 1,
+    "SDK14-OFF-13": 1,
+    "SDK14-OFF-14": 1,
+    "SDK14-OFF-15": 1,
+    "SDK14-OFF-16": 1,
+    "SDK14-OFF-17": 1,
+    "SDK14-OFF-18": 1,
+    "SDK14-OFF-19": 1,
+    "SDK14-OFF-20": 1
+  },
+  "offline_unread_before": 2,
+  "offline_unread_after": 12,
+  "offline_unread_increment": 10,
+  "restart_unread_stable": true,
+  "restart_unread_value": 13,
+  "chat_latest_visible": true,
+  "recovery_first_observed_within_seconds": 7.2,
+  "scenario": "Sender emulator and receiving Xiaomi existing test chat; receiver app stopped, ten messages sent, sender stops, receiver app relaunched; no manual history query or next sender message required.",
+  "limits": [
+    "Process stop/relaunch is not a mobile-network handover test.",
+    "iOS recovery.15 Framework and iPhone runtime not built/tested here.",
+    "No assertion of exactly-once callbacks across a crash between notification and journal acknowledgement."
+  ],
+  "retained_remote_fix": "833c19e cumulative read receipt compatibility"
+}

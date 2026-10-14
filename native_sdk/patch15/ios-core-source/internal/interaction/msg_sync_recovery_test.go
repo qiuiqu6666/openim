@@ -279,8 +279,8 @@ func TestDuplicateOrOutOfOrderPushPullsTheEntireGap(t *testing.T) {
 			receiptWorker(t, m.conversationCh, func(common.Cmd2Value) error { return nil })
 			fastPath := false
 			m.pushTriggerAndSync(ctx, recoveryMsgs("chat", seqs...), func(context.Context, map[string]*sdkws.PullMsgs) error { fastPath = true; return nil })
-			if fastPath {
-				t.Fatal("non-contiguous push bypassed gap recovery")
+			if !fastPath {
+				t.Fatal("latest push waited for gap recovery")
 			}
 			select {
 			case got := <-pulled:

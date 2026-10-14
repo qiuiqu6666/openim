@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -38,6 +39,7 @@ func TestLossMatrixPushOrderAndDuplicates(t *testing.T) {
 				m := &MsgSyncer{ctx: ctx, longConnMgr: conn,
 					conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{id: 998}}
 				var delivered []int64
+				persisted := make(map[int64]bool)
 				var mu sync.Mutex
 				receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
 					if cmd.Cmd != constant.CmdNewMsgCome && cmd.Cmd != constant.CmdNotification {
@@ -46,7 +48,12 @@ func TestLossMatrixPushOrderAndDuplicates(t *testing.T) {
 					mu.Lock()
 					defer mu.Unlock()
 					for _, msg := range cmd.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs[id].Msgs {
-						delivered = append(delivered, msg.Seq)
+						// Receipt is a storage boundary. The consumer deduplicates
+						// tail delivery followed by full coverage replay.
+						if msg.Seq > 998 && !persisted[msg.Seq] {
+							persisted[msg.Seq] = true
+							delivered = append(delivered, msg.Seq)
+						}
 					}
 					return nil
 				})
@@ -80,6 +87,7 @@ func TestLossMatrixPushOrderAndDuplicates(t *testing.T) {
 				}
 				mu.Lock()
 				defer mu.Unlock()
+				sort.Slice(delivered, func(i, j int) bool { return delivered[i] < delivered[j] })
 				if !reflect.DeepEqual(delivered, []int64{999, 1000}) {
 					t.Fatalf("lost or replayed stored messages: %v", delivered)
 				}
@@ -263,7 +271,7 @@ func TestLossMatrixMultiConversationPushFailureAndPeriodicRecovery(t *testing.T)
 					for _, msg := range msgs.Msgs {
 						// The sync owner is blocked on this receipt, so this also
 						// catches advancing any batch before durable acceptance.
-						if msg.Seq <= m.syncedMaxSeqs[id] {
+						if msg.Seq <= m.syncedMaxSeqs[id] && !stored[id][msg.Seq] {
 							t.Errorf("%s seq %d was acknowledged before storage (cursor %d)", id, msg.Seq, m.syncedMaxSeqs[id])
 						}
 					}

@@ -41,6 +41,11 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 		if visible[0] > visible[1] {
 			continue
 		}
+		// Show the current conversation tail before traversing a large legacy
+		// backlog. Delivery does not certify coverage of the preceding gap.
+		if err := m.deliverRecentMessageTail(ctx, id, visible); err != nil {
+			failures = append(failures, err)
+		}
 		pending[id] = visible
 		ids = append(ids, id)
 		totalPages += int((visible[1]-visible[0])/SplitPullMsgNum + 1)

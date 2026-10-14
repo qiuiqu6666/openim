@@ -374,6 +374,7 @@ func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[str
 
 	needSyncSeqMap := make(map[string][2]int64)
 	res := make(map[string]*sdkws.PullMsgs)
+	continuousEnds := make(map[string]int64)
 
 	for conversationID, msgs := range pushMessages {
 		var (
@@ -382,6 +383,7 @@ func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[str
 		)
 		contiguous := true
 		expected := m.syncedMaxSeqs[conversationID] + 1
+		seen := make(map[int64]bool)
 
 		for _, msg := range msgs.Msgs {
 			if msg.Seq == 0 {
@@ -390,6 +392,10 @@ func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[str
 				})
 				continue
 			}
+			if !IsNotification(conversationID) && (msg.Seq <= m.syncedMaxSeqs[conversationID] || seen[msg.Seq]) {
+				continue
+			}
+			seen[msg.Seq] = true
 			lastSeq = max(lastSeq, msg.Seq)
 			if msg.Seq != expected {
 				contiguous = false
@@ -407,10 +413,14 @@ func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[str
 			return
 		}
 
-		if contiguous {
+		if contiguous || !IsNotification(conversationID) {
 			log.ZDebug(ctx, "trigger msgs", "conversationID", conversationID, "msgs", storageMsgs)
 			res[conversationID] = &sdkws.PullMsgs{Msgs: storageMsgs}
-		} else if lastSeq > m.syncedMaxSeqs[conversationID] {
+			if contiguous {
+				continuousEnds[conversationID] = lastSeq
+			}
+		}
+		if !contiguous && lastSeq > m.syncedMaxSeqs[conversationID] {
 			// must pull message when message type is notification
 			needSyncSeqMap[conversationID] = [2]int64{
 				m.syncedMaxSeqs[conversationID] + 1,
@@ -426,7 +436,17 @@ func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[str
 			return
 		}
 		for conversationID, msgs := range res {
-			if err := m.commitMessageCheckpoint(ctx, conversationID, msgs.Msgs[len(msgs.Msgs)-1].Seq); err != nil {
+			end := int64(0)
+			for _, row := range msgs.Msgs {
+				end = max(end, row.Seq)
+			}
+			if !IsNotification(conversationID) {
+				if err := m.recordDeliveredTail(ctx, conversationID, end); err != nil {
+					common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
+					return
+				}
+			}
+			if err := m.commitMessageCheckpoint(ctx, conversationID, continuousEnds[conversationID]); err != nil {
 				log.ZError(ctx, "persist push checkpoint failed", err)
 				common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
 				return
@@ -658,7 +678,7 @@ func (m *MsgSyncer) triggerConversation(ctx context.Context, msgs map[string]*sd
 	if len(msgs) > 0 {
 		err := common.SendCmdWithReceipt(ctx, common.Cmd2Value{
 			Cmd:   constant.CmdNewMsgCome,
-			Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: msgs},
+			Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: msgs, Recovery: true},
 		}, m.conversationCh)
 		if err != nil {
 			log.ZError(ctx, "triggerCmdNewMsgCome err", err, "msgs", msgs)
