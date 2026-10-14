@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../res/app_tokens.dart';
 import '../location_picker/native/chat_location_amap_consent.dart';
+import '../location_picker/native/chat_location_map_runtime.dart';
 import '../location_picker/native/chat_location_native_map.dart';
 import '../location_picker/native/chat_location_native_map_options.dart';
 import 'chat_location_message_data.dart';
@@ -24,6 +25,7 @@ class _ChatLocationThumbnailState extends State<ChatLocationThumbnail>
     with WidgetsBindingObserver {
   static final _cache = <String, Uint8List>{};
   bool _consent = false, _failed = false, _foreground = true;
+  bool _nativeAvailable = true;
   Timer? _timeout;
   Uint8List? _image;
   String? _key;
@@ -46,7 +48,14 @@ class _ChatLocationThumbnailState extends State<ChatLocationThumbnail>
         allowed = false;
       }
     }
-    if (mounted) setState(() => _consent = allowed);
+    final nativeAvailable =
+        allowed ? await ChatLocationMapRuntime.nativeAvailable() : true;
+    if (mounted) {
+      setState(() {
+        _consent = allowed;
+        _nativeAvailable = nativeAvailable;
+      });
+    }
   }
 
   @override
@@ -104,7 +113,8 @@ class _ChatLocationThumbnailState extends State<ChatLocationThumbnail>
       content = Image.memory(_image!, fit: BoxFit.cover, gaplessPlayback: true);
     } else if (_consent && !_failed && widget.data.point != null && active) {
       final key = _key;
-      final mobile = !kIsWeb &&
+      final mobile = _nativeAvailable &&
+          !kIsWeb &&
           (defaultTargetPlatform == TargetPlatform.android ||
               defaultTargetPlatform == TargetPlatform.iOS);
       if (mobile && widget.mapBuilder == null && _timeout == null) {

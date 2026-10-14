@@ -83,12 +83,14 @@ class _ChatLocationDesktopMapState extends State<ChatLocationDesktopMap> {
                       color: ChatLocationPickerTokens.accent,
                       size: ChatLocationPickerTokens.emptyIconSize))
             ]),
-          RichAttributionWidget(attributions: [
-            TextSourceAttribution('OpenStreetMap contributors',
-                onTap: () => unawaited(launchUrl(
-                    Uri.parse('https://www.openstreetmap.org/copyright'),
-                    mode: LaunchMode.externalApplication)))
-          ]),
+          RichAttributionWidget(
+              alignment: AttributionAlignment.bottomLeft,
+              attributions: [
+                TextSourceAttribution('OpenStreetMap contributors',
+                    onTap: () => unawaited(launchUrl(
+                        Uri.parse('https://www.openstreetmap.org/copyright'),
+                        mode: LaunchMode.externalApplication)))
+              ]),
         ]);
   }
 }

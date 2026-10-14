@@ -9,6 +9,7 @@ import '../../../../res/app_tokens.dart';
 import '../chat_location_picker_labels.dart';
 import '../chat_location_picker_tokens.dart';
 import 'chat_location_amap_consent.dart';
+import 'chat_location_map_runtime.dart';
 import 'chat_location_desktop_map.dart';
 import 'chat_location_native_map_options.dart';
 import '../data/chat_location_place.dart';
@@ -27,7 +28,16 @@ class ChatLocationNativeMap extends StatelessWidget {
             defaultTargetPlatform != TargetPlatform.iOS)) {
       return ChatLocationDesktopMap(options: options);
     }
-    final view = _NativeMapView(options: options);
+    final Widget view = defaultTargetPlatform == TargetPlatform.android
+        ? FutureBuilder<bool>(
+            future: ChatLocationMapRuntime.nativeAvailable(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const SizedBox.expand();
+              return snapshot.data!
+                  ? _NativeMapView(options: options)
+                  : ChatLocationDesktopMap(options: options);
+            })
+        : _NativeMapView(options: options);
     return requireConsent && defaultTargetPlatform == TargetPlatform.android
         ? ChatLocationAmapConsent(child: view)
         : view;

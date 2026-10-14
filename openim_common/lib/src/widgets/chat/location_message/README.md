@@ -15,7 +15,11 @@ Android uses AMap snapshots; iOS retains MapKit with MKMapSnapshotter. Mobile
 thumbnail map views are released after capture or timeout. An in-memory cache
 retains at most 32 snapshots, keyed by coordinate and theme. Failed snapshots
 show a placeholder; no street map or address is fabricated. Desktop retains
-the existing map implementation.
+the existing map implementation. Android x86/x86_64 processes also use this
+OpenStreetMap compatibility renderer, behind the same consent gate: the bundled
+AMap 11.3 SDK contains ARM libraries only. Runtime selection checks the actual
+process ABI, not the device's advertised ARM translation support. Compatibility
+thumbnails do not wait for a native snapshot or run the native snapshot timeout.
 
 Descriptions remain plain text: name followed by an optional newline and
 provider address. Legacy single-line and `/////` descriptions are readable.
