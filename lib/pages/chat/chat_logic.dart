@@ -53,6 +53,7 @@ import 'messages/revocation/chat_message_revocation.dart';
 import 'messages/arrival/chat_message_arrival_controller.dart';
 import 'messages/refresh/chat_message_read_updates.dart';
 import 'messages/presentation/chat_message_presentation.dart';
+import 'messages/presentation/chat_copy_text_cache.dart';
 import 'messages/presentation/fund_notice_index.dart';
 import 'messages/forwarding/chat_forwarding_controller.dart';
 import 'messages/selection/message_selection_controller.dart';
@@ -176,6 +177,7 @@ class ChatLogic extends SuperController {
     scrollBottom: scrollBottom,
     resetInput: (message) => _composer.resetAfterSend(message),
     onTimelineChanged: _trimAutomaticWindow,
+    onMessageChanged: messageReadUpdates.notify,
     onDeliveryStarted: (message, target) => !_sessionInactive &&
             isSingleChat &&
             userID == 'assistant' &&
@@ -237,8 +239,8 @@ class ChatLogic extends SuperController {
         sessionType: conversationInfo.conversationType)),
     onTransfer: (message, state) =>
         _delivery.updateTransfer(message.clientMsgID, state),
-    onUploadFailed: (_) {
-      if (!_sessionInactive) messageList.refresh();
+    onUploadFailed: (message) {
+      if (!_sessionInactive) _delivery.messageChanged(message);
     },
     conversationID: () => conversationInfo.conversationID,
     isClosed: () => _sessionInactive,
@@ -688,7 +690,7 @@ class ChatLogic extends SuperController {
   late StreamSubscription connectionSub;
   final syncStatus = IMSdkStatus.syncEnded.obs;
 
-  final copyTextMap = <String?, String?>{};
+  final Map<String?, String?> copyTextMap = ChatCopyTextCache();
 
   String? get userID => conversationInfo.userID;
 
@@ -1335,6 +1337,7 @@ class ChatLogic extends SuperController {
     _historyRecoveryWorker?.dispose();
     _receipts.close();
     messageReadUpdates.close();
+    copyTextMap.clear();
     _ownedMessageCallback = null;
     _ownedReceiptCallback = null;
     if (identical(imLogic.onSignalingMessage, _ownedSignalingCallback)) {

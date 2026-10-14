@@ -145,6 +145,51 @@ void main() {
   void finishUpload() =>
       upload.complete(jsonEncode({'url': 'https://example.test/photo.jpg'}));
 
+  test('upload stages and ACK only refresh their row and preserve early reads',
+      () async {
+    final pending = media.onTapAlbum();
+    await until(() => uploads == 1);
+    final messages = <Message>[].obs;
+    final changedRows = <Set<String>>[];
+    final delivery = ChatDeliveryController(
+        messageList: messages,
+        conversation: () => ConversationInfo(
+            conversationID: 'chat-a', userID: 'a', conversationType: 1),
+        isClosed: () => false,
+        groupStatus: () => null,
+        scrollBottom: () {},
+        resetInput: (_) {},
+        onMessageChanged: changedRows.add);
+    final binding = bindMediaOutbox(
+        conversationID: 'chat-a',
+        messages: messages,
+        isClosed: () => false,
+        removedIDs: {},
+        delivery: delivery,
+        outbox: outbox);
+    messages.single
+      ..isRead = true
+      ..hasReadTime = 1234
+      ..exMap = {'showTime': true};
+    var listChanges = 0;
+    final subscription = messages.listen((_) => listChanges++);
+    finishUpload();
+    await pending;
+    expect(messages.single.status, MessageStatus.succeeded);
+    expect(messages.single.pictureElem!.sourcePicture!.url,
+        'https://example.test/photo.jpg');
+    expect(messages.single.isRead, true);
+    expect(messages.single.hasReadTime, 1234);
+    expect(messages.single.exMap['showTime'], true);
+    expect(listChanges, 0);
+    expect(changedRows.length, greaterThanOrEqualTo(2));
+    expect(changedRows.every((ids) => ids.single == 'image'), true);
+    expect(delivery.retainedTransferCount, 0);
+    await subscription.cancel();
+    await binding.cancel();
+    delivery.close();
+  });
+
   for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
     for (final group in [false, true]) {
       test(

@@ -6,6 +6,8 @@ import 'package:openim_common/openim_common.dart';
 
 import 'core/controller/im_controller.dart';
 import 'core/server_nodes/automatic_node_runtime.dart';
+import 'core/server_nodes/startup/startup_network_preparation.dart';
+import 'core/youmeng/youmeng_runtime.dart';
 import 'core/controller/app_controller.dart';
 import 'core/user_activity/activity_runtime.dart';
 import 'routes/app_pages.dart';
@@ -66,8 +68,12 @@ class ChatApp extends StatelessWidget {
 class InitBinding extends Bindings {
   @override
   void dependencies() {
-    Get.put<IMController>(IMController());
-    Get.put<AutomaticNodeRuntime>(AutomaticNodeRuntime());
+    final network = Get.put(StartupNetworkPreparation(
+        prepareNetwork: (onShieldStarting) =>
+            YoumengRuntime.prepare(onShieldStarting: onShieldStarting)));
+    Get.put<IMController>(IMController(prepareStartup: network.prepare));
+    Get.put<AutomaticNodeRuntime>(
+        AutomaticNodeRuntime(startupReady: () => network.ready));
     Get.put<PushController>(PushController());
     Get.put<CacheController>(CacheController());
   }

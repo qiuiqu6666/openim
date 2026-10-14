@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-/// Only mounted rows subscribe. Read changes do not invalidate timeline order,
+/// Only mounted rows subscribe. Read/delivery changes do not invalidate order,
 /// time markers, history snapshots, or the viewport's message index.
 class ChatMessageReadUpdates {
   final _listeners = <String, Set<VoidCallback>>{};

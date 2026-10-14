@@ -11,7 +11,12 @@ class YoumengRuntime {
   static const enabled = bool.fromEnvironment('YOUMENG_ENABLED');
   static const _channel = MethodChannel('openim/youmeng');
 
-  static Future<void> prepare() async {
+  static Future<void> prepare({void Function()? onShieldStarting}) async {
+    Future<void> startShield() async {
+      onShieldStarting?.call();
+      await _startShield();
+    }
+
     Config.useRuntimeNetworkRoute(null);
     final current = NodeEndpoint.current();
     NodeEndpoint? previous;
@@ -23,7 +28,7 @@ class YoumengRuntime {
         NodeEndpoint.builtIn
             .any((node) => node.signature == current.signature)) {
       await prepareRememberedShield(
-        startShield: _startShield,
+        startShield: startShield,
         checkDirect: () => StartupNodeSelector(apply: (_) async {}).select(),
         applyDirect: StartupNodeSelector.persist,
       );
@@ -36,7 +41,7 @@ class YoumengRuntime {
             await StartupNodeSelector(preferred: previous).select();
         return StartupNodeSelection.last!;
       },
-      startShield: _startShield,
+      startShield: startShield,
     );
   }
 

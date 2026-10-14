@@ -274,6 +274,33 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   });
 
+  testWidgets('real chat ACK updates one row without a second list event',
+      (tester) async {
+    final logic = open();
+    await tester.idle();
+    calls.last.complete([_entryMessage('previous')]);
+    await tester.pump();
+    var listChanges = 0, rowChanges = 0;
+    final subscription = logic.messageList.listen((_) => listChanges++);
+    final row = logic.messageReadUpdates.forMessage('outgoing');
+    void changed() => rowChanges++;
+    row.addListener(changed);
+    final outgoing = _entryMessage('outgoing', time: 2)
+      ..sendID = 'self'
+      ..status = MessageStatus.sending;
+    final sending = logic.sendPreparedMessage(outgoing);
+    await tester.idle();
+    await sending;
+    expect(outgoing.status, MessageStatus.succeeded);
+    expect(listChanges, 1,
+        reason: 'Only inserting the new message is structural');
+    expect(rowChanges, 1);
+    row.removeListener(changed);
+    await subscription.cancel();
+    logic.onDelete();
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
   testWidgets('automatic eviction waits until selection finishes',
       (tester) async {
     final logic = open();

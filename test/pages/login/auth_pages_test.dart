@@ -36,6 +36,9 @@ late Uint8List _avatarBytes;
 
 class _App extends GetxController implements AppController {
   @override
+  Future<void> autoCheckVersionUpgrade() async {}
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

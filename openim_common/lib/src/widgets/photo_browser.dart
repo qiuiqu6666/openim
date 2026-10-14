@@ -80,6 +80,8 @@ class _MediaBrowserState extends State<MediaBrowser> {
   final _chromeTick = ValueNotifier(0);
   final _pageTick = ValueNotifier(0);
   final _galleryPrecache = ImagePreviewGalleryPrecache();
+  // Warm only pages reachable by the next swipe, including on long screenshots.
+  static const _warmRadius = 1;
   final _warmImages = <int, ImageProvider>{};
   final _warmRequests = <int, ViewerImageProvider>{};
   Timer? _precacheIdle;
@@ -110,7 +112,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
         return;
       }
       for (final index in _warmImages.keys.toList()) {
-        if ((index - currentIndex).abs() > 3) {
+        if ((index - currentIndex).abs() > _warmRadius) {
           _warmImages.remove(index)?.evict();
           _warmRequests.remove(index)?.cancel();
         }
@@ -119,7 +121,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
         context: context,
         centerIndex: currentIndex,
         itemCount: widget.sources.length,
-        radius: 3,
+        radius: _warmRadius,
         resolveProvider: _warmProvider,
       );
     });
@@ -267,7 +269,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
   void _retainCurrentRequests() {
     // Apply the bound during traversal, not only after the idle timer fires.
     for (final index in _warmImages.keys.toList()) {
-      if ((index - currentIndex).abs() > 3 && index != _dragOrigin) {
+      if ((index - currentIndex).abs() > _warmRadius && index != _dragOrigin) {
         _warmImages.remove(index)?.evict();
         _warmRequests.remove(index)?.cancel();
       }

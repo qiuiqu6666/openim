@@ -45,6 +45,41 @@ class _MissingFile extends Fake implements File {
 }
 
 void main() {
+  testWidgets('idle gallery only decodes the two immediate preview neighbors',
+      (tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder).drawColor(Colors.orange, BlendMode.src);
+    final picture = recorder.endRecording();
+    final pixels = picture.toImageSync(12, 24);
+    picture.dispose();
+    addTearDown(pixels.dispose);
+    final warmed = <String>{};
+    await tester.pumpWidget(renderTestHost(MediaBrowser(
+      initialIndex: 4,
+      sources: List.generate(
+          9,
+          (i) => MediaSource(
+              url: 'https://images.test/$i',
+              thumbnail: 'https://images.test/$i')),
+      imageProviderFactory: (url, budget) {
+        if (budget == 375 * 812) warmed.add(url);
+        return _ViewerImage(
+            url,
+            OneFrameImageStreamCompleter(
+                SynchronousFuture(ImageInfo(image: pixels.clone()))));
+      },
+    )));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+    expect(warmed, {'https://images.test/3', 'https://images.test/5'});
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('small drag paints incoming pixels when local preview is missing',
       (tester) async {
     tester.view.physicalSize = const Size(375, 812);

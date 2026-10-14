@@ -50,3 +50,5 @@
 最终调试包：`build/app/outputs/flutter-apk/app-debug-home-liquid-glass-20261005-b03433399736.apk`。
 
 SHA-256：`b03433399736e2d02b346fb4909f3685cae18d5391dad7f2bdf08b9ae45e86bf`。
+
+五个首页图标复用原 PNG 与配色，通过 animated_home_icon.dart 在未选中→选中时播放一次 420ms 的独立形变动效。只变换图案，不移动角标、标签或点击区域；普通重建不重播，取消选中立即复位，减少动态效果时保持静态。各入口保持原有导航和未读数据源。

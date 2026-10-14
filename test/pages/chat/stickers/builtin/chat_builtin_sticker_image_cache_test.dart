@@ -314,6 +314,53 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  _testWidgets(
+      'a warm image larger than the budget still uses bounded decoding',
+      (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final http = _deferredHttp();
+    const url = 'https://stickers.test/builtin-large-warm.png';
+    final fixture = await _fixture(tester, url);
+    await tester.runAsync(() => fixture.sender.send(_sticker));
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+    await tester.runAsync(() async {
+      final recorder = ui.PictureRecorder();
+      ui.Canvas(recorder)
+          .drawColor(const ui.Color(0xff123456), ui.BlendMode.src);
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(1024, 1024);
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      picture.dispose();
+      await warmBuiltinStickerImage(url: url, bytes: png!.buffer.asUint8List());
+    });
+    // Metadata still claims the ordinary 240px builtin. Only actual cached
+    // image dimensions may qualify for the direct warm-cache path.
+    await _mount(tester, fixture.outgoing);
+    final provider = tester.widget<Image>(find.byType(Image)).image;
+    expect(provider, isA<ResizeImage>());
+    expect((provider as ResizeImage).width, 256);
+    expect(provider.height, 256);
+    for (var attempt = 0; attempt < 100 && http.requests == 0; attempt++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)));
+      await tester.pump(const Duration(milliseconds: 5));
+    }
+    expect(http.requests, 1);
+    http.bytes.complete(fixture.uploadedBytes);
+    for (var frame = 0; frame < 25; frame++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump(const Duration(milliseconds: 16));
+      if (find.byIcon(Icons.emoji_emotions_outlined).evaluate().isEmpty) break;
+    }
+    _expectReadyImage(tester);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(tester.takeException(), isNull);
+  });
+
   _testWidgets('invalid PNG errors leave no pending or live image cache entry',
       (tester) async {
     const url = 'https://stickers.test/builtin-invalid.png';

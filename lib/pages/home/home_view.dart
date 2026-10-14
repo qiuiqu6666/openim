@@ -14,6 +14,7 @@ import 'home_logic.dart';
 import 'glass_bottom_nav_bar.dart';
 import 'navigation/home_navigation_tokens.dart';
 import 'navigation/home_navigation_icon.dart';
+import 'navigation/animated_home_icon.dart';
 import '../../widgets/theme_aware_page.dart';
 import '../../core/controller/im_controller.dart';
 import '../../core/controller/app_controller.dart';
@@ -212,9 +213,13 @@ class _HomePageState extends State<HomePage> {
     return groupChats ? snapshot.groupUnread : snapshot.singleUnread;
   }
 
-  Widget _walletNavIcon(Color color) => ColorFiltered(
-        colorFilter: ColorFilter.mode(color, BlendMode.srcATop),
-        child: Image.asset('assets/wallet.png', width: 24, height: 24),
+  Widget _walletNavIcon(Color color) => AnimatedHomeIcon(
+        selected: color == AppTokens.accent,
+        motion: HomeIconMotion.wallet,
+        child: ColorFiltered(
+          colorFilter: ColorFilter.mode(color, BlendMode.srcATop),
+          child: Image.asset('assets/wallet.png', width: 24, height: 24),
+        ),
       );
 
   String _mainTabTitle(BuildContext context, _MainTab tab) {
@@ -264,22 +269,32 @@ class _HomePageState extends State<HomePage> {
     };
   }
 
-  Widget _navIcon(String filename, Color color) => ColorFiltered(
-        colorFilter: ColorFilter.mode(color, BlendMode.srcATop),
-        child: Image.asset('assets/images/$filename',
-            package: 'openim_common',
-            width: 24,
-            height: 24,
-            errorBuilder: (_, __, ___) => AppIcon(
-                  kind: filename.contains('contact')
-                      ? AppIconKind.contacts
-                      : filename.contains('group')
-                          ? AppIconKind.groupChat
-                          : filename.contains('profile')
-                              ? AppIconKind.profile
-                              : AppIconKind.singleChat,
-                  color: color,
-                )),
+  Widget _navIcon(String filename, Color color) => AnimatedHomeIcon(
+        selected: color == AppTokens.accent,
+        motion: filename.contains('contact')
+            ? HomeIconMotion.contact
+            : filename.contains('group')
+                ? HomeIconMotion.group
+                : filename.contains('profile')
+                    ? HomeIconMotion.profile
+                    : HomeIconMotion.message,
+        child: ColorFiltered(
+          colorFilter: ColorFilter.mode(color, BlendMode.srcATop),
+          child: Image.asset('assets/images/$filename',
+              package: 'openim_common',
+              width: 24,
+              height: 24,
+              errorBuilder: (_, __, ___) => AppIcon(
+                    kind: filename.contains('contact')
+                        ? AppIconKind.contacts
+                        : filename.contains('group')
+                            ? AppIconKind.groupChat
+                            : filename.contains('profile')
+                                ? AppIconKind.profile
+                                : AppIconKind.singleChat,
+                    color: color,
+                  )),
+        ),
       );
 
   Widget _setupIcon(Widget icon, int Function() unreadCount) {

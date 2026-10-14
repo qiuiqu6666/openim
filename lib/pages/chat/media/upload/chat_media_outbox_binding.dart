@@ -33,10 +33,11 @@ StreamSubscription<MediaOutboxEntry> bindMediaOutbox({
       messages.add(copy);
       if (!seeding) onAdded?.call();
     } else {
-      existing.update(copy);
-      messages.refresh();
+      delivery.updateMessage(existing, copy);
     }
-    delivery.updateTransfer(copy.clientMsgID, entry.transfer);
+    if (copy.status == MessageStatus.sending) {
+      delivery.updateTransfer(copy.clientMsgID, entry.transfer);
+    }
   }
 
   final owner = outbox ?? ChatMediaOutbox.instance;

@@ -30,8 +30,12 @@ import '../../pages/chat/calling/preferences/call_notification_preference_bindin
 import 'app_controller.dart';
 
 class IMController extends GetxController with IMCallback, OpenIMLive {
-  IMController({Duration loginStartTimeout = const Duration(seconds: 15)})
-      : _loginStartTimeout = loginStartTimeout;
+  IMController({
+    Duration loginStartTimeout = const Duration(seconds: 15),
+    Future<void> Function()? prepareStartup,
+  })  : _loginStartTimeout = loginStartTimeout,
+        _prepareStartup = prepareStartup;
+  final Future<void> Function()? _prepareStartup;
   final Duration _loginStartTimeout;
   final _sessionQueue = SdkSessionQueue();
   IMConnectionRecovery? _connectionRecovery;
@@ -197,7 +201,10 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     if (Get.isRegistered<AppController>()) {
       backgroundSubject.add(Get.find<AppController>().isRunningBackground);
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => initOpenIM());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _prepareStartup?.call();
+      if (!isClosed) await initOpenIM();
+    });
   }
 
   Future<bool> initOpenIM({bool notifyStartup = true}) async {

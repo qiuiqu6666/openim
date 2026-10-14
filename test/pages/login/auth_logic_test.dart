@@ -17,8 +17,17 @@ import 'package:openim/routes/app_pages.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:openim_common/src/utils/http_util.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class _App extends GetxController implements AppController {
+  Future<void>? updateCheck;
+  int updateChecks = 0;
+  @override
+  Future<void> autoCheckVersionUpgrade() {
+    updateChecks++;
+    return updateCheck ?? Future<void>.value();
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -173,6 +182,34 @@ void main() {
   tearDown(() async {
     await EasyLoading.dismiss(animation: false);
     Get.reset();
+  });
+
+  testWidgets('login submits while update check is still pending',
+      (tester) async {
+    PackageInfo.setMockInitialValues(appName: 'test', packageName: 'test',
+        version: '1.0.0', buildNumber: '1', buildSignature: '');
+    await tester.pumpWidget(_app());
+    final adapter = _UnexpectedHTTP();
+    http.dio.httpClientAdapter = adapter;
+    final app = Get.find<AppController>() as _App;
+    final gate = Completer<void>();
+    app.updateCheck = gate.future;
+    login.isPasswordLogin.value = false;
+    login.phoneCtrl.text = '13800138000';
+    login.verificationCodeCtrl.text = '123456';
+    var completed = false;
+    await tester.runAsync(() async {
+      await login.login().timeout(const Duration(seconds: 3));
+      completed = true;
+    });
+    await tester.pumpAndSettle();
+    expect(app.updateChecks, greaterThan(0));
+    expect(completed, isTrue);
+    expect(login.formError, isNotNull,
+        reason: 'The login attempt must run, not await the unresolved update.');
+    expect(gate.isCompleted, isFalse);
+    gate.complete();
+    expect(completed, isTrue);
   });
 
   testWidgets('login method switches recalculate the active credential',

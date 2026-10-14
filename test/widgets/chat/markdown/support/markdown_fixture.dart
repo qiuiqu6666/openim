@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
@@ -11,6 +12,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
+import 'package:openim/pages/chat/messages/refresh/chat_message_read_updates.dart';
 import 'package:openim/pages/chat/messages/selection/message_selection_controller.dart';
 import 'package:openim/pages/chat/voice/voice_transcription_controller.dart';
 import 'package:openim_common/openim_common.dart';
@@ -166,6 +168,10 @@ class MarkdownTileLogic extends GetxController implements ChatLogic {
   @override
   final copyTextMap = <String?, String?>{};
   @override
+  final messageReadUpdates = ChatMessageReadUpdates();
+  @override
+  ValueListenable<ChatTransferStatus?>? transferStatus(Message message) => null;
+  @override
   final sendStatusSub = PublishSubject<MsgStreamEv<bool>>();
   @override
   late final MessageSelectionController messageSelection;
@@ -211,6 +217,7 @@ class MarkdownTileLogic extends GetxController implements ChatLogic {
   void clickLinkText(String url, Object? type) {}
 
   Future<void> disposeFixture() async {
+    messageReadUpdates.close();
     messageSelection.dispose();
     voiceTranscriptions.dispose();
     voicePlayback.dispose();

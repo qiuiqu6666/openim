@@ -41,6 +41,7 @@ void main() {
   late bool sessionInactive;
   late int inputResets;
   late int scrolls;
+  late List<Set<String>> changedRows;
 
   test('late send completion preserves an already confirmed read receipt', () {
     final message = _outgoing('read-first')
@@ -61,6 +62,7 @@ void main() {
     destinations = [];
     inputResets = 0;
     scrolls = 0;
+    changedRows = [];
     delivery = ChatDeliveryController(
       accountID: 'self',
       currentAccountID: () => currentAccount,
@@ -71,6 +73,7 @@ void main() {
       groupStatus: () => null,
       scrollBottom: () => scrolls++,
       resetInput: (_) => inputResets++,
+      onMessageChanged: changedRows.add,
       sendRaw: (message, target) {
         destinations.add(target);
         return transport.future;
@@ -96,6 +99,122 @@ void main() {
     expect(messages, hasLength(1));
     expect(message.status, MessageStatus.succeeded);
     expect(message.seq, 7);
+  });
+
+  test('send acknowledgement does not broadcast a structural list change',
+      () async {
+    final message = _outgoing('target');
+    final pending = delivery.send(message);
+    var listChanges = 0;
+    final subscription = messages.listen((_) => listChanges++);
+    transport.complete(_sent('target'));
+    await pending;
+    expect(message.status, MessageStatus.succeeded);
+    expect(listChanges, 0);
+    expect(changedRows, [
+      {'target'}
+    ]);
+    await subscription.cancel();
+  });
+
+  test('1000 completed sends release transfer state without closing the chat',
+      () async {
+    for (var index = 0; index < 1000; index++) {
+      transport = Completer<Message>();
+      final message = _outgoing('sent-$index');
+      final pending = delivery.send(message);
+      expect(delivery.retainedTransferCount, 1);
+      transport.complete(_sent('sent-$index'));
+      await pending;
+      expect(delivery.retainedTransferCount, 0);
+    }
+    expect(messages, hasLength(1000));
+    expect(messages.every((m) => m.status == MessageStatus.succeeded), isTrue);
+  });
+
+  test('failed send releases transfer state and retry starts a fresh notifier',
+      () async {
+    final message = _outgoing('retry');
+    final pending = delivery.send(message);
+    final first = delivery.transferFor(message);
+    transport.completeError(
+        PlatformException(code: SDKErrorCode.parameterError.toString()));
+    await pending;
+    expect(message.status, MessageStatus.failed);
+    expect(delivery.retainedTransferCount, 0);
+    transport = Completer<Message>();
+    message.status = MessageStatus.sending;
+    final retry = delivery.send(message, addToUI: false);
+    expect(delivery.transferFor(message), isNot(same(first)));
+    transport.complete(_sent('retry'));
+    await retry;
+    expect(delivery.retainedTransferCount, 0);
+    expect(messages, hasLength(1));
+  });
+
+  test('ACK preserves the local time marker unless the SDK corrects the time',
+      () async {
+    final message = _outgoing('time')
+      ..sendTime = 1000
+      ..exMap = {'showTime': true};
+    messages.add(message);
+    var listChanges = 0;
+    final subscription = messages.listen((_) => listChanges++);
+    delivery.sendSucceeded(message, _sent('time')..sendTime = 1000);
+    expect(message.exMap['showTime'], true);
+    expect(listChanges, 0);
+    delivery.sendSucceeded(message, _sent('time')..sendTime = 2000);
+    expect(listChanges, 1, reason: 'Neighboring time separators must update');
+    await subscription.cancel();
+  });
+
+  test('duplicate upload percentages do not postpone the stalled-send check',
+      () {
+    fakeAsync((clock) {
+      final message = _outgoing('stalled-progress');
+      messages.add(message);
+      delivery.updateTransfer(message.clientMsgID,
+          const ChatTransferStatus(ChatTransferStage.uploading, 20));
+      clock.elapse(const Duration(seconds: 20));
+      delivery.updateTransfer(message.clientMsgID,
+          const ChatTransferStatus(ChatTransferStage.uploading, 20));
+      clock.elapse(const Duration(seconds: 11));
+      expect(delivery.transferFor(message)!.value!.stage,
+          ChatTransferStage.unknown);
+      delivery.close();
+    });
+  });
+
+  test('late lookup cannot recreate transfer state after a send succeeds',
+      () async {
+    delivery.close();
+    final lookup = Completer<FavoriteSendResult>();
+    delivery = ChatDeliveryController(
+      accountID: 'self',
+      currentAccountID: () => currentAccount,
+      messageList: messages,
+      conversation: () =>
+          ConversationInfo(conversationID: 'chat', userID: 'peer'),
+      isClosed: () => false,
+      groupStatus: () => null,
+      scrollBottom: () {},
+      resetInput: (_) {},
+      onMessageChanged: changedRows.add,
+      lookup: (_, __) => lookup.future,
+    );
+    final message = _outgoing('late-lookup');
+    messages.add(message);
+    delivery.updateTransfer(message.clientMsgID,
+        const ChatTransferStatus(ChatTransferStage.unknown));
+    final pending = delivery.checkDelivery(message);
+    delivery.sendSucceeded(message, _sent('late-lookup'));
+    lookup.complete(FavoriteSendResult.unknown(clientMsgID: 'late-lookup'));
+    await pending;
+    expect(message.status, MessageStatus.succeeded);
+    expect(delivery.retainedTransferCount, 0);
+    expect(changedRows, [
+      {'late-lookup'}
+    ]);
   });
 
   test('repeated send of an in-flight ID uses one transport and one bubble',

@@ -14,9 +14,12 @@ import 'timed_node_probe.dart';
 import 'node_availability_probe.dart';
 import 'direct_recovery_policy.dart';
 import 'route_history.dart';
+import 'feedback/network_recovery_progress.dart';
 
 /// Foreground recovery; shares the manual switch lock and SDK session owner.
 class AutomaticNodeRuntime extends GetxService with WidgetsBindingObserver {
+  AutomaticNodeRuntime({this.startupReady});
+  final bool Function()? startupReady;
   Timer? _timer;
   StreamSubscription<dynamic>? _status, _network;
   bool _closed = false, _busy = false, _online = true;
@@ -60,6 +63,10 @@ class AutomaticNodeRuntime extends GetxService with WidgetsBindingObserver {
 
   Future<void> _check() async {
     if (_closed || _busy || !_foreground || !_online) return;
+    if (startupReady?.call() == false) {
+      _schedule(const Duration(seconds: 1));
+      return;
+    }
     final user = DataSp.userID, token = DataSp.imToken;
     final session = (user, token, DataSp.chatToken);
     if (_recoverySession != session) {
@@ -133,7 +140,15 @@ class AutomaticNodeRuntime extends GetxService with WidgetsBindingObserver {
       if (target == null) return;
       // switchTo verifies all three services again, checks session ownership,
       // serializes reconnect and restores the old route on login failure.
-      await service.switchTo(target, isActive: active, allowShield: true);
+      final feedback = target == NodeEndpoint.shield
+          ? NetworkRecoveryProgress.instance
+              .begin(NetworkRecoveryStage.startingShield)
+          : null;
+      try {
+        await service.switchTo(target, isActive: active, allowShield: true);
+      } finally {
+        feedback?.close();
+      }
       healthy = true;
     } catch (error) {
       healthy = false;

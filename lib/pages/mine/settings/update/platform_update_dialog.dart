@@ -14,6 +14,9 @@ Future<void> showPlatformUpdateDialog(
   required String message,
   required bool force,
   required Future<void> Function() onUpdate,
+  bool closeOnSuccess = false,
+  String? actionLabel,
+  String? failureMessage,
 }) {
   final navigator = Navigator.of(context, rootNavigator: true);
   final active = _visibleUpdates[navigator];
@@ -29,7 +32,13 @@ Future<void> showPlatformUpdateDialog(
     pageBuilder: (_, __, ___) => PopScope(
       canPop: false,
       child: _PlatformUpdateDialog(
-          title: title, message: message, force: force, onUpdate: onUpdate),
+          title: title,
+          message: message,
+          force: force,
+          onUpdate: onUpdate,
+          closeOnSuccess: closeOnSuccess,
+          actionLabel: actionLabel,
+          failureMessage: failureMessage),
     ),
     transitionBuilder: (_, animation, __, child) => FadeTransition(
       opacity: animation,
@@ -52,10 +61,15 @@ class _PlatformUpdateDialog extends StatefulWidget {
       {required this.title,
       required this.message,
       required this.force,
-      required this.onUpdate});
+      required this.onUpdate,
+      this.closeOnSuccess = false,
+      this.actionLabel,
+      this.failureMessage});
   final String title, message;
   final bool force;
   final Future<void> Function() onUpdate;
+  final bool closeOnSuccess;
+  final String? actionLabel, failureMessage;
   @override
   State<_PlatformUpdateDialog> createState() => _PlatformUpdateDialogState();
 }
@@ -77,7 +91,7 @@ class _PlatformUpdateDialogState extends State<_PlatformUpdateDialog> {
     try {
       await widget.onUpdate();
       if (!mounted) return;
-      if (!widget.force) _close();
+      if (!widget.force || widget.closeOnSuccess) _close();
     } catch (_) {
       if (mounted) setState(() => _failed = true);
     } finally {
@@ -177,10 +191,11 @@ class _PlatformUpdateDialogState extends State<_PlatformUpdateDialog> {
                                     Semantics(
                                         liveRegion: true,
                                         child: Text(
-                                            settingsText(context,
-                                                zh: '无法打开下载页面，请稍后重试',
-                                                en:
-                                                    'Unable to open the download page. Please retry.'),
+                                            widget.failureMessage ??
+                                                settingsText(context,
+                                                    zh: '无法打开下载页面，请稍后重试',
+                                                    en:
+                                                        'Unable to open the download page. Please retry.'),
                                             style: TextStyle(
                                                 color: settingsDanger(dark),
                                                 fontSize: PlatformUpdateTokens
@@ -211,8 +226,9 @@ class _PlatformUpdateDialogState extends State<_PlatformUpdateDialog> {
                                               strokeWidth: 2,
                                               color: AppTokens.onAccent))
                                       : Text(
-                                          settingsText(context,
-                                              zh: '立即更新', en: 'Update Now'),
+                                          widget.actionLabel ??
+                                              settingsText(context,
+                                                  zh: '立即更新', en: 'Update Now'),
                                           style: const TextStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.w600)),

@@ -14,6 +14,7 @@ mixin UpgradeManger {
   var isShowUpgradeDialog = false;
   var isNowIgnoreUpdate = false;
   Future<void>? _automaticUpdateCheck;
+  bool updateBlocksNavigation = false;
   final subject = PublishSubject<double>();
   final notificationService = NotificationService();
 
@@ -59,9 +60,15 @@ mixin UpgradeManger {
     if (context == null) return Future.value();
     isShowUpgradeDialog = true;
     return _automaticUpdateCheck =
-        checkPlatformUpdate(context, automatic: true).whenComplete(() {
+        checkPlatformUpdate(context, automatic: true,
+            onBlocking: () => updateBlocksNavigation = true).then<void>((checked) {
+      if (checked) {
+        isNowIgnoreUpdate = true;
+        updateBlocksNavigation = false;
+      }
+    }).whenComplete(() {
       isShowUpgradeDialog = false;
-      isNowIgnoreUpdate = true;
+      _automaticUpdateCheck = null;
     });
   }
 

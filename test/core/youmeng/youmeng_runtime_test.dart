@@ -50,7 +50,7 @@ void main() {
     );
   });
 
-  test('shield startup failure propagates to startup retry page', () async {
+  test('shield startup failure propagates to the in-app retry owner', () async {
     await expectLater(
         YoumengRuntime.prepareWithFallback(
           shieldEnabled: true,

@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
+// Exercise the vendored plugin's internal decode ownership contract directly.
+// ignore: depend_on_referenced_packages
 import 'package:extended_image_library/src/network/loading/image_load_scheduler.dart';
+// ignore: depend_on_referenced_packages
 import 'package:extended_image_library/src/network/loading/prepared_image_codec.dart';
 import 'package:flutter_test/flutter_test.dart';
 

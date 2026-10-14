@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../core/controller/app_controller.dart';
+import '../core/server_nodes/feedback/network_recovery_overlay.dart';
 
 class AppView extends StatelessWidget {
   const AppView({Key? key, required this.builder}) : super(key: key);
@@ -46,7 +47,7 @@ class AppView extends StatelessWidget {
             background: Theme.of(context).appBarTheme.backgroundColor ??
                 Theme.of(context).colorScheme.surface,
             navigationBackground: Theme.of(context).scaffoldBackgroundColor,
-            child: widget!,
+            child: NetworkRecoveryOverlay(child: widget!),
           ),
         );
       },

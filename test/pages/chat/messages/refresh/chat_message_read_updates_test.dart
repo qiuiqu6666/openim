@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
+import 'package:openim/pages/chat/messages/chat_delivery_controller.dart';
 import 'package:openim/pages/chat/messages/refresh/chat_message_read_updates.dart';
 import 'package:openim/pages/chat/messages/widgets/chat_message_tile.dart';
 import 'package:openim/pages/chat/receipts/chat_read_receipts.dart';
@@ -25,6 +28,7 @@ Message _message(String id) => Message.fromJson({
     });
 
 class _TileLogic extends GetxController implements ChatLogic {
+  ChatDeliveryController? delivery;
   @override
   final messageReadUpdates = ChatMessageReadUpdates();
   @override
@@ -71,7 +75,8 @@ class _TileLogic extends GetxController implements ChatLogic {
   @override
   VoiceTranscriptionState? displayedVoiceTranscription(Message message) => null;
   @override
-  ValueListenable<ChatTransferStatus?>? transferStatus(Message message) => null;
+  ValueListenable<ChatTransferStatus?>? transferStatus(Message message) =>
+      delivery?.transferFor(message);
   @override
   void setFundMessageVisible(Message message, bool visible) {}
   @override
@@ -110,6 +115,66 @@ void main() {
         () => VisibilityDetectorController.instance.updateInterval = interval);
   });
   tearDown(Get.reset);
+
+  testWidgets('delivery updates its real tile and detaches completed transfer',
+      (tester) async {
+    final logic = _TileLogic();
+    final target = _message('sending')..status = MessageStatus.sending;
+    final other = _message('other');
+    logic.messageList.addAll([target, other]);
+    final receipt = Completer<Message>();
+    final delivery = logic.delivery = ChatDeliveryController(
+      messageList: logic.messageList,
+      conversation: () => logic.conversationInfo,
+      isClosed: () => false,
+      groupStatus: () => null,
+      scrollBottom: () {},
+      resetInput: (_) {},
+      sendRaw: (_, __) => receipt.future,
+      onMessageChanged: logic.messageReadUpdates.notify,
+    );
+    final pending = delivery.send(target, addToUI: false);
+    final builds = <String, int>{};
+    await tester.pumpWidget(ScreenUtilInit(
+        designSize: const Size(375, 812),
+        builder: (_, __) => GetMaterialApp(
+            translations: TranslationService(),
+            home: Scaffold(
+                body: Column(children: [
+              for (final message in logic.messageList)
+                ChatMessageTile(
+                    key: ValueKey(message.clientMsgID),
+                    logic: logic,
+                    message: message,
+                    textContentBuilder: (_, message) {
+                      final id = message.clientMsgID!;
+                      builds.update(id, (n) => n + 1, ifAbsent: () => 1);
+                      return Text('$id:${message.status}');
+                    }),
+            ])))));
+    await tester.pump(const Duration(milliseconds: 400));
+    final before = Map<String, int>.of(builds);
+    var listEvents = 0;
+    final subscription = logic.messageList.listen((_) => listEvents++);
+    receipt.complete(_message('sending'));
+    await tester.pump();
+    await pending;
+    expect(find.text('sending:${MessageStatus.succeeded}'), findsOneWidget);
+    expect(builds['sending'], greaterThan(before['sending']!));
+    expect(builds['other'], before['other']);
+    expect(listEvents, 0);
+    expect(delivery.retainedTransferCount, 0);
+    final bubble = find.descendant(
+        of: find.byWidgetPredicate(
+            (w) => w is ChatMessageTile && w.message.clientMsgID == 'sending'),
+        matching: find.byType(ChatItemContainer));
+    expect(tester.widget<ChatItemContainer>(bubble).isSending, isFalse);
+    await tester.pumpWidget(const SizedBox());
+    expect(tester.takeException(), isNull);
+    await subscription.cancel();
+    delivery.close();
+    logic.closeFixture();
+  });
 
   testWidgets('real tiles refresh only the receipt target without a list event',
       (tester) async {

@@ -44,15 +44,39 @@ class _ChatImageStickerState extends State<ChatImageSticker> {
   void _updateSource() {
     final original = widget.imageProvider ??
         ExtendedNetworkImageProvider(widget.url, cache: true);
-    _provider = ResizeImage(original,
-        width: _decodeExtent > 0 ? _decodeExtent : 512,
-        height: _decodeExtent > 0 ? _decodeExtent : 512,
-        policy: ResizeImagePolicy.fit,
-        allowUpscaling: false);
+    final extent = _decodeExtent > 0 ? _decodeExtent : 512;
+    _provider = _hasBoundedWarmImage(original, extent)
+        ? original
+        : ResizeImage(original,
+            width: extent,
+            height: extent,
+            policy: ResizeImagePolicy.fit,
+            allowUpscaling: false);
     _decodedSize = null;
     _failed = false;
     _probeStarted = false;
     _intrinsicSize = _preferredSize();
+  }
+
+  bool _hasBoundedWarmImage(ImageProvider original, int extent) {
+    if (original is! ExtendedNetworkImageProvider ||
+        !PaintingBinding.instance.imageCache.statusForKey(original).keepAlive) {
+      return false;
+    }
+    // The bundled sender already decoded this URL. Reuse that frame only when
+    // its actual pixels fit the budget; remote metadata is not trusted here.
+    // A ready cache hit resolves synchronously, so this starts no network I/O.
+    var fits = false;
+    final stream = original.resolve(ImageConfiguration.empty);
+    final listener = ImageStreamListener((info, synchronous) {
+      fits = synchronous &&
+          info.image.width <= extent &&
+          info.image.height <= extent;
+      info.dispose();
+    }, onError: (Object error, StackTrace? stack) {});
+    stream.addListener(listener);
+    stream.removeListener(listener);
+    return fits;
   }
 
   Size? _preferredSize() {

@@ -6,6 +6,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/controller/im_controller.dart';
+import '../../core/controller/app_controller.dart';
 import '../../core/session/sdk_session_queue.dart';
 import '../../routes/app_navigator.dart';
 import '../../services/auth_credentials/auth_credentials_store.dart';
@@ -222,6 +223,9 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
   void onReady() {
     super.onReady();
     getPackageInfo();
+    if (Get.isRegistered<AppController>()) {
+      Get.find<AppController>().autoCheckVersionUpgrade();
+    }
   }
 
   void _onChanged() {
@@ -302,8 +306,20 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
     final attempt = ++_loginAttempt;
     DataSp.putLoginType(loginType.value.rawValue);
     try {
+      if (Get.isRegistered<AppController>()) {
+        Get.find<AppController>().autoCheckVersionUpgrade();
+      }
       if (!_activeLogin(attempt)) return;
       final success = await _login(attempt);
+      if (success && Get.isRegistered<AppController>()) {
+        final app = Get.find<AppController>();
+        // Login can finish in parallel, but must not remove a blocking update
+        // dialog with the home route replacement after its result has arrived.
+        if (app.updateBlocksNavigation) {
+          await app.autoCheckVersionUpgrade();
+          if (app.updateBlocksNavigation) return;
+        }
+      }
       if (success && _activeLogin(attempt)) {
         Get.find<CacheController>().resetCache();
         AppNavigator.startMain();

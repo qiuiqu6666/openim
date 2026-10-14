@@ -200,16 +200,18 @@ void main() {
     });
   }
 
-  test('sync completion wins over an older pending initial read', () async {
+  test('sync queues a fresh snapshot after initial read and retains live changes',
+      () async {
     logic.onInit();
     await flush();
     im.imSdkStatus(IMSdkStatus.syncEnded);
     await flush();
+    expect(reads, hasLength(1), reason: 'Native snapshot reads are serialized.');
+    complete(0, []);
+    await flush();
     expect(reads, hasLength(2));
     logic.queueChanges([_row('live', time: 3)]);
     complete(1, [_row('stored', time: 2)]);
-    await flush();
-    complete(0, []);
     await flush();
     expect(logic.list.map((row) => row.conversationID), ['live', 'stored']);
   });
@@ -220,9 +222,11 @@ void main() {
     await flush();
     logic.onInit();
     await flush();
+    expect(reads, hasLength(1), reason: 'The initial read owns the native slot.');
+    complete(0, []);
+    await flush();
     expect(reads, hasLength(2));
     complete(1, [_row('restored')]);
-    complete(0, []);
     await flush();
     expect(logic.list.single.conversationID, 'restored');
   });

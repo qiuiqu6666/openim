@@ -61,7 +61,7 @@ void main() {
         isTrue);
     await tester.pump(const Duration(seconds: 2));
     expect(requests, hasLength(3),
-        reason: 'Two immediate neighbors; distant warmup remains serial');
+        reason: 'Only the two immediate neighbors are warmed');
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     expect(requests.every((r) => r.cancelled), isTrue);

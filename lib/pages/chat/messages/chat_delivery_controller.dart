@@ -27,6 +27,7 @@ class ChatDeliveryController {
     this.onDeliveryStarted,
     this.onDeliveryFinished,
     this.onTimelineChanged,
+    this.onMessageChanged,
   })  : _conversation = conversation,
         _isClosed = isClosed,
         _groupStatus = groupStatus,
@@ -58,6 +59,10 @@ class ChatDeliveryController {
   final _checking = <String>{};
   final _inFlight = <String, Future>{};
   final _deadlines = <String, Timer>{};
+
+  @visibleForTesting
+  int get retainedTransferCount => _transfers.length;
+
   ValueListenable<ChatTransferStatus?>? transferFor(Message message) {
     final id = message.clientMsgID;
     if (isClosed ||
@@ -71,6 +76,11 @@ class ChatDeliveryController {
 
   void updateTransfer(String? id, ChatTransferStatus value) {
     if (isClosed || id == null) return;
+    final current = _transfers.putIfAbsent(id, () => ValueNotifier(null));
+    if (current.value?.stage == value.stage &&
+        current.value?.percent == value.percent) {
+      return;
+    }
     _deadlines.remove(id)?.cancel();
     if (value.stage == ChatTransferStage.confirming ||
         value.stage == ChatTransferStage.uploading) {
@@ -85,11 +95,7 @@ class ChatDeliveryController {
         }
       });
     }
-    final current = _transfers.putIfAbsent(id, () => ValueNotifier(null));
-    if (current.value?.stage != value.stage ||
-        current.value?.percent != value.percent) {
-      current.value = value;
-    }
+    current.value = value;
   }
 
   Future<void> checkDelivery(Message message) async {
@@ -103,14 +109,14 @@ class ChatDeliveryController {
               userID: userID,
               groupID: groupID));
       if (isClosed) return;
+      if (message.status != MessageStatus.sending) return;
       if (result.isSuccess && result.message != null) {
         sendSucceeded(message, result.message!);
-        _completed();
       } else {
         updateTransfer(id, const ChatTransferStatus(ChatTransferStage.unknown));
       }
     } catch (_) {
-      if (!isClosed) {
+      if (!isClosed && message.status == MessageStatus.sending) {
         updateTransfer(id, const ChatTransferStatus(ChatTransferStage.unknown));
       }
     } finally {
@@ -123,6 +129,8 @@ class ChatDeliveryController {
   final void Function(Object?, Message)? onDeliveryFinished;
   // The route owns automatic-window limits and reading/selection protection.
   final void Function()? onTimelineChanged;
+  // Mounted row notifications avoid invalidating ordering/history on each ACK.
+  final void Function(Set<String>)? onMessageChanged;
   final sendStatusSub = PublishSubject<MsgStreamEv<bool>>();
   bool _closed = false;
   bool get isClosed =>
@@ -132,9 +140,43 @@ class ChatDeliveryController {
   String? get groupID => conversationInfo.groupID;
   bool get isSingleChat => userID?.trim().isNotEmpty == true;
 
-  void _completed() {
+  void messageChanged(Message message, {bool timelineChanged = false}) {
+    if (isClosed) return;
+    final id = message.clientMsgID;
+    if (id != null && message.status != MessageStatus.sending) {
+      _deadlines.remove(id)?.cancel();
+      // A mounted ValueListenableBuilder can remove its listener after dispose.
+      // A retry obtains a fresh notifier instead of retaining every past send.
+      _transfers.remove(id)?.dispose();
+    }
     onTimelineChanged?.call();
-    messageList.refresh();
+    if (!timelineChanged && id != null && onMessageChanged != null) {
+      onMessageChanged!({id});
+    } else {
+      messageList.refresh();
+    }
+  }
+
+  void updateMessage(Message message, Message update) {
+    if (isClosed || message.clientMsgID != update.clientMsgID) return;
+    final oldTime = message.sendTime;
+    final showTime = message.exMap['showTime'] == true;
+    final alreadyRead = message.isRead == true;
+    final readTime = message.hasReadTime;
+    message.update(update);
+    if (alreadyRead) {
+      message.isRead = true;
+      if ((readTime ?? 0) > 0) message.hasReadTime = readTime;
+    }
+    // SDK responses replace exMap; retain the locally calculated time marker.
+    // A corrected timestamp can change neighboring markers, so recalculate it.
+    final timeChanged = oldTime != message.sendTime;
+    if (!timeChanged) {
+      message.exMap = Map<String, dynamic>.of(message.exMap)
+        ..remove('showTime');
+      if (showTime) message.exMap['showTime'] = true;
+    }
+    messageChanged(message, timelineChanged: timeChanged);
   }
 
   void close() {
@@ -194,10 +236,11 @@ class ChatDeliveryController {
       final visible = messageList
           .firstWhereOrNull((item) => item.clientMsgID == message.clientMsgID);
       if (visible != null && !identical(visible, message)) {
-        visible.update(message);
+        updateMessage(visible, message);
         message = visible;
+      } else if (visible != null) {
+        messageChanged(visible);
       }
-      if (visible != null) messageList.refresh();
       sendStatusSub.addSafely(MsgStreamEv<bool>(
         id: message.clientMsgID!,
         value: true,
@@ -275,23 +318,22 @@ class ChatDeliveryController {
       _deadlines.remove(messageID)?.cancel();
       _inFlight.remove(messageID);
       onDeliveryFinished?.call(presentation, message);
-      if (!isClosed && account == _currentAccountID()) _completed();
+      if (!isClosed &&
+          account == _currentAccountID() &&
+          message.status != MessageStatus.succeeded) {
+        messageChanged(message);
+      }
     });
     if (messageID != null) _inFlight[messageID] = operation;
     return operation;
   }
 
   void sendSucceeded(Message oldMsg, Message newMsg) {
+    if (isClosed) return;
     _deadlines.remove(oldMsg.clientMsgID)?.cancel();
     Logger.print('message send success----');
     // A peer can read before the asynchronous send response reaches this route.
-    final alreadyRead = oldMsg.isRead == true;
-    final readTime = oldMsg.hasReadTime;
-    oldMsg.update(newMsg);
-    if (alreadyRead) {
-      oldMsg.isRead = true;
-      if ((readTime ?? 0) > 0) oldMsg.hasReadTime = readTime;
-    }
+    updateMessage(oldMsg, newMsg);
     sendStatusSub.addSafely(MsgStreamEv<bool>(
       id: oldMsg.clientMsgID!,
       value: true,
