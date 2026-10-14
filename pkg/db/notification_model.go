@@ -22,6 +22,8 @@ import (
 
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
 	"github.com/openimsdk/tools/errs"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func (d *DataBase) SetNotificationSeq(ctx context.Context, conversationID string, seq int64) error {
@@ -38,9 +40,20 @@ func (d *DataBase) SetNotificationSeq(ctx context.Context, conversationID string
 }
 
 func (d *DataBase) BatchInsertNotificationSeq(ctx context.Context, notificationSeqs []*model_struct.NotificationSeqs) error {
+	if len(notificationSeqs) == 0 {
+		return nil
+	}
 	d.mRWMutex.Lock()
 	defer d.mRWMutex.Unlock()
-	return errs.WrapMsg(d.conn.WithContext(ctx).Create(notificationSeqs).Error, "BatchInsertNotificationSeq failed")
+	// Initial message pulls may fail after this baseline is already durable.
+	// Retrying bootstrap (also after restart) must be idempotent. A stale
+	// response must not rewind the notification cursor and replay side effects.
+	return errs.WrapMsg(d.conn.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "conversation_id"}},
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"seq": gorm.Expr("MAX(seq, excluded.seq)"),
+		}),
+	}).CreateInBatches(notificationSeqs, 200).Error, "BatchInsertNotificationSeq failed")
 }
 
 func (d *DataBase) GetNotificationAllSeqs(ctx context.Context) ([]*model_struct.NotificationSeqs, error) {

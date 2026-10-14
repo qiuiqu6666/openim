@@ -261,7 +261,10 @@ func (m *MsgSyncer) compareSeqsAndBatchSync(ctx context.Context, maxSeqToSync ma
 		for conversationID, seq := range maxSeqToSync {
 			if IsNotification(conversationID) {
 				if seq != 0 { // seq is 0, no need to sync
-					notificationsSeqMap[conversationID] = seq
+					// Match the durable monotonic bootstrap baseline on retry.
+					// Otherwise a stale maximum rewinds the in-memory cursor even
+					// though SQLite correctly retained the newer notification seq.
+					notificationsSeqMap[conversationID] = max(seq, m.syncedMaxSeqs[conversationID])
 				}
 			} else {
 				messagesSeqMap[conversationID] = seq
@@ -486,10 +489,12 @@ func (m *MsgSyncer) doConnected(ctx context.Context) {
 	if reinstalled {
 		m.initialMetadataReady = false
 		if err := m.db.SetAppSDKVersion(ctx, &model_struct.LocalAppSDKVersion{Installed: false}); err != nil {
+			log.ZWarn(ctx, "initial sync failed", err, "stage", "persist-initialization")
 			common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
 			return
 		}
 		if err := m.triggerSyncStart(ctx, constant.AppDataSyncStart); err != nil {
+			log.ZWarn(ctx, "initial sync failed", err, "stage", "metadata-receipt")
 			common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
 			return
 		}
@@ -509,6 +514,7 @@ func (m *MsgSyncer) doConnected(ctx context.Context) {
 		log.ZDebug(m.ctx, "get max seq success", "resp", resp.MaxSeqs)
 	}
 	if err := m.compareSeqsAndBatchSync(ctx, resp.MaxSeqs, connectPullNums); err != nil {
+		log.ZWarn(ctx, "connected message sync failed", err, "stage", "pull-storage-checkpoint", "initial", reinstalled)
 		common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
 		return
 	}
