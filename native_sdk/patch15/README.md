@@ -74,3 +74,9 @@ flutter build apk --release --target-platform android-arm64 --build-name 3.0.1 -
 Core common、network、interaction、conversation_msg、db 五包通过竞态测试，包含实际 SQLite、207 个会话先显示摘要、首轮失败隔离、删除末尾、断线重试及历史摘要保护。375 文件的移动端锁定源码也通过五包竞态测试；15 项源码与产物锁测试通过。原生及 JS/WASM 编译、相关包静态检查通过。
 
 Android 构建证据见 `verification/recovery.18-android.json`。测试与构建结果限于本版记录，真机运行验收单独记录。
+
+## macOS iOS recovery.23-notification-tombstone.1 verification (2026-10-14)
+
+The current locked Core source was rebuilt for iOS device arm64 and simulator arm64/x86_64, installed in the local plugin, and verified against its artifact receipt. Core/SQLite build-script tests and 15 source-lock tests passed. Xcode Release no-codesign application 3.0.1+2027 compiled successfully; the Runner binary contains v3.8.3-patch.15+recovery.23-notification-tombstone.1 and does not contain recovery.17. Evidence: `verification/recovery.23-notification-tombstone-ios.json`.
+
+Open `ios/Runner.xcworkspace` for subsequent Xcode builds. The existing pre-compile artifact guard verifies this Framework and its locked source. Original local Xcode/project registration edits were preserved. Signing, installation, and device runtime were not verified in this build.
