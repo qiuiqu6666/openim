@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:openim_common/openim_common.dart';
 
 class ChatDelayedStatusView extends StatefulWidget {
@@ -54,10 +55,15 @@ class _ChatDelayedStatusViewState extends State<ChatDelayedStatusView> {
   }
 
   @override
-  Widget build(BuildContext context) => Visibility(
-        visible: widget.isSending && _visible,
-        child: CupertinoActivityIndicator(
-          color: widget.color ?? Styles.c_0089FF,
-        ),
+  Widget build(BuildContext context) => SizedBox.square(
+        // Reserve the receipt's slot before the spinner appears so the bubble
+        // does not reflow when sending takes longer or completes.
+        dimension: ChatBubbleTokens.deliveryStatusSize.w,
+        child: widget.isSending && _visible
+            ? CupertinoActivityIndicator(
+                radius: ChatBubbleTokens.deliveryStatusSize.w / 2,
+                color: widget.color ?? Styles.c_0089FF,
+              )
+            : null,
       );
 }

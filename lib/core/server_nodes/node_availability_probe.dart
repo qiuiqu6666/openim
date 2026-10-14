@@ -8,10 +8,15 @@ import 'node_endpoint.dart';
 
 class NodeAvailability {
   const NodeAvailability(this.endpoint,
-      {required this.available, required this.latencyMs});
+      {required this.available,
+      required this.latencyMs,
+      this.serviceFailures = const {}});
   final NodeEndpoint endpoint;
   final bool available;
   final int latencyMs;
+
+  /// Service names and sanitized failure categories; never URLs or credentials.
+  final Map<String, String> serviceFailures;
 }
 
 /// Credential-free checks of the Chat API, IM API and WebSocket gateway.
@@ -36,27 +41,52 @@ class NodeAvailabilityProbe {
       ..sendTimeout = timeout
       ..followRedirects = false;
     var available = false;
+    final failures = <String, String>{};
+    final pending = <String>{};
+    Future<void> track(String service, Future<dynamic> work) async {
+      pending.add(service);
+      try {
+        await work;
+      } catch (error) {
+        failures[service] = error is DioException
+            ? '${error.type.name}${error.response?.statusCode == null ? '' : ':${error.response!.statusCode}'}'
+            : error.runtimeType.toString();
+        rethrow;
+      } finally {
+        pending.remove(service);
+      }
+    }
+
     try {
       final chat = _uri(node.chatApi, const {'http', 'https'});
       final api = _uri(node.imApi, const {'http', 'https'});
       final ws = _uri(node.imWs, const {'ws', 'wss'});
       await Future.wait([
-        PlatformConfigService.fetch(
-            client: client, baseUrl: chat.toString(), cancelToken: token),
-        _api(client, api, token),
-        if (includeGateway) _gateway(client, ws, token),
+        track(
+            'chat',
+            PlatformConfigService.fetch(
+                client: client, baseUrl: chat.toString(), cancelToken: token)),
+        track('imApi', _api(client, api, token)),
+        if (includeGateway) track('imWs', _gateway(client, ws, token)),
       ], eagerError: true)
           .timeout(timeout);
       available = true;
-    } catch (_) {
+    } catch (error) {
       // Offline/partial failures leave this entire route unavailable.
+      for (final service in pending) {
+        failures.putIfAbsent(
+            service, () => error is TimeoutException ? 'timeout' : 'cancelled');
+      }
+      if (failures.isEmpty) failures['endpoint'] = error.runtimeType.toString();
     } finally {
       token.cancel('Node availability check finished');
       client.close(force: true);
       watch.stop();
     }
     return NodeAvailability(node,
-        available: available, latencyMs: watch.elapsedMilliseconds);
+        available: available,
+        latencyMs: watch.elapsedMilliseconds,
+        serviceFailures: Map.unmodifiable(failures));
   }
 
   Uri _uri(String value, Set<String> schemes) {

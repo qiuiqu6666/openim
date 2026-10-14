@@ -6,6 +6,90 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/core/session/connection/im_connection_recovery.dart';
 
 void main() {
+  testWidgets(
+      'duplicate network and resume events do not repeat a healthy sync',
+      (tester) async {
+    final network = StreamController<List<ConnectivityResult>>();
+    var wakes = 0;
+    final recovery = IMConnectionRecovery(
+      isCurrent: () => true,
+      isDisconnected: () => false,
+      networkChanges: network.stream,
+      wake: (_) async => wakes++,
+      onError: (e) => fail('$e'),
+    )..start();
+    network.add([ConnectivityResult.wifi]);
+    await tester.pump();
+    expect(wakes, 1);
+    for (var i = 0; i < 10; i++) {
+      network.add([ConnectivityResult.none, ConnectivityResult.wifi]);
+      recovery.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await tester.pump(const Duration(seconds: 1));
+    }
+    network.add([]);
+    await tester.pump(const Duration(minutes: 1));
+    expect(wakes, 1);
+    recovery.close();
+    unawaited(network.close());
+    await tester.pump();
+  });
+
+  testWidgets('offline cancels stale wake and pauses retry until online',
+      (tester) async {
+    final network = StreamController<List<ConnectivityResult>>();
+    final pending = Completer<void>();
+    var wakes = 0, reconciled = 0;
+    final recovery = IMConnectionRecovery(
+      isCurrent: () => true,
+      isDisconnected: () => true,
+      networkChanges: network.stream,
+      wake: (_) => ++wakes == 1 ? pending.future : Future.value(),
+      onWakeSucceeded: () => reconciled++,
+      onError: (e) => fail('$e'),
+    )..start();
+    network.add([ConnectivityResult.wifi]);
+    await tester.pump();
+    network.add([ConnectivityResult.none]);
+    await tester.pump();
+    pending.complete();
+    await tester.pump(const Duration(minutes: 2));
+    expect(wakes, 1);
+    expect(reconciled, 0);
+    network.add([ConnectivityResult.mobile]);
+    await tester.pump();
+    expect(wakes, 2);
+    expect(reconciled, 1);
+    recovery.close();
+    unawaited(network.close());
+    await tester.pump();
+  });
+
+  testWidgets(
+      'resume reads current network even when online stream event was lost',
+      (tester) async {
+    var network = [ConnectivityResult.none];
+    var wakes = 0;
+    final recovery = IMConnectionRecovery(
+      isCurrent: () => true,
+      isDisconnected: () => false,
+      networkChanges: const Stream.empty(),
+      networkSnapshot: () async => network,
+      wake: (_) async => wakes++,
+      onError: (e) => fail('$e'),
+    )..start();
+    await tester.pump();
+    recovery.didChangeAppLifecycleState(AppLifecycleState.paused);
+    network = [ConnectivityResult.mobile];
+    await tester.pump(const Duration(hours: 1));
+    expect(wakes, 0);
+    recovery.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(wakes, 1);
+    await tester.pump(const Duration(seconds: 3));
+    expect(wakes, 1);
+    recovery.close();
+  });
+
   testWidgets('route catch-up starts immediately and retries a failed wake',
       (tester) async {
     var wakes = 0;
@@ -106,6 +190,7 @@ void main() {
       onError: (error) => fail('$error'),
       networkChanges: const Stream.empty(),
     )..start();
+    recovery.didChangeAppLifecycleState(AppLifecycleState.paused);
     recovery.didChangeAppLifecycleState(AppLifecycleState.resumed);
     await tester.pump();
     expect(attempts, hasLength(1));
@@ -115,7 +200,8 @@ void main() {
     expect(attempts, hasLength(2));
     expect(attempts.first(), isFalse);
     await tester.pump(const Duration(seconds: 3));
-    expect(attempts, hasLength(3));
+    expect(attempts, hasLength(2),
+        reason: 'A healthy ACK already verified recovery.');
     stalled.completeError(StateError('obsolete native response'));
     await tester.pump();
     recovery.close();
@@ -141,11 +227,11 @@ void main() {
     recovery.didChangeAppLifecycleState(AppLifecycleState.resumed);
     await tester.pump();
     expect(wakes, 1);
-    // No connecting/failed callback arrives; the old connected flag is stale.
+    // The successful wake is a server ACK, so a second full sync is redundant.
     await tester.pump(const Duration(seconds: 3));
-    expect(wakes, 2);
+    expect(wakes, 1);
     await tester.pump(const Duration(minutes: 1));
-    expect(wakes, 2);
+    expect(wakes, 1);
     recovery.close();
   });
 

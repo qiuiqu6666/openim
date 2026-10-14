@@ -19,7 +19,11 @@ class IMNativeConnectionWake {
       isCurrent: isCurrentAttempt,
       isDisconnected: isDisconnected,
       invokeNative: (method, arguments) => _requests.run(
-          method, () => channel.invokeMethod<void>(method, arguments),
+          // A pre-background ACK cannot stand in for the new foreground
+          // report. Keep one native request at a time, but issue the new
+          // attempt after the obsolete request releases its slot.
+          (method, isCurrentAttempt),
+          () => channel.invokeMethod<void>(method, arguments),
           timeout: const Duration(seconds: 30),
           isCurrent: () => isCurrentSession() && isCurrentAttempt()));
 

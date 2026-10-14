@@ -5,6 +5,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/core/session/connection/api_connection_health.dart';
 
 void main() {
+  testWidgets('repeated snapshots retain latency and do not invalidate probes',
+      (tester) async {
+    final network = StreamController<List<ConnectivityResult>>();
+    var checks = 0;
+    final health = ApiConnectionHealth(
+      isCurrent: () => true,
+      networkChanges: network.stream,
+      check: () async {
+        checks++;
+        return true;
+      },
+    )..start();
+    network.add([ConnectivityResult.wifi]);
+    await tester.pump();
+    final before = checks;
+    final latency = health.latencyMs.value;
+    network.add([ConnectivityResult.wifi]);
+    network.add([]);
+    await tester.pump();
+    expect(checks, before);
+    expect(health.available.value, true);
+    expect(health.latencyMs.value, latency);
+    health.close();
+    unawaited(network.close());
+    await tester.pump();
+  });
   testWidgets(
       'offline clears latency and prevents new probes until network returns',
       (tester) async {

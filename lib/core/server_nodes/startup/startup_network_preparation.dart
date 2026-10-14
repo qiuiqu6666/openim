@@ -34,7 +34,8 @@ class StartupNetworkPreparation extends GetxService {
 
   Future<void> _prepare() async {
     if (_closed) return;
-    final feedback = _feedback = progress.begin(NetworkRecoveryStage.checking);
+    final feedback = _feedback = progress.begin(NetworkRecoveryStage.checking,
+        context: NetworkRecoveryContext.startup);
     var failures = 0;
     try {
       while (!_closed) {

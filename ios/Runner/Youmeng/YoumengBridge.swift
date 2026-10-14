@@ -101,6 +101,9 @@ private final class YoumengConnection {
     private let port: Int
     private let onClose: () -> Void
     private var tunnel: TunnelConnection?
+    private var cancelConnect: (() -> Void)?
+    private var input = [Data]()
+    private var inputBytes = 0
     private var closed = false
     private var output = [Data]()
     private var outputBytes = 0
@@ -116,7 +119,10 @@ private final class YoumengConnection {
             if case .cancelled = state { self.close() }
         }
         socket.start(queue: youmengQueue)
-        sdk.connect(sourcePort: port) { [weak self] result in
+        // Read immediately, including EOF while HELLO is pending. Otherwise a
+        // timed-out local probe leaves its native dials running in the background.
+        read()
+        cancelConnect = sdk.connect(sourcePort: port) { [weak self] result in
             guard let self, !self.closed else {
                 if case .success(let tunnel) = result { tunnel.cancel() }; return
             }
@@ -131,14 +137,23 @@ private final class YoumengConnection {
                     guard self.outputBytes <= 4 * 1024 * 1024 else { self.close(); return }
                     self.output.append(data); self.flush()
                 }
-                self.read()
+                let buffered = self.input
+                self.input.removeAll(); self.inputBytes = 0
+                for data in buffered where !self.closed { tunnel.send(data) }
             }
         }
     }
     private func read() {
         socket.receive(minimumIncompleteLength: 1, maximumLength: 32768) { [weak self] data, _, done, error in
             guard let self, !self.closed else { return }
-            if let data, !data.isEmpty { self.tunnel?.send(data) }
+            if let data, !data.isEmpty {
+                if let tunnel = self.tunnel { tunnel.send(data) }
+                else {
+                    self.inputBytes += data.count
+                    guard self.inputBytes <= 65536 else { self.close(); return }
+                    self.input.append(data)
+                }
+            }
             if done || error != nil { self.close() } else { self.read() }
         }
     }
@@ -156,6 +171,8 @@ private final class YoumengConnection {
         guard !closed else { return }; closed = true
         socket.stateUpdateHandler = nil
         socket.cancel(); tunnel?.cancel(); tunnel = nil
+        cancelConnect?(); cancelConnect = nil
+        input.removeAll(); inputBytes = 0
         output.removeAll(); outputBytes = 0
         onClose()
     }

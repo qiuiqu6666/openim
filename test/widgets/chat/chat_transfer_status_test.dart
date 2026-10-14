@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -11,16 +12,20 @@ void main() {
       final state = ValueNotifier<ChatTransferStatus?>(
           const ChatTransferStatus(ChatTransferStage.uploading, 42));
       var checks = 0;
-      await tester.pumpWidget(GetMaterialApp(
-        translations: TranslationService(),
-        locale: const Locale('zh', 'CN'),
-        theme: ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
-        home: Scaffold(
-            body: Center(
-                child: SizedBox(
-                    width: 160,
-                    child: ChatTransferStatusView(
-                        status: state, onCheck: () => checks++)))),
+      await tester.pumpWidget(ScreenUtilInit(
+        designSize: const Size(375, 812),
+        builder: (_, __) => GetMaterialApp(
+          translations: TranslationService(),
+          locale: const Locale('zh', 'CN'),
+          theme:
+              ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
+          home: Scaffold(
+              body: Center(
+                  child: SizedBox(
+                      width: 160,
+                      child: ChatTransferStatusView(
+                          status: state, onCheck: () => checks++)))),
+        ),
       ));
       expect(find.text('上传中 42%'), findsOneWidget);
       state.value = const ChatTransferStatus(ChatTransferStage.unknown);
@@ -30,6 +35,10 @@ void main() {
       state.value = const ChatTransferStatus(ChatTransferStage.confirming);
       await tester.pump();
       expect(find.text('等待确认'), findsNothing);
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 999));
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 1));
       expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 200));
       expect(

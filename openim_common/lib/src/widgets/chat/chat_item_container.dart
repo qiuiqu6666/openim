@@ -171,18 +171,23 @@ class ChatItemContainer extends StatelessWidget {
                             (overlay ? AppTokens.onAccent : null))
                     : ChatDelayedStatusView(
                         isSending: true, color: embeddedStatusColor)
-                : ChatReadReceiptIcon(
-                    isRead: showReadStatus && hasRead,
-                    size: compactBubble ? 16.w : null,
-                    color: embeddedStatusColor ??
-                        (overlay || dark
-                            ? AppTokens.onAccent
-                            : showReadStatus && hasRead
-                                ? Styles.c_0089FF
-                                : ChatBubbleTokens.metadata(dark: dark)),
-                    semanticLabel: showReadStatus
-                        ? (hasRead ? StrRes.hasRead : StrRes.unread)
-                        : StrRes.sentSuccessfully,
+                : SizedBox.square(
+                    dimension: ChatBubbleTokens.deliveryStatusSize.w,
+                    child: Center(
+                      child: ChatReadReceiptIcon(
+                        isRead: showReadStatus && hasRead,
+                        size: ChatBubbleTokens.deliveryStatusSize.w,
+                        color: embeddedStatusColor ??
+                            (overlay || dark
+                                ? AppTokens.onAccent
+                                : showReadStatus && hasRead
+                                    ? Styles.c_0089FF
+                                    : ChatBubbleTokens.metadata(dark: dark)),
+                        semanticLabel: showReadStatus
+                            ? (hasRead ? StrRes.hasRead : StrRes.unread)
+                            : StrRes.sentSuccessfully,
+                      ),
+                    ),
                   );
     final metadata = Row(
       mainAxisSize: MainAxisSize.min,

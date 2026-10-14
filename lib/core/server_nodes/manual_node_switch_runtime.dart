@@ -7,8 +7,10 @@ import 'package:openim_common/openim_common.dart';
 import '../controller/im_controller.dart';
 import '../im_callback.dart';
 import '../youmeng/youmeng_runtime.dart';
+import '../youmeng/shield_readiness.dart';
 import '../user_activity/activity_runtime.dart';
 import 'manual_node_switch_service.dart';
+import 'node_availability_probe.dart';
 import 'node_endpoint.dart';
 import 'startup_node_selection.dart';
 import 'route_history.dart';
@@ -16,6 +18,11 @@ import 'route_history.dart';
 /// One coordinator for all node pages, reusing the existing SDK session owner.
 class ManualNodeSwitchRuntime {
   static final instance = ManualNodeSwitchService(
+    probe: (node) => NodeAvailabilityProbe(
+      timeout: node.signature == NodeEndpoint.shield.signature
+          ? ShieldReadiness.timeout
+          : const Duration(seconds: 3),
+    ).check(node),
     prepareTarget: (node) async {
       if (node.signature == NodeEndpoint.shield.signature) {
         if (!YoumengRuntime.enabled) throw NodeSwitchFailure.unavailable;

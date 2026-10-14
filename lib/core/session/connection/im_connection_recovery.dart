@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../network/transport_state.dart';
+
 /// Wakes the existing native SDK reconnect loop without replacing its session.
 /// A successful wake-up is not evidence that the socket has connected.
 class IMConnectionRecovery with WidgetsBindingObserver {
@@ -13,12 +15,15 @@ class IMConnectionRecovery with WidgetsBindingObserver {
     required this.wake,
     required this.onError,
     Stream<List<ConnectivityResult>>? networkChanges,
+    Future<List<ConnectivityResult>> Function()? networkSnapshot,
     this.syncRecoverySignals,
     this.onWakeSucceeded,
     this.retryInterval = const Duration(seconds: 3),
     this.connectedCheckInterval = const Duration(minutes: 1),
     this.wakeTimeout = const Duration(seconds: 18),
-  }) : _networkChanges = networkChanges;
+  })  : _networkChanges = networkChanges,
+        _networkSnapshot = networkSnapshot ??
+            (networkChanges == null ? Connectivity().checkConnectivity : null);
 
   final bool Function() isCurrent;
   final bool Function() isDisconnected;
@@ -29,6 +34,7 @@ class IMConnectionRecovery with WidgetsBindingObserver {
   final Duration connectedCheckInterval;
   final Duration wakeTimeout;
   final Stream<List<ConnectivityResult>>? _networkChanges;
+  final Future<List<ConnectivityResult>> Function()? _networkSnapshot;
   final Stream<void>? syncRecoverySignals;
   final VoidCallback? onWakeSucceeded;
   StreamSubscription<List<ConnectivityResult>>? _network;
@@ -40,6 +46,7 @@ class IMConnectionRecovery with WidgetsBindingObserver {
   Completer<void>? _wakeWait;
   bool _wakeFailed = false;
   bool _verificationPending = false;
+  final _transport = NetworkTransportState();
 
   void start() {
     if (_active) return;
@@ -49,10 +56,8 @@ class IMConnectionRecovery with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _network = (_networkChanges ?? Connectivity().onConnectivityChanged).listen(
       (results) {
-        if (results.any((value) => value != ConnectivityResult.none)) {
-          unawaited(_wake());
-          _schedule(verifyConnection: true);
-        }
+        if (!_transport.update(results)) return;
+        _transportChanged();
       },
       onError: (Object error) {
         if (_active && isCurrent()) onError(error);
@@ -62,16 +67,35 @@ class IMConnectionRecovery with WidgetsBindingObserver {
       // Connection transitions and sync failures may arrive without an OS
       // event. Sync finishes are not fed back here: our own wake must not
       // create a repeating successful-sync/wake loop.
-      if (!_verificationPending) _schedule(verifyConnection: true);
+      if (!_verificationPending && _wakeWait == null) {
+        _schedule(verifyConnection: true);
+      }
     });
     _schedule();
+    unawaited(_refreshTransport());
+  }
+
+  void _transportChanged() {
+    if (!_transport.online) {
+      _cancelWakeWait();
+      _schedule();
+    } else {
+      unawaited(recoverNow());
+    }
+  }
+
+  Future<void> _refreshTransport() async {
+    final read = _networkSnapshot;
+    if (read == null || !_active || !_foreground || !isCurrent()) return;
+    final changed = await _transport.refresh(read);
+    if (changed && _active && _foreground && isCurrent()) _transportChanged();
   }
 
   void _schedule({bool verifyConnection = false}) {
     _retry?.cancel();
     _verificationPending = false;
     final revision = ++_scheduleRevision;
-    if (!_active || !_foreground || !isCurrent()) return;
+    if (!_active || !_foreground || !_transport.online || !isCurrent()) return;
     // The native SDK owns heartbeat/reconnect. Healthy foreground polls only
     // recheck failure state; they do not start another full metadata sync.
     final checkConnected =
@@ -100,12 +124,19 @@ class IMConnectionRecovery with WidgetsBindingObserver {
   }
 
   Future<void> _wake() async {
-    if (!_active || !_foreground || _wakeWait != null || !isCurrent()) return;
+    if (!_active ||
+        !_foreground ||
+        !_transport.online ||
+        _wakeWait != null ||
+        !isCurrent()) {
+      return;
+    }
     final cancelled = Completer<void>();
     _wakeWait = cancelled;
     bool currentAttempt() =>
         _active &&
         _foreground &&
+        _transport.online &&
         identical(_wakeWait, cancelled) &&
         isCurrent();
     try {
@@ -134,14 +165,24 @@ class IMConnectionRecovery with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _foreground = state == AppLifecycleState.resumed;
-    if (!_foreground) _cancelWakeWait();
-    if (_foreground) unawaited(_wake());
-    _schedule(verifyConnection: _foreground);
+    final foreground = state == AppLifecycleState.resumed;
+    if (_foreground == foreground) return;
+    _foreground = foreground;
+    if (_foreground) {
+      unawaited(_refreshTransport());
+      // The server acknowledgement checks the existing socket and requests
+      // incremental sync. A successful acknowledgement needs no second wake.
+      unawaited(recoverNow());
+    } else {
+      _transport.invalidateSnapshot();
+      _cancelWakeWait();
+      _schedule();
+    }
   }
 
   void close() {
     _active = false;
+    _transport.invalidateSnapshot();
     _cancelWakeWait();
     _retry?.cancel();
     ++_scheduleRevision;

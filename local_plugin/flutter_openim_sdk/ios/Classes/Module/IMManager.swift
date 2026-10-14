@@ -1,9 +1,15 @@
 import Foundation
 import OpenIMCore
+import UIKit
 
 public class IMMananger: BaseServiceManager {
     
     let reachability = try? Reachability()
+    private var observing = false
+    private var observerGeneration = 0
+    private var isInBackground = false
+    private var networkCheck: DispatchWorkItem?
+    private var networkPath = IMNetworkPathPolicy()
     
     public override func registerHandlers() {
         super.registerHandlers()
@@ -21,6 +27,12 @@ public class IMMananger: BaseServiceManager {
     }
     
     fileprivate func addObservers() {
+        guard !observing else { return }
+        observing = true
+        observerGeneration += 1
+        let generation = observerGeneration
+        isInBackground = UIApplication.shared.applicationState == .background
+        networkPath.reset(path: reachability?.connection.description)
         NotificationCenter.default.addObserver(self,
                                                selector: #selector(applicationWillEnterForeground),
                                                name: UIApplication.willEnterForegroundNotification,
@@ -32,42 +44,88 @@ public class IMMananger: BaseServiceManager {
                                                object: nil)
         
         if let reachability {
+            // Ignore the initial snapshot, duplicate flags and short path
+            // transitions. NetworkStatusChanged actively closes the SDK socket.
+            let changed: (Reachability) -> Void = { [weak self] _ in
+                guard let self = self, self.observing,
+                      self.observerGeneration == generation else { return }
+                self.scheduleNetworkCheck()
+            }
+            reachability.whenReachable = changed
+            reachability.whenUnreachable = changed
             do {
                 try reachability.startNotifier()
             } catch (let e) {
                 print("reachability: \(e)")
             }
             
-            reachability.whenReachable = { _ in
-                Open_im_sdkNetworkStatusChanged(BaseCallback(result: { _ in
-                }), UUID().uuidString)
-            }
-            reachability.whenUnreachable = { _ in
+        }
+    }
+
+    private func scheduleNetworkCheck() {
+        networkCheck?.cancel()
+        guard observing, !isInBackground else { return }
+        let generation = observerGeneration
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self, self.observing, !self.isInBackground,
+                  self.observerGeneration == generation,
+                  let path = self.reachability?.connection else { return }
+            if self.networkPath.observe(path: path.description,
+                                        online: path != .unavailable,
+                                        foreground: true),
+               self.networkPath.allowWake(path: path.description,
+                                          now: ProcessInfo.processInfo.systemUptime) {
                 Open_im_sdkNetworkStatusChanged(BaseCallback(result: { _ in
                 }), UUID().uuidString)
             }
         }
+        networkCheck = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
+
+    private func removeObservers() {
+        observing = false
+        observerGeneration += 1
+        networkCheck?.cancel()
+        networkCheck = nil
+        NotificationCenter.default.removeObserver(self,
+            name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.removeObserver(self,
+            name: UIApplication.didEnterBackgroundNotification, object: nil)
+        reachability?.whenReachable = nil
+        reachability?.whenUnreachable = nil
+        reachability?.stopNotifier()
+        networkPath.reset()
     }
     
     @objc
     fileprivate func applicationDidEnterBackground() {
+        guard observing, !isInBackground else { return }
+        isInBackground = true
+        networkCheck?.cancel()
         Open_im_sdkSetAppBackgroundStatus(BaseCallback(result: { _ in
         }), UUID().uuidString, true)
     }
     
     @objc
     fileprivate func applicationWillEnterForeground() {
+        guard observing, isInBackground else { return }
+        isInBackground = false
         Open_im_sdkSetAppBackgroundStatus(BaseCallback(result: { _ in
         }), UUID().uuidString, false)
+        scheduleNetworkCheck()
     }
     
     func initSDK(methodCall: FlutterMethodCall, result: @escaping FlutterResult){
-        callBack(result, Open_im_sdkInitSDK(ConnListener(channel: self.channel), methodCall[string: "operationID"], methodCall.toJsonString()))
-        addObservers()
+        let initialized = Open_im_sdkInitSDK(ConnListener(channel: self.channel), methodCall[string: "operationID"], methodCall.toJsonString())
+        if initialized { addObservers() }
+        callBack(result, initialized)
     }
 
     func unInitSDK(methodCall: FlutterMethodCall, result: @escaping FlutterResult){
+        removeObservers()
         Open_im_sdkUnInitSDK(methodCall[string: "operationID"])
+        callBack(result)
     }
     
     func login(methodCall: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -105,6 +163,11 @@ public class IMMananger: BaseServiceManager {
     }
     
     func networkStatusChanged(methodCall: FlutterMethodCall, result: @escaping FlutterResult) {
+        let path = reachability?.connection.description ?? "Unknown"
+        guard networkPath.allowWake(path: path, now: ProcessInfo.processInfo.systemUptime) else {
+            callBack(result)
+            return
+        }
         Open_im_sdkNetworkStatusChanged(BaseCallback(result: result), methodCall[string: "operationID"])
     }
 }

@@ -1,7 +1,5 @@
 const Map<String, String> zh_CN = {
   'networkPreparing': '正在连接…',
-  'networkConnectingFallback': '正在连接备用线路…',
-  'networkRecoveryRetrying': '正在恢复连接，稍后自动重试…',
   'videoSavePreparing': '正在准备保存视频…',
   'videoSaveDownloading': '正在下载视频',
   'videoSavePermissionDenied': '请允许添加视频到相册后重试',

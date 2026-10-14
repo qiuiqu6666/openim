@@ -33,7 +33,6 @@ class ChatTransferStatusView extends StatelessWidget {
               label: 'chatSendConfirming'.tr,
               child: ChatDelayedStatusView(
                 isSending: true,
-                delay: false,
                 color: statusColor,
               ),
             );

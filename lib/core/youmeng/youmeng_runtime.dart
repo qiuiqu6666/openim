@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
 import '../server_nodes/startup_node_selection.dart';
 import '../server_nodes/node_endpoint.dart';
-import '../server_nodes/node_availability_probe.dart';
 import '../server_nodes/route_history.dart';
 import 'youmeng_configuration.dart';
+import 'shield_readiness.dart';
 
 class YoumengRuntime {
   static const enabled =
@@ -135,8 +135,6 @@ class YoumengRuntime {
     final ready = await _channel
         .invokeMethod<bool>('start', {'cp': cp, 'token': token, 'key': key});
     if (ready != true) throw StateError('网络保护未就绪');
-    if (!(await NodeAvailabilityProbe().check(NodeEndpoint.shield)).available) {
-      throw StateError('网络保护业务链路未就绪');
-    }
+    await ShieldReadiness.verify();
   }
 }

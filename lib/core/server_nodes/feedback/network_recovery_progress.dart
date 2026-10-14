@@ -2,16 +2,27 @@ import 'package:flutter/foundation.dart';
 
 enum NetworkRecoveryStage { checking, startingShield, retrying }
 
+enum NetworkRecoveryContext { startup, reconnect }
+
+@immutable
+class NetworkRecoveryState {
+  const NetworkRecoveryState(this.stage, this.context);
+  final NetworkRecoveryStage stage;
+  final NetworkRecoveryContext context;
+}
+
 /// A route operation owns its feedback until it completes or is replaced.
-class NetworkRecoveryProgress extends ValueNotifier<NetworkRecoveryStage?> {
+/// Runtime recovery is silent by default; only initial preparation may use HUD.
+class NetworkRecoveryProgress extends ValueNotifier<NetworkRecoveryState?> {
   NetworkRecoveryProgress() : super(null);
 
   static final instance = NetworkRecoveryProgress();
   Object? _owner;
 
-  NetworkRecoveryOperation begin(NetworkRecoveryStage stage) {
+  NetworkRecoveryOperation begin(NetworkRecoveryStage stage,
+      {NetworkRecoveryContext context = NetworkRecoveryContext.reconnect}) {
     final owner = _owner = Object();
-    value = stage;
+    value = NetworkRecoveryState(stage, context);
     return NetworkRecoveryOperation._(this, owner);
   }
 }
@@ -22,7 +33,12 @@ class NetworkRecoveryOperation {
   final Object _owner;
 
   void update(NetworkRecoveryStage stage) {
-    if (identical(_progress._owner, _owner)) _progress.value = stage;
+    final current = _progress.value;
+    if (identical(_progress._owner, _owner) &&
+        current != null &&
+        current.stage != stage) {
+      _progress.value = NetworkRecoveryState(stage, current.context);
+    }
   }
 
   void close() {

@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		B859AE1818E6455390B84201 /* GameShieldClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B859AE1818E6455390B84202; };
 		B859AE1818E6455390B84203 /* YoumengBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B859AE1818E6455390B84204; };
+		B859AE1818E6455390B84205 /* TunnelConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B859AE1818E6455390B84206; };
 		10CA7100302D2E3000000001 /* NativeChatLocationMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		173BE1932A67E13300A4D9A9 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 173BE1922A67E13300A4D9A9 /* NotificationService.swift */; };
@@ -55,6 +56,7 @@
 		B859AE1818E6455390B84202 /* GameShieldClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Youmeng/GameShieldClient.swift; sourceTree = "<group>"; };
 		B859AE1818E6455390B84204 /* YoumengBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Youmeng/YoumengBridge.swift; sourceTree = "<group>"; };
 		0A43C86933581DC06E08B1B1 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
+		B859AE1818E6455390B84206 /* TunnelConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Youmeng/TunnelConnection.swift; sourceTree = "<group>"; };
 		10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChatLocationMap.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
@@ -180,6 +182,7 @@
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				B859AE1818E6455390B84202 /* GameShieldClient.swift */,
 				B859AE1818E6455390B84204 /* YoumengBridge.swift */,
+				B859AE1818E6455390B84206 /* TunnelConnection.swift */,
 				10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
@@ -512,6 +515,7 @@
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				B859AE1818E6455390B84201 /* GameShieldClient.swift in Sources */,
 				B859AE1818E6455390B84203 /* YoumengBridge.swift in Sources */,
+				B859AE1818E6455390B84205 /* TunnelConnection.swift in Sources */,
 				DE51CE5302D2E30000000001 /* DeviceSyncOriginalsBridge.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);
@@ -553,7 +557,7 @@
 				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 2026;
+				CURRENT_PROJECT_VERSION = 2027;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = HA2XCAK2D8;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -595,7 +599,7 @@
 				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 2026;
+				CURRENT_PROJECT_VERSION = 2027;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = HA2XCAK2D8;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -634,7 +638,7 @@
 				CODE_SIGN_ENTITLEMENTS = NotificationService/NotificationService.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 2026;
+				CURRENT_PROJECT_VERSION = 2027;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = HA2XCAK2D8;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -723,7 +727,7 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 2026;
+				CURRENT_PROJECT_VERSION = 2027;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 2GMR44F922;
 				ENABLE_BITCODE = NO;
@@ -868,7 +872,7 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 2026;
+				CURRENT_PROJECT_VERSION = 2027;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = HA2XCAK2D8;
 				ENABLE_BITCODE = NO;
@@ -905,7 +909,7 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 2026;
+				CURRENT_PROJECT_VERSION = 2027;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = HA2XCAK2D8;
 				ENABLE_BITCODE = NO;

@@ -32,10 +32,11 @@ void main() {
     unawaited(first.then((_) => sdkStarts++));
     expect(startup.prepare(), same(first));
     expect(attempts, hasLength(1));
-    expect(progress.value, NetworkRecoveryStage.startingShield);
+    expect(progress.value?.stage, NetworkRecoveryStage.startingShield);
+    expect(progress.value?.context, NetworkRecoveryContext.startup);
     attempts[0].completeError(StateError('shield not ready'));
     await tester.pump();
-    expect(progress.value, NetworkRecoveryStage.retrying);
+    expect(progress.value?.stage, NetworkRecoveryStage.retrying);
     expect(startup.ready, isFalse);
     expect(sdkStarts, 0);
     await tester.pump(const Duration(milliseconds: 1999));

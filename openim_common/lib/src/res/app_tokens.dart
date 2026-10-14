@@ -194,6 +194,7 @@ class ChatBubbleTokens {
   static const double horizontalPadding = 12;
   static const double verticalPadding = 8;
   static const double metadataFontSize = 11;
+  static const double deliveryStatusSize = 16;
   static const Color outgoingLight = Color(0xFFDCEEFF);
   static const Color incomingBorder = Color(0x14000000);
   static const double incomingBorderWidth = .5;

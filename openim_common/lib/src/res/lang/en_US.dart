@@ -1,7 +1,5 @@
 const Map<String, String> en_US = {
   'networkPreparing': 'Connecting…',
-  'networkConnectingFallback': 'Connecting to a backup route…',
-  'networkRecoveryRetrying': 'Restoring connection. Retrying automatically…',
   'videoSavePreparing': 'Preparing to save video…',
   'videoSaveDownloading': 'Downloading video',
   'videoSavePermissionDenied': 'Allow adding videos to Photos, then retry.',

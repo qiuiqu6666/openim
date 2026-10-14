@@ -77,7 +77,7 @@ public final class GameShieldClient {
         outbox.append(rec)
         if outbox.count > 200 { outbox.removeFirst(outbox.count - 200) }
         outLock.unlock()
-        NSLog("[GShield][%@] %@", code, msg)
+        NSLog("[GShield][%@] %@ node=%@", code, msg, rec["node"] as? String ?? "")
         onEvent?(code, msg, rec["node"] as? String ?? "")
     }
 
@@ -100,14 +100,23 @@ public final class GameShieldClient {
     private func releaseTunnel() { cntLock.lock(); tunnelCount = max(0, tunnelCount - 1); cntLock.unlock() }
 
     // ================= 对外: 建立游戏到源站端口的加密隧道(双通道会话保持) =================
-    public func connect(sourcePort: Int, completion: @escaping (Result<TunnelConnection, Error>) -> Void) {
+    @discardableResult
+    public func connect(sourcePort: Int, completion: @escaping (Result<TunnelConnection, Error>) -> Void) -> () -> Void {
+        var cancelled = false
+        var connecting: TunnelTLS?
         ensureStarted { [weak self] ok in
+            guard !cancelled else { return }
             guard let self, ok else { return completion(.failure(GSError.tunnelFail)) }
             let tun = TunnelTLS(key: self.key, projectId: self.conf.projectId, port: sourcePort,
                                 tunnelPort: self.conf.tunnelPort,
-                                nodeList: { self.nodeQueue.isEmpty ? [self.nodeIP ?? ""].filter { !$0.isEmpty } : self.nodeQueue },
-                                markBad: { self.dropAndSwap($0) })
-            tun.evtFn = { c, m, n in self.evt(c, m, n) }
+                                nodeList: { [weak self] in
+                                    guard let self else { return [] }
+                                    if self.nodeQueue.isEmpty { self.refreshNodes() }
+                                    return self.nodeQueue
+                                },
+                                markBad: { [weak self] in self?.dropAndSwap($0) })
+            connecting = tun
+            tun.evtFn = { [weak self] c, m, n in self?.evt(c, m, n) }
             let id = UUID()
             self.ownedTunnels[id] = tun
             var counted = false
@@ -116,7 +125,8 @@ public final class GameShieldClient {
                 self?.ownedTunnels.removeValue(forKey: id)
             }
             var replied = false
-            tun.onReady = {
+            tun.onReady = { [weak self, weak tun] in
+                guard let self, let tun else { return }
                 if !replied {
                     replied = true
                     self.addTunnel()
@@ -126,6 +136,13 @@ public final class GameShieldClient {
             }
             tun.onDead = { if !replied { replied = true; completion(.failure(GSError.noNode)) } }
             tun.start()
+        }
+        return {
+            youmengQueue.async {
+                cancelled = true
+                connecting?.cancel()
+                connecting = nil
+            }
         }
     }
 
@@ -150,6 +167,7 @@ public final class GameShieldClient {
         let tunnels = Array(ownedTunnels.values); ownedTunnels.removeAll()
         tunnels.forEach { $0.cancel() }
         generation += 1; started = false; finishStart(false)
+        refreshingNodes = false; lastNodeRefresh = .distantPast
         tickTimer?.cancel(); tickTimer = nil
         evt("stop", "SDK停止")
         flushReport()
@@ -160,6 +178,27 @@ public final class GameShieldClient {
     private var generation = 0
     private var starting = false
     private var waiters = [(Bool) -> Void]()
+    private var refreshingNodes = false
+    private var lastNodeRefresh = Date.distantPast
+
+    /// Failed initial dials are still demand. An exhausted pool must recover
+    /// without requiring an established tunnel (or a full SDK restart).
+    private func refreshNodes() {
+        guard started, !refreshingNodes,
+              Date().timeIntervalSince(lastNodeRefresh) >= 5 else { return }
+        refreshingNodes = true
+        lastNodeRefresh = Date()
+        let attempt = generation
+        api("/sdk/v1/nodes?token=\(token)") { [weak self] document in
+            guard let self, attempt == self.generation else { return }
+            self.refreshingNodes = false
+            guard document?["code"] as? Int == 0 else {
+                self.evt("sched_fail", "重新获取节点失败，将自动重试"); return
+            }
+            self.applyNodes(document)
+            self.evt("sched_refresh", "重新获取候选节点: \(self.nodeQueue.count)")
+        }
+    }
 
     public func prepareRules(_ completion: @escaping ([Int: Int]?) -> Void) {
         ensureStarted { ok in completion(ok ? self.conf.ports : nil) }
@@ -231,12 +270,14 @@ public final class GameShieldClient {
             evt("sched_fail", "节点列表获取失败", "")
             return
         }
-        nodeQueue = nodes.compactMap { $0["ip"] as? String }
+        nodeQueue = nodes.compactMap { $0["ip"] as? String }.filter { !$0.isEmpty }
+        nodeIP = nodeQueue.first
         rankByRtt { [weak self] in self?.nodeIP = self?.nodeQueue.first ?? self?.nodeIP }
     }
 
     /// 全部候选 PING/PONG 实测RTT, 升序重排队列
     private func rankByRtt(done: (() -> Void)? = nil) {
+        let attempt = generation
         let snapshot = nodeQueue
         guard !snapshot.isEmpty else { done?(); return }
         let group = DispatchGroup()
@@ -246,7 +287,7 @@ public final class GameShieldClient {
             measureRtt(ip) { ms in rtt[ip] = ms; group.leave() }
         }
         group.notify(queue: youmengQueue) { [weak self] in
-            guard let self else { return }
+            guard let self, attempt == self.generation else { return }
             self.nodeQueue.sort { (rtt[$0] ?? .greatestFiniteMagnitude) < (rtt[$1] ?? .greatestFiniteMagnitude) }
             let desc = self.nodeQueue.map { ip in ip + "=" + (rtt[ip] == .greatestFiniteMagnitude ? "超时" : "\(Int(rtt[ip] ?? 0))ms") }.joined(separator: " | ")
             self.evt("sched_ok", "测速排序: " + desc, "")
@@ -311,9 +352,7 @@ public final class GameShieldClient {
             }
             if active {
                 self.probeCurrent()
-                if self.tick % 60 == 0 {
-                    self.api("/sdk/v1/nodes?token=\(self.token)") { nj in self.applyNodes(nj) }
-                }
+                if self.tick % 60 == 0 { self.refreshNodes() }
             } else if !self.idleState {
                 self.idleState = true
                 self.evt("idle_enter", "游戏隧道全部关闭, 休眠(零网络活动)")
@@ -347,317 +386,3 @@ public final class GameShieldClient {
         }.resume()
     }
 }
-
-// ================= 加密隧道连接 =================
-public protocol TunnelConnection: AnyObject {
-    func send(_ data: Data)
-    func receive(_ handler: @escaping (Data?) -> Void)
-    func cancel()
-}
-
-/// 双通道(主+备)AES-256-GCM隧道, 与 PC/安卓 同设计的毫秒级无缝切换:
-///   1. 上行镜像写主/备两路; 主路故障 -> 备路"升主"(数据完整零丢包)
-///   2. 备路下行在主用期间静默丢弃(镜像语义, 防重复注入游戏)
-///   3. 无备路可升时: 断口帧进 pending(默认64KB) + 0.5s 周期重挂, 30s 宽限期才断游戏
-///      (第卅七轮: 10s→30s, 4G↔WiFi切换/弱网瞬断常在10~25秒, 旧窗口会误杀可救的局)
-final class TunnelTLS: TunnelConnection {
-    private final class Path {
-        let ip: String; let conn: NWConnection; let isBackup: Bool
-        var rx = Data(); var live = false; var helloSent = false
-        var down = false                      // 第卅七轮: pathDown 幂等锁(初拨超时与连接失败双路触发只处理一次)
-        var lastBeat = Date()          // 在隧心跳: 任何下行帧刷新(第卅三轮, 哑死判位)
-        init(ip: String, conn: NWConnection, backup: Bool) { self.ip = ip; self.conn = conn; isBackup = backup }
-    }
-    private let key: SymmetricKey
-    private let projectId: Int
-    private let port: Int
-    /// 网关会话锚: 本隧道生命周期内不变, 主/备路径共用同一 sid —— 源站网关据此跨节点归并会话
-    private let sid = Data.randomHex(10)
-    private let tunnelPort: NWEndpoint.Port?
-    private let nodeList: () -> [String]
-    private let markBad: (String) -> Void
-    private let q = youmengQueue
-    private let lock = NSLock()
-    private var primary: Path?
-    private var backup: Path?
-    private var pending = [Data]()
-    private var pendingLen = 0
-    private var pendingCap = 65536              // 断口缓冲上限(轻量: 默认仅64KB)
-    private var deadline = Date.distantFuture
-    private var handler: ((Data?) -> Void)?
-    private var earlyData = [Data]()
-    private var earlyBytes = 0
-    var onReady: (() -> Void)?
-    var onDead: (() -> Void)?
-    /// 事件上报钩子(由 GameShieldClient 注入): 升主/重挂/拒绝等生命周期原因
-    var evtFn: ((String, String, String) -> Void)?
-    /// 隧道寿命结束钩子(空闲休眠计数的释放)
-    var onRelease: (() -> Void)?
-    private var released = false
-    private var readySent = false
-    private var closed = false
-    private var lastDialAt = Date.distantPast      // 第卅七轮: 初拨失败重挂窗口内0.5s步进会重复ensurePaths, 限6s一条拨号防堆积
-
-    private func releaseOnce() {
-        lock.lock(); let first = !released; released = true; lock.unlock()
-        if first { onRelease?() }
-    }
-
-    init(key: SymmetricKey, projectId: Int, port: Int, tunnelPort: Int,
-         nodeList: @escaping () -> [String], markBad: @escaping (String) -> Void) {
-        self.key = key; self.projectId = projectId; self.port = port
-        self.nodeList = nodeList; self.markBad = markBad
-        let s = NWEndpoint.Port("\(tunnelPort)")
-        self.tunnelPort = s
-    }
-
-    func start() { q.async { self.ensurePaths(); self.startKeepalive() } }
-
-    private func ensurePaths() {
-        let list = nodeList()
-        lock.lock()
-        let needPrimary = primary == nil, needBackup = backup == nil
-        let curIp = primary?.ip
-        lock.unlock()
-        guard !closed else { return }
-        if needPrimary {
-            guard let ip = list.first else { beginRetry(); return }
-            if Date().timeIntervalSince(lastDialAt) < 6 { return }
-            lastDialAt = Date()
-            open(ip, backup: false)
-            if list.count > 1 { open(list[1], backup: true) }
-            return
-        }
-        if needBackup, let alt = list.first(where: { $0 != curIp }) { open(alt, backup: true) }
-    }
-
-    private func open(_ ip: String, backup isB: Bool) {
-        guard let tp = tunnelPort else { return }
-        let conn = NWConnection(host: NWEndpoint.Host(ip), port: tp, using: .tcp)
-        let p = Path(ip: ip, conn: conn, backup: isB)
-        conn.stateUpdateHandler = { [weak self] st in
-            guard let self else { return }
-            if self.closed { conn.cancel(); return }
-            switch st {
-            case .ready:
-                guard !p.helloSent else { return }
-                p.helloSent = true
-                conn.send(content: gsFrame(1, Data(self.helloJSON().utf8)), completion: .contentProcessed { _ in })
-                p.live = true
-                self.lock.lock()
-                if isB { self.backup = p; self.lock.unlock(); self.evtFn?("backup_up", "备通道待命(双写镜像)", ip) }
-                else {
-                    self.primary = p
-                    let first = !self.readySent
-                    self.readySent = true; self.deadline = .distantFuture
-                    // ★第卅七轮: 重挂成功后先补发断口期缓冲(与 PC/安卓 对齐; 旧版初拨失败重挂的积压帧永不投递)
-                    let pend = self.pending; self.pending = []; self.pendingLen = 0
-                    self.lock.unlock()
-                    for f in pend { self.write(p, f) }
-                    if first { self.onReady?() }
-                    else { self.evtFn?("resume_ok", "已重挂 \(ip), 游戏无掉线", ip) }
-                }
-                self.pump(p)
-            case .failed: self.pathDown(p)
-            case .cancelled: p.live = false
-            default: break
-            }
-        }
-        conn.start(queue: q)
-        q.asyncAfter(deadline: .now() + 6) { [weak self] in
-            guard let self else { return }
-            if !p.helloSent {
-                self.evtFn?("tunnel_err", "TCP可连但6秒无HELLO响应(\(ip)): 节点丢包/防火墙异常", ip)
-                self.pathDown(p)
-            }
-        }
-    }
-
-    private func helloJSON() -> String {
-        let nonce = Data.randomHex(8)
-        let auth = Data(HMAC<SHA256>.authenticationCode(for: Data("\(projectId):\(port):\(nonce)".utf8), using: key)).hexString
-        return "{\"v\":1,\"project_id\":\(projectId),\"port\":\(port),\"nonce\":\"\(nonce)\",\"auth\":\"\(auth)\",\"proto\":\"tcp\",\"sid\":\"\(sid)\"}"
-    }
-
-    private func pathDown(_ p: Path) {
-        guard !closed else { return }
-        lock.lock()
-        if p.down { lock.unlock(); return }          // 幂等: 6s无响应超时与连接failed可能双触发
-        p.down = true
-        p.live = false
-        p.conn.cancel()
-        if p.isBackup {
-            if backup === p { backup = nil }
-            lock.unlock()
-            return
-        }
-        if primary === p {
-            primary = nil
-            let promote: Path? = (backup?.live == true) ? backup : nil
-            if let b = promote { backup = nil; primary = b; readySent = true }
-            let pend = pending; pending = []; pendingLen = 0
-            lock.unlock()
-            markBad(p.ip)
-            if let b = promote {
-                evtFn?("backup_promote", "备通道升主, 原节点\(p.ip)故障, 游戏零丢包毫秒级切换", b.ip)
-                for f in pend { write(b, f) }
-                ensurePaths()
-            } else {
-                evtFn?("node_down", "主通道断口(无备通道), 游戏连接保持, 重挂中(缓冲\(pend.count)帧)", p.ip)
-                for f in pend { enqueue(f) }        // 无备可升: 断口缓冲
-                beginRetry()
-            }
-        } else {
-            // ★第卅七轮: 初次拨号失败(尚未成为主路)旧版静默吞掉 —— connect() 回调永不返回,
-            //   iOS 侧"点了就卡死"。现在摘除坏节点并走同一重挂宽限期, 到期才以失败回调收口。
-            lock.unlock()
-            markBad(p.ip)
-            evtFn?("tunnel_err", "建盾失败(\(p.ip)), 自动换节点重试(游戏侧保持等待)", p.ip)
-            beginRetry()
-        }
-    }
-
-    // ---- 在隧心跳看门狗(第卅三轮): 哑死盲区补位 ----
-    //   节点被打宕机/断网时 NWConnection 未必进 .failed(半开), 主道冻结+备道下行被镜像丢弃。
-    //   每2s对主/备各发一帧 PING 并以 lastBeat 判死: 主道6s无下行=pathDown 走既有
-    //   备门升主/重挂(毫秒级); 备道12s无响应=重建镜像备份。与 PC/安卓 同参数。
-    private func startKeepalive() {
-        q.asyncAfter(deadline: .now() + 2) { [weak self] in
-            guard let self, !self.closed else { return }
-            self.tickAlive()
-            self.startKeepalive()
-        }
-    }
-    private func tickAlive() {
-        lock.lock()
-        let a = (primary?.live == true) ? primary : nil
-        let b = (backup?.live == true) ? backup : nil
-        let now = Date()
-        let aStale = a.map { now.timeIntervalSince($0.lastBeat) > 6 } ?? false
-        let bStale = b.map { now.timeIntervalSince($0.lastBeat) > 12 } ?? false
-        lock.unlock()
-        let ping = gsFrame(3, Data())              // T.PING
-        if let a {
-            if aStale { evtFn?("hb_dead", "心跳判主隧道6秒无响应(疑节点宕机/断网哑死), 主动无缝切换", a.ip); pathDown(a) }
-            else { write(a, ping) }
-        }
-        if let b {
-            if bStale { evtFn?("hb_backup", "备通道心跳超时, 重建镜像备份", b.ip); pathDown(b); ensurePaths() }
-            else { write(b, ping) }
-        }
-        if a != nil && !aStale && b == nil { ensurePaths() }   // 备通道缺失: 持续补位
-    }
-
-    private func beginRetry() {
-        lock.lock()
-        if primary != nil || closed { lock.unlock(); return }
-        if deadline == .distantFuture { deadline = Date().addingTimeInterval(30) }   // ★第卅七轮: 重挂宽限期 10s→30s
-        lock.unlock()
-        retryStep()
-    }
-    private func retryStep() {
-        lock.lock()
-        if primary != nil || closed { lock.unlock(); return }
-        let expired = Date() > deadline
-        lock.unlock()
-        if expired {
-            evtFn?("resume_fail", "30秒内无法重挂任何节点(全部失联/握手被拒), 游戏断开", "")
-            handler?(nil); cancel(); return
-        }
-        ensurePaths()
-        q.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.retryStep() }
-    }
-
-    private func write(_ p: Path, _ frame: Data) { p.conn.send(content: frame, completion: .contentProcessed { _ in }) }
-    private func enqueue(_ f: Data) {
-        pending.append(f); pendingLen += f.count
-        if pendingLen > pendingCap { handler?(nil); cancel() }
-    }
-
-    private func pump(_ p: Path) {
-        p.conn.receive(minimumIncompleteLength: 1, maximumLength: 655360) { [weak self] data, _, isComplete, error in
-            guard let self else { return }
-            if let data { p.rx.append(data); self.drain(p) }
-            if isComplete || error != nil { self.pathDown(p); return }
-            self.pump(p)
-        }
-    }
-
-    private func drain(_ p: Path) {
-        while p.rx.count >= 5 {
-            let len = Int(gsBeUInt32(p.rx.subdata(in: 1..<5)))
-            // 第卅九轮回4: len==0 的 PONG/控制帧必须正常消费 —— 旧 guard len>0 让空帧滞留 rx 头部,
-            // 其后所有 DATA 永远读不出(整条隧道冻死)。与 Java 端 readFrame 同源 bug 同批修。
-            guard len <= 655360 else { handler?(nil); cancel(); return }
-            guard p.rx.count >= 5 + len else { return }
-            let type = p.rx[p.rx.startIndex]
-            let payload = p.rx.subdata(in: (p.rx.startIndex + 5)..<(p.rx.startIndex + 5 + len))
-            p.rx.removeSubrange(p.rx.startIndex..<(p.rx.startIndex + 5 + len))
-            p.lastBeat = Date()                    // 任何下行帧(PONG/DATA)=隧道活着
-            guard type == 2 else { continue }
-            lock.lock(); let isActive = p === primary; lock.unlock()
-            guard isActive else { continue }            // 备路下行丢弃(镜像语义)
-            if let plain = gcmOpen(payload) {
-                if let handler { handler(plain) }
-                else {
-                    earlyBytes += plain.count
-                    guard earlyBytes <= 1048576 else { cancel(); return }
-                    earlyData.append(plain)
-                }
-            } else { handler?(nil); cancel(); return }
-        }
-    }
-
-    // ---- TunnelConnection ----
-    func send(_ data: Data) {
-        guard !closed else { return }
-        guard let enc = (try? AES.GCM.seal(data, using: key))?.combined else { return }
-        let f = gsFrame(2, enc)
-        lock.lock()
-        let a = primary?.live == true ? primary : nil
-        let b = backup?.live == true ? backup : nil
-        lock.unlock()
-        if let a { write(a, f) }
-        if let b { write(b, f) }
-        if a == nil { enqueue(f) }
-    }
-    func receive(_ handler: @escaping (Data?) -> Void) {
-        self.handler = handler
-        if closed { handler(nil); return }
-        let buffered = earlyData; earlyData.removeAll(); earlyBytes = 0
-        buffered.forEach { handler($0) }
-    }
-    func cancel() {
-        guard !closed else { return }
-        closed = true
-        onDead?(); onDead = nil; onReady = nil
-        releaseOnce()
-        lock.lock(); let ps = [primary, backup].compactMap { $0 }; primary = nil; backup = nil; lock.unlock()
-        ps.forEach { $0.conn.cancel() }
-    }
-
-    private func gcmOpen(_ raw: Data) -> Data? {
-        guard let box = try? AES.GCM.SealedBox(combined: raw) else { return nil }
-        return try? AES.GCM.open(box, using: key)
-    }
-}
-
-// ================= 帧与工具 =================
-private func gsFrame(_ type: UInt8, _ payload: Data) -> Data {
-    var h = Data([type])
-    var l = UInt32(payload.count).bigEndian
-    withUnsafeBytes(of: &l) { h.append(contentsOf: $0) }
-    return h + payload
-}
-private func gsBeUInt32(_ d: Data) -> UInt32 {
-    var v: UInt32 = 0
-    for b in d { v = (v << 8) | UInt32(b) }
-    return v
-}
-extension Data {
-    var hexString: String { map { String(format: "%02x", $0) }.joined() }
-    static func randomHex(_ bytes: Int) -> String {
-        Data((0..<bytes).map { _ in UInt8.random(in: 0...255) }).hexString
-    }
-}
-enum GSError: Error { case noNode, tunnelFail }

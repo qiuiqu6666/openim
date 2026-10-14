@@ -74,6 +74,12 @@ void main() {
               clientFactory: () => Dio()..httpClientAdapter = adapter)
           .check(NodeEndpoint.direct);
       expect(result.available, isFalse);
+      final service = brokenPath == '/chat/platform'
+          ? 'chat'
+          : brokenPath == '/user/get_users_info'
+              ? 'imApi'
+              : 'imWs';
+      expect(result.serviceFailures[service], 'StateError');
       expect(adapter.closed, isTrue);
     });
   }
@@ -85,6 +91,11 @@ void main() {
             clientFactory: () => Dio()..httpClientAdapter = adapter)
         .check(NodeEndpoint.direct);
     expect(result.available, isFalse);
+    expect(result.serviceFailures, {
+      'chat': 'timeout',
+      'imApi': 'timeout',
+      'imWs': 'timeout',
+    });
     expect(adapter.closed, isTrue);
     adapter.gate!.complete();
   });

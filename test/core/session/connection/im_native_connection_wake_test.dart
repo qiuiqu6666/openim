@@ -43,6 +43,46 @@ void main() {
     expect(calls.last.arguments['isBackground'], isFalse);
   });
 
+  testWidgets('a pre-background reply cannot replace the new foreground report',
+      (tester) async {
+    final pending = Completer<void>();
+    final calls = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      if (calls.length == 1) await pending.future;
+      return null;
+    });
+    final nativeWake = IMNativeConnectionWake(
+        channel: channel,
+        isCurrentSession: () => true,
+        isDisconnected: () => false);
+    var reconciled = 0;
+    final recovery = IMConnectionRecovery(
+      isCurrent: () => true,
+      isDisconnected: () => false,
+      wake: nativeWake.wake,
+      networkChanges: const Stream.empty(),
+      onError: (error) => fail('$error'),
+      onWakeSucceeded: () => reconciled++,
+    )..start();
+    recovery.didChangeAppLifecycleState(AppLifecycleState.paused);
+    recovery.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump();
+    recovery.didChangeAppLifecycleState(AppLifecycleState.paused);
+    recovery.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(calls, ['setAppBackgroundStatus'],
+        reason: 'Native calls remain serialized.');
+    pending.complete();
+    await tester.pump();
+    expect(calls, ['setAppBackgroundStatus', 'setAppBackgroundStatus']);
+    expect(reconciled, 1,
+        reason: 'Only the current foreground ACK triggers catch-up.');
+    recovery.close();
+    nativeWake.close();
+    await tester.pump();
+  });
+
   testWidgets('slow native wake keeps its slot and does not close the socket',
       (tester) async {
     final stalled = Completer<void>();
@@ -68,6 +108,7 @@ void main() {
       onError: errors.add,
       networkChanges: const Stream.empty(),
     )..start();
+    recovery.didChangeAppLifecycleState(AppLifecycleState.paused);
     recovery.didChangeAppLifecycleState(AppLifecycleState.resumed);
     await tester.pump();
     expect(calls, ['setAppBackgroundStatus']);
