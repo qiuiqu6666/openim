@@ -7,9 +7,11 @@ $ErrorActionPreference = 'Stop'
 $taskSource = (Resolve-Path -LiteralPath $SourcePath).Path
 $taskManifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'manifest.json') -Raw | ConvertFrom-Json
 $taskPatch = Join-Path $PSScriptRoot $taskManifest.patch
+$taskBaseCommit = $taskManifest.patch_base_commit
+if (!$taskBaseCommit) { $taskBaseCommit = $taskManifest.commit }
 $taskHead = & git -C $taskSource rev-parse HEAD
-if ($LASTEXITCODE -ne 0 -or $taskHead -ne $taskManifest.commit) {
-    throw "Expected official SDK commit $($taskManifest.commit). Existing files were preserved."
+if ($LASTEXITCODE -ne 0 -or $taskHead -ne $taskBaseCommit) {
+    throw "Expected patch base commit $taskBaseCommit. Existing files were preserved."
 }
 $taskHash = (Get-FileHash -LiteralPath $taskPatch -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($taskHash -ne $taskManifest.patch_sha256) {

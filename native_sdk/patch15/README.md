@@ -1,44 +1,42 @@
-# Core SDK recovery.15：最新消息优先，历史独立补齐
+# Core SDK recovery.17：最新窗口、按需历史与有限缓存
 
-当前版本：`v3.8.3-patch.15+recovery.15`。Android 与 iOS 的唯一共同构建输入为 `ios-core-source/`，目录名保持兼容；361 个源码、测试及依赖文件受清单哈希校验。基线为官方 patch.15 的 `d6e0b549db904d0327d76ef7c9c283203879a095`。
+本次 Android 版本为 `v3.8.3-patch.15+recovery.17`，应用版本为 `3.0.1+2030`。
 
-## 修复行为
+## 来源与运行行为
 
-- 普通新推送跨越旧历史缺口时先通过已有消息/会话事务和持久交付记录落库通知，后续同一消息回放按身份去重。累计已读、撤回、初始化保护及远端 `833c19e` 的缺失终点已读回执兼容修复全部保留。
-- `delivered` 仅记录最新消息已交付，`completed` 才表示连续覆盖；交付最新消息不取消 `[completed+1,target]` 的历史义务。旧数据库不凭 `MAX(seq)` 宣告完整。
-- 超过 100 条的恢复区间先补最多 20 条最新可见消息，再按每页 100 条轮转补旧范围。尾部结果不能吞掉内部空洞；失败保留待补目标，启动、重连及前台周期继续调度。
-- 恢复页面先按服务端已读/最大水位校准未读；后续旧消息、重复补拉不重复增加未读，也不回退最新摘要。通知序号继续按序处理，首次资料和权限初始化保护保留。
-- 回调与交付记录确认之间崩溃时仍可能再次通知，应用按消息身份合并；本版本不宣称恰好一次回调。
+- Core 精确提交：`03592bcae0ad0cf45343b5ae8eabe13e7b69930f`，包含 `ccf08df` 的最新窗口/有限缓存方案，以及首次登录通知基线重复写入修复。
+- 两端构建入口统一读取 `manifest.json` 指定的 `core-source/`。372 个输入文件由 `core-source-manifest.json` 锁定。除固定 gomobile 依赖的 `go.mod/go.sum` 和内嵌版本 `version/version` 外，源码与上述提交逐字节一致。
+- 旧 `ios-core-source/` 保留 recovery.15 历史快照，当前构建不读取它；不得直接编辑旧快照来修复当前 SDK。
+- 普通消息重连只恢复最新 100 个位置，实时消息不等待旧缺口。旧历史在上滑分页时取回，不再后台全量下载。连续检查点与离散交付区间分开持久化。
+- 普通消息缓存预算：每会话 1,000 条，每账号 20,000 条及约 64 MiB；任一超限清理可替换正文。待发送/失败消息及必要删除、撤回、已读状态单独保留。预算不是 SQLite 文件物理大小或媒体目录上限；缓存维护失败时允许暂时超限并后续重试。
+- 未读按服务端读水位校准。预取与实时推送重叠时计数一次；撤回先于原消息到达时持久化状态；淘汰后重拉保留已读/撤回状态。
+- 首次同步在通知基线落库后拉取/写入失败，重试及进程重启不会再因通知序号重复插入卡在 10%；较旧响应不回退通知水位。通知事件仍按序恢复。
 
-## 构建与同源校验
+## Android 构建
 
-两端锁定 Go 1.24.0、gomobile/gobind `v0.0.0-20250711185624-d5bb5ecc55c0`，保留 `go.mod/go.sum`。脚本禁用外部 Go workspace 和隐式依赖改写，先校验并复制同一快照，再执行测试和构建。生成的 `verification.json` 绑定来源与二进制哈希；Android 每次 preBuild、iOS Pods 安装及编译前都会拒绝旧产物。
-
-二进制被 Git 忽略。完整补丁 `0001-background-message-recovery.patch` 可在官方干净基线上重建相同 361 文件。源码换行固定 LF，许可证保留。`native_binary_integrated=false` 表示 recovery.15 的 iOS 产物尚待生成；前一版 recovery.14 的 Mac 构建记录保存在历史清单，不能当作 recovery.15 的构建验收。
-
-Windows Android（需要 Python 3、JDK、SDK、NDK）：
+两端锁定 Go 1.24.0、gomobile/gobind `v0.0.0-20250711185624-d5bb5ecc55c0`；Android 使用 NDK 28.2.13676358。脚本校验源码后复制到独立构建目录，禁用隐式依赖改写，生成绑定源码/二进制哈希的凭据。
 
 ```powershell
 ./native_sdk/patch15/build-android.ps1 -Go C:/tools/go/bin/go.exe -Python python -AndroidSdk C:/Android/Sdk -AndroidNdk C:/Android/Sdk/ndk/28.2.13676358
 python native_sdk/patch15/prepare_source.py --check-artifact android
-flutter build apk --debug --target-platform android-arm64
+flutter build apk --release --target-platform android-arm64 --build-name 3.0.1 --build-number 2030
 ```
 
-Mac iOS（需要完整 Xcode、Go 1.24.0 和 Python 3）：
+Android 插件从清单读取 `io.openim:core-sdk:3.8.3-patch15-recovery.17`，每次构建校验 AAR 版本及哈希。AAR 包含 armeabi-v7a、arm64-v8a、x86、x86_64；本次交付的安装包针对 arm64。生成二进制被 Git 忽略，新检出需运行构建脚本。
 
-```sh
-native_sdk/patch15/build-ios.sh
-python3 native_sdk/patch15/prepare_source.py --check-artifact ios
-./tool/flutterw build ios --release --no-codesign
-```
+从测试/debug 切换 release 时，使用上面的完整构建命令，不加 `--no-pub`。Flutter 3.41.6 需要重新生成 release 插件注册表，排除 `integration_test` 等开发依赖；直接复用测试注册表会导致 Java 编译失败。
 
-Go 不在 PATH 时设置 `GO=/absolute/path/to/go`。Framework 包含真机 arm64 和模拟器 arm64/x86_64，安装时同时保存 `recovery-verification.json`，最低 iOS 13。`fetch-ios.ps1` 仅取未修复官方对照包，不能用于此版本。Gradle/Pods 可通过 `CORE_PYTHON` 指定 Python。
+完整补丁 `0001-background-message-recovery.patch` 以 `patch_base_commit=d6e0b549db904d0327d76ef7c9c283203879a095` 为基线，`commit` 表示实际 Core 来源。可用 `apply.ps1` 在干净官方基线上重建快照；补丁重建结果已逐文件核对。Windows 源码固定 LF，避免换行改写破坏哈希校验。
 
-## 2026-10-14 验证
+## 测试与验收范围
 
-- 合并远端累计已读兼容后，Core common/network/interaction/conversation_msg 四包 race 和 CGO=0 测试通过，相关 vet 通过。新增回归覆盖同会话 15 万条积压时新推送先交付、最新尾部先于旧页提交、SQLite 重启及旧页回放的未读与摘要幂等。
-- 15 项来源/产物校验测试通过；361 文件与干净官方基线上应用补丁的结果逐字节一致。四 ABI AAR、arm64 APK 构建通过，APK 原生库与 AAR 标准剥离结果一致。
-- 最终 recovery.15 包已保留数据安装到小米 2506BPN68G（应用 3.0.1+2029），验证实时显示，以及发送十条后停止发送、接收端恢复自行补齐。十条 SQLite 记录各一条；未读恰好增加十条，重新启动不再增加；聊天页显示最新消息。机器可读结果见 [verification/recovery.15-xiaomi.json](verification/recovery.15-xiaomi.json)。
-- 本次手机离线场景为应用停止/重新启动，未冒充真实移动网络切换验收。iOS recovery.15 Framework/iPhone 真机、长时间离线、大群与服务端故障注入仍待验收。扩展数据库全包存在两项已记录的基线失败，本轮保留说明，未计为通过。
+- Core common/network/interaction/conversation_msg/db 五包竞态测试通过，包括真实 SQLite 事务、重启、缓存淘汰、未读/撤回覆盖与首次同步重试。
+- Flutter 聊天恢复及历史测试 274 项通过、12 项原有跳过。
+- Android SDK 桥接及原生运行时/通知策略测试 24 项通过。旧插件模板测试已替换为实际方法派发错误和 Flutter 引擎生命周期回调契约测试。
+- 15 项源码/产物锁测试通过；干净官方基线补丁重建与当前快照一致。
+- 最终构建与 APK/AAR 对应关系见 `verification/recovery.17-android.json`。安装包采用隔离应用副本构建，排除工作区其他未提交功能改动。
+- 本次未覆盖真机长时间大群、温升/帧率和真实服务端故障注入；自动化通过不代表这些现场验收已经完成。
 
-回滚必须回退整组版本、锁清单及平台产物，保留用户消息数据库、恢复记录和已读状态，不清库。上一版记录见 [history/recovery.14.json](history/recovery.14.json) 与 [history/README-before-recovery.15.md](history/README-before-recovery.15.md)。
+用户本次明确选择 Android 构建和测试。iOS recovery.17 Framework 尚未构建，`native_binary_integrated=false` 表示两端尚未全部完成。Mac 后续执行 `build-ios.sh`，生成真机及模拟器 Framework 并保留凭据，之后构建应用；既有校验会拒绝旧 Framework。不得把 recovery.15 或更早的设备记录当成本版验收。
+
+前版清单见 `history/recovery.15.json`。回滚需保持源码、版本、锁和平台产物成组一致；旧全量补偿版本可能重新下载大量历史，不能将最高缓存 Seq 当作连续完整检查点。保留用户数据库与恢复状态，不清库。

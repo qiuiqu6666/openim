@@ -1,0 +1,62 @@
+{
+  "core_commit": "03592bcae0ad0cf45343b5ae8eabe13e7b69930f",
+  "sdk_version": "v3.8.3-patch.15+recovery.17",
+  "application_version": "3.0.1+2030",
+  "flutter_base_commit": "bd9bb41c87767dada2abb8f5f6286124cf777a34",
+  "source_sha256": "944018d9ce4ff785c28537b146c3e4f7cb9249ca1b12a1220015d1d3ee72228d",
+  "patch_sha256": "d650303b9dc4d2c016382dce9f11410e47cb81da7022c793e50574ef5f0ce2bd",
+  "source_files_verified": 372,
+  "apk_name": "99Chat-3.0.1-2030-recovery.17-arm64-release.apk",
+  "apk_bytes": 169747975,
+  "apk_sha256": "703601dc56ebbcdf11feb5f8a45c113bc80d0151b472ff939c47f6c154d316c6",
+  "aar_name": "core-sdk-3.8.3-patch15-recovery.17.aar",
+  "aar_sha256": "4257788e8ddacb436de6d69117ce26aa907a38d60e0e0ee5d828c41be4173bda",
+  "aar_abis": [
+    "armeabi-v7a",
+    "arm64-v8a",
+    "x86",
+    "x86_64"
+  ],
+  "apk_abis": [
+    "arm64-v8a"
+  ],
+  "apk_native_matches_verified_aar": true,
+  "core_tests": "five packages passed with race detector; pinned Go 1.24.0 and mobile dependency closure",
+  "flutter_tests": {
+    "passed": 274,
+    "skipped": 12
+  },
+  "android_jvm_tests": {
+    "suites": [
+      {
+        "suite": "io.openim.flutter_openim_sdk.FlutterOpenimSdkPluginTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "io.openim.flutter_openim_sdk.runtime.NativeIMRuntimeTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "io.openim.messaging.NativeNotificationPolicyTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ],
+    "tests": 24,
+    "failures": 0
+  },
+  "source_lock_tests": 15,
+  "patch_roundtrip": "372 files verified",
+  "unrelated_worktree_changes_excluded": true,
+  "device_runtime": "not installed/tested in this run",
+  "ios_build": "not built; user chose Android-only",
+  "apk_signature": "verified APK Signature Scheme v2"
+}
