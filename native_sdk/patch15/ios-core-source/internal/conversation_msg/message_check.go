@@ -1,0 +1,894 @@
+package conversation_msg
+
+import (
+	"context"
+	"errors"
+	"math/rand"
+	"sort"
+	"time"
+
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
+	sdk "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
+	"github.com/openimsdk/protocol/msg"
+	"github.com/openimsdk/tools/utils/datautil"
+
+	"github.com/openimsdk/tools/log"
+
+	"github.com/openimsdk/protocol/sdkws"
+)
+
+// validateAndFillInternalGaps checks for continuity within a block of messages. If gaps are detected, it initiates a fill operation
+// to retrieve and merge missing messages. It returns the maximum `seq` of this batch, which helps in determining continuity with subsequent batches.
+func (c *Conversation) validateAndFillInternalGaps(ctx context.Context, conversationID string, isReverse bool, count int,
+	startTime int64, list *[]*model_struct.LocalChatLog, messageListCallback *sdk.GetAdvancedHistoryMessageListCallback) {
+	var lostSeqListLength int
+	maxSeq, minSeq, haveSeqList := c.getMaxAndMinHaveSeqList(*list)
+	log.ZDebug(ctx, "getMaxAndMinHaveSeqList is:", "maxSeq", maxSeq, "minSeq", minSeq, "haveSeqList", haveSeqList)
+	if maxSeq != 0 && minSeq != 0 {
+		lostSeqList := getLostSeqListWithLimitLength(minSeq, maxSeq, haveSeqList, isReverse)
+		lostSeqListLength = len(lostSeqList)
+		log.ZDebug(ctx, "get lost seqList is :", "maxSeq", maxSeq, "minSeq", minSeq, "lostSeqList", lostSeqList, "length:", lostSeqListLength)
+		if lostSeqListLength > 0 {
+			log.ZDebug(ctx, "messageBlocksInternalContinuityCheck", "lostSeqList", lostSeqList)
+			c.fetchAndMergeMissingMessages(ctx, conversationID, lostSeqList, isReverse, count, startTime, list, messageListCallback)
+		}
+
+	}
+}
+
+// validateAndFillInterBlockGaps checks for continuity between blocks of messages. If a gap is identified, it retrieves the missing messages
+// to bridge the gap. The function returns a boolean indicating whether the blocks are continuous.
+func (c *Conversation) validateAndFillInterBlockGaps(ctx context.Context, thisStartSeq int64, conversationID string,
+	isReverse bool, viewType, count int, startTime int64, list *[]*model_struct.LocalChatLog, messageListCallback *sdk.GetAdvancedHistoryMessageListCallback) {
+
+	var lastEndSeq, startSeq, endSeq int64
+	var isLostSeq bool
+	if isReverse {
+		lastEndSeq, _ = c.messagePullReverseEndSeqMap.Load(conversationID, viewType)
+		isLostSeq = lastEndSeq+1 != thisStartSeq
+		startSeq = lastEndSeq + 1
+		endSeq = thisStartSeq - 1
+	} else {
+		lastEndSeq, _ = c.messagePullForwardEndSeqMap.Load(conversationID, viewType)
+		isLostSeq = thisStartSeq+1 != lastEndSeq
+		startSeq = thisStartSeq + 1
+		endSeq = lastEndSeq - 1
+	}
+	if isLostSeq && lastEndSeq != 0 {
+		log.ZDebug(ctx, "get lost LastMinSeq is :", "lastEndSeq", lastEndSeq, "thisStartSeq", thisStartSeq, "startSeq", startSeq, "endSeq", endSeq)
+		lostSeqList := getLostSeqListWithLimitLength(startSeq, endSeq, []int64{}, isReverse)
+		log.ZDebug(ctx, "get lost lostSeqList is :", "lostSeqList", lostSeqList, "length:", len(lostSeqList))
+		if len(lostSeqList) > 0 {
+			log.ZDebug(ctx, "messageBlocksBetweenContinuityCheck", "lostSeqList", lostSeqList)
+			c.fetchAndMergeMissingMessages(ctx, conversationID, lostSeqList, isReverse, count, startTime, list, messageListCallback)
+		}
+	}
+}
+
+// validateAndFillEndBlockContinuity performs an end-of-block continuity check. If a batch of messages has passed
+// internal and inter-block continuity checks but contains fewer messages than `count`, this function verifies if the end
+// of the message history has been reached. If not, it attempts to retrieve any missing messages to ensure continuity.
+func (c *Conversation) validateAndFillEndBlockContinuity(ctx context.Context, conversationID string,
+	isReverse bool, viewType, count int, startTime int64, list *[]*model_struct.LocalChatLog, messageListCallback *sdk.GetAdvancedHistoryMessageListCallback) {
+	isShouldFetchMessage, lostSeqList := c.checkEndBlock(ctx, conversationID, isReverse, viewType, count, list, messageListCallback)
+	if isShouldFetchMessage {
+		c.fetchAndMergeMissingMessages(ctx, conversationID, lostSeqList, isReverse, count, startTime, list, messageListCallback)
+		_, _ = c.checkEndBlock(ctx, conversationID, isReverse, viewType, count, list, messageListCallback)
+	}
+
+}
+func (c *Conversation) checkEndBlock(ctx context.Context, conversationID string, isReverse bool, viewType, count int,
+	list *[]*model_struct.LocalChatLog, messageListCallback *sdk.GetAdvancedHistoryMessageListCallback) (isShouldFetchMessage bool, seqList []int64) {
+	// Perform an end-of-block check if the retrieved message count is less than requested
+	if len(*list) < count {
+		if isReverse {
+			currentMaxSeq := c.getConversationMaxSeq(ctx, conversationID)
+			maxSeq, _, _ := c.getMaxAndMinHaveSeqList(*list)
+			log.ZDebug(ctx, "validateAndFillEndBlockContinuity", "maxSeq", maxSeq, "conversationID", conversationID, "currentMaxSeq", currentMaxSeq)
+			// Use >= to prevent the currentMaxSeq from being updated too slowly,
+			// which could lead to misjudgments and cause repeated message fetching."
+			if maxSeq >= currentMaxSeq {
+				messageListCallback.IsEnd = true
+			} else {
+				lastEndSeq, _ := c.messagePullReverseEndSeqMap.Load(conversationID, viewType)
+				log.ZDebug(ctx, "validateAndFillEndBlockContinuity", "lastEndSeq", lastEndSeq, "conversationID", conversationID)
+				// If `maxSeq` is zero and `lastEndSeq` is at the maximum server sequence, this batch is fully local
+				if maxSeq == 0 && lastEndSeq >= currentMaxSeq { // All messages in this batch are local messages,
+					// and the maximum seq of the last batch of valid messages has already reached the maximum pullable seq from the server.
+					messageListCallback.IsEnd = true
+				} else {
+
+					// Compute the start sequence for reverse pulling:
+					// - normally start from maxSeq+1 (the next after current batch max)
+					// - if the batch is empty (maxSeq==0), start from lastEndSeq+1 to avoid scanning from 1
+					startSeq := maxSeq + 1
+					if maxSeq == 0 && lastEndSeq > 0 {
+						startSeq = lastEndSeq + 1
+					}
+					if startSeq <= currentMaxSeq {
+						lostSeqList := getLostSeqListWithLimitLength(startSeq, currentMaxSeq, []int64{}, isReverse)
+						if len(lostSeqList) > 0 {
+							isShouldFetchMessage = true
+							seqList = lostSeqList
+							log.ZDebug(ctx, "validateAndFillEndBlockContinuity", "startSeq", startSeq, "lostSeqList", lostSeqList)
+						}
+					} else {
+						// Nothing to pull in this direction
+						messageListCallback.IsEnd = true
+					}
+
+				}
+			}
+			return isShouldFetchMessage, seqList
+		} else {
+			userCanPullMinSeq := c.getConversationMinSeq(ctx, conversationID)
+			_, minSeq, _ := c.getMaxAndMinHaveSeqList(*list)
+			log.ZDebug(ctx, "validateAndFillEndBlockContinuity", "minSeq", minSeq,
+				"conversationID", conversationID, "userCanPullMinSeq", userCanPullMinSeq)
+			// The reason for being less than is that in cases of poor network conditions,
+			// minSeq may be 0, but in fact, the server's sequence has not yet synchronized to the local.
+			if minSeq <= userCanPullMinSeq {
+				messageListCallback.IsEnd = true
+			} else {
+				lastMinSeq, _ := c.messagePullForwardEndSeqMap.Load(conversationID, viewType)
+				log.ZDebug(ctx, "validateAndFillEndBlockContinuity", "lastMinSeq", lastMinSeq, "conversationID", conversationID)
+				// If `minSeq` is zero and `lastMinSeq` is at the minimum server sequence, this batch is fully local
+				if minSeq == 0 && lastMinSeq <= userCanPullMinSeq { // All messages in this batch are local messages,
+					// and the minimum seq of the last batch of valid messages has already reached the minimum pullable seq from the server.
+					messageListCallback.IsEnd = true
+				} else {
+					// The batch includes sequences but has not reached the minimum value,
+					// This condition indicates local-only messages, with `minSeq > userCanPullMinSeq` as the only case,
+					// since `lastMinSeq > userCanPullMinSeq` is handled in inter-block continuity.
+					lostSeqList := getLostSeqListWithLimitLength(userCanPullMinSeq, minSeq-1, []int64{}, isReverse)
+					if len(lostSeqList) > 0 {
+						isShouldFetchMessage = true
+						seqList = lostSeqList
+						log.ZDebug(ctx, "validateAndFillEndBlockContinuity", "lostSeqList", lostSeqList)
+					}
+
+				}
+			}
+			return isShouldFetchMessage, seqList
+		}
+
+	} else {
+		messageListCallback.IsEnd = false
+		return isShouldFetchMessage, seqList
+	}
+}
+func (c *Conversation) getMaxAndMinHaveSeqList(messages []*model_struct.LocalChatLog) (max, min int64, seqList []int64) {
+	for i := 0; i < len(messages); i++ {
+		if messages[i].Seq != 0 {
+			seqList = append(seqList, messages[i].Seq)
+		}
+		if messages[i].Seq != 0 && min == 0 && max == 0 {
+			min = messages[i].Seq
+			max = messages[i].Seq
+		}
+		if messages[i].Seq < min && messages[i].Seq != 0 {
+			min = messages[i].Seq
+		}
+		if messages[i].Seq > max {
+			max = messages[i].Seq
+
+		}
+	}
+	return max, min, seqList
+}
+
+func getLostSeqListWithLimitLength(minSeq, maxSeq int64, haveSeqList []int64, isReverse bool) []int64 {
+	lostSeqList := make([]int64, 0, constant.PullMsgNumForReadDiffusion)
+	haveSeqSet := datautil.SliceSetAny(haveSeqList, func(e int64) int64 {
+		return e
+	})
+
+	if minSeq > maxSeq {
+		return lostSeqList
+	}
+	if isReverse {
+		for seq := minSeq; ; seq++ {
+			if _, found := haveSeqSet[seq]; !found {
+				lostSeqList = append(lostSeqList, seq)
+			}
+			if len(lostSeqList) == constant.PullMsgNumForReadDiffusion || seq == maxSeq {
+				break
+			}
+		}
+	} else {
+		for seq := maxSeq; ; seq-- {
+			if _, found := haveSeqSet[seq]; !found {
+				lostSeqList = append(lostSeqList, seq)
+			}
+			if len(lostSeqList) == constant.PullMsgNumForReadDiffusion || seq == minSeq {
+				break
+			}
+		}
+		// The existing request uses ascending SEQs even when selecting the tail.
+		for left, right := 0, len(lostSeqList)-1; left < right; left, right = left+1, right-1 {
+			lostSeqList[left], lostSeqList[right] = lostSeqList[right], lostSeqList[left]
+		}
+	}
+	return lostSeqList
+}
+
+// 1. Ensure that the amount of messages pulled at a time is lower than the amount pulled from the server.
+//
+// 2. Check the continuity within a block.
+//
+// 3. Check the continuity between blocks.
+func (c *Conversation) fetchAndMergeMissingMessages(ctx context.Context, conversationID string, seqList []int64,
+	isReverse bool, count int, startTime int64, list *[]*model_struct.LocalChatLog,
+	messageListCallback *sdk.GetAdvancedHistoryMessageListCallback) {
+
+	var getSeqMessageResp msg.GetSeqMessageResp
+	var getSeqMessageReq msg.GetSeqMessageReq
+	getSeqMessageReq.UserID = c.loginUserID
+	var conversationSeqs msg.ConversationSeqs
+	conversationSeqs.ConversationID = conversationID
+	conversationSeqs.Seqs = seqList
+	getSeqMessageReq.Conversations = append(getSeqMessageReq.Conversations, &conversationSeqs)
+	if isReverse {
+		getSeqMessageReq.Order = sdkws.PullOrder_PullOrderAsc
+	} else {
+		getSeqMessageReq.Order = sdkws.PullOrder_PullOrderDesc
+	}
+	log.ZDebug(ctx, "conversation pull message,  ", "req", getSeqMessageReq.String())
+	if startTime == 0 && !c.LongConnMgr.IsConnected() {
+		return
+	}
+	err := c.SendReqWaitResp(ctx, &getSeqMessageReq, constant.PullMsgBySeqList, &getSeqMessageResp)
+	if err != nil {
+		errHandle(seqList, list, err, messageListCallback)
+		log.ZWarn(ctx, "pull SendReqWaitResp failed", err)
+	} else {
+		log.ZDebug(ctx, "syncMsgFromServerSplit pull msg", "resp", getSeqMessageResp.String())
+		if getSeqMessageResp.Msgs == nil {
+			log.ZWarn(ctx, "syncMsgFromServerSplit pull msg is null", errors.New("pull message is null"),
+				"req", getSeqMessageResp.String())
+			errHandle(seqList, list, errors.New("history response omitted conversations"), messageListCallback)
+			return
+		}
+		if v, ok := getSeqMessageResp.Msgs[conversationID]; ok {
+			if v == nil {
+				errHandle(seqList, list, errors.New("history response omitted conversation payload"), messageListCallback)
+				return
+			}
+			log.ZDebug(ctx, "syncMsgFromServerSplit pull msg success",
+				"conversationID", conversationID, "count", count, "len", len(*list), "msgLen", len(v.Msgs))
+			var localMessage []*model_struct.LocalChatLog
+			localMessageMap := datautil.SliceToMapAny(v.Msgs, func(m *sdkws.MsgData) (int64, *model_struct.LocalChatLog) {
+				return m.Seq, MsgDataToLocalChatLog(m)
+			})
+			// If server returned fewer messages than requested (or none), synthesize placeholders
+			// for the missing seqs so that normalization and subsequent pagination can proceed stably.
+			if len(seqList) > 0 {
+				for _, s := range seqList {
+					if lm, ok := localMessageMap[s]; ok {
+						localMessage = append(localMessage, lm)
+						continue
+					}
+					// Build a placeholder local message for the missing seq; mark as deleted/exception
+					// and generate a unique ClientMsgID via handleExceptionMessages.
+					lm := &model_struct.LocalChatLog{Seq: s, SendTime: 0, Status: constant.MsgStatusHasDeleted}
+					c.handleExceptionMessages(ctx, nil, lm)
+					localMessage = append(localMessage, lm)
+				}
+			}
+			// Normalize using a “neighbor-driven” approach first:
+			// prefer the neighbor sendTime within the window/current batch;
+			// if no neighbor exists, fall back to the boundary time.
+			localMessage = c.normalizeZeroSendTimeByNeighbor(isReverse, startTime, localMessage, *list)
+			if err := c.pullMessageIntoTable(ctx, conversationID, localMessage, list); err != nil {
+				errHandle(seqList, list, err, messageListCallback)
+				return
+			}
+			if v.IsEnd {
+				c.setConversationMinSeq(ctx, isReverse, conversationID, v.EndSeq)
+			}
+
+			if !isReverse {
+				reverse(localMessage)
+			}
+			*list = mergeSortedArrays(*list, localMessage, count, !isReverse)
+		} else {
+			errHandle(seqList, list, errors.New("history response missing requested conversation"), messageListCallback)
+		}
+
+	}
+}
+
+// normalizeZeroSendTimeByNeighbor: use this page’s boundary time (startTime) to normalize
+// messages with sendTime==0 and seq>0.
+// In both directions, assign boundary directly (equal value), then rely on seq within the
+// equal-time bucket to advance pagination, avoiding “drifting” patched messages to this
+// batch’s extreme timestamps and crossing the window.
+func (c *Conversation) normalizeZeroSendTimeByNeighbor(isReverse bool, boundary int64, incoming []*model_struct.LocalChatLog, window []*model_struct.LocalChatLog) []*model_struct.LocalChatLog {
+	// Fast path: if there is nothing to normalize in this batch, return immediately.
+	need := false
+	for _, m := range incoming {
+		if m.SendTime == 0 && m.Seq > 0 {
+			need = true
+			break
+		}
+	}
+	if !need {
+		return incoming
+	}
+
+	// Aggregate neighbor references: messages with seq>0 and sendTime>0
+	// (from the sliding window + already-nonzero items in this batch).
+	type pair struct {
+		seq int64
+		ts  int64
+	}
+	refs := make([]pair, 0, len(window)+len(incoming))
+	for _, x := range window {
+		if x.Seq > 0 && x.SendTime > 0 {
+			refs = append(refs, pair{seq: x.Seq, ts: x.SendTime})
+		}
+	}
+	for _, x := range incoming {
+		if x.Seq > 0 && x.SendTime > 0 {
+			refs = append(refs, pair{seq: x.Seq, ts: x.SendTime})
+		}
+	}
+	// Sort local (seq-bearing) messages and server-fetched seq messages together by seq.
+	if len(refs) > 1 {
+		sort.Slice(refs, func(i, j int) bool { return refs[i].seq < refs[j].seq })
+	}
+
+	// Binary-search helpers
+	findLeft := func(s int64) (ts int64, ok bool) {
+		if len(refs) == 0 {
+			return 0, false
+		}
+		// Find the last seq < s
+		idx := sort.Search(len(refs), func(i int) bool { return refs[i].seq >= s })
+		if idx == 0 {
+			return 0, false
+		}
+		return refs[idx-1].ts, true
+	}
+	findRight := func(s int64) (ts int64, ok bool) {
+		if len(refs) == 0 {
+			return 0, false
+		}
+		// Find the first seq > s
+		idx := sort.Search(len(refs), func(i int) bool { return refs[i].seq > s })
+		if idx >= len(refs) {
+			return 0, false
+		}
+		return refs[idx].ts, true
+	}
+
+	// Phase 1: use only the original refs as neighbor sources
+	pending := make([]*model_struct.LocalChatLog, 0)
+	newly := make([]pair, 0)
+	for _, m := range incoming {
+		if m.SendTime != 0 || m.Seq <= 0 {
+			continue
+		}
+		var ok bool
+		var ts int64
+		if isReverse {
+			if ts, ok = findLeft(m.Seq); ok {
+				m.SendTime = ts
+				newly = append(newly, pair{seq: m.Seq, ts: ts})
+				continue
+			}
+			// Try the opposite-side neighbor
+			if ts, ok = findRight(m.Seq); ok {
+				m.SendTime = ts
+				newly = append(newly, pair{seq: m.Seq, ts: ts})
+				continue
+			}
+		} else {
+			if ts, ok = findRight(m.Seq); ok {
+				m.SendTime = ts
+				newly = append(newly, pair{seq: m.Seq, ts: ts})
+				continue
+			}
+			// Try the opposite-side neighbor
+			if ts, ok = findLeft(m.Seq); ok {
+				m.SendTime = ts
+				newly = append(newly, pair{seq: m.Seq, ts: ts})
+				continue
+			}
+		}
+		// Not filled yet; leave it for Phase 2
+		pending = append(pending, m)
+	}
+
+	if len(pending) == 0 {
+		return incoming
+	}
+
+	// Phase 2: add Phase-1 filled results back into the neighbor set, then retry;
+	// if still not found, fall back to the boundary time.
+	//
+	// Why Phase 2 is needed:
+	// - In some batches, the known reference points (sendTime>0) from window+incoming are sparse
+	//   and only cover part of the gaps. E.g., for isReverse=true (Old→New), window might have
+	//   only an early point (seq=5, ts=T) while incoming has many zero-sendTime gaps (6,7,8,...).
+	//   If you prioritize direction-side neighbors or refs include only window, Phase 1 may leave
+	//   distant gaps pending.
+	// - Phase 2 feeds Phase-1 results (e.g., 6=ts(5), 7=ts(6)) back as neighbors, so the remaining
+	//   pending items can use these “fresh near neighbors,” avoiding a large jump to boundary
+	//   startTime that could cross the window or cause repeated patching.
+	// - With current settings (allow opposite-side neighbors; refs include both window and incoming
+	//   knowns), Phase-2 rarely triggers, but keeping it improves robustness in extreme cases at low cost.
+	if len(newly) > 0 {
+		refs2 := make([]pair, 0, len(refs)+len(newly))
+		refs2 = append(refs2, refs...)
+		refs2 = append(refs2, newly...)
+		sort.Slice(refs2, func(i, j int) bool { return refs2[i].seq < refs2[j].seq })
+		findLeft2 := func(s int64) (int64, bool) {
+			idx := sort.Search(len(refs2), func(i int) bool { return refs2[i].seq >= s })
+			if idx == 0 {
+				return 0, false
+			}
+			return refs2[idx-1].ts, true
+		}
+		findRight2 := func(s int64) (int64, bool) {
+			idx := sort.Search(len(refs2), func(i int) bool { return refs2[i].seq > s })
+			if idx >= len(refs2) {
+				return 0, false
+			}
+			return refs2[idx].ts, true
+		}
+		nextPending := make([]*model_struct.LocalChatLog, 0)
+		for _, m := range pending {
+			var ok bool
+			var ts int64
+			if isReverse {
+				if ts, ok = findLeft2(m.Seq); ok {
+					m.SendTime = ts
+				} else if ts, ok = findRight2(m.Seq); ok {
+					m.SendTime = ts
+				} else {
+					nextPending = append(nextPending, m)
+				}
+			} else {
+				if ts, ok = findRight2(m.Seq); ok {
+					m.SendTime = ts
+				} else if ts, ok = findLeft2(m.Seq); ok {
+					m.SendTime = ts
+				} else {
+					nextPending = append(nextPending, m)
+				}
+			}
+		}
+		pending = nextPending
+	}
+
+	if boundary > 0 && len(pending) > 0 {
+		for _, m := range pending {
+			m.SendTime = boundary
+		}
+	}
+	return incoming
+}
+
+func (c *Conversation) getConversationMaxSeq(ctx context.Context, conversationID string) int64 {
+	conversation, err := c.db.GetConversation(ctx, conversationID)
+	if err != nil {
+		log.ZWarn(ctx, "Failed to get conversation", err)
+		return c.maxSeqRecorder.Get(conversationID)
+	}
+	if conversation.MaxSeq == 0 {
+		return c.maxSeqRecorder.Get(conversationID)
+
+	}
+	return conversation.MaxSeq
+}
+func (c *Conversation) getConversationMinSeq(ctx context.Context, conversationID string) int64 {
+	conversation, err := c.db.GetConversation(ctx, conversationID)
+	if err != nil {
+		log.ZWarn(ctx, "Failed to get conversation", err)
+		return 1
+	}
+	if conversation.MinSeq == 0 {
+		return 1
+
+	}
+	return conversation.MinSeq
+}
+func (c *Conversation) setConversationMinSeq(ctx context.Context, isReverse bool, conversationID string, endSeq int64) {
+	conversation, err := c.db.GetConversation(ctx, conversationID)
+	if err != nil {
+		log.ZWarn(ctx, "Failed to get conversation", err)
+		return
+	}
+	if !isReverse {
+		if conversation.MinSeq == 0 || endSeq > conversation.MinSeq {
+			conversation.MinSeq = endSeq
+		}
+	} else {
+		if conversation.MaxSeq == 0 || endSeq < conversation.MaxSeq {
+			conversation.MaxSeq = endSeq
+			err = c.db.UpdateConversation(ctx, conversation)
+			if err != nil {
+				log.ZWarn(ctx, "Failed to update conversation", err)
+			}
+		}
+
+	}
+	err = c.db.UpdateConversation(ctx, conversation)
+	if err != nil {
+		log.ZWarn(ctx, "Failed to update conversation", err)
+	}
+}
+func errHandle(seqList []int64, list *[]*model_struct.LocalChatLog, err error, messageListCallback *sdk.GetAdvancedHistoryMessageListCallback) {
+	messageListCallback.ErrCode = 100
+	messageListCallback.ErrMsg = err.Error()
+	var result []*model_struct.LocalChatLog
+	needPullMaxSeq := seqList[len(seqList)-1]
+	for _, chatLog := range *list {
+		if chatLog.Seq == 0 || chatLog.Seq > needPullMaxSeq {
+			temp := chatLog
+			result = append(result, temp)
+		} else {
+			if chatLog.Seq <= needPullMaxSeq {
+				break
+			}
+		}
+	}
+	*list = result
+}
+
+func mergeSortedArrays(arr1, arr2 []*model_struct.LocalChatLog, n int, isDescending bool) []*model_struct.LocalChatLog {
+	len1 := len(arr1)
+	len2 := len(arr2)
+	result := make([]*model_struct.LocalChatLog, 0, len1+len2)
+
+	i, j := 0, 0
+
+	for i < len1 && j < len2 && len(result) < n {
+		//In descending order, when pulling forward, sort by sendTime. If sendTime is the same, sort by seq.
+		//In ascending order,  when pulling backward, sort by sendTime. If sendTime is the same, sort by seq.
+		if (isDescending && (arr1[i].SendTime > arr2[j].SendTime || (arr1[i].SendTime == arr2[j].SendTime && arr1[i].Seq > arr2[j].Seq))) ||
+			(!isDescending && (arr1[i].SendTime < arr2[j].SendTime || (arr1[i].SendTime == arr2[j].SendTime && arr1[i].Seq < arr2[j].Seq))) {
+			result = append(result, arr1[i])
+			i++
+		} else {
+			result = append(result, arr2[j])
+			j++
+		}
+	}
+
+	for i < len1 && len(result) < n {
+		result = append(result, arr1[i])
+		i++
+	}
+
+	for j < len2 && len(result) < n {
+		result = append(result, arr2[j])
+		j++
+	}
+
+	return result
+}
+
+func reverse[T any](arr []T) {
+	for i, j := 0, len(arr)-1; i < j; i, j = i+1, j-1 {
+		arr[i], arr[j] = arr[j], arr[i]
+	}
+}
+
+// handleExceptionMessages handles the insertion of exception messages into the local chat log.
+// It identifies and marks messages that fall into the following categories:
+// 1. Messages pulled but marked as deleted, with non-repeating seq, requiring placeholders.
+// 2. Seq jump caused by server downtime, with non-repeating seq, requiring placeholders.
+// 3. Messages sent by the sender with a duplicate ClientMsgID but unique seq.
+// This can occur due to either client-side message duplication or server-side
+// message re-consumption, where the same ClientMsgID is sent again with a different Seq.
+// 4. Concurrent message filling with both duplicate ClientMsgID and seq.
+func (c *Conversation) handleExceptionMessages(ctx context.Context, existingMessage, message *model_struct.LocalChatLog) {
+	var prefix string
+
+	if existingMessage == nil {
+		// Case: The message is marked as deleted
+		if message.Status == constant.MsgStatusHasDeleted {
+			// If ClientMsgID is empty, it's a placeholder for seq gap
+			if message.ClientMsgID == "" {
+				// Gap messages are typically caused by server downtime or prolonged periods of inactivity.
+				// These messages usually lack a message ID, so a message ID needs to be generated to prevent primary key conflicts.
+				message.ClientMsgID = utils.GetMsgID(c.loginUserID)
+				prefix = "[SEQ_GAP_+" + utils.Int64ToString(message.Seq) + "]" // Placeholder for sequence gap
+			} else {
+				prefix = "[DELETED]" // Mark as a deleted message
+			}
+		} else {
+			// For messages that don't fall under known exceptional cases, log as normal
+			prefix = "[UNKNOWN]"
+			log.ZWarn(ctx, "Message is normal, no need to handle", nil, "message", message)
+		}
+	} else {
+		// Case: The message has a duplicate ClientMsgID
+		if existingMessage.Seq == message.Seq {
+			// Case: Both ClientMsgID and Seq are duplicated, it's a concurrent message filling
+			prefix = "[SEQ_DUP]" // Duplicate sequence message, likely caused by concurrent message handling
+		} else {
+			// Case: ClientMsgID is duplicated, but Seq is different, indicating a client-side duplication
+			prefix = "[CLIENT_DUP]" // Client-side resend or server-side consume messages duplication
+		}
+	}
+	getRandomString := func(length int) string {
+		const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+		var seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+		b := make([]byte, length)
+		for i := range b {
+			b[i] = charset[seededRand.Intn(len(charset))]
+		}
+		return string(b)
+	}
+	// Generate a random suffix to ensure uniqueness
+	randomSuffix := "_" + getRandomString(8)
+
+	// Mark the message as deleted
+	message.Status = constant.MsgStatusHasDeleted
+
+	// Add the exception prefix and random suffix to the ClientMsgID for identification
+	message.ClientMsgID = prefix + message.ClientMsgID + randomSuffix
+}
+
+func (c *Conversation) pullMessageIntoTable(ctx context.Context, conversationID string,
+	serverMessage []*model_struct.LocalChatLog, list *[]*model_struct.LocalChatLog) error {
+	insertMsg := make(map[string][]*model_struct.LocalChatLog, 20)
+	updateMsg := make(map[string][]*model_struct.LocalChatLog, 30)
+	var insertMessage, selfInsertMessage, othersInsertMessage []*model_struct.LocalChatLog
+	var updateMessage []*model_struct.LocalChatLog
+	var exceptionMsg []*model_struct.LocalChatLog
+
+	log.ZDebug(ctx, "do Msg come here, len: ", "msg length", len(serverMessage))
+
+	msgIDs := datautil.Slice(serverMessage, func(msg *model_struct.LocalChatLog) string {
+		return msg.ClientMsgID
+	})
+	localMessages, err := c.db.GetMessagesByClientMsgIDs(ctx, conversationID, msgIDs)
+	if err != nil {
+		log.ZWarn(ctx, "Failed to get messages by ClientMsgIDs", err)
+		return err
+	}
+	processedMsgIDs := make(map[string]*model_struct.LocalChatLog, len(serverMessage))
+	localMessagesMap := datautil.SliceToMap(localMessages, func(msg *model_struct.LocalChatLog) string { return msg.ClientMsgID })
+	for _, msg := range serverMessage {
+
+		log.ZDebug(ctx, "msg detail", "msg", msg, "conversationID", conversationID)
+
+		if existingMessage, ok := processedMsgIDs[msg.ClientMsgID]; ok {
+			c.handleExceptionMessages(ctx, existingMessage, msg)
+			exceptionMsg = append(exceptionMsg, msg)
+			insertMessage = append(insertMessage, msg)
+			continue
+		}
+		//When the message has been marked and deleted by the cloud, it is directly inserted locally
+		//without any conversation and message update.
+		if msg.Status == constant.MsgStatusHasDeleted {
+			c.handleExceptionMessages(ctx, nil, msg)
+			exceptionMsg = append(exceptionMsg, msg)
+			insertMessage = append(insertMessage, msg)
+			continue
+		}
+		existingMsg, exists := localMessagesMap[msg.ClientMsgID]
+		if msg.SendID == c.loginUserID { //seq
+			// Messages sent by myself  //if  sent through  this terminal
+			if exists {
+				log.ZDebug(ctx, "have message", "msg", msg)
+				if existingMsg.Seq == 0 {
+					//If the message sent by the user hasn't synchronized the seq to the local storage in time,
+					//during the next sync, there will be local messages with seq as 0. These messages need to be updated with the correct seq and deduplicated.
+					updateMessage = append(updateMessage, msg)
+
+				} else {
+					// The message you sent is duplicated, possibly due to a resend or the server consuming
+					// the message multiple times.
+					c.handleExceptionMessages(ctx, existingMsg, msg)
+					exceptionMsg = append(exceptionMsg, msg)
+					insertMessage = append(insertMessage, msg)
+				}
+			} else { //      send through  other terminal
+				log.ZDebug(ctx, "sync message", "msg", msg)
+				selfInsertMessage = append(selfInsertMessage, msg)
+			}
+		} else { //Sent by others
+			if !exists {
+				othersInsertMessage = append(othersInsertMessage, msg)
+
+			} else {
+				// The message sent by others is duplicated, possibly due to a resend or the server consuming
+				// the message multiple times.
+				c.handleExceptionMessages(ctx, existingMsg, msg)
+				exceptionMsg = append(exceptionMsg, msg)
+				insertMessage = append(insertMessage, msg)
+			}
+		}
+		processedMsgIDs[msg.ClientMsgID] = msg
+	}
+	timeNow := time.Now()
+	insertMsg[conversationID] = append(insertMessage, c.faceURLAndNicknameHandle(ctx, selfInsertMessage, othersInsertMessage, conversationID)...)
+	updateMsg[conversationID] = updateMessage
+	log.ZDebug(ctx, "faceURLAndNicknameHandle, ", "cost time", time.Since(timeNow).String(),
+		"updateMsg", updateMessage, "insertMsg", insertMessage, "selfInsertMessage", selfInsertMessage, "othersInsertMessage", othersInsertMessage)
+
+	//update message
+	if err6 := c.batchUpdateMessageList(ctx, updateMsg); err6 != nil {
+		log.ZError(ctx, "sync seq normal message err  :", err6)
+		return err6
+	}
+	if len(updateMessage) > 0 {
+		updateMessageMap := datautil.SliceToMap(updateMessage, func(message *model_struct.LocalChatLog) string {
+			return message.ClientMsgID
+		})
+
+		filteredList := make([]*model_struct.LocalChatLog, 0, len(*list))
+		for _, v := range *list {
+			if _, ok := updateMessageMap[v.ClientMsgID]; !ok {
+				filteredList = append(filteredList, v)
+			}
+		}
+
+		*list = filteredList
+	}
+
+	timeNow = time.Now()
+	//Normal message storage
+	if err := c.batchInsertMessageList(ctx, insertMsg); err != nil {
+		return err
+	}
+	log.ZDebug(ctx, "BatchInsertMessageListController, ", "cost time", time.Since(timeNow).String())
+
+	//Exception message storage
+	for _, v := range exceptionMsg {
+		log.ZWarn(ctx, "exceptionMsg show: ", nil, "msg", *v)
+	}
+	return nil
+}
+
+// All pulled messages must undergo continuity checks within the block and between the current block and the previous
+// one. If discontinuity is detected, the gaps should be filled. During the gap-filling process, if any exceptions occur,
+// only provide the sequence numbers in descending order up to the break.
+// When the pulled messages are less than expected, retrieve the server's maximum sequence (seq) for the group, the
+// user's minimum seq for the group, and the local minimum seq for the group. If the local seq is not zero and is less
+// than or equal to the server's minimum seq, it indicates that the bottom has been reached. If the local seq is zero,
+// it can be understood as an initialization where the data hasn't been synchronized yet, or there is an exceptional
+// case. If the difference between the server's maximum seq and minimum seq is greater than or equal to zero, it
+// indicates that the bottom hasn't been reached. Otherwise, the bottom has been reached.
+
+// faceURLAndNicknameHandle handles the assignment of face URLs and nicknames for chat logs
+// based on the conversation type (single chat or group chat).
+// It first retrieves the conversation information using the provided conversationID.
+// Depending on the conversation type, it delegates the handling to either singleHandle (for single chats)
+// or groupHandle (for group chats). If conversation information retrieval fails, it returns the merged chat logs.
+func (c *Conversation) faceURLAndNicknameHandle(ctx context.Context, self, others []*model_struct.LocalChatLog, conversationID string) []*model_struct.LocalChatLog {
+	lc, err := c.db.GetConversation(ctx, conversationID)
+	if err != nil {
+		return append(self, others...)
+	}
+	userInfo, err := c.db.GetLoginUser(ctx, c.loginUserID)
+	if err != nil {
+		log.ZError(ctx, "GetLoginUser failed", err)
+		return append(self, others...)
+	}
+	switch lc.ConversationType {
+	case constant.SingleChatType:
+		c.singleHandle(ctx, self, others, lc, userInfo)
+	case constant.ReadGroupChatType:
+		c.groupHandle(ctx, self, others, lc)
+	}
+	return append(self, others...)
+}
+
+// singleHandle processes chat logs for single chat conversations.
+// It updates the SenderFaceURL and SenderNickname fields for messages in the `self` list
+// using the logged-in user's information, and for messages in the `others` list
+// using the other party's information if available in the conversation.
+func (c *Conversation) singleHandle(_ context.Context, self, others []*model_struct.LocalChatLog, lc *model_struct.LocalConversation, userInfo *model_struct.LocalUser) {
+	if len(self) > 0 && userInfo != nil {
+		for _, chatLog := range self {
+			if chatLog.Status != constant.MsgStatusHasDeleted {
+				chatLog.SenderFaceURL = userInfo.FaceURL
+				chatLog.SenderNickname = userInfo.Nickname
+			}
+		}
+	}
+
+	if lc.FaceURL != "" {
+		for _, chatLog := range others {
+			chatLog.SenderFaceURL = lc.FaceURL
+		}
+	}
+
+	if lc.ShowName != "" {
+		for _, chatLog := range others {
+			chatLog.SenderNickname = lc.ShowName
+		}
+	}
+
+}
+
+// groupHandle processes chat logs for group chat conversations.
+// It merges the `self` and `others` chat logs and updates the SenderFaceURL and SenderNickname fields
+// using the group members' information. If group member information is not available,
+// it attempts to retrieve the sender's information from a local cache.
+func (c *Conversation) groupHandle(ctx context.Context, self, others []*model_struct.LocalChatLog, lc *model_struct.LocalConversation) {
+	allMessage := append(self, others...)
+
+	allSenders := datautil.Slice(allMessage, func(e *model_struct.LocalChatLog) string {
+		return e.SendID
+	})
+	userIDs := datautil.Distinct(allSenders)
+	specialUsersInfo, missKeys := c.user.UserCache().BatchGetSpecialUser(ctx, userIDs)
+
+	groupMap, err := c.group.GetGroupMembersInfo(ctx, lc.GroupID, missKeys)
+	if err != nil {
+		log.ZError(ctx, "get group member info err", err)
+		return
+	}
+	specialUsers := make(map[string]*model_struct.LocalUser)
+	for _, chatLog := range allMessage {
+		if g, ok := groupMap[chatLog.SendID]; ok { // If group member info is successfully retrieved
+			log.ZDebug(ctx, "find in GetGroupMemberNameAndFaceURL", "sendID", chatLog.SendID, "faceURL", g.FaceURL, "nickName", g.Nickname)
+			if g.FaceURL != "" && g.Nickname != "" {
+				chatLog.SenderFaceURL = g.FaceURL
+				chatLog.SenderNickname = g.Nickname
+			}
+		} else if u, ok := specialUsersInfo[chatLog.SendID]; ok {
+			if u.FaceURL != "" && u.Nickname != "" {
+				chatLog.SenderFaceURL = u.FaceURL
+				chatLog.SenderNickname = u.Nickname
+			}
+		} else { // Otherwise, retrieve from local temporary cache
+			// Maybe it's a user information that doesn't exist on the server, but has sent a message before or admin user.
+			userInfo, err := c.user.GetUserInfoWithCache(ctx, chatLog.SendID)
+			if err != nil {
+				userInfo = &model_struct.LocalUser{UserID: chatLog.SendID}
+			}
+			if userInfo.FaceURL != "" && userInfo.Nickname != "" {
+				log.ZDebug(ctx, "find in getUserNameAndFaceURL", "sendID", chatLog.SendID)
+				chatLog.SenderFaceURL = userInfo.FaceURL
+				chatLog.SenderNickname = userInfo.Nickname
+			}
+			specialUsers[chatLog.SendID] = userInfo
+		}
+	}
+	if len(specialUsers) > 0 {
+		c.user.UserCache().BatchAddSpecialUser(specialUsers)
+	}
+
+}
+
+func shouldRepairDuplicateMessages(messages []*model_struct.LocalChatLog) bool {
+	seqSet := make(map[int64]struct{}, len(messages))
+	for _, message := range messages {
+		if message == nil || message.Seq == 0 {
+			continue
+		}
+		if message.SendTime == 0 {
+			return true
+		}
+		if _, ok := seqSet[message.Seq]; ok {
+			return true
+		}
+		seqSet[message.Seq] = struct{}{}
+	}
+	return false
+}
+
+func (c *Conversation) asyncRepairDuplicateMessages(ctx context.Context, conversationID string) {
+	if _, loaded := c.duplicateMessageRepair.LoadOrStore(conversationID, struct{}{}); loaded {
+		log.ZDebug(ctx, "duplicate message repair already running", "conversationID", conversationID)
+		return
+	}
+	repairCtx := context.WithoutCancel(ctx)
+	go func() {
+		defer c.duplicateMessageRepair.Delete(conversationID)
+		if err := c.db.CleanDuplicateInvalidMessages(repairCtx, conversationID); err != nil {
+			log.ZWarn(repairCtx, "CleanDuplicateInvalidMessages failed", err, "conversationID", conversationID)
+		}
+	}()
+}

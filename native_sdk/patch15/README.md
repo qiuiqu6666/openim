@@ -1,5 +1,11 @@
 # Core SDK 后台消息恢复修复
 
+## 已入库的 iOS Core 完整源码
+
+`ios-core-source/` 保存当前 iOS `v3.8.3-patch.15+recovery.12-readseq2` Framework 的完整构建源码快照，包含恢复补丁、测试、Go 依赖锁定文件与上游许可证。来源为已成功构建的 `ios-build.tLwCyS/source`，文件 SHA256 与上游提交记录在 `ios-core-source-manifest.json`。不包含嵌套 Git 仓库、工具链、缓存或 Framework 二进制。
+
+当前 `build-ios.sh` 仍按官方提交加补丁重建；此目录为对应的已打补丁源码，不能重复应用恢复补丁。版本通过脚本的 `-ldflags` 注入。后续升级需同步补丁、此快照及校验清单，避免源码与构建入口漂移。保留上游目录和文件职责，不在此次源码入库中重构 Core。
+
 ## 2026-10-14 累计已读回执兼容（recovery.12-readseq2）
 
 原生 `doReadDrawing` 原先对空 `seqs` 返回 `tips Seqs is empty`，即使存在有效 `hasReadSeq`，也会使通知同步页无法完成。现在空列表走独立累计已读处理：按正数服务端序号分页（每页最多 200 条）读取 `seq <= hasReadSeq` 的本地消息，不展开从 1 到水位的巨大数组。对方回执只更新本账号发送的消息及已读回调；自己其他设备的回执只更新收到的消息和未读数，迟到回执不增加未读数。无匹配消息和空的无效水位为无操作，真实存储失败仍返回错误供重试。显式 `seqs` 的既有路径保留。
