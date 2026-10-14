@@ -111,7 +111,8 @@ class _PlatformUpdateDialogState extends State<_PlatformUpdateDialog> {
     try {
       await widget.onUpdate();
       if (!mounted) return;
-      if (!widget.keepOpenOnSuccess && (!widget.force || widget.closeOnSuccess)) {
+      if (!widget.keepOpenOnSuccess &&
+          (!widget.force || widget.closeOnSuccess)) {
         _close();
       }
     } catch (_) {
