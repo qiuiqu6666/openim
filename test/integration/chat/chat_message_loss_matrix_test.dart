@@ -1,18 +1,14 @@
 import 'dart:convert';
-
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/core/im_callback.dart';
-
 import '../../support/chat/chat_recovery_fixture.dart';
 
-List<Message> _range(int from, int to) => [
-      for (var seq = from; seq <= to; seq++) recoveryMessage('m-$seq', seq),
-    ];
-
-Future<void> _resume(WidgetTester tester) async {
+List<Message> range(int first, int last) =>
+    [for (var seq = first; seq <= last; seq++) recoveryMessage('m-$seq', seq)];
+Future<void> resume(WidgetTester tester) async {
   tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
   tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
   await tester.idle();
@@ -20,286 +16,102 @@ Future<void> _resume(WidgetTester tester) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  for (final covered in [false, true]) {
-    recoveryScenario(
-        '${covered ? 'covered page' : 'background'} drains more than two pages with duplicate delivery',
-        (tester, f) async {
-      final logic = await f.open(tester);
-      if (covered) {
-        for (var seq = 2; seq <= 30; seq++) {
-          f.im.recvNewMessage(recoveryMessage('m-$seq', seq));
-        }
-        await tester.pumpAndSettle();
-        logic.scrollController.jumpTo(500);
-        await tester.pump();
-        f.cover(true);
-        await tester.pump();
-        f.cover(false);
-        await tester.pump();
-      } else {
-        await _resume(tester);
-      }
-      final firstSeq = covered ? 31 : 2;
-      final lastSeq = firstSeq + 92;
-      expect(f.calls.last.arguments['startClientMsgID'],
-          covered ? 'm-30' : 'initial');
-      f.im.recvNewMessage(recoveryMessage('m-$lastSeq', lastSeq));
-      f.calls.last.complete(_range(firstSeq, firstSeq + 39), isEnd: false);
-      await tester.pump();
-      expect(f.calls.last.arguments['startClientMsgID'], 'm-${firstSeq + 39}');
-      f.im.recvOfflineMessage(
-          recoveryMessage('m-${firstSeq + 15}', firstSeq + 15));
-      f.calls.last.complete(
-          _range(firstSeq + 40, firstSeq + 79).reversed.toList(),
-          isEnd: false);
-      await tester.pump();
-      expect(f.calls.last.arguments['startClientMsgID'], 'm-${firstSeq + 79}');
-      f.calls.last.complete(_range(firstSeq + 80, lastSeq));
-      await tester.pump();
-      final ids = logic.messageList.map((m) => m.clientMsgID).toList();
-      for (var seq = firstSeq; seq <= lastSeq; seq++) {
-        expect(ids.where((id) => id == 'm-$seq'), hasLength(1),
-            reason: 'Every persisted message must occur exactly once: $seq');
-      }
-      expect(logic.messageList.last.seq, lastSeq);
-    });
-  }
-
-  recoveryScenario(
-      'sync completion and repeated wakes reread after stale snapshot',
-      (tester, f) async {
-    final logic = await f.open(tester);
-    await _resume(tester);
-    final stale = f.calls.last;
-    f.im.imSdkStatus(IMSdkStatus.syncStart);
-    f.im.imSdkStatus(IMSdkStatus.syncEnded);
-    for (var i = 0; i < 8; i++) {
-      f.im.historyRecoverySignals.add(null);
-    }
-    await tester.idle();
-    expect(f.calls, hasLength(2));
-    stale.complete([]);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 1));
-    expect(f.calls, hasLength(3));
-    expect(f.calls.last.arguments['startClientMsgID'], 'initial');
-    f.calls.last.complete(_range(2, 40));
-    await tester.pump();
-    expect(logic.messageList.map((m) => m.seq).toList(),
-        [for (var seq = 1; seq <= 40; seq++) seq]);
-  });
-
-  recoveryScenario('middle page network failure preserves last committed page',
-      (tester, f) async {
-    final logic = await f.open(tester);
-    await _resume(tester);
-    f.calls.last.complete(_range(2, 41), isEnd: false);
-    await tester.pump();
-    expect(f.calls.last.arguments['startClientMsgID'], 'm-41');
-    f.calls.last.result.completeError(PlatformException(code: 'offline'));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    expect(f.calls.last.arguments['startClientMsgID'], 'm-41');
-    f.calls.last.complete(_range(42, 81));
-    await tester.pump();
-    expect(logic.messageList.map((m) => m.seq).toList(),
-        [for (var seq = 1; seq <= 81; seq++) seq]);
-  });
-
-  recoveryScenario('account change rejects an outstanding second recovery page',
-      (tester, f) async {
-    final logic = await f.open(tester);
-    await _resume(tester);
-    f.calls.last.complete(_range(2, 41), isEnd: false);
-    await tester.pump();
-    final prior = logic.messageList.map((m) => m.clientMsgID).toList();
-    OpenIM.iMManager.userID = 'other-account';
-    f.calls.last.complete(_range(42, 81));
-    f.im.recvNewMessage(recoveryMessage('wrong-account', 82));
-    f.im.imSdkStatus(IMSdkStatus.syncEnded);
-    await tester.pump(const Duration(seconds: 35));
-    expect(logic.messageList.map((m) => m.clientMsgID), prior);
-    expect(f.calls, hasLength(3));
-  });
-
-  recoveryScenario(
-      'native partial error cannot publish rows or move the cursor',
-      (tester, f) async {
-    final logic = await f.open(tester);
-    await _resume(tester);
-    f.calls.last.result.complete(jsonEncode(AdvancedMessage(
-      messageList: _range(2, 20),
-      isEnd: true,
-      errCode: 10002,
-      errMsg: 'native pull did not complete',
-    ).toJson()));
-    await tester.pump();
-    expect(logic.messageList.map((m) => m.seq), [1]);
-    await tester.pump(const Duration(seconds: 1));
-    expect(f.calls.last.arguments['startClientMsgID'], 'initial');
-    f.calls.last.complete(_range(2, 41));
-    await tester.pump();
-    expect(logic.messageList.map((m) => m.seq).toList(),
-        [for (var seq = 1; seq <= 41; seq++) seq]);
-  });
-
-  recoveryScenario('empty nonterminal page retries without crossing its anchor',
-      (tester, f) async {
-    final logic = await f.open(tester);
-    await _resume(tester);
-    f.calls.last.complete([], isEnd: false);
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    expect(f.calls.last.arguments['startClientMsgID'], 'initial');
-    f.calls.last.complete(_range(2, 18));
-    await tester.pump();
-    expect(logic.messageList.map((m) => m.seq).toList(),
-        [for (var seq = 1; seq <= 18; seq++) seq]);
-  });
-
-  for (final inFlight in [false, true]) {
-    for (final signal in ['wake', 'sync']) {
+  for (final signal in ['wake', 'sync']) {
+    for (final inFlight in [false, true]) {
       recoveryScenario(
-          '$signal ${inFlight ? 'during' : 'after'} sparse read recovers late middle rows',
+          '$signal ${inFlight ? 'during' : 'after'} latest read coalesces and deduplicates live delivery',
           (tester, f) async {
         final logic = await f.open(tester);
-        await _resume(tester);
-        f.im.recvNewMessage(recoveryMessage('m-4', 4));
+        await resume(tester);
         final early = f.calls.last;
-        // The early local snapshot contains the live row before the missing
-        // interval is persisted. Only a fresh recovery event can verify it.
+        f.im.recvNewMessage(recoveryMessage('m-1000', 1000));
         if (!inFlight) {
-          early.complete([recoveryMessage('m-4', 4)]);
+          early.complete([recoveryMessage('m-1000', 1000)], isEnd: false);
           await tester.pump();
         }
-        for (var i = 0; i < 8; i++) {
-          if (signal == 'sync') {
-            f.im.imSdkStatus(IMSdkStatus.syncStart);
-            f.im.imSdkStatus(IMSdkStatus.syncEnded);
-          } else {
+        for (var n = 0; n < 8; n++) {
+          if (signal == 'wake') {
             f.im.historyRecoverySignals.add(null);
+          } else {
+            f.im.imSdkStatus(IMSdkStatus.syncEnded);
           }
         }
         await tester.idle();
         if (inFlight) {
           expect(f.calls, hasLength(2));
-          early.complete([recoveryMessage('m-4', 4)]);
+          early.complete([recoveryMessage('m-1000', 1000)], isEnd: false);
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 1));
         }
         expect(f.calls, hasLength(3));
-        expect(f.calls.last.arguments['startClientMsgID'], 'initial');
-        f.calls.last.complete(_range(2, 4));
+        expect(f.calls.last.arguments['startClientMsgID'], '');
+        f.calls.last.complete(range(961, 1000), isEnd: false);
         await tester.pump();
-        expect(logic.messageList.map((m) => m.seq).toList(), [1, 2, 3, 4]);
+        expect(logic.messageList.where((m) => m.seq == 1000), hasLength(1));
+        for (var seq = 961; seq <= 1000; seq++) {
+          expect(logic.messageList.where((m) => m.seq == seq), hasLength(1));
+        }
+        expect(logic.messageList.any((m) => m.seq == 2), isFalse);
       });
     }
   }
 
-  recoveryScenario('legal deleted sequence holes do not create endless retries',
-      (tester, f) async {
-    final logic = await f.open(tester);
-    await _resume(tester);
-    f.calls.last.complete([recoveryMessage('m-4', 4)]);
-    await tester.pump();
-    for (final seconds in [1, 3]) {
-      await tester.pump(Duration(seconds: seconds));
-      expect(f.calls.last.arguments['startClientMsgID'], 'm-4');
-      f.calls.last.complete([]);
+  for (final native in [false, true]) {
+    recoveryScenario(
+        '${native ? 'partial native' : 'network'} error preserves the installed window',
+        (tester, f) async {
+      final logic = await f.open(tester);
+      await resume(tester);
+      if (native) {
+        f.calls.last.result.complete(jsonEncode(AdvancedMessage(
+                messageList: range(961, 1000),
+                isEnd: false,
+                errCode: 10002,
+                errMsg: 'native pull incomplete')
+            .toJson()));
+      } else {
+        f.calls.last.result.completeError(PlatformException(code: 'offline'));
+      }
       await tester.pump();
-    }
-    final before = f.calls.length;
-    await tester.pump(const Duration(minutes: 2));
-    expect(f.calls, hasLength(before));
-    expect(logic.historyError.value, isNull);
-    expect(logic.messageList.map((m) => m.seq).toList(), [1, 4]);
-    f.im.historyRecoverySignals.add(null);
-    await tester.idle();
-    expect(f.calls.last.arguments['startClientMsgID'], 'initial');
-    f.calls.last.complete([recoveryMessage('m-4', 4)]);
-    await tester.pump();
-    for (final seconds in [1, 3]) {
-      await tester.pump(Duration(seconds: seconds));
-      f.calls.last.complete([]);
+      expect(logic.messageList.map((m) => m.seq), [1]);
+      expect(logic.historyError.value, isNotNull);
+      await tester.pump(const Duration(seconds: 1));
+      expect(f.calls.last.arguments['startClientMsgID'], '');
+      f.calls.last.complete(range(961, 1000), isEnd: false);
       await tester.pump();
-    }
-    final verifiedCount = f.calls.length;
-    await tester.pump(const Duration(minutes: 2));
-    expect(f.calls, hasLength(verifiedCount));
-    expect(logic.historyError.value, isNull);
-  });
-
-  recoveryScenario('another background retains an unverified sparse boundary',
-      (tester, f) async {
-    final logic = await f.open(tester);
-    await _resume(tester);
-    f.calls.last.complete([recoveryMessage('m-4', 4)]);
-    await tester.pump();
-    await _resume(tester);
-    expect(f.calls.last.arguments['startClientMsgID'], 'initial');
-    f.calls.last.complete(_range(2, 4));
-    await tester.pump();
-    expect(logic.messageList.map((m) => m.seq).toList(), [1, 2, 3, 4]);
-    await _resume(tester);
-    expect(f.calls.last.arguments['startClientMsgID'], 'm-4');
-  });
-
-  recoveryScenario('early sparse wake cannot certify a gap before later sync',
-      (tester, f) async {
-    final logic = await f.open(tester);
-    await _resume(tester);
-    f.calls.last.complete([recoveryMessage('m-4', 4)]);
-    await tester.pump();
-    f.im.historyRecoverySignals.add(null);
-    await tester.idle();
-    expect(f.calls.last.arguments['startClientMsgID'], 'initial');
-    // Wake only establishes connectivity. Native persistence is still behind.
-    f.calls.last.complete([recoveryMessage('m-4', 4)]);
-    await tester.pump();
-    await _resume(tester);
-    f.calls.last.complete(
-        f.calls.last.arguments['startClientMsgID'] == 'initial'
-            ? [recoveryMessage('m-4', 4)]
-            : []);
-    await tester.pump();
-    // Only now is the missing interval available. The second background must
-    // not have certified the incomplete wake snapshot as a new safe boundary.
-    f.im.imSdkStatus(IMSdkStatus.syncStart);
-    f.im.imSdkStatus(IMSdkStatus.syncEnded);
-    await tester.idle();
-    f.calls.last.complete(
-        f.calls.last.arguments['startClientMsgID'] == 'initial'
-            ? _range(2, 4)
-            : []);
-    await tester.pump();
-    expect(logic.messageList.map((m) => m.seq).toList(), [1, 2, 3, 4]);
-  });
+      expect(logic.messageList.last.seq, 1000);
+      expect(logic.historyError.value, isNull);
+    });
+  }
 
   recoveryScenario(
-      'a completed recovery gives the next background a new boundary',
+      'deleted sequence holes never start unbounded forward recovery',
       (tester, f) async {
     final logic = await f.open(tester);
-    await _resume(tester);
-    f.calls.last.complete(_range(2, 4));
+    await resume(tester);
+    final page = [
+      recoveryMessage('m-990', 990),
+      recoveryMessage('m-1000', 1000)
+    ];
+    f.calls.last.complete(page, isEnd: false);
     await tester.pump();
-    await _resume(tester);
-    expect(f.calls.last.arguments['startClientMsgID'], 'm-4');
-    f.calls.last.complete(_range(5, 6));
-    await tester.pump();
-    f.im.historyRecoverySignals.add(null);
-    await tester.idle();
-    expect(f.calls.last.arguments['startClientMsgID'], 'm-4');
-    f.calls.last.complete(_range(5, 6));
-    await tester.pump();
-    expect(logic.messageList.map((m) => m.seq).toList(), [1, 2, 3, 4, 5, 6]);
+    for (final seconds in [1, 3]) {
+      await tester.pump(Duration(seconds: seconds));
+      expect(f.calls.last.arguments['startClientMsgID'], '');
+      f.calls.last.complete(page, isEnd: false);
+      await tester.pump();
+    }
+    final reads = f.calls.length;
+    await tester.pump(const Duration(minutes: 2));
+    expect(f.calls, hasLength(reads));
+    expect(logic.messageList.map((m) => m.seq), [990, 1000]);
   });
 
   for (final action in ['clear', 'close', 'account']) {
-    recoveryScenario('queued checkpoint verification is cancelled by $action',
+    recoveryScenario('queued latest recheck is cancelled by $action',
         (tester, f) async {
       final logic = await f.open(tester);
-      await _resume(tester);
+      await resume(tester);
       final early = f.calls.last;
       f.im.historyRecoverySignals.add(null);
       await tester.idle();
@@ -310,11 +122,10 @@ void main() {
       } else {
         OpenIM.iMManager.userID = 'another-account';
       }
-      early.complete(_range(2, 4));
-      await tester.pump();
+      early.complete(range(961, 1000), isEnd: false);
       await tester.pump(const Duration(seconds: 35));
       expect(f.calls, hasLength(2));
-      expect(logic.messageList.map((m) => m.seq).toList(),
+      expect(logic.messageList.map((m) => m.seq),
           action == 'clear' ? <int>[] : [1]);
     });
   }

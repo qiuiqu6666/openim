@@ -106,20 +106,14 @@ class ChatLogic extends SuperController {
   );
   final assistantStreams = AssistantStreamState();
   late final _backgroundMessageRecovery = ChatBackgroundMessageRecovery(
-    anchor: () => _timeline.recoveryAnchor,
     canRead: () =>
         _historyVisible &&
         !_dateWindow.seeking.value &&
         !_dateWindow.returning.value &&
         historyError.value == null,
-    readNewer: _timeline.readNewerForRecovery,
-    apply: (message, unseen) {
-      if (_removedMessageIDs.contains(message.clientMsgID) ||
-          message.hasExpired) {
-        return;
-      }
-      newMessages.recordRecovered(message, unseen: unseen);
-      _appendLiveMessage(message, recovered: true);
+    refreshLatest: () async {
+      await _timeline.refresh();
+      return !_sessionInactive && historyError.value == null;
     },
     onError: (error) => debugPrint('Chat background message recovery: $error'),
   );
@@ -784,7 +778,6 @@ class ChatLogic extends SuperController {
     // A size transition is a clipped slice until its final layout. Only that
     // full-height painted frame may count as seeing the message or start burn.
     readIDs = readIDs.where((id) => !messageArrivals.isEntering(id)).toList();
-    _backgroundMessageRecovery.observeVisible(readIDs);
     newMessages
         .updateScrollOffset(_dateWindow.buffering ? 2 : distanceFromLatest);
     if (_automaticTrimPending) _trimAutomaticWindow();
@@ -862,7 +855,6 @@ class ChatLogic extends SuperController {
       newMessages.updateScrollOffset(distance, viewportConfirmed: false);
     }
     final followLatest = !newMessages.awayFromLatest.value;
-    if (!recovered) _backgroundMessageRecovery.observeLive(message);
     if (_dateWindow.buffering ||
         _timeline.holdForIncoming(awayFromLatest: !followLatest)) {
       newMessages.updateScrollOffset(2);

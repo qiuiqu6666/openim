@@ -138,7 +138,7 @@ void main() {
     final logic = await open(tester);
     expect(logic.newMessages.awayFromLatest.value, isFalse);
     await backgroundAndResume(tester);
-    expect(calls.last.arguments['startClientMsgID'], 'before-background');
+    expect(calls.last.arguments['startClientMsgID'], '');
     calls.last.complete([]);
     await tester.pump();
     im.historyRecoverySignals.add(null);
