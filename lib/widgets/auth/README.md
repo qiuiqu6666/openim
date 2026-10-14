@@ -5,7 +5,7 @@
 - `auth_reference_layout.dart`：手机与宽屏认证布局、页签、返回键和键盘滚动。
 - `auth_form_scaffold.dart`：99chat 设备验证等二次认证使用的标题、副标题、分割线和可滚动表单，返回键视觉 36、点击区域 48；页面随应用主题适配。
 - `auth_info_banner.dart`：二次认证通用的蓝底盾牌提示条。
-- `auth_reference_fields.dart`：参考的普通／组合输入框，保留自动填充、焦点与清除按钮。
+- `auth_reference_fields.dart`：参考的普通／组合输入框，保留自动填充、焦点与清除按钮。恢复系统光标／选区手柄；已聚焦的单行输入支持轻微横向拖动移动光标（共享 `text_input/sensitive_caret_region.dart`），长按和纵向滚动保留系统行为。光标移动不再触发清除按钮的重复重绘。
 - `auth_reference_field_frame.dart`：两个输入框共用的聚焦／错误边框、字号放大后的高度适配。
 - `auth_reference_feedback.dart`：字段下方提示与可换行的表单业务错误，支持屏幕阅读器播报。
 - `auth_reference_controls.dart`：按钮、国家区号、真实发送成功后的验证码倒计时和版本页脚。

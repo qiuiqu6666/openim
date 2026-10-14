@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:openim_common/openim_common.dart';
 import '../../../../../widgets/text_input/caret_selection_controls.dart';
+import '../../../../../widgets/text_input/sensitive_caret_region.dart';
 
 class NameEditorInput extends StatefulWidget {
   const NameEditorInput({
@@ -34,37 +33,13 @@ class NameEditorInput extends StatefulWidget {
 }
 
 class _NameEditorInputState extends State<NameEditorInput> {
-  // A small intentional movement should move the caret before a normal swipe
-  // recognizer activates, while filtering incidental finger jitter.
-  static const double _caretDragSlop = 3;
   bool _startedEditing = false;
-  final _fieldKey = GlobalKey();
-  Offset? _dragOrigin;
-  Duration? _touchStarted;
-  bool _dragging = false;
+  final _focusNode = FocusNode();
 
-  RenderEditable? _editable(RenderObject? object) {
-    if (object is RenderEditable) return object;
-    RenderEditable? result;
-    object?.visitChildren((child) => result ??= _editable(child));
-    return result;
-  }
-
-  void _moveCaret(PointerMoveEvent event) {
-    final origin = _dragOrigin;
-    if (widget.saving || origin == null || _touchStarted == null) return;
-    // Leave long presses to the native text selection/menu gesture.
-    if (!_dragging) {
-      if (event.timeStamp - _touchStarted! > kLongPressTimeout) return;
-      if ((event.position.dx - origin.dx).abs() < _caretDragSlop) return;
-      _dragging = true;
-    }
-    final editable = _editable(_fieldKey.currentContext?.findRenderObject());
-    if (editable == null || !editable.hasFocus) return;
-    editable.selectPositionAt(
-      from: event.position,
-      cause: SelectionChangedCause.drag,
-    );
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
   }
 
   void _startEditing() {
@@ -88,18 +63,11 @@ class _NameEditorInputState extends State<NameEditorInput> {
     final saveEnabled = widget.saveEnabled;
     final keyboardType = widget.keyboardType;
     final inputStatus = widget.inputStatus;
-    return Listener(
-      onPointerDown: (event) {
-        _dragOrigin =
-            event.kind == PointerDeviceKind.touch ? event.position : null;
-        _touchStarted = event.timeStamp;
-        _dragging = false;
-      },
-      onPointerMove: _moveCaret,
-      onPointerUp: (_) => _dragOrigin = null,
-      onPointerCancel: (_) => _dragOrigin = null,
+    return SensitiveCaretRegion(
+      focusNode: saving ? null : _focusNode,
+      onDragStart: _startEditing,
       child: TextField(
-        key: _fieldKey,
+        focusNode: _focusNode,
         controller: controller,
         selectionControls: caretSelectionControls(context),
         onTap: _startEditing,

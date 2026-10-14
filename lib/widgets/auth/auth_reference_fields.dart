@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../text_input/caret_selection_controls.dart';
+import '../text_input/sensitive_caret_region.dart';
 import 'auth_copy.dart';
 import 'auth_reference_field_frame.dart';
 import 'auth_reference_input_decoration.dart';
@@ -87,12 +87,14 @@ class AuthTextField extends StatefulWidget {
 class _AuthTextFieldState extends State<AuthTextField> {
   late FocusNode _focusNode;
   bool _ownsFocusNode = false;
+  bool _clearVisible = false;
 
   @override
   void initState() {
     super.initState();
     _focusNode = widget.focusNode ?? FocusNode();
     _ownsFocusNode = widget.focusNode == null;
+    _clearVisible = _showClear;
     _focusNode.addListener(_focusChanged);
     widget.controller.addListener(_refreshClearButton);
   }
@@ -134,7 +136,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
   }
 
   void _refreshClearButton() {
-    if (mounted) {
+    if (mounted && _clearVisible != _showClear) {
+      _clearVisible = _showClear;
       setState(() {});
     }
   }
@@ -142,7 +145,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
   void _focusChanged() {
     if (!mounted) return;
     widget.onFocusChanged?.call(_focusNode.hasFocus);
-    _refreshClearButton();
+    _clearVisible = _showClear;
+    setState(() {});
   }
 
   bool get _showClear =>
@@ -205,9 +209,9 @@ class _AuthTextFieldState extends State<AuthTextField> {
       showErrorMessage: widget.showErrorMessage,
       showBorder: widget.label == null,
       showFill: widget.label == null,
-      child: TextField(
+      child: SensitiveCaretRegion(
+          child: TextField(
         controller: widget.controller,
-        selectionControls: caretSelectionControls(context),
         autofillHints: widget.autofillHints,
         focusNode: _focusNode,
         autofocus: widget.autofocus,
@@ -239,7 +243,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
           prefix: widget.prefix,
           suffix: suffix,
         ),
-      ),
+      )),
     );
   }
 }
@@ -309,12 +313,14 @@ class AuthCompoundField extends StatefulWidget {
 class _AuthCompoundFieldState extends State<AuthCompoundField> {
   late FocusNode _focusNode;
   bool _ownsFocusNode = false;
+  bool _clearVisible = false;
 
   @override
   void initState() {
     super.initState();
     _focusNode = widget.focusNode ?? FocusNode();
     _ownsFocusNode = widget.focusNode == null;
+    _clearVisible = _showClear;
     _focusNode.addListener(_focusChanged);
     widget.controller.addListener(_refreshClearButton);
   }
@@ -356,7 +362,8 @@ class _AuthCompoundFieldState extends State<AuthCompoundField> {
   }
 
   void _refreshClearButton() {
-    if (mounted) {
+    if (mounted && _clearVisible != _showClear) {
+      _clearVisible = _showClear;
       setState(() {});
     }
   }
@@ -364,7 +371,8 @@ class _AuthCompoundFieldState extends State<AuthCompoundField> {
   void _focusChanged() {
     if (!mounted) return;
     widget.onFocusChanged?.call(_focusNode.hasFocus);
-    _refreshClearButton();
+    _clearVisible = _showClear;
+    setState(() {});
   }
 
   bool get _showClear =>
@@ -394,7 +402,8 @@ class _AuthCompoundFieldState extends State<AuthCompoundField> {
       showBorder: widget.showBorder && widget.label == null,
       showFill: widget.label == null,
       inputFontSize: inputStyle.fontSize ?? AuthReferenceTokens.inputFontSize,
-      child: TextField(
+      child: SensitiveCaretRegion(
+          child: TextField(
         controller: widget.controller,
         autofillHints: widget.autofillHints,
         focusNode: _focusNode,
@@ -469,7 +478,7 @@ class _AuthCompoundFieldState extends State<AuthCompoundField> {
                   ],
                 ]),
         ),
-      ),
+      )),
     );
   }
 
