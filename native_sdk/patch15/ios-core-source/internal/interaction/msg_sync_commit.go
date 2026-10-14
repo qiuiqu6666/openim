@@ -3,6 +3,7 @@ package interaction
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
@@ -17,7 +18,7 @@ func (m *MsgSyncer) triggerSyncStart(ctx context.Context, flag int) error {
 	}, m.conversationCh)
 }
 
-// Keep the SDK's latest-tail policy, but advance each kind only after storage.
+// A checkpoint is committed only for a fully covered, durably acknowledged page.
 func (m *MsgSyncer) commitPulledMessages(ctx context.Context, resp *sdkws.PullMessageBySeqsResp, ranges map[string][2]int64, reinstallTotal int) error {
 	if resp == nil {
 		return fmt.Errorf("message pull returned no response")
@@ -25,18 +26,37 @@ func (m *MsgSyncer) commitPulledMessages(ctx context.Context, resp *sdkws.PullMe
 	if err := validatePulledConversationCoverage(resp.Msgs, ranges, false); err != nil {
 		return err
 	}
+	for id, r := range ranges {
+		if err := m.rememberMessageTarget(ctx, id, r[1]); err != nil {
+			return err
+		}
+		if r[0] > max(1, m.syncedMaxSeqs[id]+1) {
+			return fmt.Errorf("non-contiguous checkpoint for %q", id)
+		}
+	}
 	var err error
+	for _, rows := range resp.Msgs {
+		sort.Slice(rows.Msgs, func(i, j int) bool { return rows.Msgs[i].Seq < rows.Msgs[j].Seq })
+	}
 	if reinstallTotal > 0 {
 		err = m.triggerReinstallConversation(ctx, resp.Msgs, reinstallTotal)
 	} else {
-		err = m.triggerConversation(ctx, resp.Msgs)
+		if len(resp.Msgs) > 0 {
+			err = common.SendCmdWithReceipt(ctx, common.Cmd2Value{Cmd: constant.CmdNewMsgCome,
+				Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: resp.Msgs, Recovery: true, ReconcileReadSeq: !m.recoveryReadSeqReady}}, m.conversationCh)
+			if err == nil {
+				m.recoveryReadSeqReady = true
+			}
+		}
 	}
 	if err != nil {
 		return err
 	}
 	for id, seqs := range ranges {
 		if !IsNotification(id) {
-			m.syncedMaxSeqs[id] = seqs[1]
+			if err := m.commitMessageCheckpoint(ctx, id, seqs[1]); err != nil {
+				return err
+			}
 		}
 	}
 	if err := validatePulledConversationCoverage(resp.NotificationMsgs, ranges, true); err != nil {
@@ -53,16 +73,31 @@ func (m *MsgSyncer) commitPulledMessages(ctx context.Context, resp *sdkws.PullMe
 	return nil
 }
 
+type incompleteMessageRange struct{ id string }
+
+func (e *incompleteMessageRange) Error() string {
+	return fmt.Sprintf("incomplete message range for %q", e.id)
+}
+
 func validatePulledConversationCoverage(messages map[string]*sdkws.PullMsgs, ranges map[string][2]int64, notification bool) error {
-	for id := range ranges {
+	for id, r := range ranges {
 		if IsNotification(id) != notification {
 			continue
 		}
-		// An explicit empty conversation can represent deleted/expired rows.
-		// An omitted conversation says nothing about its requested range and
-		// must not permanently advance the cursor past missing messages.
 		if messages[id] == nil {
-			return fmt.Errorf("message pull response missing requested conversation %q", id)
+			return &incompleteMessageRange{id: id}
+		}
+		seen := make(map[int64]bool, len(messages[id].Msgs))
+		for _, row := range messages[id].Msgs {
+			if row == nil || row.Seq < max(1, r[0]) || row.Seq > r[1] || seen[row.Seq] {
+				return fmt.Errorf("invalid or duplicate sequence in response for %q", id)
+			}
+			seen[row.Seq] = true
+		}
+		// Deleted rows with a sequence are explicit evidence. Neither isEnd
+		// nor an empty conversation proves that an internal gap is invisible.
+		if int64(len(seen)) != r[1]-max(1, r[0])+1 {
+			return &incompleteMessageRange{id: id}
 		}
 	}
 	return nil

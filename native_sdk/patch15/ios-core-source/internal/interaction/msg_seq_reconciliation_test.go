@@ -64,7 +64,7 @@ func TestPeriodicReconciliationRecoversMissingTailWithoutPush(t *testing.T) {
 }
 
 func TestPeriodicReconciliationSkipsUnavailableAndUninitializedSessions(t *testing.T) {
-	for _, state := range []string{"disconnected", "background", "bootstrap", "cancelled"} {
+	for _, state := range []string{"disconnected", "background", "cancelled"} {
 		t.Run(state, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(recoveryContext(t))
 			defer cancel()
@@ -76,8 +76,6 @@ func TestPeriodicReconciliationSkipsUnavailableAndUninitializedSessions(t *testi
 				conn.SetConnectionStatus(Closed)
 			case "background":
 				conn.SetBackground(true)
-			case "bootstrap":
-				m.reinstalled = true
 			case "cancelled":
 				cancel()
 			}

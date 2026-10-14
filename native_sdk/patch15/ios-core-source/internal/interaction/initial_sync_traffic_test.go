@@ -62,18 +62,22 @@ func TestFirstLoginCompletesAndCommitsMessagesUnderLiveTraffic(t *testing.T) {
 		if err := proto.Unmarshal(req.Message.Data, pull); err != nil {
 			panic(err)
 		}
-		// Model the server: omitted/ascending order returns the oldest row.
-		seq := int64(1)
-		if pull.Order == sdkws.PullOrder_PullOrderDesc {
-			seq = 6
+		var seqs []int64
+		for seq := pull.SeqRanges[0].Begin; seq <= pull.SeqRanges[0].End; seq++ {
+			seqs = append(seqs, seq)
 		}
-		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", seq)})
+		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", seqs...)})
 	})
 	done := make(chan struct{})
 	allHandled := make(chan struct{})
+	commitsFinished := make(chan struct{})
 	go func() {
 		defer close(done)
 		runMessageSyncLoop(ctx, m.recvCh, func(cmd common.Cmd2Value) {
+			if cmd.Cmd == "testCommitBarrier" {
+				close(commitsFinished)
+				return
+			}
 			m.handlePushMsgAndEventSafely(cmd)
 			if cmd.Cmd == constant.CmdPushMsg && cmd.Value.(*sdkws.PushMessages).Msgs["chat"].Msgs[0].Seq == 26 {
 				close(allHandled)
@@ -91,7 +95,7 @@ func TestFirstLoginCompletesAndCommitsMessagesUnderLiveTraffic(t *testing.T) {
 	case <-time.After(30 * time.Millisecond):
 	}
 	close(release)
-	for want := int64(6); want <= 26; want++ {
+	for want := int64(1); want <= 26; want++ {
 		select {
 		case got := <-stored:
 			if got != want {
@@ -105,6 +109,14 @@ func TestFirstLoginCompletesAndCommitsMessagesUnderLiveTraffic(t *testing.T) {
 	case <-allHandled:
 	case <-ctx.Done():
 		t.Fatal("live message commit never acknowledged")
+	}
+	// Pushes can now be handled at the first page boundary and journal gaps.
+	// Receipt observation alone precedes the worker's durable checkpoint write.
+	m.recvCh <- common.Cmd2Value{Ctx: ctx, Cmd: "testCommitBarrier"}
+	select {
+	case <-commitsFinished:
+	case <-ctx.Done():
+		t.Fatal("range checkpoint never committed")
 	}
 	cancel()
 	<-done

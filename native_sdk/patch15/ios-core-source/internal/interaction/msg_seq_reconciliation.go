@@ -63,7 +63,15 @@ func (m *MsgSyncer) canReconcileMessageSeqs() bool {
 func (m *MsgSyncer) doMessageSeqReconciliation(ctx context.Context) {
 	// Recheck after queueing. Bootstrap needs its normal metadata sync, and a
 	// foreground tick must not start new traffic once the app is backgrounded.
-	if ctx.Err() != nil || m.reinstalled || !m.canReconcileMessageSeqs() {
+	if ctx.Err() != nil || !m.canReconcileMessageSeqs() {
+		return
+	}
+	if m.reinstalled {
+		// The persisted Installed=false state is also a retry obligation.
+		// Re-enter required initialization, never the message-only shortcut.
+		if m.startSync() {
+			m.doConnected(ctx)
+		}
 		return
 	}
 	var resp sdkws.GetMaxSeqResp

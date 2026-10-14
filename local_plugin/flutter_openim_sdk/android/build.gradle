@@ -13,6 +13,8 @@ buildscript {
 }
 
 def patchedCoreRepository = new File(projectDir, "../../../native_sdk/patch15/artifacts/maven")
+def coreBuildRoot = new File(projectDir, "../../../native_sdk/patch15")
+def coreManifest = new groovy.json.JsonSlurper().parse(new File(coreBuildRoot, "manifest.json"))
 
 rootProject.allprojects {
     repositories {
@@ -32,6 +34,13 @@ rootProject.allprojects {
 
 apply plugin: "com.android.library"
 
+def verifyOpenIMCore = tasks.register("verifyOpenIMCore", Exec) {
+    workingDir coreBuildRoot
+    def python = System.getenv("CORE_PYTHON") ?: (System.getProperty("os.name").toLowerCase().contains("windows") ? "python" : "python3")
+    commandLine python, new File(coreBuildRoot, "prepare_source.py").absolutePath, "--check-artifact", "android"
+}
+tasks.named("preBuild").configure { dependsOn verifyOpenIMCore }
+
 android {
     namespace = "io.openim.flutter_openim_sdk"
 
@@ -47,7 +56,7 @@ android {
     }
 
     dependencies {
-        api 'io.openim:core-sdk:3.8.3-patch15-recovery.12-readseq2@aar'
+        api "${coreManifest.android.coordinate}@aar"
         testImplementation("junit:junit:4.13.2")
         testImplementation("org.json:json:20180813")
         testImplementation("org.mockito:mockito-core:5.0.0")

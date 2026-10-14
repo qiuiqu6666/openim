@@ -15,6 +15,7 @@ import (
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
 	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
 	"github.com/openimsdk/protocol/sdkws"
+	"github.com/openimsdk/tools/errs"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -173,6 +174,7 @@ type recoveryVersionDB struct {
 	writeErr        error
 	notificationErr error
 	versionWrites   int
+	journal         map[string]*model_struct.LocalVersionSync
 }
 
 func (d *recoveryVersionDB) GetAllConversationIDList(context.Context) ([]string, error) {
@@ -190,7 +192,25 @@ func (d *recoveryVersionDB) SetAppSDKVersion(_ context.Context, v *model_struct.
 	return nil
 }
 func (d *recoveryVersionDB) CheckConversationNormalMsgSeq(context.Context, string) (int64, error) {
-	return 5, nil
+	return 0, nil
+}
+func (d *recoveryVersionDB) GetVersionSync(_ context.Context, table, id string) (*model_struct.LocalVersionSync, error) {
+	if row := d.journal[table+id]; row != nil {
+		return row, nil
+	}
+	return nil, errs.ErrRecordNotFound
+}
+func (d *recoveryVersionDB) SetVersionSync(_ context.Context, row *model_struct.LocalVersionSync) error {
+	if d.journal == nil {
+		d.journal = make(map[string]*model_struct.LocalVersionSync)
+	}
+	copy := *row
+	copy.UIDList = append([]string(nil), row.UIDList...)
+	d.journal[row.Table+row.EntityID] = &copy
+	return nil
+}
+func (d *recoveryVersionDB) GetConversation(context.Context, string) (*model_struct.LocalConversation, error) {
+	return &model_struct.LocalConversation{}, nil
 }
 func (d *recoveryVersionDB) GetNotificationAllSeqs(context.Context) ([]*model_struct.NotificationSeqs, error) {
 	return nil, nil

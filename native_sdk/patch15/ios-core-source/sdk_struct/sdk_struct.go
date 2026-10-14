@@ -320,6 +320,9 @@ type IMConfig struct {
 type CmdNewMsgComeToConversation struct {
 	Msgs     map[string]*sdkws.PullMsgs
 	SyncFlag int
+	// Recovery pages may replay a committed batch after process interruption.
+	ReconcileReadSeq bool
+	Recovery         bool
 }
 
 type CmdMsgSyncInReinstall struct {

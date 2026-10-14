@@ -24,6 +24,25 @@ type recoveryDB struct {
 	conversation                                    model_struct.LocalConversation
 	writeErr, conversationErr, unreadErr, updateErr error
 	stored                                          *model_struct.LocalChatLog
+	deliveryVersions                                map[string]*model_struct.LocalVersionSync
+}
+
+func (d *recoveryDB) GetVersionSync(_ context.Context, table, id string) (*model_struct.LocalVersionSync, error) {
+	row := d.deliveryVersions[table+"/"+id]
+	if row == nil {
+		return nil, errs.ErrRecordNotFound
+	}
+	copy := *row
+	return &copy, nil
+}
+
+func (d *recoveryDB) SetVersionSync(_ context.Context, row *model_struct.LocalVersionSync) error {
+	if d.deliveryVersions == nil {
+		d.deliveryVersions = make(map[string]*model_struct.LocalVersionSync)
+	}
+	copy := *row
+	d.deliveryVersions[row.Table+"/"+row.EntityID] = &copy
+	return nil
 }
 
 func (d *recoveryDB) GetConversation(context.Context, string) (*model_struct.LocalConversation, error) {
@@ -58,6 +77,16 @@ func (d *recoveryDB) GetMessage(context.Context, string, string) (*model_struct.
 		return nil, errs.ErrRecordNotFound
 	}
 	return d.stored, nil
+}
+
+func (d *recoveryDB) GetMessagesByClientMsgIDs(_ context.Context, _ string, ids []string) ([]*model_struct.LocalChatLog, error) {
+	for _, id := range ids {
+		if d.stored != nil && d.stored.ClientMsgID == id {
+			copy := *d.stored
+			return []*model_struct.LocalChatLog{&copy}, nil
+		}
+	}
+	return nil, nil
 }
 func (d *recoveryDB) BatchUpdateConversationList(_ context.Context, cs []*model_struct.LocalConversation) error {
 	if d.conversationErr != nil {

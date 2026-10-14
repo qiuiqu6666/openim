@@ -15,7 +15,7 @@ $taskHash = (Get-FileHash -LiteralPath $taskPatch -Algorithm SHA256).Hash.ToLowe
 if ($taskHash -ne $taskManifest.patch_sha256) {
     throw 'Patch hash mismatch. No changes were made.'
 }
-& git -C $taskSource apply --reverse --check $taskPatch 2>$null
+& git -c core.autocrlf=false -C $taskSource apply --reverse --check $taskPatch 2>$null
 if ($LASTEXITCODE -eq 0) {
     Write-Output 'Recovery patch is already applied.'
     return
@@ -24,8 +24,8 @@ $taskStatus = & git -C $taskSource status --porcelain
 if ($LASTEXITCODE -ne 0 -or $taskStatus) {
     throw 'Use a clean official SDK checkout. Existing changes were preserved.'
 }
-& git -C $taskSource apply --check $taskPatch
+& git -c core.autocrlf=false -C $taskSource apply --check $taskPatch
 if ($LASTEXITCODE -ne 0) { throw 'Patch applicability check failed. No changes were made.' }
-& git -C $taskSource apply $taskPatch
+& git -c core.autocrlf=false -C $taskSource apply $taskPatch
 if ($LASTEXITCODE -ne 0) { throw 'Patch application failed. Inspect the checkout before proceeding.' }
 Write-Output 'Recovery patch applied to source. App SDK dependencies were not changed.'

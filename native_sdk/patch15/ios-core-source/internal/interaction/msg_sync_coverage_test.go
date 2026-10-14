@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
 	"github.com/openimsdk/protocol/sdkws"
 )
 
@@ -46,11 +47,16 @@ func TestPullMissingConversationDoesNotAdvanceAndCanRetry(t *testing.T) {
 	}
 }
 
-func TestPullExplicitEmptyDeletedConversationCanCommit(t *testing.T) {
-	m := &MsgSyncer{conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{}}
+func TestPullExplicitDeletedSequencePlaceholdersCanCommit(t *testing.T) {
+	m := &MsgSyncer{conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{"chat": 998, "n_chat": 998}}
 	receiptWorker(t, m.conversationCh, func(common.Cmd2Value) error { return nil })
-	resp := &sdkws.PullMessageBySeqsResp{Msgs: map[string]*sdkws.PullMsgs{"chat": {}},
-		NotificationMsgs: map[string]*sdkws.PullMsgs{"n_chat": {}}}
+	resp := &sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 999, 1000),
+		NotificationMsgs: recoveryMsgs("n_chat", 999, 1000)}
+	for _, p := range []*sdkws.PullMsgs{resp.Msgs["chat"], resp.NotificationMsgs["n_chat"]} {
+		for _, m := range p.Msgs {
+			m.Status = constant.MsgStatusHasDeleted
+		}
+	}
 	if err := m.commitPulledMessages(recoveryContext(t), resp,
 		map[string][2]int64{"chat": {999, 1000}, "n_chat": {999, 1000}}, 0); err != nil {
 		t.Fatal(err)

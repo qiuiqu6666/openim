@@ -1,52 +1,61 @@
 param(
-    [string]$SourcePath = 'https://github.com/openimsdk/openim-sdk-core.git',
     [string]$Go = 'go',
+    [string]$Python = 'python',
     [string]$AndroidSdk = $env:ANDROID_HOME,
     [string]$AndroidNdk = $env:ANDROID_NDK_HOME
 )
 $ErrorActionPreference = 'Stop'
+function Invoke-Checked([string]$Command, [string[]]$Arguments) {
+    & $Command @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "$Command failed ($LASTEXITCODE)" }
+}
 if (!(Test-Path -LiteralPath $AndroidSdk) -or !(Test-Path -LiteralPath $AndroidNdk)) {
     throw 'Provide existing -AndroidSdk and -AndroidNdk directories.'
 }
-$version = '3.8.3-patch15-recovery.12-readseq2'
-$mobile = 'v0.0.0-20250711185624-d5bb5ecc55c0'
+$manifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'manifest.json') -Raw | ConvertFrom-Json
+Invoke-Checked $Python @((Join-Path $PSScriptRoot 'prepare_source.py'))
+$version = $manifest.android.coordinate.Split(':')[2]
+$mobile = $manifest.gomobile
 $artifacts = Join-Path $PSScriptRoot 'artifacts'
 $work = Join-Path $artifacts ('build-' + [guid]::NewGuid().ToString('N'))
 $source = Join-Path $work 'source'
 $bin = Join-Path $work 'tools'
 New-Item -ItemType Directory -Force $bin | Out-Null
-function Invoke-Checked([string]$Command, [string[]]$Arguments) {
-    & $Command @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "$Command failed ($LASTEXITCODE)" }
-}
+Invoke-Checked $Python @((Join-Path $PSScriptRoot 'prepare_source.py'), '--output', $source)
 $savedEnvironment = @{}
-foreach ($key in @('PATH','GOBIN','ANDROID_HOME','ANDROID_NDK_HOME','CGO_ENABLED')) {
+foreach ($key in @('PATH','GOBIN','ANDROID_HOME','ANDROID_NDK_HOME','CGO_ENABLED','GOTOOLCHAIN','GOWORK','GOFLAGS')) {
     $savedEnvironment[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
 }
 try {
     $goCommand = (Get-Command $Go -ErrorAction Stop).Source
     $env:PATH = $bin + [IO.Path]::PathSeparator + (Split-Path $goCommand) + [IO.Path]::PathSeparator + $env:PATH
+    $env:GOTOOLCHAIN = 'local'
+    $env:GOWORK = 'off'
+    $env:GOFLAGS = '-mod=readonly'
+    if ((& $goCommand version) -notlike "* go$($manifest.go_version) *") { throw "Use Go $($manifest.go_version)." }
     $env:GOBIN = $bin
     $env:ANDROID_HOME = $AndroidSdk
     $env:ANDROID_NDK_HOME = $AndroidNdk
-    $env:CGO_ENABLED = '1'
-    Invoke-Checked git @('clone','--quiet','--no-hardlinks','--branch','v3.8.3-patch.15',$SourcePath,$source)
-    & (Join-Path $PSScriptRoot 'apply.ps1') -SourcePath $source
     Push-Location $source
     try {
         Invoke-Checked $goCommand @('install',"golang.org/x/mobile/cmd/gomobile@$mobile")
         Invoke-Checked $goCommand @('install',"golang.org/x/mobile/cmd/gobind@$mobile")
-        Invoke-Checked $goCommand @('get',"golang.org/x/mobile@$mobile")
         $env:CGO_ENABLED = '0'
-        Invoke-Checked $goCommand @('test','-mod=mod','./pkg/common','./internal/interaction','./internal/conversation_msg','-count=1','-timeout=60s')
+        Invoke-Checked $goCommand @('test','./pkg/common','./pkg/network','./internal/interaction','./internal/conversation_msg','-count=1','-timeout=120s')
         $env:CGO_ENABLED = '1'
-        Invoke-Checked gomobile @('init')
+        # gomobile init installs gobind@latest. Only its cache directory is needed.
+        $goPath = & $goCommand env GOPATH
+        New-Item -ItemType Directory -Force (Join-Path ($goPath.Split([IO.Path]::PathSeparator)[0]) 'pkg/gomobile') | Out-Null
         $aar = Join-Path $work "core-sdk-$version.aar"
-        $flags = '-s -w -X github.com/openimsdk/openim-sdk-core/v3/version.Version=v3.8.3-patch.15+recovery.12-readseq2 -extldflags "-Wl,--gc-sections,--as-needed,-z,max-page-size=16384"'
+        $flags = '-s -w -X github.com/openimsdk/openim-sdk-core/v3/version.Version=' + $manifest.sdk_version + ' -extldflags "-Wl,--gc-sections,--as-needed,-z,max-page-size=16384"'
         Invoke-Checked gomobile @('bind','-androidapi','21','-target=android','-trimpath','-ldflags',$flags,'-o',$aar,'./open_im_sdk/','./open_im_sdk_callback/')
+        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'prepare_source.py'), '--check-dependencies', $source)
+        $receipt = Join-Path $work 'verification.json'
+        Invoke-Checked $Python @((Join-Path $PSScriptRoot 'record_artifact.py'), 'android', $aar, $receipt)
         $destination = Join-Path $artifacts "maven/io/openim/core-sdk/$version"
         New-Item -ItemType Directory -Force $destination | Out-Null
         Copy-Item -LiteralPath $aar -Destination $destination
+        Copy-Item -LiteralPath $receipt -Destination $destination
         $pom = "<project><modelVersion>4.0.0</modelVersion><groupId>io.openim</groupId><artifactId>core-sdk</artifactId><version>$version</version><packaging>aar</packaging></project>"
         [IO.File]::WriteAllText((Join-Path $destination "core-sdk-$version.pom"), $pom)
         Get-FileHash -LiteralPath $aar -Algorithm SHA256

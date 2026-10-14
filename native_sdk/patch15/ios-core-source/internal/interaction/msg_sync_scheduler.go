@@ -2,6 +2,7 @@ package interaction
 
 import (
 	"context"
+	"time"
 
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
@@ -45,11 +46,26 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 	var cancel context.CancelFunc
 	var queued []common.Cmd2Value
 	protected := false
+	const liveBurst = 32
+	liveHandled := 0
+	var pageOwner *messagePageCoordinator
+	var pageTurns <-chan chan struct{}
+	var preemption *time.Timer
+	var preempt <-chan time.Time
+	reserveProgress := false
+	clearPreemption := func() {
+		if preemption != nil {
+			preemption.Stop()
+		}
+		preemption, preempt = nil, nil
+	}
 	stop := func() {
+		clearPreemption()
 		if cancel != nil {
 			cancel()
 			<-done // The sole state owner must exit before another command runs.
 			cancel, done, active = nil, nil, nil
+			pageOwner, pageTurns = nil, nil
 		}
 	}
 	defer stop()
@@ -57,17 +73,18 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 		if ctx.Err() != nil {
 			return
 		}
-		if active == nil && len(queued) > 0 {
+		if active == nil && len(queued) > 0 && (pending == nil || liveHandled < liveBurst) {
 			cmd := queued[0]
 			queued[0] = common.Cmd2Value{}
 			queued = queued[1:]
 			handle(cmd)
+			liveHandled++
 			continue
 		}
 		// Drain already queued work before restarting an interrupted sync.
 		if active == nil && pending != nil {
 			protected = len(protectInitialSync) > 0 && protectInitialSync[0]()
-			if !protected {
+			if !protected && liveHandled < liveBurst {
 				select {
 				case cmd, ok := <-input:
 					if !ok {
@@ -77,6 +94,7 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 						pending = coalesceMessageSync(pending, cmd)
 					} else {
 						handle(cmd)
+						liveHandled++
 					}
 					continue
 				default:
@@ -95,7 +113,10 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 			// first-login initialization cannot be starved by incoming traffic.
 			attempt := original
 			attemptCtx, attemptCancel := context.WithCancel(original.Ctx)
-			attempt.Ctx, cancel = attemptCtx, attemptCancel
+			pageOwner = &messagePageCoordinator{turns: make(chan chan struct{})}
+			pageTurns = pageOwner.turns
+			attempt.Ctx, cancel = context.WithValue(attemptCtx, messagePageContextKey{}, pageOwner), attemptCancel
+			liveHandled = 0
 			done = make(chan struct{})
 			go func(finished chan struct{}) {
 				defer close(finished)
@@ -107,7 +128,48 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 		case <-ctx.Done():
 			return
 		case <-done:
+			reserveProgress = false
 			stop()
+		case <-preempt:
+			// A stalled first attempt may yield once. Its retry owns a bounded
+			// page until completion, so busy chats cannot cancel it forever.
+			if active != nil {
+				resume := *active
+				pending = coalesceMessageSync(pending, resume)
+				reserveProgress = true
+				stop()
+			}
+		case resume := <-pageTurns:
+			clearPreemption()
+			if pageOwner.committed.Load() > 0 {
+				reserveProgress = false
+			}
+			// The worker is paused and no message transaction is in flight.
+			// Bound the ingress turn so continuous traffic cannot starve pages.
+			for n := 0; n < liveBurst; n++ {
+				var cmd common.Cmd2Value
+				if len(queued) > 0 {
+					cmd, queued = queued[0], queued[1:]
+				} else {
+					select {
+					case incoming, ok := <-input:
+						if !ok {
+							close(resume)
+							return
+						}
+						cmd = incoming
+					default:
+						n = liveBurst
+						continue
+					}
+				}
+				if isBackgroundSyncCommand(cmd) {
+					pending = coalesceMessageSync(pending, cmd)
+				} else {
+					handle(cmd)
+				}
+			}
+			close(resume)
 		case cmd, ok := <-input:
 			if !ok {
 				return
@@ -125,14 +187,20 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 				continue
 			}
 			if active != nil {
-				if protected {
+				if protected || reserveProgress || (pageOwner != nil && pageOwner.bounded.Load()) {
 					queued = append(queued, cmd)
+					if !protected && !reserveProgress && preemption == nil {
+						preemption = time.NewTimer(100 * time.Millisecond)
+						preempt = preemption.C
+					}
 					continue
 				}
 				resume := *active
 				if pending == nil {
 					pending = &resume
 				}
+				// Metadata/max-sequence I/O must also get an uninterrupted retry.
+				reserveProgress = true
 				stop()
 			}
 			handle(cmd)
