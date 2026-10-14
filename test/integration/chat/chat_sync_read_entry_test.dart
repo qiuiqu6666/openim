@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/core/im_callback.dart';
@@ -57,5 +58,36 @@ void main() {
     await tester.pumpWidget(_productionList(logic));
     await tester.pumpAndSettle();
     expect(reads(fixture), 0);
+  });
+
+  recoveryScenario('repeated sync status preserves a painted read retry',
+      (tester, fixture) async {
+    fixture.im.imSdkStatus(IMSdkStatus.syncFailed);
+    final logic =
+        await fixture.open(tester, receiptNow: tester.binding.clock.now);
+    logic.conversationInfo =
+        fixture.conversation(latest: logic.messageList.last);
+    var failRead = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(ChatRecoveryFixture.channel, (call) async {
+      fixture.nativeCalls.add(call);
+      if (call.method == 'markConversationMessageAsRead' && failRead) {
+        throw PlatformException(code: 'NETWORK_FAILURE');
+      }
+      return null;
+    });
+    await tester.pumpWidget(_productionList(logic));
+    await tester.pumpAndSettle();
+    expect(reads(fixture), 1);
+
+    failRead = false;
+    fixture.im.imSdkStatus(IMSdkStatus.syncFailed);
+    await tester.pump();
+    fixture.announce('initial', 1);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+    expect(reads(fixture), 2,
+        reason: 'A duplicate status must not lose the still-painted viewport');
   });
 }

@@ -1151,12 +1151,62 @@ class RevokedInfo {
   }
 }
 
+/// A scan boundary is transport metadata, never a displayable chat message.
+/// Extending Message preserves the existing startMsg API in both directions.
+class HistoryScanCursor extends Message {
+  HistoryScanCursor({
+    required this.conversationID,
+    required this.reverse,
+    required String clientMsgID,
+    required int sendTime,
+    required int seq,
+  }) : super(clientMsgID: clientMsgID, sendTime: sendTime, seq: seq);
+
+  final String conversationID;
+  final bool reverse;
+
+  /// Native history orders by send time, then sequence; sequence alone can
+  /// differ from chronological order for migrated or delayed messages.
+  bool advancesFrom(Message? previous) {
+    if (previous == null) return true;
+    final previousTime = previous.sendTime ?? 0;
+    final previousSeq = previous.seq ?? 0;
+    if (previousTime > 0 && sendTime != previousTime) {
+      return reverse ? sendTime! > previousTime : sendTime! < previousTime;
+    }
+    if (previousSeq > 0) {
+      return reverse ? seq! > previousSeq : seq! < previousSeq;
+    }
+    return clientMsgID != previous.clientMsgID;
+  }
+
+  factory HistoryScanCursor.fromJson(Map<String, dynamic> json) =>
+      HistoryScanCursor(
+        conversationID: json['conversationID'],
+        reverse: json['reverse'],
+        clientMsgID: json['clientMsgID'],
+        sendTime: json['sendTime'],
+        seq: json['seq'],
+      );
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'conversationID': conversationID,
+        'reverse': reverse,
+        'clientMsgID': clientMsgID,
+        'sendTime': sendTime,
+        'seq': seq,
+      };
+}
+
 class AdvancedMessage {
   List<Message>? messageList;
   bool? isEnd;
   int? errCode;
   String? errMsg;
   int? lastMinSeq;
+  HistoryScanCursor? scanCursor;
+  bool? scanLimited;
 
   AdvancedMessage({
     this.messageList,
@@ -1164,6 +1214,8 @@ class AdvancedMessage {
     this.errCode,
     this.errMsg,
     this.lastMinSeq,
+    this.scanCursor,
+    this.scanLimited,
   });
 
   AdvancedMessage.fromJson(Map<String, dynamic> json) {
@@ -1173,6 +1225,10 @@ class AdvancedMessage {
     errCode = json['errCode'];
     errMsg = json['errMsg'];
     lastMinSeq = json['lastMinSeq'];
+    scanCursor = json['scanCursor'] == null
+        ? null
+        : HistoryScanCursor.fromJson(json['scanCursor']);
+    scanLimited = json['scanLimited'];
   }
 
   Map<String, dynamic> toJson() {
@@ -1182,6 +1238,8 @@ class AdvancedMessage {
     data['errCode'] = this.errCode;
     data['errMsg'] = this.errMsg;
     data['lastMinSeq'] = this.lastMinSeq;
+    data['scanCursor'] = scanCursor?.toJson();
+    data['scanLimited'] = scanLimited;
     return data;
   }
 }

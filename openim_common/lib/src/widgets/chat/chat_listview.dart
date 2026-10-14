@@ -254,6 +254,7 @@ class ChatListView extends StatefulWidget {
     this.initialLoading = false,
     this.historyLoading = false,
     this.historyError,
+    this.historyScanLimited = false,
     this.onRetry,
     this.hasMore,
     this.newerHasMore,
@@ -281,6 +282,7 @@ class ChatListView extends StatefulWidget {
   final bool initialLoading;
   final bool historyLoading;
   final String? historyError;
+  final bool historyScanLimited;
   final VoidCallback? onRetry;
   final bool? hasMore;
   // A route-owned history window can supersede an in-flight paging request.
@@ -370,7 +372,7 @@ class _ChatListViewState extends State<ChatListView> {
     final load = widget.onScrollToBottomLoad;
     if (load == null ||
         _pagingBusy ||
-        !retry && (!_hasMore || _hasHistoryError)) {
+        !retry && (!_hasMore || _hasHistoryError || widget.historyScanLimited)) {
       return;
     }
     final generation = _pagingGeneration;
@@ -401,7 +403,7 @@ class _ChatListViewState extends State<ChatListView> {
     if (!widget.enabledScrollTopLoad ||
         load == null ||
         _pagingBusy ||
-        !retry && (!_hasNewer || _topFailed || widget.historyError != null)) {
+        !retry && (!_hasNewer || _topFailed || widget.historyError != null || widget.historyScanLimited)) {
       return;
     }
     final generation = _pagingGeneration;
@@ -471,6 +473,13 @@ class _ChatListViewState extends State<ChatListView> {
         ),
       );
 
+  Widget _continueHistory() => Center(
+        child: TextButton(
+          onPressed: _pagingBusy ? null : _retryHistory,
+          child: Text('chatHistoryContinue'.tr),
+        ),
+      );
+
   Widget _initialState() {
     if (widget.initialLoading || _historyLoading) {
       return Center(
@@ -481,6 +490,7 @@ class _ChatListViewState extends State<ChatListView> {
       );
     }
     if (_hasHistoryError) return _failure(_retryHistory);
+    if (widget.historyScanLimited) return _continueHistory();
     if (widget.emptyView != null) return widget.emptyView!;
     return Center(
         child: Text('chatHistoryEmpty'.tr, style: Styles.ts_8E9AB0_14sp));
@@ -527,7 +537,7 @@ class _ChatListViewState extends State<ChatListView> {
                     controller: widget.controller,
                     physics: physics,
                     itemCount: widget.itemCount! +
-                        (_historyLoading || _hasHistoryError ? 1 : 0),
+                        (_historyLoading || _hasHistoryError || widget.historyScanLimited ? 1 : 0),
                     padding: EdgeInsets.only(top: 10.h),
                     findChildIndexCallback: (key) => key == _historyStatusKey
                         ? widget.itemCount
@@ -541,7 +551,7 @@ class _ChatListViewState extends State<ChatListView> {
                       shrinkWrap: true,
                       physics: physics,
                       itemCount: widget.itemCount! +
-                          (_historyLoading || _hasHistoryError ? 1 : 0),
+                          (_historyLoading || _hasHistoryError || widget.historyScanLimited ? 1 : 0),
                       padding: EdgeInsets.only(top: 10.h),
                       controller: widget.controller,
                       findChildIndexCallback: (key) => key == _historyStatusKey
@@ -558,7 +568,8 @@ class _ChatListViewState extends State<ChatListView> {
     if (index == widget.itemCount) {
       return KeyedSubtree(
         key: _historyStatusKey,
-        child: _historyLoading ? loadMoreView : _failure(_retryHistory),
+        child: _historyLoading ? loadMoreView
+            : _hasHistoryError ? _failure(_retryHistory) : _continueHistory(),
       );
     }
     final child = widget.itemBuilder(context, index);

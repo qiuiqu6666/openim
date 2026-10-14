@@ -1,0 +1,63 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.18",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "9bc4d66679e02aa1a826bbf6f74eb7d295480c5f5788850632a153c2858a2f0d",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "6dc0f9e97bd4b681b9a9cf211b8f05a2b1470f5ea19acc49bd8d55f73e77e3fb",
+  "created": "2026-10-14",
+  "previous_release": "history/recovery.17.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "core_race": "passed: five packages with race detector, including the final pinned mobile source",
+    "native_build_and_vet": "passed",
+    "wasm_build": "passed",
+    "android_aar_build": "passed: all four ABIs; verified locked source and embedded SDK version",
+    "android_apk_build": "passed: signed arm64 release 3.0.1+2031, verified embedded AAR and SDK version",
+    "source_lock_tests": "passed: 15 tests",
+    "source_parity": "passed: 375 files from clean upstream patch roundtrip; only mobile dependencies/version overlays",
+    "device_runtime": "not run",
+    "ios_framework": "not built on this Windows host",
+    "apk_signature": "passed: APK Signature Scheme v2"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.18",
+    "sdk_version": "v3.8.3-patch.15+recovery.18",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "not installed/tested",
+    "application_version": "3.0.1+2031",
+    "aar_sha256": "03e9be0826cfdd1d422116de266b8ece2845c0bc00f42d0098b31993d5eeb125",
+    "apk_sha256": "7e67664e493e1dcee72cbf0070c06700f13baf8e2065c278d1adc899aed902a9"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.18",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "not tested for recovery.18",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "not built for recovery.18",
+    "app_validation_scope": "Android-only run; macOS build required for this shared source"
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned existing gomobile dependency closure",
+    "version/version: unique recovery.17 runtime identity"
+  ],
+  "verification_evidence": "verification/recovery.18-android.json"
+}

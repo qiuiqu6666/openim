@@ -157,7 +157,7 @@ void main() {
     logic = _IM();
   }
 
-  testWidgets('sync failures retry every three seconds without closing transport',
+  testWidgets('sync failures back off without closing transport',
       (tester) async {
     logic.onClose();
     logic = _IM();
@@ -166,11 +166,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 3));
     nativeCalls.clear();
-    for (var i = 0; i < 4; i++) {
+    const delays = [3, 3, 6, 12];
+    for (var i = 0; i < delays.length; i++) {
       logic.imSdkStatus(IMSdkStatus.syncStart);
       logic.imSdkStatus(IMSdkStatus.syncFailed);
       await tester.pump();
-      await tester.pump(const Duration(seconds: 2));
+      await tester.pump(Duration(seconds: delays[i] - 1));
       expect(nativeCalls, hasLength(i));
       await tester.pump(const Duration(seconds: 1));
       expect(nativeCalls, hasLength(i + 1));
@@ -179,7 +180,7 @@ void main() {
     expect(logic.currentSdkStatus, IMSdkStatus.syncFailed);
     expect(nativeCalls, everyElement('setAppBackgroundStatus'));
     // A missing new failure callback must not disable retries.
-    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 24));
     expect(nativeCalls, hasLength(5));
     logic.imSdkStatus(IMSdkStatus.syncEnded);
     await tester.pump();

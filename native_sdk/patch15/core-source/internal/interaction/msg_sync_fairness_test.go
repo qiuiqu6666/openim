@@ -49,12 +49,7 @@ func TestVisibilityPreflightYieldsBetweenConversations(t *testing.T) {
 			}
 			return wireResponse(&msg.GetSeqMessageResp{Msgs: map[string]*sdkws.PullMsgs{p.Conversations[0].ConversationID: {}}})
 		}
-		p := &sdkws.PullMessageBySeqsReq{}
-		if err := proto.Unmarshal(req.Message.Data, p); err != nil {
-			panic(err)
-		}
-		r := p.SeqRanges[0]
-		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs(r.ConversationID, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)})
+		return requestedRecoveryResponse(t, req)
 	})
 	finished := make(chan error, 1)
 	done := make(chan struct{})
@@ -177,11 +172,7 @@ func TestInitialHistoryYieldsLivePushBetweenPages(t *testing.T) {
 		case <-req.Ctx.Done():
 			return &GeneralWsResp{ErrCode: 10001}
 		}
-		var seqs []int64
-		for seq := r.Begin; seq <= r.End; seq++ {
-			seqs = append(seqs, seq)
-		}
-		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs(r.ConversationID, seqs...)})
+		return requestedRecoveryResponse(t, req)
 	})
 	done := make(chan struct{})
 	go func() {
@@ -190,7 +181,7 @@ func TestInitialHistoryYieldsLivePushBetweenPages(t *testing.T) {
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	m.recvCh <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdConnSuccesss}
-	if got := <-pageStarted; got != 201 {
+	if got := <-pageStarted; got != 300 {
 		t.Fatal(got)
 	}
 	m.recvCh <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdPushMsg, Value: &sdkws.PushMessages{Msgs: recoveryMsgs("live", 1)}}
@@ -242,7 +233,7 @@ func TestContinuousLivePushCannotCancelEveryRecoveryPage(t *testing.T) {
 		case <-req.Ctx.Done():
 			return &GeneralWsResp{ErrCode: 10001}
 		}
-		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("gap", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)})
+		return requestedRecoveryResponse(t, req)
 	})
 	done := make(chan struct{})
 	go func() { defer close(done); runMessageSyncLoop(ctx, m.recvCh, m.handlePushMsgAndEventSafely) }()
@@ -288,7 +279,12 @@ func TestContinuousLivePushCannotCancelEveryRecoveryPage(t *testing.T) {
 			t.Fatal("live queue stranded after gap")
 		}
 	}
-	if attempts.Load() != 2 {
+	select {
+	case <-storedGap:
+	case <-ctx.Done():
+		t.Fatal("history made no progress after the latest preview")
+	}
+	if attempts.Load() != 3 {
 		t.Fatalf("expected one bounded preemption, attempts=%d", attempts.Load())
 	}
 }

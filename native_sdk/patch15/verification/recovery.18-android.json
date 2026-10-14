@@ -1,0 +1,22 @@
+{
+  "core_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.18",
+  "application_version": "3.0.1+2031",
+  "source_sha256": "6dc0f9e97bd4b681b9a9cf211b8f05a2b1470f5ea19acc49bd8d55f73e77e3fb",
+  "patch_sha256": "9bc4d66679e02aa1a826bbf6f74eb7d295480c5f5788850632a153c2858a2f0d",
+  "source_files_verified": 375,
+  "apk_name": "99Chat-3.0.1-2031-recovery.18-arm64-release.apk",
+  "apk_bytes": 169748439,
+  "apk_sha256": "7e67664e493e1dcee72cbf0070c06700f13baf8e2065c278d1adc899aed902a9",
+  "aar_sha256": "03e9be0826cfdd1d422116de266b8ece2845c0bc00f42d0098b31993d5eeb125",
+  "apk_abis": [
+    "arm64-v8a"
+  ],
+  "apk_native_matches_verified_aar": true,
+  "core_tests": "five packages passed with race detector, including final pinned mobile source",
+  "source_lock_tests": 15,
+  "patch_roundtrip": "375 files verified",
+  "device_runtime": "not installed/tested",
+  "ios_build": "not built on this Windows host",
+  "apk_signature": "verified APK Signature Scheme v2"
+}

@@ -23,7 +23,7 @@ func TestPeriodicReconciliationRecoversMissingTailWithoutPush(t *testing.T) {
 	m := &MsgSyncer{ctx: ctx, loginUserID: "self", longConnMgr: conn,
 		recvCh: make(chan common.Cmd2Value, 8), conversationCh: make(chan common.Cmd2Value),
 		syncedMaxSeqs: map[string]int64{"chat": 998}}
-	delivered := make(chan []int64, 1)
+	delivered := make(chan []int64, 2)
 	receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
 		if cmd.Cmd != constant.CmdNewMsgCome {
 			t.Errorf("periodic check started metadata or sync lifecycle: %s", cmd.Cmd)
@@ -44,22 +44,26 @@ func TestPeriodicReconciliationRecoversMissingTailWithoutPush(t *testing.T) {
 		if err := proto.Unmarshal(req.Message.Data, pull); err != nil {
 			panic(err)
 		}
-		if len(pull.SeqRanges) != 1 || pull.SeqRanges[0].Begin != 999 || pull.SeqRanges[0].End != 1000 {
+		if len(pull.SeqRanges) != 1 || pull.SeqRanges[0].Begin < 999 || pull.SeqRanges[0].End > 1000 || pull.SeqRanges[0].Num != 1 {
 			t.Errorf("incorrect tail recovery range: %v", pull.SeqRanges)
 		}
-		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 999, 1000)})
+		return requestedRecoveryResponse(t, req)
 	})
 	ticks, done := make(chan time.Time), make(chan struct{})
 	go func() { defer close(done); m.listenWithReconciliation(ctx, ticks) }()
 	t.Cleanup(func() { cancel(); <-done })
 	ticks <- time.Now()
-	select {
-	case got := <-delivered:
-		if !reflect.DeepEqual(got, []int64{999, 1000}) {
-			t.Fatalf("missed recovered messages: %v", got)
+	var got []int64
+	for len(got) < 2 {
+		select {
+		case page := <-delivered:
+			got = append(got, page...)
+		case <-ctx.Done():
+			t.Fatal("online device waited for a new push to catch up")
 		}
-	case <-ctx.Done():
-		t.Fatal("online device waited for a new push to catch up")
+	}
+	if !reflect.DeepEqual(got, []int64{1000, 999}) {
+		t.Fatalf("missed latest-first recovery: %v", got)
 	}
 }
 
@@ -135,7 +139,7 @@ func TestPeriodicReconciliationRetriesFailedProbePullAndStorage(t *testing.T) {
 				if probe {
 					return wireResponse(&sdkws.GetMaxSeqResp{MaxSeqs: map[string]int64{"chat": 1000}})
 				}
-				return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 999, 1000)})
+				return requestedRecoveryResponse(t, req)
 			})
 			m.doMessageSeqReconciliation(ctx)
 			if !failed.Load() || m.syncedMaxSeqs["chat"] != 998 {

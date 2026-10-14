@@ -27,6 +27,7 @@ const Map<String, String> zh_CN = {
   'chatHistoryLoading': '正在加载聊天记录…',
   'chatHistoryEmpty': '暂无聊天记录',
   'chatHistoryLoadFailed': '聊天记录加载失败',
+  'chatHistoryContinue': '继续加载历史消息',
   'chatHistoryRetry': '重试',
   'chatSelectionEnter': '选择',
   'chatSelectionTitle': '选择消息',

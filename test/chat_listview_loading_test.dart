@@ -23,6 +23,46 @@ Future<void> pumpChatList(WidgetTester tester, Widget child,
 void main() {
   tearDown(Get.reset);
 
+  for (final brightness in [Brightness.light, Brightness.dark]) {
+    for (final count in [0, 2]) {
+      testWidgets(
+          'yielded $count-row scan waits for explicit continuation in $brightness',
+          (tester) async {
+        final controller = ScrollController();
+        var calls = 0, continued = 0;
+        await pumpChatList(
+            tester,
+            ChatListView(
+              controller: controller,
+              itemCount: count,
+              historyScanLimited: true,
+              hasMore: true,
+              onRetry: () => continued++,
+              onScrollToBottomLoad: () async {
+                calls++;
+                return true;
+              },
+              itemBuilder: (_, index) => Text('row $index'),
+            ),
+            brightness: brightness);
+        await tester.pumpAndSettle();
+        expect(find.text('chatHistoryContinue'.tr), findsOneWidget);
+        expect(find.text('chatHistoryEmpty'.tr), findsNothing);
+        expect(find.byType(CupertinoActivityIndicator), findsNothing);
+        if (count > 0) {
+          await tester.drag(find.byType(ChatListView), const Offset(0, 100));
+          await tester.pumpAndSettle();
+        }
+        expect(calls, 0);
+        await tester.tap(find.text('chatHistoryContinue'.tr));
+        await tester.pumpAndSettle();
+        expect(continued, 1);
+        await tester.pumpWidget(const SizedBox.shrink());
+        controller.dispose();
+      });
+    }
+  }
+
   testWidgets('empty history shows progress before confirming no messages',
       (tester) async {
     final request = Completer<bool>();

@@ -7,6 +7,7 @@ import 'package:openim_common/openim_common.dart';
 
 import '../../../services/chat_history_cache.dart';
 import 'chat_history_loader.dart';
+import 'chat_history_diagnostics.dart';
 
 /// Owns a chat route's message window, paging state and first-frame snapshot.
 /// SDK subscriptions, scroll resources and other message workflows stay with
@@ -56,6 +57,7 @@ class ChatTimelineController {
   final historyLoading = false.obs;
   final historyError = RxnString();
   final historyHasMore = true.obs;
+  final historyScanLimited = false.obs;
   final viewingHistory = false.obs;
   final newerHasMore = false.obs;
   final windowRevision = 0.obs;
@@ -89,6 +91,7 @@ class ChatTimelineController {
   bool get hasLoadedHistory => _history.loaded;
 
   late final ChatHistoryLoader _history = ChatHistoryLoader(
+    diagnostic: (event) => ChatHistoryDiagnostics.record(conversationID, event),
     pageSize: pageSize,
     fetch: fetch,
     fetchNewer: fetchNewer,
@@ -152,6 +155,7 @@ class ChatTimelineController {
     historyLoading.value = _history.loading;
     historyError.value = _history.error?.toString();
     historyHasMore.value = _history.hasMore;
+    historyScanLimited.value = _history.scanLimited;
     viewingHistory.value = _history.viewingHistory;
     newerHasMore.value = _history.hasNewer;
     windowRevision.value = _history.windowRevision;

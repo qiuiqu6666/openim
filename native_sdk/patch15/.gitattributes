@@ -6,3 +6,5 @@ ios-core-source/** text=auto eol=lf
 *.ps1 text eol=lf
 ios-core-source/*.sqlite -text
 core-source/** text=auto eol=lf
+# This locked descriptor is hashed byte-for-byte; preserve its exact newline.
+core-source/version/version -text -whitespace

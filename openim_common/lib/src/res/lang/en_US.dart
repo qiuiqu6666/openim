@@ -32,6 +32,7 @@ const Map<String, String> en_US = {
   'chatHistoryLoading': 'Loading messages…',
   'chatHistoryEmpty': 'No messages yet',
   'chatHistoryLoadFailed': 'Unable to load messages',
+  'chatHistoryContinue': 'Continue loading history',
   'chatHistoryRetry': 'Retry',
   'chatSelectionEnter': 'Select',
   'chatSelectionTitle': 'Select messages',

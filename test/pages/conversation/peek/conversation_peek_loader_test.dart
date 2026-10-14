@@ -53,6 +53,33 @@ List<String?> _ids(ConversationPeekLoader loader) =>
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('preview resumes an empty deleted range from the scan cursor', () async {
+    final scan = HistoryScanCursor(
+        conversationID: 'si_peer',
+        reverse: false,
+        clientMsgID: 'deleted-20',
+        sendTime: 20,
+        seq: 20);
+    final positions = <Message?>[];
+    final loader = _loader(fetch: ({required count, startMsg}) async {
+      positions.add(startMsg);
+      return startMsg == null
+          ? AdvancedMessage(
+              messageList: [],
+              isEnd: false,
+              scanLimited: true,
+              scanCursor: scan)
+          : _page([_message('last', 1)], isEnd: true);
+    });
+    addTearDown(loader.dispose);
+    expect(await loader.loadInitial(), isTrue);
+    expect(loader.hasMoreOlder, isTrue);
+    expect(loader.messages, isEmpty);
+    expect(await loader.loadOlder(), isTrue);
+    expect(positions, [null, scan]);
+    expect(_ids(loader), ['last']);
+    expect(loader.hasMoreOlder, isFalse);
+  });
   const channel = MethodChannel('flutter_openim_sdk');
   setUp(ChatHistoryCache.clear);
   tearDown(() {

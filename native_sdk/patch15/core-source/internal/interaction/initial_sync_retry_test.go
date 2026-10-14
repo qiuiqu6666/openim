@@ -36,7 +36,7 @@ func TestInitialSyncRetriesWithoutNextMessage(t *testing.T) {
 				if req.Message.ReqIdentifier == constant.GetNewestSeq {
 					return wireResponse(&sdkws.GetMaxSeqResp{MaxSeqs: map[string]int64{"chat": 2}})
 				}
-				return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 1, 2)})
+				return requestedRecoveryResponse(t, req)
 			})
 			m.doConnected(ctx)
 			if !m.reinstalled || d.installed {

@@ -4,6 +4,43 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/history/chat_history_recovery.dart';
 
 void main() {
+  testWidgets('retry evidence records attempts and the external reset source',
+      (tester) async {
+    final events = <Map<String, Object?>>[];
+    var calls = 0;
+    final recovery = ChatHistoryRecovery(
+      isActive: () => true,
+      hasError: () => true,
+      isLoading: () => false,
+      windowRevision: () => 1,
+      diagnostic: events.add,
+      retry: () async {
+        calls++;
+        return false;
+      },
+    );
+    addTearDown(recovery.close);
+    recovery.request(source: 'initial_failure');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 3));
+    for (var i = 0; i < 20; i++) {
+      recovery.request(source: 'duplicate_sync_ended');
+    }
+    await tester.pump(const Duration(seconds: 60));
+    expect(calls, 2);
+    recovery.request(resetAttempts: true, source: 'native_wake');
+    await tester.pump(const Duration(seconds: 1));
+    expect(calls, 3);
+    final reset = events.singleWhere((e) => e['event'] == 'retry_reset');
+    expect(reset['source'], 'native_wake');
+    expect(reset['previousAttempts'], 2);
+    expect(
+        events
+            .where((e) => e['event'] == 'retry_started')
+            .map((e) => e['attempt']),
+        [1, 2, 1]);
+    recovery.close();
+  });
   testWidgets('a retry timer waits for an intervening read to settle',
       (tester) async {
     var loading = false;

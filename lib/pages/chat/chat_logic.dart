@@ -38,6 +38,8 @@ import 'group/member_actions/chat_member_action_sheet.dart';
 import 'group/member_actions/chat_member_actions_controller.dart';
 import 'history/chat_timeline_controller.dart';
 import 'history/chat_history_prefetcher.dart';
+import 'history/chat_history_diagnostics.dart';
+import 'receipts/chat_read_diagnostics.dart';
 import 'history/chat_history_recovery.dart';
 import 'history/chat_latest_message_recovery.dart';
 import 'history/chat_background_message_recovery.dart';
@@ -91,6 +93,7 @@ class ChatLogic extends SuperController {
       _imToken == DataSp.imToken;
   bool get _sessionInactive => _chatClosing || isClosed || !_sameAccount;
   late final _historyRecovery = ChatHistoryRecovery(
+    diagnostic: (event) => ChatHistoryDiagnostics.record(conversationInfo.conversationID, event),
     isActive: () => _historyVisible,
     hasError: () => historyError.value != null,
     isLoading: () => historyLoading.value,
@@ -186,11 +189,37 @@ class ChatLogic extends SuperController {
       }
     },
   );
+  late final _readDiagnostics = ChatReadDiagnostics(conversationInfo.conversationID);
+  Map<String, Object?> _readDiagnosticState() => {
+    'routeCurrent': _messageRoute?.isCurrent,
+    'lifecycle': WidgetsBinding.instance.lifecycleState?.name,
+    'sameAccount': _sameAccount, 'getxClosed': isClosed,
+    'chatClosing': _chatClosing, 'syncStatus': syncStatus.value.name,
+    'historyLoading': historyLoading.value,
+    'historyError': historyError.value != null,
+    'viewingHistory': viewingHistory.value,
+    'entering': messageArrivals.hasEntering,
+    'messagesWhileCovered': _messagesWhileCovered,
+    'blockedReasons': [
+      if (_messagesWhileCovered) 'messages_while_covered',
+      if (messageArrivals.hasEntering) 'entry_animation',
+      if (historyLoading.value) 'history_loading',
+      if (historyError.value != null) 'history_error',
+      if (viewingHistory.value) 'history_window',
+      if (syncStatus.value == IMSdkStatus.syncStart ||
+          syncStatus.value == IMSdkStatus.syncProgress ||
+          syncStatus.value == IMSdkStatus.synchronizing) 'sync_in_progress',
+    ],
+  };
   late final _receipts = ChatReadReceipts(
+    diagnostics: _readDiagnostics,
+    diagnosticState: _readDiagnosticState,
     now: _receiptNow,
     messageList: messageList,
     conversation: () => conversationInfo,
-    isClosed: () => _sessionInactive,
+    // GetX marks isClosed before onClose. Keep this owner alive until the
+    // synchronous final painted read has been sent, then close it below.
+    isClosed: () => _chatClosing || !_sameAccount,
     canReadConversation: () =>
         !_messagesWhileCovered &&
         !messageArrivals.hasEntering &&
@@ -544,6 +573,7 @@ class ChatLogic extends SuperController {
   RxBool get historyLoading => _timeline.historyLoading;
   RxnString get historyError => _timeline.historyError;
   RxBool get historyHasMore => _timeline.historyHasMore;
+  RxBool get historyScanLimited => _timeline.historyScanLimited;
   RxBool get viewingHistory => _timeline.viewingHistory;
   RxBool get historyNewerHasMore => _timeline.newerHasMore;
   bool get bufferingLiveMessages => _dateWindow.buffering;
@@ -582,7 +612,7 @@ class ChatLogic extends SuperController {
               _backgroundMessageRecovery.hasCheckpoint) {
             unawaited(_loadHistoryForSyncEnd());
           }
-          _historyRecovery.request(resetAttempts: true);
+          _historyRecovery.request(resetAttempts: true, source: 'route_visible');
           _latestMessageRecovery.conversationChanged(resetAttempts: true);
         }
       });
@@ -892,7 +922,8 @@ class ChatLogic extends SuperController {
     }
   }
 
-  Future<List<Message>> searchMediaMessage({bool Function()? continueLoading}) =>
+  Future<List<Message>> searchMediaMessage(
+          {bool Function()? continueLoading}) =>
       _media.searchMediaMessage(continueLoading: continueLoading);
 
   @override
@@ -914,6 +945,7 @@ class ChatLogic extends SuperController {
     final entryTrace = arguments['chatEntryTrace'] as ChatEntryTrace?;
     entryTrace?.mark('init_start');
     conversationInfo = arguments['conversationInfo'];
+    _readDiagnostics.record('route_enter', {'unreadCount': conversationInfo.unreadCount});
     final account = arguments['officialAccount'];
     if (account is OfficialAccount &&
         account.userID == conversationInfo.userID) {
@@ -978,7 +1010,7 @@ class ChatLogic extends SuperController {
       // The immediate resume read can succeed before native persistence catches
       // up. A wake must reconcile healthy windows too, not only failed reads.
       if (historyError.value == null) unawaited(_loadHistoryForSyncEnd());
-      _historyRecovery.request(resetAttempts: true);
+      _historyRecovery.request(resetAttempts: true, source: 'native_wake');
       _latestMessageRecovery.conversationChanged(resetAttempts: true);
     }));
     unawaited(onScrollToBottomLoad().whenComplete(() {
@@ -1303,10 +1335,11 @@ class ChatLogic extends SuperController {
 
   @override
   void onClose() {
-    if (!_sessionInactive) _clearUnreadCount(leaving: true);
+    _readDiagnostics.record('route_leave', _readDiagnosticState());
     // GetX sets isClosed before calling onClose; the account fence still owns
-    // this final list refresh even though the chat itself is being disposed.
+    // the final painted read and list refresh during synchronous disposal.
     if (!_chatClosing && _sameAccount) {
+      _clearUnreadCount(leaving: true);
       ConversationRefreshEvents.publish(ConversationRefreshRequest(
           accountID: _chatAccountID,
           conversationID: conversationInfo.conversationID));
@@ -1482,17 +1515,24 @@ class ChatLogic extends SuperController {
     if (current != null) syncStatus.value = current;
     connectionSub = imLogic.imSdkStatusPublishSubject.listen((value) {
       if (_sessionInactive) return;
-      _receipts.invalidateViewport();
+      // Equal Rx values do not rebuild ChatMessageList. Invalidating on a
+      // duplicate would discard its painted IDs without a replacement frame.
+      final statusChanged = syncStatus.value != value.status;
+      _readDiagnostics.record('sync_status', {
+        'previous': syncStatus.value.name, 'next': value.status.name,
+        'changed': statusChanged,
+      }, deduplicate: true);
+      if (statusChanged) _receipts.invalidateViewport();
       syncStatus.value = value.status;
       if (value.status == IMSdkStatus.syncEnded) {
         _group.recover(resetAttempts: true);
         _backgroundMessageRecovery.restart(verifyCheckpoint: true);
-        _historyRecovery.request(resetAttempts: true);
+        _historyRecovery.request(resetAttempts: statusChanged, source: 'sync_ended');
         unawaited(_loadHistoryForSyncEnd());
         _latestMessageRecovery.conversationChanged(resetAttempts: true);
       } else if (value.status == IMSdkStatus.connectionSucceeded) {
         _group.recover(resetAttempts: true);
-        _historyRecovery.request(resetAttempts: true);
+        _historyRecovery.request(resetAttempts: statusChanged, source: 'connection_succeeded');
         if (_backgroundMessageRecovery.hasCheckpoint) {
           _backgroundMessageRecovery.restart();
           unawaited(_loadHistoryForSyncEnd());
@@ -1532,6 +1572,8 @@ class ChatLogic extends SuperController {
 
   void retryHistory() {
     if (_sessionInactive) return;
+    ChatHistoryDiagnostics.record(conversationInfo.conversationID, {'event': 'manual_continue',
+      'scanLimited': historyScanLimited.value, 'revision': historyWindowRevision.value});
     unawaited(_runHistoryRecovery(retry: true));
   }
 
@@ -1546,6 +1588,10 @@ class ChatLogic extends SuperController {
 
   Future<bool> _runHistoryRecovery({bool retry = false}) async {
     if (_sessionInactive) return false;
+    ChatHistoryDiagnostics.record(conversationInfo.conversationID, {
+      'event': 'recovery_request', 'source': retry ? 'retry' : 'sync_or_resume',
+      'revision': historyWindowRevision.value, 'scanLimited': historyScanLimited.value,
+    });
     if (!_historyVisible) {
       _messagesWhileCovered = true;
       ++_coveredHistoryRevision;
@@ -1619,7 +1665,7 @@ class ChatLogic extends SuperController {
   void onResumed() {
     _group.recover(resetAttempts: true);
     unawaited(_loadHistoryForSyncEnd());
-    _historyRecovery.request(resetAttempts: true);
+    _historyRecovery.request(resetAttempts: true, source: 'app_resumed');
     _latestMessageRecovery.conversationChanged(resetAttempts: true);
     _funds.refreshVisible();
   }

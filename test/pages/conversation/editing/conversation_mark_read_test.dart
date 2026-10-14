@@ -165,7 +165,9 @@ void main() {
     // SDK preview of the original target, or for a subsequent new message.
     final originalPreview = _conversation();
     logic.onChanged([originalPreview]);
-    expect(logic.list.single, same(originalPreview));
+    // Duplicate SDK rows may retain the existing instance. The unread data,
+    // rather than replacing that instance, proves no read was projected.
+    expect(logic.list.single.toJson(), originalPreview.toJson());
     expect(originalPreview.unreadCount, 3);
     final incoming =
         _conversation(unread: 4, time: 2, messageId: 'message-2', sequence: 2);
@@ -175,6 +177,10 @@ void main() {
     expect(incoming.unreadCount, 4);
     expect(selected.unreadCount, 3);
     expect(tester.takeException(), isNull);
+    // Timeout recovery schedules a targeted SDK query; close its owner before
+    // the widget-test timer invariant runs (the outer teardown runs later).
+    logic.onClose();
+    controllers.remove(logic);
   });
 
   testWidgets('a late native failure after timeout stays handled and unread',
@@ -203,6 +209,8 @@ void main() {
     expect(tester.takeException(), isNull,
         reason: 'The original native Future retains an error handler after '
             'the caller has already received its timeout.');
+    logic.onClose();
+    controllers.remove(logic);
   });
 
   test('a late ack after close cannot restore or mutate the closed page',

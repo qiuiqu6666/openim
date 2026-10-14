@@ -48,6 +48,23 @@ class ChatHistoryCloudSync {
     if (page.errCode != null && page.errCode != 0) {
       throw StateError('History synchronization failed: ${page.errCode}');
     }
+    final scan = page.scanCursor;
+    if (page.scanLimited == true || scan != null) {
+      if (page.scanLimited != true ||
+          page.isEnd == true ||
+          scan == null ||
+          scan.conversationID != id ||
+          scan.reverse ||
+          (scan.seq ?? 0) <= 0 ||
+          (scan.sendTime ?? 0) <= 0 ||
+          scan.clientMsgID?.isNotEmpty != true ||
+          !scan.advancesFrom(_cursor)) {
+        throw StateError('History synchronization cursor did not advance');
+      }
+      _cursor = scan;
+      hasMore = true;
+      return;
+    }
     final messages = page.messageList ?? <Message>[];
     if (messages.isEmpty) {
       if (page.isEnd != true) {

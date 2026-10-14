@@ -1,5 +1,7 @@
 # 聊天回执
 
+诊断日志：`chat_read` 写入 SDK 日志（包含 release 构建），使用 `conversationID` 与页面 `instance` 串联 `route_enter`、`sync_status`、`viewport_invalidated`、`viewport_decision`、`request_start`、`request_result` / `request_error`、`route_leave`、`leave_decision`。判断记录包含历史、动画、同步屏障列表，以及最新消息可见性、预览是否进入列表、前台/路由、未读数与最新序号。同一视口判断状态去重；请求和生命周期事件保留。不记录消息正文、账号令牌或用户资料。新日志需要重新构建并运行客户端才生效。
+
 `ChatReadReceipts` 持有可视消息 ID、在途消息 ID、刷新计时器和 `ConversationReadCoordinator`。`ChatLogic.onChatViewportChanged` 接入公共 `ChatListViewport` 的真实绘制结果，只有当前路由、前台且最新消息确实可见时才确认会话阅读；历史窗口未连接最新记录时不清会话未读。气泡自身的 `FocusDetector` 不再发送自动阅读请求。
 
 会话“已查看”与语音播放、私密内容阅读分开。查看语音、通话或本地 `isRead` 已为真的消息仍可清会话徽标，但不会设置语音已播放或启动私密语音燃烧。私密文字等内容仍通过消息 ID 回执；显式播放与转文字沿用 `markRead`。
@@ -11,6 +13,8 @@
 发送前向 `IMCallback.conversationReadRequestSubject` 同步发布 [阅读目标](../../../core/conversation_reads/README.md)，由会话列表在 SDK 成功后更新对应行。会话资料晚到时，目标使用实际看过的 SDK 消息及已知消息数量，并保留原会话预览的身份，避免误用上一条预览或误清同时间的新消息。
 
 退出前仅对最后确实看过的最新目标立即发出最终请求，已经在 SDK 发送中的相同目标不重复。页面关闭后停止排队请求和消息状态回写；已经发出的 SDK 确认可继续交给同账号会话列表，账号或令牌变化则失效。
+
+2026-10-14：GetX 在进入 `onClose` 前已经设置 `isClosed`，最终阅读发送不能依赖这个标记。聊天回执使用 `_chatClosing` 与账号/令牌边界，在同步关闭流程内先发送最后已绘制目标，再关闭回执所有者，避免 250ms 合并期间快速返回丢失已读。相同 SDK 状态的重复通知不清空可见记录，因为相同 Rx 值不会触发消息列表重新测量；真实状态转换继续使旧视口失效并等待新帧。对应回归分别覆盖真实 `onDelete` 返回流程与生产 `ChatMessageList` 的失败后重复状态重试。
 
 2026-10-13：视口全会话已读同时捕获可见普通消息的正序号 ID，交给会话阅读桥接在请求失败后进行有界逐 ID 补偿。未知序号、未显示消息和私密内容不进入补偿列表。补偿不改变语音播放或燃烧状态，也不在退出后重发全会话清理；剩余计数重新查询 SDK。
 

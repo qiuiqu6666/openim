@@ -48,6 +48,19 @@ class ChatHistoryReadGate {
                 code: result.errCode.toString(),
                 message: result.errMsg ?? 'History query failed');
           }
+          final cursor = result.scanCursor;
+          if (result.scanLimited == true || cursor != null) {
+            if (result.scanLimited != true ||
+                result.isEnd == true ||
+                cursor == null ||
+                cursor.clientMsgID?.isNotEmpty != true ||
+                cursor.conversationID.isEmpty ||
+                (cursor.seq ?? 0) <= 0 ||
+                (cursor.sendTime ?? 0) <= 0 ||
+                !cursor.advancesFrom(startMsg)) {
+              throw StateError('History scan returned an invalid continuation');
+            }
+          }
           return result;
         });
         _pending[key] = started;

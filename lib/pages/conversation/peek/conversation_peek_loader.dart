@@ -140,11 +140,25 @@ class ConversationPeekLoader extends ChangeNotifier {
       final oldest = ChatHistoryLoader.merge(raw)
           .where((m) => m.clientMsgID?.isNotEmpty == true)
           .firstOrNull;
-      final nextCursor = oldest?.clientMsgID;
+      final scan = result.scanCursor;
+      if (result.scanLimited == true || scan != null) {
+        if (result.scanLimited != true ||
+            result.isEnd == true ||
+            scan == null ||
+            scan.conversationID != conversationID ||
+            scan.reverse ||
+            (scan.seq ?? 0) <= 0 ||
+            (scan.sendTime ?? 0) <= 0 ||
+            scan.clientMsgID?.isNotEmpty != true ||
+            !scan.advancesFrom(_cursor)) {
+          throw StateError('History scan did not advance');
+        }
+      }
+      final nextCursor = scan?.clientMsgID ?? oldest?.clientMsgID;
       hasMoreOlder = result.isEnd != true &&
           nextCursor != null &&
           (initial || nextCursor != previousCursor);
-      if (nextCursor != null) _cursor = Message(clientMsgID: nextCursor);
+      if (nextCursor != null) _cursor = scan ?? oldest;
       if (initial) {
         _messages
           ..clear()

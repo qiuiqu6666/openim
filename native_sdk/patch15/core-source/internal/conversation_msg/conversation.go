@@ -55,8 +55,10 @@ func (c *Conversation) setConversation(ctx context.Context, apiReq *pbConversati
 }
 
 func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sdk.GetAdvancedHistoryMessageListParams, isReverse bool) (*sdk.GetAdvancedHistoryMessageListCallback, error) {
-	if req.Count<1 { return nil,errors.New("history count must be positive") }
-	req.Count=min(req.Count,100)
+	if req.Count < 1 {
+		return nil, errors.New("history count must be positive")
+	}
+	req.Count = min(req.Count, 100)
 	t := time.Now()
 	var messageListCallback sdk.GetAdvancedHistoryMessageListCallback
 	var conversationID string
@@ -65,7 +67,15 @@ func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sd
 	var err error
 	var messageList sdk_struct.NewMsgList
 	conversationID = req.ConversationID
-	if len(req.StartClientMsgID) > 0 {
+	if cursor := req.ScanCursor; cursor != nil {
+		if cursor.ConversationID != conversationID || cursor.Reverse != isReverse || cursor.ClientMsgID == "" || cursor.SendTime <= 0 || cursor.Seq <= 0 {
+			return nil, errors.New("invalid history scan cursor")
+		}
+		startTime, startSeq, startClientMsgID = cursor.SendTime, cursor.Seq, cursor.ClientMsgID
+		if err := c.handleEndSeq(ctx, req, isReverse, &model_struct.LocalChatLog{Seq: startSeq}); err != nil {
+			return nil, err
+		}
+	} else if len(req.StartClientMsgID) > 0 {
 		m, err := c.historyAnchor(ctx, conversationID, req.StartClientMsgID)
 		if err != nil {
 			return nil, err
@@ -283,11 +293,7 @@ func (c *Conversation) fetchMessagesWithGapCheck(ctx context.Context, conversati
 	// continue fetching recursively until the valid messages are sufficient or all messages have been fetched.
 	missingCount := shouldFetchMoreMessagesNum(list)
 	if missingCount > 0 && !messageListCallback.IsEnd {
-		depth,_:=ctx.Value(historyRecursionKey{}).(int)
-		if depth>=MaxRecursionDepth {
-			return validMessages,errors.New("history page scan budget exhausted; retry from this position")
-		}
-		ctx=context.WithValue(ctx,historyRecursionKey{},depth+1)
+		depth, _ := ctx.Value(historyRecursionKey{}).(int)
 		newStartTime, newStartSeq, newStartClientMsgID := getNewStartMessageInfo(list)
 		// First-batch zero-cursor substitution: when entering a conversation for the first time
 		// (no StartClientMsgID) and the new cursor time is still 0,
@@ -325,6 +331,22 @@ func (c *Conversation) fetchMessagesWithGapCheck(ctx context.Context, conversati
 				"conversationID", conversationID, "startTime", startTime, "startSeq", startSeq, "startClientMsgID", startClientMsgID)
 			return validMessages, errors.New("history cursor did not advance; retry after synchronization")
 		}
+		if depth >= MaxRecursionDepth {
+			if newStartTime <= 0 || newStartSeq <= 0 || newStartClientMsgID == "" {
+				return nil, errors.New("history scan has no resumable boundary")
+			}
+			messageListCallback.ScanLimited = true
+			messageListCallback.IsEnd = false
+			messageListCallback.ScanCursor = &sdk.HistoryScanCursor{
+				ConversationID: conversationID, Reverse: isReverse,
+				ClientMsgID: newStartClientMsgID, SendTime: newStartTime, Seq: newStartSeq,
+			}
+			log.ZInfo(ctx, "history scan yielded", "conversationID", conversationID,
+				"reverse", isReverse, "depth", depth, "scanCursor", messageListCallback.ScanCursor,
+				"visibleCount", len(validMessages))
+			return validMessages, nil
+		}
+		ctx = context.WithValue(ctx, historyRecursionKey{}, depth+1)
 		log.ZDebug(ctx, "fetch more messages", "missingCount", missingCount, "conversationID",
 			conversationID, "newStartTime", newStartTime, "newStartSeq", newStartSeq, "newStartClientMsgID", newStartClientMsgID)
 		missingMessages, err := c.fetchMessagesWithGapCheck(ctx, conversationID, missingCount, newStartTime, newStartSeq, newStartClientMsgID, isReverse, viewType, messageListCallback)

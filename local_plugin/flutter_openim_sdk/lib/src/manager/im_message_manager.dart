@@ -579,6 +579,7 @@ class MessageManager {
               _buildParam({
                 'conversationID': conversationID ?? '',
                 'startClientMsgID': startMsg?.clientMsgID ?? '',
+                if (startMsg is HistoryScanCursor) 'scanCursor': startMsg.toJson(),
                 'count': count ?? 40,
                 'viewType': viewType.rawValue,
                 'operationID': Utils.checkOperationID(operationID),
@@ -602,6 +603,7 @@ class MessageManager {
               _buildParam({
                 'conversationID': conversationID ?? '',
                 'startClientMsgID': startMsg?.clientMsgID ?? '',
+                if (startMsg is HistoryScanCursor) 'scanCursor': startMsg.toJson(),
                 'count': count ?? 40,
                 'viewType': viewType.rawValue,
                 'operationID': Utils.checkOperationID(operationID),

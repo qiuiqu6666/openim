@@ -83,9 +83,10 @@ class ChatRecoveryFixture {
     });
   }
 
-  Future<ChatLogic> open(WidgetTester tester) async {
+  Future<ChatLogic> open(WidgetTester tester,
+      {DateTime Function()? receiptNow}) async {
     Get.routing.args = {'conversationInfo': conversation()};
-    final owner = logic = ChatLogic();
+    final owner = logic = ChatLogic(receiptNow: receiptNow);
     owner.onInit();
     owner.bindMessageRoute(route);
     await tester.idle();

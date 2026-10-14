@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import '../../../core/conversation_reads/conversation_read_request.dart';
 import 'conversation_read_coordinator.dart';
+import 'chat_read_diagnostics.dart';
 
 /// Owns in-flight reads and coalesces visible message refreshes.
 class ChatReadReceipts {
@@ -17,7 +19,11 @@ class ChatReadReceipts {
     bool Function()? canReadConversation,
     void Function(ConversationReadRequest)? onConversationRead,
     void Function(Set<String> messageIDs)? onReadStateChanged,
-  })  : _now = now ?? DateTime.now,
+    ChatReadDiagnostics? diagnostics,
+    Map<String, Object?> Function()? diagnosticState,
+  })  : _diagnostics = diagnostics,
+        _diagnosticState = diagnosticState,
+        _now = now ?? DateTime.now,
         _conversation = conversation,
         _isClosed = isClosed,
         _isActive = isActive ?? (() => true),
@@ -39,6 +45,37 @@ class ChatReadReceipts {
     });
   }
   final DateTime Function() _now;
+  final ChatReadDiagnostics? _diagnostics;
+  final Map<String, Object?> Function()? _diagnosticState;
+
+  void _diagnose(String event,
+      {Map<String, Object?> extra = const {}, bool deduplicate = false}) {
+    if (_diagnostics == null) return;
+    final latest = messageList.lastOrNull;
+    _diagnostics.record(
+        event,
+        {
+          ...?_diagnosticState?.call(),
+          'closed': isClosed,
+          'active': _isActive(),
+          'gateAllowed': _canReadConversation(),
+          'atLatest': _atLatest,
+          'visibleCount': _visibleIDs.length,
+          'latestVisible':
+              latest != null && _visibleIDs.contains(latest.clientMsgID),
+          'latestID': latest?.clientMsgID,
+          'latestSeq': latest?.seq,
+          'latestIsRead': latest?.isRead,
+          'previewID': conversationInfo.latestMsg?.clientMsgID,
+          'previewPresent': conversationInfo.latestMsg?.clientMsgID == null ||
+              _messagesByID
+                  .containsKey(conversationInfo.latestMsg?.clientMsgID),
+          'unreadCount': conversationInfo.unreadCount,
+          ...extra,
+        },
+        deduplicate: deduplicate);
+  }
+
   final RxList<Message> messageList;
   final ConversationInfo Function() _conversation;
   final bool Function() _isClosed;
@@ -127,6 +164,7 @@ class ChatReadReceipts {
   static const viewportReadInterval = Duration(milliseconds: 250);
 
   void invalidateViewport() {
+    _diagnose('viewport_invalidated');
     _viewportReadTimer?.cancel();
     _viewportReadTimer = null;
     // A later route entry gets its first painted read immediately.
@@ -210,6 +248,7 @@ class ChatReadReceipts {
                 .map((message) => message.clientMsgID!)
             : const []);
     final targetID = latest?.clientMsgID;
+    _diagnose('request_start', extra: {'fromViewport': fromViewport});
     _sdkInFlight[targetID] = (_sdkInFlight[targetID] ?? 0) + 1;
     _onConversationRead?.call(request);
     try {
@@ -218,8 +257,17 @@ class ChatReadReceipts {
           conversationID: request.conversationID);
       final succeeded = _isSessionActive?.call() ?? !isClosed;
       request.complete(succeeded);
+      _diagnose('request_result', extra: {
+        'success': succeeded,
+        'targetID': targetID,
+        'targetSeq': latest?.seq
+      });
       if (succeeded && !isClosed) _confirmedTargetID = targetID;
-    } catch (_) {
+    } catch (error) {
+      _diagnose('request_error', extra: {
+        'errorType': error.runtimeType.toString(),
+        'errorCode': error is PlatformException ? error.code : null
+      });
       request.complete(false);
       rethrow;
     } finally {
@@ -292,6 +340,8 @@ class ChatReadReceipts {
         .whereType<Message>()
         .toList(growable: false);
     final canReadConversation = _latestIsVisible;
+    _diagnose('viewport_decision',
+        extra: {'allowed': canReadConversation}, deduplicate: true);
     if (canReadConversation &&
         (conversationInfo.unreadCount > 0 ||
             visible
@@ -400,6 +450,10 @@ class ChatReadReceipts {
   }
 
   void clearUnreadCount({bool leaving = false}) {
+    _diagnose('leave_decision', extra: {
+      'leaving': leaving,
+      'allowed': _canReadLatest(leaving: leaving)
+    });
     final targetID = messageList.lastOrNull?.clientMsgID;
     if (_canReadLatest(leaving: leaving) &&
         !_sdkInFlight.containsKey(targetID) &&

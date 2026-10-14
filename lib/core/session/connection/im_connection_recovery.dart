@@ -12,6 +12,7 @@ class IMConnectionRecovery with WidgetsBindingObserver {
     required this.isCurrent,
     required this.isDisconnected,
     this.isSyncFailed,
+    this.isSyncing,
     required this.wake,
     required this.onError,
     Stream<List<ConnectivityResult>>? networkChanges,
@@ -19,6 +20,7 @@ class IMConnectionRecovery with WidgetsBindingObserver {
     this.syncRecoverySignals,
     this.onWakeSucceeded,
     this.retryInterval = const Duration(seconds: 3),
+    this.maxRetryInterval = const Duration(seconds: 30),
     this.connectedCheckInterval = const Duration(minutes: 1),
     this.wakeTimeout = const Duration(seconds: 18),
   })  : _networkChanges = networkChanges,
@@ -28,9 +30,11 @@ class IMConnectionRecovery with WidgetsBindingObserver {
   final bool Function() isCurrent;
   final bool Function() isDisconnected;
   final bool Function()? isSyncFailed;
+  final bool Function()? isSyncing;
   final Future<void> Function(bool Function() isCurrentAttempt) wake;
   final void Function(Object) onError;
   final Duration retryInterval;
+  final Duration maxRetryInterval;
   final Duration connectedCheckInterval;
   final Duration wakeTimeout;
   final Stream<List<ConnectivityResult>>? _networkChanges;
@@ -46,6 +50,7 @@ class IMConnectionRecovery with WidgetsBindingObserver {
   Completer<void>? _wakeWait;
   bool _wakeFailed = false;
   bool _verificationPending = false;
+  int _unhealthyAttempts = 0;
   final _transport = NetworkTransportState();
 
   void start() {
@@ -100,10 +105,20 @@ class IMConnectionRecovery with WidgetsBindingObserver {
     // recheck failure state; they do not start another full metadata sync.
     final checkConnected =
         !isDisconnected() && isSyncFailed?.call() != true && !_wakeFailed;
-    final delay = verifyConnection || !checkConnected
-        ? retryInterval
-        : connectedCheckInterval;
-    _verificationPending = verifyConnection;
+    if (checkConnected && !verifyConnection && isSyncing?.call() != true) {
+      _unhealthyAttempts = 0;
+    }
+    final needsRetry = verifyConnection || !checkConnected;
+    var retryDelay = retryInterval;
+    for (var attempt = 1;
+        attempt < _unhealthyAttempts && retryDelay < maxRetryInterval;
+        attempt++) {
+      retryDelay *= 2;
+    }
+    if (retryDelay > maxRetryInterval) retryDelay = maxRetryInterval;
+    final delay = needsRetry ? retryDelay : connectedCheckInterval;
+    // Failure signals must neither shorten nor postpone an existing retry.
+    _verificationPending = needsRetry;
     _retry = Timer(delay, () async {
       _verificationPending = false;
       if (verifyConnection ||
@@ -119,6 +134,7 @@ class IMConnectionRecovery with WidgetsBindingObserver {
   /// Explicit catch-up after replacing a route, sharing retry and cancellation
   /// ownership with foreground/network recovery.
   Future<void> recoverNow() async {
+    if (_wakeWait == null) _unhealthyAttempts = 0;
     await _wake();
     _schedule();
   }
@@ -147,10 +163,18 @@ class IMConnectionRecovery with WidgetsBindingObserver {
       if (currentAttempt()) {
         _wakeFailed = false;
         onWakeSucceeded?.call();
+        if (isDisconnected() ||
+            isSyncFailed?.call() == true ||
+            isSyncing?.call() == true) {
+          _unhealthyAttempts++;
+        } else {
+          _unhealthyAttempts = 0;
+        }
       }
     } catch (error) {
       if (currentAttempt()) {
         _wakeFailed = true;
+        _unhealthyAttempts++;
         onError(error);
       }
     } finally {

@@ -370,6 +370,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('GetX disposal flushes a painted read inside the batch window',
+      (tester) async {
+    await mountChat(tester);
+    await receive(tester, _message('viewed-tall', 31), unread: 1);
+    expect(nativeReads, hasLength(1));
+    acknowledgements.single.complete();
+    await tester.pump();
+
+    final latest = _message('viewed-before-back', 32);
+    await receive(tester, latest, unread: 1);
+    expect(paintedIDs.last, contains(latest.clientMsgID));
+    expect(nativeReads, hasLength(1),
+        reason: 'The second painted target is waiting for the 250ms batch');
+
+    Get.routing.current = '/conversations';
+    chat.onDelete();
+    await tester.pumpWidget(badgeSource());
+    expect(chat.isClosed, isTrue);
+    expect(nativeReads, hasLength(2),
+        reason: 'Closing the real GetX controller must flush the seen target');
+    storedRows['chat'] = _conversation(latest, unread: 0);
+    acknowledgements.last.complete();
+    await tester.pumpAndSettle();
+    await tester.pump(ConversationLatestSync.settleDelay);
+    await tester.pumpAndSettle();
+    expect(getTarget().unreadCount, 0);
+
+    final unseen = _message('unseen-after-back', 33);
+    im.conversationChanged([_conversation(unseen, unread: 1)]);
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(getTarget().unreadCount, 1);
+    await tester.pump(const Duration(seconds: 1));
+    expect(nativeReads, hasLength(2));
+  });
+
   testWidgets('new offscreen arrival survives earlier ACK and chat close',
       (tester) async {
     await mountChat(tester);

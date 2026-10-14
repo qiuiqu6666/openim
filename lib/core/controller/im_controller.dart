@@ -480,6 +480,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
             currentConnectionStatus == IMSdkStatus.connecting ||
             currentConnectionStatus == IMSdkStatus.connectionFailed,
         isSyncFailed: () => currentSdkStatus == IMSdkStatus.syncFailed,
+        isSyncing: () => currentSdkStatus == IMSdkStatus.syncStart,
         wake: nativeWake.wake,
         onWakeSucceeded: () => historyRecoverySignals.addSafely(null),
         onError: (error) =>

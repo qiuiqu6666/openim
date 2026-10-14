@@ -25,6 +25,7 @@ class _MessageContextPageState extends State<MessageContextPage> {
   final subscriptions = <StreamSubscription>[];
   final targetKey = GlobalKey();
   bool busy = false, failed = false, older = true, newer = true;
+  HistoryScanCursor? _olderScan, _newerScan;
   @override
   void initState() {
     super.initState();
@@ -74,13 +75,15 @@ class _MessageContextPageState extends State<MessageContextPage> {
       final page = reverse
           ? await manager.getAdvancedHistoryMessageListReverse(
               conversationID: widget.conversationID,
-              startMsg: messages.last,
+              startMsg: _newerScan ?? messages.last,
               count: 20)
           : await manager.getAdvancedHistoryMessageList(
               conversationID: widget.conversationID,
-              startMsg: messages.first,
+              startMsg: _olderScan ?? messages.first,
               count: 20);
       if (!mounted) return;
+      if ((page.errCode ?? 0) != 0)
+        throw StateError('History context read failed');
       final byID = {for (final m in messages) m.clientMsgID: m};
       for (final m in page.messageList ?? <Message>[]) {
         if (!removed.contains(m.clientMsgID)) byID[m.clientMsgID] = m;
@@ -91,8 +94,10 @@ class _MessageContextPageState extends State<MessageContextPage> {
       messages.sort((a, b) => (a.sendTime ?? 0).compareTo(b.sendTime ?? 0));
       if (reverse) {
         newer = page.isEnd != true;
+        _newerScan = page.scanCursor;
       } else {
         older = page.isEnd != true;
+        _olderScan = page.scanCursor;
       }
       if (initial)
         WidgetsBinding.instance.addPostFrameCallback((_) {

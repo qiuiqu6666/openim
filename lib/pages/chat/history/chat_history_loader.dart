@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'chat_history_read_gate.dart';
 import 'chat_history_window.dart';
+import 'chat_history_diagnostics.dart';
 import '../history_search/context/search_chat_window.dart';
 
 export 'chat_history_read_gate.dart' show ChatHistoryReader;
@@ -21,6 +22,7 @@ class ChatHistoryLoader {
     this.preserveReading,
     this.canTrimHistory,
     this.pageSize = 40,
+    this.diagnostic,
     Duration readTimeout = const Duration(seconds: 30),
   }) : _reads = ChatHistoryReadGate(timeout: readTimeout);
 
@@ -34,6 +36,7 @@ class ChatHistoryLoader {
   final bool Function()? preserveReading;
   final bool Function(bool older)? canTrimHistory;
   final int pageSize;
+  final HistoryDiagnostic? diagnostic;
   final ChatHistoryReadGate _reads;
   SearchChatWindow? _searchWindow;
 
@@ -52,12 +55,18 @@ class ChatHistoryLoader {
   Message? _cursor;
   Message? _latestAnchor;
   Message? _newerCursor;
+  HistoryScanCursor? _olderScan, _newerScan;
+  bool get scanLimited => _olderScan != null || _newerScan != null;
   final _historicalIDs = <String?>{};
   Future<bool>? _request;
   Future<bool>? _queuedRefresh;
   Future<bool> Function()? _retry;
 
-  Future<bool> retry() => _retry?.call() ?? loadOlder();
+  Future<bool> retry() => _olderScan != null
+      ? loadOlder()
+      : _newerScan != null
+          ? loadNewer()
+          : _retry?.call() ?? loadOlder();
 
   /// Recovery shares the native read limit but does not move the reading
   /// window's older/newer cursors or replace its visible rows.
@@ -105,6 +114,17 @@ class ChatHistoryLoader {
   /// A sync/resume refresh waits for the current page and is coalesced.
   Future<bool> refresh() {
     if (_closed) return Future.value(false);
+    // A yielded scan belongs to explicit continuation. Sync notifications must
+    // neither restart at latest nor keep scanning a long deleted range.
+    if (scanLimited) {
+      diagnostic?.call({
+        'event': 'refresh_skipped',
+        'reason': 'scan_paused',
+        'revision': _generation,
+        'scanSeq': _olderScan?.seq ?? _newerScan?.seq
+      });
+      return Future.value(hasMore);
+    }
     // Live events, receipts and deletions keep a historical window current.
     // A latest-page refresh here would join two unrelated message ranges.
     if (viewingHistory) return Future.value(hasMore);
@@ -213,6 +233,8 @@ class ChatHistoryLoader {
       final combined = merge(
           [..._reconcile(page, before), ..._pending(before, page)],
           removedIDs: removedIDs);
+      _olderScan = pages[0].scanCursor;
+      _newerScan = pages[1].scanCursor;
       _cursor = olderPage.firstOrNull ?? target;
       _newerCursor = newerPage.lastOrNull ?? target;
       _historicalIDs
@@ -251,9 +273,10 @@ class ChatHistoryLoader {
     final generation = _generation;
     final before = _HistorySnapshot(messages());
     try {
-      if (_newerCursor == null ||
-          removedIDs.contains(_newerCursor!.clientMsgID) ||
-          !before.ids.contains(_newerCursor!.clientMsgID)) {
+      if (_newerScan == null &&
+          (_newerCursor == null ||
+              removedIDs.contains(_newerCursor!.clientMsgID) ||
+              !before.ids.contains(_newerCursor!.clientMsgID))) {
         _newerCursor = messages()
             .where((m) =>
                 !removedIDs.contains(m.clientMsgID) &&
@@ -261,18 +284,29 @@ class ChatHistoryLoader {
                 !_isPendingSend(m.status))
             .lastOrNull;
       }
-      if (_newerCursor == null) return false;
+      if (_newerScan == null && _newerCursor == null) return false;
+      diagnostic?.call({
+        'event': 'request',
+        'source': 'newer_page',
+        'revision': generation,
+        'cursor': (_newerScan ?? _newerCursor)?.clientMsgID,
+        'scanSeq': _newerScan?.seq
+      });
       final result = _searchWindow != null
           ? await _searchWindow!
               .read(false, () => !_closed && generation == _generation)
           : await _reads.read(fetchNewer!,
-              count: pageSize, startMsg: _newerCursor, revision: generation);
+              count: pageSize,
+              startMsg: _newerScan ?? _newerCursor,
+              revision: generation);
       if (_closed || generation != _generation) return false;
       final page = merge(result.messageList ?? [], removedIDs: removedIDs);
       _historicalIDs.addAll(page.map((m) => m.clientMsgID));
       var combined = merge([...messages(), ..._reconcile(page, before)],
           removedIDs: removedIDs);
       _newerCursor = page.lastOrNull ?? _newerCursor;
+      _newerScan = result.scanCursor;
+      _recordPage(result, generation);
       hasNewer = result.isEnd != true;
       if (!hasNewer && _searchWindow == null) {
         viewingHistory = false;
@@ -299,6 +333,12 @@ class ChatHistoryLoader {
       replace(combined, false, false);
       return hasNewer;
     } catch (failure) {
+      diagnostic?.call({
+        'event': 'failure',
+        'source': 'newer_page',
+        'revision': generation,
+        'error': failure.toString()
+      });
       if (!_closed && generation == _generation) error = failure;
       return hasNewer;
     }
@@ -355,19 +395,38 @@ class ChatHistoryLoader {
         hasMore = false;
         return false;
       }
+      diagnostic?.call({
+        'event': 'request',
+        'source': latest
+            ? 'return_latest'
+            : refresh
+                ? 'refresh'
+                : 'older_page',
+        'revision': generation,
+        'cursor': (_olderScan ?? (firstPage || refresh ? null : _cursor))
+            ?.clientMsgID,
+        'scanSeq': _olderScan?.seq
+      });
       final result = _searchWindow != null && !latest && !refresh
           ? await _searchWindow!
               .read(true, () => !_closed && generation == _generation)
           : await _reads.read(fetch,
               count: pageSize,
-              startMsg: firstPage || refresh ? null : _cursor,
+              startMsg: _olderScan ?? (firstPage || refresh ? null : _cursor),
               revision: generation);
       if (_closed || generation != _generation) return false;
+      _recordPage(result, generation);
       final page = result.messageList ?? <Message>[];
       if (_windowViewingHistory && !latest) {
         _historicalIDs.addAll(page.map((m) => m.clientMsgID));
       }
       final current = messages();
+      if (refresh && !firstPage && !latest && page.isEmpty &&
+          result.scanLimited != true) {
+        // A resume query can race native recovery. Empty is not a deletion
+        // receipt: preserve both the displayed window and its paging anchors.
+        return hasMore;
+      }
       // Keep messages received/sent while the request was outstanding.
       final arrived = current.where((m) => !beforeIDs.contains(m.clientMsgID));
       final pending = _pending(snapshot, page);
@@ -390,13 +449,20 @@ class ChatHistoryLoader {
       }
       Iterable<Message> retained;
       if (firstPage) {
-        retained = const <Message>[];
+        // Keep the first-frame snapshot until the bounded scan can establish
+        // an authoritative range. Scan metadata never enters the message list.
+        retained = page.isEmpty && result.scanLimited == true
+            ? current
+            : const <Message>[];
       } else if (!refresh) {
+        retained = current;
+      } else if (page.isEmpty) {
+        // isEnd describes this query's pagination, not a deletion of rows
+        // already displayed. Clear/delete events have their own generation
+        // and removed-ID fences and remain authoritative.
         retained = current;
       } else if (result.isEnd == true || discontinuous) {
         retained = const <Message>[];
-      } else if (page.isEmpty) {
-        retained = current;
       } else {
         // The refreshed latest page is authoritative for its covered range.
         // Older, already paged history and its cursor remain in place.
@@ -408,16 +474,20 @@ class ChatHistoryLoader {
           removedIDs: removedIDs);
       final pageCursor =
           page.where((m) => !removedIDs.contains(m.clientMsgID)).firstOrNull;
+      _olderScan = result.scanCursor;
       if (firstPage || !refresh || discontinuous) {
         if (pageCursor != null) _cursor = pageCursor;
-        hasMore = page.isNotEmpty && result.isEnd != true;
+        hasMore =
+            (page.isNotEmpty || _olderScan != null) && result.isEnd != true;
       } else if (_cursor == null) {
-        hasMore = page.isNotEmpty && result.isEnd != true;
+        hasMore =
+            (page.isNotEmpty || _olderScan != null) && result.isEnd != true;
         _cursor = pageCursor;
       } else if (result.isEnd == true) {
         hasMore = false;
         _cursor = pageCursor;
       }
+      if (_olderScan != null) hasMore = true;
       loaded = true;
       if (latest) {
         _searchWindow = null;
@@ -448,10 +518,31 @@ class ChatHistoryLoader {
       onLoaded?.call();
       return latest ? true : hasMore;
     } catch (failure) {
+      diagnostic?.call({
+        'event': 'failure',
+        'source': latest
+            ? 'return_latest'
+            : refresh
+                ? 'refresh'
+                : 'older_page',
+        'revision': generation,
+        'scanSeq': _olderScan?.seq,
+        'error': failure.toString()
+      });
       if (!_closed && generation == _generation) error = failure;
       return latest ? false : hasMore;
     }
   }
+
+  void _recordPage(AdvancedMessage result, int revision) => diagnostic?.call({
+        'event': 'result',
+        'revision': revision,
+        'visibleCount': result.messageList?.length ?? 0,
+        'isEnd': result.isEnd,
+        'scanLimited': result.scanLimited == true,
+        'scanSeq': result.scanCursor?.seq,
+        'scanCursor': result.scanCursor?.clientMsgID,
+      });
 
   Iterable<Message> _pending(_HistorySnapshot before, List<Message> page) {
     final pageIDs = page.map((m) => m.clientMsgID).toSet();
@@ -553,6 +644,7 @@ class ChatHistoryLoader {
     _request = null;
     _queuedRefresh = null;
     _changingWindow = false;
+    _olderScan = _newerScan = null;
   }
 
   /// The SDK has cleared the conversation. Discard all older query results,

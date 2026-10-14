@@ -310,6 +310,8 @@ func (d *DataBase) CleanDuplicateInvalidMessages(ctx context.Context, conversati
 
 	tableName := utils.GetTableName(conversationID)
 	err := d.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Raw SQL identifiers must use the same quoting as GORM's Table API.
+		quotedTable := tx.Statement.Quote(tableName)
 		zeroSendTimeResult := tx.Table(tableName).
 			Where("seq > ? AND send_time = ?", 0, 0).
 			Delete(&model_struct.LocalChatLog{})
@@ -324,7 +326,7 @@ WHERE seq > ?
   AND seq IN (
     SELECT seq FROM %s WHERE seq > ? AND status < ? GROUP BY seq
   )
-`, tableName, tableName), 0, constant.MsgStatusHasDeleted, 0, constant.MsgStatusHasDeleted)
+`, quotedTable, quotedTable), 0, constant.MsgStatusHasDeleted, 0, constant.MsgStatusHasDeleted)
 		if invalidWithValidResult.Error != nil {
 			return errs.WrapMsg(invalidWithValidResult.Error, "delete invalid messages with valid seq failed")
 		}
@@ -353,7 +355,7 @@ DELETE FROM %s
 WHERE client_msg_id IN (
   SELECT client_msg_id FROM ranked WHERE row_num > 1
 )
-`, tableName, tableName, tableName, tableName),
+`, quotedTable, quotedTable, quotedTable, quotedTable),
 			0, constant.MsgStatusHasDeleted,
 			0, constant.MsgStatusHasDeleted,
 			0, constant.MsgStatusHasDeleted)

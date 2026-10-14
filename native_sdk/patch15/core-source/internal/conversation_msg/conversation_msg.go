@@ -775,11 +775,20 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) error {
 		}
 
 		if latestMsg != nil {
-			conversationList = append(conversationList, &model_struct.LocalConversation{
+			next := &model_struct.LocalConversation{
 				LatestMsg:         utils.StructToJsonString(latestMsg),
 				LatestMsgSendTime: latestMsg.SendTime,
 				ConversationID:    conversationID,
-			})
+			}
+			current, err := c.db.GetConversation(ctx, conversationID)
+			if err != nil && !isLocalRecordMissing(err) {
+				return err
+			}
+			// Backfill follows the preview pass and may also follow a live push.
+			// Persist its rows without rolling the conversation preview backwards.
+			if err != nil || current == nil || newerConversationPreview(next, current) {
+				conversationList = append(conversationList, next)
+			}
 		} else {
 			log.ZWarn(ctx, "latestMsg is nil", errs.New("latestMsg is nil"), "conversationID", conversationID)
 		}
@@ -800,8 +809,17 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) error {
 	}
 
 	// log.ZDebug(ctx, "progress is", "msgLen", msgLen, "msgOffset", c.msgOffset, "total", total, "now progress is", (c.msgOffset*(100-InitSyncProgress))/total + InitSyncProgress)
+	if c2v.Value.(sdk_struct.CmdMsgSyncInReinstall).NotifyConversations {
+		ids := make([]string, 0, len(insertMsg))
+		for id := range insertMsg { ids = append(ids, id) }
+		// Replay the committed snapshot too: the preceding attempt may have
+		// saved its rows but failed before notifying the application.
+		if len(ids) > 0 {
+			if err := c.notifySyncedConversations(ctx, ids); err != nil { return err }
+		}
+	}
 	if total > 0 {
-		c.ConversationListener().OnSyncServerProgress((c.msgOffset*(100-InitSyncProgress))/total + InitSyncProgress)
+		c.ConversationListener().OnSyncServerProgress(min(99, (c.msgOffset*(100-InitSyncProgress))/total+InitSyncProgress))
 	}
 	//Exception message storage
 	for _, v := range exceptionMsg {

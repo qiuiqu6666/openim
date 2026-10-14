@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-14",
+  "sdk_version": "v3.8.3-patch.15+recovery.19",
+  "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Yield bounded history scans with separate continuation cursors; quote raw SQLite table names."
+  },
+  "source_sha256": "f297f7b18442507b16ee71c774969512542f99722af69de997d622284f910255",
+  "patch_sha256": "afceabec2e079b095708f06d3be794ebade70138df9b9ded05c37ab5a428e56a",
+  "core_race_tests": {
+    "conversation_msg": "passed",
+    "db": "passed"
+  },
+  "flutter_regression": {
+    "passed": 326,
+    "skipped": 12,
+    "log": "E:/openim/history-scan-final-regression.log"
+  },
+  "latest_retry_diagnostics_tests": {
+    "passed": 5,
+    "log": "E:/openim/history-scan-recovery-final.log"
+  },
+  "source_lock_tests": {
+    "passed": 15
+  },
+  "patch_roundtrip": "all 376 locked files match, except declared mobile build overlays",
+  "focused_analyze": "passed with existing informational lints; no errors or warnings in selected files",
+  "android": {
+    "aar_abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "aar_sha256": "72cbce6d1d75cf39359f45c46675be10610d4157ff980a640436c80cb7999626",
+    "apk_sha256": "a2e76b8b1aaeeaaec110670e0dd1836c16e5c76435223464462e1fabc2a2ce22",
+    "apk_path": "E:\\openim\\artifacts\\history-scan-fix-20261014\\99chat-history-scan-recovery19-debug.apk",
+    "apk_type": "debug, arm64",
+    "embedded_native_binary_matches_aar_after_standard_android_stripping": true,
+    "embedded_native_sha256": "8b11ad90135632083a0944eeec093114df206ea4403660aa5d555d97ec15ba9c"
+  },
+  "ios": "shared source updated; Framework must be rebuilt on macOS; device validation not run",
+  "limitations": {
+    "full_analyze": "existing errors in archived app copies and local plugin examples/generators; not globally clean",
+    "broader_peek_suite": "5 failures: missing markingAllRead in feed test double and image sizing assertions; direct loader continuation tests pass",
+    "device_runtime": "not run; no installation or deployment performed",
+    "working_tree": "existing unrelated recovery/read changes preserved; debug APK contains the current working tree"
+  }
+}

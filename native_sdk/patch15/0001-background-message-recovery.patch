@@ -48,71 +48,6 @@ index 0000000..96ca577
 +- 建议先内部账号，再小比例应用版本灰度；重点观察未读偏差、重复/缺失回调、历史错误及缓存维护失败。迁移前保留可恢复备份。旧客户端忽略新表但可能重新启动全量补偿，因此回滚应保留此版本的最新窗口策略并回退故障子模块，不能把最高缓存 Seq 写成旧连续检查点。
 +
 +公共消息 JSON 和 Flutter 方法签名保持兼容。IndexedDB 构建继续编译，但这次新增原生缓存表及状态覆盖能力不等同于 Web 缓存实现。
-diff --git a/go.mod b/go.mod
-index f4b3b70..536691a 100644
---- a/go.mod
-+++ b/go.mod
-@@ -10,7 +10,7 @@ require (
- 	github.com/gorilla/websocket v1.4.2
- 	github.com/jinzhu/copier v0.4.0
- 	github.com/pkg/errors v0.9.1
--	google.golang.org/protobuf v1.35.1 // indirect
-+	google.golang.org/protobuf v1.35.1
- 	gorm.io/driver/sqlite v1.5.5
- )
- 
-@@ -22,8 +22,8 @@ require (
- 	github.com/openimsdk/protocol v0.0.73-alpha.12
- 	github.com/openimsdk/tools v0.0.50-alpha.80
- 	github.com/patrickmn/go-cache v2.1.0+incompatible
--	golang.org/x/image v0.26.0
--	golang.org/x/sync v0.13.0
-+	golang.org/x/image v0.29.0
-+	golang.org/x/sync v0.16.0
- 	gorm.io/gorm v1.25.10
- )
- 
-@@ -35,8 +35,9 @@ require (
- 	go.uber.org/atomic v1.7.0 // indirect
- 	go.uber.org/multierr v1.6.0 // indirect
- 	go.uber.org/zap v1.24.0 // indirect
--	golang.org/x/sys v0.32.0 // indirect
--	golang.org/x/text v0.24.0 // indirect
-+	golang.org/x/mobile v0.0.0-20250711185624-d5bb5ecc55c0 // indirect
-+	golang.org/x/sys v0.34.0 // indirect
-+	golang.org/x/text v0.27.0 // indirect
- 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
- 	google.golang.org/grpc v1.68.0 // indirect
- )
-diff --git a/go.sum b/go.sum
-index f8a2d6d..fb88a5d 100644
---- a/go.sum
-+++ b/go.sum
-@@ -55,14 +55,24 @@ go.uber.org/zap v1.24.0 h1:FiJd5l1UOLj0wCgbSE0rwwXHzEdAZS6hiiSnxJN/D60=
- go.uber.org/zap v1.24.0/go.mod h1:2kMP+WWQ8aoFoedH3T2sq6iJ2yDWpHbP0f6MQbS9Gkg=
- golang.org/x/image v0.26.0 h1:4XjIFEZWQmCZi6Wv8BoxsDhRU3RVnLX04dToTDAEPlY=
- golang.org/x/image v0.26.0/go.mod h1:lcxbMFAovzpnJxzXS3nyL83K27tmqtKzIJpctK8YO5c=
-+golang.org/x/image v0.29.0 h1:HcdsyR4Gsuys/Axh0rDEmlBmB68rW1U9BUdB3UVHsas=
-+golang.org/x/image v0.29.0/go.mod h1:RVJROnf3SLK8d26OW91j4FrIHGbsJ8QnbEocVTOWQDA=
-+golang.org/x/mobile v0.0.0-20250711185624-d5bb5ecc55c0 h1:Z6EFcPz8e1cx0ge5jWCwqafndPjdsDQf8fk4Kw3pJoI=
-+golang.org/x/mobile v0.0.0-20250711185624-d5bb5ecc55c0/go.mod h1:kqVs191xxTTCd39tk8zK1UD3jyCS1SPrMHTpJ9ujxZg=
- golang.org/x/net v0.39.0 h1:ZCu7HMWDxpXpaiKdhzIfaltL9Lp31x/3fCP11bc6/fY=
- golang.org/x/net v0.39.0/go.mod h1:X7NRbYVEA+ewNkCNyJ513WmMdQ3BineSwVtN2zD/d+E=
- golang.org/x/sync v0.13.0 h1:AauUjRAJ9OSnvULf/ARrrVywoJDy0YS2AwQ98I37610=
- golang.org/x/sync v0.13.0/go.mod h1:1dzgHSNfp02xaA81J2MS99Qcpr2w7fw1gpm99rleRqA=
-+golang.org/x/sync v0.16.0 h1:ycBJEhp9p4vXvUZNszeOq0kGTPghopOL8q0fq3vstxw=
-+golang.org/x/sync v0.16.0/go.mod h1:1dzgHSNfp02xaA81J2MS99Qcpr2w7fw1gpm99rleRqA=
- golang.org/x/sys v0.32.0 h1:s77OFDvIQeibCmezSnk/q6iAfkdiQaJi4VzroCFrN20=
- golang.org/x/sys v0.32.0/go.mod h1:BJP2sWEmIv4KK5OTEluFJCKSidICx8ciO85XgH3Ak8k=
-+golang.org/x/sys v0.34.0 h1:H5Y5sJ2L2JRdyv7ROF1he/lPdvFsd0mJHFw2ThKHxLA=
-+golang.org/x/sys v0.34.0/go.mod h1:BJP2sWEmIv4KK5OTEluFJCKSidICx8ciO85XgH3Ak8k=
- golang.org/x/text v0.24.0 h1:dd5Bzh4yt5KYA8f9CJHCP4FB4D51c2c6JvN37xJJkJ0=
- golang.org/x/text v0.24.0/go.mod h1:L8rBsPeo2pSS+xqN0d5u2ikmjtmoJbDBT1b7nHvFCdU=
-+golang.org/x/text v0.27.0 h1:4fGWRpyh641NLlecmyl4LOe6yDdfaYNrGb2zdfo4JV4=
-+golang.org/x/text v0.27.0/go.mod h1:1D28KMCvyooCX9hBiosv5Tz/+YLxj0j7XhWjpSUF7CU=
- google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 h1:pPJltXNxVzT4pK9yD8vR9X75DaWYYmLGMsEvBfFQZzQ=
- google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1/go.mod h1:UqMtugtsSgubUsoxbuAoiCXvqvErP7Gf0so0mK9tHxU=
- google.golang.org/grpc v1.68.0 h1:aHQeeJbo8zAkAa3pRzrVjZlbz6uSfeOXlJNQM0RAbz0=
 diff --git a/internal/conversation_msg/api.go b/internal/conversation_msg/api.go
 index 7da957d..de1d469 100644
 --- a/internal/conversation_msg/api.go
@@ -262,7 +197,7 @@ index 47bfd61..f3203e7 100644
  		log.ZDebug(ctx, "fetch more messages", "missingCount", missingCount, "conversationID",
  			conversationID, "newStartTime", newStartTime, "newStartSeq", newStartSeq, "newStartClientMsgID", newStartClientMsgID)
 diff --git a/internal/conversation_msg/conversation_msg.go b/internal/conversation_msg/conversation_msg.go
-index 66e72c4..c5c9b50 100644
+index 66e72c4..416a4fe 100644
 --- a/internal/conversation_msg/conversation_msg.go
 +++ b/internal/conversation_msg/conversation_msg.go
 @@ -76,6 +76,10 @@ type Conversation struct {
@@ -491,7 +426,7 @@ index 66e72c4..c5c9b50 100644
 +					if isHistory && isConversationUpdate && isUnreadCount && !existing.IsRead && msg.Seq > c.maxSeqRecorder.Get(conversationID) && pending[msg.ClientMsgID] != msg.Seq {
 +						pending[msg.ClientMsgID] = msg.Seq
 +						deliveryAcknowledgements[conversationID] = append(deliveryAcknowledgements[conversationID], msg.ClientMsgID)
- 					}
++					}
 +					if pending[msg.ClientMsgID] == msg.Seq && existing.Status != constant.MsgStatusHasDeleted && existing.Status != constant.MsgStatusFiltered {
 +						// Storage survived, delivery did not. Rebuild the batch;
 +						// read-watermark reconciliation prevents duplicate unread.
@@ -506,7 +441,7 @@ index 66e72c4..c5c9b50 100644
 +							isTriggerUnReadCount = true
 +						}
 +						continue
-+					}
+ 					}
 +					if isConversationUpdate && existing.Status != constant.MsgStatusHasDeleted && existing.Status != constant.MsgStatusFiltered {
 +						peerPreviewRepairs[conversationID] = append(peerPreviewRepairs[conversationID], &lc)
 +					}
@@ -735,7 +670,30 @@ index 66e72c4..c5c9b50 100644
  			}
  
  			if conversationID == "" {
-@@ -609,21 +787,27 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) {
+@@ -597,11 +775,20 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) {
+ 		}
+ 
+ 		if latestMsg != nil {
+-			conversationList = append(conversationList, &model_struct.LocalConversation{
++			next := &model_struct.LocalConversation{
+ 				LatestMsg:         utils.StructToJsonString(latestMsg),
+ 				LatestMsgSendTime: latestMsg.SendTime,
+ 				ConversationID:    conversationID,
+-			})
++			}
++			current, err := c.db.GetConversation(ctx, conversationID)
++			if err != nil && !isLocalRecordMissing(err) {
++				return err
++			}
++			// Backfill follows the preview pass and may also follow a live push.
++			// Persist its rows without rolling the conversation preview backwards.
++			if err != nil || current == nil || newerConversationPreview(next, current) {
++				conversationList = append(conversationList, next)
++			}
+ 		} else {
+ 			log.ZWarn(ctx, "latestMsg is nil", errs.New("latestMsg is nil"), "conversationID", conversationID)
+ 		}
+@@ -609,21 +796,36 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) {
  		insertMsg[conversationID] = append(insertMessage, c.faceURLAndNicknameHandle(ctx, selfInsertMessage, othersInsertMessage, conversationID)...)
  	}
  
@@ -759,8 +717,17 @@ index 66e72c4..c5c9b50 100644
  
  	// log.ZDebug(ctx, "progress is", "msgLen", msgLen, "msgOffset", c.msgOffset, "total", total, "now progress is", (c.msgOffset*(100-InitSyncProgress))/total + InitSyncProgress)
 -	c.ConversationListener().OnSyncServerProgress((c.msgOffset*(100-InitSyncProgress))/total + InitSyncProgress)
++	if c2v.Value.(sdk_struct.CmdMsgSyncInReinstall).NotifyConversations {
++		ids := make([]string, 0, len(insertMsg))
++		for id := range insertMsg { ids = append(ids, id) }
++		// Replay the committed snapshot too: the preceding attempt may have
++		// saved its rows but failed before notifying the application.
++		if len(ids) > 0 {
++			if err := c.notifySyncedConversations(ctx, ids); err != nil { return err }
++		}
++	}
 +	if total > 0 {
-+		c.ConversationListener().OnSyncServerProgress((c.msgOffset*(100-InitSyncProgress))/total + InitSyncProgress)
++		c.ConversationListener().OnSyncServerProgress(min(99, (c.msgOffset*(100-InitSyncProgress))/total+InitSyncProgress))
 +	}
  	//Exception message storage
  	for _, v := range exceptionMsg {
@@ -770,7 +737,7 @@ index 66e72c4..c5c9b50 100644
  }
  
  func (c *Conversation) addInitProgress(progress int) {
-@@ -633,12 +817,12 @@ func (c *Conversation) addInitProgress(progress int) {
+@@ -633,12 +835,12 @@ func (c *Conversation) addInitProgress(progress int) {
  	}
  }
  
@@ -785,7 +752,7 @@ index 66e72c4..c5c9b50 100644
  				localC.UnreadCount = localC.UnreadCount + v.UnreadCount
  				localC.LatestMsg = v.LatestMsg
  				localC.LatestMsgSendTime = v.LatestMsgSendTime
-@@ -654,11 +838,13 @@ func (c *Conversation) diff(ctx context.Context, local, generated, cc, nc map[st
+@@ -654,11 +856,13 @@ func (c *Conversation) diff(ctx context.Context, local, generated, cc, nc map[st
  	}
  	if err := c.batchAddFaceURLAndName(ctx, newConversations...); err != nil {
  		log.ZError(ctx, "batchAddFaceURLAndName err", err, "conversations", newConversations)
@@ -799,7 +766,7 @@ index 66e72c4..c5c9b50 100644
  }
  
  func (c *Conversation) genConversationGroupAtType(lc *model_struct.LocalConversation, s *sdk_struct.MsgStruct) {
-@@ -686,14 +872,18 @@ func (c *Conversation) batchUpdateMessageList(ctx context.Context, updateMsg map
+@@ -686,14 +890,18 @@ func (c *Conversation) batchUpdateMessageList(ctx context.Context, updateMsg map
  	for conversationID, messages := range updateMsg {
  		conversation, err := c.db.GetConversation(ctx, conversationID)
  		if err != nil {
@@ -824,7 +791,7 @@ index 66e72c4..c5c9b50 100644
  		}
  		for _, v := range messages {
  			v1 := new(model_struct.LocalChatLog)
-@@ -708,16 +898,19 @@ func (c *Conversation) batchUpdateMessageList(ctx context.Context, updateMsg map
+@@ -708,16 +916,19 @@ func (c *Conversation) batchUpdateMessageList(ctx context.Context, updateMsg map
  			if err != nil {
  				return errs.WrapMsg(err, "BatchUpdateMessageList failed")
  			}
@@ -848,7 +815,7 @@ index 66e72c4..c5c9b50 100644
  			}
  		}
  
-@@ -748,6 +941,10 @@ func (c *Conversation) batchInsertMessageList(ctx context.Context, insertMsg map
+@@ -748,6 +959,10 @@ func (c *Conversation) batchInsertMessageList(ctx context.Context, insertMsg map
  				e := c.db.InsertMessage(ctx, conversationID, v)
  				if e != nil {
  					log.ZError(ctx, "InsertMessage err", err, "conversationID", conversationID, "message", v)
@@ -859,7 +826,7 @@ index 66e72c4..c5c9b50 100644
  				}
  			}
  		}
-@@ -882,7 +1079,7 @@ func (c *Conversation) updateConversation(lc *model_struct.LocalConversation, cs
+@@ -882,7 +1097,7 @@ func (c *Conversation) updateConversation(lc *model_struct.LocalConversation, cs
  	if oldC, ok := cs[lc.ConversationID]; !ok {
  		cs[lc.ConversationID] = lc
  	} else {
@@ -1283,6 +1250,109 @@ index ccb822e..facffc7 100644
  			}
  		},
  		FullID: func(ctx context.Context) ([]string, error) {
+diff --git a/internal/conversation_msg/initial_preview_sqlite_test.go b/internal/conversation_msg/initial_preview_sqlite_test.go
+new file mode 100644
+index 0000000..3211016
+--- /dev/null
++++ b/internal/conversation_msg/initial_preview_sqlite_test.go
+@@ -0,0 +1,97 @@
++//go:build cgo && !js
++
++package conversation_msg
++
++import (
++	"context"
++	"encoding/json"
++	"fmt"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/sdkws"
++)
++
++type initialPreviewCallbacks struct {
++	*recoveryCallbacks
++	progress []int
++	changed  int
++}
++
++func (l *initialPreviewCallbacks) OnSyncServerProgress(n int) { l.progress = append(l.progress, n) }
++
++func (l *initialPreviewCallbacks) OnConversationChanged(string) { l.changed++ }
++
++func TestInitialBackfillPreservesLatestPreviewSQLite(t *testing.T) {
++	for _, live := range []bool{false, true} {
++		t.Run(fmt.Sprint("live=", live), func(t *testing.T) {
++			c, _, callbacks, base := recoveryConversation(t)
++			d, err := db.NewDataBase(base.Ctx, "self", t.TempDir(), 0)
++			if err != nil {
++				t.Fatal(err)
++			}
++			t.Cleanup(func() { _ = d.Close(context.Background()) })
++			c.db = d
++			listener := &initialPreviewCallbacks{recoveryCallbacks: callbacks}
++			c.ConversationListener = func() open_im_sdk_callback.OnConversationListener { return listener }
++			if err := d.InsertLoginUser(base.Ctx, &model_struct.LocalUser{UserID: "self"}); err != nil {
++				t.Fatal(err)
++			}
++			if err := d.BatchInsertConversationList(base.Ctx, []*model_struct.LocalConversation{{ConversationID: "chat", ConversationType: constant.SingleChatType, LatestMsg: "{}", UnreadCount: 100}}); err != nil {
++				t.Fatal(err)
++			}
++			store := func(seq int64) {
++				t.Helper()
++				packet := &sdkws.PullMsgs{Msgs: []*sdkws.MsgData{{ClientMsgID: fmt.Sprintf("m%d", seq), SendID: "self", RecvID: "other", Seq: seq, SendTime: 100, SessionType: constant.SingleChatType, ContentType: constant.Text, Content: []byte(`{"content":"hello"}`), Status: constant.MsgStatusSendSuccess}}}
++				cmd := common.Cmd2Value{Ctx: base.Ctx, Cmd: constant.CmdMsgSyncInReinstall, Value: sdk_struct.CmdMsgSyncInReinstall{Msgs: map[string]*sdkws.PullMsgs{"chat": packet}, Total: 2, NotifyConversations: seq >= 1000}}
++				if err := c.doMsgSyncByReinstalled(cmd); err != nil {
++					t.Fatal(err)
++				}
++			}
++			store(1000)
++			if listener.changed != 1 {
++				t.Fatal("latest preview was not published before backfill")
++			}
++			if rows, err := d.GetConversationListSplitDB(base.Ctx, 0, 100); err != nil || len(rows) != 1 {
++				t.Fatalf("preview not visible: %v %v", rows, err)
++			}
++			want := int64(1000)
++			if live {
++				store(1001)
++				want = 1001
++			}
++			store(999)
++			wantNotifications := 1
++			if live {
++				wantNotifications++
++			}
++			if listener.changed != wantNotifications {
++				t.Fatal("background history published a stale preview")
++			}
++			row, err := d.GetConversation(base.Ctx, "chat")
++			if err != nil {
++				t.Fatal(err)
++			}
++			var latest sdk_struct.MsgStruct
++			if err := json.Unmarshal([]byte(row.LatestMsg), &latest); err != nil {
++				t.Fatal(err)
++			}
++			if latest.Seq != want || row.LatestMsgSendTime != 100 || row.UnreadCount != 100 {
++				t.Fatalf("backfill changed preview/unread: %+v", row)
++			}
++			if _, err := d.GetMessageBySeq(base.Ctx, "chat", 999); err != nil {
++				t.Fatal("history row was not stored", err)
++			}
++			for _, n := range listener.progress {
++				if n >= 100 {
++					t.Fatal("reported completion before terminal sync flag")
++				}
++			}
++		})
++	}
++}
 diff --git a/internal/conversation_msg/message_cache.go b/internal/conversation_msg/message_cache.go
 new file mode 100644
 index 0000000..cc445f6
@@ -4411,7 +4481,7 @@ index 0000000..c85657d
 +}
 diff --git a/internal/interaction/initial_sync_retry_test.go b/internal/interaction/initial_sync_retry_test.go
 new file mode 100644
-index 0000000..6d5ed81
+index 0000000..2405022
 --- /dev/null
 +++ b/internal/interaction/initial_sync_retry_test.go
 @@ -0,0 +1,68 @@
@@ -4453,7 +4523,7 @@ index 0000000..6d5ed81
 +				if req.Message.ReqIdentifier == constant.GetNewestSeq {
 +					return wireResponse(&sdkws.GetMaxSeqResp{MaxSeqs: map[string]int64{"chat": 2}})
 +				}
-+				return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 1, 2)})
++				return requestedRecoveryResponse(t, req)
 +			})
 +			m.doConnected(ctx)
 +			if !m.reinstalled || d.installed {
@@ -4485,7 +4555,7 @@ index 0000000..6d5ed81
 +}
 diff --git a/internal/interaction/initial_sync_sqlite_retry_test.go b/internal/interaction/initial_sync_sqlite_retry_test.go
 new file mode 100644
-index 0000000..14c6f68
+index 0000000..897f87f
 --- /dev/null
 +++ b/internal/interaction/initial_sync_sqlite_retry_test.go
 @@ -0,0 +1,120 @@
@@ -4565,7 +4635,7 @@ index 0000000..14c6f68
 +				if stage != "storage" && pulls == 1 {
 +					return &GeneralWsResp{ErrCode: 10001, ErrMsg: "simulated connection loss"}
 +				}
-+				return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 1, 2, 3)})
++				return requestedRecoveryResponse(t, req)
 +			})
 +			m.startSync()
 +			m.doConnected(ctx)
@@ -5260,7 +5330,7 @@ index 0000000..cbd9d6e
 +}
 diff --git a/internal/interaction/msg_checkpoint_test.go b/internal/interaction/msg_checkpoint_test.go
 new file mode 100644
-index 0000000..9fcd001
+index 0000000..005bccc
 --- /dev/null
 +++ b/internal/interaction/msg_checkpoint_test.go
 @@ -0,0 +1,173 @@
@@ -5357,18 +5427,15 @@ index 0000000..9fcd001
 +		if err := proto.Unmarshal(req.Message.Data, p); err != nil {
 +			panic(err)
 +		}
-+		r := p.SeqRanges[0]
-+		if r.Begin != 6 || r.End != 15 {
-+			t.Errorf("ignored visibility boundaries: %v", r)
++		for _, r := range p.SeqRanges {
++			if r.Begin < 6 || r.End > 15 || r.Num != r.End-r.Begin+1 {
++				t.Errorf("ignored visibility boundaries: %v", r)
++			}
++			if r.ConversationID == "a" {
++				return &GeneralWsResp{ErrCode: 10001, ErrMsg: "temporary unavailable"}
++			}
 +		}
-+		if r.ConversationID == "a" {
-+			return &GeneralWsResp{ErrCode: 10001, ErrMsg: "temporary unavailable"}
-+		}
-+		var seqs []int64
-+		for s := r.Begin; s <= r.End; s++ {
-+			seqs = append(seqs, s)
-+		}
-+		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("b", seqs...)})
++		return requestedRecoveryResponse(t, req)
 +	})
 +	if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"a": 20, "b": 20}, 1); err == nil {
 +		t.Fatal("failed conversation reported complete")
@@ -5409,14 +5476,17 @@ index 0000000..9fcd001
 +	conn := &LongConnMgr{send: make(chan Message, 1)}
 +	conn.SetConnectionStatus(Connected)
 +	m := &MsgSyncer{ctx: ctx, longConnMgr: conn, conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{"chat": 3}}
-+	stored, probes := 0, 0
++	stored, probes, reconciliations := 0, 0, 0
 +	receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
 +		p := cmd.Value.(sdk_struct.CmdNewMsgComeToConversation)
 +		if cmd.Cmd == constant.CmdSyncFlag {
 +			return errors.New("optional profile unavailable")
 +		}
 +		stored += len(p.Msgs["chat"].Msgs)
-+		if !p.ReconcileReadSeq || !p.Recovery {
++		if p.ReconcileReadSeq {
++			reconciliations++
++		}
++		if !p.Recovery {
 +			t.Error("recovery lost read-sequence guard")
 +		}
 +		return nil
@@ -5426,14 +5496,14 @@ index 0000000..9fcd001
 +			probes++
 +			return wireResponse(&sdkws.GetMaxSeqResp{MaxSeqs: map[string]int64{"chat": 13}})
 +		}
-+		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)})
++		return requestedRecoveryResponse(t, req)
 +	})
 +	m.doConnected(ctx)
 +	if probes != 0 {
 +		t.Fatal("fixture did not model metadata block")
 +	}
 +	m.doMessageSeqReconciliation(ctx)
-+	if stored != 10 || m.syncedMaxSeqs["chat"] != 13 {
++	if stored != 10 || reconciliations != 1 || m.syncedMaxSeqs["chat"] != 13 {
 +		t.Fatal("silent retry still waited for next push")
 +	}
 +}
@@ -5524,7 +5594,7 @@ index 0000000..1fe43cc
 +}
 diff --git a/internal/interaction/msg_loss_matrix_test.go b/internal/interaction/msg_loss_matrix_test.go
 new file mode 100644
-index 0000000..32061de
+index 0000000..27c13da
 --- /dev/null
 +++ b/internal/interaction/msg_loss_matrix_test.go
 @@ -0,0 +1,452 @@
@@ -5968,7 +6038,7 @@ index 0000000..32061de
 +	if len(stored[0]["quiet_group"]) != 0 {
 +		t.Fatal("current device replayed an already committed quiet conversation")
 +	}
-+	if !reflect.DeepEqual(stored[1]["quiet_group"], []int64{999, 1000}) {
++	if !reflect.DeepEqual(stored[1]["quiet_group"], []int64{1000, 999}) {
 +		t.Fatalf("second device still needs a quiet-chat push: %v", stored[1]["quiet_group"])
 +	}
 +	for index, device := range devices {
@@ -6143,10 +6213,10 @@ index 0000000..a4096d8
 +}
 diff --git a/internal/interaction/msg_seq_reconciliation_test.go b/internal/interaction/msg_seq_reconciliation_test.go
 new file mode 100644
-index 0000000..638559f
+index 0000000..33c8417
 --- /dev/null
 +++ b/internal/interaction/msg_seq_reconciliation_test.go
-@@ -0,0 +1,253 @@
+@@ -0,0 +1,257 @@
 +package interaction
 +
 +import (
@@ -6172,7 +6242,7 @@ index 0000000..638559f
 +	m := &MsgSyncer{ctx: ctx, loginUserID: "self", longConnMgr: conn,
 +		recvCh: make(chan common.Cmd2Value, 8), conversationCh: make(chan common.Cmd2Value),
 +		syncedMaxSeqs: map[string]int64{"chat": 998}}
-+	delivered := make(chan []int64, 1)
++	delivered := make(chan []int64, 2)
 +	receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
 +		if cmd.Cmd != constant.CmdNewMsgCome {
 +			t.Errorf("periodic check started metadata or sync lifecycle: %s", cmd.Cmd)
@@ -6193,22 +6263,26 @@ index 0000000..638559f
 +		if err := proto.Unmarshal(req.Message.Data, pull); err != nil {
 +			panic(err)
 +		}
-+		if len(pull.SeqRanges) != 1 || pull.SeqRanges[0].Begin != 999 || pull.SeqRanges[0].End != 1000 {
++		if len(pull.SeqRanges) != 1 || pull.SeqRanges[0].Begin < 999 || pull.SeqRanges[0].End > 1000 || pull.SeqRanges[0].Num != 1 {
 +			t.Errorf("incorrect tail recovery range: %v", pull.SeqRanges)
 +		}
-+		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 999, 1000)})
++		return requestedRecoveryResponse(t, req)
 +	})
 +	ticks, done := make(chan time.Time), make(chan struct{})
 +	go func() { defer close(done); m.listenWithReconciliation(ctx, ticks) }()
 +	t.Cleanup(func() { cancel(); <-done })
 +	ticks <- time.Now()
-+	select {
-+	case got := <-delivered:
-+		if !reflect.DeepEqual(got, []int64{999, 1000}) {
-+			t.Fatalf("missed recovered messages: %v", got)
++	var got []int64
++	for len(got) < 2 {
++		select {
++		case page := <-delivered:
++			got = append(got, page...)
++		case <-ctx.Done():
++			t.Fatal("online device waited for a new push to catch up")
 +		}
-+	case <-ctx.Done():
-+		t.Fatal("online device waited for a new push to catch up")
++	}
++	if !reflect.DeepEqual(got, []int64{1000, 999}) {
++		t.Fatalf("missed latest-first recovery: %v", got)
 +	}
 +}
 +
@@ -6284,7 +6358,7 @@ index 0000000..638559f
 +				if probe {
 +					return wireResponse(&sdkws.GetMaxSeqResp{MaxSeqs: map[string]int64{"chat": 1000}})
 +				}
-+				return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 999, 1000)})
++				return requestedRecoveryResponse(t, req)
 +			})
 +			m.doMessageSeqReconciliation(ctx)
 +			if !failed.Load() || m.syncedMaxSeqs["chat"] != 998 {
@@ -6401,7 +6475,7 @@ index 0000000..638559f
 +	}
 +}
 diff --git a/internal/interaction/msg_sync.go b/internal/interaction/msg_sync.go
-index e4a8ef9..50a2021 100644
+index e4a8ef9..b294706 100644
 --- a/internal/interaction/msg_sync.go
 +++ b/internal/interaction/msg_sync.go
 @@ -46,18 +46,23 @@ const (
@@ -7035,16 +7109,19 @@ index e4a8ef9..50a2021 100644
  		if err != nil {
  			log.ZError(ctx, "triggerCmdNewMsgCome err", err, "msgs", msgs)
  		}
-@@ -651,9 +703,9 @@ func (m *MsgSyncer) triggerConversation(ctx context.Context, msgs map[string]*sd
+@@ -649,11 +701,11 @@ func (m *MsgSyncer) triggerConversation(ctx context.Context, msgs map[string]*sd
+ }
+ 
  // triggers a conversation with a new message.
- func (m *MsgSyncer) triggerReinstallConversation(ctx context.Context, msgs map[string]*sdkws.PullMsgs, total int) (err error) {
+-func (m *MsgSyncer) triggerReinstallConversation(ctx context.Context, msgs map[string]*sdkws.PullMsgs, total int) (err error) {
++func (m *MsgSyncer) triggerReinstallConversation(ctx context.Context, msgs map[string]*sdkws.PullMsgs, total int, notifyConversations ...bool) (err error) {
  	if len(msgs) > 0 {
 -		err = common.TriggerCmdMsgSyncInReinstall(ctx, sdk_struct.CmdMsgSyncInReinstall{
 -			Msgs:  msgs,
 -			Total: total,
 +		err = common.SendCmdWithReceipt(ctx, common.Cmd2Value{
 +			Cmd:   constant.CmdMsgSyncInReinstall,
-+			Value: sdk_struct.CmdMsgSyncInReinstall{Msgs: msgs, Total: total},
++			Value: sdk_struct.CmdMsgSyncInReinstall{Msgs: msgs, Total: total, NotifyConversations: len(notifyConversations) > 0 && notifyConversations[0]},
  		}, m.conversationCh)
  		if err != nil {
  			log.ZError(ctx, "triggerCmdNewMsgCome err", err, "msgs", msgs)
@@ -7062,10 +7139,10 @@ index e4a8ef9..50a2021 100644
  	}
 diff --git a/internal/interaction/msg_sync_batches.go b/internal/interaction/msg_sync_batches.go
 new file mode 100644
-index 0000000..6194c9a
+index 0000000..e236ff0
 --- /dev/null
 +++ b/internal/interaction/msg_sync_batches.go
-@@ -0,0 +1,152 @@
+@@ -0,0 +1,182 @@
 +package interaction
 +
 +import (
@@ -7090,6 +7167,7 @@ index 0000000..6194c9a
 +	var failures []error
 +	totalPages := 0
 +	refreshedBounds := make(map[string]bool)
++	visibleRanges := make(map[string][2]int64, len(ranges))
 +	for id, r := range ranges {
 +		// Boundary revalidation can perform network I/O for many conversations.
 +		// Lend ownership between these checks as well as between message pages.
@@ -7122,11 +7200,40 @@ index 0000000..6194c9a
 +			}
 +		}
 +		ids = append(ids, id)
++		visibleRanges[id] = visible
 +		for _, page := range pending[id] {
 +			totalPages += int((page[1]-page[0])/SplitPullMsgNum + 1)
 +		}
++		if !IsNotification(id) && !m.messageAlreadyCovered(id, visible[1]) {
++			last := pending[id][len(pending[id])-1]
++			if last[0] < last[1] {
++				totalPages++ // The preview and remaining tail have separate receipts.
++			}
++		}
 +	}
 +	sort.Strings(ids)
++	previewTotal := 0
++	if reinstall {
++		previewTotal = totalPages
++	}
++	failedPreviews, err := m.syncLatestMessagePreviews(ctx, ids, visibleRanges, previewTotal)
++	if err != nil {
++		return err
++	}
++	for id, failure := range failedPreviews {
++		failures = append(failures, failure)
++		delete(pending, id) // Keep its durable target for the next attempt.
++	}
++	// Preview receipts cover only their own sequences. Recompute the recent
++	// gaps so backfill neither downloads that row again nor skips older gaps.
++	for id := range pending {
++		if !IsNotification(id) {
++			pending[id] = m.recentMissingRanges(id, visibleRanges[id])
++			if len(pending[id]) == 0 {
++				delete(pending, id)
++			}
++		}
++	}
 +	for len(pending) > 0 {
 +		for _, id := range ids {
 +			if err := yieldMessageSyncPage(ctx); err != nil {
@@ -7418,7 +7525,7 @@ index 0000000..6c17f86
 +}
 diff --git a/internal/interaction/msg_sync_commit.go b/internal/interaction/msg_sync_commit.go
 new file mode 100644
-index 0000000..1eb6478
+index 0000000..54efefb
 --- /dev/null
 +++ b/internal/interaction/msg_sync_commit.go
 @@ -0,0 +1,104 @@
@@ -7443,7 +7550,7 @@ index 0000000..1eb6478
 +}
 +
 +// A checkpoint is committed only for a fully covered, durably acknowledged page.
-+func (m *MsgSyncer) commitPulledMessages(ctx context.Context, resp *sdkws.PullMessageBySeqsResp, ranges map[string][2]int64, reinstallTotal int) error {
++func (m *MsgSyncer) commitPulledMessages(ctx context.Context, resp *sdkws.PullMessageBySeqsResp, ranges map[string][2]int64, reinstallTotal int, notifyConversations ...bool) error {
 +	if resp == nil {
 +		return fmt.Errorf("message pull returned no response")
 +	}
@@ -7463,7 +7570,7 @@ index 0000000..1eb6478
 +		sort.Slice(rows.Msgs, func(i, j int) bool { return rows.Msgs[i].Seq < rows.Msgs[j].Seq })
 +	}
 +	if reinstallTotal > 0 {
-+		err = m.triggerReinstallConversation(ctx, resp.Msgs, reinstallTotal)
++		err = m.triggerReinstallConversation(ctx, resp.Msgs, reinstallTotal, notifyConversations...)
 +	} else {
 +		if len(resp.Msgs) > 0 {
 +			err = common.SendCmdWithReceipt(ctx, common.Cmd2Value{Cmd: constant.CmdNewMsgCome,
@@ -7613,10 +7720,10 @@ index 0000000..6a99b23
 +}
 diff --git a/internal/interaction/msg_sync_fairness_test.go b/internal/interaction/msg_sync_fairness_test.go
 new file mode 100644
-index 0000000..9926a38
+index 0000000..7bd65c7
 --- /dev/null
 +++ b/internal/interaction/msg_sync_fairness_test.go
-@@ -0,0 +1,294 @@
+@@ -0,0 +1,290 @@
 +package interaction
 +
 +import (
@@ -7668,12 +7775,7 @@ index 0000000..9926a38
 +			}
 +			return wireResponse(&msg.GetSeqMessageResp{Msgs: map[string]*sdkws.PullMsgs{p.Conversations[0].ConversationID: {}}})
 +		}
-+		p := &sdkws.PullMessageBySeqsReq{}
-+		if err := proto.Unmarshal(req.Message.Data, p); err != nil {
-+			panic(err)
-+		}
-+		r := p.SeqRanges[0]
-+		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs(r.ConversationID, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)})
++		return requestedRecoveryResponse(t, req)
 +	})
 +	finished := make(chan error, 1)
 +	done := make(chan struct{})
@@ -7796,11 +7898,7 @@ index 0000000..9926a38
 +		case <-req.Ctx.Done():
 +			return &GeneralWsResp{ErrCode: 10001}
 +		}
-+		var seqs []int64
-+		for seq := r.Begin; seq <= r.End; seq++ {
-+			seqs = append(seqs, seq)
-+		}
-+		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs(r.ConversationID, seqs...)})
++		return requestedRecoveryResponse(t, req)
 +	})
 +	done := make(chan struct{})
 +	go func() {
@@ -7809,7 +7907,7 @@ index 0000000..9926a38
 +	}()
 +	t.Cleanup(func() { cancel(); <-done })
 +	m.recvCh <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdConnSuccesss}
-+	if got := <-pageStarted; got != 201 {
++	if got := <-pageStarted; got != 300 {
 +		t.Fatal(got)
 +	}
 +	m.recvCh <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdPushMsg, Value: &sdkws.PushMessages{Msgs: recoveryMsgs("live", 1)}}
@@ -7861,7 +7959,7 @@ index 0000000..9926a38
 +		case <-req.Ctx.Done():
 +			return &GeneralWsResp{ErrCode: 10001}
 +		}
-+		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("gap", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)})
++		return requestedRecoveryResponse(t, req)
 +	})
 +	done := make(chan struct{})
 +	go func() { defer close(done); runMessageSyncLoop(ctx, m.recvCh, m.handlePushMsgAndEventSafely) }()
@@ -7907,8 +8005,483 @@ index 0000000..9926a38
 +			t.Fatal("live queue stranded after gap")
 +		}
 +	}
-+	if attempts.Load() != 2 {
++	select {
++	case <-storedGap:
++	case <-ctx.Done():
++		t.Fatal("history made no progress after the latest preview")
++	}
++	if attempts.Load() != 3 {
 +		t.Fatalf("expected one bounded preemption, attempts=%d", attempts.Load())
++	}
++}
+diff --git a/internal/interaction/msg_sync_latest.go b/internal/interaction/msg_sync_latest.go
+new file mode 100644
+index 0000000..821ed16
+--- /dev/null
++++ b/internal/interaction/msg_sync_latest.go
+@@ -0,0 +1,190 @@
++package interaction
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"strings"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/sdkws"
++	"github.com/openimsdk/tools/errs"
++)
++
++const latestMessageBatchSize = 100
++
++// Publish one latest message for every conversation before pulling any recent
++// history. Batch conversations, rather than making one network trip per chat.
++func (m *MsgSyncer) syncLatestMessagePreviews(ctx context.Context, ids []string, visible map[string][2]int64, total int) (map[string]error, error) {
++	var singles, others []string
++	for _, id := range ids {
++		if IsNotification(id) || m.messageAlreadyCovered(id, visible[id][1]) {
++			continue
++		}
++		if strings.HasPrefix(id, "si_") {
++			singles = append(singles, id)
++		} else {
++			others = append(others, id)
++		}
++	}
++	ordered := make([]string, 0, len(singles)+len(others))
++	for i := 0; i < max(len(singles), len(others)); i++ {
++		if i < len(singles) {
++			ordered = append(ordered, singles[i])
++		}
++		if i < len(others) {
++			ordered = append(ordered, others[i])
++		}
++	}
++	failed := make(map[string]error)
++	for begin := 0; begin < len(ordered); begin += latestMessageBatchSize {
++		batch := make(map[string][2]int64)
++		for _, id := range ordered[begin:min(begin+latestMessageBatchSize, len(ordered))] {
++			end := visible[id][1]
++			batch[id] = [2]int64{end, end}
++		}
++		if err := m.syncLatestMessageBatch(ctx, batch, visible, total, failed); err != nil {
++			return failed, err
++		}
++	}
++	return failed, nil
++}
++
++func (m *MsgSyncer) syncLatestMessageBatch(ctx context.Context, batch, visible map[string][2]int64, total int, failed map[string]error) error {
++	if err := yieldMessageSyncPage(ctx); err != nil {
++		return err
++	}
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	// A live push handled at the page boundary may already have stored the tail.
++	for id, r := range batch {
++		if m.messageAlreadyCovered(id, r[1]) || m.syncedMaxSeqs[id] >= r[1] {
++			delete(batch, id)
++		}
++	}
++	if len(batch) == 0 {
++		return nil
++	}
++	resp, err := m.pullMsgBySeqRange(ctx, batch, 1)
++	if err != nil {
++		if ctx.Err() != nil {
++			return ctx.Err()
++		}
++		// Isolate a bad conversation without discarding other previews in its batch.
++		if len(batch) > 1 {
++			for id, r := range batch {
++				if err := m.syncLatestMessageBatch(ctx, map[string][2]int64{id: r}, visible, total, failed); err != nil {
++					return err
++				}
++			}
++		} else {
++			for id, r := range batch {
++				failed[id] = fmt.Errorf("latest message %s [%d]: %w", id, r[1], err)
++			}
++		}
++		return nil
++	}
++	accepted := &sdkws.PullMessageBySeqsResp{Msgs: make(map[string]*sdkws.PullMsgs)}
++	var deleted []string
++	for id, r := range batch {
++		if resp == nil {
++			err = fmt.Errorf("empty latest-message response")
++		} else {
++			err = validatePulledConversationCoverage(resp.Msgs, map[string][2]int64{id: r}, false)
++		}
++		if err != nil {
++			failed[id] = fmt.Errorf("latest message %s: %w", id, err)
++			delete(batch, id)
++			continue
++		}
++		accepted.Msgs[id] = resp.Msgs[id]
++		if resp.Msgs[id].Msgs[0].Status == constant.MsgStatusHasDeleted {
++			deleted = append(deleted, id)
++		}
++	}
++	// The maximum sequence can be a deletion placeholder. Recover the last
++	// visible message too, including one older than the automatic 100-row window.
++	if len(deleted) > 0 {
++		last, fetchErr := m.fetchLatestValidMessages(ctx, deleted)
++		fallback := make(map[string]*sdkws.PullMsgs)
++		for _, id := range deleted {
++			if fetchErr != nil || last == nil {
++				failed[id] = fmt.Errorf("latest valid message %s: %v", id, fetchErr)
++				delete(batch, id)
++				delete(accepted.Msgs, id)
++				continue
++			}
++			row := last.Msgs[id]
++			if row == nil {
++				continue // No remaining visible message.
++			}
++			minimum := int64(1)
++			if m.db != nil {
++				conversation, readErr := m.db.GetConversation(ctx, id)
++				if readErr != nil && !errors.Is(readErr, errs.ErrRecordNotFound) {
++					failed[id] = fmt.Errorf("latest valid message %s boundary: %w", id, readErr)
++					delete(batch, id)
++					delete(accepted.Msgs, id)
++					continue
++				}
++				if conversation != nil {
++					minimum = max(minimum, conversation.MinSeq)
++				}
++			}
++			if row.Seq < minimum || row.Seq > visible[id][1] || row.Status >= constant.MsgStatusHasDeleted {
++				failed[id] = fmt.Errorf("invalid latest valid message for %s", id)
++				delete(batch, id)
++				delete(accepted.Msgs, id)
++				continue
++			}
++			fallback[id] = &sdkws.PullMsgs{Msgs: []*sdkws.MsgData{row}}
++		}
++		if len(fallback) > 0 {
++			if total > 0 {
++				err = m.triggerReinstallConversation(ctx, fallback, total, true)
++			} else {
++				err = common.SendCmdWithReceipt(ctx, common.Cmd2Value{Cmd: constant.CmdNewMsgCome,
++					Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: fallback, Recovery: true, ReconcileReadSeq: !m.recoveryReadSeqReady}}, m.conversationCh)
++				if err == nil {
++					m.recoveryReadSeqReady = true
++				}
++			}
++			for id, packet := range fallback {
++				commitErr := err
++				if commitErr == nil {
++					seq := packet.Msgs[0].Seq
++					commitErr = m.commitMessageCoverage(ctx, id, [][2]int64{{seq, seq}})
++				}
++				if commitErr != nil {
++					failed[id] = fmt.Errorf("latest valid message %s: %w", id, commitErr)
++					delete(batch, id)
++					delete(accepted.Msgs, id)
++				}
++			}
++		}
++	}
++	if len(batch) > 0 {
++		if err := m.commitPulledMessages(ctx, accepted, batch, total, true); err != nil {
++			if ctx.Err() != nil {
++				return ctx.Err()
++			}
++			if len(batch) > 1 {
++				for id, r := range batch {
++					if err := m.syncLatestMessageBatch(ctx, map[string][2]int64{id: r}, visible, total, failed); err != nil {
++						return err
++					}
++				}
++			} else {
++				for id := range batch {
++					failed[id] = fmt.Errorf("latest message %s commit: %w", id, err)
++				}
++			}
++		} else {
++			messageSyncPageCommitted(ctx)
++		}
++	}
++	return ctx.Err()
++}
+diff --git a/internal/interaction/msg_sync_latest_test.go b/internal/interaction/msg_sync_latest_test.go
+new file mode 100644
+index 0000000..44bfc34
+--- /dev/null
++++ b/internal/interaction/msg_sync_latest_test.go
+@@ -0,0 +1,268 @@
++package interaction
++
++import (
++	"fmt"
++	"sync"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/msg"
++	"github.com/openimsdk/protocol/sdkws"
++	"google.golang.org/protobuf/proto"
++)
++
++func TestAllConversationPreviewsPrecedeRecentHistory(t *testing.T) {
++	for _, initial := range []bool{false, true} {
++		t.Run(fmt.Sprint("initial=", initial), func(t *testing.T) {
++			ctx := recoveryContext(t)
++			conn := &LongConnMgr{send: make(chan Message, 1)}
++			m := &MsgSyncer{ctx: ctx, db: &recoveryVersionDB{installed: !initial}, reinstalled: initial,
++				longConnMgr: conn, conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{}}
++			targets := map[string]int64{"si_peer": 1000, "si_other": 1000}
++			for n := 0; n < 205; n++ {
++				targets[fmt.Sprintf("sg_%03d", n)] = 1000
++			}
++			var mu sync.Mutex
++			visible := make(map[string]bool)
++			stored := make(map[string]map[int64]bool)
++			previewRequests, historyRequests := 0, 0
++			receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
++				var packets map[string]*sdkws.PullMsgs
++				if initial {
++					packets = cmd.Value.(sdk_struct.CmdMsgSyncInReinstall).Msgs
++				} else {
++					packets = cmd.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs
++				}
++				mu.Lock()
++				defer mu.Unlock()
++				for id, packet := range packets {
++					if stored[id] == nil {
++						stored[id] = make(map[int64]bool)
++					}
++					for _, row := range packet.Msgs {
++						if stored[id][row.Seq] {
++							t.Errorf("duplicate recovery of %s/%d", id, row.Seq)
++						}
++						stored[id][row.Seq] = true
++						if row.Seq == 1000 {
++							visible[id] = true
++						}
++					}
++				}
++				return nil
++			})
++			requestWorker(t, conn, func(req Message) *GeneralWsResp {
++				pull := &sdkws.PullMessageBySeqsReq{}
++				if err := proto.Unmarshal(req.Message.Data, pull); err != nil {
++					panic(err)
++				}
++				resp := &sdkws.PullMessageBySeqsResp{Msgs: make(map[string]*sdkws.PullMsgs)}
++				preview := true
++				for _, r := range pull.SeqRanges {
++					preview = preview && r.Begin == 1000 && r.End == 1000 && r.Num == 1
++				}
++				mu.Lock()
++				if preview {
++					previewRequests++
++					if len(pull.SeqRanges) > 100 {
++						t.Error("unbounded preview batch")
++					}
++					if previewRequests == 1 {
++						foundSingle, foundGroup := false, false
++						for _, r := range pull.SeqRanges {
++							foundSingle = foundSingle || r.ConversationID == "si_peer" || r.ConversationID == "si_other"
++							foundGroup = foundGroup || r.ConversationID == "sg_000"
++						}
++						if !foundSingle || !foundGroup {
++							t.Error("first preview batch delayed one conversation type")
++						}
++					}
++				} else {
++					historyRequests++
++					if len(visible) != len(targets) {
++						t.Errorf("history started with only %d/%d visible conversations", len(visible), len(targets))
++					}
++				}
++				mu.Unlock()
++				for _, r := range pull.SeqRanges {
++					if r.Begin < 901 || r.End > 1000 || r.Num != r.End-r.Begin+1 {
++						t.Errorf("unbounded recent range: %v", r)
++					}
++					var seqs []int64
++					for seq := r.Begin; seq <= r.End; seq++ {
++						seqs = append(seqs, seq)
++					}
++					resp.Msgs[r.ConversationID] = recoveryMsgs(r.ConversationID, seqs...)[r.ConversationID]
++				}
++				return wireResponse(resp)
++			})
++			if err := m.compareSeqsAndBatchSync(ctx, targets, 1); err != nil {
++				t.Fatal(err)
++			}
++			if previewRequests != 3 || historyRequests != len(targets) {
++				t.Fatalf("preview/history requests: %d/%d", previewRequests, historyRequests)
++			}
++			for id := range targets {
++				if len(stored[id]) != 100 || m.syncedMaxSeqs[id] != 0 || !m.messageAlreadyCovered(id, 1000) {
++					t.Fatalf("wrong recovered coverage for %s: %+v", id, m.checkpoints[id])
++				}
++			}
++		})
++	}
++}
++
++// A server fixture returns exactly the requested sequences for every chat.
++func requestedRecoveryResponse(t *testing.T, req Message) *GeneralWsResp {
++	t.Helper()
++	pull := &sdkws.PullMessageBySeqsReq{}
++	if err := proto.Unmarshal(req.Message.Data, pull); err != nil {
++		panic(err)
++	}
++	resp := &sdkws.PullMessageBySeqsResp{Msgs: make(map[string]*sdkws.PullMsgs), NotificationMsgs: make(map[string]*sdkws.PullMsgs)}
++	for _, r := range pull.SeqRanges {
++		var seqs []int64
++		for seq := r.Begin; seq <= r.End; seq++ {
++			seqs = append(seqs, seq)
++		}
++		packet := recoveryMsgs(r.ConversationID, seqs...)[r.ConversationID]
++		if IsNotification(r.ConversationID) {
++			resp.NotificationMsgs[r.ConversationID] = packet
++		} else {
++			resp.Msgs[r.ConversationID] = packet
++		}
++	}
++	return wireResponse(resp)
++}
++
++func TestLatestPreviewHistoryFailureRetainsGapsForRestart(t *testing.T) {
++	ctx := recoveryContext(t)
++	d := &recoveryVersionDB{installed: true}
++	conn := &LongConnMgr{send: make(chan Message, 1)}
++	m := &MsgSyncer{ctx: ctx, db: d, longConnMgr: conn, conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{"si_peer": 100}}
++	stopHistory := fmt.Errorf("history unavailable")
++	receiptWorker(t, m.conversationCh, func(common.Cmd2Value) error { return nil })
++	requestWorker(t, conn, func(req Message) *GeneralWsResp {
++		pull := &sdkws.PullMessageBySeqsReq{}
++		if err := proto.Unmarshal(req.Message.Data, pull); err != nil {
++			panic(err)
++		}
++		r := pull.SeqRanges[0]
++		if r.Begin == 1000 && r.End == 1000 {
++			return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("si_peer", 1000)})
++		}
++		return &GeneralWsResp{ErrCode: 10001, ErrMsg: stopHistory.Error()}
++	})
++	if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"si_peer": 1000}, 1); err == nil {
++		t.Fatal("failed history reported complete")
++	}
++	restarted := &MsgSyncer{db: d, syncedMaxSeqs: map[string]int64{"si_peer": 1000}}
++	if err := restarted.loadMessageCheckpoints(ctx, []string{"si_peer"}); err != nil {
++		t.Fatal(err)
++	}
++	if restarted.syncedMaxSeqs["si_peer"] != 100 || !restarted.messageAlreadyCovered("si_peer", 1000) {
++		t.Fatal("latest preview falsely completed old gaps")
++	}
++	missing := restarted.recentMissingRanges("si_peer", [2]int64{101, 1000})
++	if len(missing) != 1 || missing[0] != [2]int64{901, 999} {
++		t.Fatalf("restart lost recent history: %v", missing)
++	}
++}
++
++func TestDeletedTailRestoresLastValidPreviewBeforeHistory(t *testing.T) {
++	ctx := recoveryContext(t)
++	conn := &LongConnMgr{send: make(chan Message, 1)}
++	m := &MsgSyncer{ctx: ctx, db: &recoveryVersionDB{installed: true}, longConnMgr: conn,
++		conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{"si_peer": 950}}
++	var visible bool
++	validReads := 0
++	receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
++		for _, packet := range cmd.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs {
++			for _, row := range packet.Msgs {
++				if row.Seq == 100 && row.Status != constant.MsgStatusHasDeleted {
++					visible = true
++				}
++			}
++		}
++		return nil
++	})
++	requestWorker(t, conn, func(req Message) *GeneralWsResp {
++		if req.Message.ReqIdentifier == constant.PullConvLastMessage {
++			validReads++
++			return wireResponse(&msg.GetLastMessageResp{Msgs: map[string]*sdkws.MsgData{"si_peer": {Seq: 100, Status: constant.MsgStatusSendSuccess}}})
++		}
++		pull := &sdkws.PullMessageBySeqsReq{}
++		if err := proto.Unmarshal(req.Message.Data, pull); err != nil {
++			panic(err)
++		}
++		resp := &sdkws.PullMessageBySeqsResp{Msgs: map[string]*sdkws.PullMsgs{}}
++		for _, r := range pull.SeqRanges {
++			if r.Begin < r.End && !visible {
++				t.Error("history preceded last valid preview")
++			}
++			packet := &sdkws.PullMsgs{}
++			for seq := r.Begin; seq <= r.End; seq++ {
++				packet.Msgs = append(packet.Msgs, &sdkws.MsgData{Seq: seq, Status: constant.MsgStatusHasDeleted})
++			}
++			resp.Msgs[r.ConversationID] = packet
++		}
++		return wireResponse(resp)
++	})
++	if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"si_peer": 1000}, 1); err != nil {
++		t.Fatal(err)
++	}
++	if !visible || validReads != 1 || m.syncedMaxSeqs["si_peer"] != 1000 {
++		t.Fatal("deleted tail hid the remaining valid conversation")
++	}
++}
++
++func TestFailedLatestPreviewDoesNotHideOtherConversations(t *testing.T) {
++	for _, failure := range []string{"transport", "missing", "storage"} {
++		t.Run(failure, func(t *testing.T) {
++			ctx := recoveryContext(t)
++			conn := &LongConnMgr{send: make(chan Message, 1)}
++			m := &MsgSyncer{ctx: ctx, longConnMgr: conn, conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{}}
++			goodRows := 0
++			receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
++				packets := cmd.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs
++				if packets["si_bad"] != nil && failure == "storage" {
++					return fmt.Errorf("bad message cannot be saved")
++				}
++				if packets["sg_good"] != nil {
++					goodRows += len(packets["sg_good"].Msgs)
++				}
++				return nil
++			})
++			requestWorker(t, conn, func(req Message) *GeneralWsResp {
++				pull := &sdkws.PullMessageBySeqsReq{}
++				if err := proto.Unmarshal(req.Message.Data, pull); err != nil {
++					panic(err)
++				}
++				resp := &sdkws.PullMessageBySeqsResp{Msgs: map[string]*sdkws.PullMsgs{}}
++				for _, r := range pull.SeqRanges {
++					if r.ConversationID == "si_bad" {
++						if failure == "transport" {
++							return &GeneralWsResp{ErrCode: 10001, ErrMsg: "bad conversation unavailable"}
++						}
++						if failure == "missing" {
++							continue
++						}
++					}
++					var seqs []int64
++					for seq := r.Begin; seq <= r.End; seq++ {
++						seqs = append(seqs, seq)
++					}
++					resp.Msgs[r.ConversationID] = recoveryMsgs(r.ConversationID, seqs...)[r.ConversationID]
++				}
++				return wireResponse(resp)
++			})
++			if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"si_bad": 1000, "sg_good": 1000}, 1); err == nil {
++				t.Fatal("failed preview reported complete")
++			}
++			if goodRows != 100 || !m.messageAlreadyCovered("sg_good", 1000) || m.messageAlreadyCovered("si_bad", 1000) || m.checkpoints["si_bad"].Target != 1000 {
++				t.Fatalf("failure lost isolation/targets: rows=%d states=%+v", goodRows, m.checkpoints)
++			}
++		})
 +	}
 +}
 diff --git a/internal/interaction/msg_sync_page.go b/internal/interaction/msg_sync_page.go
@@ -8824,10 +9397,10 @@ index 0000000..c3cee56
 +}
 diff --git a/internal/interaction/msg_visible_range_test.go b/internal/interaction/msg_visible_range_test.go
 new file mode 100644
-index 0000000..1c2f515
+index 0000000..20b3c40
 --- /dev/null
 +++ b/internal/interaction/msg_visible_range_test.go
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,108 @@
 +package interaction
 +
 +import (
@@ -8915,6 +9488,9 @@ index 0000000..1c2f515
 +			if wantRows < 0 {
 +				wantRows = 0
 +			}
++			if tc.ambiguous {
++				wantRows = 1
++			} // The valid tail is visible; the unknown older gap remains pending.
 +			if delivered != wantRows {
 +				t.Fatalf("delivered=%d want=%d", delivered, wantRows)
 +			}
@@ -9037,10 +9613,10 @@ index 0000000..74b367e
 +}
 diff --git a/internal/interaction/sync_tail_test.go b/internal/interaction/sync_tail_test.go
 new file mode 100644
-index 0000000..a7536fc
+index 0000000..693e5a4
 --- /dev/null
 +++ b/internal/interaction/sync_tail_test.go
-@@ -0,0 +1,71 @@
+@@ -0,0 +1,72 @@
 +package interaction
 +
 +import (
@@ -9060,21 +9636,22 @@ index 0000000..a7536fc
 +		committed += len(cmd.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs["chat"].Msgs)
 +		return nil
 +	})
-+	next := int64(3895)
++	wantRanges := [][2]int64{{3994, 3994}, {3895, 3993}}
++	requestIndex := 0
 +	requestWorker(t, conn, func(req Message) *GeneralWsResp {
 +		p := &sdkws.PullMessageBySeqsReq{}
 +		if err := proto.Unmarshal(req.Message.Data, p); err != nil {
 +			panic(err)
 +		}
 +		r := p.SeqRanges[0]
-+		if r.Begin != next || r.End-r.Begin+1 > 100 || r.Num != r.End-r.Begin+1 {
++		if requestIndex >= len(wantRanges) || [2]int64{r.Begin, r.End} != wantRanges[requestIndex] || r.Num != r.End-r.Begin+1 {
 +			t.Errorf("wrong recovery range: %v", r)
 +		}
 +		var seqs []int64
 +		for s := r.Begin; s <= r.End; s++ {
 +			seqs = append(seqs, s)
 +		}
-+		next = r.End + 1
++		requestIndex++
 +		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", seqs...)})
 +	})
 +	if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"chat": 3994}, 1); err != nil {
@@ -9083,7 +9660,7 @@ index 0000000..a7536fc
 +	if m.syncedMaxSeqs["chat"] != 1 || !m.messageAlreadyCovered("chat", 3994) {
 +		t.Fatal("sparse tail lost or falsely advanced continuous checkpoint")
 +	}
-+	if committed != 100 {
++	if committed != 100 || requestIndex != len(wantRanges) {
 +		t.Fatalf("recovered %d/100 rows", committed)
 +	}
 +}
@@ -11092,10 +11669,10 @@ index 7a4e386..579b00f 100644
  		id := s.uuid(server)
  		local, ok := localMap[id]
 diff --git a/sdk_struct/sdk_struct.go b/sdk_struct/sdk_struct.go
-index a588ee0..ba1d0c2 100644
+index a588ee0..52ace2e 100644
 --- a/sdk_struct/sdk_struct.go
 +++ b/sdk_struct/sdk_struct.go
-@@ -320,6 +320,9 @@ type IMConfig struct {
+@@ -320,11 +320,15 @@ type IMConfig struct {
  type CmdNewMsgComeToConversation struct {
  	Msgs     map[string]*sdkws.PullMsgs
  	SyncFlag int
@@ -11105,11 +11682,311 @@ index a588ee0..ba1d0c2 100644
  }
  
  type CmdMsgSyncInReinstall struct {
-diff --git a/version/version b/version/version
-index 8dd9cb9..6e30aba 100644
---- a/version/version
-+++ b/version/version
-@@ -1 +1 @@
--v3.8.3-patch.15
-\ No newline at end of file
-+v3.8.3-patch.15+recovery.17
+-	Msgs  map[string]*sdkws.PullMsgs
+-	Total int
++	Msgs                map[string]*sdkws.PullMsgs
++	Total               int
++	NotifyConversations bool
+ }
+ 
+ type BasicInfo struct {
+diff --git a/internal/conversation_msg/conversation.go b/internal/conversation_msg/conversation.go
+index f3203e7..2ffb0c9 100644
+--- a/internal/conversation_msg/conversation.go
++++ b/internal/conversation_msg/conversation.go
+@@ -55,8 +55,10 @@ func (c *Conversation) setConversation(ctx context.Context, apiReq *pbConversati
+ }
+ 
+ func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sdk.GetAdvancedHistoryMessageListParams, isReverse bool) (*sdk.GetAdvancedHistoryMessageListCallback, error) {
+-	if req.Count<1 { return nil,errors.New("history count must be positive") }
+-	req.Count=min(req.Count,100)
++	if req.Count < 1 {
++		return nil, errors.New("history count must be positive")
++	}
++	req.Count = min(req.Count, 100)
+ 	t := time.Now()
+ 	var messageListCallback sdk.GetAdvancedHistoryMessageListCallback
+ 	var conversationID string
+@@ -65,7 +67,15 @@ func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sd
+ 	var err error
+ 	var messageList sdk_struct.NewMsgList
+ 	conversationID = req.ConversationID
+-	if len(req.StartClientMsgID) > 0 {
++	if cursor := req.ScanCursor; cursor != nil {
++		if cursor.ConversationID != conversationID || cursor.Reverse != isReverse || cursor.ClientMsgID == "" || cursor.SendTime <= 0 || cursor.Seq <= 0 {
++			return nil, errors.New("invalid history scan cursor")
++		}
++		startTime, startSeq, startClientMsgID = cursor.SendTime, cursor.Seq, cursor.ClientMsgID
++		if err := c.handleEndSeq(ctx, req, isReverse, &model_struct.LocalChatLog{Seq: startSeq}); err != nil {
++			return nil, err
++		}
++	} else if len(req.StartClientMsgID) > 0 {
+ 		m, err := c.historyAnchor(ctx, conversationID, req.StartClientMsgID)
+ 		if err != nil {
+ 			return nil, err
+@@ -283,11 +293,7 @@ func (c *Conversation) fetchMessagesWithGapCheck(ctx context.Context, conversati
+ 	// continue fetching recursively until the valid messages are sufficient or all messages have been fetched.
+ 	missingCount := shouldFetchMoreMessagesNum(list)
+ 	if missingCount > 0 && !messageListCallback.IsEnd {
+-		depth,_:=ctx.Value(historyRecursionKey{}).(int)
+-		if depth>=MaxRecursionDepth {
+-			return validMessages,errors.New("history page scan budget exhausted; retry from this position")
+-		}
+-		ctx=context.WithValue(ctx,historyRecursionKey{},depth+1)
++		depth, _ := ctx.Value(historyRecursionKey{}).(int)
+ 		newStartTime, newStartSeq, newStartClientMsgID := getNewStartMessageInfo(list)
+ 		// First-batch zero-cursor substitution: when entering a conversation for the first time
+ 		// (no StartClientMsgID) and the new cursor time is still 0,
+@@ -325,6 +331,22 @@ func (c *Conversation) fetchMessagesWithGapCheck(ctx context.Context, conversati
+ 				"conversationID", conversationID, "startTime", startTime, "startSeq", startSeq, "startClientMsgID", startClientMsgID)
+ 			return validMessages, errors.New("history cursor did not advance; retry after synchronization")
+ 		}
++		if depth >= MaxRecursionDepth {
++			if newStartTime <= 0 || newStartSeq <= 0 || newStartClientMsgID == "" {
++				return nil, errors.New("history scan has no resumable boundary")
++			}
++			messageListCallback.ScanLimited = true
++			messageListCallback.IsEnd = false
++			messageListCallback.ScanCursor = &sdk.HistoryScanCursor{
++				ConversationID: conversationID, Reverse: isReverse,
++				ClientMsgID: newStartClientMsgID, SendTime: newStartTime, Seq: newStartSeq,
++			}
++			log.ZInfo(ctx, "history scan yielded", "conversationID", conversationID,
++				"reverse", isReverse, "depth", depth, "scanCursor", messageListCallback.ScanCursor,
++				"visibleCount", len(validMessages))
++			return validMessages, nil
++		}
++		ctx = context.WithValue(ctx, historyRecursionKey{}, depth+1)
+ 		log.ZDebug(ctx, "fetch more messages", "missingCount", missingCount, "conversationID",
+ 			conversationID, "newStartTime", newStartTime, "newStartSeq", newStartSeq, "newStartClientMsgID", newStartClientMsgID)
+ 		missingMessages, err := c.fetchMessagesWithGapCheck(ctx, conversationID, missingCount, newStartTime, newStartSeq, newStartClientMsgID, isReverse, viewType, messageListCallback)
+diff --git a/pkg/db/chat_log_model.go b/pkg/db/chat_log_model.go
+index 40775a4..be1a52e 100644
+--- a/pkg/db/chat_log_model.go
++++ b/pkg/db/chat_log_model.go
+@@ -310,6 +310,8 @@ func (d *DataBase) CleanDuplicateInvalidMessages(ctx context.Context, conversati
+ 
+ 	tableName := utils.GetTableName(conversationID)
+ 	err := d.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
++		// Raw SQL identifiers must use the same quoting as GORM's Table API.
++		quotedTable := tx.Statement.Quote(tableName)
+ 		zeroSendTimeResult := tx.Table(tableName).
+ 			Where("seq > ? AND send_time = ?", 0, 0).
+ 			Delete(&model_struct.LocalChatLog{})
+@@ -324,7 +326,7 @@ WHERE seq > ?
+   AND seq IN (
+     SELECT seq FROM %s WHERE seq > ? AND status < ? GROUP BY seq
+   )
+-`, tableName, tableName), 0, constant.MsgStatusHasDeleted, 0, constant.MsgStatusHasDeleted)
++`, quotedTable, quotedTable), 0, constant.MsgStatusHasDeleted, 0, constant.MsgStatusHasDeleted)
+ 		if invalidWithValidResult.Error != nil {
+ 			return errs.WrapMsg(invalidWithValidResult.Error, "delete invalid messages with valid seq failed")
+ 		}
+@@ -353,7 +355,7 @@ DELETE FROM %s
+ WHERE client_msg_id IN (
+   SELECT client_msg_id FROM ranked WHERE row_num > 1
+ )
+-`, tableName, tableName, tableName, tableName),
++`, quotedTable, quotedTable, quotedTable, quotedTable),
+ 			0, constant.MsgStatusHasDeleted,
+ 			0, constant.MsgStatusHasDeleted,
+ 			0, constant.MsgStatusHasDeleted)
+diff --git a/pkg/db/chat_log_model_test.go b/pkg/db/chat_log_model_test.go
+index 4839467..6957a7b 100644
+--- a/pkg/db/chat_log_model_test.go
++++ b/pkg/db/chat_log_model_test.go
+@@ -46,7 +46,7 @@ func TestCleanDuplicateInvalidMessages(t *testing.T) {
+ 		conn:         conn,
+ 		tableChecker: NewTableChecker(nil),
+ 	}
+-	conversationID := "test_conversation"
++	conversationID := "sg_@lg_4095981dfe6ecb5bd137312be4121ece"
+ 	if err := d.initChatLog(ctx, conversationID); err != nil {
+ 		t.Fatalf("init chat log: %v", err)
+ 	}
+diff --git a/pkg/sdk_params_callback/conversation_msg_sdk_struct.go b/pkg/sdk_params_callback/conversation_msg_sdk_struct.go
+index 7a2aa19..0aae976 100644
+--- a/pkg/sdk_params_callback/conversation_msg_sdk_struct.go
++++ b/pkg/sdk_params_callback/conversation_msg_sdk_struct.go
+@@ -29,10 +29,21 @@ type FindMessageListCallback struct {
+ }
+ 
+ type GetAdvancedHistoryMessageListParams struct {
+-	ConversationID   string `json:"conversationID"`
+-	StartClientMsgID string `json:"startClientMsgID"`
+-	Count            int    `json:"count"`
+-	ViewType         int    `json:"viewType"`
++	ConversationID   string             `json:"conversationID"`
++	StartClientMsgID string             `json:"startClientMsgID"`
++	Count            int                `json:"count"`
++	ViewType         int                `json:"viewType"`
++	ScanCursor       *HistoryScanCursor `json:"scanCursor,omitempty"`
++}
++
++// A checked local range can end on a deleted row. Keep its position separate
++// from visible messages, and bind it to the conversation and read direction.
++type HistoryScanCursor struct {
++	ConversationID string `json:"conversationID"`
++	Reverse        bool   `json:"reverse"`
++	ClientMsgID    string `json:"clientMsgID"`
++	SendTime       int64  `json:"sendTime"`
++	Seq            int64  `json:"seq"`
+ }
+ 
+ type GetAdvancedHistoryMessageListCallback struct {
+@@ -40,6 +51,8 @@ type GetAdvancedHistoryMessageListCallback struct {
+ 	IsEnd       bool                    `json:"isEnd"`
+ 	ErrCode     int32                   `json:"errCode"`
+ 	ErrMsg      string                  `json:"errMsg"`
++	ScanCursor  *HistoryScanCursor      `json:"scanCursor,omitempty"`
++	ScanLimited bool                    `json:"scanLimited,omitempty"`
+ }
+ 
+ type FetchSurroundingMessagesReq struct {
+diff --git a/internal/conversation_msg/history_scan_test.go b/internal/conversation_msg/history_scan_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/conversation_msg/history_scan_test.go
+@@ -0,0 +1,117 @@
++package conversation_msg
++
++import (
++	"context"
++	"fmt"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/cache"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	sdk "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
++)
++
++type scanHistoryDB struct {
++	*recoveryDB
++	starts  []int64
++	visible map[int64]bool
++}
++
++func (d *scanHistoryDB) GetMessageList(_ context.Context, _ string, count int, _ int64, startSeq int64, _ string, reverse bool) ([]*model_struct.LocalChatLog, error) {
++	d.starts = append(d.starts, startSeq)
++	var rows []*model_struct.LocalChatLog
++	step := int64(-1)
++	if reverse {
++		step = 1
++	}
++	for seq := startSeq + step; seq >= 1 && seq <= 40 && len(rows) < count; seq += step {
++		status := constant.MsgStatusHasDeleted
++		if d.visible[seq] {
++			status = constant.MsgStatusSendSuccess
++		}
++		rows = append(rows, &model_struct.LocalChatLog{ClientMsgID: fmt.Sprintf("row-%d", seq), Seq: seq, SendTime: seq,
++			Status: int32(status), ContentType: constant.Text, Content: `{"content":"visible"}`})
++	}
++	return rows, nil
++}
++
++func (d *scanHistoryDB) MaintainMessageCache(context.Context, string, []string) error { return nil }
++
++func TestHistoryScanYieldsAndResumesThroughDeletedRanges(t *testing.T) {
++	for _, reverse := range []bool{false, true} {
++		for _, withVisible := range []bool{false, true} {
++			t.Run(fmt.Sprintf("reverse=%v/visible=%v", reverse, withVisible), func(t *testing.T) {
++				c, base, _, cmd := recoveryConversation(t)
++				d := &scanHistoryDB{recoveryDB: base, visible: map[int64]bool{}}
++				firstSeq, startSeq := int64(40), int64(41)
++				if reverse {
++					firstSeq, startSeq = 1, 0
++				}
++				if withVisible {
++					d.visible[firstSeq] = true
++				}
++				c.db = d
++				c.maxSeqRecorder.Set("chat", 40)
++				c.messagePullForwardEndSeqMap = cache.NewConversationSeqContextCache()
++				c.messagePullReverseEndSeqMap = cache.NewConversationSeqContextCache()
++				c.messagePullForwardEndSeqMap.Store("chat", 0, startSeq)
++				c.messagePullReverseEndSeqMap.Store("chat", 0, startSeq)
++				result := &sdk.GetAdvancedHistoryMessageListCallback{}
++				rows, err := c.fetchMessagesWithGapCheck(cmd.Ctx, "chat", 4, startSeq, startSeq, "initial", reverse, 0, result)
++				if err != nil || !result.ScanLimited || result.IsEnd || result.ScanCursor == nil {
++					t.Fatalf("scan budget became error/end: rows=%v result=%+v err=%v", rows, result, err)
++				}
++				wantVisible := 0
++				if withVisible {
++					wantVisible = 1
++				}
++				if len(rows) != wantVisible || len(d.starts) != MaxRecursionDepth+1 {
++					t.Fatalf("lost visible rows or exceeded read budget: rows=%d reads=%d", len(rows), len(d.starts))
++				}
++				previous := result.ScanCursor.Seq
++				// Resume by explicit scan position, even if the deleted anchor was cleaned
++				// from the local table. No GetMessage lookup is available on this fake.
++				for attempt := 0; attempt < 10; attempt++ {
++					resumed, err := c.getAdvancedHistoryMessageList(cmd.Ctx, sdk.GetAdvancedHistoryMessageListParams{
++						ConversationID: "chat", Count: 4, ScanCursor: result.ScanCursor,
++					}, reverse)
++					if err != nil {
++						t.Fatal(err)
++					}
++					if len(resumed.MessageList) != 0 {
++						t.Fatal("deleted scan rows entered the visible page")
++					}
++					if resumed.IsEnd {
++						if resumed.ScanLimited || resumed.ScanCursor != nil {
++							t.Fatal("completed page retains a continuation")
++						}
++						return
++					}
++					if !resumed.ScanLimited || resumed.ScanCursor == nil {
++						t.Fatal("lost continuation")
++					}
++					next := resumed.ScanCursor.Seq
++					if (!reverse && next >= previous) || (reverse && next <= previous) {
++						t.Fatal("scan did not advance")
++					}
++					previous, result = next, resumed
++				}
++				t.Fatal("scan never reached the real end")
++			})
++		}
++	}
++}
++
++func TestHistoryScanRejectsCrossConversationAndDirection(t *testing.T) {
++	c := &Conversation{}
++	for _, cursor := range []*sdk.HistoryScanCursor{
++		{ConversationID: "other", ClientMsgID: "row", Seq: 10, SendTime: 10},
++		{ConversationID: "chat", Reverse: true, ClientMsgID: "row", Seq: 10, SendTime: 10},
++		{ConversationID: "chat", ClientMsgID: "row", Seq: 0, SendTime: 10},
++	} {
++		_, err := c.getAdvancedHistoryMessageList(context.Background(), sdk.GetAdvancedHistoryMessageListParams{ConversationID: "chat", Count: 4, ScanCursor: cursor}, false)
++		if err == nil {
++			t.Fatal("accepted an invalid continuation")
++		}
++	}
++}
+diff --git a/pkg/db/chat_log_model_test.go b/pkg/db/chat_log_model_test.go
+--- a/pkg/db/chat_log_model_test.go
++++ b/pkg/db/chat_log_model_test.go
+@@ -36,6 +36,13 @@
+ }
+ 
+ func TestCleanDuplicateInvalidMessages(t *testing.T) {
++	for _, conversationID := range []string{"test_conversation", "sg_@lg_4095981dfe6ecb5bd137312be4121ece"} {
++		t.Run(conversationID, func(t *testing.T) { testCleanDuplicateInvalidMessages(t, conversationID) })
++	}
++}
++
++func testCleanDuplicateInvalidMessages(t *testing.T, conversationID string) {
++	t.Helper()
+ 	ctx := context.Background()
+ 	conn, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+ 	if err != nil {
+@@ -46,7 +53,6 @@
+ 		conn:         conn,
+ 		tableChecker: NewTableChecker(nil),
+ 	}
+-	conversationID := "sg_@lg_4095981dfe6ecb5bd137312be4121ece"
+ 	if err := d.initChatLog(ctx, conversationID); err != nil {
+ 		t.Fatalf("init chat log: %v", err)
+ 	}

@@ -144,6 +144,7 @@ class _ChatMessageListState extends State<ChatMessageList>
             initialLoading: logic.initialHistoryLoading.value,
             historyLoading: logic.historyLoading.value,
             historyError: logic.historyError.value,
+            historyScanLimited: logic.historyScanLimited.value,
             hasMore: logic.historyHasMore.value,
             onRetry: logic.retryHistory,
             findChildIndexCallback: (key) =>

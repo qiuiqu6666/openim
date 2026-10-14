@@ -36,6 +36,34 @@ class Source implements ChatHistorySearchSource, ChatHistoryCloudSource {
 }
 
 void main() {
+  test(
+      'empty yielded scan preserves progress and failed continuation retries the same position',
+      () async {
+    final positions = <Message?>[];
+    var calls = 0;
+    final scan = HistoryScanCursor(
+        conversationID: 'group',
+        reverse: false,
+        clientMsgID: 'deleted-20',
+        sendTime: 20,
+        seq: 20);
+    final sync = ChatHistoryCloudSync((id, start, count) async {
+      positions.add(start);
+      if (++calls == 1) {
+        return AdvancedMessage(
+            messageList: [], isEnd: false, scanLimited: true, scanCursor: scan);
+      }
+      if (calls == 2) throw StateError('offline');
+      return AdvancedMessage(messageList: [msg('last')], isEnd: true);
+    });
+    await sync.load('group', () => true);
+    expect(sync.hasMore, isTrue);
+    await expectLater(sync.load('group', () => true), throwsStateError);
+    expect(sync.hasMore, isTrue);
+    await sync.load('group', () => true);
+    expect(positions, [null, scan, scan]);
+    expect(sync.hasMore, isFalse);
+  });
   test('clearing during continuation stops further history requests', () async {
     final source = Source()
       ..totalPages = 5
