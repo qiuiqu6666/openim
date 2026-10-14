@@ -247,6 +247,22 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
               showDivider: false,
               onTap: _checkForUpdate,
             ),
+            if (Platform.isAndroid && AndroidUpdateRuntime.instance.hasFallback)
+              SettingsCell(
+                title: settingsText(context,
+                    zh: '前往官网下载', en: 'Download from Website'),
+                showDivider: false,
+                onTap: () async {
+                  if (!await AndroidUpdateRuntime.instance.openFallback() &&
+                      context.mounted) {
+                    showSettingsMessage(
+                        context,
+                        settingsText(context,
+                            zh: '无法打开下载页面，请稍后重试',
+                            en: 'Unable to open download page. Please retry.'));
+                  }
+                },
+              ),
           ],
         ),
         if (!widget.embedded)

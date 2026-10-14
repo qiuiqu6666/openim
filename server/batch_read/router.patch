@@ -1,0 +1,20 @@
+--- a/internal/api/router.go
++++ b/internal/api/router.go
+@@ -2,6 +2,7 @@
+ 
+ import (
+ 	"context"
++	"github.com/openimsdk/open-im-server/v3/internal/api/batchread"
+ 	"github.com/openimsdk/open-im-server/v3/pkg/messagesearch"
+ 	"github.com/redis/go-redis/v9"
+ 	"net/http"
+@@ -303,6 +304,9 @@
+ 		msgGroup.POST("/revoke_msg", m.RevokeMsg)
+ 		msgGroup.POST("/mark_msgs_as_read", m.MarkMsgsAsRead)
+ 		msgGroup.POST("/mark_conversation_as_read", m.MarkConversationAsRead)
++		batchReads := batchread.New(m.Client)
++		msgGroup.POST("/prepare_batch_read", batchReadHandler(batchReads, true))
++		msgGroup.POST("/batch_mark_conversations_as_read", batchReadHandler(batchReads, false))
+ 		msgGroup.POST("/get_conversations_has_read_and_max_seq", m.GetConversationsHasReadAndMaxSeq)
+ 		msgGroup.POST("/set_conversation_has_read_seq", m.SetConversationHasReadSeq)
+ 

@@ -3,7 +3,15 @@ import '../../../../../services/platform_config_service.dart';
 import 'android_update_package.dart';
 import 'android_update_platform.dart';
 
-enum AndroidUpdatePhase { idle, checking, downloading, verifying, ready, retry }
+enum AndroidUpdatePhase {
+  idle,
+  checking,
+  downloading,
+  verifying,
+  ready,
+  external,
+  retry
+}
 
 /// Process-wide coordinator. A successful network request is not proof of a
 /// successful install. Only installed version and a verified APK govern state.
@@ -22,31 +30,74 @@ class AndroidUpdateController extends ChangeNotifier {
   final DateTime Function() now;
   AndroidUpdatePhase phase = AndroidUpdatePhase.idle;
   AndroidUpdatePackage? package;
+  PlatformRelease? externalRelease;
   bool force = false;
   int bytes = 0, total = 0;
+  String fallbackURL = '';
   String? _verifiedKey;
   DateTime _nextCheck = DateTime.fromMillisecondsSinceEpoch(0);
   int _failures = 0;
   Future<void>? _pending;
   bool _disposed = false;
   bool get ready => phase == AndroidUpdatePhase.ready && package != null;
+  bool get external =>
+      phase == AndroidUpdatePhase.external && externalRelease != null;
+  bool get promptReady => ready || external;
+  bool get retrying => _failures > 0;
+  PlatformRelease? get promptRelease =>
+      external ? externalRelease : package?.release;
+  String? get promptKey => external
+      ? 'external:${externalRelease!.latest}:${externalRelease!.minimum}:${externalRelease!.downloadURL}'
+      : package?.key;
   void _publish() {
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> tick({bool refresh = false}) =>
-      _pending ??= _tick(refresh).whenComplete(() => _pending = null);
+  Future<void> restoreRequiredWebsite(PlatformRelease release) async {
+    if (release.downloadLink.isNotEmpty ||
+        release.minimum.isEmpty ||
+        compareAppVersions(await installedVersion(), release.minimum) >= 0) {
+      return;
+    }
+    externalRelease = release;
+    force = true;
+    phase = AndroidUpdatePhase.external;
+  }
+
+  Future<void> tick({bool refresh = false}) {
+    final pending = _pending;
+    if (pending != null) {
+      return refresh ? pending.then((_) => tick(refresh: true)) : pending;
+    }
+    return _pending = _tick(refresh).whenComplete(() => _pending = null);
+  }
 
   Future<void> _policy() async {
     final config = await fetch();
     final installed = await installedVersion();
     final release = config.android;
+    fallbackURL = release.downloadURL;
     final mandatory = release.minimum.isNotEmpty &&
         compareAppVersions(installed, release.minimum) < 0;
     final candidate = AndroidUpdatePackage(release);
     final currentBuild = int.tryParse(installed.split('+').last) ?? 0;
-    final offered = compareAppVersions(installed, release.latest) < 0 &&
-        (mandatory || bucket < release.grayRatio);
+    final offered = mandatory ||
+        (compareAppVersions(installed, release.latest) < 0 &&
+            bucket < release.grayRatio);
+    if (offered && release.downloadLink.isEmpty) {
+      // A confirmed legacy minimum remains enforced even if its website is
+      // missing or a later refresh fails. Opening a browser never satisfies it.
+      externalRelease = release;
+      package = null;
+      _verifiedKey = null;
+      force = mandatory;
+      phase = AndroidUpdatePhase.external;
+      await platform.clear();
+      _nextCheck = now().add(const Duration(minutes: 15));
+      _failures = 0;
+      return;
+    }
+    externalRelease = null;
     if (offered && !candidate.valid) {
       await platform.clear();
       package = null;
@@ -74,12 +125,13 @@ class AndroidUpdateController extends ChangeNotifier {
       await platform.enqueue(candidate);
     }
     _nextCheck = now().add(const Duration(minutes: 15));
+    _failures = 0;
   }
 
   Future<void> _tick(bool refresh) async {
     if (_disposed) return;
     if (!refresh &&
-        phase == AndroidUpdatePhase.retry &&
+        (phase == AndroidUpdatePhase.retry || retrying) &&
         now().isBefore(_nextCheck)) {
       return;
     }
@@ -120,11 +172,14 @@ class AndroidUpdateController extends ChangeNotifier {
         }
         phase = AndroidUpdatePhase.ready;
       } else {
+        _verifiedKey = null;
         phase = AndroidUpdatePhase.downloading;
       }
       _failures = 0;
     } catch (_) {
-      phase = AndroidUpdatePhase.retry;
+      phase = externalRelease != null && force
+          ? AndroidUpdatePhase.external
+          : AndroidUpdatePhase.retry;
       _failures = (_failures + 1).clamp(1, 6);
       _nextCheck = now()
           .add(Duration(seconds: (30 * (1 << (_failures - 1))).clamp(30, 900)));
@@ -142,8 +197,31 @@ class AndroidUpdateController extends ChangeNotifier {
       await platform.requestPermission();
       return false;
     }
-    await platform.install(package!);
+    try {
+      await platform.install(package!);
+    } catch (_) {
+      // An installer/verification failure must not leave an unusable APK as
+      // a permanent mandatory gate. Keep the transfer, reverify on retry.
+      _verifiedKey = null;
+      phase = AndroidUpdatePhase.retry;
+      _nextCheck = now().add(const Duration(seconds: 30));
+      _publish();
+      rethrow;
+    }
     return true;
+  }
+
+  Future<void> openExternal(Future<bool> Function(Uri) open) async {
+    await tick(refresh: true);
+    if (!external) return; // Policy withdrawn, installed, or switched to APK.
+    if (retrying) throw StateError('Update configuration unavailable');
+    final uri = Uri.tryParse(externalRelease!.downloadURL);
+    if (uri == null ||
+        !['https', 'http'].contains(uri.scheme) ||
+        uri.host.isEmpty ||
+        !await open(uri)) {
+      throw StateError('Update website unavailable');
+    }
   }
 
   @override

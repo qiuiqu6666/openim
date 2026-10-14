@@ -1,0 +1,23 @@
+--- a/internal/api/router.go
++++ b/internal/api/router.go
+@@ -26,6 +26,7 @@
+ 	"github.com/gin-gonic/gin"
+ 	"github.com/gin-gonic/gin/binding"
+ 	"github.com/go-playground/validator/v10"
++	"github.com/openimsdk/open-im-server/v3/internal/api/groupnotices"
+ 	pushapns "github.com/openimsdk/open-im-server/v3/internal/push/offlinepush/apns"
+ 	"github.com/openimsdk/open-im-server/v3/internal/push/offlinepush/getui"
+ 	"github.com/openimsdk/open-im-server/v3/pkg/common/prommetrics"
+@@ -169,6 +170,12 @@
+ 	} else {
+ 		memberDB = mgocli.GetDB()
+ 	}
++	if memberDB != nil {
++		if err := groupnotices.EnsureIndexes(ctx, memberDB); err != nil {
++			return nil, err
++		}
++	}
++	groupnotices.Register(r, memberDB)
+ 	g := NewGroupApi(group.NewGroupClient(groupConn), memberDB, config.Share.IMAdminUserID)
+ 	{
+ 		groupRouterGroup := r.Group("/group")

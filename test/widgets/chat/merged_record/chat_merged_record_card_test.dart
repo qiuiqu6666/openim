@@ -53,19 +53,12 @@ void main() {
           expect(find.text('这条不应出现在预览'), findsNothing);
           expect(find.byIcon(Icons.forum_outlined), findsNothing);
           expect(find.byIcon(Icons.chevron_right), findsOneWidget);
-          expect(find.text('14:08'), findsOneWidget);
-          expect(find.byType(ChatReadReceiptIcon),
-              outgoing ? findsOneWidget : findsNothing);
+          expect(find.text('14:08'), findsNothing);
+          expect(find.byType(ChatReadReceiptIcon), findsNothing);
           final card = tester
               .getRect(find.byKey(const ValueKey('merged-record-surface')));
-          final time = tester.getRect(find.text('14:08'));
           expect(card.left, greaterThanOrEqualTo(0));
           expect(card.right, lessThanOrEqualTo(320));
-          expect(
-              time.top, greaterThan(tester.getRect(find.text('聊天记录')).bottom));
-          expect(
-              outgoing ? time.bottom <= card.bottom : time.top >= card.bottom,
-              isTrue);
           expect(message.toJson(), original);
           expect(tester.takeException(), isNull);
         });

@@ -20,6 +20,8 @@ Future<void> _openDialog(
   double textScale = 1,
   String title = _title,
   String message = _message,
+  bool keepOpenOnSuccess = false,
+  Listenable? dismissSignal,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -46,6 +48,8 @@ Future<void> _openDialog(
             message: message,
             force: force,
             onUpdate: onUpdate,
+            keepOpenOnSuccess: keepOpenOnSuccess,
+            dismissSignal: dismissSignal,
           )),
           child: const Text('Open update'),
         ),
@@ -64,6 +68,36 @@ Future<void> _openDialog(
 }
 
 void main() {
+  testWidgets(
+      'installer launch retains optional prompt for cancellation and retry',
+      (tester) async {
+    var installs = 0;
+    await _openDialog(tester,
+        force: false,
+        keepOpenOnSuccess: true,
+        onUpdate: () async => installs++);
+    await tester.tap(find.text('立即更新'));
+    await tester.pumpAndSettle();
+    expect(find.text(_title), findsOneWidget);
+    await tester.tap(find.text('立即更新'));
+    await tester.pumpAndSettle();
+    expect(installs, 2);
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.text(_title), findsNothing);
+  });
+
+  testWidgets('withdrawn mandatory release dismisses only its own update route',
+      (tester) async {
+    final signal = ValueNotifier<int>(0);
+    await _openDialog(tester,
+        force: true, dismissSignal: signal, onUpdate: () async {});
+    signal.value++;
+    await tester.pumpAndSettle();
+    expect(find.text(_title), findsNothing);
+    expect(find.text('Open update'), findsOneWidget);
+    signal.dispose();
+  });
   testWidgets('same navigator reuses the update already shown', (tester) async {
     var originalUpdates = 0;
     var duplicateUpdates = 0;

@@ -34,7 +34,7 @@ class FakePlatform implements AndroidUpdatePlatform {
       installations = 0,
       clears = 0,
       permissions = 0;
-  bool verifyFails = false, allowed = true;
+  bool verifyFails = false, allowed = true, installFails = false;
   Completer<void>? verification;
   @override
   Future<void> enqueue(AndroidUpdatePackage package) async {
@@ -71,6 +71,7 @@ class FakePlatform implements AndroidUpdatePlatform {
 
   @override
   Future<void> install(AndroidUpdatePackage package) async {
+    if (installFails) throw StateError('installer unavailable');
     installations++;
   }
 }
@@ -107,6 +108,91 @@ void main() {
     native.state = 'complete';
     await c.tick();
   }
+
+  test('missing direct link uses mandatory website gate regardless of rollout',
+      () async {
+    config = release(link: '', metadata: false, ratio: 0);
+    await c.tick();
+    expect(c.external, true);
+    expect(c.force, true);
+    expect(c.promptReady, true);
+    expect(c.ready, false);
+    expect(native.downloads, 0);
+    await expectLater(c.openExternal((_) async => true), throwsStateError);
+    expect(c.external, true); // Missing website does not bypass minimum.
+  });
+
+  test('opening website and failed recheck cannot release mandatory gate',
+      () async {
+    config = PlatformConfig({
+      'android': {
+        'minVersion': '3.0.1+2',
+        'latestVersion': '3.0.1+3',
+        'downloadURL': 'https://example.com'
+      }
+    });
+    await c.tick();
+    var opens = 0;
+    await c.openExternal((_) async {
+      opens++;
+      return true;
+    });
+    expect(opens, 1);
+    expect(c.external, true);
+    expect(c.force, true);
+    offline = true;
+    await c.tick(refresh: true);
+    expect(c.external, true);
+    expect(c.retrying, true);
+    offline = false;
+    installed = '3.0.1+3';
+    await c.tick(refresh: true);
+    expect(c.promptReady, false);
+    expect(c.force, false);
+  });
+
+  test('website policy switches to silent download when direct link appears',
+      () async {
+    config = release(link: '', metadata: false);
+    await c.tick();
+    expect(c.external, true);
+    config = release();
+    await c.tick(refresh: true);
+    expect(c.external, false);
+    expect(c.promptReady, false);
+    expect(c.phase, AndroidUpdatePhase.downloading);
+    expect(native.downloads, 1);
+  });
+
+  test('optional website release still obeys gray rollout', () async {
+    config = release(link: '', metadata: false, minimum: '', ratio: 20);
+    await c.tick();
+    expect(c.promptReady, false);
+    config = release(link: '', metadata: false, minimum: '', ratio: 100);
+    await c.tick(refresh: true);
+    expect(c.external, true);
+    expect(c.force, false);
+  });
+
+  test(
+      'known required website survives restart offline until installed minimum is met',
+      () async {
+    final saved = PlatformRelease(
+        {'minVersion': '3.0.1+2', 'downloadURL': 'https://example.com'});
+    await c.restoreRequiredWebsite(saved);
+    offline = true;
+    await c.tick();
+    expect(c.external, true);
+    expect(c.force, true);
+    final updated = AndroidUpdateController(
+        platform: native,
+        fetch: () async => config,
+        installedVersion: () async => '3.0.1+2',
+        bucket: 0);
+    await updated.restoreRequiredWebsite(saved);
+    expect(updated.promptReady, false);
+    updated.dispose();
+  });
 
   test(
       'mandatory release ignores gray ratio but does not become ready while downloading',
@@ -228,6 +314,22 @@ void main() {
     expect(c.phase, AndroidUpdatePhase.idle);
     expect(c.package, null);
     expect(native.state, 'missing');
+  });
+
+  test(
+      'failed installer removes gate and retries cached APK without downloading again',
+      () async {
+    await complete();
+    final key = c.package!.key;
+    native.installFails = true;
+    await expectLater(c.install(key), throwsStateError);
+    expect(c.ready, false);
+    native.installFails = false;
+    clock = clock.add(const Duration(seconds: 31));
+    await c.tick();
+    expect(c.ready, true);
+    expect(native.downloads, 1);
+    expect(native.verifications, 2);
   });
   test('process restart adopts completed native task without another download',
       () async {

@@ -11,10 +11,14 @@ class AndroidUpdatePackage {
     return uri != null &&
         uri.scheme == 'https' &&
         uri.host.isNotEmpty &&
+        uri.userInfo.isEmpty &&
+        !uri.hasFragment &&
         RegExp(r'^[a-f0-9]{64}$').hasMatch(release.packageSha256) &&
         release.packageSize > 0 &&
+        release.packageSize <= 2147483648 &&
         release.versionCode > 0 &&
-        release.latest.contains('+') &&
+        release.versionCode <= 2147483647 &&
+        RegExp(r'^\d+\.\d+\.\d+\+[1-9]\d*$').hasMatch(release.latest) &&
         build == release.versionCode &&
         compareAppVersions(release.latest, release.minimum) >= 0;
   }

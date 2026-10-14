@@ -47,8 +47,8 @@ void main() {
     final response = Completer<PlatformConfig>();
     await start(tester, () => response.future);
     final navigator = tester.state<NavigatorState>(find.byType(Navigator));
-    unawaited(navigator.pushReplacement(MaterialPageRoute<void>(builder: (_) =>
-        const Scaffold(body: Text('Home')))));
+    unawaited(navigator.pushReplacement(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('Home')))));
     await tester.pumpAndSettle();
     expect(find.text('Home'), findsOneWidget);
     response.complete(policy());

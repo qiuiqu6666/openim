@@ -10,13 +10,11 @@ class ChatMergedRecordCard extends StatelessWidget {
       required this.summaries,
       required this.isOutgoing,
       required this.onTap,
-      this.time,
       this.status});
   final String title;
   final List<String> summaries;
   final bool isOutgoing;
   final VoidCallback onTap;
-  final String? time;
   final Widget? status;
 
   @override
@@ -24,17 +22,6 @@ class ChatMergedRecordCard extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final primary = AppTokens.textPrimary(dark: dark);
     final secondary = ChatMergedRecordTokens.secondary(dark);
-    final metadata = Row(mainAxisSize: MainAxisSize.min, children: [
-      if (time != null)
-        Text(time!,
-            style: TextStyle(
-                color: secondary,
-                fontSize: ChatMergedRecordTokens.metadataSize)),
-      if (status != null) ...[
-        const SizedBox(width: AppTokens.s2),
-        Flexible(child: status!),
-      ],
-    ]);
     return SizedBox(
         width: ChatMergedRecordTokens.width,
         child: Column(
@@ -50,7 +37,8 @@ class ChatMergedRecordCard extends StatelessWidget {
                   child: InkWell(
                       onTap: onTap,
                       child: Padding(
-                          padding: const EdgeInsets.all(AppTokens.s5),
+                          padding: const EdgeInsets.fromLTRB(AppTokens.s5,
+                              AppTokens.s5, AppTokens.s5, AppTokens.s3),
                           child: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,7 +75,7 @@ class ChatMergedRecordCard extends StatelessWidget {
                                 Divider(
                                     height: 1,
                                     color: primary.withValues(alpha: .1)),
-                                const SizedBox(height: AppTokens.s4),
+                                const SizedBox(height: AppTokens.s3),
                                 Row(children: [
                                   Expanded(
                                       child: Text(StrRes.chatRecord,
@@ -98,21 +86,13 @@ class ChatMergedRecordCard extends StatelessWidget {
                                   Icon(Icons.chevron_right,
                                       size: AppTokens.s6, color: secondary)
                                 ]),
-                                if (isOutgoing &&
-                                    (time != null || status != null)) ...[
+                                if (isOutgoing && status != null) ...[
                                   const SizedBox(height: AppTokens.s4),
                                   Align(
                                       alignment: Alignment.centerRight,
-                                      child: metadata),
+                                      child: status!),
                                 ],
                               ])))),
-              if (!isOutgoing && time != null) ...[
-                const SizedBox(height: AppTokens.s2),
-                Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: AppTokens.s2),
-                    child: metadata),
-              ],
             ]));
   }
 }
@@ -122,7 +102,6 @@ class ChatMergedRecordTokens {
   static const width = 285.0;
   static const titleSize = 16.0;
   static const summarySize = 13.0;
-  static const metadataSize = 12.0;
   static Color secondary(bool dark) =>
       dark ? const Color(0xFFB5BEC8) : const Color(0xFF626D79);
   static Color background({required bool dark, required bool outgoing}) => dark

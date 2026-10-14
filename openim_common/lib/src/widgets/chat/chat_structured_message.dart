@@ -69,11 +69,12 @@ class ChatStructuredMessage extends StatelessWidget {
         title: message.mergeElem?.title ?? StrRes.chatRecord,
         summaries: message.mergeElem?.abstractList ?? const [],
         isOutgoing: isOutgoing,
-        status: status,
-        time: message.sendTime == null
-            ? null
-            : DateFormat('HH:mm')
-                .format(DateTime.fromMillisecondsSinceEpoch(message.sendTime!)),
+        // Successful records omit time/read receipts; retain actionable
+        // failure and pending-send feedback from the message container.
+        status: message.status == MessageStatus.failed ||
+                message.status == MessageStatus.sending
+            ? status
+            : null,
         onTap: () {
           if (message.hasExpired) return;
           if (depth >= 8) {
