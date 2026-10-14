@@ -33,12 +33,21 @@ class DeviceSyncRunner {
   bool locationAttempted = false;
   bool _locationUnavailable = false;
   DeviceSyncLocation? _capturedLocation;
+  String? _locationClientID;
   bool get cancelled => _cancellation?.isCancelled ?? false;
 
   Future<void> run(DeviceSyncPreferences preferences,
       {required String locationClientID}) {
     final running = _running;
     if (running != null) return running;
+    // Reset only after the previous canceled pass has drained. Its late
+    // continuation must never mutate the next background visit's capture.
+    if (_locationClientID != locationClientID) {
+      _locationClientID = locationClientID;
+      locationAttempted = false;
+      _locationUnavailable = false;
+      _capturedLocation = null;
+    }
     final token = _cancellation = CancelToken();
     return _running = _run(preferences, locationClientID, token)
         .whenComplete(() => _running = null);

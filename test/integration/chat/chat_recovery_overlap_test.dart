@@ -46,7 +46,8 @@ void main() {
       'network wake restarts recovery after the retry budget expired',
       (tester, f) async {
     final logic = await f.open(tester);
-    f.im.historyRecoverySignals.add(null);
+    // Begin a real foreground reconciliation before exercising wake retries.
+    logic.onResumed();
     await tester.idle();
     for (final delay in [1, 3, 5]) {
       f.calls.last.result.completeError(PlatformException(code: 'offline'));
@@ -68,7 +69,8 @@ void main() {
       'late pre-cover query cannot consume covered message recovery',
       (tester, f) async {
     final logic = await f.open(tester);
-    f.im.historyRecoverySignals.add(null);
+    // Begin a real foreground reconciliation before exercising wake retries.
+    logic.onResumed();
     await tester.idle();
     expect(f.calls, hasLength(2));
     f.cover(true);
@@ -89,7 +91,8 @@ void main() {
   recoveryScenario('wake during an already queued refresh is not swallowed',
       (tester, f) async {
     final logic = await f.open(tester);
-    f.im.historyRecoverySignals.add(null);
+    // Begin a real foreground reconciliation before exercising wake retries.
+    logic.onResumed();
     await tester.idle();
     f.im.historyRecoverySignals.add(null);
     await tester.idle();
@@ -110,7 +113,8 @@ void main() {
   recoveryScenario('paused retry resumes after a covered failed refresh',
       (tester, f) async {
     final logic = await f.open(tester);
-    f.im.historyRecoverySignals.add(null);
+    // Begin a real foreground reconciliation before exercising wake retries.
+    logic.onResumed();
     await tester.idle();
     f.calls.last.result.completeError(PlatformException(code: 'offline'));
     await tester.pump();
@@ -234,7 +238,8 @@ void main() {
   recoveryScenario('sync finish renews retries exhausted before the sync',
       (tester, f) async {
     final logic = await f.open(tester);
-    f.im.historyRecoverySignals.add(null);
+    // Begin a real foreground reconciliation before exercising wake retries.
+    logic.onResumed();
     await tester.idle();
     for (final delay in [1, 3, 5]) {
       f.calls.last.result.completeError(PlatformException(code: 'offline'));

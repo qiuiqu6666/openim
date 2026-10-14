@@ -198,6 +198,23 @@ void main() {
     logic.onDelete();
   });
 
+  testWidgets('healthy ended window ignores unrelated global recovery cycles',
+      (tester) async {
+    final logic = await open(tester);
+    for (var cycle = 0; cycle < 3; cycle++) {
+      im.imSdkStatus(IMSdkStatus.syncFailed);
+      im.historyRecoverySignals.add(null);
+      im.imSdkStatus(IMSdkStatus.syncStart);
+      im.imSdkStatus(IMSdkStatus.syncEnded);
+      await tester.pump(const Duration(seconds: 30));
+    }
+    expect(calls, hasLength(1));
+    expect(logic.historyLoading.value, isFalse);
+    expect(logic.historyPagingLoading.value, isFalse);
+    expect(logic.messageList.single.clientMsgID, 'before-background');
+    logic.onDelete();
+  });
+
   testWidgets('ordinary conversation and message callbacks need no extra read',
       (tester) async {
     final logic = await open(tester);
@@ -351,7 +368,7 @@ void main() {
   testWidgets('failed foreground reconciliation uses the bounded history retry',
       (tester) async {
     final logic = await open(tester);
-    im.historyRecoverySignals.add(null);
+    logic.onResumed();
     await tester.idle();
     expect(calls, hasLength(2));
     calls.last.result.completeError(PlatformException(code: 'offline'));

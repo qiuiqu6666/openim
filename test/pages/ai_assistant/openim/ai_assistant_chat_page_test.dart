@@ -405,7 +405,7 @@ void main() {
                 query: '整理',
               )));
       final text = tester.widget<AiHighlightText>(find.byType(AiHighlightText));
-      expect(text.style.color, AiPalette.primary(dark));
+      expect(text.style.color, AiPalette.text);
       final rich = tester.widget<RichText>(find.descendant(
           of: find.byType(AiHighlightText), matching: find.byType(RichText)));
       final spans = <TextSpan>[];

@@ -75,16 +75,14 @@ class GroupRequestsPage extends StatelessWidget {
         ));
   }
 
-  Widget _buildItemView(GroupApplicationInfo info) =>
-      Obx(() => GroupRequestItem(
-            application: info,
-            groupName: logic.getGroupName(info),
-            groupAvatar: logic.getGroupAvatar(info),
-            outgoing: info.userID == OpenIM.iMManager.userID,
-            inviter:
-                logic.isInvite(info) ? logic.getInviterNickname(info) : null,
-            handler: logic.getHandlerNickname(info),
-            onReview: () => logic.handle(info),
-            onOpenChat: () => logic.openChat(info),
-          ));
+  Widget _buildItemView(GroupApplicationInfo info) => GroupRequestItem(
+        application: info,
+        groupName: logic.getGroupName(info),
+        groupAvatar: logic.getGroupAvatar(info),
+        outgoing: info.userID == OpenIM.iMManager.userID,
+        inviter: logic.isInvite(info) ? logic.getInviterNickname(info) : null,
+        handler: logic.getHandlerNickname(info),
+        onReview: () => logic.handle(info),
+        onOpenChat: () => logic.openChat(info),
+      );
 }

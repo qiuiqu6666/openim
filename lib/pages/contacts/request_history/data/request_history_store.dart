@@ -66,6 +66,26 @@ class RequestHistoryStore {
   bool isHidden(RequestHistoryEntry entry) =>
       isCleared(entry) || _deleted.containsKey(entry.id);
 
+  /// One-time export for server-owned group notices; friend history stays local.
+  Map<String, dynamic> get groupMigration {
+    final items = <Map<String, dynamic>>[];
+    if (kind == RequestHistoryKind.group) {
+      for (final entry in _deleted.entries) {
+        try {
+          final id = jsonDecode(entry.key);
+          if (id is List &&
+              id.length == 3 &&
+              id[0] is String &&
+              id[1] is String) {
+            items.add(
+                {'groupID': id[0], 'userID': id[1], 'reqTime': entry.value});
+          }
+        } on FormatException {/* Ignore corrupt legacy identities. */}
+      }
+    }
+    return {'through': _clearedThrough ?? 0, 'items': items};
+  }
+
   Future<void> hide(RequestHistoryEntry entry) =>
       _save(_clearedThrough, {..._deleted, entry.id: entry.time});
 

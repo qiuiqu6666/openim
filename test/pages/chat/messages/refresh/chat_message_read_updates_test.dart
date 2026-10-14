@@ -159,6 +159,7 @@ void main() {
     receipt.complete(_message('sending'));
     await tester.pump();
     await pending;
+    await tester.pump();
     expect(find.text('sending:${MessageStatus.succeeded}'), findsOneWidget);
     expect(builds['sending'], greaterThan(before['sending']!));
     expect(builds['other'], before['other']);

@@ -102,7 +102,7 @@ class ChatHistoryPrefetcher {
 
   Future<AdvancedMessage> _read(
           (String, String?, int, String, int) key, int count) =>
-      _reads.run(Object(), () => fetch(key.$4, count),
+      _reads.run((key, count), () => fetch(key.$4, count),
           timeout: _readTimeout,
           isCurrent: () => key.$1 == accountID() && key.$2 == token());
 

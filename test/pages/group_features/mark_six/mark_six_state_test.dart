@@ -190,24 +190,22 @@ void main() {
     expect(state.data?['total']['totalFlow'], 22);
     expect(state.loading, isFalse);
   });
-  test('descendants pagination deduplicates IDs and retains orphan/cycle rows',
+  test(
+      'complete descendants snapshot deduplicates IDs and retains orphan/cycle rows',
       () async {
-    final api = MarkSixFakeApi(
-        respond: (_, __, query, ___) => {
-              'page': query['page'],
-              'userId': 'self',
-              'total': 3,
-              'hasMore': query['page'] == 1,
-              'items': query['page'] == 1
-                  ? [
-                      {'userId': 'a', 'directParentUserId': 'b'},
-                      {'userId': 'b', 'directParentUserId': 'a'}
-                    ]
-                  : [
-                      {'userId': 'a', 'balance': 8},
-                      {'userId': 'c', 'directParentUserId': 'missing'}
-                    ]
-            });
+    final api = MarkSixFakeApi(respond: (_, __, query, ___) {
+      expect(query, {'scope': 'all'});
+      return {
+        'userId': 'self',
+        'total': 4,
+        'items': [
+          {'userId': 'a', 'directParentUserId': 'b'},
+          {'userId': 'b', 'directParentUserId': 'a'},
+          {'userId': 'a', 'directParentUserId': 'b', 'balance': 8},
+          {'userId': 'c', 'directParentUserId': 'missing'},
+        ]
+      };
+    });
     final repo = MarkSixRepository(markSixContext(api));
     final state = AgentDescendantsController(repo);
     addTearDown(() {
@@ -221,7 +219,7 @@ void main() {
     expect(state.hasMore, isFalse);
     expect(agentVisibleRows(state.items, ownerID: 'self'), hasLength(3));
     await state.load(more: true);
-    expect(api.calls, hasLength(2));
+    expect(api.calls, hasLength(1));
   });
   test(
       'permission event clears private projection and prevents further requests',

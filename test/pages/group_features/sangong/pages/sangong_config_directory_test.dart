@@ -127,6 +127,7 @@ TextEditingController _input(WidgetTester tester, String label) => tester
 
 void main() {
   setUp(() {
+    OpenIM.iMManager.userID = 'owner';
     Get.put<AppController>(_App());
     Get.put<IMController>(_IM());
   });

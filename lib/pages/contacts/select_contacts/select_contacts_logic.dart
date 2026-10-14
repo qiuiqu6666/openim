@@ -10,6 +10,7 @@ import 'package:openim_common/openim_common.dart';
 import 'select_contacts_view.dart';
 import 'recent_conversations/recent_conversation_preview_controller.dart';
 import 'recent_conversations/recent_conversation_directory.dart';
+import 'recent_conversations/recent_membership_cache.dart';
 import 'selection/contact_selection_policy.dart';
 import '../../official_account/widgets/official_account_name_label.dart';
 
@@ -68,7 +69,16 @@ class SelectContactsLogic extends GetxController
   final recentLoadFailed = false.obs;
   final RecentConversationDirectory _recentDirectory;
   int _recentGeneration = 0;
+  final _confirmingSelection = false.obs;
+  bool _validatingRecipients = false;
+  final _localMembershipCache = RecentMembershipCache();
+  RecentMembershipCache get _membershipCache =>
+      Get.isRegistered<ConversationLogic>()
+          ? RecentMembershipCache.forSession(
+              Get.find<ConversationLogic>(), _accountID, _sessionToken)
+          : _localMembershipCache;
   String? ex;
+  ForwardPreviewData? forwardPreview;
   UserInfo? sharedContact;
   String? cardRecipientName;
   String? cardRecipientFaceURL;
@@ -116,6 +126,7 @@ class SelectContactsLogic extends GetxController
     _removeUnavailableSelections();
     openSelectedSheet = Get.arguments['openSelectedSheet'];
     ex = Get.arguments['ex'];
+    forwardPreview = Get.arguments['forwardPreview'];
     sharedContact = Get.arguments['sharedContact'];
     cardRecipientName = Get.arguments['cardRecipientName'];
     cardRecipientFaceURL = Get.arguments['cardRecipientFaceURL'];
@@ -173,24 +184,38 @@ class SelectContactsLogic extends GetxController
           showNotificationAccounts: action == SelAction.forward);
 
   Future<void> reloadRecentConversations() async {
-    if (!selectionCurrent || hiddenConversations) return;
+    if (!selectionCurrent || hiddenConversations || _validatingRecipients) {
+      return;
+    }
     final generation = ++_recentGeneration;
     bool current() => selectionCurrent && generation == _recentGeneration;
     recentLoading.value = true;
     recentLoadFailed.value = false;
     try {
       final result = await _recentDirectory.load(
-          List<ConversationInfo>.of(Get.find<ConversationLogic>().list),
-          isVisible: isVisible,
-          isCurrent: current);
+        List<ConversationInfo>.of(Get.find<ConversationLogic>().list),
+        isVisible: isVisible,
+        isCurrent: current,
+        cache: _membershipCache,
+        onUpdate: (rows) {
+          if (current()) conversationList.assignAll(rows);
+        },
+        onExcluded: _excludeRecentGroup,
+      );
       if (!current()) return;
-      conversationList.assignAll(result.rows);
       recentLoadFailed.value = result.failed;
     } catch (_) {
       if (current()) recentLoadFailed.value = true;
     } finally {
       if (current()) recentLoading.value = false;
     }
+  }
+
+  void _excludeRecentGroup(String groupID) {
+    if (!selectionCurrent) return;
+    conversationList.removeWhere((row) => row.groupID == groupID);
+    checkedList.removeWhere(
+        (_, info) => IMUtils.convertCheckedToGroupID(info) == groupID);
   }
 
   static String? parseID(e) {
@@ -302,7 +327,17 @@ class SelectContactsLogic extends GetxController
     }
   }
 
-  confirmSelectedList() async {
+  Future<void> confirmSelectedList() async {
+    if (!enabledConfirmButton || !selectionCurrent) return;
+    _confirmingSelection.value = true;
+    try {
+      await _confirmSelectedList();
+    } finally {
+      if (!isClosed) _confirmingSelection.value = false;
+    }
+  }
+
+  Future<void> _confirmSelectedList() async {
     _removeUnavailableSelections();
     if (action == SelAction.recommend &&
         sharedContact != null &&
@@ -337,7 +372,8 @@ class SelectContactsLogic extends GetxController
                 )
               : ForwardHintDialog(
                   title: ex ?? '',
-                  checkedList: checkedList.values.toList(),
+                  preview: forwardPreview,
+                  checkedList: recipients,
                   nameMinHeight:
                       recipients.any(ContactSelectionPolicy.hasVerifiedIdentity)
                           ? 16
@@ -351,11 +387,36 @@ class SelectContactsLogic extends GetxController
                     style: style,
                   ),
                 ));
-      if (sure == true) {
+      if (sure == true && selectionCurrent) {
+        // Stop background checks before issuing newer send-time checks.
+        ++_recentGeneration;
+        recentLoading.value = false;
+        _validatingRecipients = true;
+        bool valid;
+        try {
+          valid = await _recentDirectory.validateForSend(
+            recipients.map(IMUtils.convertCheckedToGroupID).whereType<String>(),
+            isCurrent: () => selectionCurrent,
+            cache: _membershipCache,
+            onExcluded: _excludeRecentGroup,
+          );
+        } finally {
+          _validatingRecipients = false;
+        }
+        if (!selectionCurrent) return;
         _removeUnavailableSelections();
-        if (checkedList.isEmpty) return;
+        if (!valid ||
+            recipients.any((info) =>
+                !allowsSelection(info) ||
+                !checkedList.containsKey(parseID(info)))) {
+          IMViews.showToast(Get.locale?.languageCode == 'zh'
+              ? '部分群聊已不可用或暂时无法确认入群状态，请检查后重试'
+              : 'Some groups are unavailable or could not be verified. Please review and retry.');
+          unawaited(reloadRecentConversations());
+          return;
+        }
         Get.back(result: {
-          "checkedList": checkedList.values,
+          "checkedList": recipients,
         });
       }
     } else {
@@ -403,6 +464,7 @@ class SelectContactsLogic extends GetxController
       checkedList.removeWhere((_, info) => !allowsSelection(info));
 
   bool get enabledConfirmButton =>
+      !_confirmingSelection.value &&
       checkedList.values.any(allowsSelection) &&
       (action != SelAction.recommend ||
           sharedContact == null ||

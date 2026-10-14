@@ -146,7 +146,7 @@ void main() {
     });
   }
 
-  test('an earlier refresh cannot replace the latest completed refresh',
+  test('overlapping refreshes share one snapshot and the next read is fresh',
       () async {
     final logic = ConversationLogic();
     final old = logic.onRefresh();
@@ -154,11 +154,15 @@ void main() {
     final current = logic.onRefresh();
     await _flush();
     expect(logic.canShowEmptyFeed, isFalse);
-    replies[1].complete(_json([_conversation('new', 2)]));
-    await current;
-    expect(logic.canShowEmptyFeed, isTrue);
+    expect(replies, hasLength(1));
     replies[0].complete(_json([_conversation('old', 1)]));
-    await old;
+    await Future.wait([old, current]);
+    expect(logic.list.single.conversationID, 'old');
+    final next = logic.onRefresh();
+    await _flush();
+    expect(replies, hasLength(2));
+    replies[1].complete(_json([_conversation('new', 2)]));
+    await next;
     expect(logic.canShowEmptyFeed, isTrue);
     expect(logic.list.single.conversationID, 'new');
     logic.onClose();
@@ -231,6 +235,11 @@ void main() {
     await _flush();
     logic.onChanged([_conversation('removed', 2)]);
     replies.single.complete(_json([_conversation('removed', 1)]));
+    // Deletion changes native pagination; the reader restarts once before
+    // publishing a stable snapshot. Complete that read while delete is pending.
+    await _flush();
+    expect(replies, hasLength(2));
+    replies.last.complete(_json([_conversation('removed', 1)]));
     await refresh;
     expect(logic.list, isEmpty);
     deletion!.complete();

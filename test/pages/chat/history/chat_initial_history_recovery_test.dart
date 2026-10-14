@@ -19,7 +19,8 @@ void main() {
     await tester.idle();
     fixture.calls.single.complete([], isEnd: true);
     await tester.pump();
-    expect(logic.messageList, isEmpty);
+    expect(logic.messageList.map((m) => m.clientMsgID), ['known-latest']);
+    expect(logic.historyError.value, isNotNull);
     return logic;
   }
 
@@ -27,12 +28,16 @@ void main() {
       'empty first page recovers known latest without another push',
       (tester, fixture) async {
     final logic = await openEmpty(tester, fixture);
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(seconds: 1));
     expect(fixture.calls, hasLength(2));
-    fixture.calls.last
-        .complete([recoveryMessage('known-latest', 1000)], isEnd: true);
+    fixture.calls.last.complete([
+      recoveryMessage('server-latest', 1001),
+      recoveryMessage('known-latest', 1000),
+    ], isEnd: true);
     await tester.pump();
-    expect(logic.messageList.map((m) => m.clientMsgID), ['known-latest']);
+    expect(logic.messageList.map((m) => m.clientMsgID),
+        ['known-latest', 'server-latest']);
+    expect(logic.historyError.value, isNull);
     await tester.pump(const Duration(seconds: 10));
     expect(fixture.calls, hasLength(2));
   });
@@ -41,7 +46,6 @@ void main() {
       (tester, fixture) async {
     await openEmpty(tester, fixture);
     for (final delay in [
-      const Duration(milliseconds: 100),
       const Duration(seconds: 1),
       const Duration(seconds: 3),
     ]) {
@@ -52,7 +56,7 @@ void main() {
       await tester.pump();
     }
     await tester.pump(const Duration(minutes: 1));
-    expect(fixture.calls, hasLength(4));
+    expect(fixture.calls, hasLength(3));
   });
 
   recoveryScenario('closing the page cancels cold history recovery',

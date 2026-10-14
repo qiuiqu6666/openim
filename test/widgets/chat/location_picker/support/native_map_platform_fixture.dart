@@ -10,6 +10,7 @@ class NativeMapPlatformFixture {
   final platformCalls = <MethodCall>[];
   final _channels = <MethodChannel>[];
   String? statusError;
+  Uint8List? snapshotBytes;
   TestDefaultBinaryMessenger get messenger =>
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
@@ -31,6 +32,7 @@ class NativeMapPlatformFixture {
         messenger.setMockMethodCallHandler(channel, (mapCall) async {
           calls.add(mapCall);
           if (mapCall.method == 'status') return {'error': statusError};
+          if (mapCall.method == 'snapshot') return snapshotBytes;
           return null;
         });
         return platform == TargetPlatform.android && args['hybrid'] != true

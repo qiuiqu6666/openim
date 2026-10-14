@@ -183,7 +183,7 @@ void main() {
   });
 
   test(
-      'server errors and consumed or conflicting quotes require swap recovery only',
+      'server errors and consumed or conflicting quotes require recovery according to operation ambiguity',
       () async {
     for (final code in [500, 503, 20062, 20073]) {
       transport.body = {'errCode': code, 'errMsg': 'secret 123456'};
@@ -199,7 +199,9 @@ void main() {
               toAddress: 'T-destination',
               payPassword: '123456'),
           throwsA(isA<FundApiException>().having(
-              (e) => e.isUncertain, 'existing withdrawal behavior', false)));
+              (e) => e.isUncertain,
+              'ambiguous withdrawals also require recovery',
+              const {500, 503, 20062}.contains(code))));
     }
     for (final code in [20026, 20027, 20072, 20074, 20075]) {
       transport.body = {'errCode': code};

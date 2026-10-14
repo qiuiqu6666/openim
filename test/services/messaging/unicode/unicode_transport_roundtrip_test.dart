@@ -314,7 +314,7 @@ void main() {
         preferences: const MessageNotificationPreferences());
     _sameSequence(presentation?.title, text);
     _sameSequence(presentation?.senderName, text);
-    _sameSequence(presentation?.body, '$text: $text');
+    _sameSequence(presentation?.body, text);
 
     String? clipboard;
     binding.defaultBinaryMessenger

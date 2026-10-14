@@ -20,6 +20,9 @@ import '../../routes/app_pages.dart';
 import '../../services/chat_message_sender.dart';
 import '../../services/favorite_send_coordinator.dart';
 import '../notifications/app_badge_coordinator.dart';
+import '../notifications/applications/application_notice.dart';
+import '../notifications/applications/application_notice_runtime.dart';
+import '../notifications/applications/application_notice_adapter.dart';
 import '../notifications/message_notification_runtime.dart';
 import '../notifications/message_notification_preferences.dart';
 import '../notifications/system_message_notifier.dart';
@@ -37,6 +40,23 @@ class AppController extends GetxController with UpgradeManger {
 
   final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
   MessageNotificationRuntime? _messageNotifications;
+  ApplicationNoticeRuntime? _applicationNotices;
+  bool _applicationNotifierReady = false;
+  MessageNotificationSession? _applicationReadySession;
+
+  void synchronizeApplicationNotices() => _applicationNotices?.synchronize();
+
+  void showFriendApplicationNotice(FriendApplicationInfo value) =>
+      _receiveApplicationNotice(ApplicationNotice.friend(value));
+  void showGroupApplicationNotice(GroupApplicationInfo value) =>
+      _receiveApplicationNotice(ApplicationNotice.group(value));
+  void _receiveApplicationNotice(ApplicationNotice value) {
+    unawaited(_applicationNotices?.receive(value).catchError((Object error) {
+      Logger.print('Application notice unavailable: ${error.runtimeType}',
+          onlyConsole: true);
+    }));
+  }
+
   IMController? _notificationController;
   final _notificationConversationSubscriptions = <StreamSubscription>[];
   APNsPushRuntime? _apnsPush;
@@ -95,6 +115,7 @@ class AppController extends GetxController with UpgradeManger {
 
     final resumed = isRunningBackground && !run;
     isRunningBackground = run;
+    synchronizeApplicationNotices();
     // Apply the sync gate before any await. A delayed background callback must
     // not undo a newer foreground cancellation.
     DeviceSyncRuntime.instance.setForeground(!run);
@@ -128,7 +149,24 @@ class AppController extends GetxController with UpgradeManger {
           rtcBridge?.hasConnection != true,
     );
     DeviceSyncRuntime.instance.setForeground(!isRunningBackground);
+    _applicationNotices = createApplicationNotices(
+      plugin: flutterLocalNotificationsPlugin,
+      session: _notificationSession,
+      ready: () =>
+          _applicationNotifierReady &&
+          _applicationReadySession == _notificationSession() &&
+          _notificationSdkReady() &&
+          Get.find<IMController>().notificationPreferencesReady &&
+          Get.find<IMController>().currentSdkStatus == IMSdkStatus.syncEnded,
+      foreground: () => !isRunningBackground,
+      globalReceiveOption: () => Get.isRegistered<IMController>()
+          ? Get.find<IMController>().userInfo.value.globalRecvMsgOpt
+          : 2,
+      suppressSound: () => shouldMuted,
+    );
     _messageNotifications = MessageNotificationRuntime(
+      onApplicationResponse: (payload) =>
+          _applicationNotices?.handleTap(payload) ?? false,
       metadataCacheDuration: const Duration(seconds: 1),
       notifier: SystemMessageNotifier(flutterLocalNotificationsPlugin),
       currentSession: _notificationSession,
@@ -229,6 +267,8 @@ class AppController extends GetxController with UpgradeManger {
     }
     try {
       await _messageNotifications!.initialize();
+      _applicationNotifierReady = true;
+      synchronizeApplicationNotices();
     } catch (error) {
       Logger.print(
           'Notification initialization unavailable: ${error.runtimeType}',
@@ -277,6 +317,14 @@ class AppController extends GetxController with UpgradeManger {
         }
         _notificationConversationSubscriptions.clear();
         _notificationController = controller;
+        _notificationConversationSubscriptions.addAll([
+          controller.friendApplicationAddedSubject
+              .listen(showFriendApplicationNotice),
+          controller.groupApplicationAddedSubject
+              .listen(showGroupApplicationNotice),
+          controller.imSdkStatusPublishSubject
+              .listen((_) => synchronizeApplicationNotices()),
+        ]);
         for (final stream in [
           controller.conversationChangedSubject,
           controller.conversationAddedSubject
@@ -288,7 +336,15 @@ class AppController extends GetxController with UpgradeManger {
       }
     }
     try {
+      final noticeSession = _notificationSession();
+      final noticeGeneration = _notificationGeneration;
       await _messageNotifications?.onSessionReady(authenticated: authenticated);
+      if (!_closed &&
+          noticeGeneration == _notificationGeneration &&
+          noticeSession == _notificationSession()) {
+        _applicationReadySession = noticeSession;
+      }
+      synchronizeApplicationNotices();
     } catch (error) {
       Logger.print('Notification session unavailable: ${error.runtimeType}',
           onlyConsole: true);
@@ -324,6 +380,8 @@ class AppController extends GetxController with UpgradeManger {
     NotificationSoundActivity.interruptPreviews();
     _notificationGeneration++;
     _messageNotifications?.invalidateSession();
+    _applicationNotices?.invalidate();
+    _applicationReadySession = null;
     unawaited(endRemotePushSession());
   }
 
@@ -415,6 +473,7 @@ class AppController extends GetxController with UpgradeManger {
       ActivityRuntime.instance.dispose();
     }
     _messageNotifications?.close();
+    _applicationNotices?.close();
     _messageListNavigation = null;
     unawaited(_apnsPush?.dispose());
     unawaited(_pushPreferenceChanges?.cancel());

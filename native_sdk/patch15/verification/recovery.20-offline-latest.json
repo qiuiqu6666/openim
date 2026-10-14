@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-14",
+  "sdk_version": "v3.8.3-patch.15+recovery.20",
+  "source_sha256": "fa4a96840aa5b69436e2541104e219bf7fc2a15553fe4c9dc5e6b71c27a29b13",
+  "patch_sha256": "4d657333d944115eba318f41725a9a91691d60778d5d610d2ccca70576ef7887",
+  "source_files": 379,
+  "core_race_tests": {
+    "packages": [
+      "pkg/common",
+      "pkg/network",
+      "internal/interaction",
+      "internal/conversation_msg",
+      "pkg/db"
+    ],
+    "result": "passed on final locked mobile source, CGO enabled, real SQLite",
+    "log": "E:\\openim\\artifacts\\offline-latest-fix-20261014\\locked-source-race.log"
+  },
+  "scenarios": [
+    "Reconnect and foreground wake recover latest without a peer push",
+    "Short gap and server sequence 100000000 recover before ancillary metadata failure",
+    "Metadata failure remains retryable and successful retry emits sync end",
+    "207 conversation latest-preview priority and checkpoint invariants",
+    "Loaded empty refresh preserves messages and paging anchors for both isEnd values",
+    "Empty initial read preserves seed without confirming history or enabling read receipts",
+    "Cold history retries automatically with a finite budget and stops on page close",
+    "Explicit latest replacement retains visible messages on empty response",
+    "Explicit clear, deletion, account and generation fences remain authoritative"
+  ],
+  "flutter_regression": {
+    "passed": 391,
+    "skipped": 13,
+    "log": "E:\\openim\\artifacts\\offline-latest-fix-20261014\\flutter-recovery-final.log"
+  },
+  "source_lock_tests": {
+    "passed": 15
+  },
+  "patch_roundtrip": "379 files match except declared dependency/version overlays",
+  "focused_analyze": "no errors or warnings; existing informational lints in ChatLogic",
+  "android": {
+    "aar_abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "aar_sha256": "b6d8df463f4b5dc55b8b24a64bc5508fbef0de1f5a5c1a801f0bc371a4e96251",
+    "apk_sha256": "63cdea94ece4e7cabd773f8bd41f60edcc74e2482e7bbd323d810b12d114a2e9",
+    "apk_path": "E:\\openim\\artifacts\\offline-latest-fix-20261014\\99chat-offline-latest-recovery20-debug.apk",
+    "apk_type": "debug, arm64, 3.0.1+2033",
+    "embedded_native_binary_matches_aar_after_standard_android_stripping": true,
+    "embedded_native_sha256": "852f3d5c9d1ef2ac968789d03ed7d59bcc73d0b7b67016966006a27aeddb18eb",
+    "dart_sources_sha256": {
+      "lib/pages/chat/chat_logic.dart": "fcd6fec805c4629b27ccf2d8dae00789de77d83056ffd8b00a0131facba91893",
+      "lib/pages/chat/history/chat_history_loader.dart": "5b827e91a65da308934c4849ece3342ae880c94b3b2fb9039fa22d7e7acc04dc"
+    }
+  },
+  "ios": "shared locked source delivered as requested; no Framework build or device validation",
+  "limitations": {
+    "device_runtime": "not run; no app installation, deployment or peer messages sent",
+    "expanded_suite": "33 additional conversation/archive/peek tests fail identically on the baseline Dart source; not introduced by this change",
+    "baseline_failure_names": [
+      "test/pages/conversation/archive/archived_conversation_page_test.dart: all read operates only on current archived scope (false)",
+      "test/pages/conversation/archive/archived_conversation_page_test.dart: all read operates only on current archived scope (true)",
+      "test/pages/conversation/archive/archived_conversation_page_test.dart: archive navigation and empty scope (false, false)",
+      "test/pages/conversation/archive/archived_conversation_page_test.dart: archive navigation and empty scope (false, true)",
+      "test/pages/conversation/archive/archived_conversation_page_test.dart: archive navigation and empty scope (true, false)",
+      "test/pages/conversation/archive/archived_conversation_page_test.dart: archive navigation and empty scope (true, true)",
+      "test/pages/conversation/archive/archived_conversation_page_test.dart: done leaves a pending archive read batch and preserves the next selection",
+      "test/pages/conversation/archive/archived_conversation_page_test.dart: failed mark read retains unread data and selected row for retry",
+      "test/pages/conversation/archive/archived_conversation_page_test.dart: failed unarchive preserves selected row for retry",
+      "test/pages/conversation/archive/archived_conversation_page_test.dart: selected read keeps unselected archived conversation unread",
+      "test/pages/conversation/archive/archived_conversation_page_test.dart: unarchive updates real organizer state and retains original folder",
+      "test/pages/conversation/conversation_edit_host_test.dart: archive uses the root route and hides the home navigation (false)",
+      "test/pages/conversation/conversation_edit_host_test.dart: archive uses the root route and hides the home navigation (true)",
+      "test/pages/conversation/conversation_edit_host_test.dart: done leaves read batch running and blocks duplicates (false)",
+      "test/pages/conversation/conversation_edit_host_test.dart: done leaves read batch running and blocks duplicates (true)",
+      "test/pages/conversation/conversation_edit_host_test.dart: home swaps its navigation for selected conversation actions (false)",
+      "test/pages/conversation/conversation_edit_host_test.dart: home swaps its navigation for selected conversation actions (true)",
+      "test/pages/conversation/conversation_refresh_lifecycle_test.dart: an earlier refresh cannot replace the latest completed refresh",
+      "test/pages/conversation/conversation_refresh_lifecycle_test.dart: deletion rejects stale callbacks and refresh snapshots but permits a later new message",
+      "test/pages/conversation/group_identity/legacy_group_projection_integration_test.dart: cached first page is deduplicated on login",
+      "test/pages/conversation/group_identity/legacy_group_projection_integration_test.dart: refresh deduplicates without reading or hiding old group history",
+      "test/pages/conversation/group_identity/legacy_group_projection_integration_test.dart: repeated stale native snapshots remain collapsed without maintenance writes",
+      "test/pages/conversation/group_identity/legacy_group_projection_integration_test.dart: replacement arriving after first page immediately collapses old row",
+      "test/pages/conversation/group_identity/legacy_group_projection_integration_test.dart: restart reconstructs projection from persistent SDK rows",
+      "test/pages/conversation/peek/conversation_peek_integration_test.dart: editing disables long press preview and history requests (false)",
+      "test/pages/conversation/peek/conversation_peek_integration_test.dart: editing disables long press preview and history requests (true)",
+      "test/pages/conversation/peek/conversation_peek_reply_media_test.dart: long image is a clear top crop in both directions (false)",
+      "test/pages/conversation/peek/conversation_peek_reply_media_test.dart: long image is a clear top crop in both directions (true)",
+      "test/pages/conversation/peek/conversation_peek_reply_media_test.dart: long image keeps its crop ratio in a narrow incoming column",
+      "test/pages/conversation/widgets/conversation_official_name_test.dart: main/archive conversation identities show badges (false/false)",
+      "test/pages/conversation/widgets/conversation_official_name_test.dart: main/archive conversation identities show badges (false/true)",
+      "test/pages/conversation/widgets/conversation_official_name_test.dart: main/archive conversation identities show badges (true/false)",
+      "test/pages/conversation/widgets/conversation_official_name_test.dart: main/archive conversation identities show badges (true/true)"
+    ],
+    "baseline_log": "E:\\openim\\artifacts\\offline-latest-fix-20261014\\flutter-baseline-known-failures.log",
+    "working_tree": "existing unrelated recovery/read changes preserved"
+  }
+}

@@ -5,6 +5,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/core/controller/im_controller.dart';
+import 'package:openim/core/im_callback.dart';
+import 'package:openim/core/session/connection/api_connection_health.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/pages/conversation/conversation_organizer.dart';
 import 'package:openim/pages/home/home_logic.dart';
@@ -23,6 +25,10 @@ class _Home extends GetxController implements HomeLogic {
 }
 
 class _IM extends GetxController implements IMController {
+  @override
+  IMSdkStatus get currentConnectionStatus => IMSdkStatus.connectionSucceeded;
+  @override
+  ApiConnectionHealth? get apiConnectionHealth => null;
   @override
   final userInfo = UserFullInfo(userID: 'viewer', nickname: 'Viewer').obs;
   @override

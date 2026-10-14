@@ -45,7 +45,8 @@ void main() {
               onShareAppTap: () {},
               onSettingsTap: () {},
               onFeatureTap: (feature) => tappedFeature = feature,
-              onUnavailableFeatureTap: (feature) => tappedFeature = 'closed:$feature',
+              onUnavailableFeatureTap: (feature) =>
+                  tappedFeature = 'closed:$feature',
             ),
           );
         },
@@ -54,7 +55,10 @@ void main() {
 
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
     expect(scaffold.backgroundColor, AppTokens.backgroundLight);
-    expect(MediaQuery.textScalerOf(tester.element(find.byType(Scaffold))).scale(17), 17);
+    expect(
+        MediaQuery.textScalerOf(tester.element(find.byType(Scaffold)))
+            .scale(17),
+        17);
     final overlay = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
       find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first,
     );
@@ -98,7 +102,8 @@ void main() {
     expect(tappedFeature, 'AI助手');
   });
 
-  testWidgets('mine profile uses 99chat mobile width formulas without a 430px cap',
+  testWidgets(
+      'mine profile uses 99chat mobile width formulas without a 430px cap',
       (tester) async {
     tester.view.physicalSize = const Size(504, 900);
     tester.view.devicePixelRatio = 1;
@@ -144,7 +149,6 @@ void main() {
     final hotEcoText = tester.widget<Text>(find.text('热门生态'));
     expect(hotEcoText.style?.fontSize, closeTo(504 * 0.043, 0.001));
   });
-
 
   testWidgets('mine profile locks source-level 99chat geometry and colors',
       (tester) async {
@@ -210,7 +214,8 @@ void main() {
       indicatorDot.left - indicatorLine.right,
       AppTokens.mainTabIndicatorGap,
     );
-    expect(indicatorLine.top - titleRect.bottom, closeTo(0, 0.001));
+    expect(indicatorLine.top - titleRect.bottom,
+        closeTo(AppTokens.mainTabIndicatorTitleGap, 0.001));
     final lineWidget = tester.widget<Container>(
       find.byKey(const ValueKey('mine-title-indicator-line')),
     );
@@ -272,10 +277,10 @@ void main() {
       find.byKey(const ValueKey('mine-menu-settings')),
     );
     expect(favoritesRect.height, 56);
-    expect(callsRect.top - favoritesRect.bottom, 0);
+    expect(callsRect.top - favoritesRect.bottom, 14);
     expect(notificationsRect.top - callsRect.bottom, 0);
-    expect(shareRect.top - notificationsRect.bottom, 0);
-    expect(settingsRect.top - shareRect.bottom, 14);
+    expect(shareRect.top - notificationsRect.bottom, 14);
+    expect(settingsRect.top - shareRect.bottom, 0);
 
     final titleRow = tester.getRect(
       find.byKey(const ValueKey('mine-hot-eco-title-row')),
@@ -286,5 +291,4 @@ void main() {
     expect(titleRow.height, closeTo(375 * 0.11, 0.001));
     expect(tilesRow.top - titleRow.bottom, closeTo(0, 0.001));
   });
-
 }

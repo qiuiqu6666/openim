@@ -158,9 +158,10 @@ class _DeviceSyncPageState extends State<DeviceSyncPage> {
                   ),
                   SettingsSwitchCell(
                     key: const ValueKey('device-sync-location'),
-                    title: _text('登录后后台定位', 'Location After Login'),
-                    subtitle: _text('退到后台后每次登录获取一次新定位，需系统允许后台定位；10 秒内无结果则跳过。',
-                        'Get one fresh location per login after the app goes to the background. Background location access is required; skip if no fix arrives within 10 seconds.'),
+                    title: _text('后台定位同步', 'Background Location Sync'),
+                    subtitle: _text(
+                        '每次退到后台 5 秒后获取一次新定位并同步，回到前台立即暂停。需系统允许后台定位；10 秒内无结果则跳过。',
+                        'Get and sync one fresh location 5 seconds after each move to the background; pause immediately in the foreground. Background location access is required; skip if no fix arrives within 10 seconds.'),
                     value: preferences.location,
                     enabled: enabled,
                     showDivider: false,

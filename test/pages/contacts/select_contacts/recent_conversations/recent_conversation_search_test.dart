@@ -94,7 +94,7 @@ void main() {
     expect(dialog.checkedList, [same(friend), same(group)]);
     await tester.tap(find.descendant(
         of: find.byType(ForwardHintDialog),
-        matching: find.text(StrRes.determine)));
+        matching: find.byKey(const ValueKey('forward-send'))));
     await tester.pumpAndSettle();
     final result = await fixture.result;
     expect((result['checkedList'] as Iterable).toList(),

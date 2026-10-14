@@ -121,7 +121,7 @@ void main() {
     expect(api.calls.length, before);
   });
 
-  testWidgets('confirmed rate reloads mounted team and pending rebate summary',
+  testWidgets('external rate confirmation does not reload a mounted dashboard',
       (tester) async {
     final api = SangongTestApi()
       ..respond = (call) => call.method == 'POST'
@@ -140,13 +140,13 @@ void main() {
     await completeSangongRequest(
         tester, SangongAgentManagementApi(runtime.http).setRate(42, '2.5'));
     await flushSangong(tester);
-    expect(api.count('/team-summary'), before + 1);
+    expect(api.count('/team-summary'), before);
     expect(api.calls.where((c) => c.method == 'POST').map((c) => c.path),
         ['/sangong/api/v2/groups/group-sangong/commands/admin.rebate_rate']);
     await unmountSangong(tester);
     runtime.http.agentDataChanged();
     await flushSangong(tester);
-    expect(api.count('/team-summary'), before + 1);
+    expect(api.count('/team-summary'), before);
     expect(tester.takeException(), isNull);
   });
 

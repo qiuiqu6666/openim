@@ -76,6 +76,8 @@ void main() {
           tester, runtime, const SangongGameRulesSettingsPage(),
           dark: dark);
       expect(find.text('游戏规则'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('庄家抽水（%）'), 300,
+          scrollable: find.byType(Scrollable).first);
       expect(find.text('庄家抽水（%）'), findsOneWidget);
       expect(find.byType(TextField), findsNWidgets(4));
       expect(find.text('赔率'), findsNothing);

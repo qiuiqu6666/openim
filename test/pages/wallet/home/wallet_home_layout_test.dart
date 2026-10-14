@@ -29,7 +29,6 @@ void main() {
             'wallet-action-swap',
             'wallet-action-record',
             'wallet-action-overview',
-            'wallet-display-currency',
             'wallet-toggle-balance',
             'wallet-assets-filter',
             'wallet-assets-toggle',
@@ -72,7 +71,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('long USD estimate keeps every digit in $brightness',
+    testWidgets('long CNY estimate keeps every digit in $brightness',
         (tester) async {
       final controller = await loadedHomeController(
           repository: HomeTestRepository(data: walletHomeLongFixture));
@@ -82,12 +81,9 @@ void main() {
           brightness: brightness,
           textScale: 2);
       await tester.pumpAndSettle();
-      await tester.tap(walletHomeKey('wallet-display-currency'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byWidgetPredicate((widget) =>
-          widget is PopupMenuItem<String> && widget.value == 'USD'));
-      await tester.pumpAndSettle();
-      _expectCompleteTotal(tester, 320, currency: 'USD');
+      expect(tester.widget<Text>(walletHomeKey('wallet-display-currency')).data,
+          'CNY');
+      _expectCompleteTotal(tester, 320);
       _expectMatchingActionHeights(tester);
       expect(tester.takeException(), isNull);
     });

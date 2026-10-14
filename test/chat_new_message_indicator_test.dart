@@ -49,11 +49,13 @@ Future<void> _pump(
 Widget _watermark(
         {int count = 0,
         bool showBack = false,
+        bool hasNewer = false,
         VoidCallback? onTap,
         Widget? bottomView}) =>
     WaterMarkBgView(
       newMessageCount: count,
       showBackToBottom: showBack,
+      hasNewerMessages: hasNewer,
       onSeeNewMessage: onTap,
       bottomView: bottomView,
       child: const SizedBox.expand(),
@@ -91,6 +93,45 @@ Future<Uint8List> _capturePixels(
 }
 
 void main() {
+  for (final dark in [false, true]) {
+    testWidgets(
+        'unknown history gap uses generic hint and remains tappable; dark=$dark',
+        (tester) async {
+      var tapped = 0;
+      await _pump(
+          tester, _watermark(count: 20, hasNewer: true, onTap: () => tapped++),
+          dark: dark);
+      expect(find.text('有新消息'), findsOneWidget);
+      expect(find.text('20条新消息'), findsNothing);
+      await tester.tap(find.text('有新消息'));
+      expect(tapped, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('mention pill stays above latest pill and invokes its own action',
+      (tester) async {
+    var taps = 0;
+    await _pump(
+        tester,
+        Scaffold(
+            body: WaterMarkBgView(
+          newMessageCount: 2,
+          messageHint: NewMessageIndicator(
+              labelText: '2条@我的消息',
+              icon: Icons.alternate_email,
+              onTap: () => taps++),
+          child: const SizedBox.expand(),
+        )),
+        textScale: 2,
+        size: const Size(320, 568));
+    await tester.tap(find.text('2条@我的消息'));
+    expect(taps, 1);
+    final pills = find.byType(NewMessageIndicator);
+    expect(pills, findsNWidgets(2));
+    expect(tester.getRect(pills.first).bottom,
+        lessThan(tester.getRect(pills.last).top));
+    expect(tester.takeException(), isNull);
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
     if (_previewFont.isEmpty) return;

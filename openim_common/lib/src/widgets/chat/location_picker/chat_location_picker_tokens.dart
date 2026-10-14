@@ -2,6 +2,13 @@ import '../../../res/app_tokens.dart';
 
 class ChatLocationPickerTokens {
   ChatLocationPickerTokens._();
+  static const double actionHeight = 32;
+  static const double actionWidth = 64;
+  static const double toolbarHeight = 56;
+  static const accent = AppTokens.biometricGreen;
+  static const double navActionWidth = 80;
+  static const double handleWidth = 36;
+  static const double handleHeight = 4;
 
   static const double titleSize = AppTokens.profileNameFontSize;
   static const double headingSize = AppTokens.listTitleFontSize;
@@ -10,7 +17,8 @@ class ChatLocationPickerTokens {
   static const double touchSize = 48;
   static const double controlIconSize = 24;
   static const double panelRadius = AppTokens.s7;
-  static const double panelHeightFraction = .60;
+  static const double accessiblePanelHeightFraction = .72;
+  static const double panelHeightFraction = .54;
   static const double wideBreakpoint = 600;
   static const double widePanelWidth = 360;
   static const double widePanelFraction = .42;

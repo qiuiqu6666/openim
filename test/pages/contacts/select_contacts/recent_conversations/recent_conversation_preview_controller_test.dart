@@ -163,7 +163,7 @@ void main() {
     im.recvMessageRevoked(RevokedInfo(clientMsgID: 'first'));
     await tester.pump();
     await tester.pump();
-    expect(_painted(tester), '');
+    expect(_painted(tester), '一条消息已被撤回');
 
     snapshot.latestMsg = _message('second', 'second body');
     await _mount(tester, logic, snapshot);

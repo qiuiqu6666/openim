@@ -11,11 +11,14 @@ import '../chat_location_picker_tokens.dart';
 import 'chat_location_amap_consent.dart';
 import 'chat_location_desktop_map.dart';
 import 'chat_location_native_map_options.dart';
+import '../data/chat_location_place.dart';
 
 /// Mobile map SDKs display/select points; GPS remains owned by the picker.
 class ChatLocationNativeMap extends StatelessWidget {
-  const ChatLocationNativeMap({super.key, required this.options});
+  const ChatLocationNativeMap(
+      {super.key, required this.options, this.requireConsent = true});
   final ChatLocationNativeMapOptions options;
+  final bool requireConsent;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +28,7 @@ class ChatLocationNativeMap extends StatelessWidget {
       return ChatLocationDesktopMap(options: options);
     }
     final view = _NativeMapView(options: options);
-    return defaultTargetPlatform == TargetPlatform.android
+    return requireConsent && defaultTargetPlatform == TargetPlatform.android
         ? ChatLocationAmapConsent(child: view)
         : view;
   }
@@ -92,7 +95,11 @@ class _NativeMapViewState extends State<_NativeMapView> {
         // arrived before Flutter installed its handler.
         break;
       case 'onSelected':
-        if (!widget.options.active || _failure != null) return null;
+        if (!widget.options.active ||
+            widget.options.readOnly ||
+            _failure != null) {
+          return null;
+        }
         final values = call.arguments;
         if (values is! Map) return null;
         final latitude = values['latitude'], longitude = values['longitude'];
@@ -120,7 +127,28 @@ class _NativeMapViewState extends State<_NativeMapView> {
   void _notifyReady() {
     if (_ready || !mounted) return;
     _ready = true;
+    final channel = _channel;
+    if (channel != null && widget.options.onSnapshot != null) {
+      unawaited(_snapshot(channel));
+    }
+    if (channel != null) {
+      widget.options.onSearchReady
+          ?.call((query, center) => searchNativePlaces(channel, query, center));
+    }
     widget.options.onReady();
+  }
+
+  Future<void> _snapshot(MethodChannel channel) async {
+    try {
+      final bytes = await channel
+          .invokeMethod<Uint8List>('snapshot')
+          .timeout(const Duration(seconds: 12));
+      if (mounted && _channel == channel && bytes != null && bytes.isNotEmpty) {
+        widget.options.onSnapshot?.call(bytes);
+      }
+    } catch (_) {
+      if (mounted && _channel == channel) _failed('unavailable');
+    }
   }
 
   Future<void> _invoke(String method, Map<String, dynamic> arguments) async {
@@ -171,6 +199,7 @@ class _NativeMapViewState extends State<_NativeMapView> {
     final point = widget.options.selected;
     final params = <String, dynamic>{
       'dark': widget.options.dark,
+      'readOnly': widget.options.readOnly,
       'privacyAgreed': defaultTargetPlatform == TargetPlatform.android,
       if (point != null) 'latitude': point.latitude,
       if (point != null) 'longitude': point.longitude

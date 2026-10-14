@@ -237,7 +237,12 @@ void main() {
       final picture = recorder.endRecording();
       final image = picture.toImageSync(80, 120);
       picture.dispose();
-      final provider = ExtendedNetworkImageProvider(url);
+      final provider = ExtendedNetworkImageProvider(url,
+          cache: true,
+          timeLimit: const Duration(seconds: 20),
+          retries: 1,
+          timeRetry: const Duration(seconds: 1),
+          printError: false);
       provider.imageCache.putIfAbsent(
         provider,
         () =>

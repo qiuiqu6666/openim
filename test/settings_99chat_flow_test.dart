@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,6 +33,7 @@ Widget _host(Widget child) => ScreenUtilInit(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => OpenIM.iMManager.userID = 'settings-viewer');
 
   testWidgets('mine keeps 99chat top settings action and routes to settings',
       (tester) async {
@@ -62,7 +64,8 @@ void main() {
     expect(settingsTapped, isTrue);
   });
 
-  testWidgets('settings exposes the full 99chat first-level information architecture',
+  testWidgets(
+      'settings exposes the full 99chat first-level information architecture',
       (tester) async {
     tester.view.physicalSize = const Size(375, 812);
     tester.view.devicePixelRatio = 1;
@@ -95,7 +98,8 @@ void main() {
     }
   });
 
-  testWidgets('friend-permission switches keep local UI state without network calls',
+  testWidgets(
+      'friend-permission switches keep local UI state without network calls',
       (tester) async {
     final store = SettingsDraftStore();
     addTearDown(store.dispose);
@@ -163,7 +167,8 @@ void main() {
 
     expect(find.text('设置交易密码'), findsOneWidget);
     expect(find.text('请输入交易密码'), findsOneWidget);
-    expect(find.byKey(const ValueKey('trade-password-pin-dots')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('trade-password-pin-dots')), findsOneWidget);
     expect(find.byKey(const ValueKey('trade-password-keypad')), findsOneWidget);
     expect(find.text('1'), findsOneWidget);
     expect(find.text('0'), findsOneWidget);
@@ -181,42 +186,44 @@ void main() {
     expect(store.quickAnswer, isFalse);
   });
 
-
   // Regression coverage for 99chat parity: these rows/pages are intentionally
   // kept as real navigation/UI even while remote data sources stay stubbed.
   testWidgets('notification page mirrors 99chat call-ringtone structure',
-  (tester) async {
-  tester.view.physicalSize = const Size(375, 812);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-  final store = SettingsDraftStore();
-  addTearDown(store.dispose);
+      (tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = SettingsDraftStore();
+    addTearDown(store.dispose);
 
-  await tester.pumpWidget(_host(NotificationSettingsPage(store: store)));
-  await tester.pumpAndSettle();
+    await tester.pumpWidget(_host(NotificationSettingsPage(store: store)));
+    await tester.pumpAndSettle();
 
-  expect(find.text('语音和视频通话用弹窗快捷接听'), findsOneWidget);
-  expect(find.text('语音和视频通话通知'), findsNothing);
-  expect(find.text('语音和视频通话来电铃声'), findsOneWidget);
-  expect(find.text('默认铃声'), findsNothing);
+    expect(find.text('语音和视频通话用弹窗快捷接听'), findsOneWidget);
+    expect(find.text('语音和视频通话通知'), findsNothing);
+    expect(find.text('语音和视频通话来电铃声'), findsOneWidget);
+    expect(find.text('默认铃声'), findsNothing);
   });
 
-  testWidgets('about terms and privacy are real secondary pages', (tester) async {
-  tester.view.physicalSize = const Size(375, 812);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('about terms and privacy are real secondary pages',
+      (tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-  await tester.pumpWidget(_host(const AboutUsPage()));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('服务条款'));
-  await tester.pumpAndSettle();
-  expect(find.text('服务条款'), findsWidgets);
-  expect(find.byKey(const ValueKey('settings-legal-document-body')), findsOneWidget);
+    await tester.pumpWidget(_host(const AboutUsPage()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('服务条款'));
+    await tester.pumpAndSettle();
+    expect(find.text('服务条款'), findsWidgets);
+    expect(find.byKey(const ValueKey('settings-legal-document-body')),
+        findsOneWidget);
   });
 
-  testWidgets('font size page uses the 99chat full chat preview shell', (tester) async {
+  testWidgets('font size page uses the 99chat full chat preview shell',
+      (tester) async {
     tester.view.physicalSize = const Size(375, 812);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -233,7 +240,8 @@ void main() {
     expect(find.text('字体大小'), findsNothing);
   });
 
-  testWidgets('message sound row opens the dedicated 99chat picker page', (tester) async {
+  testWidgets('message sound row opens the dedicated 99chat picker page',
+      (tester) async {
     tester.view.physicalSize = const Size(375, 812);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -254,7 +262,9 @@ void main() {
     expect(find.text('叮咚'), findsOneWidget);
   });
 
-  testWidgets('appearance language uses an action sheet instead of a pushed page', (tester) async {
+  testWidgets(
+      'appearance language uses an action sheet instead of a pushed page',
+      (tester) async {
     tester.view.physicalSize = const Size(375, 812);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -277,7 +287,8 @@ void main() {
   // 99chat settings primitive parity: mobile rows must stay on the product's
   // 56px mobile metrics even on wider Android phones/tablets. Compatibility
   // adaptations must not change the visual contract.
-  testWidgets('settings cell keeps 99chat mobile 56px row contract', (tester) async {
+  testWidgets('settings cell keeps 99chat mobile 56px row contract',
+      (tester) async {
     tester.view.physicalSize = const Size(504, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);

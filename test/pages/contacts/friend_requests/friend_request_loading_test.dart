@@ -7,6 +7,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/core/controller/im_controller.dart';
+import 'package:openim/core/im_callback.dart';
 import 'package:openim/pages/home/home_logic.dart';
 import 'package:openim/pages/contacts/friend_requests/friend_requests_logic.dart';
 import 'package:openim/pages/contacts/request_history/data/request_list_cache.dart';
@@ -16,10 +17,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _IM extends GetxController implements IMController {
   @override
+  final imSdkStatusPublishSubject =
+      PublishSubject<({IMSdkStatus status, bool reInstall, int? progress})>();
+  @override
   final friendApplicationChangedSubject =
       PublishSubject<FriendApplicationInfo>();
   @override
   void onClose() {
+    imSdkStatusPublishSubject.close();
     friendApplicationChangedSubject.close();
     super.onClose();
   }
@@ -105,6 +110,21 @@ void main() {
     replies.single.complete('[]');
     await tester.pumpAndSettle();
     expect(logic.loading.value, isFalse);
+  });
+
+  testWidgets('resume and sync completion refresh authoritative request state',
+      (tester) async {
+    final logic = await open(tester);
+    rows = [];
+    logic.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(logic.applicationList, isEmpty);
+    rows = [row];
+    im.imSdkStatusPublishSubject
+        .add((status: IMSdkStatus.syncEnded, reInstall: false, progress: null));
+    await tester.pumpAndSettle();
+    expect(logic.applicationList.single.fromUserID, 'other');
+    expect(calls, 3);
   });
 
   testWidgets('cache renders immediately on reopen and respects deletion',

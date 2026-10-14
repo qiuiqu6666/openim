@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import '../update/android/android_update_runtime.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,6 +16,25 @@ Future<bool> checkPlatformUpdate(BuildContext context,
     Future<bool> Function(Uri)? openURL,
     void Function()? onBlocking,
     PlatformConfig? prefetchedConfig}) async {
+  if (Platform.isAndroid) {
+    try {
+      await AndroidUpdateRuntime.instance.start(manual: !automatic);
+      if (!automatic && context.mounted) {
+        final status = AndroidUpdateRuntime.instance.statusText(context);
+        if (!AndroidUpdateRuntime.instance.blocksNavigation) {
+          showSettingsMessage(
+              context,
+              status.isEmpty
+                  ? settingsText(context,
+                      zh: '暂无可用的新版本', en: 'No update available')
+                  : status);
+        }
+      }
+    } catch (_) {
+      // Configuration/storage failure must never lock an Android user out.
+    }
+    return true;
+  }
   final fetch = fetchConfig ?? () => PlatformConfigService.fetch();
   final open = openURL ??
       (Uri uri) => launchUrl(uri, mode: LaunchMode.externalApplication);

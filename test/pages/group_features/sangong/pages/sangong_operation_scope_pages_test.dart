@@ -26,8 +26,7 @@ class _Search extends ContactSearchSource {
 }
 
 Future<void> _pump(WidgetTester tester, SangongRuntime runtime, Widget page) =>
-    pumpSangongPage(tester, runtime,
-        Builder(builder: (context) => EasyLoading.init()(context, page)));
+    pumpSangongPage(tester, runtime, page);
 
 void _switchTenant(SangongRuntime runtime, SangongTestApi api) {
   final context =

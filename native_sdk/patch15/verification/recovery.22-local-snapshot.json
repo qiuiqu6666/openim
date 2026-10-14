@@ -1,0 +1,39 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.22-local-snapshot.1",
+  "source_sha256": "afb46e8368a6bc6890cb9b27510b860d550680bf0d3ae943f5245e9915b8b749",
+  "checks": {
+    "local_snapshot_sqlite": "passed: database reopen, 40 messages without network, unread unchanged",
+    "android_aar_build": "passed: four ABIs",
+    "ios_framework": "macOS build required",
+    "device_runtime": "not run",
+    "patch_roundtrip": "passed",
+    "android_debug_apk": "passed: arm64, embedded native parity verified",
+    "flutter_history_regression": "426 passed, 12 existing skipped; subsequent focused entry regression 64 passed",
+    "core_race": "passed: conversation_msg and db"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.22-local-snapshot.1",
+    "sdk_version": "v3.8.3-patch.15+recovery.22-local-snapshot.1",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "not run",
+    "native_binary_integrated": true,
+    "application_validation": "arm64 debug build passed; native bytes match AAR after NDK --strip-unneeded; device runtime not tested",
+    "aar_sha256": "a6cba90166c414300d8b69da561ce3e918cd2460df64b7ec98725b5e54c36894",
+    "debug_apk_sha256": "2c2b7b0e089d5fe9353b97eee8ae64be7dde439f9cff3451d83dde80bc88f34c"
+  },
+  "flutter_analysis": "changed history modules: no issues; controller/test: 4 existing info-level lints",
+  "final_empty_response_regression": "55 passed",
+  "sqlite_reopen_local_40_ms": 0.5187,
+  "timing_scope": "host SQLite test, not mobile first-frame timing",
+  "ios": "shared source and Swift bridge updated; macOS build required",
+  "apk": "E:\\openim\\artifacts\\cold-history-20261014\\chat-local-first-arm64-debug.apk"
+}

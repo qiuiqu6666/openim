@@ -16,14 +16,17 @@ class IOSVoIPBackend {
       required this.updateName,
       required this.isSessionCurrent,
       Future<CallBackendApi> Function()? createApi,
+      CallStateRuntime? runtime,
       this.pollInterval = const Duration(seconds: 2)})
-      : _createApi = createApi ?? CallBackendApi.current;
+      : _createApi = createApi ?? CallBackendApi.current,
+        _runtime = runtime ?? CallStateRuntime.instance;
 
   final bool Function(IOSCallInvitation) restore;
   final Future<void> Function(String) endRemote;
   final Future<void> Function(String, String) updateName;
   final bool Function() isSessionCurrent;
   final Future<CallBackendApi> Function() _createApi;
+  final CallStateRuntime _runtime;
   final Duration pollInterval;
   CallBackendApi? _api, _pausedApi;
   Future<void>? _stopping;
@@ -77,7 +80,7 @@ class IOSVoIPBackend {
   }
 
   void monitor(String room, {required bool incoming}) {
-    if (!_ended.contains(room)) CallStateRuntime.instance.watchRoom(room);
+    if (!_ended.contains(room)) _runtime.watchRoom(room);
   }
 
   Future<bool> recover(String room) {
@@ -95,7 +98,7 @@ class IOSVoIPBackend {
     final api = _api, generation = _generation;
     if (api == null || !_owns(api, generation) || _ended.contains(room)) return false;
     try {
-      final snapshot = await CallStateRuntime.instance.status(room);
+      final snapshot = await _runtime.status(room);
       final status = snapshot.raw;
       if (!_owns(api, generation) || _ended.contains(room)) return false;
       if (status['state'] != 'ringing') {
@@ -142,15 +145,15 @@ class IOSVoIPBackend {
     final api = _api, generation = _generation;
     if (api == null || !_owns(api, generation)) return;
     try {
-      final state = await CallStateRuntime.instance.status(room);
+      final state = await _runtime.status(room);
       if (!_owns(api, generation) || !state.incoming(api.accountID)) return;
-      await CallStateRuntime.instance.persist(
+      await _runtime.persist(
           CustomMessageType.callingReject, state.invitation);
     } catch (error) {
       Logger.print('Cold call rejection unavailable: ${error.runtimeType}',
           onlyConsole: true);
     } finally {
-      if (_owns(api, generation)) CallStateRuntime.instance.release(room);
+      if (_owns(api, generation)) _runtime.release(room);
     }
   }
 

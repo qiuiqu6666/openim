@@ -13,6 +13,7 @@ class ChatHistoryDiagnostics {
     if (!Logger().sdkIsInited) return;
     unawaited(OpenIM.iMManager
         .logs(
+          keyAndValues: const [],
           msgs: 'chat_history ${jsonEncode({
                 'conversationID': conversationID,
                 ...event,

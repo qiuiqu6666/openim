@@ -25,15 +25,7 @@ class AiOpenimTestConversation extends EntryTestConversation {
   bool get isSessionActive => true;
 }
 
-class AiOpenimTestApp extends EntryTestApp {
-  final notifications = <Message>[];
-
-  @override
-  Future<void> showNotification(Message message,
-      {bool showNotification = true}) async {
-    notifications.add(message);
-  }
-}
+class AiOpenimTestApp extends EntryTestApp {}
 
 Message aiOpenimText(String id, String text,
         {bool outgoing = false, int time = 1}) =>
@@ -159,6 +151,10 @@ class AiOpenimTestFixture {
   Future<Object?> _native(MethodCall call) async {
     nativeCalls.add(call);
     final args = Map<String, dynamic>.from(call.arguments as Map);
+    if (call.method == 'getAdvancedHistoryMessageList' &&
+        args['localSnapshot'] == true) {
+      return jsonEncode({'localSnapshot': true, 'messageList': []});
+    }
     if (call.method == 'getAdvancedHistoryMessageList') {
       final history = EntryHistoryCall(args);
       histories.add(history);
@@ -208,7 +204,7 @@ class AiOpenimTestFixture {
       await sendMessageGate?.future;
       if (failNextSend) {
         failNextSend = false;
-        throw PlatformException(code: 'NETWORK');
+        throw PlatformException(code: '${SDKErrorCode.parameterError}');
       }
       return jsonEncode({
         ...Map<String, dynamic>.from(args['message'] as Map),

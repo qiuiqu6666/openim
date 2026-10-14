@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/customer_service/data/data.dart';
+import 'package:openim_common/openim_common.dart' show Config;
 
 import '../../support/unicode/unicode_samples.dart';
 
@@ -80,9 +81,14 @@ void main() {
 
   test('uses the approved deployment and permits explicit configuration', () {
     const defaults = CustomerServiceConfig();
-    expect(defaults.normalizedBaseUrl, 'http://127.0.0.1:8815');
+    expect(defaults.normalizedBaseUrl,
+        Config.customerServiceForwardUrl ?? Config.customerServiceOriginUrl);
     expect(defaults.inboxIdentifier, 'JucC6gvPuKjfzZxLtT5ftaiQ');
-    expect(defaults.cableUri.toString(), 'ws://127.0.0.1:8815/cable');
+    final endpoint = Uri.parse(defaults.normalizedBaseUrl);
+    expect(
+        defaults.cableUri,
+        endpoint.replace(
+            scheme: endpoint.scheme == 'https' ? 'wss' : 'ws', path: '/cable'));
     expect(config.cableUri.toString(), 'wss://support.example/kefu/cable');
   });
 

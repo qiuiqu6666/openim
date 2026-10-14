@@ -11,7 +11,9 @@ Finder get _confirm => find.descendant(
     of: find.byType(CheckedConfirmView), matching: find.byType(Button));
 
 Finder _dialogAction(String text) => find.descendant(
-    of: find.byType(ForwardHintDialog), matching: find.text(text));
+    of: find.byType(ForwardHintDialog),
+    matching: find.byKey(
+        ValueKey(text == StrRes.cancel ? 'forward-cancel' : 'forward-send')));
 
 ChatRadio _radio(WidgetTester tester, String id) =>
     tester.widget<ChatRadio>(find.descendant(
@@ -19,6 +21,11 @@ ChatRadio _radio(WidgetTester tester, String id) =>
 
 Future<void> _confirmAndReturn(
     WidgetTester tester, RecentConversationFixture fixture) async {
+  final preview = ForwardPreviewData.fromMessage(Message.fromJson({
+    'contentType': MessageType.video,
+    'videoElem': {'duration': 24, 'snapshotUrl': ''},
+  }));
+  fixture.selection.forwardPreview = preview;
   final single = fixture.data[0];
   final group = fixture.data[1];
   await tester.tap(recentConversationRow(single.conversationID));
@@ -30,6 +37,7 @@ Future<void> _confirmAndReturn(
   final dialog =
       tester.widget<ForwardHintDialog>(find.byType(ForwardHintDialog));
   expect(dialog.title, fixture.selection.ex);
+  expect(dialog.preview, same(preview));
   expect(dialog.checkedList, hasLength(2));
   expect(dialog.checkedList[0], same(single));
   expect(dialog.checkedList[1], same(group));
@@ -45,8 +53,9 @@ Future<void> _confirmAndReturn(
   await tester.tap(_confirm);
   await tester.pumpAndSettle();
   expect(tester.takeException(), isNull);
-  expect(_dialogAction(StrRes.determine).hitTestable(), findsOneWidget);
-  await tester.tap(_dialogAction(StrRes.determine));
+  expect(
+      find.byKey(const ValueKey('forward-send')).hitTestable(), findsOneWidget);
+  await tester.tap(find.byKey(const ValueKey('forward-send')));
   await tester.pumpAndSettle();
   final result = await fixture.result;
   expect(result, isA<Map>());

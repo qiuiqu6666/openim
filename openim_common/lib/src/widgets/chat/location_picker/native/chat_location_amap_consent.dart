@@ -108,86 +108,178 @@ class _ChatLocationAmapConsentState extends State<ChatLocationAmapConsent> {
     return ColoredBox(
       key: const ValueKey('chat-location-amap-consent'),
       color: AppTokens.surfaceAlt(dark: dark),
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppTokens.s7),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-                maxWidth: ChatLocationPickerTokens.hintMaxWidth),
-            child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const ExcludeSemantics(
-                      child: Icon(Icons.map_outlined,
-                          color: AppTokens.accent,
-                          size: ChatLocationPickerTokens.emptyIconSize)),
-                  const SizedBox(height: AppTokens.s5),
-                  Text(labels.mapProviderTitle,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: AppTokens.textPrimary(dark: dark),
-                          fontSize: ChatLocationPickerTokens.headingSize,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: AppTokens.s3),
-                  Text(labels.mapPrivacyHint,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: secondary,
-                          fontSize: ChatLocationPickerTokens.bodySize)),
-                  TextButton(
-                      key: const ValueKey('chat-location-amap-privacy-link'),
-                      onPressed: busy ? null : _openPrivacy,
-                      style: TextButton.styleFrom(
-                          foregroundColor: AppTokens.accent,
-                          minimumSize: const Size.fromHeight(
-                              ChatLocationPickerTokens.touchSize)),
-                      child: Text(labels.mapPrivacyLink)),
-                  if (_failed) ...[
-                    Text(labels.mapUnavailable,
-                        key: const ValueKey('chat-location-amap-consent-error'),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: AppTokens.paymentError(dark: dark),
-                            fontSize: ChatLocationPickerTokens.captionSize)),
-                    TextButton(
-                        key: const ValueKey('chat-location-amap-consent-retry'),
-                        onPressed: busy ? null : _readConsent,
-                        style: TextButton.styleFrom(
-                            foregroundColor: AppTokens.accent,
-                            minimumSize: const Size.fromHeight(
-                                ChatLocationPickerTokens.touchSize)),
-                        child: Text(labels.retry)),
-                  ],
-                  const SizedBox(height: AppTokens.s3),
-                  FilledButton(
-                      key: const ValueKey('chat-location-amap-agree'),
-                      onPressed: busy || _readFailed ? null : _agree,
-                      style: FilledButton.styleFrom(
-                          backgroundColor: AppTokens.accent,
-                          foregroundColor: AppTokens.onAccent,
-                          disabledBackgroundColor: AppTokens.border(dark: dark),
-                          disabledForegroundColor: secondary,
-                          minimumSize: const Size.fromHeight(
-                              ChatLocationPickerTokens.touchSize),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: AppTokens.s5, vertical: AppTokens.s4),
-                          shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(AppTokens.rMd))),
-                      child: busy
-                          ? const SizedBox.square(
-                              dimension:
-                                  ChatLocationPickerTokens.controlIconSize,
-                              child: CircularProgressIndicator(
-                                  strokeWidth:
-                                      ChatLocationPickerTokens.progressStroke,
-                                  color: AppTokens.accent))
-                          : Text(labels.mapPrivacyAgree)),
-                ]),
-          ),
-        ),
-      ),
+      child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (constraints.maxHeight > 500)
+                      Expanded(
+                          child: Center(
+                              child: Icon(Icons.map_outlined,
+                                  color: AppTokens.textSecondary(dark: dark),
+                                  size:
+                                      ChatLocationPickerTokens.emptyIconSize))),
+                    Flexible(
+                        flex: 0,
+                        child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                                maxHeight: constraints.maxHeight),
+                            child: Material(
+                                color: AppTokens.surface(dark: dark),
+                                borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(
+                                        ChatLocationPickerTokens.panelRadius)),
+                                child: SafeArea(
+                                    top: false,
+                                    child: SingleChildScrollView(
+                                      padding:
+                                          const EdgeInsets.all(AppTokens.s7),
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                            maxWidth: ChatLocationPickerTokens
+                                                .hintMaxWidth),
+                                        child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              Center(
+                                                  child: Container(
+                                                      width:
+                                                          ChatLocationPickerTokens
+                                                              .handleWidth,
+                                                      height:
+                                                          ChatLocationPickerTokens
+                                                              .handleHeight,
+                                                      decoration: BoxDecoration(
+                                                          color:
+                                                              AppTokens.border(
+                                                                  dark: dark),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                  AppTokens
+                                                                      .rPill)))),
+                                              const SizedBox(
+                                                  height: AppTokens.s5),
+                                              Text(labels.mapProviderTitle,
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                      color:
+                                                          AppTokens.textPrimary(
+                                                              dark: dark),
+                                                      fontSize:
+                                                          ChatLocationPickerTokens
+                                                              .headingSize,
+                                                      fontWeight:
+                                                          FontWeight.w600)),
+                                              const SizedBox(
+                                                  height: AppTokens.s3),
+                                              Text(labels.mapPrivacyHint,
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                      color: secondary,
+                                                      fontSize:
+                                                          ChatLocationPickerTokens
+                                                              .bodySize)),
+                                              TextButton(
+                                                  key: const ValueKey(
+                                                      'chat-location-amap-privacy-link'),
+                                                  onPressed: busy
+                                                      ? null
+                                                      : _openPrivacy,
+                                                  style: TextButton.styleFrom(
+                                                      foregroundColor:
+                                                          ChatLocationPickerTokens
+                                                              .accent,
+                                                      minimumSize: const Size
+                                                          .fromHeight(
+                                                          ChatLocationPickerTokens
+                                                              .touchSize)),
+                                                  child: Text(
+                                                      labels.mapPrivacyLink)),
+                                              if (_failed) ...[
+                                                Text(labels.mapUnavailable,
+                                                    key: const ValueKey(
+                                                        'chat-location-amap-consent-error'),
+                                                    textAlign: TextAlign.center,
+                                                    style: TextStyle(
+                                                        color: AppTokens
+                                                            .paymentError(
+                                                                dark: dark),
+                                                        fontSize:
+                                                            ChatLocationPickerTokens
+                                                                .captionSize)),
+                                                TextButton(
+                                                    key: const ValueKey(
+                                                        'chat-location-amap-consent-retry'),
+                                                    onPressed: busy
+                                                        ? null
+                                                        : _readConsent,
+                                                    style: TextButton.styleFrom(
+                                                        foregroundColor:
+                                                            ChatLocationPickerTokens
+                                                                .accent,
+                                                        minimumSize: const Size
+                                                            .fromHeight(
+                                                            ChatLocationPickerTokens
+                                                                .touchSize)),
+                                                    child: Text(labels.retry)),
+                                              ],
+                                              const SizedBox(
+                                                  height: AppTokens.s3),
+                                              FilledButton(
+                                                  key: const ValueKey(
+                                                      'chat-location-amap-agree'),
+                                                  onPressed: busy || _readFailed
+                                                      ? null
+                                                      : _agree,
+                                                  style: FilledButton.styleFrom(
+                                                      backgroundColor:
+                                                          ChatLocationPickerTokens
+                                                              .accent,
+                                                      foregroundColor:
+                                                          AppTokens.onAccent,
+                                                      disabledBackgroundColor:
+                                                          AppTokens.border(
+                                                              dark: dark),
+                                                      disabledForegroundColor:
+                                                          secondary,
+                                                      minimumSize:
+                                                          const Size.fromHeight(
+                                                              ChatLocationPickerTokens
+                                                                  .touchSize),
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                              horizontal:
+                                                                  AppTokens.s5,
+                                                              vertical:
+                                                                  AppTokens.s4),
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTokens.rMd))),
+                                                  child: busy ? const SizedBox.square(dimension: ChatLocationPickerTokens.controlIconSize, child: CircularProgressIndicator(strokeWidth: ChatLocationPickerTokens.progressStroke, color: ChatLocationPickerTokens.accent)) : Text(labels.mapPrivacyAgree)),
+                                              const SizedBox(
+                                                  height: AppTokens.s3),
+                                              TextButton(
+                                                  key: const ValueKey(
+                                                      'chat-location-amap-decline'),
+                                                  onPressed: busy
+                                                      ? null
+                                                      : () =>
+                                                          Navigator.of(context)
+                                                              .maybePop(),
+                                                  style: TextButton.styleFrom(
+                                                      foregroundColor:
+                                                          AppTokens.textPrimary(
+                                                              dark: dark),
+                                                      minimumSize: const Size
+                                                          .fromHeight(
+                                                          ChatLocationPickerTokens
+                                                              .touchSize)),
+                                                  child: Text(labels.notNow)),
+                                            ]),
+                                      ),
+                                    ))))),
+                  ])),
     );
   }
 }

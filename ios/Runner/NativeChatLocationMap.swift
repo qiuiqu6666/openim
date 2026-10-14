@@ -46,6 +46,11 @@ private final class NativeChatLocationMap: NSObject,
     private var selectedPin: MKPointAnnotation?
     private var tapRecognizer: UITapGestureRecognizer?
     private var panRecognizer: UIPanGestureRecognizer?
+    private var placeSearch: MKLocalSearch?
+    private var placeSearchReply: FlutterResult?
+    private var readOnly = false
+    private var snapshotter: MKMapSnapshotter?
+    private var snapshotReply: FlutterResult?
     private var active = true
     private var disposed = false
     private var readySent = false
@@ -67,6 +72,7 @@ private final class NativeChatLocationMap: NSObject,
         channel = FlutterMethodChannel(
             name: "openim/chat-location-map/\(viewId)", binaryMessenger: messenger)
         super.init()
+        readOnly = parameters["readOnly"] as? Bool ?? false
 
         mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         mapView.mapType = .standard
@@ -112,6 +118,10 @@ private final class NativeChatLocationMap: NSObject,
     private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         let parameters = call.arguments as? [String: Any] ?? [:]
         switch call.method {
+        case "snapshot":
+            captureSnapshot(result)
+        case "searchPlaces":
+            searchPlaces(parameters, result: result)
         case "move":
             guard let coordinate = Self.coordinate(parameters) else {
                 result(FlutterError(code: "INVALID_COORDINATE", message: "Invalid map coordinate", details: nil))
@@ -127,6 +137,7 @@ private final class NativeChatLocationMap: NSObject,
             result(["error": NSNull()])
         case "setActive":
             active = parameters["active"] as? Bool ?? false
+            if !active { cancelPlaceSearch() }
             eventGeneration += 1
             userPanning = false
             pendingUserRegion = false
@@ -138,6 +149,86 @@ private final class NativeChatLocationMap: NSObject,
             result(nil)
         default:
             result(FlutterMethodNotImplemented)
+        }
+    }
+
+    private func captureSnapshot(_ result: @escaping FlutterResult) {
+        guard let map = map, let pin = selectedPin, active, !disposed else {
+            result(FlutterError(code: "unavailable", message: "Map unavailable", details: nil))
+            return
+        }
+        let options = MKMapSnapshotter.Options()
+        options.region = map.region
+        options.size = map.bounds.size.width > 0 ? map.bounds.size : CGSize(width: 280, height: 150)
+        options.traitCollection = map.traitCollection
+        let renderer = MKMapSnapshotter(options: options)
+        snapshotter = renderer
+        snapshotReply = result
+        renderer.start { [weak self] snapshot, error in
+            guard let self = self, self.snapshotter === renderer, !self.disposed else { return }
+            self.snapshotter = nil
+            self.snapshotReply = nil
+            guard let snapshot = snapshot, error == nil else {
+                result(FlutterError(code: "snapshotUnavailable", message: "Snapshot unavailable", details: nil))
+                return
+            }
+            let image = UIGraphicsImageRenderer(size: snapshot.image.size).image { _ in
+                snapshot.image.draw(at: .zero)
+                let point = snapshot.point(for: pin.coordinate)
+                UIImage(systemName: "mappin.circle.fill")?.withTintColor(.systemGreen, renderingMode: .alwaysOriginal)
+                    .draw(in: CGRect(x: point.x - 16, y: point.y - 32, width: 32, height: 32))
+            }
+            guard let bytes = image.pngData() else {
+                result(FlutterError(code: "snapshotUnavailable", message: "Snapshot unavailable", details: nil))
+                return
+            }
+            result(FlutterStandardTypedData(bytes: bytes))
+        }
+    }
+
+    private func cancelPlaceSearch() {
+        placeSearch?.cancel()
+        placeSearch = nil
+        let reply = placeSearchReply
+        placeSearchReply = nil
+        reply?(FlutterError(code: "cancelled", message: "Search cancelled", details: nil))
+    }
+
+    private func searchPlaces(_ values: [String: Any], result: @escaping FlutterResult) {
+        cancelPlaceSearch()
+        guard active, !disposed else {
+            result(FlutterError(code: "unavailable", message: "Map unavailable", details: nil))
+            return
+        }
+        let query = (values["query"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let center = Self.coordinate(values) ?? map?.centerCoordinate
+        let search: MKLocalSearch
+        if query.isEmpty, let center = center {
+            search = MKLocalSearch(request: MKLocalPointsOfInterestRequest(center: center, radius: 1000))
+        } else {
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = query
+            if let center = center {
+                request.region = MKCoordinateRegion(center: center, latitudinalMeters: 50000, longitudinalMeters: 50000)
+            }
+            search = MKLocalSearch(request: request)
+        }
+        placeSearch = search
+        placeSearchReply = result
+        search.start { [weak self] response, error in
+            guard let self = self, self.placeSearch === search else { return }
+            self.placeSearch = nil
+            self.placeSearchReply = nil
+            guard self.active, !self.disposed, error == nil, let response = response else {
+                result(FlutterError(code: "searchUnavailable", message: "Place search unavailable", details: nil))
+                return
+            }
+            result(response.mapItems.prefix(20).map { item -> [String: Any] in
+                let point = item.placemark.coordinate
+                return ["id": "\(point.latitude),\(point.longitude):\(item.name ?? "")",
+                        "name": item.name ?? "", "address": item.placemark.title ?? "",
+                        "latitude": point.latitude, "longitude": point.longitude]
+            })
         }
     }
 
@@ -175,7 +266,7 @@ private final class NativeChatLocationMap: NSObject,
     }
 
     @objc private func onMapTap(_ gesture: UITapGestureRecognizer) {
-        guard active, !disposed, gesture.state == .ended, let mapView = map else { return }
+        guard !readOnly, active, !disposed, gesture.state == .ended, let mapView = map else { return }
         let coordinate = mapView.convert(gesture.location(in: mapView), toCoordinateFrom: mapView)
         guard Self.valid(coordinate) else { return }
         eventGeneration += 1
@@ -189,7 +280,7 @@ private final class NativeChatLocationMap: NSObject,
     }
 
     @objc private func onMapPan(_ gesture: UIPanGestureRecognizer) {
-        guard active, !disposed else { return }
+        guard !readOnly, active, !disposed else { return }
         switch gesture.state {
         case .began:
             // Only an actual user pan opens this fence; Dart moves never do.
@@ -236,7 +327,7 @@ private final class NativeChatLocationMap: NSObject,
         let pin = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
             as? MKMarkerAnnotationView ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
         pin.annotation = annotation
-        pin.markerTintColor = .systemBlue
+        pin.markerTintColor = .systemGreen
         pin.glyphImage = UIImage(systemName: "mappin")
         pin.canShowCallout = false
         pin.isDraggable = false
@@ -288,6 +379,11 @@ private final class NativeChatLocationMap: NSObject,
     private func disposeView() {
         guard !disposed else { return }
         disposed = true
+        snapshotter?.cancel()
+        snapshotter = nil
+        snapshotReply?(FlutterError(code: "cancelled", message: "Map closed", details: nil))
+        snapshotReply = nil
+        cancelPlaceSearch()
         active = false
         eventGeneration += 1
         userPanning = false

@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
@@ -66,9 +67,15 @@ void _expectSurface(WidgetTester tester, {required bool dark}) {
 void main() {
   setUp(() {
     Get.testMode = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('flutter_openim_sdk'),
+            (call) async => call.method == 'getUsersInfo' ? '[]' : null);
     SharedPreferences.setMockInitialValues({});
   });
   tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+            const MethodChannel('flutter_openim_sdk'), null);
     Get.reset();
     Styles.isDark = false;
   });

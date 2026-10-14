@@ -46,14 +46,19 @@ class ConversationEditActions {
   }
 
   Future<void> markRead(List<ConversationInfo> conversations,
-      {bool Function(ConversationInfo)? scope}) async {
+      {bool Function(ConversationInfo)? scope, String? serverScope}) async {
     final selected = editor.selectedIds.toSet();
     final generation = editor.editGeneration;
     if (logic.markingAllRead.value) return;
     final ids = conversations.map((c) => c.conversationID).toSet();
-    await logic.markReadScope((info) => selected.isNotEmpty
-        ? selected.contains(info.conversationID)
-        : scope?.call(info) ?? ids.contains(info.conversationID));
+    if (selected.isNotEmpty) {
+      await logic.markSelectedConversationsRead(selected.toList());
+    } else if (serverScope != null) {
+      await logic.markAllConversationsRead(serverScope);
+    } else {
+      await logic.markReadScope(
+          (info) => scope?.call(info) ?? ids.contains(info.conversationID));
+    }
     if (isMounted() && editor.editing && editor.editGeneration == generation) {
       editor.toggleEditing();
     }

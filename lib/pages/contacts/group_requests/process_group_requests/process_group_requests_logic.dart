@@ -14,8 +14,15 @@ class ProcessGroupRequestsLogic extends GetxController {
   @override
   void onInit() {
     applicationInfo = Get.arguments['applicationInfo'];
+    groupRequestsLogic.trackReview(applicationInfo);
     handleResult.value = applicationInfo.handleResult ?? 0;
     super.onInit();
+  }
+
+  @override
+  void onClose() {
+    groupRequestsLogic.endReview();
+    super.onClose();
   }
 
   bool get isInvite => groupRequestsLogic.isInvite(applicationInfo);
@@ -26,10 +33,7 @@ class ProcessGroupRequestsLogic extends GetxController {
       groupRequestsLogic.getInviterNickname(applicationInfo);
 
   GroupApplicationInfo? get _updatedApplication =>
-      groupRequestsLogic.list.firstWhereOrNull((item) =>
-          item.groupID == applicationInfo.groupID &&
-          item.userID == applicationInfo.userID &&
-          item.reqTime == applicationInfo.reqTime);
+      groupRequestsLogic.findApplication(applicationInfo);
 
   String? get handlerNickname => groupRequestsLogic
       .getHandlerNickname(_updatedApplication ?? applicationInfo);

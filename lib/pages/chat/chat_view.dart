@@ -131,8 +131,21 @@ class ChatPage extends StatelessWidget {
                                   dark: Theme.of(context).brightness ==
                                       Brightness.dark),
                               floatView: _groupCallHintView,
+                              messageHint: logic.isGroupChat &&
+                                      logic.mentions.pending.isNotEmpty
+                                  ? NewMessageIndicator(
+                                      labelText: logic.mentions.busy.value
+                                          ? '正在定位…'
+                                          : '${logic.mentions.pending.length}条@我的消息',
+                                      icon: Icons.alternate_email,
+                                      onTap: logic.mentions.busy.value
+                                          ? null
+                                          : logic.jumpToMention,
+                                    )
+                                  : null,
                               newMessageCount:
                                   logic.newMessages.unseenCount.value,
+                              hasNewerMessages: logic.hasDeferredLatest,
                               showBackToBottom:
                                   logic.newMessages.showBackToBottom.value,
                               onSeeNewMessage: () =>

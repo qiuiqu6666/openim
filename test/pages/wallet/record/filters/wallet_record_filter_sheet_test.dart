@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openim/pages/wallet/record/filters/wallet_record_filter_sheet.dart';
+import 'package:openim/pages/wallet/record/filters/wallet_record_filters.dart';
+import 'package:openim/pages/wallet/record/wallet_record_models.dart';
+import 'package:openim/pages/wallet/host/wallet_i18n.dart';
 
 import '../fixtures/wallet_record_fixtures.dart';
 import '../support/wallet_record_test_support.dart';
@@ -8,21 +12,19 @@ void main() {
   testWidgets(
       'apply commits coin and transaction type together without reloading',
       (tester) async {
-    final repository = RecordTestRepository();
-    await pumpWalletRecords(tester,
-        repository: repository, size: const Size(390, 2400));
+    await _pumpFilters(tester, size: const Size(390, 2400));
     await tester.pumpAndSettle();
     await _openFilters(tester);
     await _tapOption(tester, 'coin-USDT');
     await _tapOption(tester, 'type-redPacket');
-    expectRecordRequests(repository, 1);
+
     await _confirm(tester);
     expect(walletRecordKey('wallet-record-filter-sheet'), findsNothing);
     for (final item in walletRecordFixtures) {
       expect(walletRecordKey('wallet-record-${item.id}'),
           item.id == 'january-older' ? findsOneWidget : findsNothing);
     }
-    expectRecordRequests(repository, 1);
+
     // Reopening the sheet restores the applied draft rather than defaults.
     await _openFilters(tester);
     _expectSelected(tester, 'coin-USDT', true);
@@ -33,9 +35,7 @@ void main() {
 
   testWidgets('cancel discards changed coin, type and date options',
       (tester) async {
-    final repository = RecordTestRepository();
-    await pumpWalletRecords(tester,
-        repository: repository, initialCoin: '99', size: const Size(390, 2400));
+    await _pumpFilters(tester, initialCoin: '99', size: const Size(390, 2400));
     await tester.pumpAndSettle();
     await _openFilters(tester);
     await _tapOption(tester, 'coin-USDT');
@@ -54,25 +54,18 @@ void main() {
     _expectSelected(tester, 'type-all', true);
     _expectSelected(tester, 'date-all', true);
     await _cancel(tester, '取消');
-    expectRecordRequests(repository, 1);
+
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
       'reset clears advanced filters and month while retaining expenditure direction',
       (tester) async {
-    final repository = RecordTestRepository();
-    await pumpWalletRecords(tester,
-        repository: repository,
+    await _pumpFilters(tester,
         initialCoin: 'USDT',
+        direction: WalletRecordDirection.expenditure,
+        month: DateTime(2026, 1),
         size: const Size(390, 2400));
-    await tester.pumpAndSettle();
-    await tester.tap(walletRecordKey('wallet-record-tab-expenditure'));
-    await tester.pumpAndSettle();
-    await tester.tap(walletRecordKey('wallet-record-month-picker-2026-01'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byWidgetPredicate((widget) =>
-        widget is PopupMenuItem<String> && widget.value == '2026-01'));
     await tester.pumpAndSettle();
     expect(walletRecordKey('wallet-record-january-newer'), findsOneWidget);
     expect(walletRecordKey('wallet-record-failed-outgoing'), findsNothing);
@@ -85,14 +78,15 @@ void main() {
       _expectSelected(tester, option, true);
     }
     await _confirm(tester);
-    expect(walletRecordKey('wallet-record-clear-filters'), findsNothing);
+    expect(_selection(tester).coin, isNull);
+    expect(_selection(tester).month, isNull);
+    expect(_selection(tester).type, HistoryRecordFilter.all);
     for (final item in walletRecordFixtures) {
       expect(walletRecordKey('wallet-record-${item.id}'),
           item.income ? findsNothing : findsOneWidget);
     }
-    final selectedTab = walletRecordKey('wallet-record-tab-expenditure');
-    expect(tester.widget<Semantics>(selectedTab).properties.selected, isTrue);
-    expectRecordRequests(repository, 1);
+    expect(_selection(tester).direction, WalletRecordDirection.expenditure);
+
     expect(tester.takeException(), isNull);
   });
 
@@ -113,9 +107,7 @@ void main() {
     testWidgets(
         'date options and applied summary use localized labels in ${entry.key}',
         (tester) async {
-      final repository = RecordTestRepository();
-      await pumpWalletRecords(tester,
-          repository: repository, locale: entry.key);
+      await _pumpFilters(tester, locale: entry.key);
       await tester.pumpAndSettle();
       for (var index = 0; index < dateOptions.length; index++) {
         await _openFilters(tester);
@@ -131,7 +123,7 @@ void main() {
         expect(find.text(dateOptions[index]), findsNothing,
             reason: 'Internal enum names must not appear as date labels.');
       }
-      expectRecordRequests(repository, 1);
+
       expect(tester.takeException(), isNull);
     });
   }
@@ -139,9 +131,7 @@ void main() {
   for (final brightness in Brightness.values) {
     testWidgets('320px 200% text filter sheet remains operable in $brightness',
         (tester) async {
-      final repository = RecordTestRepository();
-      await pumpWalletRecords(tester,
-          repository: repository,
+      await _pumpFilters(tester,
           size: const Size(320, 844),
           brightness: brightness,
           locale: const Locale('en', 'US'),
@@ -176,7 +166,7 @@ void main() {
       await _confirm(tester);
       expect(walletRecordKey('wallet-record-filter-sheet'), findsNothing);
       expect(walletRecordKey('wallet-record-empty'), findsOneWidget);
-      expectRecordRequests(repository, 1);
+
       expect(tester.takeException(), isNull);
     });
   }
@@ -221,4 +211,71 @@ void _expectSelected(WidgetTester tester, String option, bool selected) {
           widget is Semantics && widget.properties.selected != null));
   expect(
       tester.widget<Semantics>(semantics.first).properties.selected, selected);
+}
+
+// The current history page has no advanced-filter toolbar. Exercise the
+// retained sheet directly and verify its returned selection against real DTOs.
+WalletRecordSelection _selection(WidgetTester tester) =>
+    tester.state<_FilterHarnessState>(find.byType(_FilterHarness)).selection;
+
+Future<void> _pumpFilters(
+  WidgetTester tester, {
+  String? initialCoin,
+  WalletRecordDirection direction = WalletRecordDirection.all,
+  DateTime? month,
+  Size size = const Size(390, 844),
+  Brightness brightness = Brightness.light,
+  Locale locale = const Locale('zh', 'CN'),
+  double textScale = 1,
+  EdgeInsets safePadding = EdgeInsets.zero,
+}) =>
+    pumpWalletRecords(tester,
+        size: size,
+        brightness: brightness,
+        locale: locale,
+        textScale: textScale,
+        safePadding: safePadding,
+        home: _FilterHarness(
+            initial: WalletRecordSelection(
+                coin: initialCoin, direction: direction, month: month)));
+
+class _FilterHarness extends StatefulWidget {
+  const _FilterHarness({required this.initial});
+  final WalletRecordSelection initial;
+  @override
+  State<_FilterHarness> createState() => _FilterHarnessState();
+}
+
+class _FilterHarnessState extends State<_FilterHarness> {
+  late WalletRecordSelection selection = widget.initial;
+  final now = DateTime(2026, 2, 10);
+  @override
+  Widget build(BuildContext context) {
+    final records = walletRecordFixtures
+        .where((record) => selection.matches(record, now: now))
+        .toList();
+    return Scaffold(
+        body: Column(children: [
+      TextButton(
+          key: const ValueKey('wallet-record-filters'),
+          onPressed: () async {
+            final result = await showModalBottomSheet<WalletRecordSelection>(
+                context: context,
+                isScrollControlled: true,
+                useSafeArea: true,
+                builder: (_) => WalletRecordFilterSheet(
+                    selection: selection,
+                    coinOptions: const ['99', 'USDT'],
+                    now: now));
+            if (mounted && result != null) setState(() => selection = result);
+          },
+          child: const Text('Open filter component')),
+      if (selection.datePreset != WalletHistoryDatePreset.all)
+        Text(
+            walletRecordDatePresetLabel(selection.datePreset, AppI18n.current)),
+      if (records.isEmpty) const SizedBox(key: ValueKey('wallet-record-empty')),
+      for (final record in records)
+        SizedBox(key: ValueKey('wallet-record-${record.id}')),
+    ]));
+  }
 }

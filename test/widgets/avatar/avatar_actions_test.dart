@@ -19,7 +19,12 @@ void _cacheAvatar() {
   final recorder = ui.PictureRecorder();
   Canvas(recorder).drawColor(AppTokens.accent, BlendMode.src);
   final picture = recorder.endRecording();
-  final provider = ExtendedNetworkImageProvider(_url);
+  final provider = ExtendedNetworkImageProvider(_url,
+      cache: true,
+      timeLimit: const Duration(seconds: 20),
+      retries: 1,
+      timeRetry: const Duration(seconds: 1),
+      printError: false);
   final image = picture.toImageSync(80, 120);
   picture.dispose();
   provider.imageCache.putIfAbsent(

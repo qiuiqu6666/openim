@@ -27,6 +27,8 @@ class _FakeContactsLogic implements ContactsLogic {
   @override
   final friendsLoading = false.obs;
   @override
+  final friendsLoadFailed = false.obs;
+  @override
   int get friendApplicationCount => 2;
   @override
   int get groupApplicationCount => 0;
@@ -51,8 +53,10 @@ class _FakeContactsLogic implements ContactsLogic {
 }
 
 void main() {
-  setUp(() => VisibilityDetectorController.instance.updateInterval = Duration.zero);
-  tearDown(() => VisibilityDetectorController.instance.updateInterval = const Duration(milliseconds: 500));
+  setUp(() =>
+      VisibilityDetectorController.instance.updateInterval = Duration.zero);
+  tearDown(() => VisibilityDetectorController.instance.updateInterval =
+      const Duration(milliseconds: 500));
   testWidgets('contacts page shows reference layout and keeps search working',
       (tester) async {
     tester.view.physicalSize = const Size(375, 812);

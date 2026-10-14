@@ -17,6 +17,9 @@ class ChatTimelineController {
     required this.accountID,
     required this.conversation,
     required this.fetch,
+    this.fetchLocalSnapshot,
+    this.onLatestDeferred,
+    this.beforeLatestReplace,
     this.fetchNewer,
     required this.isClosed,
     required this.onFirstPage,
@@ -37,6 +40,16 @@ class ChatTimelineController {
   final String conversationID;
   final ConversationInfo Function() conversation;
   final ChatHistoryReader fetch;
+  final Future<List<Message>> Function()? fetchLocalSnapshot;
+  final void Function()? onLatestDeferred;
+  final Future<void> Function()? beforeLatestReplace;
+  bool _hasPaintedRows = false;
+  final latestDeferred = false.obs;
+
+  void recordPaintedRows(List<String> ids) {
+    if (!_closed && ids.any(containsMessage)) _hasPaintedRows = true;
+  }
+
   final ChatHistoryReader? fetchNewer;
   final bool Function() isClosed;
   final VoidCallback onFirstPage;
@@ -55,6 +68,7 @@ class ChatTimelineController {
   final removedIDs = <String>{};
   final initialHistoryLoading = true.obs;
   final historyLoading = false.obs;
+  final historyPagingLoading = false.obs;
   final historyError = RxnString();
   final historyHasMore = true.obs;
   final historyScanLimited = false.obs;
@@ -69,6 +83,7 @@ class ChatTimelineController {
   bool _appending = false;
   Message? _lastLiveAnchor;
   final _identities = <String?>{};
+  final _snapshotIDs = <String?>{};
 
   bool containsMessage(String? id) {
     if (_identityDirty || !_initialized) {
@@ -94,6 +109,13 @@ class ChatTimelineController {
     diagnostic: (event) => ChatHistoryDiagnostics.record(conversationID, event),
     pageSize: pageSize,
     fetch: fetch,
+    isDisplaySnapshot: (id) => _snapshotIDs.contains(id),
+    hasPaintedRows: () => _hasPaintedRows,
+    beforeLatestReplace: beforeLatestReplace,
+    onLatestDeferred: () {
+      latestDeferred.value = true;
+      onLatestDeferred?.call();
+    },
     fetchNewer: fetchNewer,
     preserveReading: preserveReading,
     canTrimHistory: canTrimHistory,
@@ -146,23 +168,80 @@ class ChatTimelineController {
         messageList.value = ChatHistoryLoader.merge(cached);
       }
     }
+    if (fetchLocalSnapshot != null &&
+        info.isPrivateChat != true &&
+        messageList.length < pageSize) {
+      unawaited(_loadLocalSnapshot());
+    }
     if (prefetch) unawaited(loadOlder());
+  }
+
+  Future<void> _loadLocalSnapshot() async {
+    final revision = _history.windowRevision;
+    final cacheRevision = _cacheRevision;
+    final watch = Stopwatch()..start();
+    try {
+      final rows = await fetchLocalSnapshot!();
+      if (_closed ||
+          !_isSessionCurrent() ||
+          accountID != _currentAccountID() ||
+          conversation().isPrivateChat == true ||
+          _history.loaded ||
+          revision != _history.windowRevision ||
+          _history.viewingHistory ||
+          _cacheEpoch != ChatHistoryCache.epoch ||
+          cacheRevision !=
+              ChatHistoryCache.revision(accountID, conversationID)) {
+        return;
+      }
+      final currentIDs = messageList.map((m) => m.clientMsgID).toSet();
+      final safe = rows
+          .where((m) =>
+              m.clientMsgID?.isNotEmpty == true &&
+              m.attachedInfoElem?.isPrivateChat != true &&
+              m.contentType != MessageType.typing &&
+              !removedIDs.contains(m.clientMsgID) &&
+              !ChatHistoryCache.isRemoved(accountID, m.clientMsgID))
+          .toList();
+      if (safe.isEmpty) return;
+      _snapshotIDs.addAll(safe
+          .map((m) => m.clientMsgID)
+          .where((id) => !currentIDs.contains(id)));
+      messageList.value = ChatHistoryLoader.merge([
+        ...safe.map((m) => ChatHistoryCache.applyRevocation(accountID, m)),
+        ...messageList,
+      ], removedIDs: removedIDs);
+      ChatHistoryDiagnostics.record(conversationID, {
+        'event': 'local_snapshot',
+        'count': safe.length,
+        'elapsedMs': watch.elapsedMilliseconds,
+      });
+    } catch (_) {
+      // This optional display read never fails the authoritative history load.
+      ChatHistoryDiagnostics.record(conversationID, {
+        'event': 'local_snapshot_unavailable',
+        'elapsedMs': watch.elapsedMilliseconds,
+      });
+    }
   }
 
   void _syncHistoryState() {
     if (_closed) return;
     initialHistoryLoading.value = !_history.loaded && _history.loading;
     historyLoading.value = _history.loading;
+    historyPagingLoading.value = _history.pagingLoading;
     historyError.value = _history.error?.toString();
     historyHasMore.value = _history.hasMore;
     historyScanLimited.value = _history.scanLimited;
     viewingHistory.value = _history.viewingHistory;
+    if (!_history.viewingHistory) latestDeferred.value = false;
     newerHasMore.value = _history.hasNewer;
     windowRevision.value = _history.windowRevision;
   }
 
   void _replaceHistory(List<Message> messages, bool firstPage, bool refresh) {
     if (_closed) return;
+    _snapshotIDs.clear();
     // Retain the last observed live edge when installing an older date window.
     _rememberRecoveryAnchor(messageList);
     _rememberRecoveryAnchor(messages);
@@ -230,6 +309,7 @@ class ChatTimelineController {
 
   /// Publish append and automatic eviction together, retaining retry rows.
   void appendIncoming(Message message, {required bool trim}) {
+    _snapshotIDs.remove(message.clientMsgID);
     _rememberRecoveryAnchor([message]);
     if (_identityDirty) containsMessage(message.clientMsgID);
     var next = List<Message>.of(messageList);
@@ -363,6 +443,9 @@ class ChatTimelineController {
   /// the returned IDs while this owner clears its own lists and snapshot.
   Set<String> clear() {
     if (_closed) return <String>{};
+    _hasPaintedRows = false;
+    latestDeferred.value = false;
+    _snapshotIDs.clear();
     _lastLiveAnchor = null;
     _history.clear();
     _cacheTimer?.cancel();

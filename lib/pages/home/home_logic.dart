@@ -22,8 +22,11 @@ import '../group_features/data/group_feature_runtime.dart';
 import '../mine/secondary/calls/data/call_records_runtime.dart';
 import '../contacts/request_history/data/request_history_store.dart';
 import 'application_badges/application_badge_refresh.dart';
+import '../contacts/group_requests/data/group_notices_api.dart';
 
 class HomeLogic extends SuperController {
+  HomeLogic({GroupNoticesApi? groupNotices})
+      : _groupNotices = groupNotices ?? GroupNoticesApi();
   final pushLogic = Get.find<PushController>();
   final imLogic = Get.find<IMController>();
   final cacheLogic = Get.find<CacheController>();
@@ -109,8 +112,8 @@ class HomeLogic extends SuperController {
   Future<void> _getUnreadMsgCount() async {
     final revision = _unreadCountRevision;
     try {
-      final count = await OpenIM.iMManager.conversationManager
-          .getTotalUnreadMsgCount();
+      final count =
+          await OpenIM.iMManager.conversationManager.getTotalUnreadMsgCount();
       if (!_badgeSessionCurrent || revision != _unreadCountRevision) return;
       unreadMsgCount.value = int.tryParse(count) ?? 0;
       initLogic.showBadge(unreadMsgCount.value);
@@ -148,29 +151,15 @@ class HomeLogic extends SuperController {
 
   void getUnhandledGroupApplicationCount() => _groupBadgeRefresh.request();
 
+  final GroupNoticesApi _groupNotices;
+  Timer? _groupNoticePoll;
+  bool _noticesForeground = true;
   Future<void> _loadUnhandledGroupApplicationCount() async {
-    final owner = OpenIM.iMManager.userID;
-    final token = DataSp.chatToken;
-    var i = 0;
-    var list = await OpenIM.iMManager.groupManager
-        .getGroupApplicationListAsRecipient();
-    if (!_badgeSessionCurrent ||
-        owner != OpenIM.iMManager.userID ||
-        token != DataSp.chatToken) {
-      return;
-    }
-    final history = RequestHistoryStore(owner, RequestHistoryKind.group);
-    final haveReadList =
-        DataSp.getHaveReadUnHandleGroupApplication()?.toSet() ?? <String>{};
-    for (var info in list) {
-      if (history.isHidden(RequestHistoryEntry.group(info))) continue;
-      var id = IMUtils.buildGroupApplicationID(info);
-      if (!haveReadList.contains(id)) {
-        if (info.handleResult == 0) i++;
-      }
-    }
-    unhandledGroupApplicationCount.value = i;
-    unhandledCount.value = unhandledFriendApplicationCount.value + i;
+    final state = await _groupNotices.state();
+    if (!_badgeSessionCurrent || !_groupNotices.isCurrent) return;
+    final count = (state['unreadCount'] as num?)?.toInt() ?? 0;
+    unhandledGroupApplicationCount.value = count;
+    unhandledCount.value = unhandledFriendApplicationCount.value + count;
   }
 
   @override
@@ -201,6 +190,10 @@ class HomeLogic extends SuperController {
       if (value.status == IMSdkStatus.syncStart) {
         _getRTCInvitationStart();
       }
+      if (value.status == IMSdkStatus.syncEnded) {
+        getUnhandledFriendApplicationCount();
+        getUnhandledGroupApplicationCount();
+      }
     }));
 
     _subscriptions.add(imLogic.onKickedOfflineSubject.listen((_) {
@@ -220,12 +213,19 @@ class HomeLogic extends SuperController {
     _getUnreadMsgCount();
     getUnhandledFriendApplicationCount();
     getUnhandledGroupApplicationCount();
+    _groupNoticePoll = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_noticesForeground && _badgeSessionCurrent) {
+        getUnhandledGroupApplicationCount();
+      }
+    });
     unawaited(CallRecordsRuntime.repository.refresh());
     super.onReady();
   }
 
   @override
   void onClose() {
+    _groupNoticePoll?.cancel();
+    _groupNotices.close();
     _closed = true;
     _friendBadgeRefresh.close();
     _groupBadgeRefresh.close();
@@ -289,13 +289,21 @@ class HomeLogic extends SuperController {
   void onDetached() {}
 
   @override
-  void onInactive() {}
+  void onInactive() {
+    _noticesForeground = false;
+  }
 
   @override
-  void onPaused() {}
+  void onPaused() {
+    _noticesForeground = false;
+  }
 
   @override
-  void onResumed() {}
+  void onResumed() {
+    _noticesForeground = true;
+    getUnhandledFriendApplicationCount();
+    getUnhandledGroupApplicationCount();
+  }
 
   void _getRTCInvitationStart() async {}
 

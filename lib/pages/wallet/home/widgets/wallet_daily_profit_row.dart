@@ -8,7 +8,7 @@ import '../../widgets/wallet_page_colors.dart';
 import '../wallet_home_tokens.dart';
 import '../wallet_amount_display.dart';
 
-/// Displays the server daily change; unavailable values use zero placeholders.
+/// Displays the server daily change without treating unavailable values as zero.
 class WalletDailyProfitRow extends StatelessWidget {
   const WalletDailyProfitRow({super.key});
 

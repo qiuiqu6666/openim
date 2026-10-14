@@ -11,8 +11,14 @@ class PlatformRelease {
         changelog = (data['changelog'] as String? ?? '').trim(),
         grayRatio = ((data['grayRatio'] as num? ?? 100).toInt()).clamp(0, 100),
         downloadURL = (data['downloadURL'] as String? ?? '').trim(),
-        downloadLink = (data['downloadLink'] as String? ?? '').trim();
+        downloadLink = (data['downloadLink'] as String? ?? '').trim(),
+        packageSha256 =
+            (data['packageSha256'] as String? ?? '').trim().toLowerCase(),
+        packageSize = int.tryParse('${data['packageSize']}') ?? 0,
+        versionCode = int.tryParse('${data['versionCode']}') ?? 0;
   final String latest, minimum, changelog, downloadURL, downloadLink;
+  final String packageSha256;
+  final int packageSize, versionCode;
   final int grayRatio;
   String get installURL => downloadLink.isNotEmpty ? downloadLink : downloadURL;
   String get shareURL => downloadURL.isNotEmpty ? downloadURL : downloadLink;

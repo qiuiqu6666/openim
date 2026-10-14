@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
-import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -47,7 +46,7 @@ void main() {
         'rejected-admin': '阿冬',
         'ignored': '未处理记录不得展示此人',
       });
-      final logic = Get.put(GroupRequestsLogic());
+      final logic = Get.put(GroupRequestsLogic(syncInterval: Duration.zero));
 
       await tester.pumpWidget(ScreenUtilInit(
         designSize: const Size(375, 812),
@@ -70,10 +69,8 @@ void main() {
       expect(find.text('审核'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
-      logic.userInfoList.assignAll([
-        UserInfo(userID: 'accepted-admin', nickname: '阿秋的新昵称'),
-        UserInfo(userID: 'rejected-admin', nickname: '阿冬'),
-      ]);
+      fixture.profiles['accepted-admin'] = '阿秋的新昵称';
+      await fixture.refresh(tester, logic);
       await tester.pump();
 
       expect(find.text('处理管理员：阿秋'), findsNothing);

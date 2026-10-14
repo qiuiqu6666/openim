@@ -1,3 +1,9 @@
+# 群通知服务端迁移（2026-10-14）
+
+群通知已改用 `../group_requests/data/` 的服务端接口。此模块继续提供共享列表外观；`RequestHistoryStore` 的本机清理和 `RequestListCache` 的快照仍用于好友申请。群通知旧本机隐藏记录仅作为一次性迁移来源，迁移完成后以服务器状态为准，不再读群通知缓存。详情见 [服务端模块](../../../../server/group_notices/README.md)。
+
+以下为历史实现说明。
+
 # 申请记录的共享展示与清理
 
 2026-10-11 按 `reference-99chat/lib/src/newContact.dart`、`all_group_application_list.dart` 及 UIKit `directory_list_row.dart` 对齐新的朋友和群通知。列表行、胶囊状态、审核/验证按钮、标题栏和本机时区日期格式放在本模块，主题色复用 `AppTokens`，头像复用 `AvatarView`。

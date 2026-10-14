@@ -37,6 +37,27 @@ void main() {
     expect((await route).messageList!.single.clientMsgID, 'first');
   });
 
+  test('overlapping route reads reuse an in-flight query for the same session',
+      () async {
+    final pending = Completer<AdvancedMessage>();
+    var reads = 0;
+    final prefetcher = ChatHistoryPrefetcher(
+        accountID: () => 'me',
+        token: () => 'token',
+        epoch: () => 0,
+        fetch: (_, __) {
+          reads++;
+          return pending.future;
+        });
+    addTearDown(prefetcher.clear);
+    final first = prefetcher.readLatest(conversation());
+    final second = prefetcher.readLatest(conversation());
+    expect(reads, 1);
+    pending.complete(page('latest'));
+    expect((await first).messageList!.single.clientMsgID, 'latest');
+    expect((await second).messageList!.single.clientMsgID, 'latest');
+  });
+
   test('a completed result is transferred once, refresh reads afresh',
       () async {
     var reads = 0;

@@ -20,6 +20,10 @@ class _Directory extends GetxController implements ContactsLogic {
 
   @override
   bool get isCurrentSession => true;
+  @override
+  final friendsLoadFailed = false.obs;
+  @override
+  Future<void> ensureFriendsLoaded() async {}
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

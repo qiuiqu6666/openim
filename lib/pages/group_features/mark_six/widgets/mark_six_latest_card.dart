@@ -1,6 +1,6 @@
 // Layout and art adapted from 99chat lottery_dashboard.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
-import 'dart:async';
+import 'mark_six_clock_row.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import '../data/mark_six_controller.dart';
@@ -55,52 +55,17 @@ class MarkSixNumberBall extends StatelessWidget {
   }
 }
 
-class MarkSixLatestCard extends StatefulWidget {
+class MarkSixLatestCard extends StatelessWidget {
   const MarkSixLatestCard(
       {super.key, required this.controller, this.preview = false});
   final MarkSixController controller;
   final bool preview;
   @override
-  State<MarkSixLatestCard> createState() => _MarkSixLatestCardState();
-}
-
-class _MarkSixLatestCardState extends State<MarkSixLatestCard> {
-  Timer? _timer;
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && widget.controller.current) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  String get countdown {
-    final round = widget.controller.currentRound;
-    if (round == null) return '期数待更新';
-    if (round.status == 'drawn') return '已开奖';
-    if (round.status == 'closed' || round.status == 'drawing') return '正在开奖';
-    final stamp = round.raw['closeAt'] ?? round.raw['drawAt'];
-    if (stamp is! num) return round.status == 'open' ? '投注中' : '等待开奖';
-    final seconds =
-        (DateTime.fromMillisecondsSinceEpoch(stamp.toInt(), isUtc: true)
-                .difference(widget.controller.now())
-                .inSeconds)
-            .clamp(0, 86400);
-    return '${round.status == 'open' ? '封盘' : '开奖'} ${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final c = widget.controller;
+    final c = controller;
     final style = MarkSixStyle.of(context);
     if (!c.current) {
-      return MarkSixEmpty(message: '登录状态已变更', compact: widget.preview);
+      return MarkSixEmpty(message: '登录状态已变更', compact: preview);
     }
     if (!c.ready && c.loading) {
       return Center(child: LoadingView.indicator());
@@ -108,19 +73,17 @@ class _MarkSixLatestCardState extends State<MarkSixLatestCard> {
     if (!c.ready) {
       return MarkSixEmpty(
           message: c.error ?? '暂无开奖数据',
-          compact: widget.preview,
+          compact: preview,
           onRetry: () => c.refresh(force: true));
     }
     final latest = c.latest;
-    final now = c.now().add(const Duration(hours: 8));
-    String two(int n) => n.toString().padLeft(2, '0');
     return DefaultTextStyle.merge(
         style: TextStyle(color: style.text),
         child: Container(
             key: const ValueKey('lottery-latest-card'),
-            padding: EdgeInsets.fromLTRB(12, 10, 12, widget.preview ? 8 : 10),
+            padding: EdgeInsets.fromLTRB(12, 10, 12, preview ? 8 : 10),
             decoration: BoxDecoration(
-                gradient: widget.preview
+                gradient: preview
                     ? null
                     : LinearGradient(
                         begin: Alignment.topLeft,
@@ -130,10 +93,8 @@ class _MarkSixLatestCardState extends State<MarkSixLatestCard> {
                             style.dark ? style.lotteryPanel : style.lotteryAlt
                           ]),
                 borderRadius: BorderRadius.circular(MarkSixStyle.radius),
-                border: widget.preview
-                    ? null
-                    : Border.all(color: style.lotteryBorder),
-                boxShadow: widget.preview
+                border: preview ? null : Border.all(color: style.lotteryBorder),
+                boxShadow: preview
                     ? null
                     : [
                         BoxShadow(
@@ -144,7 +105,7 @@ class _MarkSixLatestCardState extends State<MarkSixLatestCard> {
                             offset: const Offset(0, 7))
                       ]),
             child: Stack(clipBehavior: Clip.none, children: [
-              if (!widget.preview)
+              if (!preview)
                 Positioned(
                     right: 6,
                     bottom: 8,
@@ -187,22 +148,7 @@ class _MarkSixLatestCardState extends State<MarkSixLatestCard> {
                               fontWeight: FontWeight.w800)),
                     ]),
                     const SizedBox(height: 2),
-                    Row(children: [
-                      Expanded(
-                          child: Text(
-                              '当前时间 ${now.year}-${two(now.month)}-${two(now.day)} ${two(now.hour)}:${two(now.minute)}:${two(now.second)}',
-                              style: TextStyle(
-                                  fontSize: 11, color: style.secondary),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis)),
-                      const SizedBox(width: 4),
-                      Text(countdown,
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: c.currentRound?.status == 'open'
-                                  ? style.primary
-                                  : MarkSixStyle.red)),
-                    ]),
+                    MarkSixClockRow(controller: c),
                     const SizedBox(height: 8),
                     if (latest == null)
                       Padding(
@@ -214,15 +160,15 @@ class _MarkSixLatestCardState extends State<MarkSixLatestCard> {
                         MarkSixNumberBall(
                             number: latest.number,
                             wave: latest.wave,
-                            size: widget.preview ? 52 : 60),
-                        SizedBox(width: widget.preview ? 10 : 12),
+                            size: preview ? 52 : 60),
+                        SizedBox(width: preview ? 10 : 12),
                         Expanded(
                             child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                               Text('特码 ${latest.number} · ${latest.zodiac}',
                                   style: TextStyle(
-                                      fontSize: widget.preview ? 16 : 17,
+                                      fontSize: preview ? 16 : 17,
                                       fontWeight: FontWeight.w800)),
                               const SizedBox(height: 7),
                               Wrap(spacing: 5, runSpacing: 5, children: [

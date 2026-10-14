@@ -30,53 +30,57 @@ class ChatLocationMapOverlay extends StatelessWidget {
           child: KeyedSubtree(
               key: const ValueKey('chat-location-map'), child: map)),
       if (failure == null && (active || locating)) ...[
-        Positioned(
-            top: AppTokens.s5,
-            left: AppTokens.s5,
-            right: AppTokens.s5,
-            child: IgnorePointer(
-                child: Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                            maxWidth: ChatLocationPickerTokens.hintMaxWidth),
-                        child: DecoratedBox(
-                            decoration: BoxDecoration(
-                                color: surface,
-                                borderRadius:
-                                    BorderRadius.circular(AppTokens.rPill)),
-                            child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: AppTokens.s5,
-                                    vertical: AppTokens.s3),
-                                child: Text(
-                                    locating ? labels.locating : labels.mapHint,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                        color:
-                                            AppTokens.textPrimary(dark: dark),
-                                        fontSize: ChatLocationPickerTokens
-                                            .captionSize)))))))),
+        if (locating)
+          Positioned(
+              top: AppTokens.s5,
+              left: AppTokens.s5,
+              right: AppTokens.s5,
+              child: IgnorePointer(
+                  child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                              maxWidth: ChatLocationPickerTokens.hintMaxWidth),
+                          child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                  color: surface,
+                                  borderRadius:
+                                      BorderRadius.circular(AppTokens.rPill)),
+                              child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: AppTokens.s5,
+                                      vertical: AppTokens.s3),
+                                  child: Text(
+                                      locating
+                                          ? labels.locating
+                                          : labels.mapHint,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                          color:
+                                              AppTokens.textPrimary(dark: dark),
+                                          fontSize: ChatLocationPickerTokens
+                                              .captionSize)))))))),
         Positioned(
             bottom: AppTokens.s5,
             right: AppTokens.s5,
             child: Material(
                 color: surface,
-                shape: const CircleBorder(),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTokens.rSm)),
                 child: SizedBox.square(
                     dimension: ChatLocationPickerTokens.touchSize,
                     child: IconButton(
                         key: const ValueKey('chat-location-locate'),
                         tooltip: locating ? labels.locating : labels.locate,
                         onPressed: active && !locating ? onLocate : null,
-                        color: AppTokens.accent,
+                        color: ChatLocationPickerTokens.accent,
                         disabledColor: AppTokens.textSecondary(dark: dark),
                         icon: locating
                             ? const SizedBox.square(
                                 dimension:
                                     ChatLocationPickerTokens.controlIconSize,
                                 child: CircularProgressIndicator(
-                                    color: AppTokens.accent,
+                                    color: ChatLocationPickerTokens.accent,
                                     strokeWidth: ChatLocationPickerTokens
                                         .progressStroke))
                             : const Icon(Icons.my_location_rounded,

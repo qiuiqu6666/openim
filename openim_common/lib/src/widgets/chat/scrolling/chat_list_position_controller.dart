@@ -6,6 +6,7 @@ class ChatListPositionController {
   Object? _owner;
   Future<bool> Function(String, double)? _jump;
   VoidCallback? _cancel;
+  VoidCallback? _refreshViewport;
   bool _disposed = false;
 
   /// Resolves after the message has painted in the current chat viewport.
@@ -19,6 +20,11 @@ class ChatListPositionController {
         Future.value(false);
   }
 
+  /// Requests a fresh painted viewport observation without moving the list.
+  void refreshViewport() {
+    if (!_disposed) _refreshViewport?.call();
+  }
+
   /// Invalidates a pending position request before an explicit scroll or exit.
   void cancel() {
     if (!_disposed) _cancel?.call();
@@ -26,7 +32,8 @@ class ChatListPositionController {
 
   /// Used by the owning chat viewport to bind its positioning callbacks.
   void attach(Object owner, Future<bool> Function(String, double) jump,
-      VoidCallback cancel) {
+      VoidCallback cancel,
+      {VoidCallback? refreshViewport}) {
     if (_disposed) return;
     assert(_owner == null || identical(_owner, owner),
         'A chat position controller can only control one viewport.');
@@ -34,6 +41,7 @@ class ChatListPositionController {
     _owner = owner;
     _jump = jump;
     _cancel = cancel;
+    _refreshViewport = refreshViewport;
   }
 
   /// Used by the owning chat viewport to release its positioning callbacks.
@@ -43,6 +51,7 @@ class ChatListPositionController {
     _owner = null;
     _jump = null;
     _cancel = null;
+    _refreshViewport = null;
   }
 
   void dispose() {
@@ -52,5 +61,6 @@ class ChatListPositionController {
     _owner = null;
     _jump = null;
     _cancel = null;
+    _refreshViewport = null;
   }
 }

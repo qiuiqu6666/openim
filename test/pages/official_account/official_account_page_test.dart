@@ -112,12 +112,12 @@ void main() {
       expect(item.textBubbleStyle, isNull);
       expect(item.itemMargin, isNull);
       expect(item.itemPadding, isNull);
-      expect(item.avatarSize, isNull);
+      expect(item.avatarSize, 36);
     }
     for (final container in tester
         .widgetList<ChatItemContainer>(find.byType(ChatItemContainer))) {
       expect(container.textBubbleStyle, isNull);
-      expect(container.avatarSize, 44);
+      expect(container.avatarSize, 36);
       for (final avatar in tester.widgetList<AvatarView>(find.descendant(
           of: find.byWidget(container), matching: find.byType(AvatarView)))) {
         expect(avatar.textScaler, isNull);
@@ -128,7 +128,10 @@ void main() {
         in tester.widgetList<ChatBubble>(find.byType(ChatBubble))) {
       expect(bubble.padding, isNull);
       expect(bubble.borderRadius, isNull);
-      expect(bubble.constraints, isNull);
+      expect(
+          bubble.constraints?.maxWidth,
+          ChatBubbleTokens.maxWidth(
+              MediaQuery.sizeOf(tester.element(find.byWidget(bubble))).width));
       expect(bubble.backgroundColor, isNull);
     }
     for (final text in tester.widgetList<ChatText>(find.byType(ChatText))) {
@@ -140,7 +143,7 @@ void main() {
           of: find.byWidget(text), matching: find.byType(MatchTextView)));
       final dark = Theme.of(tester.element(find.byWidget(text))).brightness ==
           Brightness.dark;
-      expect(body.textStyle?.color, Styles.c_0C1C33);
+      expect(body.textStyle?.color, ChatBubbleTokens.bodyText(dark: dark));
       expect(ThemeData.estimateBrightnessForColor(body.textStyle!.color!),
           dark ? Brightness.light : Brightness.dark);
     }

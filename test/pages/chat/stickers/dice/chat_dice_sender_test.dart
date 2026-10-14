@@ -83,7 +83,9 @@ void main() {
       sendRaw: (message, target) async {
         attempts.add((id: message.clientMsgID, data: message.customElem?.data));
         expect(target.userID, 'peer');
-        if (attempts.length == 1) throw StateError('offline');
+        if (attempts.length == 1) {
+          throw PlatformException(code: '${SDKErrorCode.parameterError}');
+        }
         return Message.fromJson(message.toJson())
           ..status = MessageStatus.succeeded;
       },

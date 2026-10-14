@@ -52,11 +52,14 @@ void main() {
     fixture.holdRecipient = true;
     final pending = logic.getApplicationList();
     await tester.pump(const Duration(milliseconds: 2));
-    await logic.deleteRequest(logic.list.first);
+    final deleting = logic.deleteRequest(logic.list.first);
+    await tester.pump();
+    fixture.holdRecipient = false;
     fixture.recipientReplies.single.complete(
         jsonEncode(fixture.recipient.map((row) => row.toJson()).toList()));
     await tester.pumpAndSettle();
     await pending;
+    await deleting;
     expect(logic.list.map((row) => row.reqTime), [1]);
   });
 
@@ -81,7 +84,7 @@ void main() {
       tester.view.physicalSize = const Size(375, 812);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      final logic = Get.put(GroupRequestsLogic());
+      final logic = Get.put(GroupRequestsLogic(syncInterval: Duration.zero));
       await tester.pumpWidget(ScreenUtilInit(
         designSize: const Size(375, 812),
         builder: (_, __) => GetMaterialApp(

@@ -66,6 +66,8 @@ class GroupFeatureStore extends ChangeNotifier {
   final _capabilityErrors = <String, GroupFeatureException>{};
   final _capabilityTokens = <String, CancelToken>{};
   final _requested = <String>{}, _queued = <String>{}, _left = <String>{};
+  final _metadataRetries = <String, Timer>{};
+  final _metadataAttempts = <String, int>{};
   // Only live event consumers need calibration on resume/reconnect. Merely
   // visiting a group must not grow every later refresh for the whole session.
   final _eventOwners = <String, int>{};
@@ -177,6 +179,8 @@ class GroupFeatureStore extends ChangeNotifier {
   void seed(GroupInfo info) {
     if (!active || _left.contains(info.groupID)) return;
     final id = info.groupID;
+    _metadataRetries.remove(id)?.cancel();
+    _metadataAttempts.remove(id);
     final previous = _groups[id];
     if (previous != null &&
         _samePermissionValue(previous.toJson(), info.toJson()) &&
@@ -309,7 +313,7 @@ class GroupFeatureStore extends ChangeNotifier {
       if (id == null || id.isEmpty || _left.contains(id)) {
         continue;
       }
-      if (_requested.contains(id)) continue;
+      if (_requested.contains(id) || _metadataRetries.containsKey(id)) continue;
       _queued.add(id);
     }
     if (_queued.isEmpty || _scheduled) return;
@@ -326,6 +330,8 @@ class GroupFeatureStore extends ChangeNotifier {
         final batch = _queued.take(100).toList();
         _queued.removeAll(batch);
         _requested.addAll(batch);
+        final snapshots = {for (final id in batch) id: _groups[id]};
+        final unresolved = batch.toSet();
         try {
           final groups = await fetchGroups(batch);
           if (!active) return;
@@ -334,6 +340,13 @@ class GroupFeatureStore extends ChangeNotifier {
           _batching = true;
           try {
             for (final group in groups) {
+              if (!unresolved.remove(group.groupID)) continue;
+              // A chat read or SDK notification delivered newer metadata while
+              // this list read was pending. Do not turn its name black again.
+              if (!identical(
+                  _groups[group.groupID], snapshots[group.groupID])) {
+                continue;
+              }
               seed(group);
             }
           } finally {
@@ -345,12 +358,30 @@ class GroupFeatureStore extends ChangeNotifier {
             }
           }
         } catch (_) {
-          // Explicit resume/sync refresh retries; no per-row retry storm.
+          // Failed and partial reads remain retryable, unlike resolved groups.
+        } finally {
+          for (final id in unresolved) {
+            if (identical(_groups[id], snapshots[id])) _retryMetadata(id);
+          }
         }
       }
     } finally {
       _flushing = false;
     }
+  }
+
+  void _retryMetadata(String id) {
+    if (!active || _left.contains(id)) return;
+    _requested.remove(id);
+    if (_metadataRetries.containsKey(id)) return;
+    final attempt = _metadataAttempts[id] ?? 0;
+    // Two bounded retries; subsequent list activation/sync can try again.
+    if (attempt >= 2) return;
+    _metadataAttempts[id] = attempt + 1;
+    _metadataRetries[id] = Timer(Duration(seconds: attempt == 0 ? 1 : 3), () {
+      _metadataRetries.remove(id);
+      if (active && !_left.contains(id)) hydrate([id]);
+    });
   }
 
   void refreshKnownGroups() {
@@ -613,6 +644,8 @@ class GroupFeatureStore extends ChangeNotifier {
     if (!active) return;
     invalidateCapabilities(id);
     _left.add(id);
+    _metadataRetries.remove(id)?.cancel();
+    _metadataAttempts.remove(id);
     _groups.remove(id);
     _gameTypes.remove(id);
     _features.remove(id);
@@ -636,6 +669,11 @@ class GroupFeatureStore extends ChangeNotifier {
   }
 
   void clear() {
+    for (final timer in _metadataRetries.values) {
+      timer.cancel();
+    }
+    _metadataRetries.clear();
+    _metadataAttempts.clear();
     for (final token in _capabilityTokens.values) {
       token.cancel();
     }

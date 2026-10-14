@@ -76,8 +76,8 @@ class _ChatListViewportState extends State<ChatListViewport>
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     _updatePartition();
     _controller.addListener(_onScroll);
-    widget.positionController
-        ?.attach(this, _jumpToMessage, _cancelPositionJump);
+    widget.positionController?.attach(this, _jumpToMessage, _cancelPositionJump,
+        refreshViewport: _schedule);
   }
 
   @override
@@ -85,8 +85,9 @@ class _ChatListViewportState extends State<ChatListViewport>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.positionController != widget.positionController) {
       oldWidget.positionController?.detach(this);
-      widget.positionController
-          ?.attach(this, _jumpToMessage, _cancelPositionJump);
+      widget.positionController?.attach(
+          this, _jumpToMessage, _cancelPositionJump,
+          refreshViewport: _schedule);
     }
     if (_jumpTargetID != null && !widget.messageIDs.contains(_jumpTargetID)) {
       _cancelPositionJump();

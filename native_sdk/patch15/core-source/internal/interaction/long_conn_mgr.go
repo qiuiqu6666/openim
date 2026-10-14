@@ -81,10 +81,11 @@ var (
 )
 
 type LongConnMgr struct {
-	metrics      connectionTelemetry
-	runOnce      sync.Once
-	recoveryMu   sync.Mutex
-	recoveryWake chan struct{}
+	historyPriority historyPriority
+	metrics         connectionTelemetry
+	runOnce         sync.Once
+	recoveryMu      sync.Mutex
+	recoveryWake    chan struct{}
 	//conn status mutex
 	w          sync.Mutex
 	connStatus int

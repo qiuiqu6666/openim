@@ -24,6 +24,8 @@ void main() {
       await harness.mount(tester);
       await harness.selectMapPoint(tester);
       const raw = ' \u0301\u{1F469}\u{1F3FD}\u200D\u{1F4BB}公园\u00A0';
+      await tester.tap(locationKey('edit-name'));
+      await tester.pumpAndSettle();
       await tester.enterText(locationKey('name'), raw);
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pump();
@@ -55,6 +57,8 @@ void main() {
       expect(selected.latitude.isFinite, isTrue);
       expect(selected.longitude.isFinite, isTrue);
       expect(selected.latitude, isNot(0));
+      await tester.tap(locationKey('edit-name'));
+      await tester.pumpAndSettle();
       await tester.enterText(locationKey('name'), '  河畔公园南门  ');
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pump();
@@ -108,6 +112,8 @@ void main() {
     try {
       await harness.mount(tester);
       await harness.selectMapPoint(tester);
+      await tester.tap(locationKey('edit-name'));
+      await tester.pumpAndSettle();
       await tester.enterText(locationKey('name'), '保留的位置名称');
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pump();

@@ -15,6 +15,8 @@ Future<void> showPlatformUpdateDialog(
   required bool force,
   required Future<void> Function() onUpdate,
   bool closeOnSuccess = false,
+  bool keepOpenOnSuccess = false,
+  Listenable? dismissSignal,
   String? actionLabel,
   String? failureMessage,
 }) {
@@ -37,6 +39,8 @@ Future<void> showPlatformUpdateDialog(
           force: force,
           onUpdate: onUpdate,
           closeOnSuccess: closeOnSuccess,
+          keepOpenOnSuccess: keepOpenOnSuccess,
+          dismissSignal: dismissSignal,
           actionLabel: actionLabel,
           failureMessage: failureMessage),
     ),
@@ -63,12 +67,16 @@ class _PlatformUpdateDialog extends StatefulWidget {
       required this.force,
       required this.onUpdate,
       this.closeOnSuccess = false,
+      this.keepOpenOnSuccess = false,
+      this.dismissSignal,
       this.actionLabel,
       this.failureMessage});
   final String title, message;
   final bool force;
   final Future<void> Function() onUpdate;
   final bool closeOnSuccess;
+  final bool keepOpenOnSuccess;
+  final Listenable? dismissSignal;
   final String? actionLabel, failureMessage;
   @override
   State<_PlatformUpdateDialog> createState() => _PlatformUpdateDialogState();
@@ -76,6 +84,18 @@ class _PlatformUpdateDialog extends StatefulWidget {
 
 class _PlatformUpdateDialogState extends State<_PlatformUpdateDialog> {
   bool _updating = false, _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.dismissSignal?.addListener(_close);
+  }
+
+  @override
+  void dispose() {
+    widget.dismissSignal?.removeListener(_close);
+    super.dispose();
+  }
 
   void _close() {
     final route = ModalRoute.of(context);
@@ -91,7 +111,9 @@ class _PlatformUpdateDialogState extends State<_PlatformUpdateDialog> {
     try {
       await widget.onUpdate();
       if (!mounted) return;
-      if (!widget.force || widget.closeOnSuccess) _close();
+      if (!widget.keepOpenOnSuccess && (!widget.force || widget.closeOnSuccess)) {
+        _close();
+      }
     } catch (_) {
       if (mounted) setState(() => _failed = true);
     } finally {

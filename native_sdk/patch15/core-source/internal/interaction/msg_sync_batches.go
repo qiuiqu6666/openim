@@ -23,7 +23,15 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 	totalPages := 0
 	refreshedBounds := make(map[string]bool)
 	visibleRanges := make(map[string][2]int64, len(ranges))
-	for id, r := range ranges {
+	priorities := m.conversationPriorities(ctx)
+	ordered := make([]string, 0, len(ranges))
+	for id := range ranges {
+		ordered = append(ordered, id)
+	}
+	sort.Strings(ordered)
+	m.prioritizeConversations(ordered, priorities)
+	for _, id := range ordered {
+		r := ranges[id]
 		// Boundary revalidation can perform network I/O for many conversations.
 		// Lend ownership between these checks as well as between message pages.
 		if err := yieldMessageSyncPage(ctx); err != nil {
@@ -66,7 +74,7 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 			}
 		}
 	}
-	sort.Strings(ids)
+	m.prioritizeConversations(ids, priorities)
 	previewTotal := 0
 	if reinstall {
 		previewTotal = totalPages
@@ -90,6 +98,7 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 		}
 	}
 	for len(pending) > 0 {
+		m.prioritizeConversations(ids, priorities)
 		for _, id := range ids {
 			if err := yieldMessageSyncPage(ctx); err != nil {
 				return err
@@ -116,15 +125,11 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 			if r[1]-r[0] >= SplitPullMsgNum {
 				end = r[0] + SplitPullMsgNum - 1
 			}
-			batch := map[string][2]int64{id: {r[0], end}}
-			resp, err := m.pullMsgBySeqRange(ctx, batch, end-r[0]+1)
-			if err == nil {
-				total := 0
-				if reinstall {
-					total = totalPages
-				}
-				err = m.commitPulledMessages(ctx, resp, batch, total)
+			total := 0
+			if reinstall {
+				total = totalPages
 			}
+			err := m.syncPrioritizedPage(ctx, id, [2]int64{r[0], end}, total)
 			if err != nil {
 				var incomplete *incompleteMessageRange
 				if errors.As(err, &incomplete) && !IsNotification(id) && !refreshedBounds[id] {

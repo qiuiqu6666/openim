@@ -1,6 +1,8 @@
 package io.openim.location;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import java.io.ByteArrayOutputStream;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
@@ -44,6 +46,7 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
     private final Lifecycle lifecycle;
     private final Consumer<NativeChatLocationMap> onDisposed;
     private final Handler main = new Handler(Looper.getMainLooper());
+    private ChatLocationPlaceSearch placeSearch;
     private MapView mapView;
     private AMap map;
     private Marker marker;
@@ -53,6 +56,8 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
     private volatile long generation;
     private boolean resumed;
     private boolean ready;
+    private boolean readOnly;
+    private MethodChannel.Result snapshotResult;
     private boolean pointerDown;
     private boolean userPanning;
     private LatLng panStart;
@@ -64,6 +69,7 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
                           int viewId, Map<?, ?> params,
                           Consumer<NativeChatLocationMap> onDisposed) {
         this.context = context;
+        readOnly = params != null && Boolean.TRUE.equals(params.get("readOnly"));
         this.lifecycle = lifecycle;
         this.onDisposed = onDisposed;
         container = new FrameLayout(context);
@@ -117,6 +123,7 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
                 // A covered view may finish loading; remember readiness for its return.
                 if (disposed || map == null || error != null) return;
                 ready = true;
+                captureSnapshot();
                 if (active && hostResumed) emit("onReady", null);
             }));
             map.setAMapGestureListener(new AMapGestureListener() {
@@ -169,6 +176,19 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
         Map<?, ?> args = call.arguments instanceof Map ? (Map<?, ?>) call.arguments : null;
         try {
             switch (call.method) {
+                case "snapshot":
+                    if (!usable()) { result.error("unavailable", "Map unavailable", null); break; }
+                    if (snapshotResult != null) { result.error("busy", "Snapshot pending", null); break; }
+                    snapshotResult = result;
+                    captureSnapshot();
+                    break;
+                case "searchPlaces":
+                    if (!usable()) { result.error("unavailable", "Map unavailable", null); break; }
+                    if (placeSearch == null) placeSearch = new ChatLocationPlaceSearch(context);
+                    LatLng searchCenter = args == null ? null : readWgs84(args);
+                    String query = args != null && args.get("query") instanceof String ? ((String) args.get("query")).trim() : "";
+                    placeSearch.search(query, searchCenter == null ? null : toNative(searchCenter), result);
+                    break;
                 case "move":
                     if (map != null && error == null && args != null) {
                         LatLng coordinate = readWgs84(args);
@@ -192,6 +212,7 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
                     boolean next = args != null && Boolean.TRUE.equals(args.get("active"));
                     if (active != next) {
                         active = next;
+                        if (!active && placeSearch != null) placeSearch.cancel();
                         generation++;
                         clearGesture();
                         syncLifecycle();
@@ -264,7 +285,7 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
     }
 
     private void select(LatLng nativePoint) {
-        if (!usable() || nativePoint == null
+        if (readOnly || !usable() || nativePoint == null
                 || !ChatLocationCoordinates.isValid(nativePoint.latitude, nativePoint.longitude)) return;
         clearGesture();
         updateMarker(nativePoint);
@@ -280,8 +301,27 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
     private void updateMarker(LatLng point) {
         if (marker == null) {
             marker = map.addMarker(new MarkerOptions().position(point).anchor(0.5f, 1f)
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
+                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
         } else marker.setPosition(point);
+    }
+
+    private void captureSnapshot() {
+        if (!ready || !usable() || snapshotResult == null) return;
+        final MethodChannel.Result reply = snapshotResult;
+        map.getMapScreenShot(new AMap.OnMapScreenShotListener() {
+            @Override public void onMapScreenShot(Bitmap bitmap) { /* Use the rendered-status callback. */ }
+            @Override public void onMapScreenShot(Bitmap bitmap, int status) {
+                if (disposed || snapshotResult != reply) return;
+                snapshotResult = null;
+                if (bitmap == null || status != 1) {
+                    reply.error("snapshotUnavailable", "Map has not rendered", null);
+                    return;
+                }
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, bytes);
+                reply.success(bytes.toByteArray());
+            }
+        });
     }
 
     private boolean usable() { return !disposed && active && hostResumed && error == null && map != null; }
@@ -342,6 +382,7 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
 
     @Override public void onPause(@NonNull LifecycleOwner owner) {
         hostResumed = false;
+        if (placeSearch != null) placeSearch.cancel();
         generation++;
         clearGesture();
         syncLifecycle();
@@ -354,6 +395,11 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
     @Override public void dispose() {
         if (disposed) return;
         disposed = true;
+        if (snapshotResult != null) {
+            snapshotResult.error("cancelled", "Map closed", null);
+            snapshotResult = null;
+        }
+        if (placeSearch != null) placeSearch.dispose();
         generation++;
         pendingWgsPoint = null;
         clearGesture();

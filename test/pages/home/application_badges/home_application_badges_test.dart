@@ -1,3 +1,4 @@
+import 'package:openim/pages/contacts/group_requests/data/group_notices_api.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -38,6 +39,7 @@ class _Cache extends GetxController implements CacheController {
 }
 
 class _BadgeHome extends HomeLogic {
+  _BadgeHome(GroupNoticesApi api) : super(groupNotices: api);
   @override
   void onReady() {} // Exclude unrelated call history/platform entry work.
 }
@@ -73,13 +75,17 @@ void main() {
       requests.putIfAbsent(call.method, () => []).add(reply);
       return reply.future;
     });
-    home = _BadgeHome();
+    home = _BadgeHome(GroupNoticesApi(request: (path, body) async {
+      final reply = Completer<String>();
+      requests.putIfAbsent('groupNoticeState', () => []).add(reply);
+      return jsonDecode(await reply.future);
+    }));
   });
   tearDown(() async {
     home.onDelete();
     for (final calls in requests.values) {
       for (final reply in calls) {
-        if (!reply.isCompleted) reply.complete('[]');
+        if (!reply.isCompleted) reply.complete('{}');
       }
     }
     Get.reset();
@@ -99,15 +105,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 80));
     expect(requests.keys.toSet(), {
       'getFriendApplicationListAsRecipient',
-      'getGroupApplicationListAsRecipient',
+      'groupNoticeState',
     });
     expect(requests.values.every((calls) => calls.length == 1), isTrue);
     requests['getFriendApplicationListAsRecipient']!
         .single
         .complete(jsonEncode([friend.toJson()]));
-    requests['getGroupApplicationListAsRecipient']!
+    requests['groupNoticeState']!
         .single
-        .complete(jsonEncode([group.toJson()]));
+        .complete(jsonEncode({'unreadCount': 1}));
     await tester.pump();
     expect(home.unhandledFriendApplicationCount.value, 1);
     expect(home.unhandledGroupApplicationCount.value, 1);
@@ -132,13 +138,38 @@ void main() {
     await tester.pump();
     expect(home.unhandledFriendApplicationCount.value, 0);
     home.onDelete();
-    requests['getGroupApplicationListAsRecipient']!
+    requests['groupNoticeState']!
         .single
-        .complete(jsonEncode([group.toJson()]));
+        .complete(jsonEncode({'unreadCount': 1}));
     await tester.pump();
     expect(home.unhandledGroupApplicationCount.value, 0);
     home.getUnhandledGroupApplicationCount();
     await tester.pump(const Duration(seconds: 1));
-    expect(requests['getGroupApplicationListAsRecipient'], hasLength(1));
+    expect(requests['groupNoticeState'], hasLength(1));
+  });
+
+  testWidgets(
+      'resume and sync completion compensate both badges without chat unread',
+      (tester) async {
+    home.onInit();
+    home.onResumed();
+    await tester.pump(const Duration(milliseconds: 80));
+    requests['getFriendApplicationListAsRecipient']!
+        .last
+        .complete(jsonEncode([friend.toJson()]));
+    requests['groupNoticeState']!.last.complete(jsonEncode({'unreadCount': 1}));
+    await tester.pump();
+    expect(home.unhandledCount.value, 2);
+    expect(home.unreadMsgCount.value, 0);
+    im.imSdkStatusPublishSubject
+        .add((status: IMSdkStatus.syncEnded, reInstall: false, progress: null));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    requests['getFriendApplicationListAsRecipient']!.last.complete('[]');
+    requests['groupNoticeState']!.last.complete(jsonEncode({'unreadCount': 0}));
+    await tester.pump();
+    expect(home.unhandledCount.value, 0);
+    expect(requests['getFriendApplicationListAsRecipient'], hasLength(2));
+    expect(requests['groupNoticeState'], hasLength(2));
   });
 }

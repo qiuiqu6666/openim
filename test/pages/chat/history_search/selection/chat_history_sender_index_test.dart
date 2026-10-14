@@ -226,7 +226,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     last.complete(_page([_sender('d-before', 'David'), _sender('other', '🍀')],
         nextOffset: 102));
-    // The very first completed frame must already have the correct anchor.
+    // Deliver the async source result before rendering its first changed frame.
+    await tester.idle();
     await tester.pump();
     expect(offsets, [0, 50, 100]);
     expect(_directory(tester).itemCount, 5);

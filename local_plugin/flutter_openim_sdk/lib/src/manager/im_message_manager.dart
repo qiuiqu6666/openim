@@ -147,7 +147,8 @@ class MessageManager {
 
   /// Typing status update
   /// [msgTip] Custom content
-  @Deprecated('Use [OpenIM.iMManager.conversationManager.changeInputStates(conversationID:focus:)] instead')
+  @Deprecated(
+      'Use [OpenIM.iMManager.conversationManager.changeInputStates(conversationID:focus:)] instead')
   Future typingStatusUpdate({
     required String userID,
     String? msgTip,
@@ -527,7 +528,8 @@ class MessageManager {
                 },
                 'operationID': Utils.checkOperationID(operationID),
               }))
-          .then((value) => Utils.toObj(value, (map) => SearchResult.fromJson(map)));
+          .then((value) =>
+              Utils.toObj(value, (map) => SearchResult.fromJson(map)));
 
   /// Revoke a message
   /// [message] The message to be revoked
@@ -561,6 +563,32 @@ class MessageManager {
             "operationID": Utils.checkOperationID(operationID),
           }));
 
+  /// Display-only local rows. Does not establish synchronization or cursors.
+  /// Older native SDKs cannot attest this contract and their result is ignored.
+  Future<List<Message>> getLocalHistorySnapshot({
+    required String conversationID,
+    int count = 40,
+    String? operationID,
+  }) =>
+      _channel
+          .invokeMethod(
+              'getLocalHistorySnapshot',
+              _buildParam({
+                'conversationID': conversationID,
+                'startClientMsgID': '',
+                'count': count,
+                'viewType': GetHistoryViewType.history.rawValue,
+                'localSnapshot': true,
+                'operationID': Utils.checkOperationID(operationID),
+              }))
+          .then((value) => Utils.toObj(value, (map) {
+                if (map['localSnapshot'] != true ||
+                    (map['errCode'] != null && map['errCode'] != 0)) {
+                  return <Message>[];
+                }
+                return AdvancedMessage.fromJson(map).messageList ?? <Message>[];
+              }));
+
   /// Get chat history (messages prior to startMsg)
   /// [conversationID] Conversation ID, can be used for querying notifications
   /// [startMsg] Query [count] messages starting from this message. The message at index == length - 1 is the latest message, so to get the next page of history, use startMsg = list.first
@@ -579,12 +607,14 @@ class MessageManager {
               _buildParam({
                 'conversationID': conversationID ?? '',
                 'startClientMsgID': startMsg?.clientMsgID ?? '',
-                if (startMsg is HistoryScanCursor) 'scanCursor': startMsg.toJson(),
+                if (startMsg is HistoryScanCursor)
+                  'scanCursor': startMsg.toJson(),
                 'count': count ?? 40,
                 'viewType': viewType.rawValue,
                 'operationID': Utils.checkOperationID(operationID),
               }))
-          .then((value) => Utils.toObj(value, (map) => AdvancedMessage.fromJson(map)));
+          .then((value) =>
+              Utils.toObj(value, (map) => AdvancedMessage.fromJson(map)));
 
   /// Get chat history (newly received chat history after startMsg). Used for locating a specific message in global search and then fetching messages received after that message.
   /// [conversationID] Conversation ID, can be used for querying notifications
@@ -603,12 +633,14 @@ class MessageManager {
               _buildParam({
                 'conversationID': conversationID ?? '',
                 'startClientMsgID': startMsg?.clientMsgID ?? '',
-                if (startMsg is HistoryScanCursor) 'scanCursor': startMsg.toJson(),
+                if (startMsg is HistoryScanCursor)
+                  'scanCursor': startMsg.toJson(),
                 'count': count ?? 40,
                 'viewType': viewType.rawValue,
                 'operationID': Utils.checkOperationID(operationID),
               }))
-          .then((value) => Utils.toObj(value, (map) => AdvancedMessage.fromJson(map)));
+          .then((value) =>
+              Utils.toObj(value, (map) => AdvancedMessage.fromJson(map)));
 
   /// Find message details
   /// [conversationID] Conversation ID
@@ -624,7 +656,8 @@ class MessageManager {
                 'searchParams': searchParams.map((e) => e.toJson()).toList(),
                 'operationID': Utils.checkOperationID(operationID),
               }))
-          .then((value) => Utils.toObj(value, (map) => SearchResult.fromJson(map)));
+          .then((value) =>
+              Utils.toObj(value, (map) => SearchResult.fromJson(map)));
 
   /// Rich text message
   /// [text] Input content

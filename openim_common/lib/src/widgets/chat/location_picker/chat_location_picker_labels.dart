@@ -18,7 +18,26 @@ class ChatLocationPickerLabels {
   String get title =>
       _text('选择位置', '選擇位置', 'Choose location', '場所を選択', '위치 선택');
 
-  String get send => _text('发送位置', '傳送位置', 'Send location', '場所を送信', '위치 보내기');
+  String get send => _text('发送', '傳送', 'Send', '送信', '보내기');
+  String get cancel => _text('取消', '取消', 'Cancel', 'キャンセル', '취소');
+  String get search => _text('搜索地点', '搜尋地點', 'Search places', '場所を検索', '장소 검색');
+  String get customName => _text(
+      '自定义位置名称', '自訂位置名稱', 'Custom location name', '場所の名前を編集', '위치 이름 편집');
+  String get current =>
+      _text('当前位置', '目前位置', 'Current location', '現在地', '현재 위치');
+  String get searchEmpty => _text(
+      '未找到相关地点，可在地图上选点',
+      '找不到相關地點，可在地圖上選點',
+      'No places found. Choose a point on the map.',
+      '場所が見つかりません。地図で選択できます。',
+      '장소가 없습니다. 지도에서 선택하세요.');
+  String get searchFailed => _text(
+      '地点加载失败，点击重试',
+      '地點載入失敗，點選重試',
+      'Could not load places. Tap to retry.',
+      '場所を読み込めません。タップして再試行',
+      '장소 로드 실패. 눌러 다시 시도');
+  String get notNow => _text('暂不使用', '暫不使用', 'Not now', '今は使用しない', '나중에');
 
   String get name => _text('位置名称（可选）', '位置名稱（選填）', 'Location name (optional)',
       '場所の名前（任意）', '위치 이름 (선택)');
@@ -54,7 +73,7 @@ class ChatLocationPickerLabels {
   String get zoomOut => _text('缩小地图', '縮小地圖', 'Zoom out', '縮小', '축소');
 
   String get mapProviderTitle =>
-      _text('使用高德地图', '使用高德地圖', 'Use AMap', '高徳地図を使用', 'AMap 사용');
+      _text('使用地图服务', '使用地圖服務', 'Use map services', '地図サービスを使用', '지도 서비스 사용');
 
   String get mapPrivacyHint => _text(
       '查看并同意高德隐私政策后，即可在地图上选择位置。',
@@ -63,8 +82,8 @@ class ChatLocationPickerLabels {
       '高徳地図のプライバシーポリシーに同意すると、地図で場所を選べます。',
       'AMap 개인정보 처리방침을 읽고 동의하면 지도에서 위치를 선택할 수 있습니다.');
 
-  String get mapPrivacyLink =>
-      _text('隐私政策', '隱私政策', 'Privacy policy', 'プライバシーポリシー', '개인정보 처리방침');
+  String get mapPrivacyLink => _text('《高德地图隐私政策》', '《高德地圖隱私政策》',
+      'AMap privacy policy', '高徳地図プライバシーポリシー', 'AMap 개인정보 처리방침');
 
   String get mapPrivacyAgree =>
       _text('同意并继续', '同意並繼續', 'Agree and continue', '同意して続ける', '동의하고 계속');

@@ -42,6 +42,7 @@ class MessageNotificationRuntime {
         loadConversation,
     required Future<void> Function(sdk.ConversationInfo) openConversation,
     this.openMessageList,
+    this.onApplicationResponse,
     required Future<void> Function(String, sdk.ConversationInfo) sendReply,
     required void Function(String) reportError,
     MessageNotificationAvatarCache? avatars,
@@ -68,6 +69,7 @@ class MessageNotificationRuntime {
   }
 
   final SystemMessageNotifier notifier;
+  final bool Function(String? payload)? onApplicationResponse;
 
   /// The callback must check this guard again after any navigation await.
   final Future<void> Function(bool Function() isCurrent)? openMessageList;
@@ -124,6 +126,7 @@ class MessageNotificationRuntime {
 
   void _onResponse(NotificationResponse response) {
     if (_closed) return;
+    if (onApplicationResponse?.call(response.payload) == true) return;
     final target = MessageNotificationTarget.decode(response.payload);
     if (target == null || !_owns(target)) return;
     if (response.id != null && _sameNotification(target, response.id!)) {

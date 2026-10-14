@@ -8,9 +8,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import '../../support/conversation_live_fixture.dart';
 import 'package:openim/core/controller/im_controller.dart';
+import 'package:openim/core/im_callback.dart';
+import 'package:openim/core/session/connection/api_connection_health.dart';
 import 'package:openim/pages/conversation/archive/archived_conversation_page.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
-import 'package:openim/pages/conversation/editing/conversation_read_batch.dart';
 import 'package:openim/pages/conversation/conversation_organizer.dart';
 import 'package:openim/pages/conversation/editing/conversation_edit_action_bar.dart';
 import 'package:openim/pages/conversation/editing/conversation_selection_indicator.dart';
@@ -27,6 +28,10 @@ class _Home extends GetxController implements HomeLogic {
 }
 
 class _IM extends GetxController implements IMController {
+  @override
+  IMSdkStatus get currentConnectionStatus => IMSdkStatus.connectionSucceeded;
+  @override
+  ApiConnectionHealth? get apiConnectionHealth => null;
   @override
   final userInfo = UserFullInfo(userID: 'viewer', nickname: 'Viewer').obs;
   @override
@@ -48,27 +53,6 @@ class _Conversations extends GetxController
   final popCtrl = CustomPopupMenuController();
   final archivedIds = <String>{};
   final markedIds = <String>[];
-  @override
-  final markingAllRead = false.obs;
-  @override
-  final readBatchProgress = ''.obs;
-  @override
-  Future<void> markReadScope(bool Function(ConversationInfo) includes) async {
-    if (markingAllRead.value) return;
-    markingAllRead.value = true;
-    try {
-      await runConversationReadBatch(
-          conversations: list.where(includes).toList(),
-          isCurrent: () => true,
-          markRead: markConversationRead,
-          progress: (done, total) =>
-              readBatchProgress.value = '$done / $total');
-    } finally {
-      markingAllRead.value = false;
-      readBatchProgress.value = '';
-    }
-  }
-
   Completer<void>? markGate;
   @override
   bool get isSessionActive => true;

@@ -1,3 +1,4 @@
+import 'package:openim/pages/contacts/group_requests/data/group_notices_api.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -12,6 +13,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/core/controller/im_controller.dart';
+import 'package:openim/core/im_callback.dart';
 import 'package:openim/pages/contacts/friend_requests/friend_requests_logic.dart';
 import 'package:openim/pages/contacts/friend_requests/friend_requests_view.dart';
 import 'package:openim/pages/contacts/group_requests/group_requests_logic.dart';
@@ -24,6 +26,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _IM extends GetxController implements IMController {
   @override
+  final imSdkStatusPublishSubject =
+      PublishSubject<({IMSdkStatus status, bool reInstall, int? progress})>();
+  @override
   final groupApplicationChangedSubject = PublishSubject<GroupApplicationInfo>();
   @override
   final friendApplicationChangedSubject =
@@ -31,6 +36,7 @@ class _IM extends GetxController implements IMController {
   @override
   void onClose() {
     groupApplicationChangedSubject.close();
+    imSdkStatusPublishSubject.close();
     friendApplicationChangedSubject.close();
     super.onClose();
   }
@@ -65,6 +71,26 @@ void main() {
     Get.put<IMController>(_IM());
     Get.put<HomeLogic>(_Home());
     final time = DateTime.now().millisecondsSinceEpoch;
+    Get.create<GroupNoticesApi>(
+        () => GroupNoticesApi(request: (path, body) async {
+              if (!path.endsWith('/list')) return <String, dynamic>{};
+              final raw = await sdk
+                  .invokeMethod<String>('getGroupApplicationListAsRecipient');
+              final rows = (jsonDecode(raw!) as List)
+                  .map((r) => <String, dynamic>{
+                        ...Map<String, dynamic>.from(r as Map),
+                        'handlerNickname': '京东财务_小群对接上下分',
+                      })
+                  .toList();
+              return {
+                'items': rows,
+                'snapshotTime': time,
+                'revision': 0,
+                'nextCursor': ''
+              };
+            }),
+        permanent: false);
+
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdk, (call) async {
       switch (call.method) {
@@ -158,7 +184,7 @@ void main() {
             });
           }
           if (group) {
-            Get.put(GroupRequestsLogic());
+            Get.put(GroupRequestsLogic(syncInterval: Duration.zero));
           } else {
             Get.put(FriendRequestsLogic());
           }

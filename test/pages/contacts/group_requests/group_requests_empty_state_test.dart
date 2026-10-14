@@ -16,7 +16,7 @@ Future<void> _open(WidgetTester tester, Brightness brightness) async {
   tester.view.physicalSize = const Size(320, 640);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  Get.put(GroupRequestsLogic());
+  Get.put(GroupRequestsLogic(syncInterval: Duration.zero));
   await tester.pumpWidget(ScreenUtilInit(
     designSize: const Size(375, 812),
     builder: (_, __) => GetMaterialApp(

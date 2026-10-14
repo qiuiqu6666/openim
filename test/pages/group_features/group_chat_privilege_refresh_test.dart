@@ -121,8 +121,8 @@ void main() {
       await tester.pumpWidget(_app(store, dark: dark));
       await flushSangong(tester);
       expect(reads, 2);
-      expect(find.text('三公运营'), findsNothing);
-      expect(find.text('三公代理'), findsOneWidget);
+      expect(find.text('三公运营'), findsOneWidget);
+      expect(find.text('三公代理'), findsNothing);
       expect(api.count('/feature-capabilities'), 1);
       await tester.pumpWidget(_app(store, dark: dark));
       await flushSangong(tester);
@@ -185,8 +185,8 @@ void main() {
     await flushSangong(tester);
     expect(reads, 2);
     expect(api.count('/feature-capabilities'), 2);
-    expect(find.text('三公运营'), findsNothing);
-    expect(find.text('三公代理'), findsOneWidget);
+    expect(find.text('三公运营'), findsOneWidget);
+    expect(find.text('三公代理'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -261,8 +261,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(reads, 2);
       expect(find.text('群功能'), findsOneWidget);
-      expect(find.text('三公运营'), findsNothing);
-      expect(find.text('三公代理'), failed ? findsNothing : findsOneWidget);
+      expect(find.text('三公运营'), failed ? findsNothing : findsOneWidget);
+      expect(find.text('三公代理'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }

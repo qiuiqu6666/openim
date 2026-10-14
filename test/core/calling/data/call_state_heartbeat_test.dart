@@ -16,7 +16,7 @@ class HeartbeatApi extends CallBackendApi {
   bool closed = false, fail = false;
   String state = 'accepted';
   @override
-  Future<Map<String, dynamic>> status(String room) async {
+  Future<Map<String, dynamic>> heartbeat(String room) async {
     queries++;
     if (fail) throw StateError('offline');
     return {'state': state};
@@ -47,13 +47,19 @@ void main() {
   testWidgets('live calls renew state and a terminal response stops polling',
       (tester) async {
     final api = HeartbeatApi();
-    CallStateHeartbeat.start('room_1234', api);
-    await tester.pump(const Duration(seconds: 10));
+    final snapshots = <String>[];
+    CallStateHeartbeat.start('room_1234', api, onSnapshot: (value) {
+      snapshots.add(value['state'] as String);
+      // The runtime owns terminal handling and the shared transport.
+      if (value['state'] == 'ended') CallStateHeartbeat.stop('room_1234');
+    });
+    await tester.pump();
     expect(api.queries, 1);
     expect(api.closed, isFalse);
     api.state = 'ended';
     await tester.pump(const Duration(seconds: 10));
-    expect(api.closed, isTrue);
+    expect(snapshots, ['accepted', 'ended']);
+    expect(api.closed, isFalse);
     await tester.pump(const Duration(seconds: 20));
     expect(api.queries, 2);
     CallStateHeartbeat.stopAll();
@@ -61,32 +67,36 @@ void main() {
   testWidgets('logout stops the captured session before the next HTTP request',
       (tester) async {
     final api = HeartbeatApi();
-    CallStateHeartbeat.start('room_1234', api);
+    CallStateHeartbeat.start('room_1234', api, onSnapshot: (_) {});
+    await tester.pump();
     await DataSp.removeLoginCertificate();
     await tester.pump(const Duration(seconds: 10));
-    expect(api.queries, 0);
-    expect(api.closed, isTrue);
+    expect(api.queries, 1);
+    expect(api.closed, isFalse);
+    await tester.pump(const Duration(seconds: 20));
+    expect(api.queries, 1);
   });
   testWidgets('transient status failure allows the next heartbeat',
       (tester) async {
     final api = HeartbeatApi()..fail = true;
-    CallStateHeartbeat.start('room_1234', api);
-    await tester.pump(const Duration(seconds: 10));
+    CallStateHeartbeat.start('room_1234', api, onSnapshot: (_) {});
+    await tester.pump();
     expect(api.queries, 1);
     expect(api.closed, isFalse);
     api.fail = false;
-    await tester.pump(const Duration(seconds: 10));
+    await tester.pump(const Duration(seconds: 3));
     expect(api.queries, 2);
     CallStateHeartbeat.stopAll();
   });
   testWidgets(
-      'closing media stops heartbeat and terminates abandoned server state',
+      'stopping a lease prevents polling without closing the shared transport',
       (tester) async {
     final api = HeartbeatApi();
-    CallStateHeartbeat.start('room_1234', api);
-    await CallStateHeartbeat.finish('room_1234');
-    expect(api.actions, ['hangup']);
-    expect(api.closed, isTrue);
+    CallStateHeartbeat.start('room_1234', api, onSnapshot: (_) {});
+    await tester.pump();
+    CallStateHeartbeat.stop('room_1234');
+    expect(api.actions, isEmpty);
+    expect(api.closed, isFalse);
     await tester.pump(const Duration(seconds: 20));
     expect(api.queries, 1);
   });

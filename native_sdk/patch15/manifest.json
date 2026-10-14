@@ -2,33 +2,34 @@
   "upstream": "https://github.com/openimsdk/openim-sdk-core",
   "tag": "v3.8.3-patch.15",
   "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-  "sdk_version": "v3.8.3-patch.15+recovery.19",
+  "sdk_version": "v3.8.3-patch.15+recovery.23-notification-tombstone.1",
   "go_version": "1.24.0",
   "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
   "patch": "0001-background-message-recovery.patch",
-  "patch_sha256": "afceabec2e079b095708f06d3be794ebade70138df9b9ded05c37ab5a428e56a",
+  "patch_sha256": "a4208720f5ea8dc4410af97e435b836ee5e0465d1af3071603820836a98e735f",
   "source_directory": "core-source",
   "source_manifest": "core-source-manifest.json",
-  "source_sha256": "f297f7b18442507b16ee71c774969512542f99722af69de997d622284f910255",
+  "source_sha256": "f02268756fba25ef73d731cd11cd2512c3c2d7b3fd44d040604bec8872ef0e3f",
   "created": "2026-10-14",
-  "previous_release": "history/recovery.18.json",
+  "previous_release": "history/recovery.22.json",
   "native_binary_integrated": false,
   "checks": {
-    "history_scan_core": "passed: conversation_msg, db and callback packages",
-    "android_aar_build": "passed: all four ABIs, source lock and embedded version verified",
+    "notification_tombstones": "passed: deleted page checkpoint; live unknown error; checkpoint write error",
+    "android_aar_build": "passed: four ABIs",
+    "android_debug_apk": "passed: arm64 and x86_64; embedded native parity verified",
+    "device_runtime": "passed: original deleted checkpoint persisted to 52; native x86_64 same chat >60 seconds, two wakes and sync completion caused zero extra history reads",
     "ios_framework": "macOS build required",
-    "device_runtime": "not run",
-    "core_race": "passed: conversation_msg and db on final locked mobile source",
-    "android_debug_apk": "passed: arm64 isolated build, bundled bytes match verified AAR after standard Android stripping",
-    "flutter_history_regression": "passed: 326 tests, 12 skipped; final retry logging tests also pass",
-    "source_lock_tests": "passed: 15",
-    "patch_roundtrip": "passed: 376 input files",
-    "focused_analyze": "passed with existing informational lints"
+    "core_packages": "passed: common, network, interaction, conversation_msg",
+    "flutter_regression": "408 passed; 13 existing skipped",
+    "flutter_analysis": "no errors or warnings; 2 pre-existing info lints in chat_logic.dart",
+    "source_lock_tests": "15 passed",
+    "patch_roundtrip": "passed: matches all source files except documented build overlays",
+    "notification_runtime": "passed: original notification seq 2-52, count 51, persisted checkpoint 52 at 18:26:07 Taiwan time"
   },
   "android": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.19",
-    "sdk_version": "v3.8.3-patch.15+recovery.19",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.23-notification-tombstone.1",
+    "sdk_version": "v3.8.3-patch.15+recovery.23-notification-tombstone.1",
     "abis": [
       "armeabi-v7a",
       "arm64-v8a",
@@ -38,30 +39,31 @@
     "recovery_patch_included": true,
     "build_script": "build-android.ps1",
     "apk_native_parity_verified": true,
-    "runtime_validation": "not tested for recovery.19",
-    "aar_sha256": "72cbce6d1d75cf39359f45c46675be10610d4157ff980a640436c80cb7999626",
-    "debug_apk_sha256": "a2e76b8b1aaeeaaec110670e0dd1836c16e5c76435223464462e1fabc2a2ce22",
-    "application_validation": "debug arm64 build only; device runtime not tested"
+    "runtime_validation": "passed: original deleted checkpoint persisted to 52; native x86_64 same chat >60 seconds, two wakes and sync completion caused zero extra history reads",
+    "native_binary_integrated": true,
+    "application_validation": "408 Flutter tests passed; final dual-ABI debug APK installed on emulator-5554",
+    "aar_sha256": "895387ad9b806fc89c972bf75e66008e89cadb2907dcc20ca8d400f4f8379b62",
+    "debug_apk_sha256": "bebaeb8c2b2cc741546acf1428bb5b3bb8b618182e98304b4465c671e59f6cb0"
   },
   "ios": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "version": "v3.8.3-patch.15+recovery.19",
+    "version": "v3.8.3-patch.15+recovery.23-notification-tombstone.1",
     "framework_prepared": false,
     "recovery_patch_included": true,
     "build_script": "build-ios.sh",
-    "runtime_validation": "not tested for recovery.19",
+    "runtime_validation": "not tested",
     "framework_sha256": {},
     "pod_resolution_and_build": "macOS build required",
-    "app_validation_scope": "Android-only run; macOS build required for this shared source"
+    "app_validation_scope": "shared locked source; iOS binary build excluded by user"
   },
   "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
   "build_overlays": [
     "go.mod and go.sum: pinned existing gomobile dependency closure",
-    "version/version: unique recovery.19 runtime identity"
+    "version/version: unique recovery.23-notification-tombstone.1 runtime identity"
   ],
-  "verification_evidence": "verification/recovery.19-history-scan.json",
+  "verification_evidence": "verification/recovery.23-notification-tombstone.json",
   "local_changes": {
     "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-    "description": "Yield bounded history scans with separate continuation cursors; quote raw SQLite table names."
+    "description": "Skip explicitly deleted notification sequence placeholders while retaining checkpoint persistence and real errors; separate background refresh from paging indicator."
   }
 }

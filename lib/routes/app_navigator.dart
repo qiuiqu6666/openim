@@ -429,6 +429,7 @@ class AppNavigator {
     bool openSelectedSheet = false,
     String? groupID,
     String? ex,
+    ForwardPreviewData? forwardPreview,
   }) =>
       Get.toNamed(AppRoutes.selectContacts, arguments: {
         'action': action,
@@ -442,6 +443,7 @@ class AppNavigator {
         'openSelectedSheet': openSelectedSheet,
         'groupID': groupID,
         'ex': ex,
+        'forwardPreview': forwardPreview,
       });
 
   static startSelectContactsFromFriends() =>

@@ -1,4 +1,6 @@
 const Map<String, String> en_US = {
+  'forwardPreviewBatch': 'Forward individually',
+  'forwardPreviewCount': '@count messages',
   'networkPreparing': 'Connecting…',
   'videoSavePreparing': 'Preparing to save video…',
   'videoSaveDownloading': 'Downloading video',
@@ -492,6 +494,7 @@ const Map<String, String> en_US = {
   'menuRevoke': 'Revoke',
   'menuAdd': 'Add',
   'nMessage': '%s New Messages',
+  'chatNewMessagesAvailable': 'New messages',
   'backToBottom': 'Back to bottom',
   'plsSelectLocation': 'Please select a location',
   'groupAudioCallHint': '%s people in a voice call',

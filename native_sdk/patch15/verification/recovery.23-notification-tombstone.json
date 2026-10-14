@@ -1,0 +1,45 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.23-notification-tombstone.1",
+  "source_sha256": "f02268756fba25ef73d731cd11cd2512c3c2d7b3fd44d040604bec8872ef0e3f",
+  "checks": {
+    "notification_tombstones": "passed: deleted page checkpoint; live unknown error; checkpoint write error",
+    "core_packages": "passed: common, network, interaction, conversation_msg",
+    "flutter_regression": "408 passed; 13 existing skipped",
+    "flutter_analysis": "no errors or warnings; 2 pre-existing info lints in chat_logic.dart",
+    "source_lock_tests": "15 passed",
+    "patch_roundtrip": "passed: matches all source files except documented build overlays",
+    "android_aar_build": "passed: four ABIs",
+    "android_debug_apk": "passed: arm64 and x86_64; embedded native parity verified",
+    "notification_runtime": "passed: original notification seq 2-52, count 51, persisted checkpoint 52 at 18:26:07 Taiwan time",
+    "device_runtime": "passed: original deleted checkpoint persisted to 52; native x86_64 same chat >60 seconds, two wakes and sync completion caused zero extra history reads",
+    "ios_framework": "macOS build required"
+  },
+  "apk": "E:\\openim\\artifacts\\history-repeat-diagnosis-20261014\\chat-history-fixed-final-debug.apk",
+  "checkpoint_log": "E:\\openim\\artifacts\\history-repeat-diagnosis-20261014\\tombstone-checkpoint-evidence.txt",
+  "runtime_log": "E:\\openim\\artifacts\\history-repeat-diagnosis-20261014\\final-observation-events.txt",
+  "limitations": [
+    "iOS shared source updated; Framework not built on Windows",
+    "Unrelated network timeouts can still trigger global SDK recovery; healthy current chat filters these signals."
+  ],
+  "final_runtime_observation": {
+    "process": 17558,
+    "last_history_query_utc": "2026-10-14 10:34:05.861",
+    "observed_until_utc": "2026-10-14 10:35:00.332",
+    "seconds_without_history_query": 54.471,
+    "native_wake_and_sync_ended_received_without_query": true,
+    "unknown_tips_errors": 0,
+    "interrupted_by": "Emulator libhoudini SIGSEGV at 18:35:00; retry with explicit x86_64 installation"
+  },
+  "native_x86_64_observation": {
+    "process": 18550,
+    "from_utc": "2026-10-14 10:37:21.121",
+    "until_utc": "2026-10-14 10:38:21.838",
+    "seconds": 60.717,
+    "history_queries": 1,
+    "native_wakes": 2,
+    "sync_ended": 1,
+    "followup_history_queries": 0,
+    "process_alive": true,
+    "log": "E:\\openim\\artifacts\\history-repeat-diagnosis-20261014\\native-final-events.txt"
+  }
+}

@@ -36,7 +36,7 @@ void main() {
     expect(harness.controller.historyReady, isFalse);
     await harness.controller.sendText('  A question while loading  ');
     final sent = harness.controller.entries.single;
-    expect(sent.content, 'A question while loading');
+    expect(sent.content, '  A question while loading  ');
     expect(sent.state, CustomerServiceSendState.sent);
     harness.cable.message(sent.message!);
     history.complete([
@@ -45,7 +45,7 @@ void main() {
     ]);
     await loading;
     expect(harness.controller.entries.map((entry) => entry.content),
-        ['Previous answer', 'A question while loading']);
+        ['Previous answer', '  A question while loading  ']);
     expect(harness.controller.entries.last.echoId, sent.echoId);
     expect(harness.controller.loading, isFalse);
     expect(harness.controller.historyReady, isTrue);

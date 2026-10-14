@@ -70,7 +70,10 @@ Widget _host(Widget child,
 
 Future<void> _toggle(WidgetTester tester, String key) async {
   final cell = find.byKey(ValueKey(key));
-  await tester.ensureVisible(cell);
+  // Center the control below the pinned navigation bar before hit testing.
+  await Scrollable.ensureVisible(tester.element(cell), alignment: 0.5);
+  await tester.pumpAndSettle();
+  await tester.pumpAndSettle();
   await tester.tap(
       find.descendant(of: cell, matching: find.byType(SettingsPlatformSwitch)));
   await tester.pump();
@@ -93,15 +96,17 @@ void main() {
     await _signIn('account-a');
   });
 
-  testWidgets('settings exposes an explicit device-sync entry', (tester) async {
+  testWidgets('settings keeps the retired device-sync entry hidden',
+      (tester) async {
     final store = SettingsDraftStore();
     addTearDown(store.dispose);
     await tester.pumpWidget(_host(SettingsHomePage(store: store)));
-    expect(find.byKey(const ValueKey('settings-device-sync')), findsOneWidget);
-    expect(find.text('相册与定位同步'), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-device-sync')), findsNothing);
+    expect(find.text('相册与定位同步'), findsNothing);
+    expect(find.byType(SettingsHomePage), findsOneWidget);
   });
 
-  testWidgets('photo and login location choices remain independent',
+  testWidgets('photo and background location choices remain independent',
       (tester) async {
     final runtime = _Runtime(
         initial: const DeviceSyncPreferences(
@@ -121,6 +126,8 @@ void main() {
     expect(runtime.preferences.value.wifiOnly, isTrue);
     expect(find.textContaining('仅存于 iCloud'), findsOneWidget);
     expect(find.textContaining('10 秒内无结果'), findsOneWidget);
+    expect(find.textContaining('每次退到后台 5 秒后'), findsOneWidget);
+    expect(find.textContaining('回到前台立即暂停'), findsWidgets);
     runtime.status.value = DeviceSyncStatus.uploading;
     await tester.pump();
     await tester
@@ -206,6 +213,7 @@ void main() {
     expect(opens, 0);
     final cell = find.byKey(const ValueKey('device-sync-system-settings'));
     await tester.ensureVisible(cell);
+    await tester.pumpAndSettle();
     await tester.tap(cell);
     await tester.pumpAndSettle();
     expect(opens, 1);

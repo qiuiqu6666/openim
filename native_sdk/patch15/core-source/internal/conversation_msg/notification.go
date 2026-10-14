@@ -133,7 +133,13 @@ func (c *Conversation) syncFlag(c2v common.Cmd2Value) error {
 	case constant.MsgSyncBegin:
 		log.ZDebug(ctx, "MsgSyncBegin")
 		c.ConversationListener().OnSyncServerStart(false)
-		return c.syncData(c2v)
+		// Only visibility/settings and read watermarks precede message recovery.
+		// Profile, friend and member refreshes run after message delivery, so a
+		// failing unrelated endpoint cannot suppress the newest offline message.
+		return runRequiredSyncFunctions(ctx, []func(context.Context) error{
+			c.IncrSyncConversationsWithLock,
+			c.SyncAllConversationHashReadSeqs,
+		}, false)
 	case constant.MsgSyncFailed:
 		c.ConversationListener().OnSyncServerFailed(false)
 	case constant.MsgSyncEnd:
@@ -148,10 +154,19 @@ func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) error {
 	allMsg := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs
 
 	for conversationID, msgs := range allMsg {
+		started := time.Now()
+		if len(msgs.Msgs) > 0 {
+			log.ZInfo(ctx, "notification page processing started", "conversationID", conversationID, "count", len(msgs.Msgs), "firstSeq", msgs.Msgs[0].Seq, "lastSeq", msgs.Msgs[len(msgs.Msgs)-1].Seq)
+		}
 		log.ZDebug(ctx, "notification handling", "conversationID", conversationID, "msgs", msgs)
 
 		// First, process all the notifications
 		for _, msg := range msgs.Msgs {
+			// Deleted sequence placeholders have no notification payload. They
+			// still count towards the page checkpoint, but must not be dispatched.
+			if msg.Status >= constant.MsgStatusHasDeleted && msg.Seq > 0 {
+				continue
+			}
 			if msg.ContentType > constant.FriendNotificationBegin && msg.ContentType < constant.FriendNotificationEnd {
 				c.relation.DoNotification(ctx, msg)
 			} else if msg.ContentType > constant.UserNotificationBegin && msg.ContentType < constant.UserNotificationEnd {
@@ -160,6 +175,7 @@ func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) error {
 				c.group.DoNotification(ctx, msg)
 			} else {
 				if err := c.doNotification(ctx, msg); err != nil {
+					log.ZWarn(ctx, "notification page processing failed", err, "conversationID", conversationID, "seq", msg.Seq, "contentType", msg.ContentType, "clientMsgID", msg.ClientMsgID, "contextError", ctx.Err(), "duration", time.Since(started).String())
 					return err
 				}
 			}
@@ -172,9 +188,10 @@ func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) error {
 			if lastMsg.Seq != 0 {
 				if err := c.db.SetNotificationSeq(ctx, conversationID, lastMsg.Seq); err != nil {
 					// Log an error if setting the sequence number fails
-					log.ZError(ctx, "SetNotificationSeq err", err, "conversationID", conversationID, "lastMsg", lastMsg)
+					log.ZError(ctx, "SetNotificationSeq err", err, "conversationID", conversationID, "seq", lastMsg.Seq, "contextError", ctx.Err())
 					return err
 				}
+				log.ZInfo(ctx, "notification page persisted", "conversationID", conversationID, "seq", lastMsg.Seq, "count", len(msgs.Msgs), "duration", time.Since(started).String())
 			}
 		}
 	}

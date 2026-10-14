@@ -11,8 +11,10 @@ import 'call_state_snapshot.dart';
 /// Shared by Android, in-app iOS calls and PushKit recovery. Status reads never
 /// renew leases. A server update can only close the matching local room.
 class CallStateRuntime {
-  CallStateRuntime._();
-  static final instance = CallStateRuntime._();
+  CallStateRuntime({Future<CallBackendApi> Function()? createApi})
+      : _createApi = createApi ?? CallBackendApi.current;
+  static final instance = CallStateRuntime();
+  final Future<CallBackendApi> Function() _createApi;
   Future<void> Function(CallStateSnapshot, String)? onState;
   bool Function(CallStateSnapshot)? restoreIncoming;
   String? Function()? activeRoom;
@@ -64,7 +66,7 @@ class CallStateRuntime {
     if (pending != null) return pending;
     final generation = _generation;
     late Future<CallBackendApi> opening;
-    opening = CallBackendApi.current().then((api) {
+    opening = _createApi().then((api) {
       if (!_enabled || generation != _generation || !api.isCurrent) {
         api.close();
         throw const CallRequestCancelled();

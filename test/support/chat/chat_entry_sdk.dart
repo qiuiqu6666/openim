@@ -13,6 +13,8 @@ import 'package:openim_live/openim_live.dart';
 class EntryTestApp extends GetxController implements AppController {
   final notifications = <Message>[];
   @override
+  void clearBadgeSession() {}
+  @override
   Future<void> onApplicationSessionReady({bool authenticated = false}) async {}
 
   @override

@@ -155,7 +155,7 @@ Future<void> _mount(WidgetTester tester, Widget child,
 
 Future<void> _flush(WidgetTester tester) async {
   for (var frame = 0; frame < 4; frame++) {
-    await tester.pump(const Duration(milliseconds: 20));
+    await tester.pump(const Duration(milliseconds: 60));
   }
   await tester
       .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
@@ -260,7 +260,8 @@ void main() {
       }
     });
 
-    testWidgets('all visible video stickers autoplay silently in $brightness',
+    testWidgets(
+        'visible video stickers respect the decoder budget in $brightness',
         (tester) async {
       await _mount(
           tester,
@@ -270,8 +271,8 @@ void main() {
             StickerVideoBubble(message: _message('three')),
           ]),
           brightness: brightness);
-      expect(platform.players, hasLength(3));
-      expect(find.byType(VideoPlayer), findsNWidgets(3));
+      expect(platform.players, hasLength(2));
+      expect(find.byType(VideoPlayer), findsNWidgets(2));
       _expectNoPlaybackButtons();
       for (final player in platform.players.values) {
         _expectSilentlyLooping(player);
@@ -384,18 +385,21 @@ void main() {
     await _dispose(tester);
   });
 
-  testWidgets('one percent visibility starts and zero releases then restarts',
+  testWidgets('half visibility starts and zero releases then restarts',
       (tester) async {
     final height = ValueNotifier<double>(1.6);
     addTearDown(height.dispose);
     await _mount(tester, _clippedBubble(height, _message('partial')));
+    expect(platform.players, isEmpty);
+    height.value = 80;
+    await _flush(tester);
     expect(platform.players, hasLength(1));
     _expectSilentlyLooping(platform.players[1]!);
     height.value = 0;
     await _flush(tester);
     expect(platform.players[1]!.disposed, isTrue);
     expect(platform.players[1]!.playing, isFalse);
-    height.value = 1.6;
+    height.value = 80;
     await _flush(tester);
     expect(platform.players, hasLength(2));
     _expectSilentlyLooping(platform.players[2]!);
@@ -417,12 +421,12 @@ void main() {
     for (final player in platform.players.values) {
       expect(player.playing, isFalse);
       expect(player.pauses, greaterThan(0));
-      expect(player.disposed, isFalse);
+      expect(player.disposed, isTrue);
     }
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await _flush(tester);
-    expect(platform.players, hasLength(2));
-    for (final player in platform.players.values) {
+    expect(platform.players, hasLength(4));
+    for (final player in platform.players.values.where((p) => !p.disposed)) {
       _expectSilentlyLooping(player);
     }
     await _dispose(tester);

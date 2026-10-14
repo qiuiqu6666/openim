@@ -75,13 +75,12 @@ void main() {
 
     await fixture.refresh(tester, logic);
 
-    final calls = fixture.callsFor('getUsersInfo');
-    expect(calls, hasLength(1));
-    final ids = List<String>.from(calls.single.arguments['userIDList'] as List);
-    expect(ids, unorderedEquals(['shared', 'second']));
-    expect(ids.toSet().length, ids.length);
-    expect(ids, isNot(contains('pending-handler')));
-    expect(fixture.callsFor('getGroupMembersInfo'), hasLength(2));
+    expect(fixture.callsFor('getUsersInfo'), isEmpty);
+    expect(fixture.callsFor('getGroupMembersInfo'), isEmpty);
+    expect(
+        logic.getHandlerNickname(
+            logic.list.firstWhere((r) => r.handleUserID == 'second')),
+        '另一位管理员');
   });
 
   testWidgets('unhandled or incomplete records never invent a handler nickname',
@@ -109,8 +108,7 @@ void main() {
       expect(logic.getHandlerNickname(item), isNull,
           reason: 'Result ${item.handleResult}, handler ${item.handleUserID}');
     }
-    final ids = fixture.callsFor('getUsersInfo').single.arguments['userIDList'];
-    expect(ids, unorderedEquals(['unavailable', 'inviter', 'blank']));
+    expect(fixture.callsFor('getUsersInfo'), isEmpty);
   });
 
   testWidgets('a profile outage preserves the newly confirmed application',
@@ -185,8 +183,7 @@ void main() {
       expect(processor.applicationInfo.handleUserID, 'server-admin');
       expect(processor.handlerNickname, '服务器确认的处理人');
       expect(logic.list.single.handleUserID, 'server-admin');
-      expect(
-          fixture.callsFor('getGroupApplicationListAsRecipient'), hasLength(1));
+      expect(fixture.callsFor('getGroupApplicationListAsRecipient'), isEmpty);
       final method =
           result == 1 ? 'acceptGroupApplication' : 'refuseGroupApplication';
       expect(fixture.callsFor(method), hasLength(1));
@@ -248,7 +245,7 @@ void main() {
     expect(logic.list.single.handleResult, 0);
     expect(processor.currentHandleResult, 0);
     expect(processor.handlerNickname, isNull);
-    expect(fixture.home.unreadRefreshes, 0);
+    expect(fixture.callsFor('acceptGroupApplication'), isEmpty);
   });
 
   testWidgets('already processed error uses the other administrator result',
@@ -272,8 +269,7 @@ void main() {
     expect(processor.handlerNickname, '另一位管理员');
     expect(logic.list.single.handleUserID, 'other-admin');
     expect(logic.getHandlerNickname(logic.list.single), '另一位管理员');
-    expect(fixture.callsFor('getUsersInfo').single.arguments['userIDList'],
-        ['other-admin']);
+    expect(fixture.callsFor('getUsersInfo'), isEmpty);
     expect(tester.takeException(), isNull);
     expect(find.text(StrRes.groupRequestHandled), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
@@ -348,7 +344,7 @@ void main() {
 
     expect(logic.list.single.handleResult, -1);
     expect(logic.getHandlerNickname(logic.list.single), '最新处理人');
-    expect(fixture.callsFor('getUsersInfo'), hasLength(1));
+    expect(fixture.callsFor('getUsersInfo'), isEmpty);
   });
 
   testWidgets('closing requests discards late results and releases callbacks',

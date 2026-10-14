@@ -27,6 +27,8 @@ class _DirectoryLogic extends GetxController implements ContactsLogic {
   @override
   final friendsLoading = false.obs;
   @override
+  final friendsLoadFailed = false.obs;
+  @override
   final presence = PresenceStore();
   @override
   final stars = StarFriendStore();

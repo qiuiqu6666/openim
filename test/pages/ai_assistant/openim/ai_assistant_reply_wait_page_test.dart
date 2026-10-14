@@ -166,8 +166,9 @@ void main() {
           reason: 'The first delta updates the existing reply bubble.');
       expect(logic.messageList, hasLength(1));
 
-      fixture.im.recvNewMessage(
-          aiOpenimStreamFinal('durable-final', '完整回复已经保存。', 'live-reply'));
+      fixture.im.recvNewMessage(aiOpenimStreamFinal(
+          'durable-final', '完整回复已经保存。', 'live-reply',
+          time: 200));
       await flush(tester);
       expect(find.byType(AiAssistantStreamTile), findsNothing);
       expect(logic.assistantStreams.snapshots, isEmpty);
@@ -235,7 +236,7 @@ void main() {
             .where((message) => message.clientMsgID == 'dated-first-fragment'),
         isEmpty);
 
-    latestHistory.complete([]);
+    latestHistory.complete(List<Message>.of(logic.messageList));
     await flush(tester);
     expect(logic.viewingHistory.value, isFalse);
     expect(logic.bufferingLiveMessages, isFalse);
@@ -278,7 +279,8 @@ void main() {
     expect(logic.messageList.single.status, MessageStatus.succeeded);
     expect(waitingText(), findsOneWidget,
         reason: 'A shared delivery acknowledgement must keep reply feedback.');
-    fixture.im.recvNewMessage(aiOpenimText('prepared-result', '共享发送的回复'));
+    fixture.im
+        .recvNewMessage(aiOpenimText('prepared-result', '共享发送的回复', time: 200));
     await flush(tester);
     expect(logic.assistantStreams.snapshots, isEmpty);
     expect(find.byType(AiAssistantStreamTile), findsNothing);
@@ -379,6 +381,8 @@ void main() {
         final result = picture
             ? aiOpenimPicture('plain-result')
             : aiOpenimText('plain-result', '直接返回的完整答案');
+        result.seq = 200;
+        result.sendTime = 1791178400000;
         expect(result.ex, isNull,
             reason: 'Ordinary results need not contain a final stream ID.');
         fixture.im.recvNewMessage(result);

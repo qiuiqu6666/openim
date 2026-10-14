@@ -41,6 +41,7 @@ public class MessageManager: BaseServiceManager {
         self["clearConversationAndDeleteAllMsg"] = clearConversationAndDeleteAllMsg
     
         self["getAdvancedHistoryMessageList"] = getAdvancedHistoryMessageList
+        self["getLocalHistorySnapshot"] = getAdvancedHistoryMessageList
         self["getAdvancedHistoryMessageListReverse"] = getAdvancedHistoryMessageListReverse
 
         self["findMessageList"] = findMessageList

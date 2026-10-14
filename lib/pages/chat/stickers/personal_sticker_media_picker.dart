@@ -28,7 +28,10 @@ Future<PlatformFile?> pickPersonalStickerMedia({
           maxAssets: 1,
           requestType: RequestType.common,
           sortPathsByModifiedDate: true,
-          filterOptions: PMFilter.defaultValue(containsPathModified: true),
+          filterOptions: FilterOptionGroup(
+            containsPathModified: true,
+            orders: const [OrderOption(type: OrderOptionType.createDate)],
+          ),
         ));
     if (!current() || assets == null || assets.isEmpty) return null;
     // Use the original file, not the thumbnail or a flattened GIF/WebP frame.

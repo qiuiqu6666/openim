@@ -8,6 +8,7 @@ abstract final class ChatLatestScrollTokens {
   static const minDuration = Duration(milliseconds: 300);
   static const maxDuration = Duration(milliseconds: 650);
   static const correctionDuration = Duration(milliseconds: 140);
+  static const windowFadeDuration = Duration(milliseconds: 140);
   static const curve = Curves.easeInCubic;
   static const distanceEpsilon = 1.0;
   static const leaveLatestDistance = 48.0;

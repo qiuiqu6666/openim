@@ -356,6 +356,7 @@ class StrRes {
   static String get menuAdd => 'menuAdd'.tr;
 
   static String get nMessage => 'nMessage'.tr;
+  static String get chatNewMessagesAvailable => 'chatNewMessagesAvailable'.tr;
 
   static String get backToBottom => 'backToBottom'.tr;
 

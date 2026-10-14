@@ -19,7 +19,7 @@ void main() {
     await pumpWalletRecords(tester,
         repository: repository, size: const Size(390, 2400));
     await tester.pumpAndSettle();
-    expect(find.text('余额变动明细'), findsOneWidget);
+    expect(find.text('历史记录'), findsOneWidget);
     expectRecordRequests(repository, 1);
     const months = ['2026-10', '2026-01', '2025-12', '2025-01', 'unknown'];
     double previous = -1;

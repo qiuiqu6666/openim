@@ -395,6 +395,9 @@ class DeviceSyncRuntime {
           : DeviceSyncStatus.inactive;
     } else if (changed) {
       _passCompleted = false;
+      // A new background visit owns a fresh fix; retries within this visit
+      // retain their ID so an interrupted upload remains idempotent.
+      _locationID = 'loc_${const Uuid().v4()}';
       // Debounce app switching; returning to the foreground cancels this wait.
       _lastActivity = _now();
       unawaited(onSessionReady());

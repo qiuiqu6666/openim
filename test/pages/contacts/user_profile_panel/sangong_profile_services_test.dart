@@ -64,7 +64,7 @@ void main() {
         expect(find.byKey(const ValueKey('sangong-profile-services')),
             allowed ? findsOneWidget : findsNothing);
         if (allowed) {
-          expect(find.text('暂无已加入的群聊，请加入群聊后重试'), findsOneWidget);
+          expect(find.text('暂无已配置或授权的游戏群，请先配置游戏群或联系配置者授权'), findsOneWidget);
           expect(find.text('上分'), findsOneWidget);
           expect(
               find.byType(SangongProfileLedgerFloatingEntry), findsOneWidget);

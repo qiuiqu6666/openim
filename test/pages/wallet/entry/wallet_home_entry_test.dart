@@ -13,7 +13,7 @@ Future<void> _pumpHome(WidgetTester tester) async {
   // The real profile intentionally keeps its decorative animations running.
   // Advance finite route transitions without waiting for those to stop.
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 400));
+  await tester.pump(const Duration(milliseconds: 600));
   await tester.pump();
 }
 

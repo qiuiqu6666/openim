@@ -14,6 +14,12 @@ it neither changes SDK storage nor deletes messages. A unique old draft or an
 unsent latest message keeps its recovery entry until the conservative cleanup
 below can finish. These entries contain distinct local work, not duplicates.
 
+Read-only identity normalization recognizes both the original migration IP and
+the current built-in HTTPS endpoint `99imapi.99chat.vip`. Config's endpoint
+migration must not disable alias projection on login or refresh. Recognition of
+that domain does not expand `LegacyServerSnapshot.allowedServer`, so it grants no
+additional permission for automatic destructive cleanup.
+
 Reading the retired CID's history can trigger server gap-filling and extensive
 SDK logs. Waiting for every history page before publishing the list caused login
 and refresh to stall. Automatic `LegacyGroupConversationMigration` is therefore

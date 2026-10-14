@@ -240,7 +240,7 @@ void main() {
         store.pendingLocations.isEmpty);
   });
 
-  test('foreground cancels upload and background resumes the same stored fix',
+  test('foreground cancels upload and next background adds a fresh fix',
       () async {
     final task = await create(background: false);
     await task.onSessionReady();
@@ -262,8 +262,57 @@ void main() {
     await _until(
         () => sources.single.scans == 1 && store.pendingLocations.isEmpty);
     expect(apis.single.requests, hasLength(2));
-    expect(apis.single.requests.last.single.clientID, point.clientID);
+    expect(apis.single.requests.last.map((value) => value.clientID),
+        unorderedEquals([point.clientID, sources.single.locationIDs.last]));
+    expect(sources.single.locationIDs.toSet(), hasLength(2));
+    expect(sources.single.locates, 2);
+  });
+
+  test('no fix is retried only on the next background visit', () async {
+    await store.savePreferences(
+        const DeviceSyncPreferences(accountID: 'owner', location: true));
+    final task = await create(background: false);
+    await task.onSessionReady();
+    sources.single.locationResponse = (_, __) async => null;
+    task.setForeground(false);
+    await _until(() => sources.single.locates == 1);
+    await task.onSessionReady();
+    await Future<void>.delayed(const Duration(milliseconds: 30));
     expect(sources.single.locates, 1);
+    expect(apis.single.requests, isEmpty);
+    task.setForeground(true);
+    sources.single.locationResponse = null;
+    task.setForeground(false);
+    await _until(() =>
+        apis.single.requests.length == 1 && store.pendingLocations.isEmpty);
+    expect(sources.single.locates, 2);
+    expect(sources.single.locationIDs.toSet(), hasLength(2));
+  });
+
+  test('new background waits for cancelled capture and rejects its late point',
+      () async {
+    final task = await create(background: false);
+    await task.onSessionReady();
+    final oldCapture = Completer<DeviceSyncLocation?>();
+    CancelToken? oldToken;
+    sources.single.locationResponse = (_, token) {
+      oldToken = token;
+      return oldCapture.future;
+    };
+    task.setForeground(false);
+    await _until(() => oldToken != null);
+    final oldID = sources.single.locationIDs.single;
+    task.setForeground(true);
+    expect(oldToken!.isCancelled, isTrue);
+    task.setForeground(false);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(sources.single.locates, 1);
+    sources.single.locationResponse = null;
+    oldCapture.complete(_point(oldID));
+    await _until(() =>
+        apis.single.requests.length == 1 && store.pendingLocations.isEmpty);
+    expect(sources.single.locates, 2);
+    expect(apis.single.requests.single.single.clientID, isNot(oldID));
   });
 
   test('quick background foreground transitions never start a sync pass',
@@ -324,7 +373,8 @@ void main() {
         apis.single.requests.length == 2 &&
         store.pendingLocations.isEmpty &&
         sources.single.scans == 1);
-    expect(sources.single.locates, 1);
+    expect(sources.single.locates, 2);
+    expect(sources.single.locationIDs.toSet(), hasLength(2));
   });
 
   test(
@@ -413,8 +463,7 @@ void main() {
     expect(sources.single.locates, 1);
   });
 
-  test(
-      'same login and foreground restoration keep one fix while a new login has a new ID',
+  test('each background visit gets a new fix while duplicate callbacks do not',
       () async {
     await store.savePreferences(
         const DeviceSyncPreferences(accountID: 'owner', location: true));
@@ -424,11 +473,15 @@ void main() {
         apis.single.requests.length == 1 && store.pendingLocations.isEmpty);
     final firstID = sources.single.locationIDs.single;
     await task.onSessionReady(authenticated: true);
-    task.setForeground(true);
     task.setForeground(false);
     await Future<void>.delayed(const Duration(milliseconds: 30));
     expect(sources.single.locates, 1);
-    expect(apis.single.requests, hasLength(1));
+    task.setForeground(true);
+    task.setForeground(false);
+    await _until(() =>
+        apis.single.requests.length == 2 && store.pendingLocations.isEmpty);
+    expect(sources.single.locates, 2);
+    expect(sources.single.locationIDs.toSet(), hasLength(2));
     expect(task.status.value, DeviceSyncStatus.idle);
     session = (
       accountID: 'owner',

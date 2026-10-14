@@ -1,3 +1,4 @@
+import 'package:openim/pages/contacts/group_requests/data/group_notices_api.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -8,6 +9,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/core/controller/im_controller.dart';
+import 'package:openim/core/im_callback.dart';
 import 'package:openim/pages/contacts/group_requests/group_requests_logic.dart';
 import 'package:openim/pages/home/home_logic.dart';
 import 'package:openim/pages/contacts/request_history/data/request_list_cache.dart';
@@ -17,10 +19,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class GroupRequestsIM extends GetxController implements IMController {
   @override
+  final imSdkStatusPublishSubject =
+      PublishSubject<({IMSdkStatus status, bool reInstall, int? progress})>();
+  @override
   final groupApplicationChangedSubject = PublishSubject<GroupApplicationInfo>();
 
   @override
   void onClose() {
+    imSdkStatusPublishSubject.close();
     groupApplicationChangedSubject.close();
     super.onClose();
   }
@@ -97,6 +103,8 @@ class GroupRequestsFixture {
         UserInfo(userID: 'current-admin', nickname: 'Current administrator');
     Get.put<IMController>(im);
     Get.put<HomeLogic>(home);
+    Get.create<GroupNoticesApi>(() => GroupNoticesApi(request: _noticeRequest),
+        permanent: false);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdk, (call) async {
       calls.add(call);
@@ -150,6 +158,93 @@ class GroupRequestsFixture {
     });
   }
 
+  int serverRevision = 0;
+  int clearedThrough = 0;
+  bool failWrites = false;
+  final noticeCalls = <String>[];
+  final dismissed = <String>{};
+  Future<dynamic> _noticeRequest(String path, Map<String, dynamic> body) async {
+    final action = Uri.parse(path).path.split('/').last;
+    noticeCalls.add(action);
+    if (action == 'state') {
+      return {'revision': serverRevision, 'unreadCount': 0};
+    }
+    if (action == 'read') return {};
+    if (action == 'detail') {
+      final row = [...recipient, ...applicant].firstWhere((r) =>
+          r.groupID == body['groupID'] &&
+          r.userID == body['userID'] &&
+          ((r.reqTime ?? 0) < 100000000000
+                  ? (r.reqTime ?? 0) * 1000
+                  : r.reqTime) ==
+              body['reqTime']);
+      return {
+        'item': {
+          ...row.toJson(),
+          'handlerNickname': profiles[row.handleUserID] ?? ''
+        }
+      };
+    }
+
+    if (action == 'clear' || action == 'delete') {
+      if (failWrites) throw StateError('server unavailable');
+      if (action == 'clear') {
+        final value = body['through'] as int;
+        if (value > clearedThrough) clearedThrough = value;
+      } else {
+        dismissed
+            .add('${body['groupID']}/${body['userID']}/${body['reqTime']}');
+      }
+      serverRevision++;
+      return {};
+    }
+    if (failApplications) throw StateError('server unavailable');
+    var rows = [...recipient, ...applicant];
+    if (holdRecipient) {
+      final reply = Completer<String>();
+      recipientReplies.add(reply);
+      rows = (jsonDecode(await reply.future) as List)
+          .map((r) => GroupApplicationInfo.fromJson(
+              Map<String, dynamic>.from(r as Map)))
+          .toList();
+    }
+    int ms(GroupApplicationInfo r) =>
+        (r.reqTime ?? 0) < 100000000000 ? (r.reqTime ?? 0) * 1000 : r.reqTime!;
+    final cursor = body['cursor'] as String? ?? '';
+    final parts = cursor.split(':');
+    if (cursor.isNotEmpty && int.parse(parts[0]) != serverRevision) {
+      return {'reset': true};
+    }
+    final offset = cursor.isEmpty ? 0 : int.parse(parts[1]);
+    rows = rows
+        .where((r) =>
+            ms(r) > clearedThrough &&
+            !dismissed.contains('${r.groupID}/${r.userID}/${ms(r)}'))
+        .toList()
+      ..sort((a, b) => (b.reqTime ?? 0).compareTo(a.reqTime ?? 0));
+    final seen = <String>{};
+    rows = rows
+        .where((r) => seen.add('${r.groupID}/${r.userID}/${r.reqTime}'))
+        .toList();
+    return {
+      'items': rows
+          .skip(offset)
+          .take(20)
+          .map((r) => {
+                ...r.toJson(),
+                'handlerNickname':
+                    failProfiles ? '' : profiles[r.handleUserID] ?? '',
+                'inviterNickname':
+                    failProfiles ? '' : profiles[r.inviterUserID] ?? '',
+              })
+          .toList(),
+      'snapshotTime': rows.isEmpty ? 1 : ms(rows.first),
+      'revision': serverRevision,
+      'nextCursor':
+          offset + 20 < rows.length ? '$serverRevision:${offset + 20}' : '',
+    };
+  }
+
   String _page(List<GroupApplicationInfo> items, MethodCall call) {
     final req = Map<Object?, Object?>.from(call.arguments['req'] as Map);
     final offset = req['offset'] as int;
@@ -165,7 +260,7 @@ class GroupRequestsFixture {
       builder: EasyLoading.init(),
       home: const Scaffold(body: Text('group requests test')),
     ));
-    final logic = Get.put(GroupRequestsLogic());
+    final logic = Get.put(GroupRequestsLogic(syncInterval: Duration.zero));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 2));
     await tester.pumpAndSettle();

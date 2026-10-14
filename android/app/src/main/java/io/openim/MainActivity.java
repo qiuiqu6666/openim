@@ -24,12 +24,14 @@ public class MainActivity extends FlutterFragmentActivity {
     private LiveCastBridge liveCastBridge;
     private CallPictureInPictureBridge callPipBridge;
     private NativeChatLocationMapFactory chatLocationMapFactory;
+    private io.openim.update.AndroidUpdateBridge updateBridge;
     private String pendingInvite;
     private static final String SYSTEM_SHARE_CHANNEL = "openim_system_share";
 
     @Override
     public void configureFlutterEngine(FlutterEngine flutterEngine) {
         super.configureFlutterEngine(flutterEngine);
+        updateBridge = new io.openim.update.AndroidUpdateBridge(this, flutterEngine.getDartExecutor().getBinaryMessenger());
         new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), "openim/youmeng")
             .setMethodCallHandler((call, result) -> {
                 if ("start".equals(call.method)) {
@@ -87,6 +89,7 @@ public class MainActivity extends FlutterFragmentActivity {
 
     @Override
     public void cleanUpFlutterEngine(FlutterEngine flutterEngine) {
+        if (updateBridge != null) { updateBridge.dispose(); updateBridge = null; }
         if (nativeNotificationBridge != null) { nativeNotificationBridge.dispose(); nativeNotificationBridge = null; }
         if (chatLocationMapFactory != null) {
             chatLocationMapFactory.dispose();

@@ -281,7 +281,13 @@ void main() {
               tester, '$variant-${multiple ? 'loading' : 'fallback'}');
           if (multiple) {
             client.reply.complete(_ImageResponse(imageBytes));
-            await _pumpImages(tester);
+            for (var attempt = 0; attempt < 30; attempt++) {
+              await _pumpImages(tester);
+              if (_imageState(tester).extendedImageLoadState !=
+                  LoadState.loading) {
+                break;
+              }
+            }
             expect(_imageState(tester).extendedImageLoadState,
                 LoadState.completed);
             _expectCircle(tester, '研发群');

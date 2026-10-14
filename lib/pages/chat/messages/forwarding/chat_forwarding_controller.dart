@@ -46,9 +46,7 @@ class ChatForwardingController {
         _isGroupChat = isGroupChat,
         _nickname = nickname,
         _faceUrl = faceUrl,
-        _selectContacts = selectContacts ??
-            ((description) async => AppNavigator.startSelectContacts(
-                action: SelAction.forward, ex: description)),
+        _selectContacts = selectContacts,
         _selectCardContacts = selectCardContacts ??
             ((
                     {required action,
@@ -80,7 +78,7 @@ class ChatForwardingController {
   final List<Message> Function() _messages;
   final bool Function() _isClosed, _isGroupChat;
   final String Function() _nickname, _faceUrl;
-  final ForwardContactPicker _selectContacts;
+  final ForwardContactPicker? _selectContacts;
   final ContactCardPicker _selectCardContacts;
   final Future<String> Function(String userID)? _createCardExtension;
   final ForwardMessageBuilder _createForward;
@@ -230,9 +228,18 @@ class ChatForwardingController {
     try {
       var messages = resolve();
       if (messages == null) return fail(hint: invalidHint);
-      final result = await _selectContacts(merged
+      final description = merged
           ? 'sdkMergedHistory'.tr
-          : IMUtils.parseMsg(messages.first, isConversation: true));
+          : IMUtils.parseMsg(messages.first, isConversation: true);
+      final result = _selectContacts != null
+          ? await _selectContacts(description)
+          : await AppNavigator.startSelectContacts(
+              action: SelAction.forward,
+              ex: description,
+              forwardPreview: ForwardPreviewData.fromMessages(messages,
+                  merged: merged,
+                  mergeTitle: '${_nickname()} · ${'sdkMergedHistory'.tr}'),
+            );
       messages = resolve();
       if (messages == null) return fail(hint: invalidHint);
       if (result == null || result is! Map) return false;

@@ -59,6 +59,9 @@ func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sd
 		return nil, errors.New("history count must be positive")
 	}
 	req.Count = min(req.Count, 100)
+	if req.LocalSnapshot {
+		return c.localHistorySnapshot(ctx, req, isReverse)
+	}
 	t := time.Now()
 	var messageListCallback sdk.GetAdvancedHistoryMessageListCallback
 	var conversationID string

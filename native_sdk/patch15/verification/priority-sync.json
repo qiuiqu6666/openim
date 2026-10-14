@@ -1,0 +1,20 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.23-notification-tombstone.1",
+  "source_sha256": "f02268756fba25ef73d731cd11cd2512c3c2d7b3fd44d040604bec8872ef0e3f",
+  "patch_sha256": "a4208720f5ea8dc4410af97e435b836ee5e0465d1af3071603820836a98e735f",
+  "android_aar_sha256": "895387ad9b806fc89c972bf75e66008e89cadb2907dcc20ca8d400f4f8379b62",
+  "android_apk_sha256": "86b34c85228168d40f4459587fef68a0d0e7ab6dbe58a795b75308b28b89baee",
+  "apk": "E:\\openim\\artifacts\\priority-sync-20261014\\chat-priority-sync-arm64-debug.apk",
+  "apk_native_parity": "passed: ARM64 matches locked AAR after NDK strip-unneeded",
+  "core_race": "passed: pkg/common, pkg/network, internal/interaction, internal/conversation_msg; CGO enabled, SQLite included",
+  "database_regression": "passed: TestMessageSyncBatch and TestInitialNotificationBootstrap",
+  "source_lock_tests": "15 passed",
+  "flutter_chat_regression": "481 passed; 12 existing skipped",
+  "ios": {
+    "shared_source_and_bridge": "verified",
+    "artifact_check": "failed: missing recovery build receipt",
+    "binary_runtime": "not verified; macOS/Xcode rebuild required"
+  },
+  "mobile_runtime": "not tested",
+  "scope": "foreground history priority; pinned and recent background order; shared per-conversation requests and durable coverage reuse; gap, receipt failure, cache clear and session isolation regression"
+}

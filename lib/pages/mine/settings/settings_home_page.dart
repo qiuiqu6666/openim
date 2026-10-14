@@ -1,4 +1,6 @@
 import 'widgets/platform_update.dart';
+import 'dart:io';
+import 'update/android/android_update_runtime.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -61,6 +63,9 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
   @override
   void initState() {
     super.initState();
+    if (Platform.isAndroid) {
+      AndroidUpdateRuntime.instance.revision.addListener(_updateStatus);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadVersion());
   }
 
@@ -73,6 +78,16 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
       if (!mounted) return;
       setState(() => _displayVersion = '');
     }
+  }
+
+  void _updateStatus() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    AndroidUpdateRuntime.instance.revision.removeListener(_updateStatus);
+    super.dispose();
   }
 
   Future<void> _checkForUpdate() async {
@@ -222,7 +237,12 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
                   ? settingsText(context, zh: '获取中', en: 'Loading')
                   : _checkingUpdate
                       ? settingsText(context, zh: '检查中', en: 'Checking')
-                      : 'v$_displayVersion',
+                      : Platform.isAndroid &&
+                              AndroidUpdateRuntime.instance
+                                  .statusText(context)
+                                  .isNotEmpty
+                          ? AndroidUpdateRuntime.instance.statusText(context)
+                          : 'v$_displayVersion',
               showArrow: true,
               showDivider: false,
               onTap: _checkForUpdate,

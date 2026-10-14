@@ -61,6 +61,7 @@ Finder walletRecordKey(String key) => find.byKey(ValueKey(key));
 Future<void> pumpWalletRecords(
   WidgetTester tester, {
   WalletRepository? repository,
+  Widget? home,
   String? initialCoin,
   Size size = const Size(390, 844),
   Brightness brightness = Brightness.light,
@@ -111,10 +112,11 @@ Future<void> pumpWalletRecords(
       ),
       home: RepaintBoundary(
         key: boundaryKey,
-        child: WalletRecordScreen(
-          initialCoin: initialCoin,
-          repository: repository,
-        ),
+        child: home ??
+            WalletRecordScreen(
+              initialCoin: initialCoin,
+              repository: repository,
+            ),
       ),
     ),
   ));

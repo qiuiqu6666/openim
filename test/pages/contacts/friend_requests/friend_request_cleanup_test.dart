@@ -9,6 +9,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/core/controller/im_controller.dart';
+import 'package:openim/core/im_callback.dart';
 import 'package:openim/pages/contacts/friend_requests/friend_requests_logic.dart';
 import 'package:openim/pages/contacts/friend_requests/friend_requests_view.dart';
 import 'package:openim/pages/contacts/request_history/data/request_history_store.dart';
@@ -20,11 +21,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _IM extends GetxController implements IMController {
   @override
+  final imSdkStatusPublishSubject =
+      PublishSubject<({IMSdkStatus status, bool reInstall, int? progress})>();
+  @override
   final friendApplicationChangedSubject =
       PublishSubject<FriendApplicationInfo>();
 
   @override
   void onClose() {
+    imSdkStatusPublishSubject.close();
     friendApplicationChangedSubject.close();
     super.onClose();
   }

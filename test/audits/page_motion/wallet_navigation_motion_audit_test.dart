@@ -1,4 +1,4 @@
-// Diagnostic audit: these expectations document current motion, not fixes.
+// Motion regressions: repaired interactions must remain stable.
 import 'dart:async';
 import 'dart:io';
 
@@ -26,9 +26,8 @@ void main() {
         .load();
     _fontFamily = 'WalletMotionAuditCjk';
   });
-  testWidgets(
-      'audit slight initial edge diagonal movement captures wallet back '
-      'gesture ahead of vertical list scrolling', (tester) async {
+  testWidgets('slight initial edge movement preserves vertical list scrolling',
+      (tester) async {
     tester.view.physicalSize = const Size(375, 812);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -61,9 +60,12 @@ void main() {
     await gesture.moveBy(const Offset(20, -80),
         timeStamp: const Duration(milliseconds: 250));
     await tester.pump(const Duration(milliseconds: 16));
+    await gesture.moveBy(const Offset(0, -40),
+        timeStamp: const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 16));
     final during = tester.getRect(find.byKey(pageKey));
-    expect(during.left - before.left, greaterThan(0));
-    expect(scroll.offset, 0);
+    expect(during.left, before.left);
+    expect(scroll.offset, greaterThan(0));
     debugPrint('MOTION wallet route diagonal: page dx='
         '${during.left - before.left}, list offset=${scroll.offset}');
     await gesture.up();
@@ -104,7 +106,7 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
 
-    testWidgets('audit failed refresh shifts the retained wallet ($brightness)',
+    testWidgets('failed refresh keeps the retained wallet stable ($brightness)',
         (tester) async {
       final previousDark = Styles.isDark;
       addTearDown(() => Styles.isDark = previousDark);
@@ -121,7 +123,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
       final after = tester.getRect(walletHomeKey('wallet-total-amount'));
       expect(controller.totalBal, walletHomeFixture.totalBal);
-      expect(after.top - before.top, greaterThan(0));
+      expect(after.top, before.top);
       debugPrint('MOTION wallet refresh failure $brightness: total dy='
           '${after.top - before.top}');
       expect(tester.takeException(), isNull);
@@ -129,7 +131,7 @@ void main() {
     });
 
     testWidgets(
-        'audit auth wrapper bottom inset changes its viewport '
+        'auth wrapper viewport stays above the keyboard '
         'while keyboard is open ($brightness)', (tester) async {
       tester.view.physicalSize = const Size(375, 812);
       tester.view.devicePixelRatio = 1;
@@ -169,8 +171,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
       await tester.pump(const Duration(milliseconds: 16));
       final after = tester.getRect(find.byType(SingleChildScrollView));
-      expect(after.height - before.height, closeTo(24, .01));
-      expect(scroll.position.pixels - offsetBefore, closeTo(-24, .01));
+      expect(after.bottom, lessThanOrEqualTo(812 - 300));
+      expect(after.height, lessThan(before.height));
+      expect(scroll.position.pixels, closeTo(offsetBefore, .01));
       debugPrint('MOTION auth wrapper keyboard $brightness: viewport dh='
           '${after.height - before.height}, offset delta='
           '${scroll.position.pixels - offsetBefore}');

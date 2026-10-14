@@ -18,6 +18,7 @@ class ChatReadDiagnostics {
     if (deduplicate) _last[event] = encoded;
     unawaited(OpenIM.iMManager
         .logs(
+            keyAndValues: const [],
             msgs: 'chat_read ${jsonEncode({
               'conversationID': conversationID,
               'instance': instance,

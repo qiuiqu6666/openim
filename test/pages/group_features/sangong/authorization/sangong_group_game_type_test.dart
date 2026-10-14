@@ -142,7 +142,7 @@ void main() {
               tester.element(find.text('群聊正文')), fixture.context)
           .map((item) => item.text);
       expect(labels.contains('三公代理'), agentVisible);
-      expect(labels.contains('三公运营'), visible);
+      expect(labels.contains('三公运营'), isTrue);
       expect(fixture.store.cachedGroupInfo(_groupID)?.ex, ex);
       expect(fixture.businessCalls, isEmpty);
       expect(fixture.api.calls.where((c) => c.path.endsWith('/config')).length,
@@ -153,7 +153,7 @@ void main() {
   }
 
   testWidgets(
-      'same-summary type updates hide and restore the operator in place',
+      'same-summary type updates toggle floating entry and retain privileged toolbox',
       (tester) async {
     final fixture = _Fixture(_ex(1));
     addTearDown(fixture.dispose);
@@ -172,7 +172,7 @@ void main() {
         GroupFeatureActions.items(
                 tester.element(find.text('群聊正文')), fixture.context)
             .any((item) => item.text == '三公运营'),
-        isFalse);
+        isTrue);
     expect(fixture.store.cachedGroupInfo(_groupID)?.ex, markSixEx);
     expect(fixture.store.features(_groupID).revision, 5);
     expect(originalContext.capabilitiesCurrent(), isTrue);

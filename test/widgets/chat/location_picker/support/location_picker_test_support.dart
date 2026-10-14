@@ -12,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'chat_location_test_source.dart';
+import 'package:openim_common/src/widgets/chat/location_picker/data/chat_location_place.dart';
 import 'location_street_map_fixture.dart';
 export 'chat_location_test_source.dart';
 
@@ -71,10 +72,13 @@ Future<void> loadLocationPreviewFonts() async {
 }
 
 class LocationPickerHarness {
-  LocationPickerHarness({LocationTestSource? source})
+  LocationPickerHarness(
+      {LocationTestSource? source, this.placeSearch, this.useNativeMap = false})
       : source = source ?? LocationTestSource();
 
   final LocationTestSource source;
+  final ChatLocationPlaceSearch? placeSearch;
+  final bool useNativeMap;
   final navigator = GlobalKey<NavigatorState>();
   final boundary = GlobalKey();
   LatLng? selectedFromMap;
@@ -127,17 +131,19 @@ class LocationPickerHarness {
               MaterialPageRoute(
                   builder: (_) => ChatLocationPicker(
                       locationSource: source,
-                      mapBuilder: (context, options) =>
-                          LocationStreetMapFixture(
-                            center: options.selected ??
-                                const LatLng(22.543096, 114.057865),
-                            enabled: options.active,
-                            onReady: options.onReady,
-                            onSelected: (point) {
-                              selectedFromMap = point;
-                              options.onSelected(point);
-                            },
-                          ))),
+                      placeSearch: placeSearch,
+                      mapBuilder: useNativeMap
+                          ? null
+                          : (context, options) => LocationStreetMapFixture(
+                                center: options.selected ??
+                                    const LatLng(22.543096, 114.057865),
+                                enabled: options.active,
+                                onReady: options.onReady,
+                                onSelected: (point) {
+                                  selectedFromMap = point;
+                                  options.onSelected(point);
+                                },
+                              ))),
             );
             returned = true;
           },

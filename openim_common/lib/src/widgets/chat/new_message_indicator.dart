@@ -7,16 +7,25 @@ class NewMessageIndicator extends StatelessWidget {
   const NewMessageIndicator({
     Key? key,
     this.newMessageCount = 0,
+    this.hasNewerMessages = false,
     this.onTap,
+    this.labelText,
+    this.icon = Icons.keyboard_double_arrow_down,
   }) : super(key: key);
   final int newMessageCount;
+  final bool hasNewerMessages;
   final Function()? onTap;
+  final String? labelText;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    final label = newMessageCount > 0
-        ? sprintf(StrRes.nMessage, [newMessageCount])
-        : StrRes.backToBottom;
+    final label = labelText ??
+        (hasNewerMessages
+            ? StrRes.chatNewMessagesAvailable
+            : newMessageCount > 0
+                ? sprintf(StrRes.nMessage, [newMessageCount])
+                : StrRes.backToBottom);
     final radius = BorderRadius.only(
       topLeft: Radius.circular(ChatScrollHintTokens.radius.r),
       bottomLeft: Radius.circular(ChatScrollHintTokens.radius.r),
@@ -75,7 +84,7 @@ class NewMessageIndicator extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            Icons.keyboard_double_arrow_down,
+                            icon,
                             color: ChatScrollHintTokens.foreground,
                             size: ChatScrollHintTokens.iconSize.r,
                           ),

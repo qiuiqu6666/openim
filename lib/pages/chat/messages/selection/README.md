@@ -4,7 +4,7 @@
 
 顶部取消、选中数量，底部逐条转发、合并转发、删除，以及 22px 圆形勾选，对照 99chat 的 `chat_host_app_bar.dart`、`radio_button.dart`、`tim_uikit_chat_history_message_list_item.dart` 和 `tim_uikit_multi_select_panel.dart`。顶部右侧按当前用户要求留空，以等宽占位保持标题居中；选择通过逐条点击和长按滑选操作，新收到的消息不会自动选中。
 
-底部三个图标使用 99chat 多选面板的原始透明 PNG（`images/forward.png`、`merge_forward.png`、`delete.png`），保存在本模块 `assets/*_99chat.png`，由应用资源清单登记该目录打包。按原手机面板的20px图标、2px图文间距显示，使用当前主题和禁用颜色；不再借用长按菜单的矢量图标。三个动作复用既有按钮和回调。
+底部三个图标按用户要求改用 [Tabler Icons](https://tabler.io/icons) 的 arrow-forward-up（逐条转发）、arrows-join-2（合并转发）、trash（删除）。官方 SVG 保存在本模块 assets/，描边统一调整为 1.5，圆角端点，无圆形外框；沿用 20px 图标、2px 图文间距和现有按钮，通过 SvgPicture 的颜色过滤支持亮暗主题及禁用状态。资源许可证见 assets/LICENSE-tabler.txt。
 
 `MessageSelectionRow` 始终保留原消息子节点，进入多选只增加左侧指示器并禁止消息内容点击；输入框通过 Offstage 保留草稿与组件状态。顶部和底部复用公共毛玻璃导航，删除确认复用 Cupertino 底部操作组件。返回键先取消选择。
 

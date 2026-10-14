@@ -1423,7 +1423,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
       if (gestureBack) {
-        final gesture = await tester.startGesture(const Offset(80, 300));
+        final gesture = await tester.startGesture(const Offset(20, 300));
         await gesture.moveBy(const Offset(180, 0),
             timeStamp: const Duration(milliseconds: 800));
         await tester.pump();
@@ -1432,6 +1432,8 @@ void main() {
         navigator.currentState!.pop();
       }
       await tester.pumpAndSettle();
+      expect(navigator.currentState!.canPop(), isFalse,
+          reason: 'Back must close the detail before awaiting its result');
       expect(await result, same(serverOrder));
     });
   }

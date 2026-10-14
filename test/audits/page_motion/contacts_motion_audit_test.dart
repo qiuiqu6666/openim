@@ -250,7 +250,7 @@ void main() {
     expect(withGroup.top, greaterThan(withFriend.top));
     expect(tester.getRect(header), initialHeader);
     expect(logic.query.value, 'audit');
-    expect(logic.index.value, 0);
+    expect(logic.index.value, 1);
     debugPrint('[contacts-motion] search result: friend delta='
         '${withFriend.top - initialConversation.top}, group delta='
         '${withGroup.top - withFriend.top}, header delta=0');

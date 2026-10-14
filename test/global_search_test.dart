@@ -82,7 +82,9 @@ void main() {
       expect(find.text('测试好友'), findsOneWidget);
       logic.index.value = 2;
       await tester.pumpAndSettle();
-      expect(find.text('测试好友'), findsNothing);
+      expect(find.text('测试好友'), findsOneWidget,
+          reason:
+              'Unified search retains contact results beside other sections.');
       expect(tester.takeException(), isNull);
     });
   }

@@ -440,7 +440,7 @@ void main() {
     await _disposePage(tester);
   });
 
-  testWidgets('failed mark read retains unread data and selected row for retry',
+  testWidgets('failed read batch retains unread data for a new selected retry',
       (tester) async {
     final logic = _ArchiveLogic()
       ..seed('selected')
@@ -454,21 +454,21 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('conversation-edit-mark-read')));
     await tester.pumpAndSettle();
-    expect(_selected(tester, 'selected'), isTrue);
+    expect(find.byType(ConversationEditActionBar), findsNothing);
+    expect(logic.readBatchFailures, 1);
     expect(logic.list.first.unreadCount, 2);
     expect(logic.list.last.unreadCount, 2);
-    expect(
-        tester
-            .widget<ConversationEditActionBar>(
-                find.byType(ConversationEditActionBar))
-            .busy,
-        isFalse);
     EasyLoading.dismiss(animation: false);
     await tester.pump();
     logic.failMarkRead = false;
+    await tester.tap(find.byTooltip('编辑'));
+    await tester.pumpAndSettle();
+    await tester.tap(_row('selected'));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('conversation-edit-mark-read')));
     await tester.pumpAndSettle();
-    expect(logic.markedIds, ['selected', 'selected']);
+    expect(logic.markedIds, ['selected', 'selected', 'selected']);
+    expect(logic.readBatchFailures, 0);
     expect(logic.list.first.unreadCount, 0);
     expect(logic.list.last.unreadCount, 2);
     expect(find.byType(ConversationEditActionBar), findsNothing);
@@ -520,6 +520,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('编辑'));
     await tester.pumpAndSettle();
+    await tester.tap(_row('selected'));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('conversation-edit-mark-read')));
     await tester.pump();
     expect(
@@ -530,8 +532,8 @@ void main() {
         isTrue);
     await tester.tap(_row('ignored'));
     await tester.pump();
-    expect(_selected(tester, 'ignored'), isFalse,
-        reason: 'An active batch still prevents changing its selection.');
+    expect(_selected(tester, 'ignored'), isTrue,
+        reason: 'Page selection is independent of the captured read scope.');
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     expect(gate.isCompleted, isFalse);

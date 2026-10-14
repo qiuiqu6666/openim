@@ -1,3 +1,4 @@
+import 'merged_record/chat_merged_record_card.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 
@@ -311,8 +312,18 @@ class _ChatItemViewState extends State<ChatItemView> {
         ].contains(_message.contentType) ||
         _message.isEmojiType ||
         _message.isDiceType) {
-      child = ChatStructuredMessage(
-          message: _message, depth: widget.structuredDepth);
+      if (_message.contentType == MessageType.merger ||
+          _message.contentType == MessageType.location) {
+        cardWithStatus = (status) => ChatStructuredMessage(
+            message: _message,
+            depth: widget.structuredDepth,
+            isOutgoing: _isISend,
+            status: status);
+        child = cardWithStatus(null);
+      } else {
+        child = ChatStructuredMessage(
+            message: _message, depth: widget.structuredDepth);
+      }
     } else if (_message.isVideoType) {
       child = widget.mediaItemBuilder?.call(context, _message);
     } else if (_message.isVoiceType && _message.soundElem != null) {
@@ -463,6 +474,8 @@ class _ChatItemViewState extends State<ChatItemView> {
       onTapTimeline: widget.onTapTimeline,
       timelineSemanticLabel: widget.timelineSemanticLabel,
       timeStr: isFund ||
+              _message.contentType == MessageType.merger ||
+              _message.contentType == MessageType.location ||
               _message.isCardType ||
               _message.contentType ==
                   MessageType.groupInfoSetAnnouncementNotification
@@ -508,13 +521,21 @@ class _ChatItemViewState extends State<ChatItemView> {
           _message.contentType == MessageType.customFace ||
           _message.isEmojiType ||
           _message.isDiceType,
-      standaloneCard: (_message.isCardType && _message.cardElem != null) ||
+      standaloneCard: _message.contentType == MessageType.location ||
+          _message.contentType == MessageType.merger ||
+          (_message.isCardType && _message.cardElem != null) ||
           _message.contentType ==
               MessageType.groupInfoSetAnnouncementNotification,
       childWithStatusBuilder:
           cardWithStatus == null ? null : interactiveContent,
-      embeddedStatusColor:
-          cardWithStatus == null ? null : ContactCardTokens.footerText,
+      embeddedStatusColor: _message.contentType == MessageType.location
+          ? Colors.white
+          : _message.contentType == MessageType.merger
+              ? ChatMergedRecordTokens.secondary(
+                  Theme.of(context).brightness == Brightness.dark)
+              : cardWithStatus == null
+                  ? null
+                  : ContactCardTokens.footerText,
       ignorePointer: widget.ignorePointer,
       sendStatusStream: widget.sendStatusSubject,
       transferStatus: widget.transferStatus,

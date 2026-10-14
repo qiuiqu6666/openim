@@ -1,42 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'merged_record/chat_merged_record_card.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'location_message/chat_location_message_card.dart';
 
 class ChatStructuredMessage extends StatelessWidget {
   const ChatStructuredMessage(
-      {super.key, required this.message, this.depth = 0});
+      {super.key,
+      required this.message,
+      this.depth = 0,
+      this.isOutgoing = false,
+      this.status});
   final Message message;
   final int depth;
+  final bool isOutgoing;
+  final Widget? status;
 
   static String? emojiUrl(Message message) => StickerImageData.tryParse(
           message.faceElem?.data ?? message.customElem?.data)
       ?.url;
-
-  Future<void> _openLocation() async {
-    final point = message.locationElem;
-    final lat = point?.latitude, lng = point?.longitude;
-    if (lat == null ||
-        lng == null ||
-        !lat.isFinite ||
-        !lng.isFinite ||
-        lat.abs() > 90 ||
-        lng.abs() > 180) {
-      IMViews.showToast('sdkInvalidLocation'.tr);
-      return;
-    }
-    try {
-      final url = Uri.https('www.google.com', '/maps/search/',
-          {'api': '1', 'query': '$lat,$lng'});
-      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-        throw StateError('Map unavailable');
-      }
-    } catch (_) {
-      IMViews.showToast('sdkOpenFailed'.tr);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,61 +64,37 @@ class ChatStructuredMessage extends StatelessWidget {
               ),
       );
     }
-    final merge = message.contentType == MessageType.merger;
-    return InkWell(
-      onTap: merge
-          ? () {
-              if (depth >= 8) {
-                IMViews.showToast('sdkRecordTooDeep'.tr);
-                return;
-              }
-              // Keep this navigator while using the host's shared GetX motion.
-              Navigator.of(context).push(GetPageRoute<void>(
-                  customTransition: Get.customTransition,
-                  transitionDuration: Get.defaultTransitionDuration,
-                  popGesture: false,
-                  page: () =>
-                      _MergedHistory(message: message, depth: depth + 1)));
-            }
-          : _openLocation,
-      child: SizedBox(
-          width: 210.w,
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(children: [
-                  Icon(
-                      merge ? Icons.forum_outlined : Icons.location_on_outlined,
-                      color: Styles.c_0089FF),
-                  8.horizontalSpace,
-                  Expanded(
-                      child: Text(
-                          merge
-                              ? (message.mergeElem?.title ??
-                                  'sdkMergedHistory'.tr)
-                              : (message.locationElem?.description ??
-                                  StrRes.toolboxLocation),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Styles.ts_0C1C33_17sp))
-                ]),
-                6.verticalSpace,
-                if (merge) ...[
-                  for (final text
-                      in (message.mergeElem?.abstractList ?? <String>[])
-                          .take(3))
-                    Text(text,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Styles.ts_8E9AB0_12sp),
-                  Text('sdkViewHistory'.tr, style: Styles.ts_0089FF_12sp),
-                ] else
-                  Text(
-                      '${message.locationElem?.latitude ?? ''}, ${message.locationElem?.longitude ?? ''}',
-                      style: Styles.ts_8E9AB0_12sp),
-              ])),
-    );
+    if (message.contentType == MessageType.merger) {
+      return ChatMergedRecordCard(
+        title: message.mergeElem?.title ?? StrRes.chatRecord,
+        summaries: message.mergeElem?.abstractList ?? const [],
+        isOutgoing: isOutgoing,
+        status: status,
+        time: message.sendTime == null
+            ? null
+            : DateFormat('HH:mm')
+                .format(DateTime.fromMillisecondsSinceEpoch(message.sendTime!)),
+        onTap: () {
+          if (message.hasExpired) return;
+          if (depth >= 8) {
+            IMViews.showToast('sdkRecordTooDeep'.tr);
+            return;
+          }
+          Navigator.of(context).push(GetPageRoute<void>(
+              customTransition: Get.customTransition,
+              transitionDuration: Get.defaultTransitionDuration,
+              popGesture: false,
+              page: () => _MergedHistory(message: message, depth: depth + 1)));
+        },
+      );
+    }
+    return ChatLocationMessageCard(
+        message: message,
+        status: status,
+        time: message.sendTime == null
+            ? null
+            : DateFormat('HH:mm').format(
+                DateTime.fromMillisecondsSinceEpoch(message.sendTime!)));
   }
 }
 

@@ -70,6 +70,7 @@ Future<void> _mount(WidgetTester tester, Widget child,
   tester.view.physicalSize = const Size(375, 812);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
+
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(ScreenUtilInit(
     designSize: const Size(375, 812),
@@ -235,6 +236,8 @@ void main() {
       expect(closed, isTrue);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
+      await _settleImages(tester);
+      await tester.pump(const Duration(seconds: 10));
     });
   }
 
@@ -278,6 +281,8 @@ void main() {
         expect(find.byType(ChatStructuredMessage), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
+        await _settleImages(tester);
+        await tester.pump(const Duration(seconds: 10));
       });
     }
   }
@@ -292,6 +297,8 @@ void main() {
       expect(find.text('[${StrRes.emoji}]'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
+      await _settleImages(tester);
+      await tester.pump(const Duration(seconds: 10));
     }
   });
 
@@ -318,6 +325,8 @@ void main() {
       expect(find.byIcon(Icons.close_rounded), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
+      await _settleImages(tester);
+      await tester.pump(const Duration(seconds: 10));
     });
   }
 }

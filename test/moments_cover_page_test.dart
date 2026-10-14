@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -12,21 +11,34 @@ import 'package:openim/pages/moments/moments_cover_page.dart';
 import 'package:openim/services/moments_repository.dart';
 
 class _PickedFile implements File {
-  _PickedFile({this.size = 100});
+  _PickedFile({this.size = 100}) {
+    _directory = Directory.systemTemp.createTempSync('cover-regression-');
+    _file = File('${_directory.path}/selected-cover.png');
+    _file.writeAsBytesSync(_original);
+    addTearDown(() => _directory.deleteSync(recursive: true));
+  }
+  late final Directory _directory;
+  late final File _file;
+  final _original =
+      File('openim_common/assets/images/share_app_logo_99chat.png')
+          .readAsBytesSync();
   final int size;
-  Uint8List? replacementBytes;
-  bool unreadable = false;
+  set replacementBytes(Uint8List? value) =>
+      _file.writeAsBytesSync(value ?? _original);
+  set unreadable(bool value) {
+    if (value) {
+      _file.deleteSync();
+    } else {
+      _file.writeAsBytesSync(_original);
+    }
+  }
+
   @override
-  final String path = '/selected-cover.png';
+  String get path => _file.path;
   @override
   Future<int> length() async => size;
   @override
-  Future<Uint8List> readAsBytes() async {
-    if (unreadable) throw const FileSystemException('Unavailable image');
-    return replacementBytes ??
-        base64Decode(
-            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a/q8AAAAASUVORK5CYII=');
-  }
+  Future<Uint8List> readAsBytes() async => _file.readAsBytesSync();
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -152,12 +164,25 @@ Future<void> _open(WidgetTester tester, MomentsRepository repository,
 Future<void> _pick(WidgetTester tester) async {
   await tester.ensureVisible(find.byKey(const ValueKey('moments_cover_pick')));
   await tester.tap(find.byKey(const ValueKey('moments_cover_pick')));
-  await tester.pumpAndSettle();
+  await _settleFileWork(tester);
 }
 
 Future<void> _save(WidgetTester tester) async {
   await tester.ensureVisible(find.byKey(const ValueKey('moments_cover_save')));
   await tester.tap(find.byKey(const ValueKey('moments_cover_save')));
+  await _settleFileWork(tester);
+}
+
+Future<void> _settleFileWork(WidgetTester tester) async {
+  // Hashing now reads the real file in an isolate, outside the fake clock.
+  await tester.pump();
+  for (var attempt = 0; attempt < 250; attempt++) {
+    if (find.byType(CircularProgressIndicator).evaluate().isEmpty) break;
+    await tester
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.pump();
+  }
+  expect(find.byType(CircularProgressIndicator), findsNothing);
   await tester.pumpAndSettle();
 }
 
@@ -453,6 +478,9 @@ void main() {
     expect(find.text('登录状态已改变'), findsOneWidget);
     api.settingGate!.complete(
         const MomentsSettings(version: 8, coverMediaId: 'old-account-cover'));
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 300)));
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     expect(find.byType(MomentsCoverPage), findsOneWidget);
     expect(repository.settings, isNull);

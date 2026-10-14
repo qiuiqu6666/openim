@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -92,11 +93,14 @@ class MessageSelectionActionBar extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset(
+            SvgPicture.asset(
               iconAsset,
               width: MessageSelectionTokens.iconSize,
               height: MessageSelectionTokens.iconSize,
-              color: enabled ? color : Theme.of(context).disabledColor,
+              colorFilter: ColorFilter.mode(
+                enabled ? color : Theme.of(context).disabledColor,
+                BlendMode.srcIn,
+              ),
               excludeFromSemantics: true,
             ),
             const SizedBox(height: MessageSelectionTokens.labelGap),

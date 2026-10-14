@@ -77,6 +77,10 @@ mixin IMCallback {
 
   final friendApplicationChangedSubject =
       PublishSubject<FriendApplicationInfo>();
+  final friendApplicationAddedSubject =
+      PublishSubject<FriendApplicationInfo>(sync: true);
+  final groupApplicationAddedSubject =
+      PublishSubject<GroupApplicationInfo>(sync: true);
 
   final friendAddSubject = PublishSubject<FriendInfo>();
 
@@ -136,6 +140,7 @@ mixin IMCallback {
       _notificationReadySession = (account, token);
     }
   }
+
   IMSdkStatus? _connectionStatus;
   IMSdkStatus? get currentConnectionStatus => _connectionStatus;
 
@@ -286,6 +291,7 @@ mixin IMCallback {
 
   void friendApplicationAdded(FriendApplicationInfo u) {
     friendApplicationChangedSubject.addSafely(u);
+    friendApplicationAddedSubject.addSafely(u);
   }
 
   void friendApplicationDeleted(FriendApplicationInfo u) {
@@ -322,6 +328,7 @@ mixin IMCallback {
 
   void groupApplicationAdded(GroupApplicationInfo info) {
     groupApplicationChangedSubject.add(info);
+    groupApplicationAddedSubject.addSafely(info);
   }
 
   void groupApplicationDeleted(GroupApplicationInfo info) {
@@ -379,6 +386,8 @@ mixin IMCallback {
     historyRecoverySignals.close();
     initializedSubject.close();
     friendApplicationChangedSubject.close();
+    friendApplicationAddedSubject.close();
+    groupApplicationAddedSubject.close();
     friendAddSubject.close();
     friendDelSubject.close();
     friendInfoChangedSubject.close();

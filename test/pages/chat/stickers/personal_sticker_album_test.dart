@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -125,10 +126,12 @@ void main() {
       {Widget Function()? home}) {
     testWidgets(description, (tester) async {
       try {
-        await tester
-            .pumpWidget(GetMaterialApp(home: home?.call() ?? const SizedBox()));
+        await tester.pumpWidget(GetMaterialApp(
+            builder: EasyLoading.init(),
+            home: home?.call() ?? const SizedBox()));
         await body(tester);
       } finally {
+        await EasyLoading.dismiss(animation: false);
         await tester.pumpWidget(const SizedBox());
         Get.reset();
         debugDefaultTargetPlatformOverride = null;
@@ -182,6 +185,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(picker.picks.single.maxAssets, 1);
     expect(picker.picks.single.requestType, RequestType.common);
+    expect(picker.picks.single.filterOptions!.containsPathModified, isTrue);
     expect(api.urls, hasLength(1));
     expect(find.text('添加的单个表情 (1)'), findsOneWidget);
   },

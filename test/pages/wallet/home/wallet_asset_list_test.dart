@@ -157,7 +157,7 @@ void main() {
       expect(find.text('Unknown valuation'), findsOneWidget);
       expect(
           tester.widget<Text>(walletHomeKey('wallet-asset-value-UNKNOWN')).data,
-          '0.00');
+          '--');
       await tester.tap(walletHomeKey('wallet-assets-filter'));
       await tester.pumpAndSettle();
       expect(find.text('Small asset'), findsOneWidget);
@@ -231,4 +231,3 @@ void _expectHiddenTokenAmounts(WidgetTester tester) {
     }
   }
 }
-

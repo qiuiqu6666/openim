@@ -36,8 +36,7 @@ class AiOpenIMMessageTile extends StatelessWidget {
             text: aiOpenimMessageText(message),
             query: query,
             style: TextStyle(
-                color: AiPalette.primary(
-                    Theme.of(context).brightness == Brightness.dark),
+                color: AiPalette.text,
                 fontSize: AiMetrics.font15,
                 height: AiMetrics.userTextLineHeight),
           );

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -53,7 +54,9 @@ class RecentConversationIM extends GetxController implements IMController {
 }
 
 class _Selection extends SelectContactsLogic {
-  _Selection(List<ConversationInfo> data) {
+  _Selection(
+      List<ConversationInfo> data, Future<bool> Function(String)? isJoinedGroup)
+      : super(isJoinedGroup: isJoinedGroup ?? ((_) async => true)) {
     action = SelAction.forward;
     openSelectedSheet = false;
     ex = '待转发的测试消息';
@@ -148,10 +151,12 @@ Finder recentConversationPreview(String id) =>
     find.byKey(ValueKey('recent-conversation-preview-$id'));
 
 class RecentConversationFixture {
-  RecentConversationFixture({List<ConversationInfo>? data})
+  RecentConversationFixture(
+      {List<ConversationInfo>? data,
+      Future<bool> Function(String)? isJoinedGroup})
       : data = data ?? recentConversationSamples() {
     conversations = RecentConversationLive(this.data);
-    selection = _Selection(this.data);
+    selection = _Selection(this.data, isJoinedGroup);
   }
 
   final List<ConversationInfo> data;
@@ -190,6 +195,7 @@ class RecentConversationFixture {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = Size(width, 844);
     addTearDown(() async {
+      await EasyLoading.dismiss(animation: false);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
       Styles.isDark = oldDark;
@@ -220,10 +226,13 @@ class RecentConversationFixture {
         locale: locale,
         supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-                textScaler: TextScaler.linear(textScale), boldText: boldText),
-            child: child!),
+        builder: (context, child) => EasyLoading.init()(
+            context,
+            MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                    textScaler: TextScaler.linear(textScale),
+                    boldText: boldText),
+                child: child!)),
         home: const Scaffold(body: Text('父聊天页面')),
       ),
     ));

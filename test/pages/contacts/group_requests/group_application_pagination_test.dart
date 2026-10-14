@@ -65,7 +65,8 @@ void main() {
   });
   tearDown(() async => fixture.dispose());
 
-  testWidgets('SDK receives 20-item offsets; retry preserves loaded rows',
+  testWidgets(
+      'server receives bounded page cursors; retry preserves loaded rows',
       (tester) async {
     fixture.recipient = [for (var i = 45; i > 0; i--) request(time: i)];
     final logic = await fixture.mount(tester);
@@ -81,18 +82,15 @@ void main() {
     await logic.loadMore();
     expect(logic.list, hasLength(45));
     expect(logic.hasMore.value, isFalse);
-    final requests = fixture.callsFor('getGroupApplicationListAsRecipient');
-    expect(requests.map((call) => call.arguments['req']['count']),
-        everyElement(20));
-    expect(
-        requests.map((call) => call.arguments['req']['offset']), [20, 20, 40]);
+    expect(fixture.callsFor('getGroupApplicationListAsRecipient'), isEmpty);
+    expect(fixture.noticeCalls.where((a) => a == 'list'), hasLength(4));
     final before = fixture.calls.length;
     await logic.loadMore();
     expect(fixture.calls.length, before);
   });
 
   testWidgets(
-      'a refreshed page supersedes an in-flight load and keeps loaded range',
+      'a refreshed page supersedes an in-flight load and reloads only the first page',
       (tester) async {
     fixture.recipient = [for (var i = 45; i > 0; i--) request(time: i)];
     final logic = await fixture.mount(tester);
@@ -114,7 +112,7 @@ void main() {
     await logic.loadMore();
     expect(logic.list, hasLength(40));
     await fixture.refresh(tester, logic);
-    expect(logic.list, hasLength(40));
+    expect(logic.list, hasLength(20));
     expect(tester.takeException(), isNull);
   });
 

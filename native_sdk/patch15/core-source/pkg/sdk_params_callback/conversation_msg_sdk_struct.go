@@ -34,6 +34,7 @@ type GetAdvancedHistoryMessageListParams struct {
 	Count            int                `json:"count"`
 	ViewType         int                `json:"viewType"`
 	ScanCursor       *HistoryScanCursor `json:"scanCursor,omitempty"`
+	LocalSnapshot    bool               `json:"localSnapshot,omitempty"`
 }
 
 // A checked local range can end on a deleted row. Keep its position separate
@@ -47,12 +48,13 @@ type HistoryScanCursor struct {
 }
 
 type GetAdvancedHistoryMessageListCallback struct {
-	MessageList []*sdk_struct.MsgStruct `json:"messageList"`
-	IsEnd       bool                    `json:"isEnd"`
-	ErrCode     int32                   `json:"errCode"`
-	ErrMsg      string                  `json:"errMsg"`
-	ScanCursor  *HistoryScanCursor      `json:"scanCursor,omitempty"`
-	ScanLimited bool                    `json:"scanLimited,omitempty"`
+	MessageList   []*sdk_struct.MsgStruct `json:"messageList"`
+	IsEnd         bool                    `json:"isEnd"`
+	ErrCode       int32                   `json:"errCode"`
+	ErrMsg        string                  `json:"errMsg"`
+	ScanCursor    *HistoryScanCursor      `json:"scanCursor,omitempty"`
+	ScanLimited   bool                    `json:"scanLimited,omitempty"`
+	LocalSnapshot bool                    `json:"localSnapshot,omitempty"`
 }
 
 type FetchSurroundingMessagesReq struct {

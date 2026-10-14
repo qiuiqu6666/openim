@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../../services/platform_config_service.dart';
 import 'data/data.dart';
 import 'models/customer_service_chat_entry.dart';
+import 'history/customer_service_history_merge.dart';
 
 typedef CustomerServiceCableFactory = CustomerServiceCable Function(
     void Function(CustomerServiceMessage) onMessage,
@@ -172,11 +173,10 @@ class CustomerServiceController extends ChangeNotifier {
     final messages = await api.listMessages(
         contactId: session.sourceId, conversationId: session.conversationId);
     if (!_current(generation)) return;
-    for (final message in messages) {
-      _merge(message);
-    }
+    final changed = _mergeBatch(messages);
+    final hadError = error != null;
     error = null;
-    notifyListeners();
+    if (changed || hadError) notifyListeners();
   }
 
   void _onConnected() {
@@ -229,59 +229,21 @@ class CustomerServiceController extends ChangeNotifier {
       suspend();
       return;
     }
-    _merge(message);
-    notifyListeners();
+    if (_merge(message)) notifyListeners();
   }
 
-  void _merge(CustomerServiceMessage message, {String? echoId}) {
-    if (message.content.trim().isEmpty &&
-        message.attachments.isEmpty &&
-        echoId == null) {
-      return;
-    }
-    final session = _session;
-    if (message.conversationId.isNotEmpty &&
-        session != null &&
-        message.conversationId != session.conversationId) {
-      return;
-    }
-    final echo = echoId ?? message.echoId;
-    bool matches(CustomerServiceChatEntry entry) =>
-        message.id.isNotEmpty && entry.message?.id == message.id ||
-        echo.isNotEmpty && entry.echoId == echo;
-    final matchesList = _entries.where(matches).toList();
-    CustomerServiceChatEntry? local;
-    for (final item in matchesList) {
-      local ??= item;
-      if (item.upload != null || item.text.isNotEmpty) {
-        local = item;
-        break;
-      }
-    }
-    _entries.removeWhere(matches);
-    final entry = CustomerServiceChatEntry(
-      echoId: echo.isNotEmpty ? echo : local?.echoId ?? '',
-      text: local?.text ?? '',
-      upload: local?.upload,
-      message: message,
-    );
-    // Pending sends stay at the end; acknowledgements use server chronology.
-    final next = _entries.indexWhere(
-        (item) => item.message == null || _comesBefore(message, item.message!));
-    if (next >= 0) {
-      _entries.insert(next, entry);
-    } else {
-      _entries.add(entry);
-    }
-  }
+  bool _merge(CustomerServiceMessage message, {String? echoId}) =>
+      _mergeBatch([message], echoId: echoId);
 
-  bool _comesBefore(CustomerServiceMessage first, CustomerServiceMessage next) {
-    if (first.createdAt != null && next.createdAt != null) {
-      final comparison = first.createdAt!.compareTo(next.createdAt!);
-      if (comparison != 0) return comparison < 0;
-    }
-    final firstId = int.tryParse(first.id), nextId = int.tryParse(next.id);
-    return firstId != null && nextId != null && firstId < nextId;
+  bool _mergeBatch(Iterable<CustomerServiceMessage> messages,
+      {String? echoId}) {
+    final merged = mergeCustomerServiceHistory(_entries, messages,
+        conversationId: _session?.conversationId, echoId: echoId);
+    if (merged == null) return false;
+    _entries
+      ..clear()
+      ..addAll(merged);
+    return true;
   }
 
   void _onTyping(bool value) {
@@ -388,9 +350,10 @@ class CustomerServiceController extends ChangeNotifier {
               height: upload.height,
               thumbnailPath: upload.thumbnailPath);
       if (!_current(generation)) return;
-      _merge(message, echoId: entry.echoId);
+      final changed = _merge(message, echoId: entry.echoId);
+      final hadError = error != null;
       error = null;
-      notifyListeners();
+      if (changed || hadError) notifyListeners();
     } catch (_) {
       if (!_current(generation)) return;
       _changeState(entry.echoId, CustomerServiceSendState.failed);

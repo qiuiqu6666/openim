@@ -51,7 +51,7 @@ class _LocationStreetMapFixtureState extends State<LocationStreetMapFixture> {
                 child: Stack(children: [
                   const Center(
                       child: Icon(Icons.location_on,
-                          size: 38, color: Color(0xFF1687FF))),
+                          size: 38, color: Color(0xFF07C160))),
                   const Positioned(
                       left: 12,
                       bottom: 10,

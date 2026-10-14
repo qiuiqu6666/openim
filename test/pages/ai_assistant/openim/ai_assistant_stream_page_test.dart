@@ -386,8 +386,9 @@ void main() {
           tester.getRect(textContaining('流式回复目前的末尾。').last).overlaps(viewport),
           isTrue,
           reason: 'Following latest must paint the newest generated text.');
-      fixture.im.recvNewMessage(
-          aiOpenimStreamFinal('geometry-final-$dark', '本轮完整回复', followingID));
+      fixture.im.recvNewMessage(aiOpenimStreamFinal(
+          'geometry-final-$dark', '本轮完整回复', followingID,
+          time: 200));
       await tester.pumpAndSettle();
       expect(stream(followingID), findsNothing);
 

@@ -14,6 +14,10 @@ class ChatHistoryLoader {
   ChatHistoryLoader({
     required this.fetch,
     this.fetchNewer,
+    this.isDisplaySnapshot,
+    this.hasPaintedRows,
+    this.onLatestDeferred,
+    this.beforeLatestReplace,
     required this.messages,
     required this.replace,
     required this.removedIDs,
@@ -28,6 +32,10 @@ class ChatHistoryLoader {
 
   final ChatHistoryReader fetch;
   final ChatHistoryReader? fetchNewer;
+  final bool Function(String?)? isDisplaySnapshot;
+  final bool Function()? hasPaintedRows;
+  final void Function()? onLatestDeferred;
+  final Future<void> Function()? beforeLatestReplace;
   final List<Message> Function() messages;
   final void Function(List<Message>, bool firstPage, bool refresh) replace;
   final Set<String> removedIDs;
@@ -41,6 +49,10 @@ class ChatHistoryLoader {
   SearchChatWindow? _searchWindow;
 
   bool loading = false;
+  bool _backgroundRefresh = false;
+
+  /// Keep refresh reads busy for coordination without adding a paging row.
+  bool get pagingLoading => loading && !_backgroundRefresh;
   bool loaded = false;
   bool hasMore = true;
   bool viewingHistory = false;
@@ -150,13 +162,16 @@ class ChatHistoryLoader {
   Future<bool> _start({required bool refresh}) {
     _windowRetry = false;
     _retry = refresh ? this.refresh : loadOlder;
-    return _begin(() => _run(refresh: refresh));
+    return _begin(() => _run(refresh: refresh),
+        backgroundRefresh: refresh && loaded);
   }
 
-  Future<bool> _begin(Future<bool> Function() run) {
+  Future<bool> _begin(Future<bool> Function() run,
+      {bool backgroundRefresh = false}) {
     final completer = Completer<bool>();
     _request = completer.future;
     loading = true;
+    _backgroundRefresh = backgroundRefresh;
     error = null;
     onStateChanged();
     run().then((result) {
@@ -421,15 +436,52 @@ class ChatHistoryLoader {
         _historicalIDs.addAll(page.map((m) => m.clientMsgID));
       }
       final current = messages();
-      if (refresh && !firstPage && !latest && page.isEmpty &&
+      if (firstPage &&
+          page.isEmpty &&
+          result.scanLimited != true &&
+          before
+              .followedBy(current
+                  .where((m) => isDisplaySnapshot?.call(m.clientMsgID) == true))
+              .any((m) =>
+                  !removedIDs.contains(m.clientMsgID) &&
+                  !_isPendingSend(m.status))) {
+        // A first-frame snapshot or historical window is still visible. Do
+        // not confirm an empty replacement or enable read receipts from it;
+        // the existing finite recovery owner can retry this same operation.
+        throw StateError(
+            'Latest history returned no messages for the visible window');
+      }
+      if (refresh &&
+          !firstPage &&
+          !latest &&
+          page.isEmpty &&
           result.scanLimited != true) {
         // A resume query can race native recovery. Empty is not a deletion
         // receipt: preserve both the displayed window and its paging anchors.
         return hasMore;
       }
       // Keep messages received/sent while the request was outstanding.
-      final arrived = current.where((m) => !beforeIDs.contains(m.clientMsgID));
+      final arrived = current.where((m) =>
+          !beforeIDs.contains(m.clientMsgID) &&
+          isDisplaySnapshot?.call(m.clientMsgID) != true);
       final pending = _pending(snapshot, page);
+      final visibleTail =
+          current.where((m) => !_isPendingSend(m.status)).lastOrNull;
+      if (!latest &&
+          (firstPage || refresh) &&
+          hasPaintedRows?.call() == true &&
+          visibleTail != null &&
+          page.isNotEmpty &&
+          _compare(page.last, visibleTail) > 0 &&
+          holdCurrentWindow()) {
+        // The first frame is already being read. Keep every painted row and
+        // its geometry; never splice a remote latest range across a gap.
+        loaded = true;
+        hasMore = true;
+        onLatestDeferred?.call();
+        onLoaded?.call();
+        return hasMore;
+      }
       // A burst larger than one page can leave a gap between this latest page
       // and the old window. Page from the new boundary to keep history reachable.
       final discontinuous = refresh &&
@@ -468,6 +520,10 @@ class ChatHistoryLoader {
         // Older, already paged history and its cursor remain in place.
         final oldest = page.first;
         retained = current.where((m) => _compare(m, oldest) < 0);
+      }
+      if (latest && beforeLatestReplace != null) {
+        await beforeLatestReplace!();
+        if (_closed || generation != _generation) return false;
       }
       final reconciled = _reconcile(page, snapshot);
       var combined = merge([...retained, ...reconciled, ...pending, ...arrived],

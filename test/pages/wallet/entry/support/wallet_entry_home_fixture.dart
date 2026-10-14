@@ -6,6 +6,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/core/controller/im_controller.dart';
+import 'package:openim/core/im_callback.dart';
+import 'package:openim/core/session/connection/api_connection_health.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/pages/conversation/conversation_organizer.dart';
 import 'package:openim/pages/home/home_logic.dart';
@@ -29,6 +31,13 @@ class _Home extends GetxController implements HomeLogic {
 }
 
 class _Account extends GetxController implements IMController {
+  _Account(this.connecting);
+  final bool connecting;
+  @override
+  IMSdkStatus get currentConnectionStatus =>
+      connecting ? IMSdkStatus.connecting : IMSdkStatus.connectionSucceeded;
+  @override
+  ApiConnectionHealth? get apiConnectionHealth => null;
   @override
   final userInfo = UserFullInfo(userID: 'viewer', nickname: 'Viewer').obs;
 
@@ -103,7 +112,7 @@ Future<void> mountWalletEntryHome(WidgetTester tester,
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   Get.put<HomeLogic>(_Home());
-  Get.put<IMController>(_Account());
+  Get.put<IMController>(_Account(connectionStatus != null));
   Get.put<ConversationLogic>(_Conversations(connectionStatus));
   Get.put<MineLogic>(MineLogic());
   await tester.pumpWidget(ScreenUtilInit(

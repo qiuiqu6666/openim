@@ -5,7 +5,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../../res/app_tokens.dart';
 import '../chat_location_picker_tokens.dart';
 import 'chat_location_native_map_options.dart';
 
@@ -60,10 +59,14 @@ class _ChatLocationDesktopMapState extends State<ChatLocationDesktopMap> {
                     ? InteractiveFlag.all & ~InteractiveFlag.rotate
                     : InteractiveFlag.none),
             onTap: (_, point) {
-              if (options.active) options.onSelected(point);
+              if (options.active && !options.readOnly) {
+                options.onSelected(point);
+              }
             },
             onPositionChanged: (camera, gesture) {
-              if (gesture && options.active) options.onSelected(camera.center);
+              if (gesture && options.active && !options.readOnly) {
+                options.onSelected(camera.center);
+              }
             }),
         children: [
           TileLayer(
@@ -77,7 +80,7 @@ class _ChatLocationDesktopMapState extends State<ChatLocationDesktopMap> {
                   height: ChatLocationPickerTokens.emptyIconSize,
                   alignment: Alignment.topCenter,
                   child: const Icon(Icons.location_on_rounded,
-                      color: AppTokens.accent,
+                      color: ChatLocationPickerTokens.accent,
                       size: ChatLocationPickerTokens.emptyIconSize))
             ]),
           RichAttributionWidget(attributions: [

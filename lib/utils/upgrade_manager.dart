@@ -1,4 +1,5 @@
 import '../pages/mine/settings/widgets/platform_update.dart';
+import '../pages/mine/settings/update/android/android_update_runtime.dart';
 import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -14,7 +15,11 @@ mixin UpgradeManger {
   var isShowUpgradeDialog = false;
   var isNowIgnoreUpdate = false;
   Future<void>? _automaticUpdateCheck;
-  bool updateBlocksNavigation = false;
+  bool _updateBlocksNavigation = false;
+  bool get updateBlocksNavigation => Platform.isAndroid
+      ? AndroidUpdateRuntime.instance.blocksNavigation
+      : _updateBlocksNavigation;
+  set updateBlocksNavigation(bool value) => _updateBlocksNavigation = value;
   final subject = PublishSubject<double>();
   final notificationService = NotificationService();
 
@@ -52,6 +57,7 @@ mixin UpgradeManger {
   }
 
   Future<void> autoCheckVersionUpgrade() {
+    if (Platform.isAndroid) return AndroidUpdateRuntime.instance.start();
     // Home entry reuses the same check so rebuilding the home route cannot
     // issue another request or show a duplicate update dialog.
     if (_automaticUpdateCheck != null) return _automaticUpdateCheck!;
@@ -59,9 +65,9 @@ mixin UpgradeManger {
     final context = Get.context;
     if (context == null) return Future.value();
     isShowUpgradeDialog = true;
-    return _automaticUpdateCheck =
-        checkPlatformUpdate(context, automatic: true,
-            onBlocking: () => updateBlocksNavigation = true).then<void>((checked) {
+    return _automaticUpdateCheck = checkPlatformUpdate(context,
+        automatic: true,
+        onBlocking: () => updateBlocksNavigation = true).then<void>((checked) {
       if (checked) {
         isNowIgnoreUpdate = true;
         updateBlocksNavigation = false;

@@ -1,4 +1,5 @@
 import 'navigation/chat_entry_trace.dart';
+import 'mentions/chat_mention_controller.dart';
 import 'messages/quote/chat_quote_navigation.dart';
 import 'media/chat_media_message_locator.dart';
 import 'package:flutter/foundation.dart';
@@ -40,6 +41,7 @@ import 'history/chat_timeline_controller.dart';
 import 'history/chat_history_prefetcher.dart';
 import 'history/chat_history_diagnostics.dart';
 import 'receipts/chat_read_diagnostics.dart';
+import 'receipts/chat_persisted_latest_read.dart';
 import 'history/chat_history_recovery.dart';
 import 'history/chat_latest_message_recovery.dart';
 import 'history/chat_background_message_recovery.dart';
@@ -83,6 +85,7 @@ class ChatLogic extends SuperController {
   bool _messagesWhileCovered = false;
   int _coveredHistoryRevision = 0;
   bool _routeWasCurrent = true;
+  bool _awaitingInitialHistorySync = false;
   Worker? _historyRecoveryWorker;
   String? _chatToken;
   String? _imToken;
@@ -93,7 +96,8 @@ class ChatLogic extends SuperController {
       _imToken == DataSp.imToken;
   bool get _sessionInactive => _chatClosing || isClosed || !_sameAccount;
   late final _historyRecovery = ChatHistoryRecovery(
-    diagnostic: (event) => ChatHistoryDiagnostics.record(conversationInfo.conversationID, event),
+    diagnostic: (event) =>
+        ChatHistoryDiagnostics.record(conversationInfo.conversationID, event),
     isActive: () => _historyVisible,
     hasError: () => historyError.value != null,
     isLoading: () => historyLoading.value,
@@ -189,28 +193,37 @@ class ChatLogic extends SuperController {
       }
     },
   );
-  late final _readDiagnostics = ChatReadDiagnostics(conversationInfo.conversationID);
+  late final _readDiagnostics =
+      ChatReadDiagnostics(conversationInfo.conversationID);
+  bool get _historyBlocksRead =>
+      historyLoading.value &&
+      !canReadPersistedLatestDuringLoad(
+          conversationInfo, messageList.lastOrNull);
   Map<String, Object?> _readDiagnosticState() => {
-    'routeCurrent': _messageRoute?.isCurrent,
-    'lifecycle': WidgetsBinding.instance.lifecycleState?.name,
-    'sameAccount': _sameAccount, 'getxClosed': isClosed,
-    'chatClosing': _chatClosing, 'syncStatus': syncStatus.value.name,
-    'historyLoading': historyLoading.value,
-    'historyError': historyError.value != null,
-    'viewingHistory': viewingHistory.value,
-    'entering': messageArrivals.hasEntering,
-    'messagesWhileCovered': _messagesWhileCovered,
-    'blockedReasons': [
-      if (_messagesWhileCovered) 'messages_while_covered',
-      if (messageArrivals.hasEntering) 'entry_animation',
-      if (historyLoading.value) 'history_loading',
-      if (historyError.value != null) 'history_error',
-      if (viewingHistory.value) 'history_window',
-      if (syncStatus.value == IMSdkStatus.syncStart ||
-          syncStatus.value == IMSdkStatus.syncProgress ||
-          syncStatus.value == IMSdkStatus.synchronizing) 'sync_in_progress',
-    ],
-  };
+        'routeCurrent': _messageRoute?.isCurrent,
+        'lifecycle': WidgetsBinding.instance.lifecycleState?.name,
+        'sameAccount': _sameAccount,
+        'getxClosed': isClosed,
+        'chatClosing': _chatClosing,
+        'syncStatus': syncStatus.value.name,
+        'historyLoading': historyLoading.value,
+        'historyBlocksRead': _historyBlocksRead,
+        'historyError': historyError.value != null,
+        'viewingHistory': viewingHistory.value,
+        'entering': messageArrivals.hasEntering,
+        'messagesWhileCovered': _messagesWhileCovered,
+        'blockedReasons': [
+          if (_messagesWhileCovered) 'messages_while_covered',
+          if (messageArrivals.hasEntering) 'entry_animation',
+          if (_historyBlocksRead) 'history_loading',
+          if (historyError.value != null) 'history_error',
+          if (viewingHistory.value) 'history_window',
+          if (syncStatus.value == IMSdkStatus.syncStart ||
+              syncStatus.value == IMSdkStatus.syncProgress ||
+              syncStatus.value == IMSdkStatus.synchronizing)
+            'sync_in_progress',
+        ],
+      };
   late final _receipts = ChatReadReceipts(
     diagnostics: _readDiagnostics,
     diagnosticState: _readDiagnosticState,
@@ -223,7 +236,7 @@ class ChatLogic extends SuperController {
     canReadConversation: () =>
         !_messagesWhileCovered &&
         !messageArrivals.hasEntering &&
-        !historyLoading.value &&
+        !_historyBlocksRead &&
         historyError.value == null &&
         !viewingHistory.value &&
         syncStatus.value != IMSdkStatus.syncStart &&
@@ -475,6 +488,7 @@ class ChatLogic extends SuperController {
   void _removeMessageByID(String? id) {
     if (id == null || _sessionInactive) return;
     newMessages.remove(id);
+    if (isGroupChat) mentions.remove(id);
     _timeline.remove(id);
     if (messageList.isEmpty && scrollingCacheMessageList.isEmpty) {
       newMessages.reset();
@@ -488,6 +502,7 @@ class ChatLogic extends SuperController {
     final id = info.clientMsgID;
     if (id == null || _sessionInactive) return;
     newMessages.remove(id);
+    if (isGroupChat) mentions.remove(id);
     _timeline.revoke(info);
     _voice.removeMessage(id);
     copyTextMap.remove(id);
@@ -511,6 +526,11 @@ class ChatLogic extends SuperController {
   Function(List<ReadReceiptInfo>)? _ownedReceiptCallback;
   Function(SignalingMessageEvent)? _ownedSignalingCallback;
   late final ChatTimelineController _timeline = ChatTimelineController(
+    beforeLatestReplace: () => _dateWindow.prepareLatestTransition(),
+    onLatestDeferred: () => newMessages.updateScrollOffset(0),
+    fetchLocalSnapshot: () => OpenIM.iMManager.messageManager
+        .getLocalHistorySnapshot(
+            conversationID: conversationInfo.conversationID),
     accountID: _chatAccountID,
     isSessionCurrent: () => _sameAccount,
     conversation: () => conversationInfo,
@@ -571,6 +591,7 @@ class ChatLogic extends SuperController {
       _timeline.scrollingCacheMessageList;
   RxBool get initialHistoryLoading => _timeline.initialHistoryLoading;
   RxBool get historyLoading => _timeline.historyLoading;
+  RxBool get historyPagingLoading => _timeline.historyPagingLoading;
   RxnString get historyError => _timeline.historyError;
   RxBool get historyHasMore => _timeline.historyHasMore;
   RxBool get historyScanLimited => _timeline.historyScanLimited;
@@ -612,7 +633,8 @@ class ChatLogic extends SuperController {
               _backgroundMessageRecovery.hasCheckpoint) {
             unawaited(_loadHistoryForSyncEnd());
           }
-          _historyRecovery.request(resetAttempts: true, source: 'route_visible');
+          _historyRecovery.request(
+              resetAttempts: true, source: 'route_visible');
           _latestMessageRecovery.conversationChanged(resetAttempts: true);
         }
       });
@@ -629,6 +651,35 @@ class ChatLogic extends SuperController {
     jump: jumpToDateMessage,
   );
   RxnString get focusedMessageID => _messageFocus.highlightedID;
+  late final mentions = ChatMentionController(
+    userID: () => _chatAccountID,
+    isClosed: () => _sessionInactive,
+    search: (page) async {
+      final result = await OpenIM.iMManager.messageManager.searchLocalMessages(
+        conversationID: conversationInfo.conversationID,
+        messageTypeList: [MessageType.atText],
+        pageIndex: page,
+        count: 50,
+      );
+      return [
+        for (final item in result.searchResultItems ?? <SearchResultItems>[])
+          if (item.conversationID == conversationInfo.conversationID)
+            ...?item.messageList,
+      ];
+    },
+    focus: focusSearchMessage,
+  );
+
+  Future<void> jumpToMention() async {
+    try {
+      if (!await mentions.jump() && !_sessionInactive) {
+        IMViews.showToast('暂时无法定位该消息，请重试');
+      }
+    } catch (_) {
+      if (!_sessionInactive) IMViews.showToast('暂时无法定位该消息，请重试');
+    }
+  }
+
   RxInt get historyWindowRevision => _timeline.windowRevision;
 
   Future<bool> focusSearchMessage(Message message) {
@@ -763,6 +814,9 @@ class ChatLogic extends SuperController {
     }
   }
 
+  bool get hasDeferredLatest => _timeline.latestDeferred.value;
+  bool get latestWindowFading => _dateWindow.fading.value;
+
   bool onChatScrollNotification(ScrollNotification notification) {
     if (_sessionInactive) return false;
     if (notification.depth == 0 &&
@@ -807,6 +861,7 @@ class ChatLogic extends SuperController {
 
   void onChatViewportChanged(List<String> readIDs, double distanceFromLatest) {
     if (_sessionInactive) return;
+    _timeline.recordPaintedRows(readIDs);
     // A size transition is a clipped slice until its final layout. Only that
     // full-height painted frame may count as seeing the message or start burn.
     readIDs = readIDs.where((id) => !messageArrivals.isEntering(id)).toList();
@@ -886,6 +941,7 @@ class ChatLogic extends SuperController {
           scrollController.offset - scrollController.position.minScrollExtent;
       newMessages.updateScrollOffset(distance, viewportConfirmed: false);
     }
+    if (isGroupChat) mentions.add(message);
     final followLatest = !newMessages.awayFromLatest.value;
     if (_dateWindow.buffering ||
         _timeline.holdForIncoming(awayFromLatest: !followLatest)) {
@@ -897,7 +953,7 @@ class ChatLogic extends SuperController {
     messageArrivals.register(message,
         enabled: !recovered &&
             followLatest &&
-            !historyLoading.value &&
+            !_historyBlocksRead &&
             syncStatus.value == IMSdkStatus.syncEnded &&
             _timeline.hasLoadedHistory &&
             !isOfficialNotificationChat &&
@@ -945,7 +1001,8 @@ class ChatLogic extends SuperController {
     final entryTrace = arguments['chatEntryTrace'] as ChatEntryTrace?;
     entryTrace?.mark('init_start');
     conversationInfo = arguments['conversationInfo'];
-    _readDiagnostics.record('route_enter', {'unreadCount': conversationInfo.unreadCount});
+    _readDiagnostics
+        .record('route_enter', {'unreadCount': conversationInfo.unreadCount});
     final account = arguments['officialAccount'];
     if (account is OfficialAccount &&
         account.userID == conversationInfo.userID) {
@@ -955,6 +1012,19 @@ class ChatLogic extends SuperController {
     _chatAccountID = OpenIM.iMManager.userID;
     _chatToken = DataSp.chatToken;
     _imToken = DataSp.imToken;
+    if (isGroupChat) {
+      final latestSeq = conversationInfo.latestMsg?.seq ?? 0;
+      unawaited(mentions
+          .load(
+        unreadCount: conversationInfo.unreadCount,
+        latestSeq: latestSeq,
+        hasMention: conversationInfo.groupAtType != null &&
+            conversationInfo.groupAtType != GroupAtType.atNormal,
+      )
+          .catchError((Object error) {
+        if (!_sessionInactive) debugPrint('Mention lookup failed: $error');
+      }));
+    }
     _timeline.initialize(prefetch: false);
     _messageSubscriptions.add(bindMediaOutbox(
         conversationID: conversationInfo.conversationID,
@@ -1002,19 +1072,33 @@ class ChatLogic extends SuperController {
     _appearance.initialize();
     _setSdkSyncDataListener();
     _historyRecoveryWorker = ever(historyLoading, (bool loading) {
-      if (!loading) scheduleMicrotask(_historyRecovery.loadingSettled);
+      if (!loading) {
+        scheduleMicrotask(() {
+          if (_sessionInactive) return;
+          _historyRecovery.loadingSettled();
+          if (isGroupChat) {
+            unawaited(mentions.retryEntry().catchError((Object error) {
+              if (!_sessionInactive) debugPrint('Mention lookup failed: $error');
+            }));
+          }
+          messagePositionController.refreshViewport();
+        });
+      }
     });
     _messageSubscriptions.add(imLogic.historyRecoverySignals.listen((_) {
       _group.recover(resetAttempts: true);
       _backgroundMessageRecovery.restart(verifyCheckpoint: true);
-      // The immediate resume read can succeed before native persistence catches
-      // up. A wake must reconcile healthy windows too, not only failed reads.
-      if (historyError.value == null) unawaited(_loadHistoryForSyncEnd());
+      // Resume/connection catch-up can precede persistence. Recheck those
+      // windows, while unrelated global wakes leave a healthy page alone.
+      if (historyError.value == null) _recoverHistoryForSignal();
       _historyRecovery.request(resetAttempts: true, source: 'native_wake');
       _latestMessageRecovery.conversationChanged(resetAttempts: true);
     }));
     unawaited(onScrollToBottomLoad().whenComplete(() {
       entryTrace?.mark('initial_history_finished');
+      // A retained conversation preview is not proof that history loaded.
+      // Retry an initial empty/error response with the existing finite budget.
+      _historyRecovery.request(source: 'initial_history_finished');
       // A cold local database can return an empty first page while the
       // conversation already advertises a persisted latest message.
       _latestMessageRecovery.conversationChanged();
@@ -1512,27 +1596,43 @@ class ChatLogic extends SuperController {
 
   void _setSdkSyncDataListener() {
     final current = imLogic.currentSdkStatus;
+    _awaitingInitialHistorySync = current != IMSdkStatus.syncEnded;
     if (current != null) syncStatus.value = current;
     connectionSub = imLogic.imSdkStatusPublishSubject.listen((value) {
       if (_sessionInactive) return;
       // Equal Rx values do not rebuild ChatMessageList. Invalidating on a
       // duplicate would discard its painted IDs without a replacement frame.
       final statusChanged = syncStatus.value != value.status;
-      _readDiagnostics.record('sync_status', {
-        'previous': syncStatus.value.name, 'next': value.status.name,
-        'changed': statusChanged,
-      }, deduplicate: true);
+      _readDiagnostics.record(
+          'sync_status',
+          {
+            'previous': syncStatus.value.name,
+            'next': value.status.name,
+            'changed': statusChanged,
+          },
+          deduplicate: true);
       if (statusChanged) _receipts.invalidateViewport();
       syncStatus.value = value.status;
+      if (statusChanged &&
+          (value.status == IMSdkStatus.connecting ||
+              value.status == IMSdkStatus.connectionFailed)) {
+        _captureBackgroundGap();
+      }
+      if (statusChanged || value.status == IMSdkStatus.connectionSucceeded) {
+        messagePositionController.refreshViewport();
+      }
       if (value.status == IMSdkStatus.syncEnded) {
         _group.recover(resetAttempts: true);
         _backgroundMessageRecovery.restart(verifyCheckpoint: true);
-        _historyRecovery.request(resetAttempts: statusChanged, source: 'sync_ended');
-        unawaited(_loadHistoryForSyncEnd());
+        _historyRecovery.request(
+            resetAttempts: statusChanged, source: 'sync_ended');
+        _recoverHistoryForSignal();
+        _awaitingInitialHistorySync = false;
         _latestMessageRecovery.conversationChanged(resetAttempts: true);
       } else if (value.status == IMSdkStatus.connectionSucceeded) {
         _group.recover(resetAttempts: true);
-        _historyRecovery.request(resetAttempts: statusChanged, source: 'connection_succeeded');
+        _historyRecovery.request(
+            resetAttempts: statusChanged, source: 'connection_succeeded');
         if (_backgroundMessageRecovery.hasCheckpoint) {
           _backgroundMessageRecovery.restart();
           unawaited(_loadHistoryForSyncEnd());
@@ -1566,14 +1666,19 @@ class ChatLogic extends SuperController {
 
   Future<bool> onScrollToTopLoad() => _sessionInactive
       ? Future.value(false)
-      : _dateWindow.seeking.value || _dateWindow.returning.value
-          ? Future.value(historyNewerHasMore.value)
-          : _timeline.loadNewer();
+      : hasDeferredLatest
+          ? Future.value(true)
+          : _dateWindow.seeking.value || _dateWindow.returning.value
+              ? Future.value(historyNewerHasMore.value)
+              : _timeline.loadNewer();
 
   void retryHistory() {
     if (_sessionInactive) return;
-    ChatHistoryDiagnostics.record(conversationInfo.conversationID, {'event': 'manual_continue',
-      'scanLimited': historyScanLimited.value, 'revision': historyWindowRevision.value});
+    ChatHistoryDiagnostics.record(conversationInfo.conversationID, {
+      'event': 'manual_continue',
+      'scanLimited': historyScanLimited.value,
+      'revision': historyWindowRevision.value
+    });
     unawaited(_runHistoryRecovery(retry: true));
   }
 
@@ -1586,11 +1691,26 @@ class ChatLogic extends SuperController {
 
   Future<bool> _loadHistoryForSyncEnd() => _runHistoryRecovery();
 
+  void _recoverHistoryForSignal() {
+    // Global retries can concern a different conversation. Live deliveries
+    // and the latest-message owner already reconcile a healthy visible page.
+    if (_awaitingInitialHistorySync ||
+        !_timeline.hasLoadedHistory ||
+        historyLoading.value ||
+        _backgroundMessageRecovery.hasCheckpoint ||
+        _messagesWhileCovered ||
+        historyError.value != null) {
+      unawaited(_loadHistoryForSyncEnd());
+    }
+  }
+
   Future<bool> _runHistoryRecovery({bool retry = false}) async {
     if (_sessionInactive) return false;
     ChatHistoryDiagnostics.record(conversationInfo.conversationID, {
-      'event': 'recovery_request', 'source': retry ? 'retry' : 'sync_or_resume',
-      'revision': historyWindowRevision.value, 'scanLimited': historyScanLimited.value,
+      'event': 'recovery_request',
+      'source': retry ? 'retry' : 'sync_or_resume',
+      'revision': historyWindowRevision.value,
+      'scanLimited': historyScanLimited.value,
     });
     if (!_historyVisible) {
       _messagesWhileCovered = true;

@@ -64,6 +64,7 @@ void main() {
           for (var i = 0; i < 100; i++)
             {
               'userId': 'im_$i',
+              'imUserId': 'im_$i',
               'displayName': '下级$i',
               'playerNo': 1000 + i,
               'balance': 100 - i,
@@ -71,13 +72,7 @@ void main() {
             },
         ];
         if (path.endsWith('/descendants')) {
-          return {
-            'userId': 'self',
-            'page': query['page'],
-            'total': 2055,
-            'hasMore': true,
-            'items': rows
-          };
+          return {'userId': 'self', 'total': rows.length, 'items': rows};
         }
         if (path.endsWith('/descendants/im_0')) return {'item': rows.first};
         return markSixFixtureResponse(path, query);

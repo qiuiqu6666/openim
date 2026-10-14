@@ -179,6 +179,8 @@ class _ConversationPageState extends State<ConversationPage> {
             final folder = _folders.selectedFolderID;
             final group = widget.groupChats;
             _editActions.markRead(conversations,
+                serverScope:
+                    folder == null ? (group ? 'group' : 'single') : null,
                 scope: (info) => folder != null
                     ? logic.folderID(info) == folder
                     : (group ? info.isGroupChat : info.isSingleChat));

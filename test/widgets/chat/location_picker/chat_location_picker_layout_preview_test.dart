@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:openim_common/src/widgets/chat/location_picker/data/chat_location_place.dart';
 
 import 'support/location_picker_test_support.dart';
 import 'support/location_street_map_fixture.dart';
@@ -20,7 +21,20 @@ void main() {
         (tester) async {
       final source = LocationTestSource()
         ..respond = (_) async => const LatLng(22.543096, 114.057865);
-      final harness = LocationPickerHarness(source: source);
+      final harness = LocationPickerHarness(
+          source: source,
+          placeSearch: (query, center) async => const [
+                ChatLocationPlace(
+                    id: 'park',
+                    name: '河畔公园',
+                    address: '公园路1号 · 测试地点',
+                    point: LatLng(22.5431, 114.0578)),
+                ChatLocationPlace(
+                    id: 'library',
+                    name: '城市图书馆',
+                    address: '中心路8号 · 测试地点',
+                    point: LatLng(22.5432, 114.0579)),
+              ]);
       try {
         await harness.mount(tester,
             size: variant.size,
@@ -29,6 +43,24 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(LocationStreetMapFixture), findsOneWidget);
         expect(source.requests, [true]);
+        await harness.export(tester, '${variant.name}-collapsed');
+        await tester.scrollUntilVisible(locationKey('edit-name'), 100,
+            scrollable: find
+                .descendant(
+                    of: locationKey('details-scroll'),
+                    matching: find.byType(Scrollable))
+                .first);
+        await Scrollable.ensureVisible(tester.element(locationKey('edit-name')),
+            alignment: .5);
+        await tester.pumpAndSettle();
+        await tester.tap(locationKey('edit-name'));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(locationKey('name'), 80,
+            scrollable: find
+                .descendant(
+                    of: locationKey('details-scroll'),
+                    matching: find.byType(Scrollable))
+                .first);
         expect(Theme.of(tester.element(locationKey('name'))).brightness,
             variant.dark ? Brightness.dark : Brightness.light);
         final name = tester.widget<TextField>(locationKey('name'));
@@ -61,7 +93,12 @@ void main() {
           await tester.enterText(locationKey('name'), '键盘弹出后保留的位置名称');
           tester.view.viewInsets = const FakeViewPadding(bottom: 340);
           await tester.pumpAndSettle();
-          await tester.ensureVisible(locationKey('name'));
+          await tester.scrollUntilVisible(locationKey('name'), 80,
+              scrollable: find
+                  .descendant(
+                      of: locationKey('details-scroll'),
+                      matching: find.byType(Scrollable))
+                  .first);
           await tester.pumpAndSettle();
           expect(tester.getRect(locationKey('name')).bottom,
               lessThanOrEqualTo(variant.size.height - 340 + 1));

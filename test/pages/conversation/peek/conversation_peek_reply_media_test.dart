@@ -167,7 +167,8 @@ void main() {
         (tester) async {
       await _mount(tester, _picture(outgoing: outgoing));
       final size = tester.getSize(find.byType(ChatPictureView));
-      expect(size, const Size(156, 260));
+      expect(size.height, 260);
+      expect(size.width, closeTo(260 / 1.8, 0.001));
       final image = tester
           .widgetList<ExtendedImage>(find.byType(ExtendedImage))
           .firstWhere((image) => image.width == size.width);
@@ -194,8 +195,8 @@ void main() {
       (tester) async {
     await _mount(tester, _picture(), width: 180);
     final size = tester.getSize(find.byType(ChatPictureView));
-    expect(size.width, lessThan(156));
-    expect(size.width / size.height, closeTo(3 / 5, 0.001));
+    expect(size.width, lessThan(260 / 1.8));
+    expect(size.width / size.height, closeTo(1 / 1.8, 0.001));
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

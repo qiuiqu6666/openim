@@ -33,6 +33,7 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       service.pending.complete([
         {
+          'deviceID': 'managed-device-1',
           'deviceName': 'My Phone',
           'platform': 'Android',
           'version': '1.2.3',

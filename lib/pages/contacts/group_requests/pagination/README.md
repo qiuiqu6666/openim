@@ -1,3 +1,9 @@
+# 当前分页说明（2026-10-14）
+
+生产群通知已使用服务端游标分页：见 `../data/group_notices_api.dart`。`group_application_pager.dart` 为保留的旧 SDK 分页实现，当前 `GroupRequestsLogic` 不再调用；页脚组件继续复用。刷新固定首批 20 条，其他端清理导致旧游标失效时回到首批。
+
+以下为旧实现记录。
+
 # 群通知分页
 
 `GroupApplicationPager` 负责两个 SDK 群申请列表的 offset 分页及按时间合并。

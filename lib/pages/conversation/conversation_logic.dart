@@ -1,6 +1,8 @@
 import 'updates/conversation_update_buffer.dart';
 import 'updates/conversation_row_equality.dart';
-import 'editing/conversation_read_batch.dart';
+import 'editing/batch_read/conversation_batch_read_api.dart';
+import 'editing/batch_read/conversation_batch_read_runner.dart';
+import 'editing/batch_read/conversation_batch_read_projection.dart';
 import 'updates/conversation_latest_sync.dart';
 import 'updates/conversation_snapshot_reader.dart';
 import 'dart:async';
@@ -164,7 +166,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         .listen(_unreadSync.onTotalUnreadChanged));
     _subscriptions.add(imLogic.conversationReadRequestSubject
         .listen(onConversationReadRequested));
-    void handleSdkStatus(({IMSdkStatus status, bool reInstall, int? progress}) value) {
+    void handleSdkStatus(
+        ({IMSdkStatus status, bool reInstall, int? progress}) value) {
       if (!_sessionActive) return;
       final status = value.status;
       final previousStatus = imStatus.value;
@@ -213,6 +216,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         reInstall = false;
       }
     }
+
     _subscriptions.add(imLogic.imSdkStatusSubject.listen(handleSdkStatus));
     final initialSync = imLogic.initialSyncState;
     if (initialSync != null) handleSdkStatus(initialSync);
@@ -221,6 +225,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   @override
   void onClose() {
+    _serverBatchReads?.close();
     if (reInstall) EasyLoading.dismiss();
     _feedCache?.dispose();
     _feedCache = null;
@@ -366,7 +371,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     // Preserve read fences and reconciliation above even for duplicate rows.
     final changedIDs = <String>{};
     for (final info in accepted) {
-      if (sameConversationData(currentByID[info.conversationID], info)) continue;
+      if (sameConversationData(currentByID[info.conversationID], info))
+        continue;
       currentByID[info.conversationID] = info;
       changedIDs.add(info.conversationID);
     }
@@ -450,7 +456,21 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   final markingAllRead = false.obs;
   final readBatchProgress = ''.obs;
-  Future<void> markReadScope(bool Function(ConversationInfo) includes) async {
+  ConversationBatchReadApi? _serverBatchReads;
+
+  Future<void> markReadScope(bool Function(ConversationInfo) includes) =>
+      _markServerReadScope(includes: includes);
+
+  Future<void> markAllConversationsRead(String scope) =>
+      _markServerReadScope(scope: scope);
+
+  Future<void> markSelectedConversationsRead(List<String> ids) =>
+      _markServerReadScope(conversationIDs: ids);
+
+  Future<void> _markServerReadScope(
+      {String scope = 'selected',
+      List<String>? conversationIDs,
+      bool Function(ConversationInfo)? includes}) async {
     if (markingAllRead.value || !_sessionActive) return;
     markingAllRead.value = true;
     readBatchProgress.value = '准备中…';
@@ -458,18 +478,33 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     bool current() => _sessionActive && generation == _clearGeneration;
     final reader =
         ConversationSnapshotReader(timeout: const Duration(minutes: 2));
+    final api = _serverBatchReads = ConversationBatchReadApi();
     try {
-      final rows = await reader.read(
-          firstPageOnly: false,
-          isCurrent: current,
-          structureRevision: () => _structureRevision,
-          observePage: (_) {},
-          waitForMutation: _legacyMutation);
+      final rows = includes == null
+          ? <ConversationInfo>[]
+          : await reader.read(
+              firstPageOnly: false,
+              isCurrent: current,
+              structureRevision: () => _structureRevision,
+              observePage: (_) {},
+              waitForMutation: _legacyMutation);
       if (!current()) return;
-      final failed = await runConversationReadBatch(
-          conversations: rows.where(includes).toList(),
-          isCurrent: current,
-          markRead: markConversationRead,
+      final projection = ConversationBatchReadProjection(list);
+      final failed = await runServerConversationReadBatch(
+          scope: scope,
+          conversationIDs: conversationIDs ??
+              rows
+                  .where((row) => includes?.call(row) ?? false)
+                  .map((row) => row.conversationID)
+                  .toList(),
+          prepare: (scope, ids) => api.prepare(scope, conversationIDs: ids),
+          apply: api.apply,
+          isCurrent: () => current() && api.isCurrent,
+          confirmed: (targets) {
+            if (projection.confirm(targets, list, _readProjection.confirm)) {
+              list.refresh();
+            }
+          },
           progress: (done, total) =>
               readBatchProgress.value = '$done / $total');
       if (!current()) return;
@@ -480,6 +515,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     } catch (error) {
       if (current()) IMViews.showErrorToast(error);
     } finally {
+      api.close();
+      if (identical(_serverBatchReads, api)) _serverBatchReads = null;
       reader.close();
       markingAllRead.value = false;
       readBatchProgress.value = '';
@@ -727,7 +764,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     unawaited(Future<void>.sync(() async {
       await _readConversationSnapshot(
           firstPageOnly: firstPageOnly, useCachedFirstPage: useCachedFirstPage);
-      while (_fullReadQueued && _sessionActive && clearing == _clearGeneration) {
+      while (
+          _fullReadQueued && _sessionActive && clearing == _clearGeneration) {
         _fullReadQueued = false;
         _listFirstPageOnly = false;
         await _readConversationSnapshot(firstPageOnly: false);
@@ -865,6 +903,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   }
 
   void clearConversations() {
+    _serverBatchReads?.close();
     _reconcileUnreadPending = false;
     _unreadSync.reset();
     _latestSync.reset();

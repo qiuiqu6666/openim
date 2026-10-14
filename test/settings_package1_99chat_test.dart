@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -48,6 +49,7 @@ Widget _host(Widget child) => ScreenUtilInit(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => OpenIM.iMManager.userID = 'settings-viewer');
 
   testWidgets('99chat account-security information architecture is preserved',
       (tester) async {
@@ -203,7 +205,8 @@ void main() {
     final group = tester.getRect(find.byType(SettingsGroup));
     expect(group.top - header.bottom, closeTo(12, .01));
     expect(group.left, 12);
-    expect(tester.widget<Scaffold>(find.byType(Scaffold)).extendBodyBehindAppBar,
+    expect(
+        tester.widget<Scaffold>(find.byType(Scaffold)).extendBodyBehindAppBar,
         isTrue);
 
     final material =
@@ -252,7 +255,8 @@ void main() {
     expect(find.text('获取验证码'), findsOneWidget);
     expect(find.text('新密码'), findsOneWidget);
     expect(find.text('确认密码'), findsOneWidget);
-    expect(find.text('忘记支付密码？通过短信验证码重置'), findsOneWidget);
+    expect(find.text('绑定手机号后，可通过短信验证码重置支付密码。'), findsNothing);
+    expect(find.text('完成'), findsOneWidget);
   });
 
   testWidgets('moments visible-range sheet includes last six months',
@@ -265,8 +269,7 @@ void main() {
     expect(find.text('最近半年'), findsOneWidget);
   });
 
-  testWidgets(
-      'node page displays both deployment routes and the active selection',
+  testWidgets('node page displays deployment routes and the active selection',
       (tester) async {
     final store = SettingsDraftStore();
     addTearDown(store.dispose);
@@ -281,7 +284,8 @@ void main() {
     expect(find.textContaining(Config.imApiUrl), findsNothing);
     expect(find.textContaining(Config.imWsUrl), findsNothing);
     expect(find.text('尚未测速'), findsOneWidget);
-    expect(find.text('未知'), findsNWidgets(2));
+    expect(find.text('节点03'), findsOneWidget);
+    expect(find.text('未知'), findsNWidgets(3));
   });
 
   testWidgets(

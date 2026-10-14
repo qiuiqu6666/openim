@@ -9,9 +9,9 @@ void main() {
     );
 
     expect(route, isA<PageRouteBuilder<void>>());
-    expect(route.edgeStartWidthPx, 24);
+    expect(route.edgeStartWidthPx, 40);
     expect(route.enableFullScreenBackGesture, isTrue);
-    expect(route.transitionDuration, const Duration(milliseconds: 340));
-    expect(route.reverseTransitionDuration, const Duration(milliseconds: 340));
+    expect(route.transitionDuration, const Duration(milliseconds: 480));
+    expect(route.reverseTransitionDuration, const Duration(milliseconds: 480));
   });
 }

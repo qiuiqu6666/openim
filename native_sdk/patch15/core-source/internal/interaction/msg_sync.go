@@ -203,6 +203,11 @@ func (m *MsgSyncer) getSeqsNeedSync(syncedMaxSeq, maxSeq int64) []int64 {
 
 // recv msg from
 func (m *MsgSyncer) handlePushMsgAndEvent(cmd common.Cmd2Value) {
+	if isBackgroundSyncCommand(cmd) {
+		ctx, finish := beginSyncDiagnostic(cmd.Ctx, cmd.Cmd, m.reinstalled)
+		cmd.Ctx = ctx
+		defer finish()
+	}
 	switch cmd.Cmd {
 	case constant.CmdConnSuccesss:
 		log.ZInfo(cmd.Ctx, "recv long conn mgr connected", "cmd", cmd.Cmd, "value", cmd.Value)
@@ -459,7 +464,12 @@ func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[str
 			}
 		}
 	}
-	if len(needSyncSeqMap) > 0 && m.recvCh != nil {
+	// Contiguous pushes are already committed. An empty recovery pass would
+	// reset the active job's read reconciliation and consume its pending flag.
+	if len(needSyncSeqMap) == 0 {
+		return
+	}
+	if m.recvCh != nil {
 		deferNormal := true
 		for id := range needSyncSeqMap {
 			if IsNotification(id) {
@@ -521,6 +531,10 @@ func (m *MsgSyncer) doConnected(ctx context.Context) {
 	if reinstalled {
 		common.TriggerCmdSyncFlag(m.ctx, constant.AppDataSyncFinish, m.conversationCh)
 	} else {
+		if err := m.syncMetadataAfterMessages(ctx); err != nil {
+			common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
+			return
+		}
 		common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncEnd, m.conversationCh)
 	}
 }
@@ -550,6 +564,10 @@ func (m *MsgSyncer) doWakeupDataSync(ctx context.Context) {
 		common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
 		return
 	}
+	if err := m.syncMetadataAfterMessages(ctx); err != nil {
+		common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
+		return
+	}
 	common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncEnd, m.conversationCh)
 }
 
@@ -568,6 +586,7 @@ func (m *MsgSyncer) doIMMessageSync(ctx context.Context) {
 		log.ZDebug(m.ctx, "get max seq success", "resp", resp.MaxSeqs)
 	}
 	if err := m.compareSeqsAndBatchSync(ctx, resp.MaxSeqs, defaultPullNums); err != nil {
+		log.ZWarn(ctx, "IM message synchronization failed", err, "contextError", ctx.Err(), "conversationCount", len(resp.MaxSeqs))
 		common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
 	}
 }
@@ -627,6 +646,8 @@ func (m *MsgSyncer) splitSeqs(split int, seqsNeedSync []int64) (splitSeqs [][]in
 }
 
 func (m *MsgSyncer) pullMsgBySeqRange(ctx context.Context, seqMap map[string][2]int64, syncMsgNum int64, order ...sdkws.PullOrder) (resp *sdkws.PullMessageBySeqsResp, err error) {
+	started := time.Now()
+	defer func() { m.diagnoseSyncPull(ctx, seqMap, resp, time.Since(started), err) }()
 	log.ZDebug(ctx, "pullMsgBySeqRange", "seqMap", seqMap, "syncMsgNum", syncMsgNum)
 
 	req := sdkws.PullMessageBySeqsReq{UserID: m.loginUserID}

@@ -157,3 +157,5 @@ export 'src/widgets/chat/chat_formatted_text.dart';
 export 'src/widgets/chat/menu/chat_message_menu.dart';
 export 'src/widgets/chat/menu/chat_message_menu_icon.dart';
 export 'src/widgets/hold_to_record_button.dart';
+
+export 'src/widgets/forward/forward_preview_data.dart';

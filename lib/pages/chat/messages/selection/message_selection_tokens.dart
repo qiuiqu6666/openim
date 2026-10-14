@@ -15,11 +15,11 @@ abstract final class MessageSelectionTokens {
   static const labelGap = 2.0;
   static const dividerWidth = .5;
   static const forwardIcon =
-      'lib/pages/chat/messages/selection/assets/forward_99chat.png';
+      'lib/pages/chat/messages/selection/assets/arrow-forward-up.svg';
   static const mergeIcon =
-      'lib/pages/chat/messages/selection/assets/merge_forward_99chat.png';
+      'lib/pages/chat/messages/selection/assets/arrows-join-2.svg';
   static const deleteIcon =
-      'lib/pages/chat/messages/selection/assets/delete_99chat.png';
+      'lib/pages/chat/messages/selection/assets/trash.svg';
 
   static Color border(BuildContext context) =>
       Theme.of(context).colorScheme.onSurfaceVariant;

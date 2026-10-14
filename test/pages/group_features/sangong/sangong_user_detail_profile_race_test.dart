@@ -190,9 +190,9 @@ void main() {
       expect(find.byType(CupertinoTextField), findsNothing);
       expect(find.text('确认保存'), findsNothing);
       expect(find.text('下一步'), findsNothing);
-      expect(find.text('游戏信息已变化'), findsOneWidget);
-      await tester.tap(find.text('关闭'));
+      // The shared route guard closes invalidated dialogs automatically.
       await tester.pump(const Duration(milliseconds: 350));
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
       await flushSangong(tester);
       expect(api.count('/commands/wallet.limit'), 0);
       expect(

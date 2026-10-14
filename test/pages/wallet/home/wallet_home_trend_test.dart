@@ -4,8 +4,6 @@ import 'package:openim/pages/wallet/home/wallet_home_tokens.dart';
 
 import 'wallet_home_test_support.dart';
 
-const _days = [7, 30, 90, 180, 360];
-
 void main() {
   for (final brightness in Brightness.values) {
     testWidgets('trend expands without inventing history in $brightness',
@@ -36,9 +34,8 @@ void main() {
         expect(find.text('资产趋势'), findsOneWidget);
         expect(walletHomeKey('wallet-trend-empty'), findsOneWidget);
         expect(find.text('暂无资产趋势数据'), findsOneWidget);
-        expect(walletHomeKey('wallet-trend-baseline'), findsOneWidget);
+        expect(walletHomeKey('wallet-trend-chart'), findsNothing);
         expect(walletHomeKey('wallet-trend-hidden'), findsNothing);
-        _expectSelectedPeriod(tester, 7);
         _expectNoHistoryAmounts(tester);
         expect(repository.walletCalls, 1);
 
@@ -57,7 +54,7 @@ void main() {
     });
 
     testWidgets(
-        'trend keeps period across currency, privacy and refresh in $brightness',
+        'trend preserves privacy across collapse and refresh in $brightness',
         (tester) async {
       final semantics = tester.ensureSemantics();
       try {
@@ -67,12 +64,8 @@ void main() {
             controller: controller, brightness: brightness);
         await tester.pumpAndSettle();
         await _toggleTrend(tester);
-        await _selectPeriod(tester, 30);
-        _expectSelectedPeriod(tester, 30);
-        await _selectCurrency(tester, 'USD');
-        expect(find.text(r'$1,220.16'), findsOneWidget);
+        expect(find.text('¥8,652.48'), findsOneWidget);
         expect(walletHomeKey('wallet-trend-panel'), findsOneWidget);
-        _expectSelectedPeriod(tester, 30);
 
         await tester.ensureVisible(walletHomeKey('wallet-toggle-balance'));
         await tester.tap(walletHomeKey('wallet-toggle-balance'));
@@ -82,7 +75,6 @@ void main() {
         expect(walletHomeKey('wallet-trend-empty'), findsNothing);
         expect(walletHomeKey('wallet-trend-baseline'), findsNothing);
         _expectNoHistoryAmounts(tester);
-        await _selectCurrency(tester, 'CNY');
         expect(walletHomeKey('wallet-trend-panel'), findsOneWidget);
         expect(walletHomeKey('wallet-trend-hidden'), findsOneWidget);
         expect(find.textContaining('8,652.48'), findsNothing);
@@ -92,26 +84,17 @@ void main() {
         await tester.tap(walletHomeKey('wallet-toggle-balance'));
         await tester.pumpAndSettle();
         expect(walletHomeKey('wallet-trend-empty'), findsOneWidget);
-        _expectSelectedPeriod(tester, 30);
         await _toggleTrend(tester);
         await _toggleTrend(tester);
-        _expectSelectedPeriod(tester, 30);
         expect(repository.walletCalls, 1,
-            reason:
-                'Local periods and visibility must not reload wallet data.');
+            reason: 'Local visibility must not reload wallet data.');
 
-        await _selectCurrency(tester, 'USD');
         repository.respond = () async => walletHomeFilterFixture;
         await controller.load(force: true);
         await tester.pumpAndSettle();
         expect(find.text('¥10.10'), findsOneWidget);
         expect(walletHomeKey('wallet-trend-panel'), findsOneWidget);
-        _expectSelectedPeriod(tester, 30);
-        expect(
-            find.descendant(
-                of: walletHomeKey('wallet-display-currency'),
-                matching: find.text('CNY')),
-            findsOneWidget);
+        expect(walletHomeKey('wallet-display-currency'), findsOneWidget);
         expect(repository.walletCalls, 2);
         expect(tester.takeException(), isNull);
       } finally {
@@ -135,28 +118,10 @@ void main() {
           await tester.pumpAndSettle();
           await _toggleTrend(tester);
           _expectActionsBelowPanel(tester);
-          for (final days in _days) {
-            final rect =
-                tester.getRect(walletHomeKey('wallet-trend-period-$days'));
-            expect(rect.width, greaterThanOrEqualTo(48));
-            expect(rect.height, greaterThanOrEqualTo(48));
-          }
-          await tester.ensureVisible(walletHomeKey('wallet-trend-period-7'));
+          expect(walletHomeKey('wallet-trend-empty'), findsOneWidget);
+          expect(walletHomeKey('wallet-trend-chart'), findsNothing);
+          await tester.ensureVisible(walletHomeKey('wallet-trend-empty'));
           await tester.pumpAndSettle();
-          final horizontal = find.descendant(
-              of: walletHomeKey('wallet-trend-panel'),
-              matching: find.byWidgetPredicate((widget) =>
-                  widget is Scrollable &&
-                  (widget.axisDirection == AxisDirection.right ||
-                      widget.axisDirection == AxisDirection.left)));
-          expect(horizontal, findsOneWidget);
-          await tester.drag(horizontal, const Offset(-650, 0));
-          await tester.pumpAndSettle();
-          expect(walletHomeKey('wallet-trend-period-360').hitTestable(),
-              findsOneWidget);
-          await tester.tap(walletHomeKey('wallet-trend-period-360'));
-          await tester.pumpAndSettle();
-          _expectSelectedPeriod(tester, 360);
           final panel = tester.getRect(walletHomeKey('wallet-trend-panel'));
           expect(panel.left, greaterThanOrEqualTo(0));
           expect(panel.right, lessThanOrEqualTo(320));
@@ -174,35 +139,6 @@ Future<void> _toggleTrend(WidgetTester tester) async {
   await tester.ensureVisible(walletHomeKey('wallet-action-overview'));
   await tester.tap(walletHomeKey('wallet-action-overview'));
   await tester.pumpAndSettle();
-}
-
-Future<void> _selectPeriod(WidgetTester tester, int days) async {
-  final period = walletHomeKey('wallet-trend-period-$days');
-  await tester.ensureVisible(period);
-  await tester.tap(period);
-  await tester.pumpAndSettle();
-}
-
-Future<void> _selectCurrency(WidgetTester tester, String currency) async {
-  await tester.ensureVisible(walletHomeKey('wallet-display-currency'));
-  await tester.tap(walletHomeKey('wallet-display-currency'));
-  await tester.pumpAndSettle();
-  await tester.tap(find.byWidgetPredicate(
-      (widget) => widget is PopupMenuItem<String> && widget.value == currency));
-  await tester.pumpAndSettle();
-}
-
-void _expectSelectedPeriod(WidgetTester tester, int selected) {
-  for (final days in _days) {
-    final selection = find
-        .ancestor(
-            of: walletHomeKey('wallet-trend-period-$days'),
-            matching: find.byWidgetPredicate((widget) =>
-                widget is Semantics && widget.properties.selected != null))
-        .first;
-    expect(tester.widget<Semantics>(selection).properties.selected,
-        days == selected);
-  }
 }
 
 void _expectNoHistoryAmounts(WidgetTester tester) {

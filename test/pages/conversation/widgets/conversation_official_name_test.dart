@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/pages/conversation/widgets/conversation_feed_row.dart';
+import 'package:openim/pages/group_features/identity/group_name_label.dart';
 import 'package:openim/pages/official_account/official_account_chrome_tokens.dart';
 import 'package:openim/pages/official_account/widgets/official_account_name_label.dart';
 import 'package:openim_common/openim_common.dart';
@@ -117,11 +118,20 @@ void main() {
             .widgetList<OfficialAccountNameLabel>(
                 find.byType(OfficialAccountNameLabel))
             .toList();
-        expect(labels.map((label) => label.name),
-            conversations.map((conversation) => conversation.showName));
+        expect(
+            labels.map((label) => label.name),
+            conversations
+                .where((row) => row.isSingleChat)
+                .map((row) => row.showName));
         expect(labels.first.userID, '99Message');
         expect(labels[2].ex, '{"accountType":"official"}');
-        expect(labels.last.isSingleChat, isFalse);
+        final groupLabel =
+            tester.widget<GroupNameLabel>(find.byType(GroupNameLabel));
+        expect(groupLabel.name, conversations.last.showName);
+        expect(groupLabel.groupID, conversations.last.groupID);
+        expect(
+            find.descendant(of: find.byType(GroupNameLabel), matching: _badges),
+            findsNothing);
         expect(labels.first.style!.fontSize, 16);
         expect(labels.first.style!.fontWeight, FontWeight.w500);
         expect(labels.first.style!.color, AppTokens.textPrimary(dark: dark));

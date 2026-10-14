@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -154,6 +155,13 @@ Future<void> _flushUntil(bool Function() ready) async {
 
 Future<_Verify> _openVerification(WidgetTester tester) async {
   await tester.pumpWidget(_app());
+  addTearDown(() async {
+    final dialog = find.byType(CupertinoAlertDialog);
+    if (dialog.evaluate().isNotEmpty) {
+      Navigator.of(tester.element(dialog)).pop();
+      await tester.pumpAndSettle();
+    }
+  });
   Get.toNamed(AppRoutes.verifyPhone, arguments: _arguments);
   await tester.pumpAndSettle();
   return Get.put<VerifyPhoneLogic>(_Verify()) as _Verify;
@@ -164,6 +172,13 @@ Future<SetPasswordLogic> _openPassword(WidgetTester tester,
     RegistrationProfileDraft? profileDraft,
     RegistrationAvatarService? avatarService}) async {
   await tester.pumpWidget(_app());
+  addTearDown(() async {
+    final dialog = find.byType(CupertinoAlertDialog);
+    if (dialog.evaluate().isNotEmpty) {
+      Navigator.of(tester.element(dialog)).pop();
+      await tester.pumpAndSettle();
+    }
+  });
   Get.toNamed(AppRoutes.setPassword, arguments: {
     ..._arguments,
     if (!withPassword) 'password': null,
@@ -428,16 +443,11 @@ void main() {
   });
 
   for (final language in ['zh', 'en']) {
-    testWidgets('signup rejection shows one centered shared toast in $language',
+    testWidgets(
+        'signup rejection shows one shared confirmation dialog in $language',
         (tester) async {
       Get.locale = Locale(language);
-      var shown = 0;
-      void onStatus(EasyLoadingStatus status) {
-        if (status == EasyLoadingStatus.show) shown++;
-      }
 
-      EasyLoading.addStatusCallback(onStatus);
-      addTearDown(() => EasyLoading.removeCallback(onStatus));
       final logic = await _openPassword(tester);
       await tester.runAsync(() async {
         final pending = logic.nextStep();
@@ -455,14 +465,11 @@ void main() {
       final message = HttpUtil.errorMessage((20018, ''), path: Urls.register);
       expect(find.text(message), findsOneWidget);
       expect(find.textContaining('NicknameAlreadyUsed'), findsNothing);
-      expect(shown, 1);
-      final toast = tester.getRect(find.text(message));
-      final page =
-          tester.getRect(find.widgetWithText(Scaffold, 'password form'));
-      expect(toast.center.dx, closeTo(page.center.dx, 1));
-      expect(toast.center.dy, closeTo(page.center.dy, 1));
-      expect(EasyLoading.isShow, isTrue);
-      await EasyLoading.dismiss(animation: false);
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(EasyLoading.isShow, isFalse);
+      await tester.tap(find.byType(CupertinoDialogAction));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
       logic.nicknameCtrl.text = 'Bob';
       expect(logic.enabled.value, isTrue);
     });

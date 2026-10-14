@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -15,34 +16,28 @@ void main() {
   });
   tearDown(() => fixture.dispose());
 
-  testWidgets('list does not wait for either profile source', (tester) async {
+  testWidgets('one server page includes names without SDK profile fan-out',
+      (tester) async {
     fixture.recipient = [
       request(result: 1, handler: 'admin', inviter: 'inviter')
     ];
-    fixture.holdMembers = fixture.holdProfiles = true;
+    fixture.profiles['admin'] = '处理人';
     final logic = await fixture.mount(tester);
     expect(logic.applicationsLoaded.value, isTrue);
-    expect(logic.list, hasLength(1));
-    expect(fixture.memberReplies, hasLength(1));
-    expect(fixture.profileReplies, hasLength(1));
-    fixture.profileReplies.single.complete(jsonEncode([
-      {'userID': 'admin', 'nickname': '处理人'},
-    ]));
-    await tester.pumpAndSettle();
     expect(logic.getHandlerNickname(logic.list.single), '处理人');
-    expect(fixture.memberReplies.single.isCompleted, isFalse);
+    expect(fixture.callsFor('getUsersInfo'), isEmpty);
+    expect(fixture.callsFor('getJoinedGroupList'), isEmpty);
   });
 
-  testWidgets(
-      'reopen paints snapshot while SDK waits and deleted rows stay hidden',
+  testWidgets('reopen waits for server visibility and deleted rows stay hidden',
       (tester) async {
     fixture.recipient = [request(time: 2), request(time: 1)];
     final first = await fixture.mount(tester);
     await first.deleteRequest(first.list.last);
     Get.delete<GroupRequestsLogic>(force: true);
     fixture.holdRecipient = true;
-    final reopened = Get.put(GroupRequestsLogic());
-    expect(reopened.list.map((row) => row.reqTime), [2]);
+    final reopened = Get.put(GroupRequestsLogic(syncInterval: Duration.zero));
+    expect(reopened.list, isEmpty);
     expect(reopened.applicationsLoaded.value, isFalse,
         reason:
             'a snapshot must not enable paging with an uninitialized cursor');
@@ -75,28 +70,109 @@ void main() {
     await tester.pumpAndSettle();
     await read;
     expect(logic.list.single.reqTime, 2);
-    expect(
-        fixture.callsFor('getGroupApplicationListAsRecipient'), hasLength(2));
+    expect(fixture.noticeCalls.where((a) => a == 'list').length, 3);
   });
 
-  testWidgets('late profiles cannot update a closed or replaced session',
+  testWidgets('late server page cannot update a replaced session',
       (tester) async {
-    fixture.recipient = [request(result: 1, handler: 'admin')];
-    fixture.holdProfiles = true;
     final logic = await fixture.mount(tester);
+    fixture.holdRecipient = true;
+    final pending = logic.reloadApplications();
+    await tester.pump();
     await DataSp.putLoginCertificate(LoginCertificate.fromJson({
       'userID': 'current-admin',
       'imToken': 'new-im',
       'chatToken': 'new-chat',
     }));
-    fixture.profileReplies.single.complete(jsonEncode([
-      {'userID': 'admin', 'nickname': '旧账号'}
-    ]));
+    fixture.recipientReplies.single.complete(jsonEncode([request().toJson()]));
     await tester.pumpAndSettle();
-    expect(logic.userInfoList, isEmpty);
+    await pending;
+    expect(logic.list, isEmpty);
+  });
+
+  testWidgets('refresh remains one 20-row request after many pages',
+      (tester) async {
+    fixture.recipient = [for (var i = 2000; i > 0; i--) request(time: i)];
+    final logic = await fixture.mount(tester);
+    for (var i = 0; i < 5; i++) {
+      await logic.loadMore();
+    }
+    expect(logic.list.length, 120);
+    fixture.noticeCalls.clear();
+    await logic.reloadApplications();
+    expect(logic.list.length, 20);
+    expect(fixture.noticeCalls.where((a) => a == 'list'), hasLength(1));
+  });
+
+  testWidgets(
+      'remote clear invalidates an old cursor without resurrecting rows',
+      (tester) async {
+    fixture.recipient = [for (var i = 45; i > 0; i--) request(time: i)];
+    final logic = await fixture.mount(tester);
+    fixture.clearedThrough = 45000;
+    fixture.serverRevision++;
+    await logic.loadMore();
+    expect(logic.list, isEmpty);
+    expect(logic.hasMore.value, isFalse);
+  });
+
+  testWidgets('failed server deletion does not hide the row locally',
+      (tester) async {
+    fixture.recipient = [request()];
+    final logic = await fixture.mount(tester);
+    fixture.failWrites = true;
+    await logic.deleteRequest(logic.list.single);
+    expect(logic.list, hasLength(1));
+    expect(fixture.dismissed, isEmpty);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+  });
+  testWidgets(
+      'foreground polling observes another device clear and stops in background',
+      (tester) async {
+    fixture.recipient = [request()];
+    await fixture.mount(tester);
     Get.delete<GroupRequestsLogic>(force: true);
-    final reopened = Get.put(GroupRequestsLogic());
-    expect(reopened.list, isEmpty);
+    final logic = Get.put(GroupRequestsLogic());
+    await tester.pumpAndSettle();
+    fixture.clearedThrough = 100000;
+    fixture.serverRevision++;
+    await tester.pump(const Duration(seconds: 15));
+    await tester.pumpAndSettle();
+    expect(logic.list, isEmpty);
+    logic.didChangeAppLifecycleState(AppLifecycleState.paused);
+    fixture.noticeCalls.clear();
+    await tester.pump(const Duration(seconds: 30));
+    expect(fixture.noticeCalls, isEmpty);
+    logic.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(fixture.noticeCalls, contains('list'));
     Get.delete<GroupRequestsLogic>(force: true);
+  });
+  testWidgets(
+      'an older review updates with one detail request after first-page refresh',
+      (tester) async {
+    fixture.recipient = [for (var i = 45; i > 0; i--) request(time: i)];
+    final logic = await fixture.mount(tester);
+    await logic.loadMore();
+    final reviewed = logic.list.last;
+    logic.trackReview(reviewed);
+    fixture.recipient = [
+      for (var row in fixture.recipient)
+        row.reqTime == reviewed.reqTime
+            ? request(time: row.reqTime!, result: 1, handler: 'admin')
+            : row
+    ];
+    fixture.profiles['admin'] = '实际管理员';
+    fixture.noticeCalls.clear();
+    await logic.reloadApplications();
+    expect(logic.list, hasLength(20));
+    final updated = logic.findApplication(reviewed)!;
+    expect(updated.handleResult, 1);
+    expect(logic.getHandlerNickname(updated), '实际管理员');
+    expect(fixture.noticeCalls.where((a) => a == 'detail'), hasLength(1));
+    expect(fixture.noticeCalls.where((a) => a == 'list'), hasLength(1));
+    logic.endReview();
   });
 }

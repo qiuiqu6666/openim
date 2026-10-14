@@ -16,9 +16,7 @@ import '../sangong_test_support.dart';
 Future<void> _pumpInputsPage(
         WidgetTester tester, SangongRuntime runtime, Widget page,
         {bool dark = false}) =>
-    pumpSangongPage(tester, runtime,
-        Builder(builder: (context) => EasyLoading.init()(context, page)),
-        dark: dark);
+    pumpSangongPage(tester, runtime, page, dark: dark);
 
 class _AccountSearch extends ContactSearchSource {
   final requests = <String>[];

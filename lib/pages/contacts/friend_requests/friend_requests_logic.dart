@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:flutter/widgets.dart';
+import '../../../core/im_callback.dart';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -12,7 +14,7 @@ import '../request_history/data/request_list_cache.dart';
 import '../request_history/data/request_load_coordinator.dart';
 import '../request_history/navigation/request_history_chat_opener.dart';
 
-class FriendRequestsLogic extends GetxController {
+class FriendRequestsLogic extends GetxController with WidgetsBindingObserver {
   final imLogic = Get.find<IMController>();
   final homeLogic = Get.find<HomeLogic>();
   final applicationList = <FriendApplicationInfo>[].obs;
@@ -29,6 +31,7 @@ class FriendRequestsLogic extends GetxController {
   int _loadVersion = 0;
   final _loads = RequestLoadCoordinator();
   late StreamSubscription faSub;
+  StreamSubscription? _syncSub;
 
   bool get isSessionActive =>
       !isClosed &&
@@ -111,6 +114,12 @@ class FriendRequestsLogic extends GetxController {
 
   @override
   void onInit() {
+    WidgetsBinding.instance.addObserver(this);
+    _syncSub = imLogic.imSdkStatusPublishSubject.listen((event) {
+      if (event.status == IMSdkStatus.syncEnded && isSessionActive) {
+        unawaited(loadRequests(refreshAfter: true));
+      }
+    });
     applicationList.assignAll(RequestListCache.shared
         .read(_ownerAccount, _ownerToken, RequestHistoryKind.friend,
             FriendApplicationInfo.fromJson)
@@ -124,6 +133,8 @@ class FriendRequestsLogic extends GetxController {
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _syncSub?.cancel();
     _loads.close();
     _loadVersion++;
     faSub.cancel();
@@ -134,6 +145,13 @@ class FriendRequestsLogic extends GetxController {
   Future<void> loadRequests({bool refreshAfter = false}) {
     if (refreshAfter && _loads.busy) _loadVersion++;
     return _loads.run(_loadRequests, refreshAfter: refreshAfter);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && isSessionActive) {
+      unawaited(loadRequests(refreshAfter: true));
+    }
   }
 
   void _cacheRows() {

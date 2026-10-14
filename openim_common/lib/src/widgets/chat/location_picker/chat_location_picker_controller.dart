@@ -55,6 +55,12 @@ class ChatLocationPickerController extends ChangeNotifier {
   }
 
   /// Permission-free reads fail silently, for example after visiting settings.
+  void selectPlace(LatLng point) {
+    if (_disposed || !_active) return;
+    _locationRevision++;
+    select(point);
+  }
+
   Future<void> locate({bool requestPermission = true}) async {
     if (_disposed || !_active || _locating) return;
     final activation = _activation;

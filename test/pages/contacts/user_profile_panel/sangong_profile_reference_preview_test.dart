@@ -48,43 +48,45 @@ void main() {
               'sangong': {'canManage': true, 'tenantID': 'tenant-authorized'}
             };
           }
-          if (call.path.endsWith('/reports/users')) {
+          if (call.path.endsWith('/user')) {
             return {
-              'users': [
-                {
+              'ok': true,
+              'data': {
+                'exists': true,
+                'user': {
                   'userId': 19,
                   'imUserId': 'target',
                   'nickname': '秋啊',
                   'balance': 420,
                   'rebatePer10000': 8
-                }
-              ],
-              'page': 1,
-              'totalPages': 1
+                },
+                'parent': {'nickname': '上级甲'},
+              }
             };
           }
-          if (call.path.endsWith('/user-detail')) {
+          if (call.path.endsWith('/snapshot')) {
+            final state = sangongState(1);
             return {
-              'parent': {'nickname': '上级甲'}
-            };
-          }
-          if (call.path.endsWith('/session')) {
-            return {
-              'round': {
-                'id': 18,
-                'bankerDoor': 2,
-                'bankerLimit': 2000,
-                'coBank': {
-                  'poolTotal': 800,
-                  'members': [
-                    {
-                      'userId': 19,
-                      'imUserId': 'target',
-                      'nickname': '秋啊',
-                      'amount': 200,
-                      'sharePercent': 25
-                    }
-                  ]
+              'ok': true,
+              'data': {
+                ...state,
+                'groupId': 'g',
+                'round': {
+                  ...state['round'] as Map<String, dynamic>,
+                  'bankerDoor': 2,
+                  'bankerLimit': 2000,
+                  'coBank': {
+                    'poolTotal': 800,
+                    'members': [
+                      {
+                        'userId': 19,
+                        'imUserId': 'target',
+                        'nickname': '秋啊',
+                        'amount': 200,
+                        'sharePercent': 25
+                      }
+                    ]
+                  }
                 }
               }
             };
@@ -132,7 +134,8 @@ void main() {
           loadGameGroups: () async => [group]);
       expect(find.text('三公服务'), findsNothing);
       expect(find.byType(DropdownButtonFormField<String>), findsNothing);
-      expect(find.textContaining('当前积分 420'), findsOneWidget);
+      expect(
+          find.textContaining('当前积分 420', findRichText: true), findsOneWidget);
       expect(find.text('庄2门 限额2000'), findsOneWidget);
       expect(find.text('合庄占股 25.00%'), findsOneWidget);
       expect(find.byType(TextField), findsNWidgets(3));

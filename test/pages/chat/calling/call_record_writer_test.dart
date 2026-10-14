@@ -188,14 +188,14 @@ void main() {
     sendGate = Completer<String>();
     sendReached = Completer<void>();
     final first = live.onTimeoutCancelled(signal);
-    await live.onTapReject(signal);
+    final duplicate = live.onTapReject(signal);
     await sendReached!.future;
     final beforeResponse = DateTime.now().millisecondsSinceEpoch;
     await Future<void>.delayed(const Duration(milliseconds: 10));
     final sent =
         nativeCalls.singleWhere((call) => call.method == 'sendMessage');
     sendGate!.complete(jsonEncode(args(sent)['message']));
-    await first;
+    await Future.wait([first, duplicate]);
     expect(records, hasLength(1));
     expect(records.single.endedAt, lessThanOrEqualTo(beforeResponse));
     expect(records.single.state, 'timeout');

@@ -22,14 +22,14 @@ void main() {
     }
     expect(find.text(r'$1,220.16'), findsNothing);
     expect(find.text('¥8,652.48'), findsOneWidget);
-    await _selectCurrency(tester, 'USD');
-    expect(find.text(r'$1,220.16'), findsOneWidget);
-    expect(find.text('¥8,652.48'), findsNothing);
+    await _checkCurrencyLabel(tester);
+    expect(find.text(r'$1,220.16'), findsNothing);
+    expect(find.text('¥8,652.48'), findsOneWidget);
     await tester.tap(walletHomeKey('wallet-toggle-balance'));
     await tester.pumpAndSettle();
     expect(controller.showBal, isFalse);
-    for (final currency in ['CNY', 'USD']) {
-      await _selectCurrency(tester, currency);
+    for (final currency in ['CNY']) {
+      await _checkCurrencyLabel(tester);
       final spoken = tester
           .getSemantics(walletHomeKey('wallet-home-scroll'))
           .toStringDeep();
@@ -45,21 +45,22 @@ void main() {
     await tester.tap(walletHomeKey('wallet-toggle-balance'));
     await tester.pumpAndSettle();
     expect(controller.showBal, isTrue);
-    expect(find.text(r'$1,220.16'), findsOneWidget);
+    expect(find.text(r'$1,220.16'), findsNothing);
     expect(find.textContaining('402.325811'), findsWidgets);
     semantics.dispose();
   });
 
-  testWidgets('currency menu uses only available repository totals',
+  testWidgets(
+      'CNY display retains the repository USD value without a conversion menu',
       (tester) async {
     final controller = await loadedHomeController();
     await pumpWalletHome(tester, controller: controller);
     await tester.pumpAndSettle();
     expect(find.text('¥8,652.48'), findsOneWidget);
     expect(walletHomeKey('wallet-usd-amount'), findsNothing);
-    await _selectCurrency(tester, 'USD');
-    expect(find.text(r'$1,220.16'), findsOneWidget);
-    await _selectCurrency(tester, 'CNY');
+    await _checkCurrencyLabel(tester);
+    expect(find.text(r'$1,220.16'), findsNothing);
+    await _checkCurrencyLabel(tester);
     expect(find.text('¥8,652.48'), findsOneWidget);
     expect(controller.totalBal, walletHomeFixture.totalBal);
     expect(controller.totalBalUsd, walletHomeFixture.totalBalUsd);
@@ -76,12 +77,8 @@ void main() {
           repository: HomeTestRepository(data: data));
       await pumpWalletHome(tester, controller: controller);
       await tester.pumpAndSettle();
-      await tester.tap(walletHomeKey('wallet-display-currency'));
-      await tester.pumpAndSettle();
-      expect(_currencyItem('CNY'), findsOneWidget);
-      expect(_currencyItem('USD'), findsNothing);
-      await tester.tap(_currencyItem('CNY'));
-      await tester.pumpAndSettle();
+      await _checkCurrencyLabel(tester);
+      expect(find.byType(PopupMenuItem<String>), findsNothing);
       expect(find.text('¥${data.totalBal}'), findsOneWidget);
       expect(find.textContaining(r'$'), findsNothing,
           reason: 'The UI must not invent a currency conversion.');
@@ -101,7 +98,7 @@ void main() {
         await tester.pumpAndSettle();
         final row = walletHomeKey('wallet-daily-profit-row');
         final amount = walletHomeKey('wallet-daily-profit');
-        final label = find.descendant(of: row, matching: find.text('今日盈亏'));
+        final label = find.descendant(of: row, matching: find.text('今日变动'));
         expect(tester.widget<Text>(amount).data, '-- (--%)');
         expect(tester.getRect(row).height, greaterThanOrEqualTo(48));
         expect(find.descendant(of: row, matching: find.byType(Icon)),
@@ -326,14 +323,12 @@ void main() {
   });
 }
 
-Finder _currencyItem(String currency) => find.byWidgetPredicate(
-    (widget) => widget is PopupMenuItem<String> && widget.value == currency);
-
-Future<void> _selectCurrency(WidgetTester tester, String currency) async {
-  await tester.tap(walletHomeKey('wallet-display-currency'));
+Future<void> _checkCurrencyLabel(WidgetTester tester) async {
+  final label = walletHomeKey('wallet-display-currency');
+  expect(tester.widget<Text>(label).data, 'CNY');
+  await tester.tap(label);
   await tester.pumpAndSettle();
-  await tester.tap(_currencyItem(currency));
-  await tester.pumpAndSettle();
+  expect(find.byType(PopupMenuItem<String>), findsNothing);
 }
 
 void _expectNoFailureNotice() {

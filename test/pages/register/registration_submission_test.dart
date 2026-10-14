@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -255,6 +256,13 @@ Future<void> _stale(String reason) async {
 Future<_Profile> _mount(
     WidgetTester tester, _Avatars avatars, List<String> events) async {
   await tester.pumpWidget(_app());
+  addTearDown(() async {
+    final dialog = find.byType(CupertinoAlertDialog);
+    if (dialog.evaluate().isNotEmpty) {
+      Navigator.of(tester.element(dialog)).pop();
+      await tester.pumpAndSettle();
+    }
+  });
   Get.toNamed(AppRoutes.setPassword, arguments: _arguments);
   await tester.pumpAndSettle();
   final logic = Get.put<SetPasswordLogic>(
@@ -638,18 +646,12 @@ void main() {
 
   for (final language in ['zh', 'en']) {
     testWidgets(
-        'profile HTTP 200 nickname error shows one centered toast in $language',
+        'profile HTTP 200 nickname error shows one shared confirmation dialog in $language',
         (tester) async {
       Get.locale = Locale(language);
       final logic = await _mount(tester, avatars, events)
         ..liveRegistration = true;
-      var shown = 0;
-      void onStatus(EasyLoadingStatus status) {
-        if (status == EasyLoadingStatus.show) shown++;
-      }
 
-      EasyLoading.addStatusCallback(onStatus);
-      addTearDown(() => EasyLoading.removeCallback(onStatus));
       await tester.runAsync(() async {
         final pending = logic.nextStep();
         await _flushUntil(() => adapter.requests == 1);
@@ -663,17 +665,15 @@ void main() {
       expect(logic.errorFor(RegistrationField.nickname), isNull);
       expect(logic.submitting.value, isFalse);
       expect(logic.nicknameCtrl.text, '  Alice  ');
-      expect(shown, 1);
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
       expect(adapter.requests, 1);
       expect(logic.passwordLogins, 0);
       expect(im.logins, 0);
       expect(avatars.uploads, 0);
-      final pageCenter =
-          tester.getCenter(find.widgetWithText(Scaffold, 'profile form'));
-      final toastCenter = tester.getCenter(find.text(message));
-      expect(toastCenter.dx, closeTo(pageCenter.dx, 1));
-      expect(toastCenter.dy, closeTo(pageCenter.dy, 1));
-      await EasyLoading.dismiss(animation: false);
+      expect(EasyLoading.isShow, isFalse);
+      await tester.tap(find.byType(CupertinoDialogAction));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
     });
   }
 }

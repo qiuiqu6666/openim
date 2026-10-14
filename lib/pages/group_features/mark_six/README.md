@@ -68,3 +68,7 @@
 ## 验证
 
 测试目录 `test/pages/group_features/mark_six`：独立传输 fixture、查询合并/缓存过期/账号切换/权限撤销/分页晚响应/真实结算状态/UTC+8 日边界，实际页面亮暗与小窗口、入口权限、错误重试、预览展开测试。导出真实 UI 预览通过 `EXPORT_MARK_SIX_PREVIEW=1` 启用，输出至 `docs/previews`，默认跳过。fixture 仅存在测试目录。
+
+### 可见时钟
+
+widgets/mark_six_clock_row.dart 独立维护当前时间和倒计时，避免每秒重建整张卡片。计时受前后台、当前路由、TickerMode 和实际可见区域共同控制；隐藏时取消 Timer，恢复时立即按服务端校准时钟重新计算。保留已开奖状态下原有当前时间显示；dispose 和 controller 替换释放监听。

@@ -19,6 +19,7 @@ import '../../support/chat/chat_entry_list.dart';
 import '../../support/chat/chat_entry_sdk.dart';
 import 'chat_new_message_cases.dart';
 import 'chat_keyboard_scroll_cases.dart';
+import 'chat_deferred_history_cases.dart';
 
 Message _entryMessage(String id, {int time = 1}) => Message.fromJson({
       'clientMsgID': id,
@@ -52,6 +53,7 @@ void main() {
   late List<EntryHistoryCall> calls;
   late List<ChatLogic> controllers;
   late List<Map<String, dynamic>> draftCalls;
+  late List<Message> localSnapshot;
 
   ChatLogic open([ConversationInfo? conversation]) {
     // Get.arguments reads Routing.args; invoking the real onInit here lets the
@@ -93,6 +95,9 @@ void main() {
     expect(logic.newMessages.awayFromLatest.value, isTrue);
   }
 
+  registerDeferredHistoryCases(open: () => open(), calls: () => calls,
+      seed: (rows) => localSnapshot = rows);
+
   setUp(() {
     Get.testMode = true;
     ChatHistoryPrefetcher.shared.clear();
@@ -100,6 +105,7 @@ void main() {
     calls = [];
     controllers = [];
     draftCalls = [];
+    localSnapshot = [];
     Get.put<AppController>(EntryTestApp());
     im = Get.put<IMController>(EntryTestIM()) as EntryTestIM;
     Get.put<ConversationLogic>(EntryTestConversation());
@@ -108,6 +114,14 @@ void main() {
     OpenIM.iMManager.userInfo = UserInfo(userID: 'self', nickname: 'Self');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdkChannel, (call) async {
+      if (call.method == 'getLocalHistorySnapshot') {
+        expect((call.arguments as Map)['localSnapshot'], isTrue);
+        return jsonEncode({
+          'localSnapshot': true,
+          'errCode': 0,
+          'messageList': localSnapshot.map((m) => m.toJson()).toList()
+        });
+      }
       if (call.method == 'getAdvancedHistoryMessageList') {
         final history =
             EntryHistoryCall(Map<String, dynamic>.from(call.arguments as Map));
@@ -140,6 +154,26 @@ void main() {
     Get.reset();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdkChannel, null);
+  });
+
+  testWidgets('cold entry paints local history before network completes',
+      (tester) async {
+    localSnapshot =
+        List.generate(40, (i) => _entryMessage('local-$i', time: i + 1));
+    final logic = open();
+    await tester.pumpWidget(buildChatEntryList(logic));
+    await tester.pump();
+    expect(logic.messageList, hasLength(40));
+    expect(find.text('local-39'), findsOneWidget);
+    expect(logic.initialHistoryLoading.value, isTrue);
+    expect(calls, hasLength(1));
+    expect(calls.single.result.isCompleted, isFalse);
+    calls.single.complete([_entryMessage('server-latest', time: 100)]);
+    await tester.pump();
+    expect(logic.messageList.map((m) => m.clientMsgID), ['server-latest']);
+    expect(logic.initialHistoryLoading.value, isFalse);
+    logic.onDelete();
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets(
@@ -923,7 +957,8 @@ void main() {
       _entryMessage('sdk-history-only', time: 31),
     ]);
     await tester.pump();
-    expect(logic.messageList.last.clientMsgID, 'sdk-history-only');
+    expect(logic.messageList.last.clientMsgID, 'history-29');
+    expect(logic.hasDeferredLatest, isTrue);
     expect(logic.newMessages.unseenCount.value, 0);
     expect(logic.newMessages.awayFromLatest.value, isTrue);
     expect(logic.scrollController.offset, 160);
@@ -972,7 +1007,7 @@ void main() {
     logic.onDelete();
   });
 
-  testWidgets('real chat list follows new latest boundary after SDK refresh',
+  testWidgets('real chat list preserves painted boundary after SDK refresh',
       (tester) async {
     final logic = await mountHistoryChat(tester, commonList: true);
     im.imSdkStatus(IMSdkStatus.syncEnded);
@@ -984,12 +1019,13 @@ void main() {
     ]);
     await tester.pump();
     await tester.pump();
-    expect(logic.messageList.last.clientMsgID, 'refreshed-latest');
+    expect(logic.messageList.last.clientMsgID, 'history-29');
     expect(logic.scrollController.offset,
         logic.scrollController.position.minScrollExtent);
     expect(logic.newMessages.unseenCount.value, 0);
-    expect(logic.newMessages.awayFromLatest.value, isFalse);
-    expectMessageInsideChatList(tester, 'refreshed-latest');
+    expect(logic.newMessages.awayFromLatest.value, isTrue);
+    expect(logic.hasDeferredLatest, isTrue);
+    expectMessageInsideChatList(tester, 'history-29');
     logic.onDelete();
   });
 

@@ -19,12 +19,21 @@ class MomentsStatePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SettingsEmptyState(
-        icon: icon,
-        title: title,
-        description: message,
-        actionLabel: actionLabel,
-        onAction: onAction,
-        imageWidth: 180);
+    return LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    minHeight: constraints.hasBoundedHeight
+                        ? constraints.maxHeight
+                        : 0),
+                child: SettingsEmptyState(
+                    icon: icon,
+                    title: title,
+                    description: message,
+                    actionLabel: actionLabel,
+                    onAction: onAction,
+                    imageWidth: 180),
+              ),
+            ));
   }
 }

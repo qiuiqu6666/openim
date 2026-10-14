@@ -12,6 +12,7 @@ class WaterMarkBgView extends StatelessWidget {
     this.text = '',
     this.newMessageCount = 0,
     this.showBackToBottom = false,
+    this.hasNewerMessages = false,
     this.textStyle,
     this.backgroundColor,
     required this.child,
@@ -19,11 +20,13 @@ class WaterMarkBgView extends StatelessWidget {
     this.bottomView,
     this.floatView,
     this.onSeeNewMessage,
+    this.messageHint,
   }) : super(key: key);
   final String? path;
   final String text;
   final int newMessageCount;
   final bool showBackToBottom;
+  final bool hasNewerMessages;
   final TextStyle? textStyle;
   final Color? backgroundColor;
   final Widget child;
@@ -31,6 +34,7 @@ class WaterMarkBgView extends StatelessWidget {
   final Widget? bottomView;
   final Widget? floatView;
   final Function()? onSeeNewMessage;
+  final Widget? messageHint;
 
   @override
   Widget build(BuildContext context) {
@@ -50,17 +54,33 @@ class WaterMarkBgView extends StatelessWidget {
                   alignment: Alignment.center,
                   children: [
                     child,
-                    if (newMessageCount > 0 || showBackToBottom)
+                    if (messageHint != null ||
+                        newMessageCount > 0 ||
+                        showBackToBottom ||
+                        hasNewerMessages)
                       Positioned(
                         bottom: ChatScrollHintTokens.bottomGap.h,
                         left: AppTokens.s4.w,
                         right: 0,
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: NewMessageIndicator(
-                            newMessageCount: newMessageCount,
-                            onTap: onSeeNewMessage,
-                          ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (messageHint != null) messageHint!,
+                            if (messageHint != null &&
+                                (newMessageCount > 0 ||
+                                    showBackToBottom ||
+                                    hasNewerMessages))
+                              SizedBox(height: AppTokens.s2.h),
+                            if (newMessageCount > 0 ||
+                                showBackToBottom ||
+                                hasNewerMessages)
+                              NewMessageIndicator(
+                                newMessageCount: newMessageCount,
+                                hasNewerMessages: hasNewerMessages,
+                                onTap: onSeeNewMessage,
+                              ),
+                          ],
                         ),
                       ),
                   ],

@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openim_common/openim_common.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:openim/core/calling/data/call_backend_api.dart';
 import 'package:openim/core/push/apns/apns_platform.dart';
 
@@ -26,6 +28,12 @@ class Transport implements HttpClientAdapter {
 }
 
 void main() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    await DataSp.init();
+    await DataSp.putLoginCertificate(LoginCertificate.fromJson(
+        {'userID': 'callee', 'chatToken': 'chat-session', 'imToken': 'im'}));
+  });
   test(
       'separate VoIP registration uses captured Chat credential and environment',
       () async {
@@ -34,14 +42,14 @@ void main() {
         accountID: 'callee',
         token: 'chat-session',
         deviceID: 'device_one',
-        baseUrl: 'https://chat.example/',
+        baseUrl: '${Config.callingUrl}/',
         client: Dio()..httpClientAdapter = transport);
     await api.bind(APNsDeviceToken(
         token: 'ab' * 32,
         bundleID: 'vip.99chat.ios',
         environment: 'production'));
     final req = transport.requests.single;
-    expect(req.path, 'https://chat.example/calling/voip/register');
+    expect(req.path, '${Config.callingUrl}/calling/voip/register');
     expect(req.headers['token'], 'chat-session');
     expect(req.followRedirects, isFalse);
     expect((req.data as Map)['environment'], 'production');
@@ -59,7 +67,7 @@ void main() {
         accountID: 'callee',
         token: 'chat-session',
         deviceID: 'device_one',
-        baseUrl: 'https://chat.example',
+        baseUrl: Config.callingUrl,
         client: Dio()..httpClientAdapter = transport);
     await expectLater(
         api.status('room_1234'), throwsA(isA<CallBackendException>()));

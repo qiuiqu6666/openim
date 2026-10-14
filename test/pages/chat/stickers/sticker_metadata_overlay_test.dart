@@ -95,6 +95,7 @@ Future<void> _mount(WidgetTester tester, Widget child,
   tester.view.physicalSize = const Size(375, 812);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
+
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(ScreenUtilInit(
     designSize: const Size(375, 812),
@@ -187,6 +188,8 @@ void _expectOverlay(WidgetTester tester, Message message, Size frameSize,
 Future<void> _unmount(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox.shrink());
   await _flush(tester);
+  // Drain shared disk-cache housekeeping after the viewer releases its request.
+  await tester.pump(const Duration(seconds: 10));
   expect(tester.takeException(), isNull);
 }
 

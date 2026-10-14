@@ -107,14 +107,18 @@ Message _message(
     });
 
 Future<void> _finishIo(WidgetTester tester) async {
-  // The grid resolves local files, then a gallery route resolves its originals.
-  // Advance both frame/IO phases before settling indeterminate progress widgets.
-  for (var phase = 0; phase < 3; phase++) {
+  // File IO and decoding finish outside the fake frame clock. Keep pumping
+  // until every image request releases its Windows file handle.
+  for (var phase = 0; phase < 100; phase++) {
     await tester.pump();
-    await tester.runAsync(() async {
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-    });
+    await tester
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    if (phase >= 3 &&
+        PaintingBinding.instance.imageCache.pendingImageCount == 0) {
+      break;
+    }
   }
+  expect(PaintingBinding.instance.imageCache.pendingImageCount, 0);
   await tester.pumpAndSettle();
 }
 

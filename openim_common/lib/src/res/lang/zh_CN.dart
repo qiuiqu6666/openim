@@ -1,4 +1,6 @@
 const Map<String, String> zh_CN = {
+  'forwardPreviewBatch': '逐条转发',
+  'forwardPreviewCount': '共 @count 条消息',
   'networkPreparing': '正在连接…',
   'videoSavePreparing': '正在准备保存视频…',
   'videoSaveDownloading': '正在下载视频',
@@ -458,6 +460,7 @@ const Map<String, String> zh_CN = {
   'menuRevoke': '撤回',
   'menuAdd': '添加',
   'nMessage': '%s条新消息',
+  'chatNewMessagesAvailable': '有新消息',
   'backToBottom': '回到底部',
   'plsSelectLocation': '请选择一个位置',
   'groupAudioCallHint': '%s人正在语音通话',

@@ -65,7 +65,7 @@ void main() {
     });
   }
   testWidgets(
-      'current-group management preserves rules, config and users without default members',
+      'current-group management preserves rules, config and authorized member management',
       (tester) async {
     final api = SangongTestApi();
     final runtime = sangongTestRuntime(sangongTestContext(api));
@@ -81,7 +81,7 @@ void main() {
     for (final title in ['三公管理', '游戏规则', '我的配置', '全部用户']) {
       expect(find.text(title), findsOneWidget);
     }
-    expect(find.text('成员管理'), findsNothing);
+    expect(find.text('成员管理'), findsOneWidget);
     await tester.tap(find.text('游戏规则'));
     await flushSangong(tester);
     await tester.pump(const Duration(milliseconds: 350));
@@ -169,7 +169,9 @@ void main() {
     events.add(
         {'key': 'groupGameChanged', 'groupID': 'group-sangong', 'action': ''});
     await flushSangong(tester);
-    expect(api.count('/snapshot'), 2);
+    expect(api.count('/snapshot'), 0,
+        reason:
+            'An unconfirmed tenant and a legacy public event cannot authorize private reads.');
     state.value = sangongTestContext(api,
         canConfigure: false,
         canManage: false,

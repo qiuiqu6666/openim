@@ -183,8 +183,8 @@ void main() {
     final runtime = runtimeFor(sangongTestContext(api, enabled: false));
     expect(runtime.canManage, isTrue);
     expect(runtime.featureContext.capabilities.sangong.canOpenAgent, isTrue);
-    expect(runtime.canOpenAgent, isFalse);
-    expect(runtime.canViewRebateHistory, isFalse);
+    expect(runtime.canOpenAgent, isTrue);
+    expect(runtime.canViewRebateHistory, isTrue);
     expectReadOnlyReason(runtime, null);
   });
 

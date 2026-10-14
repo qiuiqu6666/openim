@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-14",
+  "sdk_version": "v3.8.3-patch.15+recovery.21-sync-empty.1",
+  "source_sha256": "227fcff03ac5229f3b96bfbfa433284df3a341e4ac2c743db040121647b18b56",
+  "patch_sha256": "674a13a1b37451dead1b8678b66627835a12b4420a3085f80a7549b089615cac",
+  "apk_sha256": "1bc0c8cbd6e60784b33baeae5ca0daccafec2f218b6fa2ede9a16aeea686704a",
+  "aar_sha256": "bab6ba3aa544dee1f9ee6d28e294b7eac8eebc0b8a2cb9caeb2599b927c63892",
+  "apk_native_matches_stripped_aar": true,
+  "tests": [
+    "common, network, interaction, conversation_msg passed on final locked source",
+    "invisible prefix / inclusive boundary / absent proof / transport failure / checkpoint failure / 100-conversation batching and no-repeat",
+    "383-file patch roundtrip and Android source/artifact lock passed"
+  ],
+  "runtime": {
+    "device": "emulator-5554",
+    "preserved_account_data": true,
+    "initial_sync_completed_local": "2026-10-14 16:57:13.545",
+    "initial_attempt_seconds": 13.715306125,
+    "confirmed_invisible_conversations": 1447,
+    "restart_initial": false,
+    "restart_message_pulls": 0,
+    "restart_sync_ended_local": "2026-10-14 16:57:55.049",
+    "restart_note": "One metadata sync was cancelled by the existing scheduler and retried successfully; no incomplete-message failure recurred.",
+    "observation_end_utc": "2026-10-14 08:59:00.810",
+    "repeated_empty_revalidation": 0,
+    "incomplete_message_errors": 0
+  },
+  "server": {
+    "readonly_probe": true,
+    "data_or_service_modified": false,
+    "sample1": {
+      "global_max": 4,
+      "user_min": 5,
+      "user_max": 0,
+      "user_read": 4
+    },
+    "sample2": {
+      "global_max": 29,
+      "user_min": 30,
+      "user_max": 0,
+      "user_read": 29
+    },
+    "conclusion": "Empty replies obey stored personal visibility. SDK preview branch failed to revalidate that invisible prefix before treating it as missing data. Original operation that set personal minima not established."
+  },
+  "ios": "shared source updated; framework and device not built/tested"
+}

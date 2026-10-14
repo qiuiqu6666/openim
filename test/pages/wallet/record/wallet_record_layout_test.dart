@@ -37,8 +37,6 @@ void main() {
           'wallet-record-tab-all',
           'wallet-record-tab-expenditure',
           'wallet-record-tab-income',
-          'wallet-record-support',
-          'wallet-record-filters',
           'wallet-record-month-picker-2026-10',
         ]) {
           final rect = tester.getRect(walletRecordKey(key));

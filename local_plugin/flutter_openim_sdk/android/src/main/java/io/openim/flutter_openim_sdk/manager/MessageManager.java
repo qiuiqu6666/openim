@@ -290,6 +290,10 @@ public class MessageManager extends BaseManager {
     }
 
 
+    public void getLocalHistorySnapshot(MethodCall methodCall, MethodChannel.Result result) {
+        getAdvancedHistoryMessageList(methodCall, result);
+    }
+
     public void getAdvancedHistoryMessageList(MethodCall methodCall, MethodChannel.Result result) {
         Open_im_sdk.getAdvancedHistoryMessageList(
                 new OnBaseListener(result, methodCall),
