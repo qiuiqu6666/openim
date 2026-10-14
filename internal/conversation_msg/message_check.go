@@ -75,7 +75,9 @@ func (c *Conversation) validateAndFillEndBlockContinuity(ctx context.Context, co
 	isShouldFetchMessage, lostSeqList := c.checkEndBlock(ctx, conversationID, isReverse, viewType, count, list, messageListCallback)
 	if isShouldFetchMessage {
 		c.fetchAndMergeMissingMessages(ctx, conversationID, lostSeqList, isReverse, count, startTime, list, messageListCallback)
-		_, _ = c.checkEndBlock(ctx, conversationID, isReverse, viewType, count, list, messageListCallback)
+		if !messageListCallback.IsEnd {
+			_, _ = c.checkEndBlock(ctx, conversationID, isReverse, viewType, count, list, messageListCallback)
+		}
 	}
 
 }
@@ -125,6 +127,46 @@ func (c *Conversation) checkEndBlock(ctx context.Context, conversationID string,
 		} else {
 			userCanPullMinSeq := c.getConversationMinSeq(ctx, conversationID)
 			_, minSeq, _ := c.getMaxAndMinHaveSeqList(*list)
+			lastEnd, _ := c.messagePullForwardEndSeqMap.Load(conversationID, viewType)
+			if len(*list) == 0 && lastEnd == 0 {
+				// A cold local table has no older anchor. Seed it from the
+				// known remote tail before deciding that history is exhausted.
+				newest := c.getConversationMaxSeq(ctx, conversationID)
+				if newest == 0 {
+					if !c.LongConnMgr.IsConnected() {
+						messageListCallback.ErrCode, messageListCallback.ErrMsg = 100, "message history is not synchronized while disconnected"
+						return false, nil
+					}
+					var resp sdkws.GetMaxSeqResp
+					err := c.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: c.loginUserID}, constant.GetNewestSeq, &resp)
+					if err != nil {
+						messageListCallback.ErrCode, messageListCallback.ErrMsg = 100, err.Error()
+						return false, nil
+					}
+					newest = resp.MaxSeqs[conversationID]
+					// Discovery alone must not advance the unread watermark.
+				}
+				if newest >= userCanPullMinSeq && newest > 0 {
+					cached, err := c.db.GetConversation(ctx, conversationID)
+					if err != nil {
+						messageListCallback.ErrCode, messageListCallback.ErrMsg = 100, err.Error()
+						return false, nil
+					}
+					if cached != nil && cached.MaxSeq > 0 && newest > cached.MaxSeq {
+						visible, err := c.ResolveVisibleMessageRange(ctx, c.loginUserID, conversationID, [2]int64{userCanPullMinSeq, newest})
+						if err != nil {
+							messageListCallback.ErrCode, messageListCallback.ErrMsg = 100, err.Error()
+							return false, nil
+						}
+						userCanPullMinSeq, newest = visible[0], visible[1]
+						if newest < userCanPullMinSeq {
+							messageListCallback.IsEnd = true
+							return false, nil
+						}
+					}
+					return true, getLostSeqListWithLimitLength(max(userCanPullMinSeq, newest-int64(count)+1), newest, nil, false)
+				}
+			}
 			log.ZDebug(ctx, "validateAndFillEndBlockContinuity", "minSeq", minSeq,
 				"conversationID", conversationID, "userCanPullMinSeq", userCanPullMinSeq)
 			// The reason for being less than is that in cases of poor network conditions,
@@ -180,29 +222,37 @@ func (c *Conversation) getMaxAndMinHaveSeqList(messages []*model_struct.LocalCha
 }
 
 func getLostSeqListWithLimitLength(minSeq, maxSeq int64, haveSeqList []int64, isReverse bool) []int64 {
-	var lostSeqList []int64
+	lostSeqList := make([]int64, 0, constant.PullMsgNumForReadDiffusion)
 	haveSeqSet := datautil.SliceSetAny(haveSeqList, func(e int64) int64 {
 		return e
 	})
 
-	for i := minSeq; i <= maxSeq; i++ {
-		if _, found := haveSeqSet[i]; !found {
-			lostSeqList = append(lostSeqList, i)
+	if minSeq > maxSeq {
+		return lostSeqList
+	}
+	if isReverse {
+		for seq := minSeq; ; seq++ {
+			if _, found := haveSeqSet[seq]; !found {
+				lostSeqList = append(lostSeqList, seq)
+			}
+			if len(lostSeqList) == constant.PullMsgNumForReadDiffusion || seq == maxSeq {
+				break
+			}
+		}
+	} else {
+		for seq := maxSeq; ; seq-- {
+			if _, found := haveSeqSet[seq]; !found {
+				lostSeqList = append(lostSeqList, seq)
+			}
+			if len(lostSeqList) == constant.PullMsgNumForReadDiffusion || seq == minSeq {
+				break
+			}
+		}
+		// The existing request uses ascending SEQs even when selecting the tail.
+		for left, right := 0, len(lostSeqList)-1; left < right; left, right = left+1, right-1 {
+			lostSeqList[left], lostSeqList[right] = lostSeqList[right], lostSeqList[left]
 		}
 	}
-
-	// If the lostSeqList exceeds the max limit, trim the list
-	if len(lostSeqList) > constant.PullMsgNumForReadDiffusion {
-		if isReverse {
-			// If isReverse is true, take the first constant.PullMsgNumForReadDiffusion sequences
-			return lostSeqList[:constant.PullMsgNumForReadDiffusion]
-		} else {
-			// If isReverse is false, take the last constant.PullMsgNumForReadDiffusion sequences
-			return lostSeqList[len(lostSeqList)-constant.PullMsgNumForReadDiffusion:]
-		}
-	}
-
-	// Return the entire lostSeqList if it's within the limit
 	return lostSeqList
 }
 
@@ -229,6 +279,7 @@ func (c *Conversation) fetchAndMergeMissingMessages(ctx context.Context, convers
 	}
 	log.ZDebug(ctx, "conversation pull message,  ", "req", getSeqMessageReq.String())
 	if startTime == 0 && !c.LongConnMgr.IsConnected() {
+		errHandle(seqList, list, errors.New("message history is not synchronized while disconnected"), messageListCallback)
 		return
 	}
 	err := c.SendReqWaitResp(ctx, &getSeqMessageReq, constant.PullMsgBySeqList, &getSeqMessageResp)
@@ -240,35 +291,43 @@ func (c *Conversation) fetchAndMergeMissingMessages(ctx context.Context, convers
 		if getSeqMessageResp.Msgs == nil {
 			log.ZWarn(ctx, "syncMsgFromServerSplit pull msg is null", errors.New("pull message is null"),
 				"req", getSeqMessageResp.String())
+			errHandle(seqList, list, errors.New("history response omitted conversations"), messageListCallback)
 			return
 		}
 		if v, ok := getSeqMessageResp.Msgs[conversationID]; ok {
+			if v == nil {
+				errHandle(seqList, list, errors.New("history response omitted conversation payload"), messageListCallback)
+				return
+			}
 			log.ZDebug(ctx, "syncMsgFromServerSplit pull msg success",
 				"conversationID", conversationID, "count", count, "len", len(*list), "msgLen", len(v.Msgs))
 			var localMessage []*model_struct.LocalChatLog
 			localMessageMap := datautil.SliceToMapAny(v.Msgs, func(m *sdkws.MsgData) (int64, *model_struct.LocalChatLog) {
 				return m.Seq, MsgDataToLocalChatLog(m)
 			})
-			// If server returned fewer messages than requested (or none), synthesize placeholders
-			// for the missing seqs so that normalization and subsequent pagination can proceed stably.
+			// Missing rows require explicit visibility evidence. Do not fabricate
+			// tombstones from a transient empty or incomplete response.
 			if len(seqList) > 0 {
 				for _, s := range seqList {
 					if lm, ok := localMessageMap[s]; ok {
 						localMessage = append(localMessage, lm)
 						continue
 					}
-					// Build a placeholder local message for the missing seq; mark as deleted/exception
-					// and generate a unique ClientMsgID via handleExceptionMessages.
-					lm := &model_struct.LocalChatLog{Seq: s, SendTime: 0, Status: constant.MsgStatusHasDeleted}
-					c.handleExceptionMessages(ctx, nil, lm)
-					localMessage = append(localMessage, lm)
+					if v.IsEnd && ((!isReverse && s < v.EndSeq) || (isReverse && s > v.EndSeq)) {
+						continue // Explicit server visibility boundary, not a local tombstone.
+					}
+					errHandle(seqList, list, errors.New("incomplete history response without visibility evidence"), messageListCallback)
+					return
 				}
 			}
 			// Normalize using a “neighbor-driven” approach first:
 			// prefer the neighbor sendTime within the window/current batch;
 			// if no neighbor exists, fall back to the boundary time.
 			localMessage = c.normalizeZeroSendTimeByNeighbor(isReverse, startTime, localMessage, *list)
-			c.pullMessageIntoTable(ctx, conversationID, localMessage, list)
+			if err := c.pullMessageIntoTable(ctx, conversationID, localMessage, list); err != nil {
+				errHandle(seqList, list, err, messageListCallback)
+				return
+			}
 			if v.IsEnd {
 				c.setConversationMinSeq(ctx, isReverse, conversationID, v.EndSeq)
 			}
@@ -277,9 +336,28 @@ func (c *Conversation) fetchAndMergeMissingMessages(ctx context.Context, convers
 				reverse(localMessage)
 			}
 			*list = mergeSortedArrays(*list, localMessage, count, !isReverse)
+			if v.IsEnd {
+				messageListCallback.IsEnd = historyPageReachedEnd(*list, isReverse, v.EndSeq)
+			}
+		} else {
+			errHandle(seqList, list, errors.New("history response missing requested conversation"), messageListCallback)
 		}
 
 	}
+}
+
+// A network response may reach the boundary while the visible page is trimmed
+// to count. Only the endpoint actually returned to the caller can end paging.
+func historyPageReachedEnd(rows []*model_struct.LocalChatLog, isReverse bool, endSeq int64) bool {
+	if len(rows) == 0 {
+		return true
+	}
+	for _, row := range rows {
+		if row.Seq > 0 && ((!isReverse && row.Seq <= endSeq) || (isReverse && row.Seq >= endSeq)) {
+			return true
+		}
+	}
+	return false
 }
 
 // normalizeZeroSendTimeByNeighbor: use this page’s boundary time (startTime) to normalize
@@ -460,11 +538,9 @@ func (c *Conversation) getConversationMaxSeq(ctx context.Context, conversationID
 		log.ZWarn(ctx, "Failed to get conversation", err)
 		return c.maxSeqRecorder.Get(conversationID)
 	}
-	if conversation.MaxSeq == 0 {
-		return c.maxSeqRecorder.Get(conversationID)
-
-	}
-	return conversation.MaxSeq
+	// A previous ascending query's endpoint is not a permanent upper limit.
+	// The server still enforces permissions on every history request.
+	return max(conversation.MaxSeq, c.maxSeqRecorder.Get(conversationID))
 }
 func (c *Conversation) getConversationMinSeq(ctx context.Context, conversationID string) int64 {
 	conversation, err := c.db.GetConversation(ctx, conversationID)
@@ -479,24 +555,18 @@ func (c *Conversation) getConversationMinSeq(ctx context.Context, conversationID
 	return conversation.MinSeq
 }
 func (c *Conversation) setConversationMinSeq(ctx context.Context, isReverse bool, conversationID string, endSeq int64) {
+	if isReverse {
+		// Ascending isEnd may mean only the current global tail. Do not
+		// persist it into the authenticated conversation permission field.
+		return
+	}
 	conversation, err := c.db.GetConversation(ctx, conversationID)
 	if err != nil {
 		log.ZWarn(ctx, "Failed to get conversation", err)
 		return
 	}
-	if !isReverse {
-		if conversation.MinSeq == 0 || endSeq > conversation.MinSeq {
-			conversation.MinSeq = endSeq
-		}
-	} else {
-		if conversation.MaxSeq == 0 || endSeq < conversation.MaxSeq {
-			conversation.MaxSeq = endSeq
-			err = c.db.UpdateConversation(ctx, conversation)
-			if err != nil {
-				log.ZWarn(ctx, "Failed to update conversation", err)
-			}
-		}
-
+	if conversation.MinSeq == 0 || endSeq > conversation.MinSeq {
+		conversation.MinSeq = endSeq
 	}
 	err = c.db.UpdateConversation(ctx, conversation)
 	if err != nil {
@@ -574,6 +644,11 @@ func (c *Conversation) handleExceptionMessages(ctx context.Context, existingMess
 	if existingMessage == nil {
 		// Case: The message is marked as deleted
 		if message.Status == constant.MsgStatusHasDeleted {
+			if message.Seq > 0 {
+				message.ClientMsgID = "[SERVER_DELETED_SEQ_" + utils.Int64ToString(message.Seq) + "]"
+				message.Content = ""
+				return
+			}
 			// If ClientMsgID is empty, it's a placeholder for seq gap
 			if message.ClientMsgID == "" {
 				// Gap messages are typically caused by server downtime or prolonged periods of inactivity.
@@ -619,7 +694,10 @@ func (c *Conversation) handleExceptionMessages(ctx context.Context, existingMess
 }
 
 func (c *Conversation) pullMessageIntoTable(ctx context.Context, conversationID string,
-	serverMessage []*model_struct.LocalChatLog, list *[]*model_struct.LocalChatLog) {
+	serverMessage []*model_struct.LocalChatLog, list *[]*model_struct.LocalChatLog) error {
+	if err := c.applyStoredRevocations(ctx, conversationID, serverMessage); err != nil {
+		return err
+	}
 	insertMsg := make(map[string][]*model_struct.LocalChatLog, 20)
 	updateMsg := make(map[string][]*model_struct.LocalChatLog, 30)
 	var insertMessage, selfInsertMessage, othersInsertMessage []*model_struct.LocalChatLog
@@ -634,6 +712,7 @@ func (c *Conversation) pullMessageIntoTable(ctx context.Context, conversationID 
 	localMessages, err := c.db.GetMessagesByClientMsgIDs(ctx, conversationID, msgIDs)
 	if err != nil {
 		log.ZWarn(ctx, "Failed to get messages by ClientMsgIDs", err)
+		return err
 	}
 	processedMsgIDs := make(map[string]*model_struct.LocalChatLog, len(serverMessage))
 	localMessagesMap := datautil.SliceToMap(localMessages, func(msg *model_struct.LocalChatLog) string { return msg.ClientMsgID })
@@ -642,9 +721,26 @@ func (c *Conversation) pullMessageIntoTable(ctx context.Context, conversationID 
 		log.ZDebug(ctx, "msg detail", "msg", msg, "conversationID", conversationID)
 
 		if existingMessage, ok := processedMsgIDs[msg.ClientMsgID]; ok {
+			if existingMessage.Seq == msg.Seq {
+				*msg = *existingMessage
+				continue
+			}
 			c.handleExceptionMessages(ctx, existingMessage, msg)
 			exceptionMsg = append(exceptionMsg, msg)
 			insertMessage = append(insertMessage, msg)
+			continue
+		}
+		if existing, ok := localMessagesMap[msg.ClientMsgID]; ok && existing.Seq == msg.Seq {
+			// Overlapping latest/history reads are ordinary replay. Preserve the
+			// stored identity and local deletion/read/recall state.
+			if msg.Status < constant.MsgStatusHasDeleted && existing.Status >= constant.MsgStatusHasDeleted {
+				*msg = *existing
+			} else if msg.ContentType != constant.RevokeNotification && msg.Status < constant.MsgStatusHasDeleted {
+				*msg = *existing
+			} else {
+				updateMessage = append(updateMessage, msg)
+			}
+			processedMsgIDs[msg.ClientMsgID] = msg
 			continue
 		}
 		//When the message has been marked and deleted by the cloud, it is directly inserted locally
@@ -696,10 +792,6 @@ func (c *Conversation) pullMessageIntoTable(ctx context.Context, conversationID 
 	log.ZDebug(ctx, "faceURLAndNicknameHandle, ", "cost time", time.Since(timeNow).String(),
 		"updateMsg", updateMessage, "insertMsg", insertMessage, "selfInsertMessage", selfInsertMessage, "othersInsertMessage", othersInsertMessage)
 
-	//update message
-	if err6 := c.batchUpdateMessageList(ctx, updateMsg); err6 != nil {
-		log.ZError(ctx, "sync seq normal message err  :", err6)
-	}
 	if len(updateMessage) > 0 {
 		updateMessageMap := datautil.SliceToMap(updateMessage, func(message *model_struct.LocalChatLog) string {
 			return message.ClientMsgID
@@ -717,14 +809,16 @@ func (c *Conversation) pullMessageIntoTable(ctx context.Context, conversationID 
 
 	timeNow = time.Now()
 	//Normal message storage
-	_ = c.batchInsertMessageList(ctx, insertMsg)
+	if err := c.persistMessageSyncBatch(ctx, updateMsg, insertMsg, nil, nil); err != nil {
+		return err
+	}
 	log.ZDebug(ctx, "BatchInsertMessageListController, ", "cost time", time.Since(timeNow).String())
 
 	//Exception message storage
 	for _, v := range exceptionMsg {
 		log.ZWarn(ctx, "exceptionMsg show: ", nil, "msg", *v)
 	}
-
+	return nil
 }
 
 // All pulled messages must undergo continuity checks within the block and between the current block and the previous

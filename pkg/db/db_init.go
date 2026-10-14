@@ -106,6 +106,10 @@ func NewDataBase(ctx context.Context, loginUserID string, dbDir string, logLevel
 		return dataBase, errs.Wrap(err)
 	}
 	dataBase.tableChecker = NewTableChecker(tables)
+	if err := dataBase.initializeMessageCache(ctx, tables); err != nil {
+		_ = dataBase.Close(ctx)
+		return nil, err
+	}
 
 	return dataBase, nil
 }
@@ -157,6 +161,9 @@ func (d *DataBase) initDB(ctx context.Context, logLevel int) error {
 	}
 
 	if err = d.versionDataMigrate(ctx); err != nil {
+		return err
+	}
+	if err = db.AutoMigrate(&messageCacheEntry{}, &messageCacheAnchor{}, &messageCacheCursor{}, &messageCacheConversation{}, &messageRevokeRecord{}, &messageReadState{}); err != nil {
 		return err
 	}
 

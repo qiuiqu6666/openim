@@ -42,6 +42,8 @@ import (
 
 const MaxRecursionDepth = 3
 
+type historyRecursionKey struct{}
+
 func (c *Conversation) setConversation(ctx context.Context, apiReq *pbConversation.SetConversationsReq, localConversation *model_struct.LocalConversation) error {
 	apiReq.Conversation.ConversationID = localConversation.ConversationID
 	apiReq.Conversation.ConversationType = localConversation.ConversationType
@@ -53,6 +55,8 @@ func (c *Conversation) setConversation(ctx context.Context, apiReq *pbConversati
 }
 
 func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sdk.GetAdvancedHistoryMessageListParams, isReverse bool) (*sdk.GetAdvancedHistoryMessageListCallback, error) {
+	if req.Count<1 { return nil,errors.New("history count must be positive") }
+	req.Count=min(req.Count,100)
 	t := time.Now()
 	var messageListCallback sdk.GetAdvancedHistoryMessageListCallback
 	var conversationID string
@@ -62,7 +66,7 @@ func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sd
 	var messageList sdk_struct.NewMsgList
 	conversationID = req.ConversationID
 	if len(req.StartClientMsgID) > 0 {
-		m, err := c.db.GetMessage(ctx, conversationID, req.StartClientMsgID)
+		m, err := c.historyAnchor(ctx, conversationID, req.StartClientMsgID)
 		if err != nil {
 			return nil, err
 		}
@@ -77,6 +81,11 @@ func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sd
 		// Clear both maps when the user enters the conversation
 		c.messagePullForwardEndSeqMap.Delete(conversationID, req.ViewType)
 		c.messagePullReverseEndSeqMap.Delete(conversationID, req.ViewType)
+		if !isReverse {
+			if err := c.ensureLatestHistory(ctx, conversationID, req.Count); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	log.ZDebug(ctx, "Assembly conversation parameters", "cost time", time.Since(t), "conversationID",
@@ -89,6 +98,11 @@ func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sd
 	t = time.Now()
 
 	messageList = c.LocalChatLog2MsgStruct(list)
+	cacheIDs := make([]string, 0, len(list))
+	for _, row := range list {
+		cacheIDs = append(cacheIDs, row.ClientMsgID)
+	}
+	c.maintainMessageCache(ctx, conversationID, cacheIDs)
 	log.ZDebug(ctx, "message convert and unmarshal", "unmarshal cost time", time.Since(t))
 	t = time.Now()
 	if !isReverse {
@@ -100,6 +114,16 @@ func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sd
 	return &messageListCallback, nil
 }
 func (c *Conversation) handleEndSeq(ctx context.Context, req sdk.GetAdvancedHistoryMessageListParams, isReverse bool, startMessage *model_struct.LocalChatLog) error {
+	// A retry or another view may start behind the cached last page. The
+	// caller's persisted anchor is authoritative, never a previous failed read.
+	if startMessage.Seq != 0 {
+		if isReverse {
+			c.messagePullReverseEndSeqMap.Store(req.ConversationID, req.ViewType, startMessage.Seq)
+		} else {
+			c.messagePullForwardEndSeqMap.Store(req.ConversationID, req.ViewType, startMessage.Seq)
+		}
+		return nil
+	}
 	if isReverse {
 		if _, ok := c.messagePullReverseEndSeqMap.Load(req.ConversationID, req.ViewType); !ok {
 			if startMessage.Seq != 0 {
@@ -237,19 +261,33 @@ func (c *Conversation) fetchMessagesWithGapCheck(ctx context.Context, conversati
 	}
 	c.validateAndFillInterBlockGaps(ctx, thisStartSeq, conversationID,
 		isReverse, viewType, count, startTime, &list, messageListCallback)
+	if messageListCallback.ErrCode != 0 {
+		return nil, errors.New(messageListCallback.ErrMsg)
+	}
 	log.ZDebug(ctx, "between continuity check over", "cost time", time.Since(t), "thisStartSeq", thisStartSeq)
 	t = time.Now()
 	c.validateAndFillInternalGaps(ctx, conversationID, isReverse,
 		count, startTime, &list, messageListCallback)
+	if messageListCallback.ErrCode != 0 {
+		return nil, errors.New(messageListCallback.ErrMsg)
+	}
 	log.ZDebug(ctx, "internal continuity check over", "cost time", time.Since(t))
 	t = time.Now()
 	c.validateAndFillEndBlockContinuity(ctx, conversationID, isReverse, viewType,
 		count, startTime, &list, messageListCallback)
+	if messageListCallback.ErrCode != 0 {
+		return nil, errors.New(messageListCallback.ErrMsg)
+	}
 	log.ZDebug(ctx, "end continuity check over", "cost time", time.Since(t))
 	// If the number of valid messages retrieved is less than the count,
 	// continue fetching recursively until the valid messages are sufficient or all messages have been fetched.
 	missingCount := shouldFetchMoreMessagesNum(list)
 	if missingCount > 0 && !messageListCallback.IsEnd {
+		depth,_:=ctx.Value(historyRecursionKey{}).(int)
+		if depth>=MaxRecursionDepth {
+			return validMessages,errors.New("history page scan budget exhausted; retry from this position")
+		}
+		ctx=context.WithValue(ctx,historyRecursionKey{},depth+1)
 		newStartTime, newStartSeq, newStartClientMsgID := getNewStartMessageInfo(list)
 		// First-batch zero-cursor substitution: when entering a conversation for the first time
 		// (no StartClientMsgID) and the new cursor time is still 0,
@@ -285,8 +323,7 @@ func (c *Conversation) fetchMessagesWithGapCheck(ctx context.Context, conversati
 		if newStartTime == startTime && newStartSeq == startSeq && newStartClientMsgID == startClientMsgID {
 			log.ZWarn(ctx, "cursor stalled, stop recursive fetch to avoid loop", nil,
 				"conversationID", conversationID, "startTime", startTime, "startSeq", startSeq, "startClientMsgID", startClientMsgID)
-			messageListCallback.IsEnd = true
-			return validMessages, nil
+			return validMessages, errors.New("history cursor did not advance; retry after synchronization")
 		}
 		log.ZDebug(ctx, "fetch more messages", "missingCount", missingCount, "conversationID",
 			conversationID, "newStartTime", newStartTime, "newStartSeq", newStartSeq, "newStartClientMsgID", newStartClientMsgID)

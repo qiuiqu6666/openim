@@ -54,7 +54,7 @@ func (c *Conversation) IncrSyncConversations(ctx context.Context) error {
 			return datautil.Batch(ServerConversationToLocal, resp.Insert)
 		},
 		Syncer: func(server, local []*model_struct.LocalConversation) error {
-			return c.conversationSyncer.Sync(ctx, server, local, nil, true)
+			return c.syncConversationsWithProfiles(ctx, server, local)
 		},
 		FullSyncer: func(ctx context.Context) error {
 			conversationIDList, err := c.db.GetAllConversationIDList(ctx)
@@ -73,7 +73,7 @@ func (c *Conversation) IncrSyncConversations(ctx context.Context) error {
 					return err
 				}
 				server := datautil.Batch(ServerConversationToLocal, resp.Conversations)
-				return c.conversationSyncer.Sync(ctx, server, local, nil, true)
+				return c.syncConversationsWithProfiles(ctx, server, local)
 			}
 		},
 		FullID: func(ctx context.Context) ([]string, error) {

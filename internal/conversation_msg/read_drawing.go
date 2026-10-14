@@ -174,11 +174,13 @@ func (c *Conversation) doUnreadCount(ctx context.Context, conversation *model_st
 	if conversation.ConversationType == constant.SingleChatType {
 		if len(seqs) != 0 {
 			hasReadMessage, err := c.db.GetMessageBySeq(ctx, conversation.ConversationID, hasReadSeq)
-			if err != nil {
+			if err != nil && !isLocalRecordMissing(err) {
 				return err
 			}
-			if hasReadMessage.IsRead {
-				return errs.New("read info from self can be ignored").Wrap()
+			if err == nil && hasReadMessage.IsRead {
+				// A replayed acknowledgement is already applied, not a failed
+				// notification page. Let the following notifications advance.
+				return nil
 
 			} else {
 				_, err := c.db.MarkConversationMessageAsReadBySeqs(ctx, conversation.ConversationID, seqs)
@@ -199,6 +201,7 @@ func (c *Conversation) doUnreadCount(ctx context.Context, conversation *model_st
 				log.ZWarn(ctx, "unread count is less than 0", nil, "conversationID", conversation.ConversationID, "currentMaxSeq", currentMaxSeq, "hasReadSeq", hasReadSeq)
 				unreadCount = 0
 			}
+			unreadCount = min(unreadCount, int64(conversation.UnreadCount))
 			if err := c.db.UpdateColumnsConversation(ctx, conversation.ConversationID, map[string]interface{}{"unread_count": unreadCount}); err != nil {
 				return err
 			}
@@ -213,13 +216,19 @@ func (c *Conversation) doUnreadCount(ctx context.Context, conversation *model_st
 				Action: constant.UpdateLatestMessageReadState, Args: []string{conversation.ConversationID}}, Ctx: ctx})
 		}
 	} else {
-		if err := c.db.UpdateColumnsConversation(ctx, conversation.ConversationID, map[string]interface{}{"unread_count": 0}); err != nil {
+		maxSeq := c.maxSeqRecorder.Get(conversation.ConversationID)
+		unread := int64(conversation.UnreadCount)
+		if maxSeq > 0 {
+			unread = max(int64(0), maxSeq-hasReadSeq)
+		}
+		unread = min(unread, int64(conversation.UnreadCount))
+		if err := c.db.UpdateColumnsConversation(ctx, conversation.ConversationID, map[string]interface{}{"unread_count": unread}); err != nil {
 			log.ZError(ctx, "UpdateColumnsConversation err", err, "conversationID", conversation.ConversationID)
 			return err
 		}
 	}
-	c.doUpdateConversation(common.Cmd2Value{Value: common.UpdateConNode{ConID: conversation.ConversationID, Action: constant.ConChange, Args: []string{conversation.ConversationID}}})
-	c.doUpdateConversation(common.Cmd2Value{Value: common.UpdateConNode{Action: constant.TotalUnreadMessageChanged}})
+	c.doUpdateConversation(common.Cmd2Value{Ctx: ctx, Value: common.UpdateConNode{ConID: conversation.ConversationID, Action: constant.ConChange, Args: []string{conversation.ConversationID}}})
+	c.doUpdateConversation(common.Cmd2Value{Ctx: ctx, Value: common.UpdateConNode{Action: constant.TotalUnreadMessageChanged}})
 
 	return nil
 }
@@ -232,6 +241,14 @@ func (c *Conversation) doReadDrawing(ctx context.Context, msg *sdkws.MsgData) er
 		return err
 	}
 	log.ZDebug(ctx, "do readDrawing", "tips", tips)
+	if tips.MarkAsReadUserID == c.loginUserID && tips.HasReadSeq > 0 {
+		if err := c.saveReadWatermarks(ctx, map[string]int64{tips.ConversationID: tips.HasReadSeq}, true, msg.SendTime); err != nil {
+			return err
+		}
+	}
+	if len(tips.Seqs) == 0 {
+		return c.doReadWatermark(ctx, msg, tips)
+	}
 	conversation, err := c.db.GetConversation(ctx, tips.ConversationID)
 	if err != nil {
 		log.ZWarn(ctx, "GetConversation err", err, "conversationID", tips.ConversationID)

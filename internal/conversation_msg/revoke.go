@@ -42,45 +42,22 @@ func (c *Conversation) doRevokeMsg(ctx context.Context, msg *sdkws.MsgData) erro
 }
 
 func (c *Conversation) revokeMessage(ctx context.Context, tips *sdkws.RevokeMsgTips) error {
+	store, sparse := c.db.(sparseRevocationStore)
+	if sparse {
+		if err := store.SaveMessageRevocation(ctx, tips); err != nil {
+			return err
+		}
+	}
 	revokedMsg, err := c.db.GetMessageBySeq(ctx, tips.ConversationID, tips.Seq)
 	if err != nil {
+		if sparse && isLocalRecordMissing(err) {
+			return c.revokeUncachedPreview(ctx, tips)
+		}
 		log.ZError(ctx, "GetMessageBySeq failed", err, "tips", &tips)
 		return errs.Wrap(err)
 	}
 
-	var revokerRole int32
-	var revokerNickname string
-	if tips.IsAdminRevoke || tips.SesstionType == constant.SingleChatType {
-		_, userName, err := c.getUserNameAndFaceURL(ctx, tips.RevokerUserID)
-		if err != nil {
-			log.ZError(ctx, "GetUserNameAndFaceURL failed", err, "tips", &tips)
-			return errs.Wrap(err)
-		} else {
-			log.ZDebug(ctx, "revoker user name", "userName", userName)
-		}
-
-		revokerNickname = userName
-	} else if tips.SesstionType == constant.ReadGroupChatType {
-		conversation, err := c.db.GetConversation(ctx, tips.ConversationID)
-		if err != nil {
-			log.ZError(ctx, "GetConversation failed", err, "conversationID", tips.ConversationID)
-			return errs.Wrap(err)
-		}
-
-		groupMember, err := c.group.GetSpecifiedGroupMembersInfo(ctx, conversation.GroupID, []string{tips.RevokerUserID})
-		if err != nil {
-			log.ZError(ctx, "GetGroupMemberInfoByGroupIDUserID failed", err, "tips", &tips)
-			return errs.Wrap(err)
-		} else {
-			log.ZDebug(ctx, "revoker member name", "groupMember", groupMember)
-			if len(groupMember) == 0 {
-				revokerNickname = "unknown"
-			} else {
-				revokerRole = groupMember[0].RoleLevel
-				revokerNickname = groupMember[0].Nickname
-			}
-		}
-	}
+	revokerRole, revokerNickname := c.revokeDisplayInfo(ctx, tips, revokedMsg)
 	m := sdk_struct.MessageRevoked{
 		RevokerID:                   tips.RevokerUserID,
 		RevokerRole:                 revokerRole,
@@ -103,6 +80,8 @@ func (c *Conversation) revokeMessage(ctx context.Context, tips *sdkws.RevokeMsgT
 		log.ZError(ctx, "UpdateMessageBySeq failed", err, "tips", &tips)
 		return errs.Wrap(err)
 	}
+	// Persist the recall before notifying the UI; preview repair must not hide it.
+	c.msgListener().OnNewRecvMessageRevoked(utils.StructToJsonString(m))
 	conversation, err := c.db.GetConversation(ctx, tips.ConversationID)
 	if err != nil {
 		log.ZError(ctx, "GetConversation failed", err, "tips", &tips)
@@ -129,7 +108,7 @@ func (c *Conversation) revokeMessage(ctx context.Context, tips *sdkws.RevokeMsgT
 		}
 
 	}
-	c.msgListener().OnNewRecvMessageRevoked(utils.StructToJsonString(m))
+
 	msgList, err := c.db.SearchAllMessageByContentType(ctx, conversation.ConversationID, constant.Quote)
 	if err != nil {
 		log.ZError(ctx, "SearchAllMessageByContentType failed", err, "tips", &tips)

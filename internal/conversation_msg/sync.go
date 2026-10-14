@@ -18,7 +18,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
 	"github.com/openimsdk/protocol/msg"
@@ -44,6 +43,21 @@ func (c *Conversation) SyncAllConversationHashReadSeqs(ctx context.Context) erro
 	if len(seqs) == 0 {
 		return nil
 	}
+	readSeqs := make(map[string]int64, len(seqs))
+	for id, seq := range seqs {
+		readSeqs[id] = seq.HasReadSeq
+	}
+	if err := c.saveReadWatermarks(ctx, readSeqs, true, 0); err != nil {
+		return err
+	}
+	// Protect the local snapshot/update, not the preceding network wait.
+	c.conversationSyncMutex.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			c.conversationSyncMutex.Unlock()
+		}
+	}()
 	var conversationChangedIDs []string
 	var conversationIDsNeedSync []string
 
@@ -62,7 +76,6 @@ func (c *Conversation) SyncAllConversationHashReadSeqs(ctx context.Context) erro
 	stepStartTime = time.Now()
 	for conversationID, v := range seqs {
 		var unreadCount int32
-		c.maxSeqRecorder.Set(conversationID, v.MaxSeq)
 		if v.MaxSeq-v.HasReadSeq < 0 {
 			unreadCount = 0
 			log.ZWarn(ctx, "unread count is less than 0", nil, "conversationID",
@@ -74,10 +87,11 @@ func (c *Conversation) SyncAllConversationHashReadSeqs(ctx context.Context) erro
 			if conversation.UnreadCount != unreadCount {
 				if err := c.db.UpdateColumnsConversation(ctx, conversationID, map[string]interface{}{"unread_count": unreadCount}); err != nil {
 					log.ZWarn(ctx, "UpdateColumnsConversation err", err, "conversationID", conversationID)
-					continue
+					return err
 				}
 				conversationChangedIDs = append(conversationChangedIDs, conversationID)
 			}
+			c.maxSeqRecorder.Set(conversationID, v.MaxSeq)
 		} else {
 			conversationIDsNeedSync = append(conversationIDsNeedSync, conversationID)
 		}
@@ -85,6 +99,9 @@ func (c *Conversation) SyncAllConversationHashReadSeqs(ctx context.Context) erro
 	log.ZDebug(ctx, "Process seqs completed", "duration", time.Since(stepStartTime).String())
 
 	if len(conversationIDsNeedSync) > 0 {
+		// Fetch missing metadata without holding the message-storage lock.
+		c.conversationSyncMutex.Unlock()
+		locked = false
 		stepStartTime = time.Now()
 		r, err := c.getConversationsByIDsFromServer(ctx, conversationIDsNeedSync)
 		if err != nil {
@@ -99,6 +116,26 @@ func (c *Conversation) SyncAllConversationHashReadSeqs(ctx context.Context) erro
 			return err
 		}
 		log.ZDebug(ctx, "batchAddFaceURLAndName completed", "duration", time.Since(stepStartTime).String())
+		c.conversationSyncMutex.Lock()
+		locked = true
+		// Another operation may have created a conversation during the fetch.
+		// Its latest message and local settings must not be replaced by this
+		// metadata-only response.
+		current, err := c.db.GetMultipleConversationDB(ctx, conversationIDsNeedSync)
+		if err != nil {
+			return err
+		}
+		existing := make(map[string]struct{}, len(current))
+		for _, conversation := range current {
+			existing[conversation.ConversationID] = struct{}{}
+		}
+		missing := conversationsOnServer[:0]
+		for _, conversation := range conversationsOnServer {
+			if _, present := existing[conversation.ConversationID]; !present {
+				missing = append(missing, conversation)
+			}
+		}
+		conversationsOnServer = missing
 
 		for _, conversation := range conversationsOnServer {
 			var unreadCount int32
@@ -119,15 +156,24 @@ func (c *Conversation) SyncAllConversationHashReadSeqs(ctx context.Context) erro
 		err = c.db.BatchInsertConversationList(ctx, conversationsOnServer)
 		if err != nil {
 			log.ZWarn(ctx, "BatchInsertConversationList err", err, "conversationsOnServer", conversationsOnServer)
+			return err
 		}
 		log.ZDebug(ctx, "BatchInsertConversationList completed", "duration", time.Since(stepStartTime).String())
+		for _, conversation := range conversationsOnServer {
+			if v, ok := seqs[conversation.ConversationID]; ok {
+				c.maxSeqRecorder.Set(conversation.ConversationID, v.MaxSeq)
+			}
+		}
 	}
+	c.conversationSyncMutex.Unlock()
+	locked = false
 
 	log.ZDebug(ctx, "update conversations", "conversations", conversationChangedIDs)
 	if len(conversationChangedIDs) > 0 {
 		stepStartTime = time.Now()
-		common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{Action: constant.ConChange, Args: conversationChangedIDs}, c.GetCh())
-		common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{Action: constant.TotalUnreadMessageChanged}, c.GetCh())
+		if err := c.notifySyncedConversations(ctx, conversationChangedIDs); err != nil {
+			return err
+		}
 		log.ZDebug(ctx, "TriggerCmdUpdateConversation completed", "duration", time.Since(stepStartTime).String())
 	}
 

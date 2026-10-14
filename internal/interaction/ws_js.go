@@ -236,3 +236,5 @@ func (w *JSWebSocket) IsNil() bool {
 	}
 	return true
 }
+
+func transportCloseCode(err error) (int, bool) { return 0, false }

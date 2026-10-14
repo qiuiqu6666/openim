@@ -62,6 +62,7 @@ const (
 
 	sendAndWaitTime  = time.Second * 10
 	sendChainMaxWait = 3 * time.Second
+	requestBudget    = 30 * time.Second
 )
 
 const (
@@ -80,6 +81,10 @@ var (
 )
 
 type LongConnMgr struct {
+	metrics      connectionTelemetry
+	runOnce      sync.Once
+	recoveryMu   sync.Mutex
+	recoveryWake chan struct{}
 	//conn status mutex
 	w          sync.Mutex
 	connStatus int
@@ -111,6 +116,7 @@ type LongConnMgr struct {
 }
 
 type Message struct {
+	Ctx     context.Context `json:"-"`
 	Message GeneralWsReq
 	Resp    chan *GeneralWsResp
 	Order   *ccontext.SendOrderInfo
@@ -158,18 +164,37 @@ func (c *LongConnMgr) RegisterSendOrder(lane ccontext.SendOrderLane, seq int64, 
 }
 
 func (c *LongConnMgr) Run(ctx context.Context) {
-	go c.readPump(ctx)
-	go c.writePump(ctx)
-	go c.heartbeat(ctx)
+	c.runOnce.Do(func() {
+		ctx, cancel := context.WithCancel(ctx)
+		go func() { defer cancel(); c.readPump(ctx) }()
+		go c.writePump(ctx)
+		go c.heartbeat(ctx)
+		go func() {
+			<-ctx.Done()
+			// DialContext releases this lock on cancellation. Closing the socket
+			// releases a blocked reader without waiting for its read deadline.
+			c.connWrite.Lock()
+			defer c.connWrite.Unlock()
+			if !c.conn.IsNil() {
+				_ = c.conn.Close()
+			}
+		}()
+	})
 }
 
 func (c *LongConnMgr) SendReqWaitResp(ctx context.Context, m proto.Message, reqIdentifier int, resp proto.Message) error {
+	ctx, cancel := context.WithTimeout(ctx, requestBudget)
+	defer cancel()
+	if ctx.Err() != nil {
+		return sdkerrs.ErrCtxDeadline
+	}
 	data, err := proto.Marshal(m)
 	if err != nil {
 		return sdkerrs.ErrArgs
 	}
 	orderInfo, _ := ccontext.GetSendOrderInfo(ctx)
 	msg := Message{
+		Ctx: ctx,
 		Message: GeneralWsReq{
 			ReqIdentifier: reqIdentifier,
 			SendID:        ccontext.Info(ctx).UserID(),
@@ -179,7 +204,11 @@ func (c *LongConnMgr) SendReqWaitResp(ctx context.Context, m proto.Message, reqI
 		Resp:  make(chan *GeneralWsResp, 1),
 		Order: orderInfo,
 	}
-	c.send <- msg
+	select {
+	case c.send <- msg:
+	case <-ctx.Done():
+		return sdkerrs.ErrCtxDeadline
+	}
 	log.ZDebug(ctx, "send message to send channel success", "msg", m, "reqIdentifier", reqIdentifier)
 	select {
 	case <-ctx.Done():
@@ -216,13 +245,13 @@ func (c *LongConnMgr) readPump(ctx context.Context) {
 	log.ZDebug(ctx, "readPump start", "goroutine ID:", getGoroutineID())
 	defer func() {
 		_ = c.close()
-		log.ZWarn(c.ctx, "readPump closed", c.closedErr)
+		log.ZWarn(c.ctx, "readPump closed", c.closeError())
 	}()
 	connNum := 0
 	for {
 		select {
 		case <-ctx.Done():
-			c.closedErr = ctx.Err()
+			c.setCloseError(ctx.Err())
 			log.ZInfo(c.ctx, "readPump done, sdk logout.....")
 			return
 		default:
@@ -230,36 +259,49 @@ func (c *LongConnMgr) readPump(ctx context.Context) {
 		ctx = ccontext.WithOperationID(ctx, utils.OperationIDGenerator())
 		needRecon, err := c.reConn(ctx, &connNum)
 		if !needRecon {
-			c.closedErr = err
+			c.setCloseError(err)
 			return
 		}
 		if err != nil {
 			log.ZWarn(c.ctx, "reConn", err)
-			time.Sleep(c.reconnectStrategy.GetSleepInterval())
+			if !c.waitReconnect(ctx, c.reconnectStrategy.GetSleepInterval()) {
+				return
+			}
 			continue
 		}
 		c.conn.SetReadLimit(maxMessageSize)
 		_ = c.conn.SetReadDeadline(pongWait)
 		messageType, message, err := c.conn.ReadMessage()
 		if err != nil {
+			c.setCloseError(err)
 			log.ZError(c.ctx, "readMessage err", err, "goroutine ID:", getGoroutineID())
 			_ = c.close()
 			c.sub.onConnClosed(err)
 			continue
 		}
+		c.metrics.lastMessage.Store(time.Now().UnixMilli())
 		switch messageType {
 		case MessageBinary:
 			err := c.handleMessage(message)
 			if err != nil {
-				c.closedErr = err
-				return
+				c.setCloseError(err)
+				_ = c.close()
+				if !c.waitReconnect(ctx, time.Second) {
+					return
+				}
+				continue
 			}
 		case MessageText:
-			c.closedErr = ErrNotSupportMessageProtocol
-			return
+			c.setCloseError(ErrNotSupportMessageProtocol)
+			_ = c.close()
+			if !c.waitReconnect(ctx, time.Second) {
+				return
+			}
+			continue
 		case CloseMessage:
-			c.closedErr = ErrClientClosed
-			return
+			c.setCloseError(ErrClientClosed)
+			_ = c.close()
+			continue
 		default:
 		}
 	}
@@ -298,7 +340,7 @@ func (c *LongConnMgr) writePump(ctx context.Context) {
 		}
 		select {
 		case <-ctx.Done():
-			c.closedErr = ctx.Err()
+			c.setCloseError(ctx.Err())
 			log.ZInfo(c.ctx, "writePump done, sdk logout.....")
 			return
 		case message, ok := <-c.send:
@@ -309,7 +351,7 @@ func (c *LongConnMgr) writePump(ctx context.Context) {
 				if err != nil {
 					log.ZError(c.ctx, "send close message error", err)
 				}
-				c.closedErr = ErrChanClosed
+				c.setCloseError(ErrChanClosed)
 				return
 			}
 			c.processIncomingMessage(textLane, mediaLane, message)
@@ -396,7 +438,11 @@ func laneByType(laneType ccontext.SendOrderLane, textLane, mediaLane *laneState)
 func (c *LongConnMgr) dispatchMessage(message Message) {
 	log.ZDebug(c.ctx, "writePump recv message", "reqIdentifier", message.Message.ReqIdentifier,
 		"operationID", message.Message.OperationID, "sendID", message.Message.SendID)
-	resp, err := c.sendAndWaitResp(&message.Message)
+	ctx := message.Ctx
+	if ctx == nil {
+		ctx = c.ctx
+	}
+	resp, err := c.sendAndWaitResp(ctx, &message.Message)
 	if err != nil {
 		resp = &GeneralWsResp{
 			ReqIdentifier: message.Message.ReqIdentifier,
@@ -456,6 +502,7 @@ func (c *LongConnMgr) sendPingMessage(ctx context.Context) {
 			log.ZWarn(ctx, "ping Message failed", err, "goroutine ID:", getGoroutineID(), "opid", opid)
 			return
 		}
+		c.metrics.lastPing.Store(time.Now().UnixMilli())
 	} else {
 		log.ZDebug(ctx, "ping Message failed, connection", "connStatus", c.GetConnectionStatus(), "goroutine ID:", getGoroutineID(), "opid", opid)
 	}
@@ -514,13 +561,15 @@ func getGoroutineID() int64 {
 	return id
 }
 
-func (c *LongConnMgr) sendAndWaitResp(msg *GeneralWsReq) (*GeneralWsResp, error) {
-	tempChan, err := c.writeBinaryMsgAndRetry(msg)
+func (c *LongConnMgr) sendAndWaitResp(ctx context.Context, msg *GeneralWsReq) (*GeneralWsResp, error) {
+	tempChan, err := c.writeBinaryMsgAndRetry(ctx, msg)
 	defer c.Syncer.DelCh(msg.MsgIncr)
 	if err != nil {
 		return nil, err
 	} else {
 		select {
+		case <-ctx.Done():
+			return nil, sdkerrs.ErrCtxDeadline
 		case resp := <-tempChan:
 			return resp, nil
 		case <-time.After(sendAndWaitTime):
@@ -530,19 +579,42 @@ func (c *LongConnMgr) sendAndWaitResp(msg *GeneralWsReq) (*GeneralWsResp, error)
 	}
 }
 
-func (c *LongConnMgr) writeBinaryMsgAndRetry(msg *GeneralWsReq) (chan *GeneralWsResp, error) {
+func (c *LongConnMgr) writeBinaryMsgAndRetry(ctx context.Context, msg *GeneralWsReq) (chan *GeneralWsResp, error) {
 	msgIncr, tempChan := c.Syncer.AddCh(msg.SendID)
 	msg.MsgIncr = msgIncr
 	if c.GetConnectionStatus() != Connected && msg.ReqIdentifier == constant.GetNewestSeq {
 		return tempChan, sdkerrs.ErrNetwork.WrapMsg("connection closed,conning...")
 	}
 	for i := 0; i < maxReconnectAttempts; i++ {
-		err := c.writeBinaryMsg(*msg)
+		if ctx.Err() != nil {
+			return tempChan, sdkerrs.ErrCtxDeadline
+		}
+		c.connWrite.Lock()
+		var err error
+		if ctx.Err() != nil {
+			err = sdkerrs.ErrCtxDeadline
+		} else {
+			budget := writeWait
+			if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < budget {
+				budget = time.Until(deadline)
+			}
+			err = c.writeBinaryMsgWithBudget(*msg, budget)
+		}
+		c.connWrite.Unlock()
+		if errors.Is(err, sdkerrs.ErrCtxDeadline) {
+			return tempChan, err
+		}
 		if err != nil {
 			log.ZError(c.ctx, "send binary message error", err, "message", msg)
-			c.closedErr = err
+			c.setCloseError(err)
 			_ = c.close()
-			time.Sleep(time.Second * 1)
+			timer := time.NewTimer(time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return tempChan, sdkerrs.ErrCtxDeadline
+			case <-timer.C:
+			}
 			continue
 		} else {
 			return tempChan, nil
@@ -595,6 +667,10 @@ func (c *LongConnMgr) writeSubInfo(subscribeUserID, unsubscribeUserID []string, 
 }
 
 func (c *LongConnMgr) writeBinaryMsgNoLock(req GeneralWsReq) error {
+	return c.writeBinaryMsgWithBudget(req, writeWait)
+}
+
+func (c *LongConnMgr) writeBinaryMsgWithBudget(req GeneralWsReq, budget time.Duration) error {
 	encodeBuf, err := c.encoder.Encode(req)
 	if err != nil {
 		return err
@@ -602,7 +678,10 @@ func (c *LongConnMgr) writeBinaryMsgNoLock(req GeneralWsReq) error {
 	if c.GetConnectionStatus() != Connected {
 		return sdkerrs.ErrNetwork.WrapMsg("connection closed,re conning...")
 	}
-	_ = c.conn.SetWriteDeadline(writeWait)
+	if budget <= 0 {
+		return sdkerrs.ErrCtxDeadline
+	}
+	_ = c.conn.SetWriteDeadline(budget)
 	if c.IsCompression {
 		resultBuf, compressErr := c.compressor.CompressWithPool(encodeBuf)
 		if compressErr != nil {
@@ -621,7 +700,8 @@ func (c *LongConnMgr) close() error {
 		return nil
 	}
 	c.connStatus = Closed
-	log.ZWarn(c.ctx, "conn closed", c.closedErr)
+	log.ZWarn(c.ctx, "conn closed", c.closeError())
+	c.metrics.disconnected(c.ctx, c.closeError(), c.GetBackground())
 	return c.conn.Close()
 }
 
@@ -802,11 +882,20 @@ func (c *LongConnMgr) reConn(ctx context.Context, num *int) (needRecon bool, err
 	if c.IsCompression {
 		url += fmt.Sprintf("&compression=%s", "gzip")
 	}
-	log.ZDebug(ctx, "conn start", "url", url)
-	resp, err := c.conn.Dial(url, nil)
+	log.ZDebug(ctx, "conn start", "endpoint", ccontext.Info(ctx).WsAddr(), "background", c.GetBackground())
+	c.metrics.attempts.Add(1)
+	resp, err := dialSession(ctx, c.conn, url)
+	if ctx.Err() != nil {
+		if err == nil {
+			_ = c.conn.Close()
+		}
+		c.SetConnectionStatus(Closed)
+		return false, ctx.Err()
+	}
 	if err != nil {
 		c.SetConnectionStatus(Closed)
 		if resp != nil {
+			defer resp.Body.Close()
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return true, err
@@ -844,8 +933,16 @@ func (c *LongConnMgr) reConn(ctx context.Context, num *int) (needRecon bool, err
 		ccontext.GetApiErrCodeCallback(ctx).OnError(ctx, err)
 		c.listener.OnConnectFailed(sdkerrs.NetworkError, err.Error())
 		c.conn.Close()
+		c.SetConnectionStatus(Closed)
 		return true, err
 	}
+	if ctx.Err() != nil {
+		_ = c.conn.Close()
+		c.SetConnectionStatus(Closed)
+		return false, ctx.Err()
+	}
+	c.setCloseError(nil)
+	c.metrics.connected(ctx, c.GetBackground())
 	c.listener.OnConnectSuccess()
 	c.sub.onConnSuccess()
 	c.ctx = newContext(c.conn.LocalAddr())
@@ -897,9 +994,10 @@ func (c *LongConnMgr) doPushMsg(ctx context.Context, wsResp GeneralWsResp) error
 	return nil
 }
 func (c *LongConnMgr) Close(ctx context.Context) {
+	c.wakeReconnect()
 	if c.GetConnectionStatus() == Connected {
 		log.ZInfo(ctx, "network change conn close")
-		c.closedErr = errors.New("closed by client network change")
+		c.setCloseError(errors.New("closed by client network change"))
 		err := c.close()
 		if err != nil {
 			log.ZWarn(ctx, "actively close err", err)
@@ -916,8 +1014,12 @@ func (c *LongConnMgr) GetBackground() bool {
 }
 func (c *LongConnMgr) SetBackground(isBackground bool) {
 	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	changed := c.IsBackground != isBackground
 	c.IsBackground = isBackground
+	c.mutex.Unlock()
+	if changed && !isBackground {
+		c.wakeReconnect()
+	}
 }
 
 // receive ping and send pong.
@@ -931,6 +1033,7 @@ func (c *LongConnMgr) pingHandler(_ string) error {
 
 // when client send pong.
 func (c *LongConnMgr) pongHandler(appData string) error {
+	c.metrics.lastPong.Store(time.Now().UnixMilli())
 	log.ZDebug(c.ctx, "server Pong Message Received", "appData", appData)
 	if err := c.conn.SetReadDeadline(pongWait); err != nil {
 		return err

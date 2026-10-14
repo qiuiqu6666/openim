@@ -44,40 +44,65 @@ const (
 const InitSyncProgress = 10
 
 func (c *Conversation) Work(c2v common.Cmd2Value) {
+	var workErr error
+	defer func() {
+		if failure := recover(); failure != nil {
+			if c2v.Receipt != nil {
+				c2v.Receipt <- fmt.Errorf("conversation work panic: %v", failure)
+			}
+			panic(failure)
+		}
+		if c2v.Receipt != nil {
+			c2v.Receipt <- workErr
+		}
+	}()
+	if c2v.Ctx != nil && c2v.Ctx.Err() != nil {
+		workErr = c2v.Ctx.Err()
+		return
+	}
+	if !c2v.ExpiresAt.IsZero() && !time.Now().Before(c2v.ExpiresAt) {
+		workErr = context.DeadlineExceeded
+		return
+	}
 	log.ZDebug(c2v.Ctx, "NotificationCmd start", "caller", c2v.Caller, "cmd", c2v.Cmd, "value", c2v.Value)
 	defer log.ZDebug(c2v.Ctx, "NotificationCmd end", "caller", c2v.Caller, "cmd", c2v.Cmd, "value", c2v.Value)
 	switch c2v.Cmd {
 	case constant.CmdNewMsgCome:
-		c.doMsgNew(c2v)
+		workErr = c.doMsgNew(c2v)
 	case constant.CmdUpdateConversation:
 		c.doUpdateConversation(c2v)
 	case constant.CmdUpdateMessage:
 		c.doUpdateMessage(c2v)
 	case constant.CmdNotification:
-		c.doNotificationManager(c2v)
+		workErr = c.doNotificationManager(c2v)
 	case constant.CmdSyncData:
-		c.syncData(c2v)
+		workErr = c.syncData(c2v)
 	case constant.CmdSyncFlag:
-		c.syncFlag(c2v)
+		workErr = c.syncFlag(c2v)
 	case constant.CmdMsgSyncInReinstall:
-		c.doMsgSyncByReinstalled(c2v)
+		workErr = c.doMsgSyncByReinstalled(c2v)
 	}
 }
 
-func (c *Conversation) syncFlag(c2v common.Cmd2Value) {
-	ctx := c2v.Ctx
+func (c *Conversation) syncFlag(c2v common.Cmd2Value) error {
+	ctx, cancel := syncCommandContext(c2v)
+	defer cancel()
 	syncFlag := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).SyncFlag
 	switch syncFlag {
 	case constant.AppDataSyncStart:
 		log.ZDebug(ctx, "AppDataSyncStart")
 		c.startTime = time.Now()
+		c.progress = 0
+		c.msgOffset = 0
 		c.ConversationListener().OnSyncServerStart(true)
 		c.ConversationListener().OnSyncServerProgress(1)
 		asyncWaitFunctions := []func(c context.Context) error{
 			c.group.SyncAllJoinedGroupsAndMembers,
 			c.relation.IncrSyncFriends,
 		}
-		runSyncFunctions(ctx, asyncWaitFunctions, asyncWait)
+		if err := runRequiredSyncFunctions(ctx, asyncWaitFunctions, true); err != nil {
+			return err
+		}
 		c.addInitProgress(InitSyncProgress * 4 / 10)              // add 40% of InitSyncProgress as progress
 		c.ConversationListener().OnSyncServerProgress(c.progress) // notify server current Progress
 
@@ -85,7 +110,9 @@ func (c *Conversation) syncFlag(c2v common.Cmd2Value) {
 			c.IncrSyncConversations,
 			c.SyncAllConversationHashReadSeqs,
 		}
-		runSyncFunctions(ctx, syncWaitFunctions, syncWait)
+		if err := runRequiredSyncFunctions(ctx, syncWaitFunctions, false); err != nil {
+			return err
+		}
 		log.ZWarn(ctx, "core data sync over", nil, "cost time", time.Since(c.startTime).String())
 		c.addInitProgress(InitSyncProgress * 6 / 10)              // add 60% of InitSyncProgress as progress
 		c.ConversationListener().OnSyncServerProgress(c.progress) // notify server current Progress
@@ -94,7 +121,9 @@ func (c *Conversation) syncFlag(c2v common.Cmd2Value) {
 			c.user.SyncLoginUserInfoWithoutNotice,
 			c.relation.SyncAllBlackListWithoutNotice,
 		}
-		runSyncFunctions(ctx, asyncNoWaitFunctions, asyncNoWait)
+		// Join optional metadata work before the interruptible attempt exits.
+		// Otherwise cancellation could leave lock-owning background jobs behind.
+		runSyncFunctions(ctx, asyncNoWaitFunctions, asyncWait)
 
 	case constant.AppDataSyncFinish:
 		log.ZDebug(ctx, "AppDataSyncFinish", "time", time.Since(c.startTime).String())
@@ -104,16 +133,17 @@ func (c *Conversation) syncFlag(c2v common.Cmd2Value) {
 	case constant.MsgSyncBegin:
 		log.ZDebug(ctx, "MsgSyncBegin")
 		c.ConversationListener().OnSyncServerStart(false)
-		c.syncData(c2v)
+		return c.syncData(c2v)
 	case constant.MsgSyncFailed:
 		c.ConversationListener().OnSyncServerFailed(false)
 	case constant.MsgSyncEnd:
 		log.ZDebug(ctx, "MsgSyncEnd", "time", time.Since(c.startTime).String())
 		c.ConversationListener().OnSyncServerFinish(false)
 	}
+	return nil
 }
 
-func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) {
+func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) error {
 	ctx := c2v.Ctx
 	allMsg := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs
 
@@ -129,7 +159,9 @@ func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) {
 			} else if msg.ContentType > constant.GroupNotificationBegin && msg.ContentType < constant.GroupNotificationEnd {
 				c.group.DoNotification(ctx, msg)
 			} else {
-				c.DoNotification(ctx, msg)
+				if err := c.doNotification(ctx, msg); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -141,11 +173,12 @@ func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) {
 				if err := c.db.SetNotificationSeq(ctx, conversationID, lastMsg.Seq); err != nil {
 					// Log an error if setting the sequence number fails
 					log.ZError(ctx, "SetNotificationSeq err", err, "conversationID", conversationID, "lastMsg", lastMsg)
+					return err
 				}
 			}
 		}
 	}
-
+	return nil
 }
 
 func (c *Conversation) DoNotification(ctx context.Context, msg *sdkws.MsgData) {
@@ -408,11 +441,9 @@ func (c *Conversation) doUpdateMessage(c2v common.Cmd2Value) {
 
 }
 
-func (c *Conversation) syncData(c2v common.Cmd2Value) {
-	c.conversationSyncMutex.Lock()
-	defer c.conversationSyncMutex.Unlock()
-
-	ctx := c2v.Ctx
+func (c *Conversation) syncData(c2v common.Cmd2Value) error {
+	ctx, cancel := syncCommandContext(c2v)
+	defer cancel()
 	c.startTime = time.Now()
 	//clear SubscriptionStatusMap
 	//c.user.OnlineStatusCache.DeleteAll()
@@ -422,7 +453,9 @@ func (c *Conversation) syncData(c2v common.Cmd2Value) {
 		c.SyncAllConversationHashReadSeqs,
 	}
 
-	runSyncFunctions(ctx, syncFuncs, syncWait)
+	if err := runRequiredSyncFunctions(ctx, syncFuncs, false); err != nil {
+		return err
+	}
 
 	// Asynchronous sync functions
 	asyncFuncs := []func(c context.Context) error{
@@ -433,7 +466,31 @@ func (c *Conversation) syncData(c2v common.Cmd2Value) {
 		c.IncrSyncConversationsWithLock,
 	}
 
-	runSyncFunctions(ctx, asyncFuncs, asyncNoWait)
+	// These jobs share the cancellable attempt and are joined before yielding
+	// to message updates, including jobs holding conversationSyncMutex.
+	return runRequiredSyncFunctions(ctx, asyncFuncs, true)
+}
+
+func runRequiredSyncFunctions(ctx context.Context, funcs []func(context.Context) error, parallel bool) error {
+	if !parallel {
+		for _, fn := range funcs {
+			if err := runSyncFunctionSafely(ctx, fn); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	results := make(chan error, len(funcs))
+	for _, fn := range funcs {
+		go func(run func(context.Context) error) { results <- runSyncFunctionSafely(ctx, run) }(fn)
+	}
+	var firstError error
+	for range funcs {
+		if err := <-results; err != nil && firstError == nil {
+			firstError = err
+		}
+	}
+	return firstError
 }
 
 func runSyncFunctions(ctx context.Context, funcs []func(c context.Context) error, mode int) {
@@ -463,7 +520,7 @@ func executeSyncFunction(ctx context.Context, fn func(c context.Context) error, 
 
 	funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 	startTime := time.Now()
-	err := fn(ctx)
+	err := runSyncFunctionSafely(ctx, fn)
 	duration := time.Since(startTime)
 	if err != nil {
 		log.ZWarn(ctx, fmt.Sprintf("%s sync error", funcName), err, "duration", duration.String())

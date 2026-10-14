@@ -83,6 +83,8 @@ func (u *WsRespAsyn) AddChByIncr(msgIncr string) chan *GeneralWsResp {
 }
 
 func (u *WsRespAsyn) GetCh(msgIncr string) chan *GeneralWsResp {
+	u.wsMutex.RLock()
+	defer u.wsMutex.RUnlock()
 	ch, ok := u.wsNotification[msgIncr]
 	if ok {
 		return ch
@@ -115,23 +117,24 @@ func (u *WsRespAsyn) notifyCh(ch chan *GeneralWsResp, value *GeneralWsResp, time
 	}
 }
 
-// write a unit test for this function
 func (u *WsRespAsyn) NotifyResp(ctx context.Context, wsResp GeneralWsResp) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	u.wsMutex.Lock()
 	defer u.wsMutex.Unlock()
 
-	ch := u.GetCh(wsResp.MsgIncr)
+	ch := u.wsNotification[wsResp.MsgIncr]
 	if ch == nil {
 		return errs.WrapMsg(errors.New("no ch"), "GetCh failed "+wsResp.MsgIncr)
 	}
-	for {
-		err := u.notifyCh(ch, &wsResp, 1)
-		if err != nil {
-			log.ZWarn(ctx, "TriggerCmdNewMsgCome failed ", err, "ch", ch, "wsResp", wsResp)
-			continue
-
-		}
+	// Each request has one buffered response slot. A full slot is a duplicate;
+	// waiting here would block DelCh and the websocket reader indefinitely.
+	select {
+	case ch <- &wsResp:
 		return nil
+	default:
+		return errors.New("duplicate response: " + wsResp.MsgIncr)
 	}
 }
 func (u *WsRespAsyn) WaitResp(ctx context.Context, ch chan *GeneralWsResp, timeout int) (*GeneralWsResp, error) {

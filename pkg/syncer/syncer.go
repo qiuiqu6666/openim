@@ -16,6 +16,7 @@ package syncer
 
 import (
 	"context"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
 	"reflect"
 
 	"github.com/google/go-cmp/cmp"
@@ -273,6 +274,10 @@ func (s *Syncer[T, RESP, V]) Sync(ctx context.Context, serverData []T, localData
 
 	// Iterate through server data to sync with local data.
 	for i := range serverData {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		common.ReportSyncProgress(ctx)
 		server := serverData[i]
 		id := s.uuid(server)
 		local, ok := localMap[id]

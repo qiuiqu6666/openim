@@ -17,6 +17,8 @@
 package interaction
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -27,6 +29,15 @@ type Default struct {
 	ConnType  int
 	conn      *websocket.Conn
 	isSetConf bool
+}
+
+func transportCloseCode(err error) (int, bool) {
+	var closed *websocket.CloseError
+	if !errors.As(err, &closed) {
+		return 0, false
+	}
+	// 1006 and 1005 are local sentinels, never a received close code.
+	return closed.Code, closed.Code != 1006 && closed.Code != 1005 && closed.Code != 1015
 }
 
 func (d *Default) SetReadDeadline(timeout time.Duration) error {
@@ -70,7 +81,13 @@ func (d *Default) ReadMessage() (int, []byte, error) {
 }
 
 func (d *Default) Dial(urlStr string, requestHeader http.Header) (*http.Response, error) {
-	conn, httpResp, err := websocket.DefaultDialer.Dial(urlStr, requestHeader)
+	return d.DialContext(context.Background(), urlStr, requestHeader)
+}
+
+func (d *Default) DialContext(ctx context.Context, urlStr string, requestHeader http.Header) (*http.Response, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	conn, httpResp, err := websocket.DefaultDialer.DialContext(ctx, urlStr, requestHeader)
 	if err == nil {
 		d.conn = conn
 	}

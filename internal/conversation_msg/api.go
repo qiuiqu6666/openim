@@ -38,7 +38,16 @@ func (c *Conversation) GetAllConversationList(ctx context.Context) ([]*model_str
 }
 
 func (c *Conversation) GetConversationListSplit(ctx context.Context, offset, count int) ([]*model_struct.LocalConversation, error) {
-	return c.db.GetConversationListSplitDB(ctx, offset, count)
+	c.conversationSyncMutex.Lock()
+	defer c.conversationSyncMutex.Unlock()
+	rows, err := c.db.GetConversationListSplitDB(ctx, offset, count)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.repairTiedPreviews(ctx, rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 func (c *Conversation) HideConversation(ctx context.Context, conversationID string) error {
@@ -167,6 +176,9 @@ func (c *Conversation) updateMsgStatusAndTriggerConversation(ctx context.Context
 	lc.LatestMsg = utils.StructToJsonString(s)
 	lc.LatestMsgSendTime = sendTime
 	_ = common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{ConID: lc.ConversationID, Action: constant.AddConOrUpLatMsg, Args: *lc}, c.GetCh())
+	if status == constant.MsgStatusSendSuccess {
+		c.maintainMessageCache(ctx, lc.ConversationID, []string{clientMsgID})
+	}
 }
 
 func (c *Conversation) fileName(ftype string, id string) string {

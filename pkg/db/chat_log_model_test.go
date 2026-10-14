@@ -14,17 +14,25 @@ import (
 
 func TestGetLatestValidateServerMessage(t *testing.T) {
 	ctx := context.Background()
-	db, err := NewDataBase(ctx, "1695766238", "../../", 6)
-	if err != nil {
-		return
-	}
-
-	message, err := db.GetLatestValidServerMessage(ctx, "sg_93606743", 1710774468519, true)
-
+	db, err := NewDataBase(ctx, "latest-valid-test", t.TempDir(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("message", message)
+	t.Cleanup(func() { _ = db.Close(ctx) })
+	if err := db.BatchInsertMessageList(ctx, "sg_test", []*model_struct.LocalChatLog{
+		{ClientMsgID: "server-old", Seq: 1, SendTime: 10},
+		{ClientMsgID: "server-new", Seq: 2, SendTime: 20},
+		{ClientMsgID: "pending", Seq: 0, SendTime: 25},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	message, err := db.GetLatestValidServerMessage(ctx, "sg_test", 30, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message == nil || message.ClientMsgID != "server-new" {
+		t.Fatalf("latest valid server row = %+v", message)
+	}
 }
 
 func TestCleanDuplicateInvalidMessages(t *testing.T) {

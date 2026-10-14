@@ -160,6 +160,19 @@ func (d *DataBase) BatchInsertMessageMap(ctx context.Context, insertMsg map[stri
 			if len(messages) == 0 {
 				continue
 			}
+			if err := applyMessageRevocations(tx, conversationID, messages); err != nil {
+				return err
+			}
+			if err := applyMessageReadWatermarks(tx, conversationID, d.loginUserID, messages); err != nil {
+				return err
+			}
+			for _, row := range messages {
+				if row.Seq > 0 && row.Status >= constant.MsgStatusHasDeleted {
+					if err := tx.Table(utils.GetTableName(conversationID)).Where("seq = ?", row.Seq).Updates(map[string]interface{}{"status": row.Status, "content": ""}).Error; err != nil {
+						return err
+					}
+				}
+			}
 			t0 := time.Now()
 			if err := tx.WithContext(ctx).
 				Table(utils.GetTableName(conversationID)).
@@ -591,7 +604,7 @@ func (d *DataBase) GetLatestActiveMessage(ctx context.Context, conversationID st
 	if isReverse {
 		timeOrder = "send_time ASC"
 	} else {
-		timeOrder = "send_time DESC"
+		timeOrder = "send_time DESC, seq DESC"
 	}
 
 	// only get status < 4(NotHasDeleted) Msg

@@ -76,6 +76,10 @@ type Conversation struct {
 	sender                 *messageSender
 	senderOnce             sync.Once
 	duplicateMessageRepair sync.Map
+	// Owned by the serialized conversation worker. Retain undelivered self
+	// messages across partial writes; this is a delivery obligation, not proof
+	// that any message or conversation write has committed.
+	pendingSelfDeliveries map[selfDeliveryKey]int64
 }
 
 func (c *Conversation) ConversationEventQueue() chan common.Cmd2Value {
@@ -135,8 +139,10 @@ func (c *Conversation) getSender() *messageSender {
 func (c *Conversation) initSyncer() {
 	c.conversationSyncer = syncer.New2[*model_struct.LocalConversation, pbConversation.GetOwnerConversationResp, string](
 		syncer.WithInsert[*model_struct.LocalConversation, pbConversation.GetOwnerConversationResp, string](func(ctx context.Context, value *model_struct.LocalConversation) error {
-			if err := c.batchAddFaceURLAndName(ctx, value); err != nil {
-				return err
+			if prepared, _ := ctx.Value(profilesPreparedKey{}).(bool); !prepared {
+				if err := c.batchAddFaceURLAndName(ctx, value); err != nil {
+					return err
+				}
 			}
 			return c.db.InsertConversation(ctx, value)
 		}),
@@ -212,14 +218,43 @@ type onlineMsgKey struct {
 	ServerMsgID string
 }
 
-func (c *Conversation) doMsgNew(c2v common.Cmd2Value) {
-	allMsg := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs
+func (c *Conversation) doMsgNew(c2v common.Cmd2Value) error {
+	input := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation)
+	allMsg := input.Msgs
 	ctx := c2v.Ctx
+	if input.ReconcileReadSeq {
+		// This is the only metadata dependency of a recovery page. It prevents
+		// replaying old rows from incrementing unread after process restart.
+		if err := c.SyncAllConversationHashReadSeqs(ctx); err != nil {
+			return err
+		}
+	}
+	if len(allMsg) == 0 {
+		return nil
+	}
 	var isTriggerUnReadCount bool
 	insertMsg := make(map[string][]*model_struct.LocalChatLog, 10)
 	updateMsg := make(map[string][]*model_struct.LocalChatLog, 10)
 	var exceptionMsg []*model_struct.LocalChatLog
 	var newMessages sdk_struct.NewMsgList
+	selfDeliveries := make(map[selfDeliveryKey]int64)
+	selfPreviewRepairs := make(map[string][]*sdk_struct.MsgStruct)
+	peerPreviewRepairs := make(map[string][]*model_struct.LocalConversation)
+	messageDeliveries := make(map[string]map[string]int64)
+	deliveryAcknowledgements := make(map[string][]string)
+	appendSelfDelivery := func(conversationID string, msg *sdk_struct.MsgStruct) {
+		key := selfDeliveryKey{conversationID, msg.ClientMsgID}
+		if _, exists := selfDeliveries[key]; !exists {
+			newMessages = append(newMessages, msg)
+			selfDeliveries[key] = msg.Seq
+			if msg.Seq > 0 {
+				messageDeliveries[conversationID][msg.ClientMsgID] = msg.Seq
+				deliveryAcknowledgements[conversationID] = append(deliveryAcknowledgements[conversationID], msg.ClientMsgID)
+			}
+		}
+	}
+	unreadSeqs := make(map[string][]int64)
+	unreadMaxSeqs := make(map[string]int64)
 
 	var isUnreadCount, isConversationUpdate, isHistory, isNotPrivate, isSenderConversationUpdate bool
 
@@ -237,25 +272,33 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) {
 	onlineMap := make(map[onlineMsgKey]struct{})
 
 	for conversationID, msgs := range allMsg {
+		if err := c.applyIncomingRevocations(ctx, conversationID, msgs.Msgs); err != nil {
+			return err
+		}
+		pending, err := c.loadMessageDeliveries(ctx, conversationID)
+		if err != nil {
+			return err
+		}
+		messageDeliveries[conversationID] = pending
 		totalIncomingMsgs += len(msgs.Msgs)
 		conversationIDs = append(conversationIDs, conversationID)
 
 		log.ZDebug(ctx, "parse message in one conversation", "conversationID", conversationID, "message length", len(msgs.Msgs), "data", msgs.Msgs)
 
-		// Only query existing messages for self-sent messages (SendID == loginUserID).
-		// For others' duplicates, we tolerate dropping on insert (ON CONFLICT DO NOTHING).
+		// Recovery and pending delivery need persisted identity/status as well as
+		// the usual lookup for locally sent messages.
 		selfClientIDs := make([]string, 0, len(msgs.Msgs))
 		for _, msg := range msgs.Msgs {
-			if msg.SendID == c.loginUserID {
+			if input.Recovery || pending[msg.ClientMsgID] != 0 || msg.SendID == c.loginUserID {
 				selfClientIDs = append(selfClientIDs, msg.ClientMsgID)
 			}
 		}
-		var err error
 		var clientMsgs []*model_struct.LocalChatLog
 		if len(selfClientIDs) > 0 {
 			clientMsgs, err = c.db.GetMessagesByClientMsgIDs(ctx, conversationID, selfClientIDs)
 			if err != nil {
 				log.ZWarn(ctx, "GetMessagesByClientMsgIDs failed", err, "conversationID", conversationID, "clientIDs", selfClientIDs)
+				return err
 			}
 		}
 		clientMsgMap := datautil.SliceToMap(clientMsgs, func(e *model_struct.LocalChatLog) string {
@@ -266,6 +309,15 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) {
 		var updateMessage []*model_struct.LocalChatLog
 
 		for _, v := range msgs.Msgs {
+			if pending[v.ClientMsgID] == v.Seq && v.Seq > 0 {
+				deliveryAcknowledgements[conversationID] = append(deliveryAcknowledgements[conversationID], v.ClientMsgID)
+				if v.SendID == c.loginUserID {
+					if c.pendingSelfDeliveries == nil {
+						c.pendingSelfDeliveries = make(map[selfDeliveryKey]int64)
+					}
+					c.pendingSelfDeliveries[selfDeliveryKey{conversationID, v.ClientMsgID}] = v.Seq
+				}
+			}
 			log.ZDebug(ctx, "parse message ", "conversationID", conversationID, "msg", v)
 			isHistory = utils.GetSwitchFromOptions(v.Options, constant.IsHistory)
 
@@ -287,14 +339,26 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) {
 				insertMessage = append(insertMessage, dbMessage)
 				continue
 			}
+			fromLocal := false
+			if existing := clientMsgMap[v.ClientMsgID]; existing != nil && existing.Seq == v.Seq && v.Seq > 0 {
+				if existing.Status == constant.MsgStatusHasDeleted || existing.Status == constant.MsgStatusFiltered {
+					delete(c.pendingSelfDeliveries, selfDeliveryKey{conversationID, v.ClientMsgID})
+					continue
+				}
+				// Recovery must preserve newer local recall/read/content updates.
+				// An outstanding callback is not permission to replay old content.
+				msg = converter.LocalChatLogToMsgStruct(existing)
+				fromLocal = true
+			}
 
 			msg.Status = constant.MsgStatusSendSuccess
 
 			//De-analyze data
-			err := converter.PopulateMsgStructByContentType(msg)
-			if err != nil {
-				log.ZError(ctx, "Parsing data error:", err, "type: ", msg.ContentType, "msg", msg)
-				continue
+			if !fromLocal {
+				if err := converter.PopulateMsgStructByContentType(msg); err != nil {
+					log.ZError(ctx, "Parsing data error:", err, "type: ", msg.ContentType, "msg", msg)
+					return err
+				}
 			}
 
 			if !isNotPrivate {
@@ -320,6 +384,24 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) {
 							msg.Status = constant.MsgStatusFiltered
 						}
 						updateMessage = append(updateMessage, converter.MsgStructToLocalChatLog(msg))
+						if isConversationUpdate && isSenderConversationUpdate {
+							selfPreviewRepairs[conversationID] = append(selfPreviewRepairs[conversationID], msg)
+						}
+					} else if existingMsg.Seq == msg.Seq {
+						// An already committed row is not an exceptional duplicate.
+						// Its preview or delivery may still be pending after a later
+						// write failed. Respect local deletion/filtering on replay.
+						key := selfDeliveryKey{conversationID, msg.ClientMsgID}
+						if existingMsg.Status == constant.MsgStatusHasDeleted || existingMsg.Status == constant.MsgStatusFiltered {
+							delete(c.pendingSelfDeliveries, key)
+							continue
+						}
+						if isConversationUpdate && isSenderConversationUpdate {
+							selfPreviewRepairs[conversationID] = append(selfPreviewRepairs[conversationID], msg)
+						}
+						if isConversationUpdate && isHistory && c.pendingSelfDeliveries[key] == msg.Seq {
+							appendSelfDelivery(conversationID, msg)
+						}
 					} else {
 						dbMessage := converter.MsgStructToLocalChatLog(msg)
 						c.handleExceptionMessages(ctx, existingMsg, dbMessage)
@@ -328,24 +410,13 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) {
 					}
 				} else {
 					log.ZInfo(ctx, "sync message", "msg", msg)
-					lc := model_struct.LocalConversation{
-						ConversationType:  v.SessionType,
-						LatestMsg:         utils.StructToJsonString(msg),
-						LatestMsgSendTime: msg.SendTime,
-						ConversationID:    conversationID,
-					}
-					switch v.SessionType {
-					case constant.SingleChatType:
-						lc.UserID = v.RecvID
-					case constant.WriteGroupChatType, constant.ReadGroupChatType:
-						lc.GroupID = v.GroupID
-					}
 					if isConversationUpdate {
 						if isSenderConversationUpdate {
-							log.ZDebug(ctx, "updateConversation msg", "message", v, "conversation", lc)
-							c.updateConversation(&lc, conversationSet)
+							c.updateSelfMessagePreview(conversationID, msg, conversationSet)
 						}
-						newMessages = append(newMessages, msg)
+						if isHistory {
+							appendSelfDelivery(conversationID, msg)
+						}
 					}
 					if isHistory {
 						selfInsertMessage = append(selfInsertMessage, converter.MsgStructToLocalChatLog(msg))
@@ -368,16 +439,45 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) {
 				case constant.NotificationChatType:
 					lc.UserID = v.SendID
 				}
-				if isUnreadCount {
-					if c.maxSeqRecorder.IsNewMsg(conversationID, msg.Seq) {
-						isTriggerUnReadCount = true
-						lc.UnreadCount = 1
-						c.maxSeqRecorder.Incr(conversationID, 1)
+				if existing := clientMsgMap[msg.ClientMsgID]; existing != nil && existing.Seq == msg.Seq {
+					// A latest-page read can store a body before its first live
+					// delivery. Cache presence alone must not suppress unread.
+					// The commit below rechecks this watermark under the same
+					// lock as server reconciliation before incrementing it.
+					if isHistory && isConversationUpdate && isUnreadCount && !existing.IsRead && msg.Seq > c.maxSeqRecorder.Get(conversationID) && pending[msg.ClientMsgID] != msg.Seq {
+						pending[msg.ClientMsgID] = msg.Seq
+						deliveryAcknowledgements[conversationID] = append(deliveryAcknowledgements[conversationID], msg.ClientMsgID)
 					}
+					if pending[msg.ClientMsgID] == msg.Seq && existing.Status != constant.MsgStatusHasDeleted && existing.Status != constant.MsgStatusFiltered {
+						// Storage survived, delivery did not. Rebuild the batch;
+						// read-watermark reconciliation prevents duplicate unread.
+						if isConversationUpdate {
+							c.updateConversation(&lc, conversationSet)
+							newMessages = append(newMessages, msg)
+						}
+						if isUnreadCount {
+							unreadSeqs[conversationID] = append(unreadSeqs[conversationID], msg.Seq)
+							// The previous commit may have failed before publishing
+							// total unread, even if the watermark already advanced.
+							isTriggerUnReadCount = true
+						}
+						continue
+					}
+					if isConversationUpdate && existing.Status != constant.MsgStatusHasDeleted && existing.Status != constant.MsgStatusFiltered {
+						peerPreviewRepairs[conversationID] = append(peerPreviewRepairs[conversationID], &lc)
+					}
+					continue
+				}
+				if isUnreadCount {
+					unreadSeqs[conversationID] = append(unreadSeqs[conversationID], msg.Seq)
 				}
 				if isConversationUpdate {
 					c.updateConversation(&lc, conversationSet)
 					newMessages = append(newMessages, msg)
+					if isHistory && msg.Seq > 0 {
+						pending[msg.ClientMsgID] = msg.Seq
+						deliveryAcknowledgements[conversationID] = append(deliveryAcknowledgements[conversationID], msg.ClientMsgID)
+					}
 				}
 				if isHistory {
 					othersInsertMessage = append(othersInsertMessage, converter.MsgStructToLocalChatLog(msg))
@@ -423,9 +523,32 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) {
 	list, err := c.db.GetMultipleConversationDB(ctx, conversationIDs)
 	if err != nil {
 		log.ZError(ctx, "GetMultipleConversationDB", err, "conversationIDs", conversationIDs)
-		return
+		return err
 	}
 	log.ZDebug(ctx, "GetMultipleConversationDB done", "duration", time.Since(tGetMultipleConversationDB).String(), "count", len(list))
+	// Compute unread increments against the snapshot protected by the same
+	// lock as server read-sequence reconciliation. Do not commit them before
+	// the corresponding conversation write succeeds.
+	for id, seqs := range unreadSeqs {
+		generated := conversationSet[id]
+		if generated == nil {
+			continue
+		}
+		committed := c.maxSeqRecorder.Get(id)
+		seen := make(map[int64]struct{}, len(seqs))
+		for _, seq := range seqs {
+			if seq <= committed {
+				continue
+			}
+			if _, duplicate := seen[seq]; duplicate {
+				continue
+			}
+			seen[seq] = struct{}{}
+			generated.UnreadCount++
+			isTriggerUnReadCount = true
+			unreadMaxSeqs[id] = max(unreadMaxSeqs[id], seq)
+		}
+	}
 
 	var hList []*model_struct.LocalConversation
 	tBuildLocalConversationMap := time.Now()
@@ -436,23 +559,42 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) {
 		return e.ConversationID
 	})
 	log.ZDebug(ctx, "doMsgNew buildLocalConversationMap done", "duration", time.Since(tBuildLocalConversationMap).String(), "local", len(list), "hidden", len(hList))
+	for id, previews := range peerPreviewRepairs {
+		local := m[id]
+		if local == nil || (local.LatestMsgSendTime > 0 && local.LatestMsg != "") {
+			for _, preview := range previews {
+				c.updateConversation(preview, conversationSet)
+			}
+		}
+	}
+	for id, messages := range selfPreviewRepairs {
+		// Replaying an already persisted self message must not undo a user's
+		// hide/clear. Filter eligibility before selecting the newest preview,
+		// so an old delivered duplicate cannot mask a pending new delivery.
+		local := m[id]
+		for _, msg := range messages {
+			pending := c.pendingSelfDeliveries[selfDeliveryKey{id, msg.ClientMsgID}] == msg.Seq
+			if local == nil || pending || (local.LatestMsgSendTime > 0 && local.LatestMsg != "") {
+				c.updateSelfMessagePreview(id, msg, conversationSet)
+			}
+		}
+	}
 
 	tDiff := time.Now()
-	c.diff(ctx, m, conversationSet, conversationChangedSet, newConversationSet)
+	if err := c.diff(ctx, m, conversationSet, conversationChangedSet, newConversationSet); err != nil {
+		return err
+	}
 	log.ZDebug(ctx, "diff done", "duration", time.Since(tDiff).String(), "new", len(newConversationSet), "changed", len(conversationChangedSet))
 	log.ZDebug(ctx, "doMsgNew conversationChanges", "new", len(newConversationSet), "changed", len(conversationChangedSet))
-
-	//seq sync message update
-	tBatchUpdateMessageList := time.Now()
-	if err := c.batchUpdateMessageList(ctx, updateMsg); err != nil {
-		log.ZError(ctx, "sync seq normal message err  :", err)
+	// Register before any message write: a DB fallback can commit a prefix
+	// and then fail. Successful callbacks, not a batch return value, release
+	// the obligation to deliver a self message from another device.
+	if len(selfDeliveries) > 0 && c.pendingSelfDeliveries == nil {
+		c.pendingSelfDeliveries = make(map[selfDeliveryKey]int64)
 	}
-	log.ZDebug(ctx, "batchUpdateMessageList done", "duration", time.Since(tBatchUpdateMessageList).String())
-
-	//Normal message storage
-	tBatchInsertMessageList := time.Now()
-	_ = c.batchInsertMessageList(ctx, insertMsg)
-	log.ZDebug(ctx, "batchInsertMessageList done", "duration", time.Since(tBatchInsertMessageList).String())
+	for key, seq := range selfDeliveries {
+		c.pendingSelfDeliveries[key] = seq
+	}
 
 	//
 	for _, v := range hList {
@@ -482,24 +624,39 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) {
 		}
 	}
 
-	tBatchUpdateConversationList := time.Now()
-	if err := c.db.BatchUpdateConversationList(ctx, append(datautil.Values(conversationChangedSet), datautil.Values(phConversationChangedSet)...)); err != nil {
-		log.ZError(ctx, "insert changed conversation err :", err)
+	for id, pending := range messageDeliveries {
+		if len(deliveryAcknowledgements[id]) > 0 {
+			if err := c.saveMessageDeliveries(ctx, id, pending); err != nil {
+				return err
+			}
+		}
 	}
-	log.ZDebug(ctx, "BatchUpdateConversationList done", "duration", time.Since(tBatchUpdateConversationList).String(), "count", len(conversationChangedSet)+len(phConversationChangedSet))
-	//New conversation storage
-
-	tBatchInsertConversationList := time.Now()
-	if err := c.db.BatchInsertConversationList(ctx, datautil.Values(phNewConversationSet)); err != nil {
-		log.ZError(ctx, "insert new conversation err:", err)
+	if err := c.persistMessageSyncBatch(ctx, updateMsg, insertMsg,
+		append(datautil.Values(conversationChangedSet), datautil.Values(phConversationChangedSet)...), datautil.Values(phNewConversationSet)); err != nil {
+		return err
 	}
-	log.ZDebug(ctx, "BatchInsertConversationList done", "duration", time.Since(tBatchInsertConversationList).String(), "count", len(phNewConversationSet))
+	for id, seq := range unreadMaxSeqs {
+		if conversationChangedSet[id] != nil || phConversationChangedSet[id] != nil || phNewConversationSet[id] != nil {
+			c.maxSeqRecorder.Set(id, seq)
+		}
+	}
+	var totalUnreadCount int32
+	if isTriggerUnReadCount {
+		var err error
+		totalUnreadCount, err = c.db.GetTotalUnreadMsgCountDB(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	log.ZDebug(ctx, "doMsgNew before callbacks", "duration", time.Since(b).String(), "conversations", len(allMsg), "incomingMsgs", totalIncomingMsgs)
 
 	if c.batchMsgListener() != nil {
 		c.batchNewMessages(ctx, newMessages, conversationChangedSet, newConversationSet, onlineMap)
 	} else {
 		c.newMessage(ctx, newMessages, conversationChangedSet, newConversationSet, onlineMap)
+	}
+	for key := range selfDeliveries {
+		delete(c.pendingSelfDeliveries, key)
 	}
 	if len(newConversationSet) > 0 {
 		c.ConversationListener().OnNewConversation(utils.StructToJsonString(datautil.Values(newConversationSet)))
@@ -509,15 +666,32 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) {
 	}
 
 	if isTriggerUnReadCount {
-		_ = c.OnTotalUnreadMessageCountChanged(ctx)
+		c.ConversationListener().OnTotalUnreadMessageCountChanged(totalUnreadCount)
+	}
+	for id, ids := range deliveryAcknowledgements {
+		pending := messageDeliveries[id]
+		for _, msgID := range ids {
+			delete(pending, msgID)
+		}
+		if err := c.saveMessageDeliveries(ctx, id, pending); err != nil {
+			return err
+		}
 	}
 
 	//Exception message storage
+	for id, rows := range allMsg {
+		ids := make([]string, 0, len(rows.Msgs))
+		for _, row := range rows.Msgs {
+			ids = append(ids, row.ClientMsgID)
+		}
+		c.maintainMessageCache(ctx, id, ids)
+	}
 	for _, v := range exceptionMsg {
 		log.ZWarn(ctx, "exceptionMsg show: ", nil, "msg", *v)
 	}
 
 	log.ZDebug(ctx, "doMsgNew done", "duration", time.Since(b).String(), "conversations", len(allMsg), "incomingMsgs", totalIncomingMsgs, "newMessages", len(newMessages))
+	return nil
 }
 
 func (c *Conversation) OnTotalUnreadMessageCountChanged(ctx context.Context) error {
@@ -525,6 +699,7 @@ func (c *Conversation) OnTotalUnreadMessageCountChanged(ctx context.Context) err
 	totalUnreadCount, err := c.db.GetTotalUnreadMsgCountDB(ctx)
 	if err != nil {
 		log.ZWarn(ctx, "TotalUnreadMessageChanged GetTotalUnreadMsgCountDB err", err)
+		return err
 	} else {
 		log.ZDebug(ctx, "TotalUnreadMessageChanged", "totalUnreadCount", totalUnreadCount)
 		c.ConversationListener().OnTotalUnreadMessageCountChanged(totalUnreadCount)
@@ -532,7 +707,7 @@ func (c *Conversation) OnTotalUnreadMessageCountChanged(ctx context.Context) err
 	return nil
 }
 
-func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) {
+func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) error {
 	allMsg := c2v.Value.(sdk_struct.CmdMsgSyncInReinstall).Msgs
 	ctx := c2v.Ctx
 	msgLen := len(allMsg)
@@ -549,6 +724,9 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) {
 	for conversationID, msgs := range allMsg {
 		log.ZDebug(ctx, "parse message in one conversation", "conversationID",
 			conversationID, "message length", len(msgs.Msgs))
+		if err := c.applyIncomingRevocations(ctx, conversationID, msgs.Msgs); err != nil {
+			return err
+		}
 		var insertMessage, selfInsertMessage, othersInsertMessage []*model_struct.LocalChatLog
 		var latestMsg *sdk_struct.MsgStruct
 		if len(msgs.Msgs) == 0 {
@@ -573,7 +751,7 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) {
 			err := msgHandleByContentType(msg)
 			if err != nil {
 				log.ZError(ctx, "Parsing data error:", err, "type: ", msg.ContentType, "msg", msg)
-				continue
+				return err
 			}
 
 			if conversationID == "" {
@@ -609,21 +787,27 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) {
 		insertMsg[conversationID] = append(insertMessage, c.faceURLAndNicknameHandle(ctx, selfInsertMessage, othersInsertMessage, conversationID)...)
 	}
 
-	// message storage
-	_ = c.batchInsertMessageList(ctx, insertMsg)
-
-	// conversation storage
-	if err := c.db.BatchUpdateConversationList(ctx, conversationList); err != nil {
-		log.ZError(ctx, "insert new conversation err:", err)
+	if err := c.persistMessageSyncBatch(ctx, nil, insertMsg, conversationList, nil); err != nil {
+		return err
 	}
 	log.ZDebug(ctx, "doMsgSyncByReinstalled before callbacks", "duration", time.Since(b).String(), "conversations", len(allMsg))
+	for id, rows := range insertMsg {
+		ids := make([]string, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.ClientMsgID)
+		}
+		c.maintainMessageCache(ctx, id, ids)
+	}
 
 	// log.ZDebug(ctx, "progress is", "msgLen", msgLen, "msgOffset", c.msgOffset, "total", total, "now progress is", (c.msgOffset*(100-InitSyncProgress))/total + InitSyncProgress)
-	c.ConversationListener().OnSyncServerProgress((c.msgOffset*(100-InitSyncProgress))/total + InitSyncProgress)
+	if total > 0 {
+		c.ConversationListener().OnSyncServerProgress((c.msgOffset*(100-InitSyncProgress))/total + InitSyncProgress)
+	}
 	//Exception message storage
 	for _, v := range exceptionMsg {
 		log.ZWarn(ctx, "exceptionMsg show: ", nil, "msg", *v)
 	}
+	return nil
 }
 
 func (c *Conversation) addInitProgress(progress int) {
@@ -633,12 +817,12 @@ func (c *Conversation) addInitProgress(progress int) {
 	}
 }
 
-func (c *Conversation) diff(ctx context.Context, local, generated, cc, nc map[string]*model_struct.LocalConversation) {
+func (c *Conversation) diff(ctx context.Context, local, generated, cc, nc map[string]*model_struct.LocalConversation) error {
 	var newConversations []*model_struct.LocalConversation
 	for _, v := range generated {
 		if localC, ok := local[v.ConversationID]; ok {
 
-			if v.LatestMsgSendTime > localC.LatestMsgSendTime {
+			if newerConversationPreview(v, localC) {
 				localC.UnreadCount = localC.UnreadCount + v.UnreadCount
 				localC.LatestMsg = v.LatestMsg
 				localC.LatestMsgSendTime = v.LatestMsgSendTime
@@ -654,11 +838,13 @@ func (c *Conversation) diff(ctx context.Context, local, generated, cc, nc map[st
 	}
 	if err := c.batchAddFaceURLAndName(ctx, newConversations...); err != nil {
 		log.ZError(ctx, "batchAddFaceURLAndName err", err, "conversations", newConversations)
+		return err
 	} else {
 		for _, v := range newConversations {
 			nc[v.ConversationID] = v
 		}
 	}
+	return nil
 }
 
 func (c *Conversation) genConversationGroupAtType(lc *model_struct.LocalConversation, s *sdk_struct.MsgStruct) {
@@ -686,14 +872,18 @@ func (c *Conversation) batchUpdateMessageList(ctx context.Context, updateMsg map
 	for conversationID, messages := range updateMsg {
 		conversation, err := c.db.GetConversation(ctx, conversationID)
 		if err != nil {
-			log.ZError(ctx, "GetConversation err", err, "conversationID", conversationID)
-			continue
+			if !errors.Is(err, errs.ErrRecordNotFound) {
+				return err
+			}
 		}
 		latestMsg := &sdk_struct.MsgStruct{}
-		if err := json.Unmarshal([]byte(conversation.LatestMsg), latestMsg); err != nil {
-			log.ZError(ctx, "Unmarshal err", err, "conversationID",
-				conversationID, "latestMsg", conversation.LatestMsg, "messages", messages)
-			continue
+		if conversation != nil && conversation.LatestMsg != "" {
+			if err := json.Unmarshal([]byte(conversation.LatestMsg), latestMsg); err != nil {
+				log.ZError(ctx, "Unmarshal err", err, "conversationID", conversationID)
+				// A missing/corrupt preview must not prevent the message itself
+				// from receiving its server sequence and delivery status.
+				latestMsg = &sdk_struct.MsgStruct{}
+			}
 		}
 		for _, v := range messages {
 			v1 := new(model_struct.LocalChatLog)
@@ -708,16 +898,19 @@ func (c *Conversation) batchUpdateMessageList(ctx context.Context, updateMsg map
 			if err != nil {
 				return errs.WrapMsg(err, "BatchUpdateMessageList failed")
 			}
-			if latestMsg.ClientMsgID == v.ClientMsgID {
+			if conversation != nil && latestMsg.ClientMsgID == v.ClientMsgID {
 				latestMsg.ServerMsgID = v.ServerMsgID
 				latestMsg.Seq = v.Seq
 				latestMsg.SendTime = v.SendTime
 				latestMsg.Status = v.Status
 				conversation.LatestMsg = utils.StructToJsonString(latestMsg)
 
-				c.doUpdateConversation(common.Cmd2Value{Value: common.UpdateConNode{ConID: conversation.ConversationID,
-					Action: constant.AddConOrUpLatMsg, Args: *conversation}})
-
+				if err := c.db.UpdateColumnsConversation(ctx, conversationID, map[string]interface{}{
+					"latest_msg": conversation.LatestMsg,
+				}); err != nil {
+					return err
+				}
+				c.ConversationListener().OnConversationChanged(utils.StructToJsonString([]*model_struct.LocalConversation{conversation}))
 			}
 		}
 
@@ -748,6 +941,10 @@ func (c *Conversation) batchInsertMessageList(ctx context.Context, insertMsg map
 				e := c.db.InsertMessage(ctx, conversationID, v)
 				if e != nil {
 					log.ZError(ctx, "InsertMessage err", err, "conversationID", conversationID, "message", v)
+					stored, readErr := c.db.GetMessage(ctx, conversationID, v.ClientMsgID)
+					if readErr != nil || stored == nil || stored.Seq != v.Seq {
+						return e
+					}
 				}
 			}
 		}
@@ -882,7 +1079,7 @@ func (c *Conversation) updateConversation(lc *model_struct.LocalConversation, cs
 	if oldC, ok := cs[lc.ConversationID]; !ok {
 		cs[lc.ConversationID] = lc
 	} else {
-		if lc.LatestMsgSendTime > oldC.LatestMsgSendTime {
+		if newerConversationPreview(lc, oldC) {
 			oldC.UnreadCount = oldC.UnreadCount + lc.UnreadCount
 			oldC.LatestMsg = lc.LatestMsg
 			oldC.LatestMsgSendTime = lc.LatestMsgSendTime

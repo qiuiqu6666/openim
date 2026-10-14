@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/ccontext"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/page"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/sdkerrs"
 	"github.com/openimsdk/tools/errs"
@@ -70,6 +71,7 @@ func ApiPost(ctx context.Context, api string, req, resp any) (err error) {
 	defer func(start time.Time) {
 		elapsed := time.Since(start).String()
 		if err == nil {
+			common.ReportSyncProgress(ctx)
 			log.ZDebug(ctx, "CallApi success", "duration", elapsed, "api", api, "state", "success")
 		} else {
 			log.ZError(ctx, "CallApi error", err, "duration", elapsed, "api", api, "state", "failed")
