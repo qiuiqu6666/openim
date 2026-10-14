@@ -42,6 +42,16 @@ void main() {
   late int inputResets;
   late int scrolls;
 
+  test('late send completion preserves an already confirmed read receipt', () {
+    final message = _outgoing('read-first')
+      ..isRead = true
+      ..hasReadTime = 123456;
+    delivery.sendSucceeded(message, _sent('read-first')..isRead = false);
+    expect(message.status, MessageStatus.succeeded);
+    expect(message.isRead, isTrue);
+    expect(message.hasReadTime, 123456);
+  });
+
   setUp(() {
     OpenIM.iMManager.userID = 'self';
     currentAccount = 'self';

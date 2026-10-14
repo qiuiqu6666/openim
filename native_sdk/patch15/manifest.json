@@ -3,7 +3,7 @@
   "tag": "v3.8.3-patch.15",
   "commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
   "patch": "0001-background-message-recovery.patch",
-  "patch_sha256": "aa7deb1466b038fbe7af8c20085eca05e9a7081bc2f2734c5e0baf7274f3914c",
+  "patch_sha256": "4afb06281de98a1171ecdd69e5ad237eae0ebcf56788e7c0c3bb45456f4bbf15",
   "created": "2026-10-13",
   "source_path": "E:\\openim\\sdk-source\\openim-sdk-core-recovery",
   "go_version": "1.24.0",
@@ -16,9 +16,9 @@
     "official_server_integration": "unavailable: local OpenIM service not running",
     "ios_framework": "passed recovery.10; ios arm64 and simulator arm64/x86_64; four Core packages passed on macOS",
     "race_detector": "not run",
-    "android_aar_build": "passed recovery.12, 4 ABIs; 45 patched files match final build snapshot",
-    "android_app_build": "recovery.12 not APK-built or installed; final Flutter debug bundle passed",
-    "android_runtime_version": "recovery.12 not installed; previous recovery.10 observed on emulator",
+    "android_aar_build": "passed recovery.12-readseq2; all four Android ABIs",
+    "android_app_build": "passed recovery.12-readseq2 arm64 debug APK; installed on connected Android",
+    "android_runtime_version": "verified v3.8.3-patch.15+recovery.12-readseq2 on Android",
     "flutter_recovery_regressions": "67 passed, 4 existing failures reproduced with original sync overlay; 48 connection/chat overlap tests pass",
     "connection_repair": "7 new Core tests and 1 new Flutter outage test passed",
     "sync_priority": "42 Core tests passed; vet and Windows full build passed; 27 patch files match native build source",
@@ -29,16 +29,18 @@
     "prelogin_state": "prelogin late userID regression fixed using persisted credential owner; fresh uninitialized SDK and initial-sync replay tests passed",
     "metadata_watchdog": "common/network/interaction/conversation tests passed; vet and full Windows build passed; idle cancellation and progress extension tested; fresh-device end-to-end pending",
     "online_seq_recovery": "11 new Core tests and 4 new Flutter tests passed; Core 4-package test/vet and Windows CGO=0 build passed; 63 Flutter regressions passed, 4 baseline failures reproduced; no two-device or race validation",
-    "android_plugin_compile": "passed recovery.12 compileDebugJavaWithJavac; dependencyInsight confirms recovery.12",
+    "android_plugin_compile": "passed recovery.12-revoke1 compileDebugJavaWithJavac",
     "message_loss_crosscheck": "23 SDK scheduling scenarios x10; self-message retry fault tests; 83 Flutter recovery and 77 session tests passed; Core 4-package test/vet and Windows CGO=0 build passed; mock two-device verification only",
-    "message_loss_boundaries": "Process termination between message and preview writes can leave preview stale; no physical two-device or real SQLite fault/race validation; server partial-success/deletion ambiguity retained; iOS patch not built"
+    "message_loss_boundaries": "Process termination between message and preview writes can leave preview stale; no physical two-device or real SQLite fault/race validation; server partial-success/deletion ambiguity retained; iOS patch not built",
+    "group_revoke": "3 new fault scenarios passed; isolated packaged Core common/interaction/conversation_msg tests and conversation_msg vet passed; Flutter 49 recall tests passed; physical two-account reproduction not verified",
+    "cumulative_read_receipt": "range/self/replay/empty/huge/storage-failure and explicit self replay tests passed; packaged common/interaction/conversation tests and vet passed; physical queue advanced to notification seq 119 then two syncEnded callbacks (two startup syncFailed before recovery)"
   },
   "android": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "aar_sha256": "bbde05e359cdc83a501fa352b7d303d4205c0c4935116063536d95c228cef361",
+    "aar_sha256": "ba46681fb2fa110ce0be2d0fcdd2c1585107a4d6a22393c173dda78494e3477d",
     "ndk": "28.2.13676358",
-    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.12",
-    "sdk_version": "v3.8.3-patch.15+recovery.12",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.12-readseq2",
+    "sdk_version": "v3.8.3-patch.15+recovery.12-readseq2",
     "abis": [
       "armeabi-v7a",
       "arm64-v8a",
@@ -66,7 +68,7 @@
     "archive_purpose": "unpatched official reference only; installed Framework built by build-ios.sh",
     "app_binary_sha256": "f7bf73d9bb5606a04c2165be9e88ba50d79c9330279b3149ed841a8d16fa66c4",
     "app_version": "3.0.1+2026",
-    "verified_at": "2026-10-13T07:05:51.045916+00:00",
+    "verified_at": "2026-10-13T15:05:51.045916+08:00",
     "app_validation_scope": "Built on e5bde1945525680bf2c5ac25779ca7d2ffea1149 with local iOS recovery.10 and version changes; subsequent remote app changes not rebuilt."
   }
 }

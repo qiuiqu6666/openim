@@ -6,10 +6,12 @@ import 'package:openim_common/openim_common.dart';
 
 import '../controller/im_controller.dart';
 import '../im_callback.dart';
+import '../youmeng/youmeng_runtime.dart';
 import '../user_activity/activity_runtime.dart';
 import 'manual_node_switch_service.dart';
 import 'node_endpoint.dart';
 import 'startup_node_selection.dart';
+import 'route_history.dart';
 
 /// One coordinator for all node pages, reusing the existing SDK session owner.
 class ManualNodeSwitchRuntime {
@@ -39,7 +41,12 @@ class ManualNodeSwitchRuntime {
     final token = DataSp.imToken!;
     if (Logger().sdkIsInited) await logic.logout();
     checkSession();
-    await StartupNodeSelector.persist(node);
+    if (node.signature == NodeEndpoint.shield.signature) {
+      YoumengRuntime.applyShieldRoute();
+    } else {
+      await StartupNodeSelector.persist(node);
+      Config.useRuntimeNetworkRoute(null);
+    }
     checkSession();
     dio.options.baseUrl = node.imApi;
 
@@ -70,6 +77,7 @@ class ManualNodeSwitchRuntime {
       }
       checkSession();
       ActivityRuntime.instance.sessionRestored(user, token);
+      await RouteHistory.remember(node);
     } finally {
       await subscription.cancel();
     }

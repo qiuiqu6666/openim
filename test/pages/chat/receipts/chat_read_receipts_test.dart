@@ -624,6 +624,36 @@ void main() {
     });
   }
 
+  test('receipt before history arrives survives later unread snapshots',
+      () async {
+    receipts.applyC2CReceipt([
+      ReadReceiptInfo(userID: 'peer', msgIDList: ['late']),
+      ReadReceiptInfo(userID: 'other', msgIDList: ['unrelated']),
+    ], 'peer');
+    messages.addAll([_received('late', 1), _received('unrelated', 2)]);
+    await _flush();
+    expect(messages.first.isRead, isTrue);
+    expect(messages.last.isRead, isFalse);
+    messages[0] = _received('late', 1);
+    await _flush();
+    expect(messages.first.isRead, isTrue);
+  });
+
+  test('late receipt state cannot cross a closed session', () async {
+    receipts.applyC2CReceipt([
+      ReadReceiptInfo(userID: 'peer', msgIDList: ['late'])
+    ], 'peer');
+    OpenIM.iMManager.userID = 'another-account';
+    messages.add(_received('late', 1));
+    await _flush();
+    expect(messages.single.isRead, isFalse);
+    receipts.close();
+    OpenIM.iMManager.userID = 'self';
+    messages[0] = _received('late', 1);
+    await _flush();
+    expect(messages.single.isRead, isFalse);
+  });
+
   test('C2C receipt bursts filter peers and publish one refresh', () async {
     final matching = _received('matching', 1);
     final unrelated = _received('unrelated', 2);

@@ -42,7 +42,9 @@ Future<GlobalKey<NavigatorState>> host(WidgetTester tester,
 }
 
 Future<void> push(WidgetTester tester, GlobalKey<NavigatorState> navigator,
-    {Widget child = target, double edge = 24, bool enabled = true}) async {
+    {Widget child = target,
+    double edge = AppSwipeBackTokens.edgeWidth,
+    bool enabled = true}) async {
   unawaited(navigator.currentState!.push(AppMaterialPageRoute<void>(
     builder: (_) => child,
     edgeStartWidthPx: edge,
@@ -89,16 +91,46 @@ void main() {
     expect(find.byKey(pageKey), findsNothing);
   });
 
-  testWidgets('normal 24, chat 40 and funds 96 edges exclude the page body',
-      (tester) async {
+  testWidgets('normal, chat and funds share a 40 pixel edge', (tester) async {
     final nav = await host(tester);
-    for (final edge in [24.0, 40.0, 96.0]) {
+    for (final edge in [
+      AppSwipeBackTokens.edgeWidth,
+      AppSwipeBackTokens.chatEdgeWidth,
+      AppSwipeBackTokens.walletOverlayEdgeWidth
+    ]) {
+      expect(edge, 40);
       await push(tester, nav, edge: edge);
       await swipe(tester, start: edge + 5);
       expect(find.byKey(pageKey), findsOneWidget);
       await swipe(tester, start: edge - 5);
       expect(find.byKey(pageKey), findsNothing);
     }
+  });
+
+  testWidgets('whole 40 pixel edge tolerates initial finger jitter',
+      (tester) async {
+    final nav = await host(tester);
+    for (final start in [1.0, 24.0, 39.5]) {
+      await push(tester, nav,
+          child: Scaffold(
+              key: pageKey,
+              body: ListView.builder(
+                  itemCount: 40,
+                  itemBuilder: (_, i) =>
+                      SizedBox(height: 60, child: Text('$i')))));
+      final gesture = await tester.startGesture(Offset(start, 300));
+      await gesture.moveBy(const Offset(-0.2, 0.5));
+      await tester.pump();
+      expect(nav.currentState!.userGestureInProgress, isFalse);
+      await gesture.moveBy(const Offset(90, 0),
+          timeStamp: const Duration(milliseconds: 800));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.byKey(pageKey), findsNothing, reason: 'start=$start');
+    }
+    await push(tester, nav);
+    await swipe(tester, start: 40.5);
+    expect(find.byKey(pageKey), findsOneWidget);
   });
 
   testWidgets(

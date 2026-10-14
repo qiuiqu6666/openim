@@ -67,9 +67,11 @@ void main() {
         'http://127.0.0.1:28815/uploads/a.png');
     expect(
         config.resolveMediaUrl(
-            'http://127.0.0.1:8815/uploads/a.png?download=1'),
+            'http://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815/uploads/a.png?download=1'),
         'http://127.0.0.1:28815/uploads/a.png?download=1');
-    expect(config.resolveMediaUrl('//127.0.0.1:8815/uploads/a.png'),
+    expect(
+        config.resolveMediaUrl(
+            '//lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815/uploads/a.png'),
         'http://127.0.0.1:28815/uploads/a.png');
     expect(config.resolveMediaUrl('https://cdn.example/a.png'),
         'https://cdn.example/a.png');
@@ -83,7 +85,8 @@ void main() {
     expect(custom.cableUri.toString(), 'wss://custom.example/support/cable');
     Config.useRuntimeNetworkRoute(null);
     expect(config.normalizedBaseUrl, Config.customerServiceOriginUrl);
-    expect(config.cableUri.toString(), 'ws://127.0.0.1:8815/cable');
+    expect(config.cableUri.toString(),
+        'ws://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815/cable');
   });
   test(
       'visitor session survives forwarding-port changes and resumes old conversation',

@@ -44,14 +44,18 @@ class Config {
   static late String cachePath;
   static RuntimeNetworkRoute? _runtimeNetworkRoute;
 
+  static final networkRouteRevision = ValueNotifier<int>(0);
+
   static void useRuntimeNetworkRoute(RuntimeNetworkRoute? route) {
     _runtimeNetworkRoute = route;
+    networkRouteRevision.value++;
   }
 
   static const customerServiceOriginUrl =
-      'http://127.0.0.1:8815';
+      'http://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:8815';
   static String? get customerServiceForwardUrl =>
-      _runtimeNetworkRoute?.customerServiceUrl;
+      _runtimeNetworkRoute?.customerServiceUrl ??
+      DataSp.getServerConfig()?['customerServiceUrl'];
 
   static const uiW = 375.0;
   static const uiH = 812.0;
@@ -75,7 +79,7 @@ class Config {
   static const friendScheme = "io.openim.app/addFriend/";
   static const groupScheme = "https://99chat.vip?group=";
 
-  static const _host = '127.0.0.1';
+  static const _host = '99chatapi.99chat.vip';
 
   static String get serverIp {
     String? ip;
@@ -83,7 +87,9 @@ class Config {
     if (null != server) {
       ip = server['serverIP'];
     }
-    return ip == null || ip == '129.226.192.93' || ip == '127.0.0.1' ? _host : ip;
+    return ip == null || ip == '129.226.192.93' || ip == '127.0.0.1'
+        ? _host
+        : ip;
   }
 
   static String get appAuthUrl {
@@ -93,8 +99,8 @@ class Config {
     if (null != server) {
       url = server['authUrl'];
     }
-    return _currentEndpoint(url, 'http://127.0.0.1:10008',
-        retired: 'https://99chatapi.99chat.vip',
+    return _currentEndpoint(url, 'https://99chatapi.99chat.vip',
+        retired: 'http://127.0.0.1:10008',
         previous: 'http://129.226.192.93:10008');
   }
 
@@ -105,8 +111,8 @@ class Config {
     if (null != server) {
       url = server['apiUrl'];
     }
-    return _currentEndpoint(url, 'http://127.0.0.1:10002',
-        retired: 'https://99imapi.99chat.vip',
+    return _currentEndpoint(url, 'https://99imapi.99chat.vip',
+        retired: 'http://127.0.0.1:10002',
         previous: 'http://129.226.192.93:10002');
   }
 
@@ -117,16 +123,18 @@ class Config {
     if (null != server) {
       url = server['wsUrl'];
     }
-    return _currentEndpoint(url, 'ws://127.0.0.1:10001',
-        retired: 'wss://websocket.99chat.vip',
-        previous: 'ws://129.226.192.93:10001');
+    return _currentEndpoint(url, 'wss://websocket.99chat.vip',
+        retired: 'ws://127.0.0.1:10001', previous: 'ws://129.226.192.93:10001');
   }
 
   // Migrate saved built-in routes without replacing custom deployments.
   static String _currentEndpoint(String? saved, String current,
       {required String retired, String? previous}) {
     final value = saved?.trim().replaceFirst(RegExp(r'/+$'), '');
-    if (value == null || value.isEmpty || value == retired || value == previous) {
+    if (value == null ||
+        value.isEmpty ||
+        value == retired ||
+        value == previous) {
       return current;
     }
     return value;

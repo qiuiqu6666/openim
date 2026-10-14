@@ -16,8 +16,12 @@ void main() {
           'FlutterError: ${details.exception.toString()}, ${details.stack.toString()}');
     };
 
+    Timer? retry;
+    var failures = 0;
     Future<void> boot() async {
+      retry?.cancel();
       await Config.init(() async {
+        failures = 0;
         await AppSystemBars.initialize();
         AppThemeController.instance.load();
         NavigationGlassController.instance.load();
@@ -27,13 +31,16 @@ void main() {
           prepareNetwork: YoumengRuntime.prepare,
           onInitError: YoumengRuntime.enabled
               ? (_) {
+                  const delays = [2, 4, 8, 15, 30];
+                  retry = Timer(Duration(seconds: delays[failures]), boot);
+                  if (failures < delays.length - 1) failures++;
                   runApp(MaterialApp(
                       home: Scaffold(
                           body: Center(
                               child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                        const Text('网络保护启动失败，请检查配置后重试'),
+                        const Text('正在恢复网络连接，将自动重试'),
                         TextButton(onPressed: boot, child: const Text('重试')),
                       ])))));
                 }

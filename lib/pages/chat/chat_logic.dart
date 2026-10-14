@@ -977,8 +977,12 @@ class ChatLogic extends SuperController {
       _historyRecovery.request(resetAttempts: true);
       _latestMessageRecovery.conversationChanged(resetAttempts: true);
     }));
-    unawaited(onScrollToBottomLoad()
-        .whenComplete(() => entryTrace?.mark('initial_history_finished')));
+    unawaited(onScrollToBottomLoad().whenComplete(() {
+      entryTrace?.mark('initial_history_finished');
+      // A cold local database can return an empty first page while the
+      // conversation already advertises a persisted latest message.
+      _latestMessageRecovery.conversationChanged();
+    }));
 
     conversationSub = imLogic.conversationChangedSubject.listen((value) {
       final obj = value.firstWhereOrNull(

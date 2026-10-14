@@ -70,7 +70,7 @@ class AppController extends GetxController with UpgradeManger {
   bool get shouldMuted =>
       OpenIMLiveClient().isBusy ||
       rtcBridge?.hasConnection == true ||
-      Get.find<IMController>().currentSdkStatus != IMSdkStatus.syncEnded;
+      !Get.find<IMController>().notificationSessionReady;
 
   final _foregroundMessageAlerts = ForegroundMessageAlert();
   late final _appBadges = AppBadgeCoordinator(
@@ -256,7 +256,8 @@ class AppController extends GetxController with UpgradeManger {
   bool _notificationSdkReady() =>
       !_closed &&
       Get.isRegistered<IMController>() &&
-      Get.find<IMController>().currentSdkStatus == IMSdkStatus.syncEnded &&
+      OpenIM.iMManager.isLogined &&
+      Get.find<IMController>().notificationSessionReady &&
       _notificationSession()?.accountID == OpenIM.iMManager.userID &&
       Get.currentRoute != AppRoutes.splash &&
       Get.currentRoute != AppRoutes.login &&

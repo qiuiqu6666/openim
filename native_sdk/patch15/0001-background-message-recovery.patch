@@ -1488,6 +1488,329 @@ index 0000000..2b4ced1
 +		t.Fatal("repair is not idempotent")
 +	}
 +}
+diff --git a/internal/conversation_msg/read_drawing.go b/internal/conversation_msg/read_drawing.go
+index 36c675c..c5f0adf 100644
+--- a/internal/conversation_msg/read_drawing.go
++++ b/internal/conversation_msg/read_drawing.go
+@@ -178,7 +178,9 @@ func (c *Conversation) doUnreadCount(ctx context.Context, conversation *model_st
+ 				return err
+ 			}
+ 			if hasReadMessage.IsRead {
+-				return errs.New("read info from self can be ignored").Wrap()
++				// A replayed acknowledgement is already applied, not a failed
++				// notification page. Let the following notifications advance.
++				return nil
+ 
+ 			} else {
+ 				_, err := c.db.MarkConversationMessageAsReadBySeqs(ctx, conversation.ConversationID, seqs)
+@@ -232,6 +234,9 @@ func (c *Conversation) doReadDrawing(ctx context.Context, msg *sdkws.MsgData) er
+ 		return err
+ 	}
+ 	log.ZDebug(ctx, "do readDrawing", "tips", tips)
++	if len(tips.Seqs) == 0 {
++		return c.doReadWatermark(ctx, msg, tips)
++	}
+ 	conversation, err := c.db.GetConversation(ctx, tips.ConversationID)
+ 	if err != nil {
+ 		log.ZWarn(ctx, "GetConversation err", err, "conversationID", tips.ConversationID)
+diff --git a/internal/conversation_msg/read_watermark.go b/internal/conversation_msg/read_watermark.go
+new file mode 100644
+index 0000000..c88d10b
+--- /dev/null
++++ b/internal/conversation_msg/read_watermark.go
+@@ -0,0 +1,115 @@
++package conversation_msg
++
++import (
++	"context"
++	"encoding/json"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/sdkws"
++	"github.com/openimsdk/tools/errs"
++)
++
++type readWatermarkStore interface {
++	GetReadWatermarkMessages(context.Context, string, int64, int64) ([]*model_struct.LocalChatLog, error)
++}
++
++// A cumulative receipt is valid even when no corresponding message is stored
++// locally. Only the relevant sender's positive server sequences are marked.
++func (c *Conversation) doReadWatermark(ctx context.Context, msg *sdkws.MsgData, tips *sdkws.MarkAsReadTips) error {
++	if tips.HasReadSeq <= 0 {
++		return nil
++	}
++	conversation, err := c.db.GetConversation(ctx, tips.ConversationID)
++	if err != nil {
++		return err
++	}
++	self := tips.MarkAsReadUserID == c.loginUserID
++	if conversation.ConversationType != constant.SingleChatType {
++		if self {
++			return c.doUnreadCount(ctx, conversation, tips.HasReadSeq, nil)
++		}
++		return nil
++	}
++	store, ok := c.db.(readWatermarkStore)
++	if !ok {
++		return errs.New("cumulative read receipts require native storage").Wrap()
++	}
++	var latest sdk_struct.MsgStruct
++	if conversation.LatestMsg != "" {
++		if err = json.Unmarshal([]byte(conversation.LatestMsg), &latest); err != nil {
++			return err
++		}
++	}
++	for after := int64(0); ; {
++		rows, err := store.GetReadWatermarkMessages(ctx, tips.ConversationID, after, tips.HasReadSeq)
++		if err != nil {
++			return err
++		}
++		if len(rows) == 0 {
++			break
++		}
++		previous := after
++		var ids []string
++		for _, row := range rows {
++			if row.Seq > after {
++				after = row.Seq
++			}
++			if row.Seq <= 0 || row.Seq > tips.HasReadSeq || (row.SendID == c.loginUserID) == self {
++				continue
++			}
++			if !row.IsRead {
++				var attached sdk_struct.AttachedInfoElem
++				_ = utils.JsonStringToStruct(row.AttachedInfo, &attached)
++				attached.HasReadTime = msg.SendTime
++				row.AttachedInfo = utils.StructToJsonString(attached)
++				row.IsRead = true
++				if err = c.db.UpdateMessage(ctx, tips.ConversationID, row); err != nil {
++					return err
++				}
++			}
++			if !self {
++				ids = append(ids, row.ClientMsgID)
++			}
++		}
++		if len(ids) > 0 {
++			c.msgListener().OnRecvC2CReadReceipt(utils.StructToJsonString([]*sdk_struct.MessageReceipt{{UserID: tips.MarkAsReadUserID, MsgIDList: ids, SessionType: conversation.ConversationType, ReadTime: msg.SendTime}}))
++		}
++		if after <= previous {
++			return errs.New("read watermark cursor did not advance").Wrap()
++		}
++	}
++	columns := map[string]interface{}{}
++	if latest.Seq > 0 && latest.Seq <= tips.HasReadSeq && (latest.SendID == c.loginUserID) != self && !latest.IsRead {
++		latest.IsRead = true
++		columns["latest_msg"] = utils.StructToJsonString(latest)
++	}
++	if self {
++		maxSeq := c.maxSeqRecorder.Get(tips.ConversationID)
++		if maxSeq > 0 {
++			unread := maxSeq - tips.HasReadSeq
++			if unread < 0 {
++				unread = 0
++			}
++			// A delayed receipt must never resurrect already-cleared unread badges.
++			if unread < int64(conversation.UnreadCount) {
++				columns["unread_count"] = unread
++			}
++		}
++	}
++	if len(columns) > 0 {
++		if err = c.db.UpdateColumnsConversation(ctx, tips.ConversationID, columns); err != nil {
++			return err
++		}
++		if err = common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{ConID: tips.ConversationID, Action: constant.ConChange, Args: []string{tips.ConversationID}}, c.GetCh()); err != nil {
++			return err
++		}
++		if self {
++			return common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{Action: constant.TotalUnreadMessageChanged}, c.GetCh())
++		}
++	}
++	return nil
++}
+diff --git a/internal/conversation_msg/read_watermark_test.go b/internal/conversation_msg/read_watermark_test.go
+new file mode 100644
+index 0000000..9cb1558
+--- /dev/null
++++ b/internal/conversation_msg/read_watermark_test.go
+@@ -0,0 +1,171 @@
++package conversation_msg
++
++import (
++	"context"
++	"errors"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/sdkws"
++)
++
++type watermarkDB struct {
++	db_interface.DataBase
++	rows               []*model_struct.LocalChatLog
++	conversation       model_struct.LocalConversation
++	queryErr, writeErr error
++	queries            int
++}
++
++func (d *watermarkDB) GetMessageBySeq(_ context.Context, _ string, seq int64) (*model_struct.LocalChatLog, error) {
++	for _, row := range d.rows {
++		if row.Seq == seq {
++			return row, nil
++		}
++	}
++	return nil, errors.New("missing message")
++}
++
++func TestReadWatermarkExplicitSelfReplayDoesNotFailPage(t *testing.T) {
++	c, d, _ := watermarkFixture()
++	d.rows[1].IsRead = true
++	tips := &sdkws.MarkAsReadTips{ConversationID: "chat", MarkAsReadUserID: "self", HasReadSeq: 1, Seqs: []int64{1}}
++	msg := &sdkws.MsgData{Content: []byte(utils.StructToJsonString(sdk_struct.NotificationElem{Detail: utils.StructToJsonString(tips)}))}
++	if err := c.doReadDrawing(context.Background(), msg); err != nil {
++		t.Fatal(err)
++	}
++}
++
++func (d *watermarkDB) GetConversation(context.Context, string) (*model_struct.LocalConversation, error) {
++	v := d.conversation
++	return &v, nil
++}
++func (d *watermarkDB) GetReadWatermarkMessages(_ context.Context, _ string, after, through int64) ([]*model_struct.LocalChatLog, error) {
++	d.queries++
++	if d.queryErr != nil {
++		return nil, d.queryErr
++	}
++	var result []*model_struct.LocalChatLog
++	for _, row := range d.rows {
++		if row.Seq > after && row.Seq <= through {
++			v := *row
++			result = append(result, &v)
++			if len(result) == 2 {
++				break
++			}
++		}
++	}
++	return result, nil
++}
++func (d *watermarkDB) UpdateMessage(_ context.Context, _ string, row *model_struct.LocalChatLog) error {
++	if d.writeErr != nil {
++		return d.writeErr
++	}
++	for _, old := range d.rows {
++		if old.ClientMsgID == row.ClientMsgID {
++			*old = *row
++		}
++	}
++	return nil
++}
++func (d *watermarkDB) UpdateColumnsConversation(_ context.Context, _ string, columns map[string]interface{}) error {
++	if d.writeErr != nil {
++		return d.writeErr
++	}
++	if v, ok := columns["latest_msg"].(string); ok {
++		d.conversation.LatestMsg = v
++	}
++	if v, ok := columns["unread_count"].(int64); ok {
++		d.conversation.UnreadCount = int32(v)
++	}
++	return nil
++}
++
++type watermarkListener struct {
++	open_im_sdk_callback.OnAdvancedMsgListener
++	receipts []string
++}
++
++func (l *watermarkListener) OnRecvC2CReadReceipt(s string) { l.receipts = append(l.receipts, s) }
++func watermarkFixture() (*Conversation, *watermarkDB, *watermarkListener) {
++	d := &watermarkDB{conversation: model_struct.LocalConversation{ConversationID: "chat", ConversationType: constant.SingleChatType, UnreadCount: 3, LatestMsg: `{"clientMsgID":"own","sendID":"self","seq":4}`}, rows: []*model_struct.LocalChatLog{
++		{ClientMsgID: "pending", Seq: 0, SendID: "self"}, {ClientMsgID: "peer", Seq: 1, SendID: "peer"}, {ClientMsgID: "own2", Seq: 2, SendID: "self"}, {ClientMsgID: "own", Seq: 4, SendID: "self"}, {ClientMsgID: "later", Seq: 9, SendID: "self"},
++	}}
++	l := &watermarkListener{}
++	c := &Conversation{db: d, loginUserID: "self", maxSeqRecorder: NewMaxSeqRecorder(), conversationEventQueue: make(chan common.Cmd2Value, 20), msgListener: func() open_im_sdk_callback.OnAdvancedMsgListener { return l }}
++	c.maxSeqRecorder.Set("chat", 9)
++	return c, d, l
++}
++func watermarkNotice(user string, seq int64) *sdkws.MsgData {
++	tips := &sdkws.MarkAsReadTips{ConversationID: "chat", MarkAsReadUserID: user, HasReadSeq: seq}
++	return &sdkws.MsgData{SendTime: 1234, Content: []byte(utils.StructToJsonString(sdk_struct.NotificationElem{Detail: utils.StructToJsonString(tips)}))}
++}
++func TestReadWatermarkPeerRangeAndReplay(t *testing.T) {
++	c, d, l := watermarkFixture()
++	for i := 0; i < 2; i++ {
++		if err := c.doReadDrawing(context.Background(), watermarkNotice("peer", 4)); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if d.rows[0].IsRead || d.rows[1].IsRead || !d.rows[2].IsRead || !d.rows[3].IsRead || d.rows[4].IsRead {
++		t.Fatal("wrong sender/range marked")
++	}
++	if len(l.receipts) != 4 || d.queries != 6 {
++		t.Fatalf("missing paged receipts: %d, queries=%d", len(l.receipts), d.queries)
++	}
++	var latest sdk_struct.MsgStruct
++	_ = utils.JsonStringToStruct(d.conversation.LatestMsg, &latest)
++	if !latest.IsRead || d.conversation.UnreadCount != 3 {
++		t.Fatal("preview or own unread corrupted")
++	}
++}
++func TestReadWatermarkSelfAndStale(t *testing.T) {
++	c, d, l := watermarkFixture()
++	for _, seq := range []int64{8, 2} {
++		if err := c.doReadDrawing(context.Background(), watermarkNotice("self", seq)); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if !d.rows[1].IsRead || d.rows[2].IsRead || d.conversation.UnreadCount != 1 || len(l.receipts) != 0 {
++		t.Fatal("self receipt incorrectly changes peer reads/unread")
++	}
++}
++func TestReadWatermarkEmptyAndHuge(t *testing.T) {
++	c, d, _ := watermarkFixture()
++	d.rows = nil
++	for _, seq := range []int64{0, -1, 1 << 60} {
++		if err := c.doReadDrawing(context.Background(), watermarkNotice("peer", seq)); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if d.queries != 1 {
++		t.Fatal("expanded watermark or queried invalid range")
++	}
++}
++func TestReadWatermarkStorageFailuresRemainRetryable(t *testing.T) {
++	for _, stage := range []string{"query", "write"} {
++		t.Run(stage, func(t *testing.T) {
++			c, d, _ := watermarkFixture()
++			failure := errors.New("storage unavailable")
++			if stage == "query" {
++				d.queryErr = failure
++			} else {
++				d.writeErr = failure
++			}
++			if err := c.doReadDrawing(context.Background(), watermarkNotice("peer", 4)); !errors.Is(err, failure) {
++				t.Fatalf("lost failure: %v", err)
++			}
++			d.queryErr = nil
++			d.writeErr = nil
++			if err := c.doReadDrawing(context.Background(), watermarkNotice("peer", 4)); err != nil {
++				t.Fatal(err)
++			}
++		})
++	}
++}
 diff --git a/internal/conversation_msg/recovery_test.go b/internal/conversation_msg/recovery_test.go
 new file mode 100644
 index 0000000..6325d7c
@@ -1821,6 +2144,221 @@ index 0000000..6325d7c
 +	}
 +	if len(c.conversationEventQueue) != 1 {
 +		t.Fatal("sync modified its own pending queue")
++	}
++}
+diff --git a/internal/conversation_msg/revoke.go b/internal/conversation_msg/revoke.go
+index 3b43bcf..d67e092 100644
+--- a/internal/conversation_msg/revoke.go
++++ b/internal/conversation_msg/revoke.go
+@@ -48,39 +48,7 @@ func (c *Conversation) revokeMessage(ctx context.Context, tips *sdkws.RevokeMsgT
+ 		return errs.Wrap(err)
+ 	}
+ 
+-	var revokerRole int32
+-	var revokerNickname string
+-	if tips.IsAdminRevoke || tips.SesstionType == constant.SingleChatType {
+-		_, userName, err := c.getUserNameAndFaceURL(ctx, tips.RevokerUserID)
+-		if err != nil {
+-			log.ZError(ctx, "GetUserNameAndFaceURL failed", err, "tips", &tips)
+-			return errs.Wrap(err)
+-		} else {
+-			log.ZDebug(ctx, "revoker user name", "userName", userName)
+-		}
+-
+-		revokerNickname = userName
+-	} else if tips.SesstionType == constant.ReadGroupChatType {
+-		conversation, err := c.db.GetConversation(ctx, tips.ConversationID)
+-		if err != nil {
+-			log.ZError(ctx, "GetConversation failed", err, "conversationID", tips.ConversationID)
+-			return errs.Wrap(err)
+-		}
+-
+-		groupMember, err := c.group.GetSpecifiedGroupMembersInfo(ctx, conversation.GroupID, []string{tips.RevokerUserID})
+-		if err != nil {
+-			log.ZError(ctx, "GetGroupMemberInfoByGroupIDUserID failed", err, "tips", &tips)
+-			return errs.Wrap(err)
+-		} else {
+-			log.ZDebug(ctx, "revoker member name", "groupMember", groupMember)
+-			if len(groupMember) == 0 {
+-				revokerNickname = "unknown"
+-			} else {
+-				revokerRole = groupMember[0].RoleLevel
+-				revokerNickname = groupMember[0].Nickname
+-			}
+-		}
+-	}
++	revokerRole, revokerNickname := c.revokeDisplayInfo(ctx, tips, revokedMsg)
+ 	m := sdk_struct.MessageRevoked{
+ 		RevokerID:                   tips.RevokerUserID,
+ 		RevokerRole:                 revokerRole,
+@@ -103,6 +71,8 @@ func (c *Conversation) revokeMessage(ctx context.Context, tips *sdkws.RevokeMsgT
+ 		log.ZError(ctx, "UpdateMessageBySeq failed", err, "tips", &tips)
+ 		return errs.Wrap(err)
+ 	}
++	// Persist the recall before notifying the UI; preview repair must not hide it.
++	c.msgListener().OnNewRecvMessageRevoked(utils.StructToJsonString(m))
+ 	conversation, err := c.db.GetConversation(ctx, tips.ConversationID)
+ 	if err != nil {
+ 		log.ZError(ctx, "GetConversation failed", err, "tips", &tips)
+@@ -129,7 +99,7 @@ func (c *Conversation) revokeMessage(ctx context.Context, tips *sdkws.RevokeMsgT
+ 		}
+ 
+ 	}
+-	c.msgListener().OnNewRecvMessageRevoked(utils.StructToJsonString(m))
++
+ 	msgList, err := c.db.SearchAllMessageByContentType(ctx, conversation.ConversationID, constant.Quote)
+ 	if err != nil {
+ 		log.ZError(ctx, "SearchAllMessageByContentType failed", err, "tips", &tips)
+diff --git a/internal/conversation_msg/revoke_metadata.go b/internal/conversation_msg/revoke_metadata.go
+new file mode 100644
+index 0000000..2786b28
+--- /dev/null
++++ b/internal/conversation_msg/revoke_metadata.go
+@@ -0,0 +1,43 @@
++package conversation_msg
++
++import (
++	"context"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/protocol/sdkws"
++	"github.com/openimsdk/tools/log"
++)
++
++// Display metadata is not authorization: the server has already accepted the
++// recall. A missing profile must never leave the original content visible.
++func (c *Conversation) revokeDisplayInfo(ctx context.Context, tips *sdkws.RevokeMsgTips, message *model_struct.LocalChatLog) (int32, string) {
++	var fallback string
++	if tips.RevokerUserID == message.SendID {
++		fallback = message.SenderNickname
++	}
++	if tips.IsAdminRevoke || tips.SesstionType == constant.SingleChatType {
++		_, name, err := c.getUserNameAndFaceURL(ctx, tips.RevokerUserID)
++		if err != nil {
++			log.ZWarn(ctx, "revoke display profile unavailable", err)
++			return 0, fallback
++		}
++		return 0, name
++	}
++	if tips.SesstionType == constant.ReadGroupChatType {
++		conversation, err := c.db.GetConversation(ctx, tips.ConversationID)
++		if err != nil {
++			log.ZWarn(ctx, "revoke display conversation unavailable", err)
++			return 0, fallback
++		}
++		members, err := c.group.GetSpecifiedGroupMembersInfo(ctx, conversation.GroupID, []string{tips.RevokerUserID})
++		if err != nil {
++			log.ZWarn(ctx, "revoke display group member unavailable", err)
++			return 0, fallback
++		}
++		if len(members) > 0 && members[0] != nil {
++			return members[0].RoleLevel, members[0].Nickname
++		}
++	}
++	return 0, fallback
++}
+diff --git a/internal/conversation_msg/revoke_recovery_test.go b/internal/conversation_msg/revoke_recovery_test.go
+new file mode 100644
+index 0000000..f2a63a4
+--- /dev/null
++++ b/internal/conversation_msg/revoke_recovery_test.go
+@@ -0,0 +1,97 @@
++package conversation_msg
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/internal/group"
++	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/sdkws"
++)
++
++type revokeRecoveryDB struct {
++	db_interface.DataBase
++	message                          model_struct.LocalChatLog
++	profileErr, previewErr, writeErr error
++	conversationReads                int
++}
++
++func (d *revokeRecoveryDB) GetMessageBySeq(context.Context, string, int64) (*model_struct.LocalChatLog, error) {
++	m := d.message
++	return &m, nil
++}
++func (d *revokeRecoveryDB) GetConversation(context.Context, string) (*model_struct.LocalConversation, error) {
++	d.conversationReads++
++	if d.conversationReads > 1 && d.previewErr != nil {
++		return nil, d.previewErr
++	}
++	return &model_struct.LocalConversation{ConversationID: "sg_group", GroupID: "group", LatestMsg: `{"seq":20}`}, nil
++}
++func (d *revokeRecoveryDB) GetVersionSync(context.Context, string, string) (*model_struct.LocalVersionSync, error) {
++	return nil, d.profileErr
++}
++func (d *revokeRecoveryDB) UpdateMessageBySeq(_ context.Context, _ string, m *model_struct.LocalChatLog) error {
++	if d.writeErr != nil {
++		return d.writeErr
++	}
++	d.message.Content, d.message.ContentType = m.Content, m.ContentType
++	return nil
++}
++func (d *revokeRecoveryDB) SearchAllMessageByContentType(context.Context, string, int) ([]*model_struct.LocalChatLog, error) {
++	return nil, nil
++}
++
++type revokeRecoveryListener struct {
++	open_im_sdk_callback.OnAdvancedMsgListener
++	events []string
++}
++
++func (l *revokeRecoveryListener) OnNewRecvMessageRevoked(s string) { l.events = append(l.events, s) }
++
++func TestGroupRevokeSurvivesUnavailableMemberProfile(t *testing.T) {
++	for _, stage := range []string{"profile", "preview", "storage"} {
++		t.Run(stage, func(t *testing.T) {
++			d := &revokeRecoveryDB{
++				message:    model_struct.LocalChatLog{ClientMsgID: "m10", Seq: 10, SendID: "sender", SenderNickname: "Sender", ContentType: constant.Text, Content: `{"content":"secret"}`},
++				profileErr: errors.New("member metadata unavailable"),
++			}
++			if stage == "preview" {
++				d.previewErr = errors.New("preview unavailable")
++			}
++			if stage == "storage" {
++				d.writeErr = errors.New("disk full")
++			}
++			l := &revokeRecoveryListener{}
++			c := &Conversation{db: d, group: group.NewGroup("receiver", d, nil), msgListener: func() open_im_sdk_callback.OnAdvancedMsgListener { return l }}
++			err := c.revokeMessage(context.Background(), &sdkws.RevokeMsgTips{ConversationID: "sg_group", Seq: 10, RevokerUserID: "sender", SesstionType: constant.ReadGroupChatType})
++			if stage == "storage" {
++				if err == nil || len(l.events) != 0 || d.message.ContentType != constant.Text {
++					t.Fatal("failed storage must remain retryable without success callback")
++				}
++				return
++			}
++			if stage == "profile" && err != nil {
++				t.Fatalf("profile blocked accepted revoke: %v", err)
++			}
++			if stage == "preview" && err == nil {
++				t.Fatal("preview failure must remain retryable")
++			}
++			if d.message.ContentType != constant.RevokeNotification || len(l.events) != 1 {
++				t.Fatalf("receiver retained original message: type=%d events=%d err=%v", d.message.ContentType, len(l.events), err)
++			}
++			var notice sdk_struct.MessageRevoked
++			if err := json.Unmarshal([]byte(l.events[0]), &notice); err != nil {
++				t.Fatal(err)
++			}
++			if notice.ClientMsgID != "m10" || notice.RevokerID != "sender" {
++				t.Fatalf("wrong event: %+v", notice)
++			}
++		})
 +	}
 +}
 diff --git a/internal/conversation_msg/sync.go b/internal/conversation_msg/sync.go
@@ -5732,6 +6270,36 @@ index 749a48d..11b2a49 100644
  	}
  
  	// only get status < 4(NotHasDeleted) Msg
+diff --git a/pkg/db/read_watermark.go b/pkg/db/read_watermark.go
+new file mode 100644
+index 0000000..ef3bc17
+--- /dev/null
++++ b/pkg/db/read_watermark.go
+@@ -0,0 +1,24 @@
++//go:build !js
++
++package db
++
++import (
++	"context"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
++)
++
++// GetReadWatermarkMessages pages by the server sequence, not by wall-clock
++// ordering. Never expand a possibly very large watermark into a sequence list.
++func (d *DataBase) GetReadWatermarkMessages(ctx context.Context, id string, after, through int64) (rows []*model_struct.LocalChatLog, err error) {
++	if err = d.initChatLog(ctx, id); err != nil {
++		return nil, err
++	}
++	d.mRWMutex.RLock()
++	defer d.mRWMutex.RUnlock()
++	err = d.conn.WithContext(ctx).Table(utils.GetConversationTableName(id)).
++		Where("seq > ? AND seq <= ?", after, through).
++		Order("seq ASC").Limit(200).Find(&rows).Error
++	return
++}
 diff --git a/pkg/network/http_client.go b/pkg/network/http_client.go
 index 0cb628d..0beae19 100644
 --- a/pkg/network/http_client.go

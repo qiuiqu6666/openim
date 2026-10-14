@@ -7,6 +7,7 @@ import 'package:extended_image/extended_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -34,7 +35,139 @@ class _ViewerImage extends ViewerImageProvider {
       completer;
 }
 
+class _MissingFile extends Fake implements File {
+  @override
+  String get path => 'missing-gallery-photo.png';
+  @override
+  Future<bool> exists() async => false;
+  @override
+  Future<int> length() async => 0;
+}
+
 void main() {
+  testWidgets('small drag paints incoming pixels when local preview is missing',
+      (tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final boundaryKey = GlobalKey();
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder).drawColor(const Color(0xFF00FF00), BlendMode.src);
+    final picture = recorder.endRecording();
+    final green = picture.toImageSync(375, 812);
+    picture.dispose();
+    addTearDown(green.dispose);
+    final changes = <int>[];
+    await tester.pumpWidget(renderTestHost(RepaintBoundary(
+      key: boundaryKey,
+      child: MediaBrowser(
+        initialIndex: 0,
+        sources: [
+          MediaSource(
+              url: 'https://test/first', thumbnail: 'https://test/first'),
+          MediaSource(
+              url: 'https://test/next',
+              thumbnail: 'https://test/thumb',
+              file: _MissingFile()),
+        ],
+        onPageChanged: changes.add,
+        imageProviderFactory: (url, _) => _ViewerImage(
+            url,
+            OneFrameImageStreamCompleter(
+                SynchronousFuture(ImageInfo(image: green.clone())))),
+      ),
+    )));
+    await tester.pump();
+    final drag = await tester.startGesture(const Offset(190, 400));
+    for (final dx in [-5.0, -30.0, -45.0]) {
+      await drag.moveBy(Offset(dx, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await tester.pump();
+    final pager = tester.widget<ExtendedImageGesturePageView>(
+        find.byType(ExtendedImageGesturePageView));
+    expect(pager.controller.offset, inExclusiveRange(8, 187));
+    expect(changes, isEmpty);
+    final rgba = await tester.runAsync(() async {
+      final frame = await (boundaryKey.currentContext!.findRenderObject()
+              as RenderRepaintBoundary)
+          .toImage();
+      final data = await frame.toByteData(format: ui.ImageByteFormat.rawRgba);
+      frame.dispose();
+      return data!;
+    });
+    final pixel = (400 * 375 + 365) * 4;
+    expect(rgba!.getUint8(pixel + 1), 255,
+        reason:
+            'Incoming image pixels must be visible, not just a mounted widget');
+    expect(rgba.getUint8(pixel), 0);
+    await drag.cancel();
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('warmed arriving page stays visible while original is pending',
+      (tester) async {
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder).drawColor(Colors.orange, BlendMode.src);
+    final picture = recorder.endRecording();
+    final pixels = picture.toImageSync(120, 240);
+    picture.dispose();
+    addTearDown(pixels.dispose);
+    final original = Completer<ImageInfo>();
+    final changes = <int>[];
+    await tester.pumpWidget(renderTestHost(MediaBrowser(
+      initialIndex: 0,
+      sources: List.generate(
+          2,
+          (i) => MediaSource(
+              url: 'https://images.test/$i',
+              thumbnail: 'https://images.test/$i')),
+      onPageChanged: changes.add,
+      imageProviderFactory: (url, budget) => _ViewerImage(
+        url,
+        OneFrameImageStreamCompleter(
+          url.endsWith('/1') && budget == 16 * 1024 * 1024
+              ? original.future
+              : SynchronousFuture(ImageInfo(image: pixels.clone())),
+        ),
+      ),
+    )));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+
+    final drag = await tester.startGesture(const Offset(400, 300));
+    await drag.moveBy(const Offset(-5, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    await drag.moveBy(const Offset(-30, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    await drag.moveBy(const Offset(-160, 0));
+    await tester.pump();
+    expect(changes, isEmpty,
+        reason: 'Inspect the incoming page before halfway');
+    expect(find.byWidgetPredicate((w) => w is ExtendedImageGesture),
+        findsNWidgets(2),
+        reason: 'Both sides of the swipe paint decoded pixels');
+    await drag.moveBy(const Offset(-450, 0));
+    await drag.up();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    expect(changes, [1]);
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(
+        find.byWidgetPredicate((w) => w is ExtendedImageGesture), findsWidgets);
+    original.complete(ImageInfo(image: pixels.clone()));
+    for (var frame = 0; frame < 4; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+      expect(find.byWidgetPredicate((w) => w is ExtendedImageGesture),
+          findsWidgets);
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(tester.takeException(), isNull);
+  });
+
   tearDown(() {
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();

@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 if (!(Test-Path -LiteralPath $AndroidSdk) -or !(Test-Path -LiteralPath $AndroidNdk)) {
     throw 'Provide existing -AndroidSdk and -AndroidNdk directories.'
 }
-$version = '3.8.3-patch15-recovery.12'
+$version = '3.8.3-patch15-recovery.12-readseq2'
 $mobile = 'v0.0.0-20250711185624-d5bb5ecc55c0'
 $artifacts = Join-Path $PSScriptRoot 'artifacts'
 $work = Join-Path $artifacts ('build-' + [guid]::NewGuid().ToString('N'))
@@ -42,7 +42,7 @@ try {
         $env:CGO_ENABLED = '1'
         Invoke-Checked gomobile @('init')
         $aar = Join-Path $work "core-sdk-$version.aar"
-        $flags = '-s -w -X github.com/openimsdk/openim-sdk-core/v3/version.Version=v3.8.3-patch.15+recovery.12 -extldflags "-Wl,--gc-sections,--as-needed,-z,max-page-size=16384"'
+        $flags = '-s -w -X github.com/openimsdk/openim-sdk-core/v3/version.Version=v3.8.3-patch.15+recovery.12-readseq2 -extldflags "-Wl,--gc-sections,--as-needed,-z,max-page-size=16384"'
         Invoke-Checked gomobile @('bind','-androidapi','21','-target=android','-trimpath','-ldflags',$flags,'-o',$aar,'./open_im_sdk/','./open_im_sdk_callback/')
         $destination = Join-Path $artifacts "maven/io/openim/core-sdk/$version"
         New-Item -ItemType Directory -Force $destination | Out-Null

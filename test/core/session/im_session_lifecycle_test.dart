@@ -543,8 +543,13 @@ void main() {
       await _flush();
       profiles.complete(0, 'first', 'First');
       await _flush();
+      logic.imSdkStatus(IMSdkStatus.syncStart, reInstall: true);
+      logic.imSdkStatus(IMSdkStatus.syncFailed);
+      expect(logic.notificationPreferencesReady, isTrue);
+      expect(logic.notificationSessionReady, isTrue);
       logic.imSdkStatus(IMSdkStatus.syncEnded);
       await logic.logout();
+      expect(logic.notificationSessionReady, isFalse);
       expect(logic.currentSdkStatus, IMSdkStatus.connecting);
       await _credentials('second');
       await logic.login('second', 'second-im');

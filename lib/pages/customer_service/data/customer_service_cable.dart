@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:openim_common/openim_common.dart' show Config;
 
 import 'customer_service_config.dart';
 import 'customer_service_message.dart';
@@ -15,7 +16,15 @@ class CustomerServiceCable {
     this.onConnected,
     this.onDisconnected,
     CustomerServiceTransport transport = const NativeCustomerServiceTransport(),
-  }) : _transport = transport;
+  }) : _transport = transport {
+    Config.networkRouteRevision.addListener(_routeChanged);
+  }
+
+  void _routeChanged() {
+    if (!_disposed && !_suspended) {
+      connect(pubsubToken: _pubsubToken, conversationId: _conversationId);
+    }
+  }
 
   final CustomerServiceConfig config;
   final void Function(CustomerServiceMessage) onMessage;
@@ -146,6 +155,7 @@ class CustomerServiceCable {
   }
 
   void dispose() {
+    Config.networkRouteRevision.removeListener(_routeChanged);
     if (_disposed) return;
     suspend();
     _disposed = true;

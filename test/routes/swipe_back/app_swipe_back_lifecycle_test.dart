@@ -69,8 +69,7 @@ void main() {
       final transition = page.customTransition! as AppGetTransition;
       expect(page.popGesture, isFalse,
           reason: 'avoid duplicate GetX recognizer');
-      expect(transition.edgeWidth,
-          AppRoutes.isConversationRoute(page.name) ? 40 : 24);
+      expect(transition.edgeWidth, 40);
       expect(
           transition.enableBackGesture,
           ![AppRoutes.home, AppRoutes.login, AppRoutes.splash]
@@ -165,13 +164,13 @@ void main() {
     final nav = await support.host(tester);
     final route = AppMaterialPageRoute<void>(
       opaque: false,
-      edgeStartWidthPx: 96,
+      edgeStartWidthPx: 40,
       builder: (_) => const Center(child: Text('overlay')),
     );
     unawaited(nav.currentState!.push(route));
     await tester.pumpAndSettle();
     expect(find.text('home'), findsOneWidget);
-    await support.swipe(tester, start: 90, distance: 180);
+    await support.swipe(tester, start: 39, distance: 180);
     expect(find.text('overlay'), findsNothing);
   });
 }

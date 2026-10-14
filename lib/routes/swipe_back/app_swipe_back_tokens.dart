@@ -2,9 +2,9 @@ import 'package:flutter/animation.dart';
 
 /// Shared motion tuned against IMG_0076.MP4; gesture thresholds stay unchanged.
 abstract final class AppSwipeBackTokens {
-  static const edgeWidth = 24.0;
-  static const chatEdgeWidth = 40.0;
-  static const walletOverlayEdgeWidth = 96.0;
+  static const edgeWidth = 40.0;
+  static const chatEdgeWidth = edgeWidth;
+  static const walletOverlayEdgeWidth = edgeWidth;
   static const distanceFraction = 0.16;
   static const velocity = 320.0;
   static const transitionDuration = Duration(milliseconds: 480);

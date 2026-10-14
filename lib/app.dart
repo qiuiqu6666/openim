@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'core/controller/im_controller.dart';
+import 'core/server_nodes/automatic_node_runtime.dart';
 import 'core/controller/app_controller.dart';
 import 'core/user_activity/activity_runtime.dart';
 import 'routes/app_pages.dart';
@@ -66,6 +67,7 @@ class InitBinding extends Bindings {
   @override
   void dependencies() {
     Get.put<IMController>(IMController());
+    Get.put<AutomaticNodeRuntime>(AutomaticNodeRuntime());
     Get.put<PushController>(PushController());
     Get.put<CacheController>(CacheController());
   }

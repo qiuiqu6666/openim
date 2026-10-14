@@ -26,6 +26,14 @@ class ChatReadReceipts {
     _indexWorker = ever(messageList, (_) {
       _messageIndexDirty = true;
       _messageIndex.clear();
+      if (!this.isClosed && _confirmedReads.isNotEmpty) {
+        var changed = false;
+        for (final message in messageList) {
+          final time = _confirmedReads[message.clientMsgID];
+          if (time != null) changed = _applyRead(message, time) || changed;
+        }
+        if (changed) _refreshReadState();
+      }
     });
   }
   final DateTime Function() _now;
@@ -44,6 +52,17 @@ class ChatReadReceipts {
   late final Worker _indexWorker;
   bool _messageIndexDirty = true;
   final _messageIndex = <String, Message>{};
+  // Route/session-owned receipts also cover buffered rows and in-flight history.
+  // Never infer reads from an incoming reply; only confirmed SDK IDs enter here.
+  final _confirmedReads = <String, int>{};
+  static const _maxConfirmedReads = 4096;
+
+  bool _applyRead(Message message, int time) {
+    if (message.isRead == true && (message.hasReadTime ?? 0) > 0) return false;
+    message.isRead = true;
+    if ((message.hasReadTime ?? 0) <= 0) message.hasReadTime = time;
+    return true;
+  }
 
   Map<String, Message> get _messagesByID {
     if (_messageIndexDirty) {
@@ -58,18 +77,20 @@ class ChatReadReceipts {
   }
 
   void applyC2CReceipt(List<ReadReceiptInfo> receipts, String? peerID) {
-    if (isClosed) return;
+    if (isClosed || peerID == null || peerID.isEmpty) return;
     var changed = false;
     for (final receipt in receipts) {
       if (receipt.userID != peerID) continue;
       final ids = receipt.msgIDList?.toSet() ?? <String>{};
       for (final id in ids) {
+        if (id.isEmpty) continue;
+        final time = _confirmedReads.putIfAbsent(id, () => _timestamp);
+        while (_confirmedReads.length > _maxConfirmedReads) {
+          _confirmedReads.remove(_confirmedReads.keys.first);
+        }
         final message = _messagesByID[id];
-        if (message != null &&
-            (message.isRead != true || (message.hasReadTime ?? 0) <= 0)) {
-          message.isRead = true;
-          message.hasReadTime = _timestamp;
-          changed = true;
+        if (message != null) {
+          changed = _applyRead(message, time) || changed;
         }
       }
     }
@@ -82,6 +103,7 @@ class ChatReadReceipts {
     _viewportReadTimer?.cancel();
     _indexWorker.dispose();
     _messageIndex.clear();
+    _confirmedReads.clear();
   }
 
   void markMessageAsRead(Message message, bool visible) {

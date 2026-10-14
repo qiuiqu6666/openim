@@ -106,6 +106,22 @@ void main() {
     await expectLater(change(), throwsA(NodeSwitchFailure.sessionChanged));
     expect(connections, [NodeEndpoint.direct]);
   });
+  test('automatic shield route uses the same serialized switch flow', () async {
+    await service.switchTo(NodeEndpoint.shield,
+        isActive: () => active, allowShield: true);
+    expect(current, NodeEndpoint.shield);
+  });
+  test('automatic shield cannot replace a custom deployment', () async {
+    current = const NodeEndpoint(
+        chatApi: 'https://custom.test',
+        imApi: 'https://custom.test/api',
+        imWs: 'wss://custom.test/ws');
+    await expectLater(
+        service.switchTo(NodeEndpoint.shield,
+            isActive: () => active, allowShield: true),
+        throwsA(NodeSwitchFailure.unavailable));
+    expect(connections, isEmpty);
+  });
   test('custom deployment does not switch into production', () async {
     current = const NodeEndpoint(
         chatApi: 'https://custom.example',
@@ -114,11 +130,11 @@ void main() {
     await expectLater(change(), throwsA(NodeSwitchFailure.unavailable));
     expect(connections, isEmpty);
   });
-  test('removed domain node cannot be selected manually', () async {
+  test('shield loopback cannot be selected manually', () async {
     const removed = NodeEndpoint(
-        chatApi: 'https://99chatapi.99chat.vip',
-        imApi: 'https://99imapi.99chat.vip',
-        imWs: 'wss://websocket.99chat.vip');
+        chatApi: 'http://127.0.0.1:10008',
+        imApi: 'http://127.0.0.1:10002',
+        imWs: 'ws://127.0.0.1:10001');
     await expectLater(service.switchTo(removed, isActive: () => active),
         throwsA(NodeSwitchFailure.unavailable));
     expect(connections, isEmpty);

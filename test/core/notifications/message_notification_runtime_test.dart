@@ -941,6 +941,18 @@ void main() {
     expect(h.lookups, 0);
   });
 
+  test('transient initialization failure does not permanently disable alerts',
+      () async {
+    final h = _Harness();
+    h.notifier.beforeInitialize =
+        Future<void>.error(StateError('plugin unavailable'));
+    await expectLater(h.start(), throwsStateError);
+    h.notifier.beforeInitialize = null;
+    await h.start();
+    await h.runtime.receive(h.message('after-retry'));
+    expect(h.notifier.shown, hasLength(1));
+  });
+
   test('simultaneous session-ready triggers initialize native session once',
       () async {
     final h = _Harness();

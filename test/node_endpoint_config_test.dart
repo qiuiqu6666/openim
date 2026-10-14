@@ -10,9 +10,9 @@ void main() {
     await DataSp.init();
   });
   void expectDirect() {
-    expect(Config.appAuthUrl, 'http://129.226.192.93:10008');
-    expect(Config.imApiUrl, 'http://129.226.192.93:10002');
-    expect(Config.imWsUrl, 'ws://129.226.192.93:10001');
+    expect(Config.appAuthUrl, 'https://99chatapi.99chat.vip');
+    expect(Config.imApiUrl, 'https://99imapi.99chat.vip');
+    expect(Config.imWsUrl, 'wss://websocket.99chat.vip');
   }
 
   test('default endpoints use the requested direct route', expectDirect);
@@ -36,9 +36,9 @@ void main() {
       'apiUrl': 'http://129.226.192.93:10002',
       'wsUrl': 'ws://129.226.192.93:10001',
     });
-    expect(Config.appAuthUrl, 'http://129.226.192.93:10008');
-    expect(Config.imApiUrl, 'http://129.226.192.93:10002');
-    expect(Config.imWsUrl, 'ws://129.226.192.93:10001');
+    expect(Config.appAuthUrl, 'https://99chatapi.99chat.vip');
+    expect(Config.imApiUrl, 'https://99imapi.99chat.vip');
+    expect(Config.imWsUrl, 'wss://websocket.99chat.vip');
   });
   test('explicit custom endpoints remain configured', () async {
     await DataSp.putServerConfig({

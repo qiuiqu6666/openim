@@ -36,7 +36,7 @@ void main() {
       probed.add(node);
       return result(node, false);
     }).select();
-    expect(probed, [NodeEndpoint.direct]);
+    expect(probed, NodeEndpoint.builtIn);
     expect(selected.selected.signature, NodeEndpoint.direct.signature);
     expect(NodeEndpoint.current().signature, NodeEndpoint.direct.signature);
     expect(DataSp.getServerConfig()?['logLevel'], '4');
@@ -54,23 +54,39 @@ void main() {
       probed.add(node);
       return result(node, true);
     }).select();
-    expect(probed, [NodeEndpoint.direct, NodeEndpoint.direct]);
+    expect(probed, [...NodeEndpoint.builtIn, ...NodeEndpoint.builtIn]);
     expect(selected.selected, NodeEndpoint.direct);
     expect(NodeEndpoint.current().signature, NodeEndpoint.direct.signature);
   });
 
-  test('saved production IP migrates to new hostname with the same ports', () async {
+  test('remembered direct node is preferred after fresh service validation',
+      () async {
+    NodeEndpoint? applied;
+    final selection = await StartupNodeSelector(
+      preferred: NodeEndpoint.backup,
+      readCurrent: () => NodeEndpoint.direct,
+      apply: (node) async {
+        applied = node;
+      },
+      probe: (node) async => result(node, true),
+    ).select();
+    expect(selection.selected, NodeEndpoint.backup);
+    expect(applied, NodeEndpoint.backup);
+  });
+
+  test('saved production IP migrates to new hostname with the same ports',
+      () async {
     await DataSp.putServerConfig({
       'serverIP': '129.226.192.93',
       'authUrl': 'http://129.226.192.93:10008',
       'apiUrl': 'http://129.226.192.93:10002',
       'wsUrl': 'ws://129.226.192.93:10001',
     });
-    const host = '127.0.0.1';
+    const host = '99chatapi.99chat.vip';
     expect(Config.serverIp, host);
-    expect(Config.appAuthUrl, 'http://127.0.0.1:10008');
-    expect(Config.imApiUrl, 'http://127.0.0.1:10002');
-    expect(Config.imWsUrl, 'ws://127.0.0.1:10001');
+    expect(Config.appAuthUrl, 'https://99chatapi.99chat.vip');
+    expect(Config.imApiUrl, 'https://99imapi.99chat.vip');
+    expect(Config.imWsUrl, 'wss://websocket.99chat.vip');
     expect(NodeEndpoint.current().signature, NodeEndpoint.direct.signature);
   });
 
@@ -115,11 +131,11 @@ void main() {
     });
     final first = selector.select();
     expect(identical(first, selector.select()), isTrue);
-    expect(calls, 1);
+    expect(calls, 2);
     gate.complete();
     await first;
     await selector.select();
-    expect(calls, 2);
+    expect(calls, 4);
   });
 
   test('an endpoint changed during probing is not overwritten', () async {
@@ -150,6 +166,7 @@ void main() {
       'authUrl': NodeEndpoint.direct.chatApi,
       'apiUrl': NodeEndpoint.direct.imApi,
       'wsUrl': NodeEndpoint.direct.imWs,
+      'customerServiceUrl': NodeEndpoint.direct.customerServiceUrl,
       'logLevel': '4',
       'serverIP': 'custom-value',
     });
@@ -159,6 +176,6 @@ void main() {
     final selected = await StartupNodeSelector(
         probe: (_) async => throw StateError('unreachable')).select();
     expect(selected.selected.signature, NodeEndpoint.direct.signature);
-    expect(selected.checks.single.available, isFalse);
+    expect(selected.checks.every((check) => !check.available), isTrue);
   });
 }

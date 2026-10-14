@@ -163,6 +163,11 @@ public class GameShieldClient {
 
     // ================= 生命周期 =================
     public void start() throws IOException {
+        // Fetch independent startup documents concurrently; install only after
+        // configuration validation so RTT probes use the correct tunnel port.
+        final java.util.concurrent.Future<JSONObject> initialNodes =
+            pool.submit(() -> api("/sdk/v1/nodes?token=" + token));
+        try {
         try {
         JSONObject conf = api("/sdk/v1/conf?token=" + token);
         if (conf.getInt("code") != 0) throw new IOException("conf: " + conf.optString("msg"));
@@ -177,7 +182,18 @@ public class GameShieldClient {
             ports.put(Integer.parseInt(k), p.getInt(k));
         }
         } catch (JSONException e) { throw new IOException("conf-json: " + e); }
-        refreshNodes();
+        try {
+            JSONObject nodes = initialNodes.get();
+            if (nodes.optInt("code", -1) != 0) throw new IOException("nodes rejected");
+            installNodes(nodes);
+            if (ranked.isEmpty()) throw new IOException("nodes empty");
+            lastNodesTry = System.currentTimeMillis();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("startup interrupted", e);
+        } catch (java.util.concurrent.ExecutionException e) {
+            throw new IOException("nodes unavailable", e.getCause());
+        }
         running = true;
         for (int lp : ports.keySet()) {
             if ("udp".equals(protocol) || protocol.equals("all")) openUdpListener(lp);
@@ -185,6 +201,7 @@ public class GameShieldClient {
         }
         pool.execute(this::scheduleLoop);
         evt("start", "项目#" + projectId + " 端口" + ports.keySet(), "");
+        } finally { initialNodes.cancel(true); }
     }
 
     public void stop() {
@@ -234,6 +251,12 @@ public class GameShieldClient {
             }
             return;
         }
+        installNodes(r);
+        } catch (JSONException e) { throw new IOException("nodes-json: " + e); }
+    }
+
+    private void installNodes(JSONObject r) throws IOException {
+        try {
         JSONArray nodes = r.getJSONObject("data").getJSONArray("nodes");
         ranked.clear();
         for (int i = 0; i < nodes.length(); i++) ranked.add(nodes.getJSONObject(i).getString("ip"));

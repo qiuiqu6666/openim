@@ -108,7 +108,12 @@ class MessageNotificationRuntime {
   bool _allowed = false;
   bool _permissionRequested = false;
 
-  Future<void> initialize() => _initializing ??= _initialize();
+  Future<void> initialize() =>
+      _initializing ??= _initialize().onError((Object error, StackTrace stack) {
+        // A transient plugin failure must not poison every subsequent arrival.
+        _initializing = null;
+        Error.throwWithStackTrace(error, stack);
+      });
   Future<void> _initialize() async {
     await notifier.initialize(_onResponse);
     if (_closed) return;

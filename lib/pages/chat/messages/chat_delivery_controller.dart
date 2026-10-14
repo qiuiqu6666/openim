@@ -284,7 +284,14 @@ class ChatDeliveryController {
   void sendSucceeded(Message oldMsg, Message newMsg) {
     _deadlines.remove(oldMsg.clientMsgID)?.cancel();
     Logger.print('message send success----');
+    // A peer can read before the asynchronous send response reaches this route.
+    final alreadyRead = oldMsg.isRead == true;
+    final readTime = oldMsg.hasReadTime;
     oldMsg.update(newMsg);
+    if (alreadyRead) {
+      oldMsg.isRead = true;
+      if ((readTime ?? 0) > 0) oldMsg.hasReadTime = readTime;
+    }
     sendStatusSub.addSafely(MsgStreamEv<bool>(
       id: oldMsg.clientMsgID!,
       value: true,

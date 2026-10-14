@@ -48,8 +48,7 @@ void main() {
             clientFactory: () => Dio()..httpClientAdapter = adapter)
         .check(NodeEndpoint.direct, includeGateway: false);
     expect(result.available, isTrue);
-    expect(adapter.requests.map((request) => request.uri.port).toSet(),
-        {10008, 10002});
+    expect(adapter.requests.map((request) => request.uri.port).toSet(), {443});
   });
   test('probes every service with no login credentials or redirects', () async {
     final adapter = _Adapter();
@@ -58,8 +57,7 @@ void main() {
         .check(NodeEndpoint.direct);
     expect(result.available, isTrue);
     expect(adapter.requests, hasLength(3));
-    expect(adapter.requests.map((request) => request.uri.port).toSet(),
-        {10008, 10002, 10001});
+    expect(adapter.requests.map((request) => request.uri.port).toSet(), {443});
     for (final request in adapter.requests) {
       final headers = request.headers.keys.map((key) => key.toLowerCase());
       expect(headers, isNot(contains('token')));

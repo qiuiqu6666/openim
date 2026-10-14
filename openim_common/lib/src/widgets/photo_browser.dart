@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'media_browser/media_page_gesture.dart';
 import 'media_browser/gallery_image_precache.dart';
+import 'media_browser/media_image_loading.dart';
 
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/cupertino.dart';
@@ -88,6 +89,19 @@ class _MediaBrowserState extends State<MediaBrowser> {
   void _schedulePrecache() {
     _precacheIdle?.cancel();
     _galleryPrecache.invalidate();
+    // The two pages that can enter the viewport must not wait behind the
+    // directional idle queue (a slow forward image used to block going back).
+    for (final index in [currentIndex - 1, currentIndex + 1]) {
+      if (index < 0 ||
+          index >= widget.sources.length ||
+          _warmImages.containsKey(index)) {
+        continue;
+      }
+      final provider = _warmProvider(index);
+      if (provider != null) {
+        unawaited(precacheImage(provider, context, onError: (_, __) {}));
+      }
+    }
     _precacheIdle = Timer(const Duration(milliseconds: 150), () {
       if (!mounted ||
           _activePointers.isNotEmpty ||
@@ -125,7 +139,8 @@ class _MediaBrowserState extends State<MediaBrowser> {
       } else if (source.file != null) {
         provider = FileImage(source.file!);
       } else {
-        final url = source.url ?? source.thumbnail;
+        final url =
+            source.thumbnail.isNotEmpty ? source.thumbnail : source.url ?? '';
         provider = _warmRequests.putIfAbsent(
             index,
             () =>
@@ -250,8 +265,23 @@ class _MediaBrowserState extends State<MediaBrowser> {
   }
 
   void _retainCurrentRequests() {
+    // Apply the bound during traversal, not only after the idle timer fires.
+    for (final index in _warmImages.keys.toList()) {
+      if ((index - currentIndex).abs() > 3 && index != _dragOrigin) {
+        _warmImages.remove(index)?.evict();
+        _warmRequests.remove(index)?.cancel();
+      }
+    }
     final source = widget.sources[currentIndex];
     final urls = {source.url, source.thumbnail};
+    // A visible neighbor starts loading before the halfway page notification.
+    // Keep that request alive through the drag and reuse it after selection.
+    for (final index in [currentIndex - 1, currentIndex + 1]) {
+      if (index >= 0 && index < widget.sources.length) {
+        final neighbor = widget.sources[index];
+        if (!neighbor.isVideo) urls.addAll([neighbor.url, neighbor.thumbnail]);
+      }
+    }
     final origin = _dragOrigin;
     if (origin != null && origin < widget.sources.length) {
       urls.addAll(
@@ -341,7 +371,8 @@ class _MediaBrowserState extends State<MediaBrowser> {
                             builder: (context, _, child) {
                               final s = widget.sources[index];
 
-                              if (index != currentIndex &&
+                              if (s.isVideo &&
+                                  index != currentIndex &&
                                   index != _dragOrigin) {
                                 return const SizedBox.expand();
                               }
@@ -374,7 +405,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
                                       tag: s.tag ?? s.thumbnail,
                                       slideType: SlideType.onlyImage,
                                       slidePagekey: slidePagekey,
-                                      child: _buildFullImage(s),
+                                      child: _buildFullImage(s, index),
                                     );
                             }),
                   ),
@@ -548,21 +579,16 @@ class _MediaBrowserState extends State<MediaBrowser> {
     ]);
   }
 
-  Widget _buildNetworkImage(MediaSource s) => AdaptiveMediaImage(
+  Widget _buildNetworkImage(MediaSource s, int index) => AdaptiveMediaImage(
         image: _image(s.url ?? s.thumbnail),
         loadStateChanged: (state) {
           if (state.extendedImageLoadState == LoadState.loading) {
-            return Stack(
-              alignment: AlignmentDirectional.center,
-              children: [
-                AdaptiveMediaImage(
-                  image: _warmImages[currentIndex] ??
-                      _image(s.thumbnail, thumbnail: true),
-                ),
-                const CupertinoActivityIndicator(
-                  radius: 15,
-                ),
-              ],
+            return AdaptiveMediaImage(
+              image: _warmImages[index] ?? _image(s.thumbnail, thumbnail: true),
+              loadStateChanged: (preview) =>
+                  preview.extendedImageLoadState == LoadState.loading
+                      ? const MediaImageLoading()
+                      : null,
             );
           } else if (state.extendedImageLoadState == LoadState.failed) {
             state.imageProvider.evict();
@@ -582,7 +608,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
     if (_pageController.hasClients) _pageController.jumpToPage(index);
   }
 
-  Widget _buildFullImage(MediaSource source) {
+  Widget _buildFullImage(MediaSource source, int index) {
     if (source.loading) {
       return const Center(child: CupertinoActivityIndicator(radius: 15));
     }
@@ -610,14 +636,14 @@ class _MediaBrowserState extends State<MediaBrowser> {
       );
     }
     final file = source.file;
-    if (file == null) return _buildNetworkImage(source);
+    if (file == null) return _buildNetworkImage(source, index);
     return FutureBuilder<bool>(
       future: _localFiles.exists(file),
       builder: (_, snapshot) => !snapshot.hasData
           ? const Center(child: CupertinoActivityIndicator(radius: 15))
           : snapshot.data!
               ? AdaptiveMediaImage(image: ExtendedFileImageProvider(file))
-              : _buildNetworkImage(source),
+              : _buildNetworkImage(source, index),
     );
   }
 

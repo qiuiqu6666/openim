@@ -384,7 +384,10 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
         OpenIM.iMManager.token == token &&
         DataSp.userID == userID &&
         DataSp.imToken == token;
-    if (!reusingSession) imSdkStatus(IMSdkStatus.connecting);
+    if (!reusingSession) {
+      resetNotificationReadiness();
+      imSdkStatus(IMSdkStatus.connecting);
+    }
     AccountPrivilegeRuntime.store.reset();
     _profileSessionGeneration = null;
     _notificationProfileGeneration = null;
@@ -483,6 +486,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   Future<void>? _pendingLogout;
 
   Future<void> logout() {
+    resetNotificationReadiness();
     apiConnectionHealth?.close();
     apiConnectionHealth = null;
     _connectionRecovery?.close();
@@ -604,6 +608,9 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
         if (!current() || !ready) return false;
         _notificationProfileGeneration = generation;
         _notificationProfileSession = (account, token, base);
+        // Login and the current account's notification preferences are verified.
+        // Failed history recovery must not indefinitely mute live messages.
+        markNotificationSessionReady(account, token);
         MessageNotificationPreferences.notifyChanged(account);
         target.update((val) {
           val?.account = data.account;

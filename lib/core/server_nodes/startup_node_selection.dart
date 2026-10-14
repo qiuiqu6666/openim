@@ -2,6 +2,7 @@ import 'package:openim_common/openim_common.dart';
 
 import 'node_availability_probe.dart';
 import 'node_endpoint.dart';
+import 'timed_node_probe.dart';
 
 class NodeSelection {
   NodeSelection(this.selected, this.checks) : checkedAt = DateTime.now();
@@ -15,7 +16,10 @@ class StartupNodeSelector {
     Future<NodeAvailability> Function(NodeEndpoint)? probe,
     NodeEndpoint Function()? readCurrent,
     Future<void> Function(NodeEndpoint)? apply,
-  })  : _probe = probe ?? NodeAvailabilityProbe().check,
+    this.preferred,
+  })  : _probe = probe ??
+            NodeAvailabilityProbe(timeout: const Duration(milliseconds: 2250))
+                .check,
         _readCurrent = readCurrent ?? NodeEndpoint.current,
         _apply = apply ?? persist;
 
@@ -23,6 +27,7 @@ class StartupNodeSelector {
   final NodeEndpoint Function() _readCurrent;
   final Future<void> Function(NodeEndpoint) _apply;
   Future<NodeSelection>? _pending;
+  final NodeEndpoint? preferred;
 
   Future<NodeSelection> select() => _pending ??= _select().whenComplete(() {
         _pending = null;
@@ -30,16 +35,12 @@ class StartupNodeSelector {
 
   Future<NodeSelection> _select() async {
     final current = _readCurrent();
-    final checks =
-        await Future.wait(NodeEndpoint.candidates(current).map((node) async {
-      try {
-        return await _probe(node);
-      } catch (_) {
-        return NodeAvailability(node, available: false, latencyMs: 0);
-      }
-    }));
-    // The deployment has one direct route. Offline startup keeps that route
-    // and custom deployments only probe their own configured addresses.
+    final candidates = [...NodeEndpoint.candidates(current)];
+    final index =
+        candidates.indexWhere((node) => node.signature == preferred?.signature);
+    if (index > 0) candidates.insert(0, candidates.removeAt(index));
+    final checks = await TimedNodeProbe(probe: _probe).check(candidates);
+    // Prefer the first healthy built-in route. Custom deployments stay isolated.
     var selected = current;
     for (final check in checks) {
       if (check.available) {
@@ -50,7 +51,9 @@ class StartupNodeSelector {
     if (_readCurrent().signature != current.signature) {
       return NodeSelection(_readCurrent(), checks);
     }
-    if (selected.signature != current.signature) {
+    if (selected.signature != current.signature ||
+        (selected.customerServiceUrl != null &&
+            selected.customerServiceUrl != current.customerServiceUrl)) {
       try {
         await _apply(selected);
       } catch (_) {
@@ -70,6 +73,8 @@ class StartupNodeSelector {
       'authUrl': node.chatApi,
       'apiUrl': node.imApi,
       'wsUrl': node.imWs,
+      if (node.customerServiceUrl != null)
+        'customerServiceUrl': node.customerServiceUrl!,
     };
     if (await DataSp.putServerConfig(config) != true) {
       throw StateError('Could not persist the selected node');

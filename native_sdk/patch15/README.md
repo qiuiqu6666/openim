@@ -1,5 +1,23 @@
 # Core SDK 后台消息恢复修复
 
+## 2026-10-14 累计已读回执兼容（recovery.12-readseq2）
+
+原生 `doReadDrawing` 原先对空 `seqs` 返回 `tips Seqs is empty`，即使存在有效 `hasReadSeq`，也会使通知同步页无法完成。现在空列表走独立累计已读处理：按正数服务端序号分页（每页最多 200 条）读取 `seq <= hasReadSeq` 的本地消息，不展开从 1 到水位的巨大数组。对方回执只更新本账号发送的消息及已读回调；自己其他设备的回执只更新收到的消息和未读数，迟到回执不增加未读数。无匹配消息和空的无效水位为无操作，真实存储失败仍返回错误供重试。显式 `seqs` 的既有路径保留。
+
+维护文件：Core `internal/conversation_msg/read_watermark.go`、`read_watermark_test.go`、`pkg/db/read_watermark.go`，入口为 `read_drawing.go`。范围查询使用原生 SQLite 能力，不改表结构；WASM 存储尚未增加此能力。重复回执可重发幂等客户端已读事件，以便故障重试恢复已落库消息的界面状态。此修复不处理回执之后才补入本地的历史消息，也不修正服务端 maxSeq 小于 hasReadSeq 的异常数据。
+
+独立打包源码的 common/interaction/conversation_msg 测试及 conversation_msg/db vet 通过，详见 `E:/openim/artifacts/read-watermark-packaged-tests.log`。Android 构建与实机验证记录见 manifest。
+
+readseq2 同时修正显式 seqs 的自己已读回执重放：原先“已读可忽略”仍返回 error，现返回成功，允许后续通知推进。四 ABI AAR 和 arm64 debug APK 构建成功，已覆盖安装安卓实机；日志确认原生版本 readseq2，原卡住队列成功提交通知 seq 119，随后两次 onSyncServerFinish/syncEnded。启动初期仍有两次 syncFailed，不能据此认为所有网络异常已消除。证据：`E:/openim/artifacts/read-watermark-device-final.log`。iOS 未重建安装。
+
+## 2026-10-14 群撤回接收修复（recovery.12-revoke1）
+
+接收服务端撤回通知时，撤回者资料查询失败曾导致整个处理提前返回，其他成员仍保留消息正文；消息落库后会话摘要读取失败也会阻止撤回回调。现在资料仅用于显示名称，失败使用原发送者名称或通用提示；撤回状态成功落库后立即通知客户端，再执行摘要与引用更新。数据库写入失败仍返回错误并保留重试，不发送成功回调。
+
+修复复用现有 SDK 撤回通知、Flutter 历史缓存和时间线替换机制，参考 99chat 的撤回状态覆盖旧历史原则，没有新增 UI。源码位于 Core `internal/conversation_msg/revoke.go`、`revoke_metadata.go`，回归位于 `revoke_recovery_test.go`；这些文件已包含在本目录校验补丁内。
+
+独立构建快照通过 Core common/interaction/conversation_msg 回归及撤回包 vet，Flutter 撤回相关 49 项测试通过，Android 四 ABI 原生库已构建。没有安装到设备，也未取得本次故障的双账号日志，不能视为真实群聊端到端验收。iOS 需要在 macOS 重建 Framework 才包含此修复。共享 SDK 工作区的其他在途修改未纳入此版本。
+
 本方案从 OpenIM 官方 `v3.8.3-patch.15` 源码修复后台回前台时消息同步失败后无法恢复的问题。补丁包含实现和测试，保留官方 patch.15 的历史消息、重复消息修复。
 
 ## iOS recovery.10 构建记录与构建入口

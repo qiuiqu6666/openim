@@ -172,8 +172,22 @@ public final class GameShieldClient {
             if self.starting { return }
             self.starting = true
             let attempt = self.generation
+            let documents = DispatchGroup()
+            var configuration: [String: Any]?
+            var nodeDocument: [String: Any]?
+            documents.enter()
             self.api("/sdk/v1/conf?token=\(self.token)") { json in
+                configuration = json
+                documents.leave()
+            }
+            documents.enter()
+            self.api("/sdk/v1/nodes?token=\(self.token)") { nodes in
+                nodeDocument = nodes
+                documents.leave()
+            }
+            documents.notify(queue: youmengQueue) {
                 guard attempt == self.generation else { return }
+                let json = configuration
                 guard json?["code"] as? Int == 0,
                       let d = json?["data"] as? [String: Any],
                       let project = d["project_id"] as? Int, project > 0,
@@ -191,7 +205,8 @@ public final class GameShieldClient {
                     }
                     self.conf.ports[local] = value
                 }
-                self.api("/sdk/v1/nodes?token=\(self.token)") { nodes in
+                do {
+                    let nodes = nodeDocument
                     guard attempt == self.generation else { return }
                     guard nodes?["code"] as? Int == 0 else { self.finishStart(false); return }
                     self.applyNodes(nodes)

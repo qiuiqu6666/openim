@@ -45,7 +45,11 @@ class AppBackGestureRecognizer extends OneSequenceGestureRecognizer {
       _tracker!.addPosition(event.timeStamp, event.position);
       if (!_accepted) {
         final delta = event.position - _start!;
-        if (delta.distance < 0.1) return;
+        // Decide intent after touch slop, not sub-pixel finger jitter. Rejecting
+        // immediately lets a scrollable win even when the next move is right.
+        if (delta.distance < computeHitSlop(event.kind, gestureSettings)) {
+          return;
+        }
         if (delta.dx <= 0 || delta.dx.abs() <= delta.dy.abs() * 0.8) {
           resolve(GestureDisposition.rejected);
           return;
@@ -57,6 +61,9 @@ class AppBackGestureRecognizer extends OneSequenceGestureRecognizer {
           _clear();
           return;
         }
+        _distance = delta.dx;
+        onUpdate(delta.dx);
+        return;
       }
       _distance += event.delta.dx;
       onUpdate(event.delta.dx);

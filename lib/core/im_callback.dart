@@ -119,6 +119,23 @@ mixin IMCallback {
 
   IMSdkStatus? _currentSdkStatus;
   IMSdkStatus? get currentSdkStatus => _currentSdkStatus;
+  (String?, String?)? _notificationReadySession;
+  // History synchronization is not authentication. An authenticated profile
+  // can enable live alerts even if history recovery never reaches syncEnded.
+  bool get notificationSessionReady =>
+      _notificationReadySession != null &&
+      _notificationReadySession == (DataSp.userID, DataSp.chatToken);
+
+  void resetNotificationReadiness() => _notificationReadySession = null;
+
+  void markNotificationSessionReady(String account, String? token) {
+    if (account.isNotEmpty &&
+        token?.isNotEmpty == true &&
+        account == DataSp.userID &&
+        token == DataSp.chatToken) {
+      _notificationReadySession = (account, token);
+    }
+  }
   IMSdkStatus? _connectionStatus;
   IMSdkStatus? get currentConnectionStatus => _connectionStatus;
 
@@ -147,6 +164,11 @@ mixin IMCallback {
       _initialSyncState = null;
     }
     _currentSdkStatus = status;
+    if (status == IMSdkStatus.syncEnded &&
+        DataSp.userID?.isNotEmpty == true &&
+        DataSp.chatToken?.isNotEmpty == true) {
+      _notificationReadySession = (DataSp.userID, DataSp.chatToken);
+    }
     if (status == IMSdkStatus.connecting ||
         status == IMSdkStatus.connectionFailed ||
         status == IMSdkStatus.connectionSucceeded) {
@@ -162,14 +184,17 @@ mixin IMCallback {
   }
 
   void kickedOffline() {
+    resetNotificationReadiness();
     onKickedOfflineSubject.add(KickoffType.kickedOffline);
   }
 
   void userTokenInvalid() {
+    resetNotificationReadiness();
     onKickedOfflineSubject.add(KickoffType.userTokenInvalid);
   }
 
   void userTokenExpired() {
+    resetNotificationReadiness();
     onKickedOfflineSubject.add(KickoffType.userTokenExpired);
   }
 
@@ -341,6 +366,7 @@ mixin IMCallback {
   }
 
   void close() {
+    resetNotificationReadiness();
     revokedMessages.close();
     deletedMessages.close();
     unreadMsgCountEventSubject.close();

@@ -28,13 +28,18 @@ class ManualNodeSwitchService {
   bool busy = false;
 
   Future<void> switchTo(NodeEndpoint target,
-      {required bool Function() isActive}) async {
+      {required bool Function() isActive, bool allowShield = false}) async {
     if (busy || !canSwitch()) throw NodeSwitchFailure.busy;
     final session = readSession();
     if (session == null) throw NodeSwitchFailure.sessionChanged;
     final previous = readEndpoint();
-    if (!NodeEndpoint.candidates(previous)
-        .any((node) => node.signature == target.signature)) {
+    if (!(allowShield &&
+            [...NodeEndpoint.builtIn, NodeEndpoint.shield]
+                .any((node) => node.signature == previous.signature) &&
+            [...NodeEndpoint.builtIn, NodeEndpoint.shield]
+                .any((node) => node.signature == target.signature)) &&
+        !NodeEndpoint.candidates(previous)
+            .any((node) => node.signature == target.signature)) {
       throw NodeSwitchFailure.unavailable;
     }
     busy = true;
