@@ -8,11 +8,13 @@ Android 供应包：`E:/下载/悠梦游戏盾`。采用包内纯 Java 源码 `c
 
 ## 配置
 
-复制 `tool/youmeng/youmeng.example.json` 为同目录 `youmeng.local.json`（当前部署配置已按要求纳入 Git），填写供应商提供的 HTTPS 调度地址、SDK Token 和配套 32 字节 AES 密钥（64 位十六进制），准备好规则后把 YOUMENG_ENABLED 改为 true。
+普通 `flutter run`、`flutter build apk` 和 iOS 构建默认开启游戏盾可用开关，实际启动时机遵循上述直连优先和线路记忆策略，从应用资源 `tool/youmeng/youmeng.local.json` 读取调度地址、SDK Token 和 64 位十六进制 AES 密钥。该文件已由仓库跟踪，构建时会打入包中。项目编号由调度中心返回；本地 `YOUMENG_PROJECT_ID` 仅记录部署信息。
+
+如需覆盖配置，仍可使用 `--dart-define-from-file`；`--dart-define=YOUMENG_ENABLED=false` 可显式关闭。默认开关由代码控制，不读取 JSON 中的 `YOUMENG_ENABLED`；修改 JSON 开关时需配合 `--dart-define-from-file`。
 
 原 GS2 Token 不适用于此 API。后台必须配置 TCP 本地端口 10008、10002、10001、8815，分别指向业务 API、IM API、消息 WebSocket 和客服源站；源站需接受对应的 HTTP/WS 流量。通话接口跟随业务 API。SDK 的规则配置决定真实源站，客户端不会自行修改后台。
 
-构建：`flutter build apk --debug --dart-define-from-file=tool/youmeng/youmeng.local.json`。
+构建：`flutter build apk --debug`；iOS：`flutter build ios --debug --no-codesign`。
 
 本地转发配置不写入服务器偏好。自定义服务器不允许套用这些生产规则。前台服务拥有 SDK，Activity 重建不重新启动；系统终止服务/进程不保证连接继续，未实现无凭据后台自动重启。
 

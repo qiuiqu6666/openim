@@ -17,8 +17,8 @@ Windows 上无法编译 Network/CryptoKit 或运行 Xcode。必须在 Mac 上执
 
     flutter pub get
     cd ios && pod install && cd ..
-    flutter build ios --debug --no-codesign --dart-define-from-file=tool/youmeng/youmeng.local.json
+    flutter build ios --debug --no-codesign
 
-本地凭据文件不会随 Git 同步，Mac 需单独配置。iOS 当前版本的 OpenIM 自定义 Framework 也需按项目原有方式准备。
+默认启用游戏盾，凭据从应用内的 `tool/youmeng/youmeng.local.json` 资源读取，该配置文件已被仓库跟踪。iOS 当前版本的 OpenIM 自定义 Framework 也需按项目原有方式准备。
 
 待验证：Xcode 编译、真机首启/重试、四端口 HTTP/WS 往返、账号登录及收发消息、客服附件、切网、息屏与恢复。iOS 挂起时不能保证本地转发继续，保留现有 APNs/PushKit，不新增虚假后台模式。未取得商店审核或真机可用性结论。

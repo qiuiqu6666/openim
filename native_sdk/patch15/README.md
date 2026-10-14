@@ -8,7 +8,7 @@
 
 独立打包源码的 common/interaction/conversation_msg 测试及 conversation_msg/db vet 通过，详见 `E:/openim/artifacts/read-watermark-packaged-tests.log`。Android 构建与实机验证记录见 manifest。
 
-readseq2 同时修正显式 seqs 的自己已读回执重放：原先“已读可忽略”仍返回 error，现返回成功，允许后续通知推进。四 ABI AAR 和 arm64 debug APK 构建成功，已覆盖安装安卓实机；日志确认原生版本 readseq2，原卡住队列成功提交通知 seq 119，随后两次 onSyncServerFinish/syncEnded。启动初期仍有两次 syncFailed，不能据此认为所有网络异常已消除。证据：`E:/openim/artifacts/read-watermark-device-final.log`。iOS 未重建安装。
+readseq2 同时修正显式 seqs 的自己已读回执重放：原先“已读可忽略”仍返回 error，现返回成功，允许后续通知推进。四 ABI AAR 和 arm64 debug APK 构建成功，已覆盖安装安卓实机；日志确认原生版本 readseq2，原卡住队列成功提交通知 seq 119，随后两次 onSyncServerFinish/syncEnded。启动初期仍有两次 syncFailed，不能据此认为所有网络异常已消除。证据：`E:/openim/artifacts/read-watermark-device-final.log`。iOS Framework 已于 2026-10-14 从同一补丁重建为 recovery.12-readseq2，尚未安装真机。
 
 ## 2026-10-14 群撤回接收修复（recovery.12-revoke1）
 
@@ -20,9 +20,9 @@ readseq2 同时修正显式 seqs 的自己已读回执重放：原先“已读�
 
 本方案从 OpenIM 官方 `v3.8.3-patch.15` 源码修复后台回前台时消息同步失败后无法恢复的问题。补丁包含实现和测试，保留官方 patch.15 的历史消息、重复消息修复。
 
-## iOS recovery.10 构建记录与构建入口
+## iOS recovery.12-readseq2 构建记录与构建入口
 
-当前 Android 与补丁源码为 recovery.12；已验证的 iOS 产物为 recovery.10，iOS recovery.12 尚未构建验证。
+当前 Android 与 iOS Framework 均为 recovery.12-readseq2。iOS 使用相同官方提交、补丁 SHA256、Go 1.24.0 与固定 gomobile 编译，common/network/interaction/conversation_msg 回归通过；包含真机 arm64 和模拟器 arm64/x86_64。应用构建状态和二进制哈希见 manifest.json，真机同步与收发仍待验证。
 
 历史构建记录：两端以 `manifest.json` 的官方提交和补丁 SHA256 为准，原生版本为 `v3.8.3-patch.15+recovery.10`。iOS 使用 macOS/Xcode 从同一份补丁源码构建，不再使用未打补丁的官方预编译包。以下旧版 recovery.1–6 的接入状态和 Windows 验证记录为历史记录。
 

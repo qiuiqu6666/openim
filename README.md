@@ -81,7 +81,7 @@ Follow the steps below to set up your local development environment:
    static const _host = "your-server-ip or your-domain";
    ```
 
-4. Run the application using `flutter run` from the terminal or through your IDE.
+4. Run `./tool/flutterw run` from the repository root. Configure your IDE to use the SDK pinned in `.flutter-version`; do not use a different global Flutter version.
 
 5. Start developing and testing! 🎉
 

@@ -14,7 +14,7 @@
     "windows_build_all_cgo_0": "passed",
     "android_arm64_core_compile_cgo_1": "passed",
     "official_server_integration": "unavailable: local OpenIM service not running",
-    "ios_framework": "passed recovery.10; ios arm64 and simulator arm64/x86_64; four Core packages passed on macOS",
+    "ios_framework": "passed recovery.12-readseq2; ios arm64 and simulator arm64/x86_64; four Core packages passed on macOS",
     "race_detector": "not run",
     "android_aar_build": "passed recovery.12-readseq2; all four Android ABIs",
     "android_app_build": "passed recovery.12-readseq2 arm64 debug APK; installed on connected Android",
@@ -51,24 +51,24 @@
     "build_script": "build-android.ps1"
   },
   "ios": {
-    "pod_resolution_and_build": "passed: pod install and Flutter 3.41.6 iOS Release no-codesign, 3.0.1+2026",
+    "pod_resolution_and_build": "passed: Flutter 3.41.6 iOS Release no-codesign",
     "archive_sha256": "1a8f011820b5e282396328b2fbac294e8011ecc891d68e45e680186cf3822f69",
     "framework_prepared": true,
     "recovery_patch_included": true,
     "archive_url": "https://github.com/openimsdk/openim-sdk-core/releases/download/v3.8.3-patch.15/openim-sdk-core_v3.8.3-patch.15_iOS_xcframework.zip",
-    "version": "v3.8.3-patch.15+recovery.10",
+    "version": "v3.8.3-patch.15+recovery.12-readseq2",
     "build_script": "build-ios.sh",
     "go_version": "1.24.0",
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
     "framework_sha256": {
-      "ios-arm64_x86_64-simulator/OpenIMCore.framework/OpenIMCore": "32e55b23ec0212e2ef08d7e709f14b3fae2db8905ebba9074456769be4e54d7d",
-      "ios-arm64/OpenIMCore.framework/OpenIMCore": "b8b335c15c0b611a293159830ef3a2c2990d75fe8b80092ddff4069317cfcfde"
+      "ios-arm64/OpenIMCore.framework/OpenIMCore": "39ae7a29e5b5b206fd1547224ef6967c932da0c88b45b32a336643e50a3295ae",
+      "ios-arm64_x86_64-simulator/OpenIMCore.framework/OpenIMCore": "8af15a5f8ae119a928c98e23bc1804e36285e34bbd833c1f1f0b20691aa65155"
     },
     "runtime_validation": "not tested on device",
     "archive_purpose": "unpatched official reference only; installed Framework built by build-ios.sh",
-    "app_binary_sha256": "f7bf73d9bb5606a04c2165be9e88ba50d79c9330279b3149ed841a8d16fa66c4",
+    "app_binary_sha256": "9f18e0c620529d17ffb3a0a78d849089dc01ef088478aad2b1f63dc8c35908ac",
     "app_version": "3.0.1+2026",
-    "verified_at": "2026-10-13T15:05:51.045916+08:00",
-    "app_validation_scope": "Built on e5bde1945525680bf2c5ac25779ca7d2ffea1149 with local iOS recovery.10 and version changes; subsequent remote app changes not rebuilt."
+    "verified_at": "2026-10-14T00:18:08.949881+00:00",
+    "app_validation_scope": "Built on 7c83b37920ecfa55a51a167ed256a11389d0ac0e with local bundled Youmeng configuration and iOS SDK changes"
   }
 }

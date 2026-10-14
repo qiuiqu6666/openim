@@ -180,6 +180,7 @@ flutter:
 
   # App-owned 99chat parity assets, including live artwork/tutorial and lottery balls.
   assets:
+    - tool/youmeng/youmeng.local.json
     - lib/pages/login/desktop_authorization/assets/
     - assets/images/
     - assets/ai/

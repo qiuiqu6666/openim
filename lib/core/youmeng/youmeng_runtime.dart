@@ -6,9 +6,11 @@ import '../server_nodes/startup_node_selection.dart';
 import '../server_nodes/node_endpoint.dart';
 import '../server_nodes/node_availability_probe.dart';
 import '../server_nodes/route_history.dart';
+import 'youmeng_configuration.dart';
 
 class YoumengRuntime {
-  static const enabled = bool.fromEnvironment('YOUMENG_ENABLED');
+  static const enabled =
+      bool.fromEnvironment('YOUMENG_ENABLED', defaultValue: true);
   static const _channel = MethodChannel('openim/youmeng');
 
   static Future<void> prepare({void Function()? onShieldStarting}) async {
@@ -109,9 +111,10 @@ class YoumengRuntime {
       });
 
   static Future<void> _ensureReady() async {
-    const cp = String.fromEnvironment('YOUMENG_CP');
-    const token = String.fromEnvironment('YOUMENG_TOKEN');
-    const key = String.fromEnvironment('YOUMENG_AES_KEY');
+    final configuration = await YoumengConfiguration.load();
+    final cp = configuration.cp;
+    final token = configuration.token;
+    final key = configuration.key;
     const customer = String.fromEnvironment('CUSTOMER_SERVICE_BASE_URL',
         defaultValue: Config.customerServiceOriginUrl);
     final uri = Uri.tryParse(cp);

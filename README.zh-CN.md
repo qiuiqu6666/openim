@@ -92,7 +92,7 @@ Shorebird 基础包、补丁发布和设备验收流程见 [热更新维护入�
     static const _host = "your-server-ip or your-domain";
   ```
 
-4. 通过终端执行 `flutter run` 或者IDE的启动菜单来运行iOS/Android应用程序。
+4. 在仓库根目录执行 `./tool/flutterw run` 来运行 iOS/Android 应用；IDE 也须选择 `.flutter-version` 指定的 Flutter SDK。不要使用其他版本的全局 `flutter run`。
 
 5. 开始开发测试！ 🎉
 
