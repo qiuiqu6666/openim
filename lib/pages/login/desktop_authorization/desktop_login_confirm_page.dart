@@ -1,4 +1,4 @@
-import 'package:flutter/services.dart';
+import 'widgets/desktop_login_code_input.dart';
 import 'data/qr_login_api.dart';
 import 'widgets/desktop_login_device_details.dart';
 import 'dart:async';
@@ -172,18 +172,9 @@ class _DesktopLoginConfirmPageState extends State<DesktopLoginConfirmPage> {
                   code: value.code,
                   region: value.region),
               const SizedBox(height: 16),
-              TextField(
+              DesktopLoginCodeInput(
                 controller: _code,
                 enabled: !_busy,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                enableSuggestions: false,
-                autocorrect: false,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(6)
-                ],
-                decoration: const InputDecoration(labelText: '输入电脑上的六位数字'),
               ),
             ],
             if (state == DesktopAuthorizationState.expired)
