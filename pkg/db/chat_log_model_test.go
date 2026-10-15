@@ -36,6 +36,13 @@ func TestGetLatestValidateServerMessage(t *testing.T) {
 }
 
 func TestCleanDuplicateInvalidMessages(t *testing.T) {
+	for _, conversationID := range []string{"test_conversation", "sg_@lg_4095981dfe6ecb5bd137312be4121ece"} {
+		t.Run(conversationID, func(t *testing.T) { testCleanDuplicateInvalidMessages(t, conversationID) })
+	}
+}
+
+func testCleanDuplicateInvalidMessages(t *testing.T, conversationID string) {
+	t.Helper()
 	ctx := context.Background()
 	conn, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
@@ -46,7 +53,6 @@ func TestCleanDuplicateInvalidMessages(t *testing.T) {
 		conn:         conn,
 		tableChecker: NewTableChecker(nil),
 	}
-	conversationID := "test_conversation"
 	if err := d.initChatLog(ctx, conversationID); err != nil {
 		t.Fatalf("init chat log: %v", err)
 	}

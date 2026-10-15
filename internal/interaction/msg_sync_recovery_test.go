@@ -177,6 +177,10 @@ type recoveryVersionDB struct {
 	journal         map[string]*model_struct.LocalVersionSync
 }
 
+func (d *recoveryVersionDB) GetAllConversationListDB(context.Context) ([]*model_struct.LocalConversation, error) {
+	return nil, nil
+}
+
 func (d *recoveryVersionDB) GetAllConversationIDList(context.Context) ([]string, error) {
 	return []string{"chat"}, nil
 }

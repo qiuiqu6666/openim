@@ -91,28 +91,43 @@ func (g *Group) IncrSyncGroupAndMember(ctx context.Context, groupIDs ...string) 
 		if err != nil {
 			return err
 		}
-		if len(groupVersion) == 0 {
-			for _, req := range groups {
-				delete(groupIDSet, req.GroupID)
-			}
-			continue
+		// Unchanged groups may be omitted by the batch endpoint. Retire the
+		// requested batch together and reset it even when the response is empty.
+		results := make(chan error, len(groups))
+		requested := make(map[string]bool, len(groups))
+		for _, req := range groups {
+			requested[req.GroupID] = true
+			delete(groupIDSet, req.GroupID)
 		}
 		groups = groups[:0]
 		for groupID, resp := range groupVersion {
+			if !requested[groupID] {
+				continue
+			}
+			if resp == nil {
+				results <- errs.New("nil incremental group response", "groupID", groupID)
+				continue
+			}
 			tempResp := resp
 			tempGroupID := groupID
 			wg.Add(1)
-			go func() error {
+			go func() {
 				defer wg.Done()
-				if err := g.syncGroupAndMember(ctx, tempGroupID, tempResp); err != nil {
+				err := g.syncGroupAndMember(ctx, tempGroupID, tempResp)
+				if err != nil {
 					log.ZError(ctx, "sync Group And Member error", errs.Wrap(err))
-					return errs.Wrap(err)
 				}
-				return nil
+				results <- err
 			}()
 			delete(groupIDSet, tempGroupID)
 		}
 		wg.Wait()
+		close(results)
+		for err := range results {
+			if err != nil {
+				return err
+			}
+		}
 	}
 }
 
@@ -157,21 +172,7 @@ func (g *Group) syncGroupAndMember(ctx context.Context, groupID string, resp *gr
 			if groupInfo == nil {
 				return nil
 			}
-			local, err := g.db.GetJoinedGroupListDB(ctx)
-			if err != nil {
-				return err
-			}
-			log.ZDebug(ctx, "group info", "groupInfo", groupInfo)
-			changes := datautil.Batch(ServerGroupToLocalGroup, []*sdkws.GroupInfo{groupInfo})
-			kv := datautil.SliceToMapAny(local, func(e *model_struct.LocalGroup) (string, *model_struct.LocalGroup) {
-				return e.GroupID, e
-			})
-			for i, change := range changes {
-				key := change.GroupID
-				kv[key] = changes[i]
-			}
-			server := datautil.Values(kv)
-			return g.groupSyncer.Sync(ctx, server, local, nil)
+			return g.syncGroupProfile(ctx, groupID, groupInfo)
 		},
 		Syncer: func(server, local []*model_struct.LocalGroupMember) error {
 			return g.groupMemberSyncer.Sync(ctx, server, local, nil)
@@ -270,21 +271,7 @@ func (g *Group) onlineSyncGroupAndMember(ctx context.Context, groupID string, de
 			if groupInfo == nil {
 				return nil
 			}
-			local, err := g.db.GetJoinedGroupListDB(ctx)
-			if err != nil {
-				return err
-			}
-			log.ZDebug(ctx, "group info", "groupInfo", groupInfo)
-			changes := datautil.Batch(ServerGroupToLocalGroup, []*sdkws.GroupInfo{groupInfo})
-			kv := datautil.SliceToMapAny(local, func(e *model_struct.LocalGroup) (string, *model_struct.LocalGroup) {
-				return e.GroupID, e
-			})
-			for i, change := range changes {
-				key := change.GroupID
-				kv[key] = changes[i]
-			}
-			server := datautil.Values(kv)
-			return g.groupSyncer.Sync(ctx, server, local, nil)
+			return g.syncGroupProfile(ctx, groupID, groupInfo)
 		},
 		Syncer: func(server, local []*model_struct.LocalGroupMember) error {
 			return g.groupMemberSyncer.Sync(ctx, server, local, nil)
@@ -354,7 +341,17 @@ func (g *Group) IncrSyncJoinGroupAndGetIDs(ctx context.Context) ([]string, error
 			return g.groupSyncer.Sync(ctx, server, local, nil)
 		},
 		FullSyncer: func(ctx context.Context) error {
-			return g.groupSyncer.FullSync(ctx, g.loginUserID)
+			// Fetch all pages before touching local rows. Differential application
+			// preserves group callbacks, conversation profile updates and retries.
+			server, err := g.getServerJoinGroup(ctx)
+			if err != nil {
+				return err
+			}
+			local, err := g.db.GetJoinedGroupListDB(ctx)
+			if err != nil {
+				return err
+			}
+			return g.groupSyncer.Sync(ctx, datautil.Batch(ServerGroupToLocalGroup, server), local, nil)
 		},
 		FullID: func(ctx context.Context) ([]string, error) {
 			resp, err := g.getFullJoinGroupIDs(ctx, &group.GetFullJoinGroupIDsReq{

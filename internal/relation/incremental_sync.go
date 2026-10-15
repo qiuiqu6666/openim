@@ -47,7 +47,9 @@ func (r *Relation) IncrSyncFriends(ctx context.Context) error {
 			return r.friendSyncer.Sync(ctx, server, local, nil)
 		},
 		FullSyncer: func(ctx context.Context) error {
-			return r.friendSyncer.FullSync(ctx, r.loginUserID)
+			return syncFullFriendsWithNotice(ctx, r.db.GetAllFriendList, func(ctx context.Context) error {
+				return r.friendSyncer.FullSync(ctx, r.loginUserID)
+			}, r.friendshipListener)
 		},
 		FullID: func(ctx context.Context) ([]string, error) {
 			resp, err := r.getFullFriendUserIDs(ctx, &relation.GetFullFriendUserIDsReq{

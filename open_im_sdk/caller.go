@@ -1,4 +1,4 @@
-// Copyright © 2023 OpenIM SDK. All rights reserved.
+// Copyright 漏 2023 OpenIM SDK. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -91,6 +92,7 @@ func call_(operationID string, fn any, args ...any) (res any, err error) {
 	t := time.Now()
 	funcPtr := reflect.ValueOf(fn).Pointer()
 	funcName := runtime.FuncForPC(funcPtr).Name()
+	diagnosticLog := strings.HasSuffix(funcName, ".(*Third).Log-fm")
 	if operationID == "" {
 		return nil, sdkerrs.ErrArgs.WrapMsg("call function operationID is empty")
 	}
@@ -106,7 +108,9 @@ func call_(operationID string, fn any, args ...any) (res any, err error) {
 		} else {
 			elapsed := time.Since(start).String()
 			if err == nil {
-				log.ZInfo(ctx, "fn call success", "function name", funcName, "cost time", elapsed, "resp", res)
+				if !diagnosticLog {
+					log.ZInfo(ctx, "fn call success", "function name", funcName, "cost time", elapsed)
+				}
 			} else {
 				log.ZError(ctx, "fn call error", err, "function name", funcName, "cost time", elapsed)
 			}
@@ -114,7 +118,9 @@ func call_(operationID string, fn any, args ...any) (res any, err error) {
 		}
 	}(t)
 
-	log.ZInfo(ctx, "func call req", "function name", funcName, "args", args)
+	if !diagnosticLog {
+		log.ZInfo(ctx, "func call req", "function name", funcName, "argumentCount", len(args))
+	}
 	fnv := reflect.ValueOf(fn)
 	if fnv.Kind() != reflect.Func {
 		return nil, sdkerrs.ErrSdkInternal.WrapMsg(fmt.Sprintf("call function fn is not function, is %T", fn))
@@ -268,14 +274,14 @@ func syncCall(operationID string, fn any, args ...any) (res string) {
 		} else {
 			elapsed := time.Since(start).String()
 			if err == nil {
-				log.ZInfo(ctx, "fn call success", "function name", funcName, "resp", res, "cost time", elapsed)
+				log.ZInfo(ctx, "fn call success", "function name", funcName, "cost time", elapsed)
 			} else {
 				log.ZError(ctx, "fn call error", err, "function name", funcName, "cost time", elapsed)
 			}
 
 		}
 	}(t)
-	log.ZInfo(ctx, "func call req", "function name", funcName, "args", args)
+	log.ZInfo(ctx, "func call req", "function name", funcName, "argumentCount", len(args))
 	ins = append(ins, reflect.ValueOf(ctx))
 	for i := 0; i < len(args); i++ {
 		tag := fnt.In(i + 1)
@@ -398,7 +404,7 @@ func messageCall_(callback open_im_sdk_callback.SendMsgCallBack, operationID str
 	ctx = ccontext.WithSendMessageCallback(ctx, callback)
 	funcPtr := reflect.ValueOf(fn).Pointer()
 	funcName := runtime.FuncForPC(funcPtr).Name()
-	log.ZInfo(ctx, "input req", "function name", funcName, "args", args)
+	log.ZInfo(ctx, "input req", "function name", funcName, "argumentCount", len(args))
 
 	ins = append(ins, reflect.ValueOf(ctx))
 	for i := 0; i < len(args); i++ { // callback open_im_sdk_callback.Base, operationID string, ...

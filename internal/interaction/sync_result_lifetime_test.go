@@ -37,6 +37,11 @@ func TestWakeupResultSurvivesAttemptCleanup(t *testing.T) {
 				start.Receipt <- errors.New("metadata unavailable")
 			} else {
 				start.Receipt <- nil
+				metadata := <-queue
+				if metadata.Cmd != constant.CmdSyncData {
+					t.Fatal("expected post-message metadata refresh")
+				}
+				metadata.Receipt <- nil
 			}
 			<-done
 			cleanup()

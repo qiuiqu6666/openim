@@ -84,8 +84,11 @@ func TestContiguousVisibleBoundariesAndFailedConversationIsolation(t *testing.T)
 			if err := proto.Unmarshal(req.Message.Data, p); err != nil {
 				panic(err)
 			}
-			id := p.Conversations[0].ConversationID
-			return wireResponse(&msg.GetSeqMessageResp{Msgs: map[string]*sdkws.PullMsgs{id: {IsEnd: p.Order == sdkws.PullOrder_PullOrderAsc, EndSeq: 15}}})
+			packets := make(map[string]*sdkws.PullMsgs)
+			for _, row := range p.Conversations {
+				packets[row.ConversationID] = &sdkws.PullMsgs{IsEnd: p.Order == sdkws.PullOrder_PullOrderAsc, EndSeq: 15}
+			}
+			return wireResponse(&msg.GetSeqMessageResp{Msgs: packets})
 		}
 		p := &sdkws.PullMessageBySeqsReq{}
 		if err := proto.Unmarshal(req.Message.Data, p); err != nil {

@@ -3,7 +3,6 @@ package interaction
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
 	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
@@ -16,13 +15,13 @@ import (
 func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[string][2]int64, reinstall bool) error {
 	leavePages := protectMessagePages(ctx)
 	defer leavePages()
-	m.recoveryReadSeqReady = false
+	m.recoveryReadSeqReady = common.RecoveryMetadataPrepared(ctx)
 	pending := make(map[string][][2]int64, len(ranges))
 	var ids []string
 	var failures []error
 	totalPages := 0
-	refreshedBounds := make(map[string]bool)
 	visibleRanges := make(map[string][2]int64, len(ranges))
+	validatedRanges, boundaryFailures, recoveryOrder := m.visibleMessageRanges(ctx, ranges)
 	for id, r := range ranges {
 		// Boundary revalidation can perform network I/O for many conversations.
 		// Lend ownership between these checks as well as between message pages.
@@ -32,7 +31,7 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 		if err := m.rememberMessageTarget(ctx, id, r[1]); err != nil {
 			return err
 		}
-		visible, err := m.visibleMessageRange(ctx, id, r)
+		visible, err := validatedRanges[id], boundaryFailures[id]
 		if err != nil {
 			failures = append(failures, err)
 			continue
@@ -66,7 +65,11 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 			}
 		}
 	}
-	sort.Strings(ids)
+	priority := make(map[string]int, len(recoveryOrder))
+	for n, id := range recoveryOrder {
+		priority[id] = n
+	}
+	sort.SliceStable(ids, func(i, j int) bool { return priority[ids[i]] < priority[ids[j]] })
 	previewTotal := 0
 	if reinstall {
 		previewTotal = totalPages
@@ -89,82 +92,7 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 			}
 		}
 	}
-	for len(pending) > 0 {
-		for _, id := range ids {
-			if err := yieldMessageSyncPage(ctx); err != nil {
-				return err
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			pages := pending[id]
-			if len(pages) == 0 {
-				continue
-			}
-			// Fetch the nearest recent gap first. Notification state still
-			// replays in order; it is not optional message-history cache.
-			r := pages[len(pages)-1]
-			r[0] = max(r[0], m.syncedMaxSeqs[id]+1)
-			if r[0] > r[1] {
-				pending[id] = pages[:len(pages)-1]
-				if len(pending[id]) == 0 {
-					delete(pending, id)
-				}
-				continue
-			}
-			end := r[1]
-			if r[1]-r[0] >= SplitPullMsgNum {
-				end = r[0] + SplitPullMsgNum - 1
-			}
-			batch := map[string][2]int64{id: {r[0], end}}
-			resp, err := m.pullMsgBySeqRange(ctx, batch, end-r[0]+1)
-			if err == nil {
-				total := 0
-				if reinstall {
-					total = totalPages
-				}
-				err = m.commitPulledMessages(ctx, resp, batch, total)
-			}
-			if err != nil {
-				var incomplete *incompleteMessageRange
-				if errors.As(err, &incomplete) && !IsNotification(id) && !refreshedBounds[id] {
-					refreshedBounds[id] = true
-					visible, boundaryErr := m.refreshVisibleMessageRange(ctx, id, r)
-					if boundaryErr == nil && visible != r {
-						if visible[0] > r[0] {
-							if err := m.commitMessageCheckpoint(ctx, id, min(r[1], visible[0]-1)); err != nil {
-								return err
-							}
-						}
-						if visible[0] > visible[1] {
-							delete(pending, id)
-						} else {
-							pending[id] = m.recentMissingRanges(id, visible)
-							if len(pending[id]) == 0 {
-								delete(pending, id)
-							}
-						}
-						continue
-					}
-					if boundaryErr != nil {
-						err = errors.Join(err, boundaryErr)
-					}
-				}
-				failures = append(failures, fmt.Errorf("message range %s [%d,%d]: %w", id, r[0], end, err))
-				delete(pending, id)
-				continue
-			}
-			messageSyncPageCommitted(ctx)
-			if end == r[1] {
-				pending[id] = pages[:len(pages)-1]
-				if len(pending[id]) == 0 {
-					delete(pending, id)
-				}
-			} else {
-				pages[len(pages)-1] = [2]int64{end + 1, r[1]}
-			}
-		}
-	}
+	failures = append(failures, m.recoverRecentMessagePages(ctx, ids, pending, reinstall, totalPages)...)
 	if len(failures) > 0 {
 		return errors.Join(failures...)
 	}

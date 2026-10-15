@@ -29,17 +29,36 @@ type FindMessageListCallback struct {
 }
 
 type GetAdvancedHistoryMessageListParams struct {
-	ConversationID   string `json:"conversationID"`
-	StartClientMsgID string `json:"startClientMsgID"`
-	Count            int    `json:"count"`
-	ViewType         int    `json:"viewType"`
+	ConversationID   string             `json:"conversationID"`
+	StartClientMsgID string             `json:"startClientMsgID"`
+	Count            int                `json:"count"`
+	ViewType         int                `json:"viewType"`
+	ScanCursor       *HistoryScanCursor `json:"scanCursor,omitempty"`
+	LocalSnapshot    bool               `json:"localSnapshot,omitempty"`
+	Window           bool               `json:"window,omitempty"`
+	TargetWatermark  int64              `json:"targetWatermark,omitempty"`
+}
+
+// A checked local range can end on a deleted row. Keep its position separate
+// from visible messages, and bind it to the conversation and read direction.
+type HistoryScanCursor struct {
+	ConversationID string `json:"conversationID"`
+	Reverse        bool   `json:"reverse"`
+	ClientMsgID    string `json:"clientMsgID"`
+	SendTime       int64  `json:"sendTime"`
+	Seq            int64  `json:"seq"`
 }
 
 type GetAdvancedHistoryMessageListCallback struct {
-	MessageList []*sdk_struct.MsgStruct `json:"messageList"`
-	IsEnd       bool                    `json:"isEnd"`
-	ErrCode     int32                   `json:"errCode"`
-	ErrMsg      string                  `json:"errMsg"`
+	MessageList   []*sdk_struct.MsgStruct `json:"messageList"`
+	IsEnd         bool                    `json:"isEnd"`
+	ErrCode       int32                   `json:"errCode"`
+	ErrMsg        string                  `json:"errMsg"`
+	ScanCursor    *HistoryScanCursor      `json:"scanCursor,omitempty"`
+	ScanLimited   bool                    `json:"scanLimited,omitempty"`
+	LocalSnapshot bool                    `json:"localSnapshot,omitempty"`
+	SnapshotReady bool                    `json:"snapshotReady,omitempty"`
+	Window        *MessageWindow          `json:"window,omitempty"`
 }
 
 type FetchSurroundingMessagesReq struct {

@@ -39,7 +39,10 @@ func (m *MsgSyncer) syncLatestMessagePreviews(ctx context.Context, ids []string,
 		}
 	}
 	failed := make(map[string]error)
+	priorities := m.conversationPriorities(ctx)
+	ctx = context.WithValue(ctx, recoveryPriorityKey{}, priorities)
 	for begin := 0; begin < len(ordered); begin += latestMessageBatchSize {
+		m.prioritizeConversations(ordered[begin:], priorities)
 		batch := make(map[string][2]int64)
 		for _, id := range ordered[begin:min(begin+latestMessageBatchSize, len(ordered))] {
 			end := visible[id][1]
@@ -59,6 +62,16 @@ func (m *MsgSyncer) syncLatestMessageBatch(ctx context.Context, batch, visible m
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	release, err := m.lockPreviewHistory(ctx, batch)
+	if err != nil {
+		return err
+	}
+	defer release()
+	for id, r := range batch {
+		if err := m.acceptStoredHistory(ctx, id, r, total); err != nil {
+			return err
+		}
+	}
 	// A live push handled at the page boundary may already have stored the tail.
 	for id, r := range batch {
 		if m.messageAlreadyCovered(id, r[1]) || m.syncedMaxSeqs[id] >= r[1] {
@@ -75,6 +88,7 @@ func (m *MsgSyncer) syncLatestMessageBatch(ctx context.Context, batch, visible m
 		}
 		// Isolate a bad conversation without discarding other previews in its batch.
 		if len(batch) > 1 {
+			release()
 			for id, r := range batch {
 				if err := m.syncLatestMessageBatch(ctx, map[string][2]int64{id: r}, visible, total, failed); err != nil {
 					return err
@@ -86,6 +100,9 @@ func (m *MsgSyncer) syncLatestMessageBatch(ctx context.Context, batch, visible m
 			}
 		}
 		return nil
+	}
+	if err := m.resolveEmptySyncPreviews(ctx, batch, visible, resp); err != nil {
+		return err
 	}
 	accepted := &sdkws.PullMessageBySeqsResp{Msgs: make(map[string]*sdkws.PullMsgs)}
 	var deleted []string
@@ -172,6 +189,7 @@ func (m *MsgSyncer) syncLatestMessageBatch(ctx context.Context, batch, visible m
 				return ctx.Err()
 			}
 			if len(batch) > 1 {
+				release()
 				for id, r := range batch {
 					if err := m.syncLatestMessageBatch(ctx, map[string][2]int64{id: r}, visible, total, failed); err != nil {
 						return err
