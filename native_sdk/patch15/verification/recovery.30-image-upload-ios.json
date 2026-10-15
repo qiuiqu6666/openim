@@ -1,0 +1,27 @@
+{
+  "platform": "ios",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.30-image-upload.1",
+  "source_sha256": "bdd6c329ce82a4c144df59bfaa137746bd2a075372e6920959f141e93fac06ca",
+  "patch_sha256": "77de972fd62f847c356591b5761e811d75e3e98389a45b79e3317d40c6582444",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "core_tests": "passed",
+  "device_runtime": "not installed/tested",
+  "binaries_sha256": {
+    "ios-arm64_x86_64-simulator/OpenIMCore.framework/OpenIMCore": "1a12d6b7d5fef6e5eee9716c7813934693044f58158b0610fed1c7dbe6cb1fa9",
+    "ios-arm64/OpenIMCore.framework/OpenIMCore": "99516825400c32fdba161bd9857669235429a2ef12cafa5e9b0730a9ee8c3ddf"
+  },
+  "verified_at": "2026-10-15T12:25:49.271288+00:00",
+  "application_version": "3.0.1+2028",
+  "bundle_identifier": "vip.99chat.ios",
+  "application_git_commit": "13e9a395c63be19aafd0bd4fc53cc98c78ce9f7a",
+  "app_binary_sha256": "6a7c74378eb28b5bd97452845b32b1c176b0a1ea3c78c45ca731761455c42e8b",
+  "app_core_version_verified": "v3.8.3-patch.15+recovery.30-image-upload.1",
+  "app_build": "passed: direct Xcode Release --no-codesign equivalent flags",
+  "native_tests": "CGO=0 common/network/interaction/conversation_msg and upload deadline/hash; CGO=1 interaction/conversation_msg including visible-empty lifecycle regression; SQLite sync batch and notification bootstrap",
+  "source_lock_tests": "15 passed",
+  "source_files": 433,
+  "local_changes_preserved": true,
+  "logs_directory": "artifacts/ios30-push-verification"
+}

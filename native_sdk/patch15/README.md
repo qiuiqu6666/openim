@@ -147,3 +147,19 @@ Open `ios/Runner.xcworkspace` for subsequent Xcode builds. The existing pre-comp
 `localSnapshot=true` 的本地读取增加 `snapshotReady`。只有最近序号范围完整（删除占位也计入已保存序号）时才允许 Flutter 用该结果绘制首屏；完整的一页旧记录或仅保存最新摘要都不能证明中间无缺口。同一 `sendTime` 的消息按 `seq` 排序，未分配序号的发送中消息保持在该时间的已确认消息之后，使用稳定排序保持相等项的原始顺序。
 
 Flutter 同时检查实时消息与快照之间的连续性，在全局同步进行中等待完整查询；新消息使导航预读失效。服务端当前历史接口的序号、可见范围、删除占位和终止标记回归已通过，本次无需部署服务端代码。验证入口为 `test/integration/chat/chat_entry_performance_test.dart`、`test/pages/chat/history/`、Core `history_snapshot_test.go` 和 `history_snapshot_sqlite_test.go`。Android 验证包与产物校验见 `verification/chat-entry-window-20261015.json`；iOS Framework 与设备性能仍需 macOS/Xcode 验证。
+
+## macOS iOS recovery.30-image-upload.1 verification (2026-10-15)
+
+The current 433-file locked Core source, including the added visible-empty lifecycle test, was rebuilt for iOS device arm64 and simulator arm64/x86_64 and installed in the local plugin with an artifact receipt. Core/SQLite build-script tests, upload deadline/hash tests and 15 source-lock tests passed. Xcode Release no-codesign application 3.0.1+2028 compiled successfully; its Runner binary contains v3.8.3-patch.15+recovery.30-image-upload.1 and does not contain recovery.17 or recovery.23-notification-tombstone.1. Evidence: `verification/recovery.30-image-upload-ios.json`.
+
+Open `ios/Runner.xcworkspace` for subsequent Xcode builds. The pre-compile artifact guard verifies the current Framework against the locked source. Original local edits were preserved. Signing, installation, and device runtime were not verified in this build.
+
+## CocoaPods CDN download repair (2026-10-15)
+
+A CDN HTTP/2 framing failure left the GoogleUtilities 8.1.5 spec cache empty. The official spec was downloaded over HTTP/1.1, validated for package/version, and cached with its server ETag. The application remains locked to GoogleUtilities 8.1.0; Podfile.lock and dependency versions were unchanged. Both deployment installation and repository refresh passed with reduced CDN concurrency:
+
+```sh
+COCOAPODS_CDN_MAX_CONCURRENCY=4 pod install --repo-update --deployment --project-directory=ios
+```
+
+Run the command from the project root. The cache repair is local to this Mac; the cached spec and native binaries are not stored in Git. Direct Xcode Release no-codesign compilation passed after the repair. Evidence: `verification/cocoapods-download-repair-ios.json`. This verifies dependency installation and compilation, not signing or device runtime.

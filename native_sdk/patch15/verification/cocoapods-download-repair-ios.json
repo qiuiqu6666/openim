@@ -1,0 +1,17 @@
+{
+  "repair": "Validated official GoogleUtilities 8.1.5 spec downloaded with HTTP/1.1 and atomically populated CocoaPods trunk cache with server ETag",
+  "locked_googleutilities": "8.1.0, unchanged",
+  "pod_install_deployment": "passed",
+  "pod_install_repo_update_deployment": "passed with COCOAPODS_CDN_MAX_CONCURRENCY=4",
+  "xcodebuild": "Release generic iOS device, no codesign, exit 0",
+  "application_path": "build/ios/Release-iphoneos/Runner.app",
+  "application_version": "3.0.1+2028",
+  "embedded_core": "v3.8.3-patch.15+recovery.30-image-upload.1",
+  "app_binary_sha256": "76a3593b5de583c6e274754bc25673098bf3a8423e5d0519be24c1614ee036be",
+  "local_edits_preserved": true,
+  "podfile_lock_unchanged": true,
+  "signing_and_device_runtime": "not tested",
+  "application_git_commit": "cb2c34f",
+  "logs_directory": "artifacts/cocoapods-download-repair",
+  "scope": "local CDN cache repair and recorded Xcode build; reproduction command documented in README"
+}
