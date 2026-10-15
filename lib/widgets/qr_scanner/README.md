@@ -57,3 +57,15 @@ Friend entry paths retain wrappers under `pages/contacts/scanning/`, including
 the original gallery alias and overlay exports. Existing friend scanner tests
 exercise the shared lifecycle and recognition; native device camera/album
 permissions still need device validation.
+
+Gallery recognition runs in `gallery/qr_gallery_worker.dart`. After native
+original-resolution, scale, contrast and crop passes find no codes, it tries the
+existing Dart detector on the original pixels within the same cancellation and
+timeout budget. This recovers valid branded contact cards missed by the native
+detector. Successful native multi-code results keep their existing behavior.
+
+`test/widgets/qr_scanner/qr_logo_gallery_test.dart` covers central overlays and
+blank images. To replay the reported personal card without saving its invitation
+token in the repository, pass `--dart-define=QR_GALLERY_REGRESSION_IMAGE=<path>`
+to `flutter test`. With the native library available, also pass
+`--dart-define=QR_NATIVE_TESTS=true` to verify the native-to-Dart recovery path.

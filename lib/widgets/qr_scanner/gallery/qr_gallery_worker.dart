@@ -23,7 +23,8 @@ Future<void> qrGalleryWorker(QrWorkerInput input) async {
   var width = 0, height = 0;
   var engine = 'zxing-cpp';
   final found = <QrGalleryCode>[];
-  bool budget() => !cancelled && passes < 36 && watch.elapsedMilliseconds < input.$6;
+  bool budget() =>
+      !cancelled && passes < 36 && watch.elapsedMilliseconds < input.$6;
   QrGalleryResult finish(QrGalleryStatus status, {bool partial = false}) =>
       QrGalleryResult(found.isNotEmpty ? QrGalleryStatus.success : status,
           codes: found,
@@ -93,12 +94,13 @@ Future<void> qrGalleryWorker(QrWorkerInput input) async {
         int top = 0,
         double scaleX = 1,
         double scaleY = 1,
-        bool harder = true}) async {
+        bool harder = true,
+        bool dartFallback = false}) async {
       await Future<void>.delayed(Duration.zero);
       if (!budget()) return;
       passes++;
       final List<QrGalleryCode> codes;
-      if (nativeReady) {
+      if (nativeReady && !dartFallback) {
         codes = native.zx
             .readBarcodes(
                 candidate.getBytes(),
@@ -189,6 +191,13 @@ Future<void> qrGalleryWorker(QrWorkerInput input) async {
               left: x, top: y);
         }
       }
+    }
+    // The native detector can miss valid QR exports with a central logo.
+    // Reuse the independent Dart detector after native recovery passes fail.
+    // Keep the original pixels and the same cancellation/deadline budget.
+    if (nativeReady && budget()) {
+      engine = 'zxing-cpp+zxing-dart';
+      await scan(source, dartFallback: true);
     }
     return finish(budget() ? QrGalleryStatus.noCode : QrGalleryStatus.timeout,
         partial: !budget());
