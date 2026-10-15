@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-15",
+  "sdk_version": "v3.8.3-patch.15+recovery.32-read-receipt.1",
+  "source_sha256": "1473deb08a391304b956e02dc458edeedc39e1a244f5a73895af8c9021083491",
+  "regression_before_fix": "TestExplicitReceiptEmptyPreviewPage/empty_preview fails: unexpected end of JSON input; checkpoint remains 56",
+  "regression_after_fix": "6 scenarios pass, two attempts each; empty preview checkpoint advances to 57; malformed JSON and storage errors remain retryable",
+  "shared_source_tests": "conversation_msg, interaction, relation, common, syncer passed with Go 1.24.0, CGO_ENABLED=0, -mod=readonly",
+  "source_lock": "15 tests passed; 436 locked files; cumulative patch applies and 165 patched files match shared source excluding declared build overlays",
+  "sqlite_database_tests": "not passed: CGO_ENABLED=0 uses go-sqlite3 stub; requires C compiler and CGO-enabled rerun",
+  "android_binary": "not rebuilt",
+  "ios_framework": "not built; macOS required",
+  "device_runtime": "not tested",
+  "changes": [
+    "Guard empty preview JSON in explicit peer read receipts",
+    "Preserve existing zero-row read replay fix",
+    "Add notification-page checkpoint regression coverage"
+  ]
+}

@@ -4470,16 +4470,20 @@ new file mode 100644
 +	}
 +}
 diff --git a/internal/conversation_msg/read_drawing.go b/internal/conversation_msg/read_drawing.go
+index 36c675c..5389e68 100644
 --- a/internal/conversation_msg/read_drawing.go
 +++ b/internal/conversation_msg/read_drawing.go
-@@ -173,53 +173,52 @@
+@@ -173,53 +173,52 @@ func (c *Conversation) unreadChangeTrigger(ctx context.Context, conversationID s
  func (c *Conversation) doUnreadCount(ctx context.Context, conversation *model_struct.LocalConversation, hasReadSeq int64, seqs []int64) error {
  	if conversation.ConversationType == constant.SingleChatType {
  		if len(seqs) != 0 {
 -			hasReadMessage, err := c.db.GetMessageBySeq(ctx, conversation.ConversationID, hasReadSeq)
 -			if err != nil {
--				return err
--			}
++			// Apply every listed sequence even if the tail is already read or
++			// outside the local cache. The database treats zero matches as a no-op.
++			if _, err := c.db.MarkConversationMessageAsReadBySeqs(ctx, conversation.ConversationID, seqs); err != nil {
+ 				return err
+ 			}
 -			if hasReadMessage.IsRead {
 -				return errs.New("read info from self can be ignored").Wrap()
 -
@@ -4488,11 +4492,7 @@ diff --git a/internal/conversation_msg/read_drawing.go b/internal/conversation_m
 -				if err != nil {
 -					return err
 -				}
-+			// Apply every listed sequence even if the tail is already read or
-+			// outside the local cache. The database treats zero matches as a no-op.
-+			if _, err := c.db.MarkConversationMessageAsReadBySeqs(ctx, conversation.ConversationID, seqs); err != nil {
-+				return err
- 			}
+-			}
  
  		} else {
  			return errs.New("seqList is empty", "conversationID", conversation.ConversationID, "hasReadSeq", hasReadSeq).Wrap()
@@ -4546,7 +4546,7 @@ diff --git a/internal/conversation_msg/read_drawing.go b/internal/conversation_m
  
  	return nil
  }
-@@ -232,6 +231,14 @@
+@@ -232,6 +231,14 @@ func (c *Conversation) doReadDrawing(ctx context.Context, msg *sdkws.MsgData) er
  		return err
  	}
  	log.ZDebug(ctx, "do readDrawing", "tips", tips)
@@ -4561,6 +4561,23 @@ diff --git a/internal/conversation_msg/read_drawing.go b/internal/conversation_m
  	conversation, err := c.db.GetConversation(ctx, tips.ConversationID)
  	if err != nil {
  		log.ZWarn(ctx, "GetConversation err", err, "conversationID", tips.ConversationID)
+@@ -250,9 +257,13 @@ func (c *Conversation) doReadDrawing(ctx context.Context, msg *sdkws.MsgData) er
+ 		}
+ 		if conversation.ConversationType == constant.SingleChatType {
+ 			latestMsg := &sdk_struct.MsgStruct{}
+-			if err := json.Unmarshal([]byte(conversation.LatestMsg), latestMsg); err != nil {
+-				log.ZWarn(ctx, "Unmarshal err", err, "conversationID", tips.ConversationID, "latestMsg", conversation.LatestMsg)
+-				return err
++			// Empty previews are valid when no latest message is visible.
++			// Still apply receipts and allow the notification page to commit.
++			if conversation.LatestMsg != "" {
++				if err := json.Unmarshal([]byte(conversation.LatestMsg), latestMsg); err != nil {
++					log.ZWarn(ctx, "Unmarshal err", err, "conversationID", tips.ConversationID, "latestMsg", conversation.LatestMsg)
++					return err
++				}
+ 			}
+ 			var successMsgIDs []string
+ 			for _, message := range messages {
 diff --git a/internal/conversation_msg/read_state_sparse.go b/internal/conversation_msg/read_state_sparse.go
 new file mode 100644
 --- /dev/null
@@ -18083,3 +18100,103 @@ diff --git a/sdk_struct/sdk_struct.go b/sdk_struct/sdk_struct.go
  }
  
  type BasicInfo struct {
+diff --git a/internal/conversation_msg/read_receipt_empty_preview_test.go b/internal/conversation_msg/read_receipt_empty_preview_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/conversation_msg/read_receipt_empty_preview_test.go
+@@ -0,0 +1,95 @@
++package conversation_msg
++
++import (
++	"context"
++	"errors"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/sdkws"
++)
++
++type emptyPreviewReceiptDB struct {
++	*watermarkDB
++	checkpoint int64
++}
++
++func (d *emptyPreviewReceiptDB) GetMessagesBySeqs(_ context.Context, _ string, seqs []int64) ([]*model_struct.LocalChatLog, error) {
++	if d.queryErr != nil {
++		return nil, d.queryErr
++	}
++	var rows []*model_struct.LocalChatLog
++	for _, row := range d.rows {
++		for _, seq := range seqs {
++			if row.Seq == seq {
++				copy := *row
++				rows = append(rows, &copy)
++				break
++			}
++		}
++	}
++	return rows, nil
++}
++
++func (d *emptyPreviewReceiptDB) SetNotificationSeq(_ context.Context, _ string, seq int64) error {
++	d.checkpoint = seq
++	return nil
++}
++
++func TestExplicitReceiptEmptyPreviewPage(t *testing.T) {
++	for _, tc := range []struct {
++		name, preview                                 string
++		sparse, writeFailure, queryFailure, wantError bool
++	}{
++		{name: "empty preview"},
++		{name: "empty preview replay with sparse cache", sparse: true},
++		{name: "existing preview", preview: `{"clientMsgID":"own","seq":4}`},
++		{name: "malformed preview remains retryable", preview: `{`, wantError: true},
++		{name: "write failure remains retryable", writeFailure: true, wantError: true},
++		{name: "query failure remains retryable", queryFailure: true, wantError: true},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			c, store, listener := watermarkFixture()
++			store.conversation.LatestMsg = tc.preview
++			if tc.sparse {
++				store.rows = nil
++			}
++			if tc.writeFailure {
++				store.writeErr = errors.New("storage write failure")
++			}
++			if tc.queryFailure {
++				store.queryErr = errors.New("storage query failure")
++			}
++			d := &emptyPreviewReceiptDB{watermarkDB: store, checkpoint: 56}
++			c.db = d
++			tips := &sdkws.MarkAsReadTips{ConversationID: "chat", MarkAsReadUserID: "peer", Seqs: []int64{4, 500}}
++			msg := &sdkws.MsgData{Seq: 57, ContentType: constant.HasReadReceipt, SendTime: 1234, Content: []byte(utils.StructToJsonString(sdk_struct.NotificationElem{Detail: utils.StructToJsonString(tips)}))}
++			cmd := common.Cmd2Value{Ctx: context.Background(), Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: map[string]*sdkws.PullMsgs{"n_chat": {Msgs: []*sdkws.MsgData{msg}}}}}
++			for attempt := 0; attempt < 2; attempt++ {
++				err := c.doNotificationManager(cmd)
++				if tc.wantError {
++					if err == nil || d.checkpoint != 56 {
++						t.Fatalf("failure acknowledged: err=%v checkpoint=%d", err, d.checkpoint)
++					}
++					continue
++				}
++				if err != nil || d.checkpoint != 57 {
++					t.Fatalf("receipt page blocked: err=%v checkpoint=%d", err, d.checkpoint)
++				}
++				if !tc.sparse && !store.rows[3].IsRead {
++					t.Fatal("cached message was not marked read")
++				}
++				if tc.preview == "" && store.conversation.LatestMsg != "" {
++					t.Fatal("receipt fabricated a preview")
++				}
++			}
++			if !tc.wantError && len(listener.receipts) != 2 {
++				t.Fatal("read receipt callback missing")
++			}
++		})
++	}
++}

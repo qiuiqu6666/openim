@@ -257,9 +257,13 @@ func (c *Conversation) doReadDrawing(ctx context.Context, msg *sdkws.MsgData) er
 		}
 		if conversation.ConversationType == constant.SingleChatType {
 			latestMsg := &sdk_struct.MsgStruct{}
-			if err := json.Unmarshal([]byte(conversation.LatestMsg), latestMsg); err != nil {
-				log.ZWarn(ctx, "Unmarshal err", err, "conversationID", tips.ConversationID, "latestMsg", conversation.LatestMsg)
-				return err
+			// Empty previews are valid when no latest message is visible.
+			// Still apply receipts and allow the notification page to commit.
+			if conversation.LatestMsg != "" {
+				if err := json.Unmarshal([]byte(conversation.LatestMsg), latestMsg); err != nil {
+					log.ZWarn(ctx, "Unmarshal err", err, "conversationID", tips.ConversationID, "latestMsg", conversation.LatestMsg)
+					return err
+				}
 			}
 			var successMsgIDs []string
 			for _, message := range messages {

@@ -2,28 +2,29 @@
   "upstream": "https://github.com/openimsdk/openim-sdk-core",
   "tag": "v3.8.3-patch.15",
   "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-  "sdk_version": "v3.8.3-patch.15+recovery.31-friend-profile.1",
+  "sdk_version": "v3.8.3-patch.15+recovery.32-read-receipt.1",
   "go_version": "1.24.0",
   "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
   "patch": "0001-background-message-recovery.patch",
-  "patch_sha256": "dc62c4f208ce9fe7e2f7e4fc907934aeac740e0d52fdb526354f7b3f1da59e28",
+  "patch_sha256": "31051ab0301d9bce053b017f85d3c44cdf05f82a392dd999be77bbd311d959e0",
   "source_directory": "core-source",
   "source_manifest": "core-source-manifest.json",
-  "source_sha256": "3d5da83820d3bdd7e3fe40abdb16746451a52df0efecc7fe6926e384940c57fa",
+  "source_sha256": "1473deb08a391304b956e02dc458edeedc39e1a244f5a73895af8c9021083491",
   "created": "2026-10-15",
-  "previous_release": "history/recovery.30-image-upload.1.json",
+  "previous_release": "history/recovery.31-friend-profile.1.json",
   "native_binary_integrated": false,
   "checks": {
-    "core_packages": "relation, conversation_msg, interaction, syncer passed",
-    "source_lock": "15 tests passed; 435 files; cumulative patch roundtrip verified",
-    "android_core": "four ABIs built and receipt verified; native regressions passed",
-    "android_application": "230 Flutter tests passed, 4 skipped; APK ABI parity verified; unchanged-version emulator repair passed",
-    "ios_framework": "macOS required"
+    "core_packages": "conversation_msg, interaction, relation, common, syncer passed; CGO_ENABLED=0",
+    "source_lock": "15 tests passed; 436 locked files; cumulative patch applies and 165 patched files match shared source excluding declared build overlays",
+    "android_core": "not rebuilt",
+    "android_application": "not rebuilt or device tested",
+    "ios_framework": "not built; macOS required",
+    "database": "CGO-enabled SQLite tests not run successfully: C compiler unavailable"
   },
   "android": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.31-friend-profile.1",
-    "sdk_version": "v3.8.3-patch.15+recovery.31-friend-profile.1",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.32-read-receipt.1",
+    "sdk_version": "v3.8.3-patch.15+recovery.32-read-receipt.1",
     "abis": [
       "armeabi-v7a",
       "arm64-v8a",
@@ -32,17 +33,15 @@
     ],
     "recovery_patch_included": true,
     "build_script": "build-android.ps1",
-    "apk_native_parity_verified": true,
-    "runtime_validation": "emulator-5554: unchanged-version stale friend profile repaired; directory and profile UI verified",
-    "native_binary_integrated": true,
-    "aar_built": true,
-    "sdk_artifact_verified": true,
-    "aar_sha256": "657b8f72dc827cac9b264f010d31e4139f35a21e71fcfbcdbf5b27e68d0b271f",
-    "apk_sha256": "bc130bd8155aad1e494aa7c56a59de81a4a25a2e9c7f6034a8a4e2f8695db6e3"
+    "apk_native_parity_verified": false,
+    "runtime_validation": "not tested; rebuild required",
+    "native_binary_integrated": false,
+    "aar_built": false,
+    "sdk_artifact_verified": false
   },
   "ios": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "version": "v3.8.3-patch.15+recovery.31-friend-profile.1",
+    "version": "v3.8.3-patch.15+recovery.32-read-receipt.1",
     "framework_prepared": false,
     "recovery_patch_included": true,
     "build_script": "build-ios.sh",
@@ -52,17 +51,17 @@
     "app_validation_scope": "same locked Core source as Android; previous binary is rejected",
     "native_binary_integrated": false,
     "source_consistency_verified": true,
-    "source_files": 435
+    "source_files": 436
   },
   "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
   "build_overlays": [
     "go.mod and go.sum: pinned existing gomobile dependency closure",
-    "version/version: unique recovery.31-friend-profile.1 runtime identity"
+    "version/version: unique recovery.32-read-receipt.1 runtime identity"
   ],
-  "verification_evidence": "verification/recovery.31-friend-profile.json",
+  "verification_evidence": "verification/recovery.32-read-receipt.json",
   "local_changes": {
     "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-    "description": "Retain failed friend notification checkpoints; reconcile designated profiles independently of roster versions; bounded auxiliary profile repair and full-sync user cache eviction. Includes all previous recovery fixes."
+    "description": "Handle an empty latest-message preview during explicit peer read receipts without blocking notification checkpoints; retain malformed JSON and storage failures for retry. Existing zero-row read replay fix preserved."
   },
   "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
   "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
