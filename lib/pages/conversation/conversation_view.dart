@@ -34,6 +34,7 @@ import 'editing/conversation_edit_action_bar.dart';
 import 'editing/conversation_edit_actions.dart';
 import 'peek/conversation_peek_entry.dart';
 import 'empty/conversation_empty_state.dart';
+import '../global_search/inline/inline_global_search_surface.dart';
 
 class ConversationPage extends StatefulWidget {
   const ConversationPage(
@@ -41,12 +42,14 @@ class ConversationPage extends StatefulWidget {
       this.groupChats = false,
       this.archivedOnly = false,
       this.liveUpdatesActive = true,
-      this.onEditActionBarChanged});
+      this.onEditActionBarChanged,
+      this.onSearchModeChanged});
 
   final bool groupChats;
   final bool archivedOnly;
   final bool liveUpdatesActive;
   final ValueChanged<Widget?>? onEditActionBarChanged;
+  final ValueChanged<bool>? onSearchModeChanged;
 
   @override
   State<ConversationPage> createState() => _ConversationPageState();
@@ -254,13 +257,23 @@ class _ConversationPageState extends State<ConversationPage> {
           userID: OpenIM.iMManager.userID,
           sessionCurrent: () => logic.isSessionActive,
           active: widget.liveUpdatesActive,
-          child: ListenableBuilder(
-            listenable: Listenable.merge(
-                [FriendDisplayPreferences.changes, _editor, _folders]),
-            builder: (context, _) => _build(context),
+          child: InlineGlobalSearchSurface(
+            entryKey: const ValueKey('conversation-search-entry'),
+            onSearchModeChanged: widget.onSearchModeChanged,
+            onWillOpen: () {
+              if (_editor.busy) return false;
+              _closeOpenItems();
+              if (_editor.editing) _editor.toggleEditing();
+              return true;
+            },
+            feedBuilder: (searchPlaceholder) => ListenableBuilder(
+              listenable: Listenable.merge(
+                  [FriendDisplayPreferences.changes, _editor, _folders]),
+              builder: (context, _) => _build(context, searchPlaceholder),
+            ),
           ));
 
-  Widget _build(BuildContext context) {
+  Widget _build(BuildContext context, Widget searchPlaceholder) {
     return Obx(() {
       // Keep the mounted feed and scroll state while its home tab is hidden.
       // Observe the O(1) list length even when returning the cached subtree.
@@ -336,50 +349,9 @@ class _ConversationPageState extends State<ConversationPage> {
         ),
         body: Column(
           children: [
-            Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppTokens.backgroundDark
-                    : AppTokens.surfaceLight,
-                border: Border(
-                    bottom: BorderSide(
-                        color: ConversationFeedStyle.divider(context),
-                        width: ConversationFeedStyle.dividerHeight)),
-              ),
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              child: Material(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? AppTokens.surfaceDark
-                    : AppTokens.surfaceAltLight,
-                borderRadius: BorderRadius.circular(10),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: logic.globalSearch,
-                  child: SizedBox(
-                    height: 40,
-                    child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Row(children: [
-                          Icon(Icons.search,
-                              size: 19,
-                              color: AppTokens.textPrimary(
-                                      dark: Theme.of(context).brightness ==
-                                          Brightness.dark)
-                                  .withValues(alpha: .7)),
-                          const SizedBox(width: 8),
-                          Text(StrRes.search,
-                              style: TextStyle(
-                                  fontSize: 15,
-                                  color: AppTokens.textPrimary(
-                                          dark: Theme.of(context).brightness ==
-                                              Brightness.dark)
-                                      .withValues(alpha: .7))),
-                        ])),
-                  ),
-                ),
-              ),
-            ),
-            if (!widget.groupChats) DesktopLoginBanner(active: widget.liveUpdatesActive),
+            searchPlaceholder,
+            if (!widget.groupChats)
+              DesktopLoginBanner(active: widget.liveUpdatesActive),
             ConversationFolderBar(
               folders: _folders.displayFolders,
               selectedFolderID: _folders.selectedFolderID,
@@ -484,8 +456,8 @@ class _ConversationPageState extends State<ConversationPage> {
         child: SizedBox(
           height: ConversationFeedStyle.rowHeight(context),
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w),
-            child: Row(children: [
+            padding: ConversationFeedStyle.rowPadding,
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               SizedBox(
                 width: 54,
                 height: 54,
@@ -505,7 +477,6 @@ class _ConversationPageState extends State<ConversationPage> {
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('归档',
@@ -516,7 +487,7 @@ class _ConversationPageState extends State<ConversationPage> {
                             color: AppTokens.textPrimary(
                                 dark: Theme.of(context).brightness ==
                                     Brightness.dark))),
-                    SizedBox(height: 4.w),
+                    SizedBox(height: 6.w),
                     Row(
                       children: [
                         Expanded(

@@ -84,25 +84,25 @@ func TestContiguousVisibleBoundariesAndFailedConversationIsolation(t *testing.T)
 			if err := proto.Unmarshal(req.Message.Data, p); err != nil {
 				panic(err)
 			}
-			id := p.Conversations[0].ConversationID
-			return wireResponse(&msg.GetSeqMessageResp{Msgs: map[string]*sdkws.PullMsgs{id: {IsEnd: p.Order == sdkws.PullOrder_PullOrderAsc, EndSeq: 15}}})
+			packets := make(map[string]*sdkws.PullMsgs)
+			for _, row := range p.Conversations {
+				packets[row.ConversationID] = &sdkws.PullMsgs{IsEnd: p.Order == sdkws.PullOrder_PullOrderAsc, EndSeq: 15}
+			}
+			return wireResponse(&msg.GetSeqMessageResp{Msgs: packets})
 		}
 		p := &sdkws.PullMessageBySeqsReq{}
 		if err := proto.Unmarshal(req.Message.Data, p); err != nil {
 			panic(err)
 		}
-		r := p.SeqRanges[0]
-		if r.Begin != 6 || r.End != 15 {
-			t.Errorf("ignored visibility boundaries: %v", r)
+		for _, r := range p.SeqRanges {
+			if r.Begin < 6 || r.End > 15 || r.Num != r.End-r.Begin+1 {
+				t.Errorf("ignored visibility boundaries: %v", r)
+			}
+			if r.ConversationID == "a" {
+				return &GeneralWsResp{ErrCode: 10001, ErrMsg: "temporary unavailable"}
+			}
 		}
-		if r.ConversationID == "a" {
-			return &GeneralWsResp{ErrCode: 10001, ErrMsg: "temporary unavailable"}
-		}
-		var seqs []int64
-		for s := r.Begin; s <= r.End; s++ {
-			seqs = append(seqs, s)
-		}
-		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("b", seqs...)})
+		return requestedRecoveryResponse(t, req)
 	})
 	if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"a": 20, "b": 20}, 1); err == nil {
 		t.Fatal("failed conversation reported complete")
@@ -112,18 +112,18 @@ func TestContiguousVisibleBoundariesAndFailedConversationIsolation(t *testing.T)
 	}
 }
 
-func TestContiguousPushGapYieldsToBackgroundScheduler(t *testing.T) {
+func TestSparsePushDeliversBeforeRecentGapRecovery(t *testing.T) {
 	ctx := recoveryContext(t)
 	d := &recoveryVersionDB{installed: true}
 	m := &MsgSyncer{ctx: ctx, db: d, recvCh: make(chan common.Cmd2Value, 1), syncedMaxSeqs: map[string]int64{"chat": 3}}
-	// No transport: latest delivery must not wait for history network requests.
+	// No transport: the latest message must not wait for any gap request.
 	delivered := false
 	m.pushTriggerAndSync(ctx, recoveryMsgs("chat", 1003), func(context.Context, map[string]*sdkws.PullMsgs) error {
 		delivered = true
 		return nil
 	})
-	if !delivered {
-		t.Fatal("latest push was withheld")
+	if !delivered || !m.messageAlreadyCovered("chat", 1003) {
+		t.Fatal("latest push was not delivered and recorded")
 	}
 	if m.syncedMaxSeqs["chat"] != 3 || m.checkpoints["chat"].Target != 1003 {
 		t.Fatal("push consumed gap")
@@ -143,14 +143,17 @@ func TestContiguousMetadataFailureStillRecoversOnSilentPeriodicTick(t *testing.T
 	conn := &LongConnMgr{send: make(chan Message, 1)}
 	conn.SetConnectionStatus(Connected)
 	m := &MsgSyncer{ctx: ctx, longConnMgr: conn, conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{"chat": 3}}
-	stored, probes := 0, 0
+	stored, probes, reconciliations := 0, 0, 0
 	receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
 		p := cmd.Value.(sdk_struct.CmdNewMsgComeToConversation)
 		if cmd.Cmd == constant.CmdSyncFlag {
 			return errors.New("optional profile unavailable")
 		}
 		stored += len(p.Msgs["chat"].Msgs)
-		if !p.ReconcileReadSeq || !p.Recovery {
+		if p.ReconcileReadSeq {
+			reconciliations++
+		}
+		if !p.Recovery {
 			t.Error("recovery lost read-sequence guard")
 		}
 		return nil
@@ -160,14 +163,14 @@ func TestContiguousMetadataFailureStillRecoversOnSilentPeriodicTick(t *testing.T
 			probes++
 			return wireResponse(&sdkws.GetMaxSeqResp{MaxSeqs: map[string]int64{"chat": 13}})
 		}
-		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)})
+		return requestedRecoveryResponse(t, req)
 	})
 	m.doConnected(ctx)
 	if probes != 0 {
 		t.Fatal("fixture did not model metadata block")
 	}
 	m.doMessageSeqReconciliation(ctx)
-	if stored != 10 || m.syncedMaxSeqs["chat"] != 13 {
+	if stored != 10 || reconciliations != 1 || m.syncedMaxSeqs["chat"] != 13 {
 		t.Fatal("silent retry still waited for next push")
 	}
 }

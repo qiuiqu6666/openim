@@ -98,7 +98,7 @@ func watermarkFixture() (*Conversation, *watermarkDB, *watermarkListener) {
 		{ClientMsgID: "pending", Seq: 0, SendID: "self"}, {ClientMsgID: "peer", Seq: 1, SendID: "peer"}, {ClientMsgID: "own2", Seq: 2, SendID: "self"}, {ClientMsgID: "own", Seq: 4, SendID: "self"}, {ClientMsgID: "later", Seq: 9, SendID: "self"},
 	}}
 	l := &watermarkListener{}
-	c := &Conversation{db: d, loginUserID: "self", maxSeqRecorder: NewMaxSeqRecorder(), conversationEventQueue: make(chan common.Cmd2Value, 20), msgListener: func() open_im_sdk_callback.OnAdvancedMsgListener { return l }}
+	c := &Conversation{db: d, loginUserID: "self", maxSeqRecorder: NewMaxSeqRecorder(), conversationEventQueue: make(chan common.Cmd2Value, 20), msgListener: func() open_im_sdk_callback.OnAdvancedMsgListener { return l }, ConversationListener: func() open_im_sdk_callback.OnConversationListener { return &receiptConversationListener{} }}
 	c.maxSeqRecorder.Set("chat", 9)
 	return c, d, l
 }

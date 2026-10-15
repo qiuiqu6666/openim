@@ -226,9 +226,10 @@ class _CommonGroupsPageState extends State<CommonGroupsPage> {
                   ? const CircularProgressIndicator()
                   : _store.failed
                       ? TextButton(
-                          onPressed: _store.items.isEmpty
-                              ? _store.refresh
-                              : _store.loadMore,
+                          onPressed:
+                              _store.items.isEmpty || _store.refreshFailed
+                                  ? _store.refresh
+                                  : _store.loadMore,
                           child: Text('profileCommonGroupsRetry'.tr))
                       : _store.hasMore
                           ? TextButton(

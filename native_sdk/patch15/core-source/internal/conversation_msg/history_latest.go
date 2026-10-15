@@ -15,16 +15,20 @@ func (c *Conversation) ensureLatestHistory(ctx context.Context, id string, count
 	if c.LongConnMgr == nil || !c.LongConnMgr.IsConnected() {
 		return nil
 	}
-	release, err := c.LockMessageHistory(ctx, id, true)
-	if err != nil {
-		return err
-	}
-	defer release()
 	var newest sdkws.GetMaxSeqResp
 	if err := c.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: c.loginUserID}, constant.GetNewestSeq, &newest); err != nil {
 		return err
 	}
 	end := newest.MaxSeqs[id]
+	return c.ensureHistoryWindow(ctx, id, count, end)
+}
+
+func (c *Conversation) ensureHistoryWindow(ctx context.Context, id string, count int, end int64) error {
+	release, err := c.LockMessageHistory(ctx, id, true)
+	if err != nil {
+		return err
+	}
+	defer release()
 	if end <= 0 {
 		return nil
 	}

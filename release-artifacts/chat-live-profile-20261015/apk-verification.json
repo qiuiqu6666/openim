@@ -1,0 +1,20 @@
+{
+  "apk": "E:\\openim\\openim-flutter-demo\\release-artifacts\\99chat-chat-profile-3.0.1-2042.apk",
+  "apk_bytes": 295592197,
+  "apk_sha256": "5da0872b0e07055a0fc1c61716690b095b7c8b0edd5eed5daa4e090f35c1c409",
+  "aar_sha256": "d11ec34f9a0934837627f70264303c179084d9e15047b0010f28e4ca50f0afed",
+  "native": {
+    "arm64-v8a": {
+      "sha256": "3255eab12284d5f457e8018ecd9ee374c1e1fad4079fbb9277800769dc718dd0",
+      "matches_built_aar_after_strip": true,
+      "runtime_version_string": "v3.8.3-patch.15+recovery.28-fast-recovery.1"
+    },
+    "x86_64": {
+      "sha256": "ee27f9317dca9221ace23e287739820473670db7ab01d1613f6e8d7531161a2f",
+      "matches_built_aar_after_strip": true,
+      "runtime_version_string": "v3.8.3-patch.15+recovery.28-fast-recovery.1"
+    }
+  },
+  "matches_profiled_native_sdk": true,
+  "normal_application_entrypoint": true
+}

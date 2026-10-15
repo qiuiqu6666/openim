@@ -3,6 +3,8 @@ package interaction
 import (
 	"context"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/converter"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
 	"github.com/openimsdk/protocol/sdkws"
 	"sort"
 	"sync"
@@ -128,12 +130,25 @@ type syncConversationPriority struct {
 	activity int64
 }
 
+type recoveryPriorityKey struct{}
+
+func recoveryPriorities(ctx context.Context) map[string]syncConversationPriority {
+	priorities, _ := ctx.Value(recoveryPriorityKey{}).(map[string]syncConversationPriority)
+	return priorities
+}
+
 func (m *MsgSyncer) conversationPriorities(ctx context.Context) map[string]syncConversationPriority {
 	result := make(map[string]syncConversationPriority)
 	if m.db == nil {
 		return result
 	}
-	rows, err := m.db.GetAllConversationListDB(ctx)
+	var rows []*model_struct.LocalConversation
+	var err error
+	if reader, ok := m.db.(db_interface.MessageRecoveryBoundsReader); ok {
+		rows, err = reader.GetMessageRecoveryBounds(ctx)
+	} else {
+		rows, err = m.db.GetAllConversationListDB(ctx)
+	}
 	if err != nil {
 		return result
 	} // Ordering is optional; synchronization still runs.

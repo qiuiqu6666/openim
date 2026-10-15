@@ -233,6 +233,7 @@ mixin IMCallback {
   }
 
   void recvNewMessage(Message msg) {
+    ChatHistoryCache.receivedMessage();
     AssistantStreamLog.received(msg,
         source: 'normal',
         hasReceiver: chatMessageEvents.hasListener || onRecvNewMessage != null);
@@ -249,6 +250,7 @@ mixin IMCallback {
   }
 
   void recvOfflineMessage(Message msg) {
+    ChatHistoryCache.receivedMessage();
     AssistantStreamLog.received(msg,
         source: 'offline',
         hasReceiver:

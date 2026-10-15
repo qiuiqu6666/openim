@@ -36,6 +36,10 @@ class ChatHistoryCache {
   static bool _latestSeedSafe = true;
   static final _conversationRevisions = <(String, String), int>{};
   static int get epoch => _epoch;
+  // New persisted deliveries invalidate prepared reads, without invalidating
+  // active timelines or their deletion/credential fences.
+  static int messageRevision = 0;
+  static void receivedMessage() => messageRevision++;
   static bool get canSeedLatest => _latestSeedSafe;
 
   static int revision(String accountID, String conversationID) =>
@@ -102,6 +106,7 @@ class ChatHistoryCache {
   }
 
   static void removeConversation(String accountID, String conversationID) {
+    MessageWindowCache.shared.invalidate(conversationID);
     final key = (accountID, conversationID);
     _entries.remove(key);
     _conversationRevisions.remove(key);
@@ -115,6 +120,8 @@ class ChatHistoryCache {
   }
 
   static void clear() {
+    MessageWindowCache.shared.invalidate();
+    messageRevision++;
     _epoch++;
     _entries.clear();
     _removedMessages.clear();

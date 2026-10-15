@@ -5,18 +5,22 @@ import 'node_endpoint.dart';
 
 /// Parallel, credential-free probes with cumulative decision deadlines.
 class TimedNodeProbe {
-  TimedNodeProbe({Future<NodeAvailability> Function(NodeEndpoint)? probe})
-      : probe = probe ??
-            NodeAvailabilityProbe(timeout: const Duration(milliseconds: 2250))
-                .check;
+  TimedNodeProbe(
+      {Future<NodeAvailability> Function(NodeEndpoint)? probe,
+      this.cancelPending})
+      : _probe = probe;
 
-  final Future<NodeAvailability> Function(NodeEndpoint) probe;
+  final Future<NodeAvailability> Function(NodeEndpoint)? _probe;
+  final void Function()? cancelPending;
+  final _availability =
+      NodeAvailabilityProbe(timeout: const Duration(milliseconds: 2250));
 
   Future<List<NodeAvailability>> check(List<NodeEndpoint> nodes) async {
     if (nodes.isEmpty) return [];
     final results = <NodeEndpoint, NodeAvailability>{};
     for (final node in nodes) {
-      unawaited(Future.sync(() => probe(node)).then((value) {
+      unawaited(Future.sync(() => (_probe ?? _availability.check)(node)).then(
+          (value) {
         results[node] = value;
       }, onError: (Object _) {
         results[node] = NodeAvailability(node, available: false, latencyMs: 0);
@@ -29,6 +33,8 @@ class TimedNodeProbe {
       if (delay == 250 && results.values.any((value) => value.available)) break;
       if (results[nodes.first]?.available == true) break;
     }
+    _availability.cancel();
+    cancelPending?.call();
     return [
       for (final node in nodes)
         results[node] ??

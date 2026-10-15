@@ -30,6 +30,10 @@ class MomentsPostActions extends StatelessWidget {
         children: [
           _action(context,
               key: ValueKey('moments_like_${post.momentId}'),
+              semanticLabel: momentsText(context,
+                  zh: post.likedByMe ? '取消点赞' : '点赞',
+                  en: post.likedByMe ? 'Unlike' : 'Like'),
+              selected: post.likedByMe,
               icon: post.likedByMe
                   ? Icons.favorite_rounded
                   : Icons.favorite_border_rounded,
@@ -40,6 +44,7 @@ class MomentsPostActions extends StatelessWidget {
               onTap: busy || !post.canLike ? null : onLike),
           _action(context,
               key: ValueKey('moments_comment_${post.momentId}'),
+              semanticLabel: momentsText(context, zh: '评论', en: 'Comment'),
               icon: Icons.chat_bubble_outline_rounded,
               label: post.interactionCountsTrusted && post.commentCount > 0
                   ? '${post.commentCount}'
@@ -63,20 +68,37 @@ class MomentsPostActions extends StatelessWidget {
 
   Widget _action(BuildContext context,
           {required Key key,
+          required String semanticLabel,
+          bool? selected,
           required IconData icon,
           required String label,
           required Color color,
           required VoidCallback? onTap}) =>
-      TextButton.icon(
-        key: key,
-        onPressed: onTap,
-        icon: Icon(icon, size: AppTokens.s6, color: color),
-        label: Text(label,
-            style:
-                TextStyle(color: color, fontSize: MomentsLayout.captionSize)),
-        style: TextButton.styleFrom(
-            minimumSize: const Size(
-                MomentsLayout.touchTarget, MomentsLayout.touchTarget),
-            padding: const EdgeInsets.symmetric(horizontal: AppTokens.s2)),
+      Semantics(
+        selected: selected,
+        child: TextButton.icon(
+          key: key,
+          onPressed: onTap,
+          icon: AnimatedSwitcher(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : AppTokens.contentTransitionDuration,
+            switchInCurve: AppTokens.contentTransitionCurve,
+            switchOutCurve: AppTokens.contentTransitionCurve,
+            child: Icon(icon,
+                key: ValueKey(icon), size: AppTokens.s6, color: color),
+          ),
+          label: Text(label,
+              semanticsLabel: int.tryParse(label) == null
+                  ? semanticLabel
+                  : '$semanticLabel, $label',
+              style:
+                  TextStyle(color: color, fontSize: MomentsLayout.captionSize)),
+          style: TextButton.styleFrom(
+              enableFeedback: true,
+              minimumSize: const Size(
+                  MomentsLayout.touchTarget, MomentsLayout.touchTarget),
+              padding: const EdgeInsets.symmetric(horizontal: AppTokens.s2)),
+        ),
       );
 }

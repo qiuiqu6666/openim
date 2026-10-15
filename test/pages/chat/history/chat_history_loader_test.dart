@@ -319,8 +319,8 @@ void main() {
       cursors.add(startMsg?.clientMsgID);
       return cursors.length == 1
           ? AdvancedMessage(
-              messageList: [msg('a', 1), msg('b', 2)], isEnd: false)
-          : AdvancedMessage(messageList: [msg('older', 0)], isEnd: true);
+              messageList: [msg('a', 2), msg('b', 3)], isEnd: false)
+          : AdvancedMessage(messageList: [msg('older', 1)], isEnd: true);
     });
     await h.loader.loadOlder();
     h.removed.add('a');

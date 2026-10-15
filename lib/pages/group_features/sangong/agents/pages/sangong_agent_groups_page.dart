@@ -159,6 +159,7 @@ class _SangongAgentGroupsPageState extends State<SangongAgentGroupsPage> {
             ]),
             SettingsPrimaryButton(
                 text: _saving ? '绑定中…' : '绑定代理群',
-                onPressed: _saving || _loading ? () {} : _bind),
+                loading: _saving || _loading,
+                onPressed: _saving || _loading ? null : _bind),
           ]));
 }

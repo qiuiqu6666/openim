@@ -47,7 +47,7 @@ class QrLoginApi implements DesktopAuthorizationService {
       String action, Map<String, dynamic> data) async {
     _checkOwner();
     final base = Uri.parse(_baseUrl);
-    if (base.scheme != 'https' ||
+    if (!['http', 'https'].contains(base.scheme) ||
         base.host.isEmpty ||
         base.userInfo.isNotEmpty ||
         base.hasQuery ||

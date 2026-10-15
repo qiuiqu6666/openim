@@ -19,6 +19,10 @@ class ChatHistorySearchBar extends StatelessWidget {
     this.focusNode,
     this.hintText,
     this.cancelColor,
+    this.onTap,
+    this.readOnly = false,
+    this.cancelProgress = 1,
+    this.fieldKey,
   });
 
   final TextEditingController controller;
@@ -29,6 +33,22 @@ class ChatHistorySearchBar extends StatelessWidget {
   final FocusNode? focusNode;
   final String? hintText;
   final Color? cancelColor;
+  final VoidCallback? onTap;
+  final bool readOnly;
+  final double cancelProgress;
+  final Key? fieldKey;
+
+  static double fieldHeight(BuildContext context) =>
+      (MediaQuery.textScalerOf(context)
+                      .scale(ChatHistorySearchTokens.searchFontSize) *
+                  ChatHistorySearchTokens.searchLineHeight +
+              2 * ChatHistorySearchTokens.searchVerticalPadding)
+          .clamp(ChatHistorySearchTokens.searchMinHeight, double.infinity);
+
+  static double height(BuildContext context) =>
+      fieldHeight(context) +
+      ChatHistorySearchTokens.searchTopPadding +
+      ChatHistorySearchTokens.searchBottomPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -36,11 +56,8 @@ class ChatHistorySearchBar extends StatelessWidget {
     final dark = theme.brightness == Brightness.dark;
     final primaryText = AppTokens.textPrimary(dark: dark);
     final secondaryText = AppTokens.textSecondary(dark: dark);
-    final fieldHeight = (MediaQuery.textScalerOf(context)
-                    .scale(ChatHistorySearchTokens.searchFontSize) *
-                ChatHistorySearchTokens.searchLineHeight +
-            2 * ChatHistorySearchTokens.searchVerticalPadding)
-        .clamp(ChatHistorySearchTokens.searchMinHeight, double.infinity);
+    final inputHeight = fieldHeight(context);
+    final reveal = cancelProgress.clamp(0.0, 1.0);
     final style = TextStyle(
       color: primaryText,
       fontSize: ChatHistorySearchTokens.searchFontSize,
@@ -71,6 +88,7 @@ class ChatHistorySearchBar extends StatelessWidget {
                   ),
                 ),
                 child: DecoratedBox(
+                  key: fieldKey,
                   decoration: BoxDecoration(
                     color: ChatHistorySearchTokens.searchFill(dark: dark),
                     borderRadius: BorderRadius.circular(
@@ -78,7 +96,7 @@ class ChatHistorySearchBar extends StatelessWidget {
                     ),
                   ),
                   child: SizedBox(
-                    height: fieldHeight,
+                    height: inputHeight,
                     child: ValueListenableBuilder<TextEditingValue>(
                       valueListenable: controller,
                       builder: (context, value, _) => TextField(
@@ -86,6 +104,11 @@ class ChatHistorySearchBar extends StatelessWidget {
                         controller: controller,
                         focusNode: focusNode,
                         autofocus: autofocus,
+                        onTap: onTap,
+                        readOnly: readOnly,
+                        canRequestFocus: !readOnly,
+                        showCursor: !readOnly,
+                        enableInteractiveSelection: !readOnly,
                         textInputAction: TextInputAction.search,
                         textAlignVertical: TextAlignVertical.center,
                         style: style,
@@ -155,24 +178,46 @@ class ChatHistorySearchBar extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: ChatHistorySearchTokens.cancelGap),
-            Semantics(
-              button: true,
-              label: cancelLabel,
-              onTap: onCancel,
-              child: ExcludeSemantics(
-                child: GestureDetector(
-                  key: const ValueKey('chat-history-search-cancel'),
-                  onTap: onCancel,
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: AppTokens.s3),
-                    child: Text(
-                      cancelLabel,
-                      style: TextStyle(
-                        color: cancelColor ?? primaryText,
-                        fontSize: ChatHistorySearchTokens.cancelFontSize,
-                      ),
+            ClipRect(
+              child: Align(
+                alignment: Alignment.centerRight,
+                widthFactor: reveal,
+                child: Opacity(
+                  opacity: reveal,
+                  child: IgnorePointer(
+                    ignoring: reveal == 0,
+                    child: ExcludeSemantics(
+                      excluding: reveal == 0,
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const SizedBox(
+                            width: ChatHistorySearchTokens.cancelGap),
+                        Semantics(
+                          button: true,
+                          label: cancelLabel,
+                          onTap: onCancel,
+                          child: ExcludeSemantics(
+                            child: GestureDetector(
+                              key: const ValueKey('chat-history-search-cancel'),
+                              onTap: onCancel,
+                              behavior: HitTestBehavior.opaque,
+                              child: SizedBox(
+                                height: inputHeight,
+                                child: Center(
+                                    child: Text(
+                                  cancelLabel,
+                                  style: TextStyle(
+                                    color: cancelColor ?? primaryText,
+                                    fontSize:
+                                        ChatHistorySearchTokens.cancelFontSize,
+                                    height: ChatHistorySearchTokens
+                                        .searchLineHeight,
+                                  ),
+                                )),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ]),
                     ),
                   ),
                 ),

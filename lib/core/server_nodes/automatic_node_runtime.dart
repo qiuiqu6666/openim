@@ -17,6 +17,7 @@ import 'node_availability_probe.dart';
 import 'direct_recovery_policy.dart';
 import 'route_history.dart';
 import 'feedback/network_recovery_progress.dart';
+import 'public_health_check.dart';
 
 /// Foreground recovery; shares the manual switch lock and SDK session owner.
 class AutomaticNodeRuntime extends GetxService with WidgetsBindingObserver {
@@ -45,6 +46,8 @@ class AutomaticNodeRuntime extends GetxService with WidgetsBindingObserver {
       switchService ?? ManualNodeSwitchRuntime.instance;
   int _revision = 0, _failures = 0;
   final _directRecovery = DirectRecoveryPolicy();
+  final _availability =
+      NodeAvailabilityProbe(timeout: const Duration(milliseconds: 2250));
   Object? _recoverySession;
   bool get _foreground =>
       WidgetsBinding.instance.lifecycleState == null ||
@@ -54,6 +57,7 @@ class AutomaticNodeRuntime extends GetxService with WidgetsBindingObserver {
   void onInit() {
     super.onInit();
     WidgetsBinding.instance.addObserver(this);
+    Config.networkRouteRevision.addListener(_routeChanged);
     final im = Get.find<IMController>();
     _status = im.imSdkStatusPublishSubject.listen((event) {
       if (event.status == IMSdkStatus.syncEnded &&
@@ -144,10 +148,11 @@ class AutomaticNodeRuntime extends GetxService with WidgetsBindingObserver {
       final checks = probeNodes != null
           ? await probeNodes!(nodes, onShield)
           : onShield
-              ? await Future.wait(nodes.map((node) => NodeAvailabilityProbe(
-                      timeout: const Duration(milliseconds: 2250))
-                  .check(node)))
-              : await TimedNodeProbe().check(nodes);
+              ? await Future.wait(nodes.map(_availability.check))
+              : await TimedNodeProbe(
+                      probe: _availability.check,
+                      cancelPending: _availability.cancel)
+                  .check(nodes);
       if (!active()) return;
       if (checks.first.available) {
         healthy = true;
@@ -202,8 +207,11 @@ class AutomaticNodeRuntime extends GetxService with WidgetsBindingObserver {
       const retry = [2, 4, 8, 15, 30];
       final seconds = healthy ? 30 : retry[_failures];
       if (!healthy && _failures < retry.length - 1) _failures++;
-      _schedule(
-          _freshCheckPending ? Duration.zero : Duration(seconds: seconds));
+      _schedule(_freshCheckPending
+          ? Duration.zero
+          : healthy
+              ? Duration(seconds: seconds)
+              : PublicHealthCheck.retryDelay(Duration(seconds: seconds)));
     }
   }
 
@@ -215,6 +223,8 @@ class AutomaticNodeRuntime extends GetxService with WidgetsBindingObserver {
   }
 
   void _environmentChanged() {
+    if (_closed) return;
+    _availability.cancel();
     _revision++;
     _freshCheckPending = true;
     _failures = 0;
@@ -224,9 +234,16 @@ class AutomaticNodeRuntime extends GetxService with WidgetsBindingObserver {
     _schedule(Duration.zero);
   }
 
+  void _routeChanged() {
+    // Our own coordinated switch already owns cancellation and the next check.
+    if (!_switchService.busy) _environmentChanged();
+  }
+
   @override
   void onClose() {
     _closed = true;
+    _availability.cancel();
+    Config.networkRouteRevision.removeListener(_routeChanged);
     _transport.invalidateSnapshot();
     _revision++;
     _timer?.cancel();

@@ -59,6 +59,9 @@ func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sd
 		return nil, errors.New("history count must be positive")
 	}
 	req.Count = min(req.Count, 100)
+	if req.Window && !isReverse {
+		return c.messageWindow(ctx, req)
+	}
 	if req.LocalSnapshot {
 		return c.localHistorySnapshot(ctx, req, isReverse)
 	}
@@ -119,7 +122,7 @@ func (c *Conversation) getAdvancedHistoryMessageList(ctx context.Context, req sd
 	log.ZDebug(ctx, "message convert and unmarshal", "unmarshal cost time", time.Since(t))
 	t = time.Now()
 	if !isReverse {
-		sort.Sort(messageList)
+		sort.Stable(messageList)
 	}
 	log.ZDebug(ctx, "sort", "sort cost time", time.Since(t))
 	messageListCallback.MessageList = messageList

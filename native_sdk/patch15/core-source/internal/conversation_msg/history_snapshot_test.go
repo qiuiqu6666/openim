@@ -3,6 +3,7 @@ package conversation_msg
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -72,5 +73,39 @@ func TestLocalSnapshotRejectsPagingAndPrivateConversations(t *testing.T) {
 	req.StartClientMsgID = ""
 	if _, err := c.getAdvancedHistoryMessageList(context.Background(), req, true); err == nil {
 		t.Fatal("accepted reverse")
+	}
+}
+
+func TestLocalSnapshotAttestsLatestWindowIncludingDeletedRows(t *testing.T) {
+	for _, scenario := range []struct {
+		name  string
+		seqs  []int64
+		max   int64
+		ready bool
+	}{
+		{"complete", []int64{1, 2, 3}, 3, true},
+		{"middle gap despite latest preview", []int64{1, 3}, 3, false},
+		{"stale full page", []int64{1, 2, 3}, 4, false},
+		{"bounded latest range", []int64{98, 99, 100}, 100, true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			d := &snapshotDB{recoveryDB: &recoveryDB{conversation: model_struct.LocalConversation{MaxSeq: scenario.max}}}
+			for _, seq := range scenario.seqs {
+				d.rows = append(d.rows, &model_struct.LocalChatLog{ClientMsgID: fmt.Sprint(seq), Seq: seq, SendTime: 1000, ContentType: constant.Text, Content: `{"content":"test"}`, Status: constant.MsgStatusSendSuccess})
+			}
+			if len(d.rows) > 1 {
+				d.rows[1].Status = constant.MsgStatusHasDeleted
+			}
+			c := &Conversation{db: d}
+			page, err := c.getAdvancedHistoryMessageList(context.Background(), sdk.GetAdvancedHistoryMessageListParams{ConversationID: "chat", Count: 3, LocalSnapshot: true}, false)
+			if err != nil || page.SnapshotReady != scenario.ready {
+				t.Fatalf("readiness=%v err=%v", page.SnapshotReady, err)
+			}
+			for i := 1; i < len(page.MessageList); i++ {
+				if page.MessageList[i-1].Seq >= page.MessageList[i].Seq {
+					t.Fatal("same timestamp messages reordered")
+				}
+			}
+		})
 	}
 }

@@ -101,7 +101,8 @@ func TestAllConversationPreviewsPrecedeRecentHistory(t *testing.T) {
 			if err := m.compareSeqsAndBatchSync(ctx, targets, 1); err != nil {
 				t.Fatal(err)
 			}
-			if previewRequests != 3 || historyRequests != len(targets) {
+			wantHistory := (len(targets)*(recentMessageWindow-1) + SplitPullMsgNum - 1) / SplitPullMsgNum
+			if previewRequests != 3 || historyRequests != wantHistory {
 				t.Fatalf("preview/history requests: %d/%d", previewRequests, historyRequests)
 			}
 			for id := range targets {

@@ -313,7 +313,8 @@ class _SangongMembersPageState extends State<SangongMembersPage> {
         text: _busy
             ? i18n.t(zhHans: '处理中...', zhHant: '處理中...', en: 'Working...')
             : i18n.t(zhHans: '添加帮工', zhHant: '添加幫工', en: 'Add helper'),
-        onPressed: _busy ? () {} : _showAddHelperDialog,
+        loading: _busy,
+        onPressed: _busy ? null : _showAddHelperDialog,
       ),
       children: [
         Padding(

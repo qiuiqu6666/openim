@@ -19,6 +19,7 @@ class CommonGroupsStore extends ChangeNotifier {
   final _ids = <String>{};
   bool busy = false;
   bool failed = false;
+  bool refreshFailed = false;
   bool hasMore = true;
   String _cursor = '';
   bool _disposed = false;
@@ -36,38 +37,64 @@ class CommonGroupsStore extends ChangeNotifier {
     final cancel = _cancel = CancelToken();
     busy = true;
     failed = false;
-    if (refresh) {
-      items.clear();
-      _ids.clear();
-      _cursor = '';
-      hasMore = true;
-    }
+    refreshFailed = false;
+    var replacing = refresh;
+    var cursor = refresh ? '' : _cursor;
+    final retainedCount = items.length;
     notifyListeners();
     try {
       CommonGroupListPage page;
       try {
         page = await _service.list(peerUserID,
-            cursor: _cursor, cancelToken: cancel);
+            cursor: cursor, cancelToken: cancel);
       } on CommonGroupsException catch (error) {
-        if (error.code != 1001 || _cursor.isEmpty) rethrow;
+        if (error.code != 1001 || cursor.isEmpty) rethrow;
         // Restart once when a signed or expired cursor is rejected.
         if (!_valid || version != _version) return;
-        items.clear();
-        _ids.clear();
-        _cursor = '';
-        hasMore = true;
-        notifyListeners();
+        replacing = true;
+        cursor = '';
         page = await _service.list(peerUserID, cancelToken: cancel);
       }
       if (!_valid || version != _version) return;
-      items.addAll(page.items.where((item) => _ids.add(item.groupID)));
+      final incoming = <GroupInfo>[];
+      final incomingIDs = <String>{};
+      final cursors = <String>{cursor};
+      while (true) {
+        incoming
+            .addAll(page.items.where((item) => incomingIDs.add(item.groupID)));
+        // Refill the previously visible prefix before publishing a refresh.
+        // Keeping only page one would clamp a deeply scrolled viewport too.
+        if (!replacing || !page.hasMore || incoming.length >= retainedCount) {
+          break;
+        }
+        if (!cursors.add(page.nextCursor)) {
+          throw const FormatException('Common group cursor did not advance');
+        }
+        page = await _service.list(peerUserID,
+            cursor: page.nextCursor, cancelToken: cancel);
+        if (!_valid || version != _version) return;
+      }
+      if (replacing) {
+        items.clear();
+        _ids.clear();
+      }
+      items.addAll(incoming.where((item) => _ids.add(item.groupID)));
       _cursor = page.nextCursor;
       hasMore = page.hasMore;
     } catch (_) {
-      if (_valid && version == _version) failed = true;
+      if (_valid && version == _version) {
+        failed = true;
+        refreshFailed = replacing;
+      }
     } finally {
       if (_valid && version == _version) {
         busy = false;
+        notifyListeners();
+      } else if (!_disposed && _currentUser() != _owner) {
+        items.clear();
+        _ids.clear();
+        busy = false;
+        hasMore = false;
         notifyListeners();
       }
     }

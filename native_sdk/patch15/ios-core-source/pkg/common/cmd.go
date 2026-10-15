@@ -38,7 +38,7 @@ func sendCmd(ch chan<- Cmd2Value, value Cmd2Value, timeout time.Duration) error 
 		value.Caller = GetCaller(3)
 	}
 	if ch == nil {
-		log.ZError(value.Ctx, "sendCmd chan is nil", ErrChanNil, "caller", value.Caller, "cmd", value.Cmd, "value", value.Value)
+		log.ZError(value.Ctx, "sendCmd chan is nil", ErrChanNil, "caller", value.Caller, "cmd", value.Cmd)
 		return ErrChanNil
 	}
 	timer := time.NewTimer(timeout)
@@ -54,10 +54,10 @@ func sendCmd(ch chan<- Cmd2Value, value Cmd2Value, timeout time.Duration) error 
 	case <-cancelled:
 		return value.Ctx.Err()
 	case ch <- value:
-		log.ZInfo(value.Ctx, "sendCmd chan success", "caller", value.Caller, "cmd", value.Cmd, "value", value.Value)
+		log.ZInfo(value.Ctx, "sendCmd chan success", "caller", value.Caller, "cmd", value.Cmd)
 		return nil
 	case <-timer.C:
-		log.ZError(value.Ctx, "sendCmd chan timeout", ErrTimeout, "caller", value.Caller, "cmd", value.Cmd, "value", value.Value)
+		log.ZError(value.Ctx, "sendCmd chan timeout", ErrTimeout, "caller", value.Caller, "cmd", value.Cmd)
 		return ErrTimeout
 	}
 }
@@ -117,9 +117,9 @@ func DoListener(ctx context.Context, li goroutine) {
 			if !ok {
 				return
 			}
-			log.ZInfo(cmd.Ctx, "recv cmd", "caller", cmd.Caller, "cmd", cmd.Cmd, "value", cmd.Value)
+			log.ZInfo(cmd.Ctx, "recv cmd", "caller", cmd.Caller, "cmd", cmd.Cmd)
 			runCommandSafely(li, cmd)
-			log.ZInfo(cmd.Ctx, "done cmd", "caller", cmd.Caller, "cmd", cmd.Cmd, "value", cmd.Value)
+			log.ZInfo(cmd.Ctx, "done cmd", "caller", cmd.Caller, "cmd", cmd.Cmd)
 		case <-ctx.Done():
 			log.ZInfo(ctx, "conversation done sdk logout.....")
 			return

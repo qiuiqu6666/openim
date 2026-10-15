@@ -26,10 +26,6 @@ class _ConversationLogic extends GetxController
   @override
   final popCtrl = CustomPopupMenuController();
   final connection = 'ready'.obs;
-  @override
-  final markingAllRead = false.obs;
-  @override
-  final readBatchProgress = ''.obs;
   int searches = 0;
 
   @override
@@ -192,7 +188,12 @@ void main() {
       image.dispose();
 
       await tester.tap(find.text('搜索'));
-      expect(logic.searches, 1);
+      await tester.pumpAndSettle();
+      expect(logic.searches, 0);
+      expect(find.byType(TextField), findsOneWidget);
+      await tester
+          .tap(find.byKey(const ValueKey('chat-history-search-cancel')));
+      await tester.pumpAndSettle();
       logic.connection.value = 'connecting';
       logic.imStatus.value = IMSdkStatus.connecting;
       await tester.pump();
@@ -248,8 +249,8 @@ void main() {
   testWidgets('returning to a cached feed uses the latest connection state',
       (tester) async {
     _configureView(tester);
-    final logic = Get.put<ConversationLogic>(_ConversationLogic())
-        as _ConversationLogic;
+    final logic =
+        Get.put<ConversationLogic>(_ConversationLogic()) as _ConversationLogic;
     logic.connection.value = 'connecting';
     logic.imStatus.value = IMSdkStatus.connecting;
     await tester.pumpWidget(_host(dark: false));

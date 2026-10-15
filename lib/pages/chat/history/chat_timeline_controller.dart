@@ -18,6 +18,8 @@ class ChatTimelineController {
     required this.conversation,
     required this.fetch,
     this.fetchLocalSnapshot,
+    this.fetchWindow,
+    this.canPaintInitialWindow,
     this.onLatestDeferred,
     this.beforeLatestReplace,
     this.fetchNewer,
@@ -41,6 +43,19 @@ class ChatTimelineController {
   final ConversationInfo Function() conversation;
   final ChatHistoryReader fetch;
   final Future<List<Message>> Function()? fetchLocalSnapshot;
+  final FutureOr<AdvancedMessage> Function()? fetchWindow;
+  MessageWindow? _publishedWindow;
+  bool get hasPublishableWindow => _publishedWindow?.canPublish == true;
+  bool get _hasSnapshotProvider =>
+      fetchLocalSnapshot != null || fetchWindow != null;
+  late final _ingress = MessageWindowIngress(
+    conversationID: conversationID,
+    publish: _appendWindowBatch,
+    recover: () {
+      if (!_closed) unawaited(refresh());
+    },
+  );
+  final bool Function()? canPaintInitialWindow;
   final void Function()? onLatestDeferred;
   final Future<void> Function()? beforeLatestReplace;
   bool _hasPaintedRows = false;
@@ -67,6 +82,7 @@ class ChatTimelineController {
   final scrollingCacheMessageList = <Message>[];
   final removedIDs = <String>{};
   final initialHistoryLoading = true.obs;
+  final initialWindowReady = false.obs;
   final historyLoading = false.obs;
   final historyPagingLoading = false.obs;
   final historyError = RxnString();
@@ -105,12 +121,46 @@ class ChatTimelineController {
   // Cached rows are first-frame snapshots until an SDK page establishes cursors.
   bool get hasLoadedHistory => _history.loaded;
 
+  void showLoadedLocalWindow() {
+    if (!_closed && _history.loaded && canPaintInitialWindow?.call() != false) {
+      initialWindowReady.value = true;
+    }
+  }
+
   late final ChatHistoryLoader _history = ChatHistoryLoader(
     diagnostic: (event) => ChatHistoryDiagnostics.record(conversationID, event),
     pageSize: pageSize,
-    fetch: fetch,
+    fetch: ({required count, startMsg}) async {
+      final result = await fetch(count: count, startMsg: startMsg);
+      if (result.window != null &&
+          result.window!.conversationID != conversationID) {
+        throw StateError('History window belongs to another conversation');
+      }
+      if (result.window?.canPublish == true &&
+          hasPublishableWindow &&
+          result.window!.targetWatermark < _publishedWindow!.targetWatermark) {
+        // A pre-navigation snapshot may finish after a newer local window.
+        // Read the SDK's current proof; never roll the published edge backwards.
+        final current = await fetchWindow?.call();
+        if (current?.window?.canPublish != true ||
+            current!.window!.conversationID != conversationID ||
+            current.window!.targetWatermark <
+                _publishedWindow!.targetWatermark) {
+          throw StateError(
+              'History snapshot superseded by the published window');
+        }
+        return current;
+      }
+      return result;
+    },
     isDisplaySnapshot: (id) => _snapshotIDs.contains(id),
     hasPaintedRows: () => _hasPaintedRows,
+    expectsLatest: () {
+      final latest = conversation().latestMsg;
+      return latest?.clientMsgID?.isNotEmpty == true &&
+          !ChatHistoryCache.isRemoved(accountID, latest!.clientMsgID) &&
+          latest.contentType != MessageType.typing;
+    },
     beforeLatestReplace: beforeLatestReplace,
     onLatestDeferred: () {
       latestDeferred.value = true;
@@ -131,8 +181,8 @@ class ChatTimelineController {
     },
   );
 
-  /// Seed only safe cached/latest messages, then query the SDK's latest page.
-  /// The route can defer the query until its remaining entry wiring is ready.
+  /// Production routes paint an attested native window or the complete SDK
+  /// page. The route may defer the query until entry wiring is ready.
   void initialize({bool prefetch = true}) {
     if (_initialized || _closed) return;
     _initialized = true;
@@ -151,7 +201,7 @@ class ChatTimelineController {
     if (info.isPrivateChat == true) {
       ChatHistoryCache.removeConversation(accountID, conversationID);
       _cacheRevision = ChatHistoryCache.revision(accountID, conversationID);
-    } else {
+    } else if (!_hasSnapshotProvider) {
       final cached = ChatHistoryCache.read(accountID, conversationID);
       final latest = info.latestMsg;
       if (ChatHistoryCache.canSeedLatest &&
@@ -168,7 +218,11 @@ class ChatTimelineController {
         messageList.value = ChatHistoryLoader.merge(cached);
       }
     }
-    if (fetchLocalSnapshot != null &&
+    // Production entry paints only an attested native window, never an old
+    // presentation cache plus one preview. Live arrivals remain hidden until
+    // they can be committed with the initial window.
+    if (!_hasSnapshotProvider) initialWindowReady.value = true;
+    if (_hasSnapshotProvider &&
         info.isPrivateChat != true &&
         messageList.length < pageSize) {
       unawaited(_loadLocalSnapshot());
@@ -181,7 +235,20 @@ class ChatTimelineController {
     final cacheRevision = _cacheRevision;
     final watch = Stopwatch()..start();
     try {
-      final rows = await fetchLocalSnapshot!();
+      final prepared = fetchWindow?.call();
+      // A prewarmed proof can publish in onInit, before the first route build.
+      // Awaiting an already completed Future would still paint a skeleton frame.
+      final page =
+          prepared is Future<AdvancedMessage> ? await prepared : prepared;
+      final window = page?.window;
+      final rows = page?.messageList ??
+          (fetchLocalSnapshot == null
+              ? <Message>[]
+              : await fetchLocalSnapshot!());
+      if (window != null &&
+          (!window.canPublish || window.conversationID != conversationID)) {
+        return;
+      }
       if (_closed ||
           !_isSessionCurrent() ||
           accountID != _currentAccountID() ||
@@ -189,6 +256,8 @@ class ChatTimelineController {
           _history.loaded ||
           revision != _history.windowRevision ||
           _history.viewingHistory ||
+          (window?.canPublish != true &&
+              canPaintInitialWindow?.call() == false) ||
           _cacheEpoch != ChatHistoryCache.epoch ||
           cacheRevision !=
               ChatHistoryCache.revision(accountID, conversationID)) {
@@ -203,14 +272,71 @@ class ChatTimelineController {
               !removedIDs.contains(m.clientMsgID) &&
               !ChatHistoryCache.isRemoved(accountID, m.clientMsgID))
           .toList();
-      if (safe.isEmpty) return;
+      if (safe.isEmpty && window?.emptyConfirmed != true) return;
+      final latest = conversation().latestMsg;
+      if (latest?.clientMsgID?.isNotEmpty == true &&
+          !safe.any((m) => m.clientMsgID == latest!.clientMsgID) &&
+          !messageList.any((m) => m.clientMsgID == latest!.clientMsgID) &&
+          !ChatHistoryCache.isRemoved(accountID, latest!.clientMsgID) &&
+          !((latest.seq ?? 0) > 0 &&
+              window != null &&
+              latest.seq! <= window.targetWatermark)) {
+        return;
+      }
+      final liveSeqs =
+          messageList.where((m) => (m.seq ?? 0) > 0).map((m) => m.seq!).toSet();
+      final snapshotEnd =
+          safe.map((m) => m.seq ?? 0).fold(0, (a, b) => a > b ? a : b);
+      final liveEnd = liveSeqs.fold(0, (a, b) => a > b ? a : b);
+      if (window == null && liveEnd > snapshotEnd) {
+        final stored = {...liveSeqs, ...safe.map((m) => m.seq ?? 0)};
+        final start = liveEnd - pageSize + 1;
+        for (var seq = start > 1 ? start : 1; seq <= liveEnd; seq++) {
+          if (!stored.contains(seq)) {
+            return;
+          }
+        }
+      }
       _snapshotIDs.addAll(safe
           .map((m) => m.clientMsgID)
           .where((id) => !currentIDs.contains(id)));
-      messageList.value = ChatHistoryLoader.merge([
+      final combined = ChatHistoryLoader.merge([
         ...safe.map((m) => ChatHistoryCache.applyRevocation(accountID, m)),
         ...messageList,
       ], removedIDs: removedIDs);
+      final persisted = combined
+          .where((m) =>
+              m.status != MessageStatus.sending &&
+              m.status != MessageStatus.failed)
+          .toList();
+      final keep = persisted.length > pageSize
+          ? persisted
+              .skip(persisted.length - pageSize)
+              .map((m) => m.clientMsgID)
+              .toSet()
+          : persisted.map((m) => m.clientMsgID).toSet();
+      final initial = combined
+          .where((m) =>
+              keep.contains(m.clientMsgID) ||
+              m.status == MessageStatus.sending ||
+              m.status == MessageStatus.failed)
+          .toList();
+      initialWindowReady.value = true;
+      if (window != null) {
+        _publishedWindow = window;
+        _ingress.accept(window);
+      }
+      messageList.value = window == null
+          ? initial
+          : initial
+              .where((m) => (m.seq ?? 0) <= window.targetWatermark)
+              .toList();
+      if (window != null) {
+        for (final m
+            in initial.where((m) => (m.seq ?? 0) > window.targetWatermark)) {
+          _ingress.receive(m);
+        }
+      }
       ChatHistoryDiagnostics.record(conversationID, {
         'event': 'local_snapshot',
         'count': safe.length,
@@ -246,9 +372,27 @@ class ChatTimelineController {
     _rememberRecoveryAnchor(messageList);
     _rememberRecoveryAnchor(messages);
     final offset = captureOffset();
+    final alreadyPainted = _hasPaintedRows;
+    final window = _history.currentWindow;
+    final awaitingInitial = !hasPublishableWindow && window?.canPublish == true;
+    final buffered = awaitingInitial
+        ? messages.where((m) => (m.seq ?? 0) > window!.targetWatermark).toList()
+        : <Message>[];
     messageList.value = messages
+        .where(
+            (m) => !awaitingInitial || (m.seq ?? 0) <= window!.targetWatermark)
         .map((m) => ChatHistoryCache.applyRevocation(accountID, m))
         .toList();
+    if (window?.canPublish == true) {
+      _publishedWindow = window;
+      _ingress.accept(window!);
+      for (final m in buffered) {
+        _ingress.receive(m);
+      }
+    }
+    if (hasPublishableWindow || canPaintInitialWindow?.call() != false) {
+      initialWindowReady.value = true;
+    }
     final visibleIDs = messages.map((m) => m.clientMsgID).toSet();
     final latest = messages
         .where((m) =>
@@ -267,7 +411,7 @@ class ChatTimelineController {
                         (latest.sendTime ?? latest.createTime ?? 0) &&
                     (m.seq ?? 0) > 0 &&
                     (m.seq ?? 0) <= (latest.seq ?? 0)))));
-    if (firstPage && !_history.viewingHistory) {
+    if (firstPage && !_history.viewingHistory && !alreadyPainted) {
       onFirstPage();
     } else if (refresh) {
       restoreOffset(offset);
@@ -309,6 +453,48 @@ class ChatTimelineController {
 
   /// Publish append and automatic eviction together, retaining retry rows.
   void appendIncoming(Message message, {required bool trim}) {
+    if (_ingress.receive(message)) return;
+    _appendIncomingDirect(message, trim: trim);
+  }
+
+  void _appendWindowBatch(List<Message> batch) {
+    if (_closed) return;
+    final visible = batch
+        .where((m) =>
+            !removedIDs.contains(m.clientMsgID) &&
+            m.status != MessageStatus.deleted &&
+            !containsMessage(m.clientMsgID))
+        .toList();
+    if (visible.isEmpty) return;
+    for (final row in visible) {
+      _rememberRecoveryAnchor([row]);
+    }
+    // Both confirmed segments are already ordered; pending sends remain a
+    // separate stable tail. Do not re-sort hundreds of unchanged bubbles.
+    var next = <Message>[
+      ...messageList.where((m) => (m.seq ?? 0) > 0),
+      ...visible,
+      ...messageList.where((m) => (m.seq ?? 0) <= 0),
+    ];
+    if (preserveReading?.call() != true &&
+        !_history.viewingHistory &&
+        next.length > automaticWindowLimit) {
+      final start = next.length - automaticWindowLimit;
+      next = [
+        for (var i = 0; i < next.length; i++)
+          if (i >= start ||
+              next[i].status == MessageStatus.sending ||
+              next[i].status == MessageStatus.failed)
+            next[i]
+      ];
+      _history.didTrimLatest();
+    }
+    messageList.value = next
+        .map((m) => ChatHistoryCache.applyRevocation(accountID, m))
+        .toList();
+  }
+
+  void _appendIncomingDirect(Message message, {required bool trim}) {
     _snapshotIDs.remove(message.clientMsgID);
     _rememberRecoveryAnchor([message]);
     if (_identityDirty) containsMessage(message.clientMsgID);
@@ -423,6 +609,7 @@ class ChatTimelineController {
     if (_closed || id == null) return;
     ChatHistoryCache.removeMessage(accountID, id);
     removedIDs.add(id);
+    _ingress.remove(id);
     messageList.removeWhere((m) => m.clientMsgID == id);
     scrollingCacheMessageList.removeWhere((m) => m.clientMsgID == id);
   }
@@ -444,6 +631,8 @@ class ChatTimelineController {
   Set<String> clear() {
     if (_closed) return <String>{};
     _hasPaintedRows = false;
+    _publishedWindow = null;
+    _ingress.reset();
     latestDeferred.value = false;
     _snapshotIDs.clear();
     _lastLiveAnchor = null;
@@ -512,6 +701,7 @@ class ChatTimelineController {
     if (_disposed) return;
     _cacheHistory();
     _disposed = true;
+    _ingress.close();
     _history.close();
     _messageListWorker?.dispose();
     _identities.clear();

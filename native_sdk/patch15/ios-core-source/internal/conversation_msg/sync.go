@@ -43,6 +43,13 @@ func (c *Conversation) SyncAllConversationHashReadSeqs(ctx context.Context) erro
 	if len(seqs) == 0 {
 		return nil
 	}
+	readSeqs := make(map[string]int64, len(seqs))
+	for id, seq := range seqs {
+		readSeqs[id] = seq.HasReadSeq
+	}
+	if err := c.saveReadWatermarks(ctx, readSeqs, true, 0); err != nil {
+		return err
+	}
 	// Protect the local snapshot/update, not the preceding network wait.
 	c.conversationSyncMutex.Lock()
 	locked := true

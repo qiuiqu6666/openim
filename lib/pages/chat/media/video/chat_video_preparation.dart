@@ -20,11 +20,12 @@ Future<File> prepareChatVideo(File original, ChatVideoQuality quality) async {
   // Native compression is serialized by the album preparation loop. Never
   // delete the source or cancel another module's compressor.
   if (VideoCompress.isCompressing) return original;
-  final info = await LoadingView.singleton.wrap(
-      asyncFunction: () => VideoCompress.compressVideo(original.path,
-          quality: VideoQuality.Res1280x720Quality,
-          deleteOrigin: false,
-          includeAudio: true));
+  // The accepted attachment task already owns local preparation feedback.
+  // Compression must not block the chat or dismiss another task's loader.
+  final info = await VideoCompress.compressVideo(original.path,
+      quality: VideoQuality.Res1280x720Quality,
+      deleteOrigin: false,
+      includeAudio: true);
   final output = info?.file;
   if (output == null || !await output.exists()) return original;
   if (await output.length() >= await original.length()) return original;

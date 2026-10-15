@@ -8,7 +8,7 @@ import '../../../core/controller/im_controller.dart';
 import '../../../routes/app_navigator.dart';
 import '../chat_logic.dart';
 import '../../conversation/conversation_logic.dart';
-import '../../customer_service/customer_service.dart';
+import '../complaints/complaint_reason_page.dart';
 import '../../mine/settings/pages/chat_background_page.dart';
 import '../../mine/settings/widgets/settings_widgets.dart';
 import 'chat_history_search_page.dart';
@@ -112,21 +112,14 @@ class ChatSetupLogic extends GetxController {
     }
     _reporting = true;
     try {
-      final confirmed = await showSettingsConfirm(context,
-          title: settingsText(context, zh: '投诉', en: 'Report'),
-          message: settingsText(context,
-              zh: '如需投诉此聊天，请联系人工客服，并提供对方账号：$peer。',
-              en:
-                  'To report this chat, contact customer service and provide the other user’s account: $peer.'),
-          confirmText: settingsText(context,
-              zh: '联系人工客服', en: 'Contact customer service'));
-      if (!confirmed || !_active || !context.mounted) return;
-      await showCustomerServiceSheet(context);
+      await Get.to(() => ComplaintReasonPage(
+          reportedUserID: peer,
+          targetName: conversationInfo.value.showName ?? peer));
     } catch (_) {
       if (_active && context.mounted) {
         IMViews.showToast(settingsText(context,
-            zh: '无法打开在线客服，请稍后重试',
-            en: 'Unable to open customer service. Please try again.'));
+            zh: '无法打开投诉页面，请稍后重试',
+            en: 'Unable to open complaint page. Please try again.'));
       }
     } finally {
       _reporting = false;

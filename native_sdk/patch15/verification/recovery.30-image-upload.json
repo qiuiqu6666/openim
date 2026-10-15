@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-15",
+  "sdk_version": "v3.8.3-patch.15+recovery.30-image-upload.1",
+  "source_sha256": "3a0d0dafc9ea26d4dfaae6e05989c5a11cd2bae2c64362e96b65d07ab9c6f3e2",
+  "patch_sha256": "3f783f7b9fdbc02aa087eed5484d6015ca5c849709defcc8d3749c10222e353f",
+  "flutter": {
+    "tests_passed": 169,
+    "analyze": "no issues",
+    "reproduction_before_fix": "7 failures: image metadata selection and stalled optional preview"
+  },
+  "native": {
+    "upload_failure_tests": "passed: stalled HTTP headers/body, same-image retry, cancelled lock waiter, 60 concurrent uploads",
+    "regression_packages": [
+      "pkg/common",
+      "pkg/network",
+      "internal/interaction",
+      "internal/conversation_msg"
+    ],
+    "source_lock_tests_passed": 15,
+    "patch_roundtrip": "all Go sources match after applying cumulative patch to base with LF text line endings",
+    "aar_sha256": "4ca03a3c3c1610f5759df46d4ca423e41fc0f5f670d524c7845d0fc80c4130d0",
+    "libraries_sha256": {
+      "armeabi-v7a": "f0d0f3ab3f8d74c674b0051f5affbdcbce703868ebaca6877a1e67a29b6dd8fd",
+      "arm64-v8a": "383f558ec81acece5a2614fff83025b6f4f846d83c38370dc2666cf51da256ed",
+      "x86": "fa5a07e62db252e358420f18be263cfb78753039ae624685cc9c40980c956699",
+      "x86_64": "dd43b7d75092c74581fb1aa87e6c46ac899f4f15cfa7e0f59596c1cd0f8b697a"
+    }
+  },
+  "android": {
+    "build": "debug arm64 passed",
+    "apk_sha256": "09ef8f3a74017a5989ae7ac352d414d7fa49bdc520df8678bc81ddc773edd260",
+    "embedded_sdk_matches_aar": true,
+    "device_test": "not performed",
+    "embedded_core_sha256": "781572d1c84fe442cdad7aa0bbf7e16aa0a5b512e88c4d037ca2812bdd28e012",
+    "strip_chain_verified": true,
+    "artifact": "E:\\openim\\artifacts\\image-send-audit-20261015\\app-build\\build\\app\\outputs\\flutter-apk\\app-debug.apk"
+  },
+  "ios": {
+    "shared_source": "updated and locked",
+    "framework_build": "requires macOS",
+    "device_test": "not performed"
+  },
+  "field_root_cause": "not uniquely established without affected-device logs"
+}

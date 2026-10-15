@@ -42,8 +42,17 @@ func (c *Conversation) doRevokeMsg(ctx context.Context, msg *sdkws.MsgData) erro
 }
 
 func (c *Conversation) revokeMessage(ctx context.Context, tips *sdkws.RevokeMsgTips) error {
+	store, sparse := c.db.(sparseRevocationStore)
+	if sparse {
+		if err := store.SaveMessageRevocation(ctx, tips); err != nil {
+			return err
+		}
+	}
 	revokedMsg, err := c.db.GetMessageBySeq(ctx, tips.ConversationID, tips.Seq)
 	if err != nil {
+		if sparse && isLocalRecordMissing(err) {
+			return c.revokeUncachedPreview(ctx, tips)
+		}
 		log.ZError(ctx, "GetMessageBySeq failed", err, "tips", &tips)
 		return errs.Wrap(err)
 	}
@@ -116,6 +125,11 @@ func (c *Conversation) revokeMessage(ctx context.Context, tips *sdkws.RevokeMsgT
 }
 
 func (c *Conversation) quoteMsgRevokeHandle(ctx context.Context, conversationID string, v *model_struct.LocalChatLog, revokedMsg sdk_struct.MessageRevoked) error {
+	// Sequence tombstones intentionally retain their type but have no body.
+	// They cannot contain a live quote and must not block the notification page.
+	if v.Status >= constant.MsgStatusHasDeleted {
+		return nil
+	}
 	s := sdk_struct.QuoteElem{}
 	if v.Content == "" {
 		return errs.New("Chat Log Content not found")

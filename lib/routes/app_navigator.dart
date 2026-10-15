@@ -52,21 +52,27 @@ class AppNavigator {
     String? draftText,
     Message? searchMessage,
     bool Function()? isCurrent,
+    ChatEntryTrace? entryTrace,
   }) async {
     if (isCurrent?.call() == false) return null;
     final owner = (OpenIM.iMManager.userID, DataSp.imToken);
-    final entryTrace = ChatEntryTrace(conversationInfo.conversationType);
+    entryTrace ??= ChatEntryTrace(conversationInfo.conversationType);
+    // Preparation overlaps account resolution and the route transition.
+    entryTrace.mark('prefetch_start');
+    ChatHistoryPrefetcher.shared.prepare(conversationInfo, mark: entryTrace.mark);
     final resolution = await OfficialAccountResolver.shared
         .resolveConversation(conversationInfo);
     entryTrace.mark('account_resolved');
     if (owner != (OpenIM.iMManager.userID, DataSp.imToken) ||
         isCurrent?.call() == false) {
+      entryTrace.close();
       return null;
     }
     return _startResolvedChat<T>(
       conversationInfo: conversationInfo,
       resolution: resolution,
       entryTrace: entryTrace,
+      historyPrepared: true,
       offUntilHome: offUntilHome,
       draftText: draftText,
       searchMessage: searchMessage,
@@ -77,13 +83,17 @@ class AppNavigator {
     required ConversationInfo conversationInfo,
     required OfficialConversationResolution resolution,
     ChatEntryTrace? entryTrace,
+    bool historyPrepared = false,
     bool offUntilHome = true,
     bool replaceCurrent = false,
     String? draftText,
     Message? searchMessage,
   }) {
-    entryTrace?.mark('prefetch_start');
-    ChatHistoryPrefetcher.shared.prepare(conversationInfo);
+    if (!historyPrepared) {
+      entryTrace ??= ChatEntryTrace(conversationInfo.conversationType);
+      entryTrace.mark('prefetch_start');
+      ChatHistoryPrefetcher.shared.prepare(conversationInfo, mark: entryTrace.mark);
+    }
     entryTrace?.mark('route_push');
     GetTags.createChatTag();
     final route = switch (resolution.target) {

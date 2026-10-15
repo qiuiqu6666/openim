@@ -7,17 +7,19 @@ import '../../../models/group_feature_context.dart';
 import '../../data/mark_six_repository.dart';
 import '../../widgets/mark_six_style.dart';
 import '../data/agent_query_controller.dart';
+import '../widgets/agent_query_feedback.dart';
 import '../identity/agent_avatar_directory.dart';
 import '../identity/agent_user_avatar.dart';
 import '../widgets/agent_descendant_tile.dart';
 import 'agent_descendant_history_page.dart';
 
 class AgentDescendantDetailPage extends StatefulWidget {
-  const AgentDescendantDetailPage({super.key,
-    required this.featureContext,
-    required this.userID,
-    this.initialItem,
-    this.loadedItems = const []});
+  const AgentDescendantDetailPage(
+      {super.key,
+      required this.featureContext,
+      required this.userID,
+      this.initialItem,
+      this.loadedItems = const []});
   final GroupFeatureContext featureContext;
   final String userID;
   final Map<String, dynamic>? initialItem;
@@ -42,13 +44,16 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
       widget.featureContext.capabilities.markSix.canOpenAgent;
 
   Future<void> _load({bool force = false}) async {
-    await _state.load('/me/agent/descendants/${Uri.encodeComponent(widget.userID)}',
+    await _state.load(
+        '/me/agent/descendants/${Uri.encodeComponent(widget.userID)}',
         force: force);
     if (!mounted || !allowed || _state.error != null) return;
     final expected = (_state.data?['directChildCount'] as num?)?.toInt();
-    final inheritedCount = widget.loadedItems.where((item) =>
-        '${item['directParentUserId']}' == widget.userID &&
-        '${item['userId']}' != widget.userID).length;
+    final inheritedCount = widget.loadedItems
+        .where((item) =>
+            '${item['directParentUserId']}' == widget.userID &&
+            '${item['userId']}' != widget.userID)
+        .length;
     if (expected != null && expected == inheritedCount) {
       setState(() {
         _childItems = widget.loadedItems;
@@ -77,9 +82,11 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
       if (reported != null && reported != all.length) {
         throw FormatException('下级名单不完整：${all.length} / $reported');
       }
-      final direct = all.where((item) =>
-          '${item['directParentUserId']}' == widget.userID &&
-          '${item['userId']}' != widget.userID).length;
+      final direct = all
+          .where((item) =>
+              '${item['directParentUserId']}' == widget.userID &&
+              '${item['userId']}' != widget.userID)
+          .length;
       if (expected != null && direct != expected) {
         throw FormatException('直属下级人数不一致：$direct / $expected');
       }
@@ -116,15 +123,19 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
       builder: (context, _) {
         final style = MarkSixStyle.of(context);
         final item = markSixMap(_state.data?['item']);
-        final directChildren = _childItems.where((row) =>
-            '${row['directParentUserId']}' == widget.userID &&
-            '${row['userId']}' != widget.userID).toList()
+        final directChildren = _childItems
+            .where((row) =>
+                '${row['directParentUserId']}' == widget.userID &&
+                '${row['userId']}' != widget.userID)
+            .toList()
           ..sort((a, b) {
             final ba = num.tryParse('${a['balance']}') ?? 0;
             final bb = num.tryParse('${b['balance']}') ?? 0;
             final order = bb.compareTo(ba);
-            return order != 0 ? order :
-                '${a['playerNo'] ?? a['userId']}'.compareTo('${b['playerNo'] ?? b['userId']}');
+            return order != 0
+                ? order
+                : '${a['playerNo'] ?? a['userId']}'
+                    .compareTo('${b['playerNo'] ?? b['userId']}');
           });
         return Scaffold(
             backgroundColor: style.background,
@@ -132,7 +143,8 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                 context, '${widget.initialItem?['displayName'] ?? '下级详情'}',
                 actions: [
                   if (allowed &&
-                      widget.featureContext.capabilities.markSix.canViewRebateHistory)
+                      widget.featureContext.capabilities.markSix
+                          .canViewRebateHistory)
                     IconButton(
                         tooltip: '历史记录',
                         onPressed: () {
@@ -146,99 +158,164 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                 ]),
             body: SafeArea(
                 top: false,
-                child: !allowed
-                    ? const MarkSixEmpty(message: '你没有代理功能权限')
-                    : !_state.current
-                        ? const MarkSixEmpty(message: '登录状态已变更')
-                        : _state.loading
-                            ? Center(child: LoadingView.indicator())
-                            : _state.error != null
-                                ? MarkSixEmpty(
-                                    message: _state.error!,
-                                    onRetry: () => _load(force: true))
-                                : item.isEmpty || '${item['userId']}' != widget.userID
-                                    ? const MarkSixEmpty(
-                                        message: '下级资料缺失或上下文不匹配')
-                                    : RefreshIndicator(
-                                        onRefresh: () => _load(force: true),
-                                        child: ListView(
-                                            physics: const AlwaysScrollableScrollPhysics(),
-                                            padding: const EdgeInsets.all(16),
-                                            children: [
-                                              Container(
-                                                  padding: const EdgeInsets.all(16),
-                                                  decoration: BoxDecoration(
-                                                      color: style.surface,
-                                                      borderRadius: BorderRadius.circular(MarkSixStyle.radius),
-                                                      border: Border.all(color: style.divider)),
-                                                  child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        Row(children: [
-                                                          AgentUserAvatar(
-                                                              directory: _avatars,
-                                                              item: item,
-                                                              size: 48,
-                                                              name: '${item['displayName'] ?? item['playerNo']}'),
-                                                          const SizedBox(width: 12),
-                                                          Expanded(child: Column(
-                                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                                              children: [
-                                                                Text('${item['displayName'] ?? item['playerNo']}',
-                                                                    style: TextStyle(
-                                                                        fontSize: 17,
-                                                                        color: style.text,
-                                                                        fontWeight: FontWeight.w700)),
-                                                                const SizedBox(height: 4),
-                                                                Text('用户编号：${item['playerNo'] ?? '—'}',
-                                                                    style: TextStyle(fontSize: 12, color: style.secondary))
-                                                              ]))
-                                                        ]),
-                                                        const SizedBox(height: 16),
-                                                        _metrics(context, item),
-                                                      ])),
-                                              const SizedBox(height: 12),
-                                              Container(
-                                                  padding: const EdgeInsets.all(16),
-                                                  decoration: BoxDecoration(
-                                                      color: style.surface,
-                                                      borderRadius: BorderRadius.circular(MarkSixStyle.radius)),
-                                                  child: Wrap(
-                                                      spacing: 24,
-                                                      runSpacing: 8,
-                                                      children: [
-                                                        Text('直属下级：${_state.data?['directChildCount'] ?? '—'}'),
-                                                        Text('全部下级：${_state.data?['descendantCount'] ?? '—'}'),
-                                                        Text('团队上分：${markSixAmount(_state.data?['teamTotalUp'])}'),
-                                                        Text('团队下分：${markSixAmount(_state.data?['teamTotalDown'])}'),
-                                                      ])),
-                                              const SizedBox(height: 16),
-                                              const Text('直属下级',
-                                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                                              const SizedBox(height: 12),
-                                              if (_childrenLoading)
-                                                Center(child: LoadingView.indicator(size: 24)),
-                                              if (_childrenError != null)
-                                                TextButton(
-                                                    onPressed: () => _loadChildren(
-                                                        (_state.data?['directChildCount'] as num?)?.toInt()),
-                                                    child: Text('直属下级加载失败，点击重试：$_childrenError')),
-                                              for (final child in directChildren)
-                                                AgentDescendantTile(
-                                                    avatars: _avatars,
-                                                    item: child,
-                                                    onTap: () {
-                                                      if (!_state.current) return;
-                                                      Navigator.of(context).push(MaterialPageRoute<void>(
-                                                          builder: (_) => AgentDescendantDetailPage(
-                                                              featureContext: widget.featureContext,
-                                                              userID: '${child['userId']}',
-                                                              initialItem: child,
-                                                              loadedItems: _childItems)));
-                                                    }),
-                                              if (!_childrenLoading && _childrenError == null && directChildren.isEmpty)
-                                                const MarkSixEmpty(message: '暂无已加载的直属下级'),
-                                            ]))));
+                child: AgentQueryFeedback(
+                    state: _state,
+                    onRetry: () => _load(force: true),
+                    child: !allowed
+                        ? const MarkSixEmpty(message: '你没有代理功能权限')
+                        : !_state.current
+                            ? const MarkSixEmpty(message: '登录状态已变更')
+                            : _state.loading && _state.data == null
+                                ? Center(child: LoadingView.indicator())
+                                : _state.error != null && _state.data == null
+                                    ? MarkSixEmpty(
+                                        message: _state.error!,
+                                        onRetry: () => _load(force: true))
+                                    : item.isEmpty ||
+                                            '${item['userId']}' != widget.userID
+                                        ? const MarkSixEmpty(
+                                            message: '下级资料缺失或上下文不匹配')
+                                        : RefreshIndicator(
+                                            onRefresh: () => _load(force: true),
+                                            child: ListView(
+                                                physics:
+                                                    const AlwaysScrollableScrollPhysics(),
+                                                padding:
+                                                    const EdgeInsets.all(16),
+                                                children: [
+                                                  Container(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              16),
+                                                      decoration: BoxDecoration(
+                                                          color: style.surface,
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                  MarkSixStyle
+                                                                      .radius),
+                                                          border: Border.all(
+                                                              color: style
+                                                                  .divider)),
+                                                      child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Row(children: [
+                                                              AgentUserAvatar(
+                                                                  directory:
+                                                                      _avatars,
+                                                                  item: item,
+                                                                  size: 48,
+                                                                  name:
+                                                                      '${item['displayName'] ?? item['playerNo']}'),
+                                                              const SizedBox(
+                                                                  width: 12),
+                                                              Expanded(
+                                                                  child: Column(
+                                                                      crossAxisAlignment:
+                                                                          CrossAxisAlignment
+                                                                              .start,
+                                                                      children: [
+                                                                    Text(
+                                                                        '${item['displayName'] ?? item['playerNo']}',
+                                                                        style: TextStyle(
+                                                                            fontSize:
+                                                                                17,
+                                                                            color:
+                                                                                style.text,
+                                                                            fontWeight: FontWeight.w700)),
+                                                                    const SizedBox(
+                                                                        height:
+                                                                            4),
+                                                                    Text(
+                                                                        '用户编号：${item['playerNo'] ?? '—'}',
+                                                                        style: TextStyle(
+                                                                            fontSize:
+                                                                                12,
+                                                                            color:
+                                                                                style.secondary))
+                                                                  ]))
+                                                            ]),
+                                                            const SizedBox(
+                                                                height: 16),
+                                                            _metrics(
+                                                                context, item),
+                                                          ])),
+                                                  const SizedBox(height: 12),
+                                                  Container(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              16),
+                                                      decoration: BoxDecoration(
+                                                          color: style.surface,
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                  MarkSixStyle
+                                                                      .radius)),
+                                                      child: Wrap(
+                                                          spacing: 24,
+                                                          runSpacing: 8,
+                                                          children: [
+                                                            Text(
+                                                                '直属下级：${_state.data?['directChildCount'] ?? '—'}'),
+                                                            Text(
+                                                                '全部下级：${_state.data?['descendantCount'] ?? '—'}'),
+                                                            Text(
+                                                                '团队上分：${markSixAmount(_state.data?['teamTotalUp'])}'),
+                                                            Text(
+                                                                '团队下分：${markSixAmount(_state.data?['teamTotalDown'])}'),
+                                                          ])),
+                                                  const SizedBox(height: 16),
+                                                  const Text('直属下级',
+                                                      style: TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w700)),
+                                                  const SizedBox(height: 12),
+                                                  if (_childrenLoading)
+                                                    Center(
+                                                        child: LoadingView
+                                                            .indicator(
+                                                                size: 24)),
+                                                  if (_childrenError != null)
+                                                    TextButton(
+                                                        onPressed: () =>
+                                                            _loadChildren(
+                                                                (_state.data?[
+                                                                            'directChildCount']
+                                                                        as num?)
+                                                                    ?.toInt()),
+                                                        child: Text(
+                                                            '直属下级加载失败，点击重试：$_childrenError')),
+                                                  for (final child
+                                                      in directChildren)
+                                                    AgentDescendantTile(
+                                                        avatars: _avatars,
+                                                        item: child,
+                                                        onTap: () {
+                                                          if (!_state.current) {
+                                                            return;
+                                                          }
+                                                          Navigator.of(context).push(MaterialPageRoute<
+                                                                  void>(
+                                                              builder: (_) => AgentDescendantDetailPage(
+                                                                  featureContext:
+                                                                      widget
+                                                                          .featureContext,
+                                                                  userID:
+                                                                      '${child['userId']}',
+                                                                  initialItem:
+                                                                      child,
+                                                                  loadedItems:
+                                                                      _childItems)));
+                                                        }),
+                                                  if (!_childrenLoading &&
+                                                      _childrenError == null &&
+                                                      directChildren.isEmpty)
+                                                    const MarkSixEmpty(
+                                                        message: '暂无已加载的直属下级'),
+                                                ])))));
       });
 
   Widget _metrics(BuildContext context, Map<String, dynamic> item) {
@@ -265,7 +342,8 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(metric.$1,
-                              style: TextStyle(fontSize: 12, color: style.secondary)),
+                              style: TextStyle(
+                                  fontSize: 12, color: style.secondary)),
                           const SizedBox(height: 4),
                           Text(markSixAmount(item[metric.$2]),
                               style: TextStyle(

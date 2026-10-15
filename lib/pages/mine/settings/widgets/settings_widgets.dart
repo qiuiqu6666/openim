@@ -203,7 +203,7 @@ class SettingsScaffold extends StatelessWidget {
                           icon: const Icon(Icons.arrow_back_ios_new_rounded),
                           color: leadingColor ?? AppTokens.accent,
                           onPressed: onLeadingPressed ??
-                              () => Navigator.of(context).pop(),
+                              () => Navigator.of(context).maybePop(),
                         )
                     : null,
                 actions: actions,
@@ -617,9 +617,10 @@ class SettingsPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: padding,
-        child: SizedBox(
+        child: Container(
           width: double.infinity,
-          height: SettingsResponsive.controlHeight(context),
+          constraints: BoxConstraints(
+              minHeight: SettingsResponsive.controlHeight(context)),
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               elevation: 0,
@@ -634,23 +635,37 @@ class SettingsPrimaryButton extends StatelessWidget {
               ),
             ),
             onPressed: loading ? null : onPressed,
-            child: loading
-                ? SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(
-                        foregroundColor ?? AppTokens.onAccent,
+            child: Semantics(
+              liveRegion: loading,
+              excludeSemantics: loading,
+              label: loading
+                  ? settingsText(context,
+                      zh: '$text，处理中', en: '$text, in progress')
+                  : null,
+              child: Stack(alignment: Alignment.center, children: [
+                Padding(
+                  // Reserve the indicator's space in every state so a long
+                  // label never reflows only when a request starts.
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppTokens.s6 + AppTokens.s3),
+                  child: Text(text,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+                if (loading)
+                  PositionedDirectional(
+                    start: 0,
+                    child: SizedBox.square(
+                      dimension: AppTokens.s6,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: settingsTextColor(context),
                       ),
                     ),
-                  )
-                : Text(
-                    text,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
                   ),
+              ]),
+            ),
           ),
         ),
       );

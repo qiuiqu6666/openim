@@ -36,6 +36,7 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
   IMController get imLogic => Get.find<IMController>();
   GroupSetupLogic get groupSetupLogic => Get.find<GroupSetupLogic>();
   final controller = RefreshController();
+  final scrollController = ScrollController();
   final presence = PresenceStore();
   final _visibleIDs = <String>{};
   Timer? _presenceDebounce;
@@ -101,8 +102,7 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
                   (isOwner
                       ? m.roleLevel != GroupRoleLevel.owner
                       : isAdmin && m.roleLevel == GroupRoleLevel.member))))
-      .toList()
-    ..sort(compareGroupMembers);
+      .toList();
 
   void searchChanged(String value) {
     if (!identity.isCurrentSession || isClosed) return;
@@ -153,9 +153,7 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
       if (!next) {
         try {
           remarkMatches = await groupMembersMatchingRemarks(
-              groupID: groupInfo.groupID,
-              keyword: keyword,
-              isCurrent: current);
+              groupID: groupInfo.groupID, keyword: keyword, isCurrent: current);
         } catch (_) {
           // Keep ordinary SDK search usable if an optional member lookup fails.
         }
@@ -243,6 +241,7 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
     _presencePoll?.cancel();
     presence.dispose();
     controller.dispose();
+    scrollController.dispose();
     super.onClose();
   }
 
@@ -437,7 +436,11 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
           showNumber: count);
       if (list == null || isClosed || !identity.active(request)) return;
       final known = memberList.map((member) => member.userID).toSet();
-      memberList.addAll(list.where((member) => known.add(member.userID)));
+      // Sort only the incoming page: reordering existing rows on pagination
+      // changes the member under the viewport even when its offset is retained.
+      final nextPage = list.where((member) => known.add(member.userID)).toList()
+        ..sort(compareGroupMembers);
+      memberList.addAll(nextPage);
       ++_pageNumber;
       if (list.length < count) {
         controller.loadNoData();

@@ -83,6 +83,9 @@ class UserProfileIdentity extends StatelessWidget {
                                 message: copyLabel,
                                 child: InkWell(
                                   onTap: onCopy,
+                                  splashFactory: NoSplash.splashFactory,
+                                  highlightColor: Colors.transparent,
+                                  hoverColor: Colors.transparent,
                                   borderRadius: BorderRadius.circular(
                                       UserProfileTokens.accountRadius),
                                   child: _accountContent(context),

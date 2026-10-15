@@ -97,8 +97,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
       final after = tester.getRect(walletHomeKey('wallet-action-receive'));
       final amountAfter = tester.getRect(walletHomeKey('wallet-total-amount'));
-      expect(after.top - before.top, greaterThan(0));
-      expect(amountAfter.height, greaterThan(amountBefore.height));
+      expect(after.top, closeTo(before.top, .01));
+      expect(amountAfter.height, closeTo(amountBefore.height, .01));
       debugPrint('MOTION wallet long balance $brightness: actions dy='
           '${after.top - before.top}, amount dh='
           '${amountAfter.height - amountBefore.height}');

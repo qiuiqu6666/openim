@@ -41,7 +41,7 @@ func TestLocalSnapshotSurvivesDatabaseReopenSQLite(t *testing.T) {
 	c := &Conversation{db: d}
 	start := time.Now()
 	page, err := c.getAdvancedHistoryMessageList(cmd.Ctx, sdk.GetAdvancedHistoryMessageListParams{ConversationID: "chat", Count: 40, LocalSnapshot: true}, false)
-	if err != nil || len(page.MessageList) != 40 || !page.LocalSnapshot || page.IsEnd {
+	if err != nil || len(page.MessageList) != 40 || !page.LocalSnapshot || !page.SnapshotReady || page.IsEnd {
 		t.Fatalf("cold snapshot: %+v %v", page, err)
 	}
 	t.Logf("reopened SQLite, 40 local messages, no network: %s", time.Since(start))

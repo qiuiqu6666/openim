@@ -17,10 +17,15 @@ class MessageSendSession {
   final String accountID, _imApi, _chatApi;
   final String? _imToken, _chatToken;
 
-  bool get current =>
+  /// Ownership for presenting results, even after the same account changes node.
+  /// This does not authorize starting new work on a different SDK connection.
+  bool get identityCurrent =>
       OpenIM.iMManager.userID == accountID &&
       DataSp.imToken == _imToken &&
-      DataSp.chatToken == _chatToken &&
+      DataSp.chatToken == _chatToken;
+
+  bool get current =>
+      identityCurrent &&
       Config.imApiUrl == _imApi &&
       Config.appAuthUrl == _chatApi;
 

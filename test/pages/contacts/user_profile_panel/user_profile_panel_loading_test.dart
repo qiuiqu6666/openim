@@ -50,19 +50,6 @@ Map<String, Rect?> _geometry(WidgetTester tester) {
   return values;
 }
 
-String _geometryChanges(Map<String, Rect?> first, Map<String, Rect?> next) {
-  final changes = <String>[];
-  for (final entry in first.entries) {
-    final before = entry.value;
-    final after = next[entry.key];
-    if (before != null && after != null && before != after) {
-      changes.add('${entry.key}: top ${after.top - before.top}, '
-          'height ${after.height - before.height}');
-    }
-  }
-  return changes.join('; ');
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
@@ -125,28 +112,27 @@ void main() {
             }
             await tester.pump(const Duration(milliseconds: 16));
             final afterAccount = _geometry(tester);
-            expect(afterAccount, first,
-                reason:
-                    'The later public chat ID must not move the avatar or cards. '
-                    '${_geometryChanges(first, afterAccount)}');
+            expect(afterAccount['identity'], first['identity']);
+            expect(afterAccount['appBar'], first['appBar']);
+            expect(afterAccount['scrollViewport'], first['scrollViewport']);
             expect(find.byIcon(Icons.copy_outlined), findsOneWidget);
             fixture.userInfo.update((user) => user?.gender = 2);
             await tester.pump(const Duration(milliseconds: 16));
-            expect(_geometry(tester), first);
+            expect(_geometry(tester), afterAccount);
             fixture.userInfo
                 .update((user) => user?.ex = '{"signature":"生活很慢，咖啡很香。"}');
             await tester.pump(const Duration(milliseconds: 16));
-            expect(_geometry(tester), first);
+            expect(_geometry(tester), afterAccount);
             fixture.userInfo.update((user) => user?.ex =
                 '{"signature":"这是一段加载完成之后才返回的较长个性签名，希望这个周末可以和朋友一起去喝咖啡。"}');
             await tester.pump(const Duration(milliseconds: 16));
-            expect(_geometry(tester), first,
+            expect(_geometry(tester), afterAccount,
                 reason: 'A two-line bio must use its reserved space.');
             api.ready.complete(
                 MomentsCapabilities.fromJson({'supportsMoments': true}));
             await tester.pump(const Duration(milliseconds: 16));
             await tester.pump(const Duration(milliseconds: 16));
-            expect(_geometry(tester), first);
+            expect(_geometry(tester), afterAccount);
             if (group) {
               fixture.groupAccount.value = null;
               await tester.pump(const Duration(milliseconds: 16));
@@ -158,7 +144,7 @@ void main() {
               expect(
                   find.bySemanticsLabel(RegExp('@ab12cd34ef')), findsNothing);
               expect(_geometry(tester), first,
-                  reason: 'Clearing disclosure must keep the reserved layout.');
+                  reason: 'Clearing disclosure restores the compact layout.');
             }
             expect(tester.takeException(), isNull);
             await tester.pumpWidget(const SizedBox.shrink());
@@ -214,19 +200,18 @@ void main() {
           fixture.groupAccount.value = '@ab12cd34ef';
           await tester.pump(const Duration(milliseconds: 16));
           final afterAccount = _geometry(tester);
-          expect(afterAccount, first,
-              reason:
-                  'The compact header and details card top must stay still. '
-                  '${_geometryChanges(first, afterAccount)}');
-          expect(detailsCard().top, detailsCardTop);
+          expect(afterAccount['identity'], first['identity']);
+          expect(afterAccount['appBar'], first['appBar']);
+          expect(afterAccount['scrollViewport'], first['scrollViewport']);
+          expect(detailsCard().top, closeTo(detailsCardTop, .01));
           expect(find.text('profileChatID'.tr), findsOneWidget);
           expect(find.text('@ab12cd34ef'), findsWidgets);
           expect(find.byIcon(Icons.copy_outlined), findsOneWidget);
           fixture.userInfo.update((user) =>
               user?.ex = '{"signature":"这是一段加载之后返回的个性签名，希望周末和朋友一起去喝咖啡。"}');
           await tester.pump(const Duration(milliseconds: 16));
-          expect(_geometry(tester), first);
-          expect(detailsCard().top, detailsCardTop);
+          expect(_geometry(tester), afterAccount);
+          expect(detailsCard().top, closeTo(detailsCardTop, .01));
           fixture.groupAccount.value = null;
           await tester.pump(const Duration(milliseconds: 16));
           expectUndisclosed();

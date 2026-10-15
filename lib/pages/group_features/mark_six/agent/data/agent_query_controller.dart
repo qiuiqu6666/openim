@@ -38,10 +38,11 @@ class AgentQueryController extends ChangeNotifier {
     final key = '$path|$query';
     if (_requestKey == key && _work != null) return _work!;
     final generation = ++_generation;
+    final sameQuery = _requestKey == key;
     _requestKey = key;
     loading = true;
     error = null;
-    data = null;
+    if (!sameQuery) data = null;
     notify();
     late final Future<void> work;
     work = repository.read(path, query: query, force: force).then((response) {

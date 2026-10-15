@@ -71,19 +71,14 @@ void main() {
           expect(logic.peerTyping.value, isTrue);
           expect(logic.messageList.map((message) => message.clientMsgID),
               messageIDs);
-          expect(beforeTimeline.height - typingTimeline.height, greaterThan(16),
-              reason: 'The typing card currently consumes timeline height.');
+          expect(typingTimeline, beforeTimeline,
+              reason: 'Thinking updates the existing header status slot.');
+          expect(find.text('思考中…'), findsOneWidget);
           debugPrint('motion audit AI typing: dark=$dark long=$longHistory '
               'timeline delta=${typingTimeline.height - beforeTimeline.height}, '
               'bubble delta=${typingBubble.top - beforeBubble.top}');
-          if (longHistory) {
-            expect(beforeBubble.top - typingBubble.top, greaterThan(16),
-                reason: 'A full reverse timeline follows its moving bottom.');
-          } else {
-            expect(typingBubble.top, closeTo(beforeBubble.top, .5),
-                reason:
-                    'The adaptive viewport keeps short histories at the top.');
-          }
+          expect(typingBubble.top, closeTo(beforeBubble.top, .5),
+              reason: 'Status changes must not move historical messages.');
 
           fixture.im.recvNewMessage(
               aiOpenimTyping('transient-typing-no', tips: 'no'));
@@ -164,8 +159,8 @@ void main() {
       final after = tester.getSize(markdown);
       debugPrint('motion audit Markdown image: before=$before after=$after');
       expect(after.width, closeTo(before.width, .5));
-      expect(after.height - before.height, greaterThan(60),
-          reason: 'The waiting 16:10 slot becomes a square decoded image.');
+      expect(after.height, closeTo(before.height, .01),
+          reason: 'The decoded image is contained in the original frame.');
       expect(tester.takeException(), isNull);
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());

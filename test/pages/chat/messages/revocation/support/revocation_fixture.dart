@@ -3,8 +3,10 @@ import 'package:openim/pages/chat/group/member_actions/chat_member_action_source
 import 'package:openim/pages/chat/messages/revocation/chat_message_revocation.dart';
 
 class RevocationFixture {
-  RevocationFixture() {
+  RevocationFixture({Future<bool> Function()? confirm}) {
     controller = ChatMessageRevocation(
+      confirm: confirm,
+      log: events.add,
       conversationID: () => conversation,
       currentUserID: () => account,
       groupID: () => groupID,
@@ -16,7 +18,7 @@ class RevocationFixture {
       isClosed: () => closed,
       onRevoked: removed.add,
       showFeedback: feedback.add,
-      nowMilliseconds: () => now,
+      nowMilliseconds: () => clock,
       readMembers: (groupID, account, sender) async {
         reads.add((groupID, account, sender));
         return onRead != null ? await onRead!() : snapshot;
@@ -29,6 +31,8 @@ class RevocationFixture {
   }
 
   static const now = 1800000000000;
+  int clock = now;
+  final events = <Map<String, Object?>>[];
   String account = 'admin', conversation = 'sg_group';
   String? groupID = 'group';
   GroupInfo? group = GroupInfo(groupID: 'group', ownerUserID: 'owner');

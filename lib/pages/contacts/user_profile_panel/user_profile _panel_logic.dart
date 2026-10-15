@@ -659,8 +659,6 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
       groupUserNickname.value = other?.nickname ?? '';
       joinGroupTime.value = other?.joinTime ?? 0;
 
-      _getJoinGroupMethod(other);
-
       hasAdminPermission.value = other?.roleLevel == GroupRoleLevel.admin;
 
       if (!isMyself) {
@@ -695,6 +693,10 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
               ?.appManagerLevel;
       _syncGroupPrivacy();
 
+      if (iHaveAdminOrOwnerPermission.value) {
+        _getJoinGroupMethod(other);
+      }
+
       if (null != other &&
           null != other.muteEndTime &&
           other.muteEndTime! > 0) {
@@ -711,7 +713,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
           userIDList: [other.inviterUserID!],
         );
         var inviterUserInfo = list.firstOrNull;
-        if (isClosed) return;
+        if (isClosed || !iHaveAdminOrOwnerPermission.value) return;
         inviterID.value = other.inviterUserID!;
         inviterName.value = inviterUserInfo?.nickname ?? other.inviterUserID!;
         joinGroupMethod.value = sprintf(
@@ -969,7 +971,9 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
   }
 
   void viewInviter() {
-    if (inviterID.value.isEmpty) return;
+    if (!hasActiveGroupMemberContext ||
+        !iHaveAdminOrOwnerPermission.value ||
+        inviterID.value.isEmpty) return;
     AppNavigator.startUserProfilePane(
       userID: inviterID.value,
       nickname: inviterName.value,

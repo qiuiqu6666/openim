@@ -10,7 +10,7 @@ GroupInfo group(String id, String name, {String owner = 'self'}) =>
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('skips other-category pages without sorting or loading all pages',
+  test('loads all pages so alphabet navigation reaches the complete directory',
       () async {
     final offsets = <int>[];
     final logic = GroupListLogic(
@@ -22,20 +22,20 @@ void main() {
                 group('other1', 'Adam', owner: 'peer'),
                 group('other2', 'Bob', owner: 'peer')
               ],
-            2 => [group('z', '张三'), group('a', 'Alice')],
-            _ => [group('z', '张三更新')],
+            2 => [group('z', '寮犱笁'), group('a', 'Alice')],
+            _ => [group('z', '寮犱笁鏇存柊')],
           };
         })
       ..count = 2;
     await logic.iCreatedInitial();
-    expect(offsets, [0, 2]);
+    expect(offsets, [0, 2, 4]);
     expect(logic.iCreatedList.map((group) => group.groupID), ['z', 'a']);
-    expect(logic.canLoadMore(true), isTrue);
-    expect(logic.isComplete(true), isFalse);
+    expect(logic.canLoadMore(true), isFalse);
+    expect(logic.isComplete(true), isTrue);
     await logic.iCreatedLoadMore();
     expect(offsets, [0, 2, 4]);
     expect(logic.iCreatedList.map((group) => group.groupID), ['z', 'a']);
-    expect(logic.iCreatedList.first.groupName, '张三更新');
+    expect(logic.iCreatedList.first.groupName, '寮犱笁鏇存柊');
     expect(logic.iCreatedOffset, 5);
     expect(logic.canLoadMore(true), isFalse);
     expect(logic.isComplete(true), isTrue);
@@ -49,13 +49,12 @@ void main() {
         currentUserID: () => 'self',
         fetchPage: (offset, _) async {
           offsets.add(offset);
-          if (offset == 0) return [group('old', '张三'), group('old2', 'Alice')];
+          if (offset == 0) return [group('old', '寮犱笁'), group('old2', 'Alice')];
           if (fail) throw StateError('offline');
-          return [group('new', '新群')];
+          return [group('new', '鏂扮兢')];
         })
       ..count = 2;
     await logic.iCreatedInitial();
-    await logic.iCreatedLoadMore();
     expect(logic.loadFailed[true], isTrue);
     expect(logic.iCreatedList.map((group) => group.groupID), ['old', 'old2']);
     expect(logic.iCreatedOffset, 2);

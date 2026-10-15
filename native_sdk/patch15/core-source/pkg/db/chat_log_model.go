@@ -480,7 +480,7 @@ func (d *DataBase) SearchAllMessageByContentType(ctx context.Context, conversati
 	defer d.mRWMutex.RUnlock()
 
 	query := d.conn.WithContext(ctx).Table(utils.GetTableName(conversationID)).
-		Where("content_type = ?", contentType)
+		Where("content_type = ? AND status < ?", contentType, constant.MsgStatusHasDeleted)
 
 	err = query.Find(&result).Error
 	return result, err
@@ -495,10 +495,11 @@ func (d *DataBase) GetUnreadMessage(ctx context.Context, conversationID string) 
 func (d *DataBase) MarkConversationMessageAsReadBySeqs(ctx context.Context, conversationID string, seqs []int64) (rowsAffected int64, err error) {
 	d.mRWMutex.Lock()
 	defer d.mRWMutex.Unlock()
-	t := d.conn.WithContext(ctx).Table(utils.GetConversationTableName(conversationID)).Where("seq in ? AND send_id != ?", seqs, d.loginUserID).Update("is_read", constant.HasRead)
-	if t.RowsAffected == 0 {
-		return 0, errs.WrapMsg(errors.New("RowsAffected == 0"), "no update")
-	}
+	// Sparse caches and replayed receipts can legitimately match zero rows.
+	// Preserve SQL errors, including missing tables and cancelled transactions.
+	t := d.conn.WithContext(ctx).Table(utils.GetConversationTableName(conversationID)).
+		Where("seq in ? AND send_id != ? AND status < ? AND is_read = ?", seqs, d.loginUserID, constant.MsgStatusHasDeleted, constant.NotRead).
+		Update("is_read", constant.HasRead)
 	return t.RowsAffected, errs.WrapMsg(t.Error, "UpdateMessageStatusBySourceID failed")
 }
 

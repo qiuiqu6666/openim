@@ -12,6 +12,7 @@ type messagePageContextKey struct{}
 type messagePageCoordinator struct {
 	bounded   atomic.Bool
 	committed atomic.Int64
+	failed    atomic.Bool
 	turns     chan chan struct{}
 }
 

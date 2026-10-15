@@ -13,8 +13,8 @@ import (
 
 // The peer has stopped sending. A range server honors exactly the wire request;
 // it does not help the client by returning messages outside its requested tail.
-func TestContiguousReconnectRecoversEntireOfflineIntervalWithoutNextPush(t *testing.T) {
-	for _, count := range []int64{10, 100, 1000} {
+func TestReconnectRecoversLatestWindowWithoutNextPush(t *testing.T) {
+	for _, count := range []int64{10, 100, 1000, 100000000} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			ctx := recoveryContext(t)
 			conn := &LongConnMgr{send: make(chan Message, 1)}
@@ -50,10 +50,13 @@ func TestContiguousReconnectRecoversEntireOfflineIntervalWithoutNextPush(t *test
 				return wireResponse(resp)
 			})
 			m.doConnected(ctx)
-			if len(stored) != int(count) {
+			if len(stored) != int(min(count, recentMessageWindow)) {
 				t.Fatalf("offline rows persisted = %d/%d, cursor = %d", len(stored), count, m.syncedMaxSeqs["chat"])
 			}
-			for seq := int64(4); seq <= 3+count; seq++ {
+			if count > recentMessageWindow && m.syncedMaxSeqs["chat"] != 3 {
+				t.Fatal("sparse tail advanced continuous checkpoint")
+			}
+			for seq := max(int64(4), 4+count-recentMessageWindow); seq <= 3+count; seq++ {
 				if !stored[seq] {
 					t.Fatalf("missing seq %d", seq)
 				}

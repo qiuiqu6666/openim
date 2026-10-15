@@ -72,6 +72,8 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
   String _identity = '';
   String? _credential;
   int _sessionGeneration = 0;
+  int _accountGeneration = 0;
+  String _accountIdentity = '';
   int _permissionGeneration = 0;
   MomentsCapabilities? capabilities;
   MomentsSettings? settings;
@@ -106,6 +108,13 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
   String get currentUserId => _userIdProvider();
   String get baseUrl => _environmentProvider?.call() ?? api.baseUrl;
   String get sessionScope => _ensureSession();
+
+  /// Changes on account/credential replacement, but not transport rerouting.
+  int get accountScope {
+    _ensureSession();
+    return _accountGeneration;
+  }
+
   String get authorizationScope => '$sessionScope|$_permissionGeneration';
   bool isSessionCurrent(String scope) =>
       !_disposed && _ensureSession() == scope;
@@ -156,6 +165,10 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
   String _ensureSession() {
     final identity = '$baseUrl|$currentUserId';
     final credential = _checkCredentials ? DataSp.chatToken : null;
+    if (_accountIdentity != currentUserId || credential != _credential) {
+      _accountIdentity = currentUserId;
+      _accountGeneration++;
+    }
     if (identity != _identity || credential != _credential) {
       _identity = identity;
       _credential = credential;
@@ -242,6 +255,7 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void resetSession() {
+    _accountGeneration++;
     _identity = '';
     _ensureSession();
     _notify();

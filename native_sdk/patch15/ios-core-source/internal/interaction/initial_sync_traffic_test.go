@@ -20,7 +20,7 @@ func TestFirstLoginCompletesAndCommitsMessagesUnderLiveTraffic(t *testing.T) {
 	m := &MsgSyncer{ctx: ctx, db: db, reinstalled: true, loginUserID: "self", longConnMgr: conn,
 		recvCh: make(chan common.Cmd2Value, 32), conversationCh: make(chan common.Cmd2Value, 32), syncedMaxSeqs: map[string]int64{}}
 	started, release := make(chan struct{}), make(chan struct{})
-	stored := make(chan int64, 64)
+	stored := make(chan int64, 32)
 	starts := 0
 	receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
 		if initial, ok := cmd.Value.(sdk_struct.CmdMsgSyncInReinstall); ok {
@@ -96,11 +96,11 @@ func TestFirstLoginCompletesAndCommitsMessagesUnderLiveTraffic(t *testing.T) {
 	}
 	close(release)
 	seen := make(map[int64]bool)
-	for len(seen) < 26 {
+	for n := 0; n < 26; n++ {
 		select {
 		case got := <-stored:
-			if got < 1 || got > 26 {
-				t.Fatalf("invalid stored sequence %d", got)
+			if got < 1 || got > 26 || seen[got] {
+				t.Fatalf("unexpected/duplicate sequence %d", got)
 			}
 			seen[got] = true
 		case <-ctx.Done():
@@ -122,7 +122,7 @@ func TestFirstLoginCompletesAndCommitsMessagesUnderLiveTraffic(t *testing.T) {
 	}
 	cancel()
 	<-done
-	if !db.installed || m.reinstalled || m.syncedMaxSeqs["chat"] < 6 || m.syncedMaxSeqs["chat"] > 26 || m.checkpoints["chat"].Target != 26 || starts != 1 {
+	if !db.installed || m.reinstalled || m.syncedMaxSeqs["chat"] != 26 || starts != 1 {
 		t.Fatalf("bootstrap not committed: installed=%v reinstall=%v seq=%d starts=%d", db.installed, m.reinstalled, m.syncedMaxSeqs["chat"], starts)
 	}
 }

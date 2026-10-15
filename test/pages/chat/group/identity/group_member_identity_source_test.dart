@@ -65,6 +65,62 @@ class _Adapter implements HttpClientAdapter {
 }
 
 void main() {
+  test('membership verification only accepts scoped server membership',
+      () async {
+    final fixture = _Fixture();
+    fixture.response = {
+      'errCode': 0,
+      'data': {
+        'members': [
+          {'groupID': 'g', 'userID': 'im_owner'}
+        ]
+      }
+    };
+    expect(
+        await fixture.source.containsMember(groupID: 'g', userID: 'im_owner'),
+        isTrue);
+    expect(fixture.requests.single.$2['userIDs'], ['im_owner']);
+    fixture.response = {'members': []};
+    expect(
+        await fixture.source.containsMember(groupID: 'g', userID: 'im_owner'),
+        isFalse);
+    for (final data in [
+      <String, dynamic>{},
+      {'members': null},
+      {'members': 'invalid'},
+      {
+        'members': [
+          {'groupID': 'other', 'userID': 'im_owner'}
+        ]
+      },
+      {
+        'members': [
+          {'groupID': 'g', 'userID': 'other'}
+        ]
+      },
+    ]) {
+      fixture.response = data;
+      await expectLater(
+          fixture.source.containsMember(groupID: 'g', userID: 'im_owner'),
+          throwsA(isA<FormatException>()));
+    }
+  });
+
+  test('membership verification cannot outlive an IM session', () async {
+    final fixture = _Fixture();
+    final pending = Completer<Map<String, dynamic>>();
+    fixture.response = pending.future;
+    final request =
+        fixture.source.containsMember(groupID: 'g', userID: 'im_owner');
+    fixture.token = 'replacement';
+    pending.complete({
+      'members': [
+        {'groupID': 'g', 'userID': 'im_owner'}
+      ]
+    });
+    await expectLater(
+        request, throwsA(isA<GroupMemberIdentitySessionChanged>()));
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('list uses the IM endpoint, JSON and a fresh operation ID', () async {

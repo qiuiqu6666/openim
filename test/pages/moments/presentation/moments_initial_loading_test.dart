@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/services/moments_repository.dart';
+import 'package:openim/pages/moments/presentation/loading/moments_feed_skeleton.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -38,13 +39,19 @@ void main() {
         expect(fixture.api.feedCursors, isEmpty);
         expect(fixture.api.albumRequests, isEmpty);
         expect(fixture.api.detailRequests, isEmpty);
-        expect(find.byType(CircularProgressIndicator), findsWidgets);
+        if (surface == MomentsUiSurface.detail) {
+          expect(find.byType(CircularProgressIndicator), findsWidgets);
+        } else {
+          expect(find.byType(MomentsFeedSkeleton), findsOneWidget);
+          expect(find.byType(ShaderMask), findsWidgets);
+        }
         for (final post in fixture.api.posts.values) {
           expect(find.text(post.text), findsNothing);
         }
 
         gate.complete(MomentsCapabilities.fromJson({'supportsMoments': true}));
         await tester.pumpAndSettle();
+        expect(find.byType(MomentsFeedSkeleton), findsNothing);
         expect(tester.takeException(), isNull);
         if (surface == MomentsUiSurface.feed) {
           expect(fixture.api.feedCursors, [null]);

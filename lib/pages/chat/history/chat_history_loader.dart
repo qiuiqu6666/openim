@@ -11,11 +11,13 @@ export 'chat_history_read_gate.dart' show ChatHistoryReader;
 /// Coordinates the SDK's first page, older pages and refreshes for one route.
 /// The route retains ownership of its existing observable message list.
 class ChatHistoryLoader {
+  MessageWindow? currentWindow;
   ChatHistoryLoader({
     required this.fetch,
     this.fetchNewer,
     this.isDisplaySnapshot,
     this.hasPaintedRows,
+    this.expectsLatest,
     this.onLatestDeferred,
     this.beforeLatestReplace,
     required this.messages,
@@ -34,6 +36,7 @@ class ChatHistoryLoader {
   final ChatHistoryReader? fetchNewer;
   final bool Function(String?)? isDisplaySnapshot;
   final bool Function()? hasPaintedRows;
+  final bool Function()? expectsLatest;
   final void Function()? onLatestDeferred;
   final Future<void> Function()? beforeLatestReplace;
   final List<Message> Function() messages;
@@ -432,19 +435,24 @@ class ChatHistoryLoader {
       if (_closed || generation != _generation) return false;
       _recordPage(result, generation);
       final page = result.messageList ?? <Message>[];
+      if (result.window != null && !result.window!.canPublish) {
+        throw StateError('Message window is not covered yet');
+      }
       if (_windowViewingHistory && !latest) {
         _historicalIDs.addAll(page.map((m) => m.clientMsgID));
       }
       final current = messages();
       if (firstPage &&
           page.isEmpty &&
+          result.window?.emptyConfirmed != true &&
           result.scanLimited != true &&
-          before
-              .followedBy(current
-                  .where((m) => isDisplaySnapshot?.call(m.clientMsgID) == true))
-              .any((m) =>
-                  !removedIDs.contains(m.clientMsgID) &&
-                  !_isPendingSend(m.status))) {
+          (expectsLatest?.call() == true ||
+              before
+                  .followedBy(current.where(
+                      (m) => isDisplaySnapshot?.call(m.clientMsgID) == true))
+                  .any((m) =>
+                      !removedIDs.contains(m.clientMsgID) &&
+                      !_isPendingSend(m.status)))) {
         // A first-frame snapshot or historical window is still visible. Do
         // not confirm an empty replacement or enable read receipts from it;
         // the existing finite recovery owner can retry this same operation.
@@ -473,6 +481,8 @@ class ChatHistoryLoader {
           visibleTail != null &&
           page.isNotEmpty &&
           _compare(page.last, visibleTail) > 0 &&
+          (result.window == null ||
+              result.window!.lowerBound > (visibleTail.seq ?? 0) + 1) &&
           holdCurrentWindow()) {
         // The first frame is already being read. Keep every painted row and
         // its geometry; never splice a remote latest range across a gap.
@@ -570,6 +580,7 @@ class ChatHistoryLoader {
           viewingHistory = _windowViewingHistory = hasNewer = true;
         }
       }
+      if (result.window != null) currentWindow = result.window;
       replace(combined, firstPage || discontinuous, refresh);
       onLoaded?.call();
       return latest ? true : hasMore;
@@ -614,6 +625,11 @@ class ChatHistoryLoader {
     final reconciled = <Message>[];
     for (final fresh in page) {
       final local = localByID[fresh.clientMsgID];
+      if (local?.contentType == MessageType.revokeMessageNotification &&
+          fresh.contentType != MessageType.revokeMessageNotification) {
+        reconciled.add(local!);
+        continue;
+      }
       // Do not undo receipts or voice metadata received while awaiting the SDK.
       if (local?.isRead == true) {
         fresh.isRead = true;
@@ -652,6 +668,11 @@ class ChatHistoryLoader {
       status == MessageStatus.sending || status == MessageStatus.failed;
 
   static int _compare(Message a, Message b) {
+    if ((a.seq ?? 0) > 0 && (b.seq ?? 0) > 0) {
+      return a.seq!.compareTo(b.seq!);
+    }
+    if ((a.seq ?? 0) > 0) return -1;
+    if ((b.seq ?? 0) > 0) return 1;
     final time = (a.sendTime ?? a.createTime ?? 0)
         .compareTo(b.sendTime ?? b.createTime ?? 0);
     if (time != 0) return time;

@@ -19,7 +19,8 @@ void main() {
     await tester.idle();
     fixture.calls.single.complete([], isEnd: true);
     await tester.pump();
-    expect(logic.messageList.map((m) => m.clientMsgID), ['known-latest']);
+    expect(logic.messageList, isEmpty,
+        reason: 'A preview cannot attest the initial message window');
     expect(logic.historyError.value, isNotNull);
     return logic;
   }

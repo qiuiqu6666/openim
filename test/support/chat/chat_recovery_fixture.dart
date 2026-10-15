@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -39,6 +41,7 @@ class ChatRecoveryFixture {
   static const channel = MethodChannel('flutter_openim_sdk');
   final calls = <EntryHistoryCall>[];
   final nativeCalls = <MethodCall>[];
+  List<Message> localSnapshot = [];
   late EntryTestIM im;
   ChatLogic? logic;
   final route = RecoveryRoute();
@@ -71,6 +74,13 @@ class ChatRecoveryFixture {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       nativeCalls.add(call);
+      if (call.method == 'getLocalHistorySnapshot') {
+        return jsonEncode({
+          'localSnapshot': true,
+          'snapshotReady': true,
+          'messageList': localSnapshot.map((m) => m.toJson()).toList()
+        });
+      }
       if (call.method == 'getAdvancedHistoryMessageList' ||
           call.method == 'getAdvancedHistoryMessageListReverse') {
         final history =

@@ -132,7 +132,7 @@ class _AiAssistantChatPageState extends State<AiAssistantChatPage> {
                           subtitle: _logic.assistantStreams.snapshots.isNotEmpty
                               ? _text('正在回复…', 'Replying…')
                               : _logic.peerTyping.value
-                                  ? _text('正在输入…', 'Typing…')
+                                  ? _text('思考中…', 'Thinking…')
                                   : _text('官方助理 · 你的专属对话',
                                       'Official assistant · Your personal chat'),
                           toolbarHeight: toolbarHeight,
@@ -192,25 +192,6 @@ class _AiAssistantChatPageState extends State<AiAssistantChatPage> {
                                     : const SizedBox.shrink()),
                           ],
                         ),
-                      ),
-                      ListenableBuilder(
-                        listenable: _logic.assistantStreams,
-                        builder: (context, _) => Obx(() => _logic
-                                    .peerTyping.value &&
-                                _logic.assistantStreams.snapshots.isEmpty
-                            ? Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: AiMetrics.space16,
-                                    vertical: AiMetrics.space8),
-                                child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Semantics(
-                                        liveRegion: true,
-                                        child: AiThinkingCard(
-                                            dark: dark,
-                                            i18n:
-                                                AiAssistantI18n.of(context)))))
-                            : const SizedBox.shrink()),
                       ),
                       if (_logic.messageSelection.active)
                         MessageSelectionActionBar(

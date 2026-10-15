@@ -18,6 +18,7 @@ import 'moments_widgets.dart';
 import 'presentation/moments_cover_header.dart';
 import 'presentation/moments_profile_timeline.dart';
 import 'presentation/moments_profile_range_hint.dart';
+import 'presentation/loading/moments_feed_skeleton.dart';
 
 /// Community entry and personal timelines share server-backed live entities.
 class MomentsPage extends StatefulWidget {
@@ -280,11 +281,7 @@ class _MomentsPageState extends State<MomentsPage> {
                                     en: 'Go back and reopen Moments.')))
                       else if ((_loading || state.loading) &&
                           (state.items.isEmpty || initialRangePending))
-                        const SliverToBoxAdapter(
-                            child: Padding(
-                                padding: EdgeInsets.all(AppTokens.s8),
-                                child:
-                                    Center(child: CircularProgressIndicator())))
+                        const SliverToBoxAdapter(child: MomentsFeedSkeleton())
                       else if (state.items.isEmpty &&
                           (_error != null || state.error != null))
                         SliverToBoxAdapter(
@@ -324,7 +321,8 @@ class _MomentsPageState extends State<MomentsPage> {
                                             en: 'No posts yet.'))))
                       else
                         SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(0, 4, 0, 24),
+                            padding: EdgeInsets.fromLTRB(0, 4, 0,
+                                _feed ? 24 : MomentsLayout.timelineListBottom),
                             sliver: SliverList.builder(
                                 itemCount: state.items.length,
                                 itemBuilder: (context, index) {
@@ -363,7 +361,8 @@ class _MomentsPageState extends State<MomentsPage> {
                                       ),
                                       if (index < state.items.length - 1)
                                         Divider(
-                                            height: 22,
+                                            height: MomentsLayout
+                                                .timelineDividerSpace,
                                             thickness: .6,
                                             indent: 96,
                                             color: MomentsTheme.border(

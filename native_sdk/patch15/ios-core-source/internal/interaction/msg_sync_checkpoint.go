@@ -9,7 +9,6 @@ import (
 
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
 	"github.com/openimsdk/tools/errs"
-	"github.com/openimsdk/tools/log"
 )
 
 // A private namespace in the existing per-user version store. It is supported
@@ -19,16 +18,27 @@ const messageCheckpointTable = "sdk_message_coverage_v1"
 type messageCheckpoint struct {
 	Completed int64 `json:"completed"`
 	Target    int64 `json:"target"`
-	Delivered int64 `json:"delivered,omitempty"` // Observed delivery, never continuous coverage.
+	// Covered records delivery coverage above Completed, not cache residency.
+	// Its complement is historical data available on demand, never a background job.
+	Covered   [][2]int64 `json:"covered,omitempty"`
 	persisted bool
 }
 
 // MAX(seq) is an observation, never a proof of coverage. A legacy database
-// replays its visible range once; existing rows are retained idempotently.
-func (m *MsgSyncer) loadMessageCheckpoints(ctx context.Context, ids []string) error {
+// replays its latest window once; existing rows are retained idempotently.
+func (m *MsgSyncer) loadMessageCheckpoints(ctx context.Context, ids []string, snapshots ...map[string]*model_struct.LocalVersionSync) error {
 	m.checkpoints = make(map[string]messageCheckpoint)
 	m.checkpointIDs = make(map[string]bool)
-	index, err := m.db.GetVersionSync(ctx, messageCheckpointTable, "index")
+	read := func(id string) (*model_struct.LocalVersionSync, error) {
+		if len(snapshots) > 0 && snapshots[0] != nil {
+			if row := snapshots[0][id]; row != nil {
+				return row, nil
+			}
+			return nil, errs.ErrRecordNotFound
+		}
+		return m.db.GetVersionSync(ctx, messageCheckpointTable, id)
+	}
+	index, err := read("index")
 	if err != nil && !errors.Is(err, errs.ErrRecordNotFound) {
 		return err
 	}
@@ -49,7 +59,7 @@ func (m *MsgSyncer) loadMessageCheckpoints(ctx context.Context, ids []string) er
 			continue
 		}
 		state := messageCheckpoint{Target: m.syncedMaxSeqs[id]}
-		row, err := m.db.GetVersionSync(ctx, messageCheckpointTable, "conversation:"+id)
+		row, err := read("conversation:" + id)
 		if err != nil && !errors.Is(err, errs.ErrRecordNotFound) {
 			return err
 		}
@@ -57,8 +67,13 @@ func (m *MsgSyncer) loadMessageCheckpoints(ctx context.Context, ids []string) er
 			if err := json.Unmarshal([]byte(row.VersionID), &state); err != nil {
 				return fmt.Errorf("invalid message checkpoint %q: %w", id, err)
 			}
-			if state.Completed < 0 || state.Target < state.Completed || state.Delivered < 0 {
+			if state.Completed < 0 || state.Target < state.Completed {
 				return fmt.Errorf("invalid message checkpoint bounds %q", id)
+			}
+			for _, r := range state.Covered {
+				if r[0] <= state.Completed || r[1] < r[0] || r[1] > state.Target {
+					return fmt.Errorf("invalid sparse message coverage %q", id)
+				}
 			}
 			state.persisted = true
 			if m.syncedMaxSeqs[id] > state.Target {
@@ -116,13 +131,10 @@ func (m *MsgSyncer) commitMessageCheckpoint(ctx context.Context, id string, end 
 		return nil
 	}
 	if !IsNotification(id) {
-		state := m.checkpoints[id]
-		state.Completed = end
-		state.Target = max(end, state.Target)
-		if err := m.saveMessageCheckpoint(ctx, id, state); err != nil {
+		if err := m.commitMessageCoverage(ctx, id, [][2]int64{{m.syncedMaxSeqs[id] + 1, end}}); err != nil {
 			return err
 		}
-		log.ZInfo(ctx, "message coverage committed", "conversationID", id, "completed", end, "target", state.Target, "pending", state.Target-end)
+		return nil
 	}
 	m.syncedMaxSeqs[id] = end
 	return nil

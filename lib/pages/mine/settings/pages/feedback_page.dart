@@ -5,18 +5,22 @@ import 'package:openim_common/openim_common.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
 import '../settings_service.dart';
+import '../feedback/feedback_submission.dart';
 import '../feedback/widgets/feedback_attachment_preview.dart';
 import '../widgets/settings_widgets.dart';
 import '../../../customer_service/customer_service.dart';
+import '../../../../widgets/editing/unsaved_changes_guard.dart';
 
 class FeedbackPage extends StatefulWidget {
   const FeedbackPage({
     super.key,
     required this.service,
     this.embedded = false,
+    this.submission,
   });
 
   final SettingsService service;
+  final FeedbackSubmission? submission;
   final bool embedded;
 
   @override
@@ -83,7 +87,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
   bool get _canSubmit =>
       !_submitting &&
       !_picking &&
-      graphemeTrim(_controller.text).isNotEmpty &&
+      (widget.submission != null ||
+          graphemeTrim(_controller.text).isNotEmpty) &&
       graphemeTrim(_controller.text).characters.length <= _maxContentLength;
 
   Future<void> _pickImages() async {
@@ -153,7 +158,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
     if (!_canSubmit) return;
     FocusManager.instance.primaryFocus?.unfocus();
 
-    if (!widget.service.supportsFeedback) {
+    if (widget.submission == null && !widget.service.supportsFeedback) {
       showUnavailableSettingsAction(
         context,
         settingsText(context, zh: '提交反馈', en: 'Submit feedback'),
@@ -169,20 +174,25 @@ class _FeedbackPageState extends State<FeedbackPage> {
         _clientRequestID = const Uuid().v4();
         _submittedFingerprint = fingerprint;
       }
-      _feedbackID = await widget.service.createFeedback(
-        clientRequestID: _clientRequestID!,
-        type: _type,
-        content: graphemeTrim(_controller.text),
-        attachments: List.unmodifiable(_attachments),
-        includeSDKLogs: _includeDiagnostics,
-      );
+      _feedbackID = widget.submission != null
+          ? await widget.submission!.submit(_clientRequestID!,
+              graphemeTrim(_controller.text), List.unmodifiable(_attachments))
+          : await widget.service.createFeedback(
+              clientRequestID: _clientRequestID!,
+              type: _type,
+              content: graphemeTrim(_controller.text),
+              attachments: List.unmodifiable(_attachments),
+              includeSDKLogs: _includeDiagnostics,
+            );
       if (!mounted) return;
       if (_includeDiagnostics) await _uploadLogs();
       if (!mounted) return;
       FocusManager.instance.primaryFocus?.unfocus();
       setState(() => _submitted = true);
     } catch (error) {
-      if (error is (int, String) && error.$1 == 20046) _clientRequestID = null;
+      if (error is (int, String) && (error.$1 == 20046 || error.$1 == 20110)) {
+        _clientRequestID = null;
+      }
       if (!mounted) return;
       showSettingsError(
           context,
@@ -197,30 +207,37 @@ class _FeedbackPageState extends State<FeedbackPage> {
   @override
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.of(context).disableAnimations;
-    return AnimatedSwitcher(
-      duration:
-          reduceMotion ? Duration.zero : const Duration(milliseconds: 420),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0.03, 0),
-            end: Offset.zero,
-          ).animate(animation),
-          child: child,
+    return UnsavedChangesGuard(
+      dirty: !_submitted &&
+          (_controller.text.isNotEmpty || _attachments.isNotEmpty),
+      busy: _submitting || _uploadingLogs || _picking,
+      child: AnimatedSwitcher(
+        duration:
+            reduceMotion ? Duration.zero : const Duration(milliseconds: 420),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.03, 0),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
         ),
+        child: _submitted
+            ? _FeedbackSuccessView(
+                key: const ValueKey('feedback-success'),
+                onDone: () => Navigator.of(context)
+                    .pop(widget.submission != null ? true : null),
+                isComplaint: widget.submission != null,
+                logFailed: _logFailed,
+                uploadingLogs: _uploadingLogs,
+                retryLogs: _uploadLogs,
+              )
+            : _buildForm(context),
       ),
-      child: _submitted
-          ? _FeedbackSuccessView(
-              key: const ValueKey('feedback-success'),
-              onDone: () => Navigator.of(context).maybePop(),
-              logFailed: _logFailed,
-              uploadingLogs: _uploadingLogs,
-              retryLogs: _uploadLogs,
-            )
-          : _buildForm(context),
     );
   }
 
@@ -257,7 +274,9 @@ class _FeedbackPageState extends State<FeedbackPage> {
                     )
                   : null,
               title: Text(
-                settingsText(context, zh: '意见反馈', en: 'Feedback'),
+                settingsText(context,
+                    zh: widget.submission != null ? '投诉' : '意见反馈',
+                    en: widget.submission != null ? 'Complaint' : 'Feedback'),
                 style: TextStyle(
                   color: text,
                   fontSize: 18,
@@ -322,35 +341,77 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _sectionHeading(
-                            context,
-                            title: settingsText(
+                          if (widget.submission != null) ...[
+                            _sectionHeading(context,
+                                title: settingsText(context,
+                                    zh: '投诉对象', en: 'Reported target'),
+                                trailing: '',
+                                text: text,
+                                muted: muted),
+                            Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                    color: fill,
+                                    borderRadius: BorderRadius.circular(12)),
+                                child: Text(widget.submission!.target,
+                                    style: TextStyle(
+                                        color: text,
+                                        fontSize: 16,
+                                        height: 1.5))),
+                            const SizedBox(height: 26),
+                            _sectionHeading(context,
+                                title: settingsText(context,
+                                    zh: '投诉原因', en: 'Reason'),
+                                trailing: '',
+                                text: text,
+                                muted: muted),
+                            Align(
+                                alignment: Alignment.centerLeft,
+                                child: Chip(
+                                    label: Text(widget.submission!.reason),
+                                    labelStyle: const TextStyle(
+                                        color: _blue,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600),
+                                    backgroundColor: dark
+                                        ? const Color(0xFF173E65)
+                                        : const Color(0xFFE8F4FF),
+                                    side: BorderSide.none)),
+                          ] else ...[
+                            _sectionHeading(
                               context,
-                              zh: '反馈类型',
-                              en: 'Feedback type',
+                              title: settingsText(
+                                context,
+                                zh: '反馈类型',
+                                en: 'Feedback type',
+                              ),
+                              trailing: settingsText(
+                                context,
+                                zh: '请选择问题的类型',
+                                en: 'Choose a category',
+                              ),
+                              text: text,
+                              muted: muted,
                             ),
-                            trailing: settingsText(
+                            _buildTypeGrid(
                               context,
-                              zh: '请选择问题的类型',
-                              en: 'Choose a category',
+                              fill: fill,
+                              text: text,
+                              muted: muted,
+                              dark: dark,
                             ),
-                            text: text,
-                            muted: muted,
-                          ),
-                          _buildTypeGrid(
-                            context,
-                            fill: fill,
-                            text: text,
-                            muted: muted,
-                            dark: dark,
-                          ),
+                          ],
                           const SizedBox(height: 26),
                           _sectionHeading(
                             context,
                             title: settingsText(
                               context,
-                              zh: '反馈内容',
-                              en: 'Your feedback',
+                              zh: widget.submission != null
+                                  ? '补充说明（选填）'
+                                  : '反馈内容',
+                              en: widget.submission != null
+                                  ? 'Details (optional)'
+                                  : 'Your feedback',
                             ),
                             trailing:
                                 '${_controller.text.characters.length}/$_maxContentLength',
@@ -375,8 +436,12 @@ class _FeedbackPageState extends State<FeedbackPage> {
                               counterText: '',
                               hintText: settingsText(
                                 context,
-                                zh: '请详细描述您的问题或建议（必填）',
-                                en: 'Describe your issue or suggestion (required)',
+                                zh: widget.submission != null
+                                    ? '请补充相关情况，以便我们核实处理（选填）'
+                                    : '请详细描述您的问题或建议（必填）',
+                                en: widget.submission != null
+                                    ? 'Add details to help us review (optional)'
+                                    : 'Describe your issue or suggestion (required)',
                               ),
                               hintStyle: TextStyle(
                                 color: muted,
@@ -421,45 +486,46 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Material(
-                      color: Colors.transparent,
-                      child: CheckboxListTile(
-                        key: const ValueKey('feedback-diagnostics'),
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 4),
-                        activeColor: _blue,
-                        value: _includeDiagnostics,
-                        onChanged: _submitting
-                            ? null
-                            : (value) => setState(
-                                  () => _includeDiagnostics = value ?? false,
-                                ),
-                        title: Text(
-                          settingsText(
-                            context,
-                            zh: '附带 SDK 运行日志',
-                            en: 'Attach diagnostic report',
+                    if (widget.submission == null)
+                      Material(
+                        color: Colors.transparent,
+                        child: CheckboxListTile(
+                          key: const ValueKey('feedback-diagnostics'),
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 4),
+                          activeColor: _blue,
+                          value: _includeDiagnostics,
+                          onChanged: _submitting
+                              ? null
+                              : (value) => setState(
+                                    () => _includeDiagnostics = value ?? false,
+                                  ),
+                          title: Text(
+                            settingsText(
+                              context,
+                              zh: '附带 SDK 运行日志',
+                              en: 'Attach diagnostic report',
+                            ),
+                            style: TextStyle(
+                              color: text,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                          style: TextStyle(
-                            color: text,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        subtitle: Text(
-                          settingsText(
-                            context,
-                            zh: '附带 SDK 运行日志，帮助排查问题。日志可能包含设备和运行信息。',
-                            en: 'Attach SDK runtime logs to help investigate. Logs may contain device and runtime information.',
-                          ),
-                          style: TextStyle(
-                            color: muted,
-                            fontSize: 12.5,
-                            height: 1.45,
+                          subtitle: Text(
+                            settingsText(
+                              context,
+                              zh: '附带 SDK 运行日志，帮助排查问题。日志可能包含设备和运行信息。',
+                              en: 'Attach SDK runtime logs to help investigate. Logs may contain device and runtime information.',
+                            ),
+                            style: TextStyle(
+                              color: muted,
+                              fontSize: 12.5,
+                              height: 1.45,
+                            ),
                           ),
                         ),
                       ),
-                    ),
                     const SizedBox(height: 18),
                     DecoratedBox(
                       decoration: BoxDecoration(
@@ -1110,9 +1176,11 @@ class _FeedbackSuccessView extends StatelessWidget {
       {super.key,
       required this.onDone,
       this.logFailed = false,
+      this.isComplaint = false,
       this.uploadingLogs = false,
       required this.retryLogs});
   final bool logFailed;
+  final bool isComplaint;
   final bool uploadingLogs;
   final VoidCallback retryLogs;
 
@@ -1174,8 +1242,12 @@ class _FeedbackSuccessView extends StatelessWidget {
                         Text(
                           settingsText(
                             context,
-                            zh: '感谢您的反馈！\n我们会尽快处理，并持续优化产品体验。',
-                            en: 'Thank you for your feedback!\nWe will review it as soon as possible and keep improving your experience.',
+                            zh: isComplaint
+                                ? '您的投诉已收到。\n我们会尽快核实处理，感谢您的支持。'
+                                : '感谢您的反馈！\n我们会尽快处理，并持续优化产品体验。',
+                            en: isComplaint
+                                ? 'Your complaint has been received.\nWe will review it as soon as possible. Thank you for your support.'
+                                : 'Thank you for your feedback!\nWe will review it as soon as possible and keep improving your experience.',
                           ),
                           textAlign: TextAlign.center,
                           style: TextStyle(

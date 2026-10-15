@@ -7,6 +7,7 @@ import '../../../models/group_feature_context.dart';
 import '../../data/mark_six_repository.dart';
 import '../../widgets/mark_six_style.dart';
 import '../data/agent_query_controller.dart';
+import '../widgets/agent_query_feedback.dart';
 import '../models/agent_date_range.dart';
 import '../widgets/agent_date_range_picker.dart';
 
@@ -76,33 +77,41 @@ class _AgentDescendantHistoryPageState
                       range: _range,
                       onPressed: !_state.loading && allowed ? _dates : null),
                   Expanded(
-                      child: !allowed
-                          ? const MarkSixEmpty(message: '你没有收益历史权限')
-                          : !_state.current
-                              ? const MarkSixEmpty(message: '登录状态已变更')
-                              : _state.loading
-                                  ? Center(child: LoadingView.indicator())
-                                  : _state.error != null
-                                      ? MarkSixEmpty(
-                                          message: _state.error!,
-                                          onRetry: () => _load(force: true))
-                                      : RefreshIndicator(
-                                          onRefresh: () => _load(force: true),
-                                          child: ListView.separated(
-                                              padding: const EdgeInsets.all(16),
-                                              physics:
-                                                  const AlwaysScrollableScrollPhysics(),
-                                              itemCount: rows.isEmpty
-                                                  ? 1
-                                                  : rows.length,
-                                              separatorBuilder: (_, __) =>
-                                                  const SizedBox(height: 12),
-                                              itemBuilder: (_, index) => rows
-                                                      .isEmpty
-                                                  ? const MarkSixEmpty(
-                                                      message: '所选日期暂无下级记录')
-                                                  : _card(
-                                                      context, rows[index])))),
+                      child: AgentQueryFeedback(
+                          state: _state,
+                          onRetry: () => _load(force: true),
+                          child: !allowed
+                              ? const MarkSixEmpty(message: '你没有收益历史权限')
+                              : !_state.current
+                                  ? const MarkSixEmpty(message: '登录状态已变更')
+                                  : _state.loading && _state.data == null
+                                      ? Center(child: LoadingView.indicator())
+                                      : _state.error != null &&
+                                              _state.data == null
+                                          ? MarkSixEmpty(
+                                              message: _state.error!,
+                                              onRetry: () => _load(force: true))
+                                          : RefreshIndicator(
+                                              onRefresh: () =>
+                                                  _load(force: true),
+                                              child: ListView.separated(
+                                                  padding:
+                                                      const EdgeInsets.all(16),
+                                                  physics:
+                                                      const AlwaysScrollableScrollPhysics(),
+                                                  itemCount: rows.isEmpty
+                                                      ? 1
+                                                      : rows.length,
+                                                  separatorBuilder: (_, __) =>
+                                                      const SizedBox(
+                                                          height: 12),
+                                                  itemBuilder: (_, index) =>
+                                                      rows.isEmpty
+                                                          ? const MarkSixEmpty(
+                                                              message:
+                                                                  '所选日期暂无下级记录')
+                                                          : _card(context,
+                                                              rows[index]))))),
                 ])));
       });
   Widget _card(BuildContext context, Map<String, dynamic> item) {

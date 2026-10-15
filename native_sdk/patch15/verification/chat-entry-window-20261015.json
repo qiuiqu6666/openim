@@ -1,0 +1,58 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.25-group-profile-scale.3",
+  "apk_path": "E:\\openim\\release-artifacts\\chat-entry-window-20261015-debug.apk",
+  "apk_sha256": "c6d04e65c851715289193276f7d2017dd7115c4b0be4ecbd90445d5563424f0d",
+  "native_sha256": {
+    "arm64-v8a": "091d59e4c6fcd5164830c847cfe44b625ef9cc15f29d9ba5b81007d6d8e732e6",
+    "x86_64": "6b42bcc1fddfe830844f306b5a8b0a5ffb794c63eac675d82448c7618380b881"
+  },
+  "native_parity": true,
+  "snapshot_ready_contract_present": true,
+  "source_sha256": "8f2b2fa6c7160244ace35dc949b49b7f7f59a393c8fc593a0ae88dcb54707b22",
+  "checks": {
+    "flutter": "542 passed; 13 existing skipped",
+    "analysis": "no errors or warnings; 2 existing info lints in ChatLogic",
+    "core_race_sqlite": "passed: conversation_msg, interaction, db; final frozen SDK source",
+    "source_lock_tests": "15 passed",
+    "android": "four ABI AAR built; APK arm64/x86_64 native parity verified; snapshotReady symbol present",
+    "server": "msg RPC and message storage controller tests passed; no server deployment needed",
+    "ios": "shared source updated; Framework and device runtime not built or verified"
+  },
+  "device": {
+    "android_device": "emulator-5554",
+    "installed_version_code": 2029,
+    "installation": "in-place update; existing account preserved",
+    "entry_capture": "real SDK and existing test group; cold entry and re-entry screenshots inspected",
+    "observed_behavior": "initial loading state followed by latest ordered window; no old cached chat rows painted in sampled frames",
+    "limits": [
+      "Sampled frames and debug emulator timings are not a frame-by-frame performance guarantee",
+      "No two-account scripted offline delivery test performed",
+      "iOS Framework and device runtime require macOS/Xcode"
+    ],
+    "server": "existing history range/order/visibility tests passed; production server source unchanged",
+    "core": "SQLite/race tests passed for conversation_msg/interaction/db",
+    "artifact": "E:/openim/release-artifacts/chat-entry-window-20261015-debug.apk",
+    "final_sdk_version": "v3.8.3-patch.15+recovery.25-group-profile-scale.3",
+    "captures_sdk_version": "v3.8.3-patch.15+recovery.25-group-profile-scale.1",
+    "latest_sdk_installation": "in-place emulator update completed"
+  },
+  "logs": [
+    "E:/openim/entry-window-acceptance-tests.log",
+    "E:/openim/entry-window-core-final-race.log",
+    "E:/openim/entry-window-final-analysis.log",
+    "E:/openim/entry-window-current-apk-build.log"
+  ],
+  "changes": [
+    "Hide stale presentation cache until native or complete history window is ready",
+    "Reject local windows with missing latest or sequence gaps",
+    "Coalesce incoming messages with initial paint",
+    "Invalidate prepared reads on persisted delivery",
+    "Stable same-time sequence ordering; preserve painted scroll position"
+  ],
+  "server_source": "/srv/99chat-production/app/source/open-im-server",
+  "scope_limits": [
+    "Debug emulator screenshots are sampled observations; all-device frame-time guarantee not measured",
+    "Two-account scripted offline device test not performed",
+    "iOS build and device verification require macOS/Xcode"
+  ]
+}

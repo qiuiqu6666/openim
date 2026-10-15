@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:image/image.dart' as img;
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -85,6 +87,45 @@ void main() {
             groupID: 'group',
             sessionType: ConversationType.superGroup));
     expect(calls.single.method, 'sendMessage');
+  });
+  test('stalled optional preview cannot prevent sending an uploaded original',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('preview-stall-');
+    final file = await File('${directory.path}/long.png')
+        .writeAsBytes(img.encodePng(img.Image(width: 30, height: 300)));
+    final previewUpload = Completer<String>();
+    final previewStarted = Completer<void>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if ((call.arguments['id'] as String).startsWith('chat-top-preview:')) {
+        previewStarted.complete();
+        return previewUpload.future;
+      }
+      return jsonEncode({'url': 'https://im.test/original.png'});
+    });
+    final message = image()..pictureElem!.sourcePath = file.path;
+    final pending = uploader.prepare(message);
+    try {
+      await previewStarted.future.timeout(const Duration(seconds: 3));
+      final finished = await pending
+          .then((_) => true)
+          .timeout(const Duration(seconds: 6), onTimeout: () => false);
+      expect(finished, isTrue,
+          reason:
+              'The original is uploaded; a decorative preview must be bounded');
+      expect(message.pictureElem!.sourcePicture!.url,
+          'https://im.test/original.png');
+      previewUpload.complete(jsonEncode({'url': 'https://im.test/late.png'}));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      expect(
+          message.pictureElem!.snapshotPicture!.url, isNot(contains('late')));
+    } finally {
+      if (!previewUpload.isCompleted) {
+        previewUpload.complete(jsonEncode({'url': 'https://im.test/late.png'}));
+      }
+      await pending;
+      await directory.delete(recursive: true);
+    }
   });
   test(
       'upload completing after account or route change cannot mutate the message',

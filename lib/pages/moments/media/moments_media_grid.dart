@@ -49,6 +49,10 @@ class MomentsMediaGrid extends StatelessWidget {
                 key: ValueKey('${repository.currentUserId}:${item.mediaId}'),
                 repository: repository,
                 media: item,
+                fit: media.length == 1 &&
+                        ((item.width ?? 0) <= 0 || (item.height ?? 0) <= 0)
+                    ? BoxFit.contain
+                    : BoxFit.cover,
                 onDimensions: onDimensions,
               ),
               if (item.isVideo)

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -49,11 +50,19 @@ class MomentsApi {
   Future<MomentPost> detail(String momentId) async =>
       _post(await _request('/moments/${_id(momentId)}'));
   Future<MomentsPageResult<MomentComment>> comments(String momentId,
-          {String? cursor, int pageSize = 20}) async =>
-      MomentsPageResult.fromJson(
-          await _request('/moments/${_id(momentId)}/comments',
-              query: _pageQuery(cursor, pageSize)),
-          MomentComment.fromJson);
+      {String? cursor, int pageSize = 20}) async {
+    final data = await _request('/moments/${_id(momentId)}/comments',
+        query: _pageQuery(cursor, pageSize));
+    // protojson omits an empty repeated field. Require the successful page's
+    // context marker so an unrelated/malformed object is still rejected.
+    if (!data.containsKey('items') &&
+        data['viewerContextVersion'] is String &&
+        (data['viewerContextVersion'] as String).isNotEmpty) {
+      data['items'] = const <dynamic>[];
+    }
+    return MomentsPageResult.fromJson(data, MomentComment.fromJson);
+  }
+
   Future<MomentsPageResult<MomentLike>> likes(String momentId,
           {String? cursor, int pageSize = 20}) async =>
       MomentsPageResult.fromJson(
@@ -267,13 +276,41 @@ class MomentsApi {
               followRedirects: false,
               validateStatus: (_) => true));
       _checkSession(token, base);
-      _checkStatus(response.statusCode, false, null);
-      if (response.data == null) throw const MomentsException('媒体内容不可用');
+      final errorBody = _mediaErrorBody(
+          response.data, response.headers.value(Headers.contentTypeHeader));
+      _checkStatus(response.statusCode, false, errorBody);
+      if (errorBody != null) {
+        if (errorBody['errCode'] is int && errorBody['errCode'] != 0) {
+          _throwBusinessError(errorBody);
+        }
+        throw const MomentsException('媒体响应不是图片',
+            code: 'INVALID_MEDIA_RESPONSE');
+      }
+      if (response.data == null || response.data!.isEmpty) {
+        throw const MomentsException('媒体内容不可用');
+      }
       return Uint8List.fromList(response.data!);
     } on DioException {
       _checkSession(token, base);
       throw const MomentsException('媒体加载失败，请稍后重试');
     }
+  }
+
+  // The business gateway can encode errors as JSON even with HTTP 200.
+  // Never return those bytes to the image decoder or private media cache.
+  static Map<String, dynamic>? _mediaErrorBody(
+      List<int>? bytes, String? contentType) {
+    final jsonType = contentType?.toLowerCase().contains('json') == true;
+    final first =
+        bytes?.skipWhile((b) => const [9, 10, 13, 32].contains(b)).firstOrNull;
+    if (!jsonType && first != 123 && first != 91) return null;
+    try {
+      final body = jsonDecode(utf8.decode(bytes ?? const []));
+      if (body is Map<String, dynamic>) return body;
+    } on FormatException {
+      // Report an invalid media response without exposing response contents.
+    }
+    throw const MomentsException('媒体响应不是图片', code: 'INVALID_MEDIA_RESPONSE');
   }
 
   Future<MomentsSettings> settings() async =>

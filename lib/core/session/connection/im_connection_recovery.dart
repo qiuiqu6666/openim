@@ -109,6 +109,7 @@ class IMConnectionRecovery with WidgetsBindingObserver {
       _unhealthyAttempts = 0;
     }
     final needsRetry = verifyConnection || !checkConnected;
+    final verifyingFailure = verifyConnection && isSyncFailed?.call() == true;
     var retryDelay = retryInterval;
     for (var attempt = 1;
         attempt < _unhealthyAttempts && retryDelay < maxRetryInterval;
@@ -121,7 +122,10 @@ class IMConnectionRecovery with WidgetsBindingObserver {
     _verificationPending = needsRetry;
     _retry = Timer(delay, () async {
       _verificationPending = false;
-      if (verifyConnection ||
+      // A failed sync may have recovered while its timer was queued. Connection
+      // transitions still receive their one-shot socket verification; obsolete
+      // sync failures must not start another complete metadata synchronization.
+      if ((verifyConnection && !verifyingFailure) ||
           isDisconnected() ||
           isSyncFailed?.call() == true ||
           _wakeFailed) {

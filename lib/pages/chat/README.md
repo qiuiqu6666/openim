@@ -13,6 +13,7 @@
 | `receipts/` | `chat_read_receipts.dart`、`conversation_read_coordinator.dart` | 真实视口会话阅读、私密消息逐条回执、消息身份与未读快照请求合并、SDK 成功确认桥接、回执刷新计时器 |
 | `composer/` | `chat_composer_controller.dart` | 输入与焦点资源、串行草稿、引用、@成员、定向成员、格式化编辑；`mention_id.dart` 为共用的提及 ID 解析 |
 | `messages/` | `chat_delivery_controller.dart`、`chat_message_actions.dart` | 发送状态、失败提示、撤回删除策略；`selection/` 为当前聊天多选、长按滑选与操作栏，`forwarding/` 为单条/批量/合并转发及名片，`presentation/` 为消息显示策略，`widgets/` 为消息行渲染 |
+| `messages/loading/` | `chat_entry_skeleton.dart`、`chat_initial_window_transition.dart` | 首屏灰化骨架与短交叉淡入；沿用真实气泡圆角、头像和时间布局，保持真实列表实例与滚动位置；减少动态效果时静态替换；过渡完成后再提交真实可见消息回执 |
 | `media/` | `chat_media_controller.dart`、`chat_picture_gallery.dart` | 相册、相机、文件、位置、音频文件选择和临时附件准备；音频转文字预览交给语音模块 |
 | `voice/` | `chat_voice_controller.dart` | 录音、播放、转文字、预览、本地扩展字段串行写入和任务取消；服务与转写状态在本目录维护 |
 | `stickers/` | `chat_sticker_controller.dart`、`personal_sticker_store.dart` | 表情上传、收藏重试、个人表情存储/管理、图片与视频表情发送及展示 |
@@ -42,7 +43,9 @@
 
 ## 生命周期
 
-导航开始时提前读取 SDK 本地首批历史。进入时先捕获会话账号和令牌，初始化安全消息快照，再初始化输入和页面订阅并复用预读请求。群资料在首批历史之后加载，不阻挡聊天内容显示；资料尚未就绪时群成员入口等待权限信息。
+聊天首屏通过 `initialWindowReady` 控制可见性。生产入口消费 SDK 的版本化窗口契约，校验当前会话身份、覆盖区间、权限上下文和窗口修订身份；当前会话的可信窗口可在其他会话同步期间发布。本地可用窗口与远程确认窗口通过 `source` 区分，本地空结果不能证明云端为空。固定水位之后的实时消息经过有界排序队列，连续后批量接入；缺口和溢出从 SDK 持久化数据重读。已发布窗口保持消息 ID、顺序和阅读锚点，旧请求不替换新页面。导航预读在全局新消息期间仍复用同一个请求，旧 SDK 的无证明结果继续重新校验。契约和回退说明见 [history/WINDOW_CONTRACT.md](history/WINDOW_CONTRACT.md)，专项测试在 `test/integration/chat/chat_window_contract_test.dart`、`test/pages/chat/history/`。
+
+导航开始时提前准备 SDK 当前会话窗口，页面并行读取有证明的本地窗口。进入时捕获会话账号和令牌，初始化安全消息快照，再初始化输入和页面订阅并复用预读请求。群资料在首批历史之后加载，不阻挡聊天内容显示；资料尚未就绪时群成员入口等待权限信息。已有单聊官方账号路由判定仍可能等待资料，窗口预读先于该判定启动。
 
 关闭时，各控制器关闭自己的队列、计时器、播放资源、输入资源和订阅。页面只在回调仍属于自己时清理 SDK 消息/回执/通话回调，避免旧页面清掉新页面的订阅。最终草稿和历史快照可以保存；账号或令牌变化后，旧页面不能向新账号保存草稿、发送消息或发起媒体预览。
 

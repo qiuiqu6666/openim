@@ -74,6 +74,11 @@ void main() {
       'http://login:secret@129.226.192.93/account/login',
       'http://129.226.192.93.example.invalid/account/login',
       'ftp://129.226.192.93/account/login',
+      'http://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com.attacker:10008/account/login',
+      'http://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:10002/account/login',
+      'http://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com/account/login',
+      'http://user:secret@lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:10008/account/login',
+      'ftp://lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com:10008/account/login',
       '/account/login',
     ]) {
       var sent = 0;

@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	maxBatchMessages     = 400
-	minAggregationDelay  = 50 * time.Millisecond
-	maxAggregationDelay  = time.Second
+	maxBatchMessages     = 100
+	minAggregationDelay  = 5 * time.Millisecond
+	maxAggregationDelay  = 10 * time.Millisecond
 	lowLoadWindow        = 10 * time.Second
 	lowLoadMessageLimit  = 20
 	highLoadMessageLimit = 200
@@ -210,7 +210,7 @@ func (b *MessageBatcher) Enqueue(ctx context.Context, batch *sdkws.PushMessages)
 	}
 
 	pendingCount := b.pendingCountLocked()
-	if pendingCount >= maxBatchMessages && recent < highLoadMessageLimit {
+	if pendingCount >= maxBatchMessages {
 		toFlush, toCtxs = b.consumeLocked()
 		b.cancelTimerLocked()
 	} else {

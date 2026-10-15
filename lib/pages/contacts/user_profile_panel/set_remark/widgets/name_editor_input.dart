@@ -12,6 +12,7 @@ class NameEditorInput extends StatefulWidget {
     required this.onSave,
     this.hintText,
     this.showClearButton = false,
+    this.remarkLayout = false,
     this.saving = false,
     this.saveEnabled = true,
     this.keyboardType,
@@ -23,6 +24,7 @@ class NameEditorInput extends StatefulWidget {
   final VoidCallback onSave;
   final String? hintText;
   final bool showClearButton;
+  final bool remarkLayout;
   final bool saving;
   final bool saveEnabled;
   final TextInputType? keyboardType;
@@ -63,7 +65,7 @@ class _NameEditorInputState extends State<NameEditorInput> {
     final saveEnabled = widget.saveEnabled;
     final keyboardType = widget.keyboardType;
     final inputStatus = widget.inputStatus;
-    return SensitiveCaretRegion(
+    final input = SensitiveCaretRegion(
       focusNode: saving ? null : _focusNode,
       onDragStart: _startEditing,
       child: TextField(
@@ -84,59 +86,90 @@ class _NameEditorInputState extends State<NameEditorInput> {
           hintText: hintText,
           hintStyle: TextStyle(color: Styles.c_8E9AB0, fontSize: 16.sp),
           filled: true,
-          fillColor: Styles.c_FFFFFF,
+          fillColor: widget.remarkLayout ? Styles.c_F4F5F7 : Styles.c_FFFFFF,
           border: _border(),
           enabledBorder: _border(),
           focusedBorder: _border(),
           counterText: '',
-          suffixIcon: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (_, value, __) => Padding(
-              padding: EdgeInsets.only(left: 8.w, right: 18.w),
-              child: Center(
-                widthFactor: 1,
-                heightFactor: 1,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showClearButton && value.text.isNotEmpty)
-                      IconButton(
-                        key: const ValueKey('name-editor-clear'),
-                        onPressed: saving
-                            ? null
-                            : () {
-                                _startedEditing = true;
-                                controller.clear();
-                              },
-                        tooltip: StrRes.clearAll,
-                        constraints: const BoxConstraints(
-                          minWidth: kMinInteractiveDimension,
-                          minHeight: kMinInteractiveDimension,
-                        ),
-                        visualDensity: VisualDensity.standard,
-                        color: Styles.c_8E9AB0,
-                        icon: const Icon(Icons.cancel, size: AppTokens.s5),
+          suffixIcon: widget.remarkLayout
+              ? null
+              : ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: controller,
+                  builder: (_, value, __) => Padding(
+                    padding: EdgeInsets.only(left: 8.w, right: 18.w),
+                    child: Center(
+                      widthFactor: 1,
+                      heightFactor: 1,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (showClearButton && value.text.isNotEmpty)
+                            IconButton(
+                              key: const ValueKey('name-editor-clear'),
+                              onPressed: saving
+                                  ? null
+                                  : () {
+                                      _startedEditing = true;
+                                      controller.clear();
+                                    },
+                              tooltip: StrRes.clearAll,
+                              constraints: const BoxConstraints(
+                                minWidth: kMinInteractiveDimension,
+                                minHeight: kMinInteractiveDimension,
+                              ),
+                              visualDensity: VisualDensity.standard,
+                              color: Styles.c_8E9AB0,
+                              icon:
+                                  const Icon(Icons.cancel, size: AppTokens.s5),
+                            ),
+                          if (inputStatus != null) ...[
+                            inputStatus,
+                            const SizedBox(width: AppTokens.s3),
+                          ],
+                          Text('${value.text.characters.length}/$maxLength',
+                              style: Styles.ts_8E9AB0_13sp),
+                        ],
                       ),
-                    if (inputStatus != null) ...[
-                      inputStatus,
-                      const SizedBox(width: AppTokens.s3),
-                    ],
-                    Text('${value.text.characters.length}/$maxLength',
-                        style: Styles.ts_8E9AB0_13sp),
-                  ],
+                    ),
+                  ),
                 ),
+          contentPadding: widget.remarkLayout
+              ? const EdgeInsets.fromLTRB(
+                  AppTokens.s3, AppTokens.s2, AppTokens.s3, AppTokens.s4)
+              : EdgeInsets.symmetric(horizontal: 18.w, vertical: 13.h),
+        ),
+      ),
+    );
+    if (!widget.remarkLayout) return input;
+    return Container(
+      decoration: BoxDecoration(
+        color: Styles.c_F4F5F7,
+        borderRadius: BorderRadius.circular(AppTokens.s2.r),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          input,
+          Padding(
+            padding: const EdgeInsets.only(
+                right: AppTokens.s4, bottom: AppTokens.s2),
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (_, value, __) => Text(
+                '${(maxLength - value.text.characters.length).clamp(0, maxLength)}',
+                textAlign: TextAlign.right,
+                style: Styles.ts_8E9AB0_13sp,
               ),
             ),
           ),
-          contentPadding:
-              EdgeInsets.symmetric(horizontal: 18.w, vertical: 13.h),
-        ),
+        ],
       ),
     );
   }
 
   OutlineInputBorder _border() => OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10.r),
+        borderRadius:
+            BorderRadius.circular(widget.remarkLayout ? AppTokens.s2.r : 10.r),
         borderSide: BorderSide.none,
       );
 }

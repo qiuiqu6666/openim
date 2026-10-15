@@ -30,10 +30,18 @@ class _StarBurstButtonState extends State<StarBurstButton>
   Future<void> _tap() async {
     if (_busy || widget.onPressed == null) return;
     setState(() => _busy = true);
-    HapticFeedback.lightImpact().catchError((_) {});
-    if (!MediaQuery.disableAnimationsOf(context)) _controller.forward(from: 0);
+    final adding = !widget.starred;
+    HapticFeedback.selectionClick().catchError((_) {});
     try {
       await widget.onPressed!();
+      if (!mounted || !adding) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            widget.starred &&
+            !MediaQuery.disableAnimationsOf(context)) {
+          _controller.forward(from: 0);
+        }
+      });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -93,22 +101,22 @@ class _StarBurstButtonState extends State<StarBurstButton>
                                   color: Styles.c_FFB300))),
                     ),
                 ],
-                Transform.scale(
+                IconButton(
+                  tooltip: widget.tooltip,
+                  onPressed: _busy || widget.onPressed == null ? null : _tap,
+                  isSelected: widget.starred,
+                  icon: Transform.scale(
                     scale: scale,
-                    child: IconButton(
-                      tooltip: widget.tooltip,
-                      onPressed:
-                          _busy || widget.onPressed == null ? null : _tap,
-                      isSelected: widget.starred,
-                      icon: Icon(
-                          widget.starred
-                              ? Icons.star_rounded
-                              : Icons.star_outline_rounded,
-                          color: active || widget.starred
-                              ? Styles.c_FFB300
-                              : widget.color,
-                          size: 26),
-                    )),
+                    child: Icon(
+                        widget.starred
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        color: active || widget.starred
+                            ? Styles.c_FFB300
+                            : widget.color,
+                        size: 26),
+                  ),
+                ),
               ],
             ));
       },

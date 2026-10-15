@@ -24,6 +24,7 @@ import '../../core/conversation_reads/conversation_read_recovery.dart';
 import '../../routes/app_navigator.dart';
 import '../../services/legacy_identity/legacy_group_identity.dart';
 import '../../services/chat_history_cache.dart';
+import '../chat/navigation/chat_entry_trace.dart';
 import '../contacts/add_by_search/add_by_search_logic.dart';
 import '../home/home_logic.dart';
 import '../group_features/data/group_feature_runtime.dart';
@@ -1141,6 +1142,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     ConversationInfo? conversationInfo,
     Message? searchMessage,
   }) async {
+    final entryTrace = ChatEntryTrace(conversationInfo?.conversationType ?? sessionType);
     if (groupID != null) groupID = LegacyGroupIdentity.canonical(groupID);
     conversationInfo ??= await _createConversation(
       sourceID: userID ?? groupID!,
@@ -1150,6 +1152,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     if (await _jumpOANtf(conversationInfo)) return;
 
     await AppNavigator.startChat(
+      entryTrace: entryTrace,
       offUntilHome: offUntilHome,
       draftText: conversationInfo.draftText,
       conversationInfo: conversationInfo,

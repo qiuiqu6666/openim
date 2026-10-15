@@ -1,0 +1,535 @@
+{
+  "scope": "Android emulator profile; real navigation, controller and bubbles; synthetic SDK transport",
+  "device": "emulator-5554 / Android 9 x86_64",
+  "route_transition_ms": 480,
+  "profile_lookup_ms": 40,
+  "clock": "monotonic; Flutter paint submission, not display scan-out",
+  "scenarios": [
+    {
+      "scenario": "ordinary",
+      "local_delay_ms": 5,
+      "remote_delay_ms": 300,
+      "global_sync_in_progress": false,
+      "samples_each": 3,
+      "before": {
+        "tap_to_correct_frame_ms": {
+          "median": 83.007,
+          "samples": [
+            89.04,
+            83.007,
+            76.29
+          ]
+        },
+        "tap_to_interactive_ms": {
+          "median": 532.82,
+          "samples": [
+            531.728,
+            532.82,
+            534.525
+          ]
+        },
+        "tap_to_route_push_ms": {
+          "median": 40.587,
+          "samples": [
+            42.079,
+            40.587,
+            40.496
+          ]
+        },
+        "route_push_to_correct_frame_ms": {
+          "median": 42.42,
+          "samples": [
+            46.961,
+            42.42,
+            35.794
+          ]
+        },
+        "correct_frame_to_interactive_ms": {
+          "median": 449.813,
+          "samples": [
+            442.688,
+            449.813,
+            458.235
+          ]
+        },
+        "local_queries_each": [
+          1,
+          1,
+          1
+        ],
+        "remote_queries_each": [
+          1,
+          1,
+          1
+        ]
+      },
+      "after": {
+        "tap_to_correct_frame_ms": {
+          "median": 60.69,
+          "samples": [
+            69.832,
+            58.886,
+            60.69
+          ]
+        },
+        "tap_to_interactive_ms": {
+          "median": 533.491,
+          "samples": [
+            526.682,
+            534.828,
+            533.491
+          ]
+        },
+        "tap_to_route_push_ms": {
+          "median": 41.473,
+          "samples": [
+            41.473,
+            41.385,
+            44.162
+          ]
+        },
+        "route_push_to_correct_frame_ms": {
+          "median": 17.501,
+          "samples": [
+            28.359,
+            17.501,
+            16.528
+          ]
+        },
+        "correct_frame_to_interactive_ms": {
+          "median": 472.801,
+          "samples": [
+            456.85,
+            475.942,
+            472.801
+          ]
+        },
+        "local_queries_each": [
+          1,
+          1,
+          1
+        ],
+        "remote_queries_each": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "scenario": "ordinary",
+      "local_delay_ms": 5,
+      "remote_delay_ms": 300,
+      "global_sync_in_progress": true,
+      "samples_each": 3,
+      "before": {
+        "tap_to_correct_frame_ms": {
+          "median": 73.341,
+          "samples": [
+            80.966,
+            73.341,
+            68.209
+          ]
+        },
+        "tap_to_interactive_ms": {
+          "median": 531.511,
+          "samples": [
+            535.644,
+            531.511,
+            525.982
+          ]
+        },
+        "tap_to_route_push_ms": {
+          "median": 41.208,
+          "samples": [
+            41.139,
+            44.311,
+            41.208
+          ]
+        },
+        "route_push_to_correct_frame_ms": {
+          "median": 29.03,
+          "samples": [
+            39.827,
+            29.03,
+            27.001
+          ]
+        },
+        "correct_frame_to_interactive_ms": {
+          "median": 457.773,
+          "samples": [
+            454.678,
+            458.17,
+            457.773
+          ]
+        },
+        "local_queries_each": [
+          1,
+          1,
+          1
+        ],
+        "remote_queries_each": [
+          1,
+          1,
+          1
+        ]
+      },
+      "after": {
+        "tap_to_correct_frame_ms": {
+          "median": 53.349,
+          "samples": [
+            53.309,
+            53.349,
+            59.061
+          ]
+        },
+        "tap_to_interactive_ms": {
+          "median": 528.201,
+          "samples": [
+            528.201,
+            527.241,
+            533.334
+          ]
+        },
+        "tap_to_route_push_ms": {
+          "median": 42.374,
+          "samples": [
+            43.276,
+            41.021,
+            42.374
+          ]
+        },
+        "route_push_to_correct_frame_ms": {
+          "median": 12.328,
+          "samples": [
+            10.033,
+            12.328,
+            16.687
+          ]
+        },
+        "correct_frame_to_interactive_ms": {
+          "median": 474.273,
+          "samples": [
+            474.892,
+            473.892,
+            474.273
+          ]
+        },
+        "local_queries_each": [
+          1,
+          1,
+          1
+        ],
+        "remote_queries_each": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "scenario": "slow-local",
+      "local_delay_ms": 380,
+      "remote_delay_ms": 700,
+      "global_sync_in_progress": false,
+      "samples_each": 3,
+      "before": {
+        "tap_to_correct_frame_ms": {
+          "median": 450.656,
+          "samples": [
+            450.656,
+            447.559,
+            451.012
+          ]
+        },
+        "tap_to_interactive_ms": {
+          "median": 669.029,
+          "samples": [
+            669.346,
+            665.768,
+            669.029
+          ]
+        },
+        "tap_to_route_push_ms": {
+          "median": 41.235,
+          "samples": [
+            41.316,
+            40.989,
+            41.235
+          ]
+        },
+        "route_push_to_correct_frame_ms": {
+          "median": 409.34,
+          "samples": [
+            409.34,
+            406.57,
+            409.777
+          ]
+        },
+        "correct_frame_to_interactive_ms": {
+          "median": 218.209,
+          "samples": [
+            218.69,
+            218.209,
+            218.017
+          ]
+        },
+        "local_queries_each": [
+          1,
+          1,
+          1
+        ],
+        "remote_queries_each": [
+          1,
+          1,
+          1
+        ]
+      },
+      "after": {
+        "tap_to_correct_frame_ms": {
+          "median": 401.772,
+          "samples": [
+            405.818,
+            401.772,
+            401.195
+          ]
+        },
+        "tap_to_interactive_ms": {
+          "median": 531.498,
+          "samples": [
+            531.498,
+            527.064,
+            535.053
+          ]
+        },
+        "tap_to_route_push_ms": {
+          "median": 42.113,
+          "samples": [
+            42.001,
+            42.113,
+            42.587
+          ]
+        },
+        "route_push_to_correct_frame_ms": {
+          "median": 359.659,
+          "samples": [
+            363.817,
+            359.659,
+            358.608
+          ]
+        },
+        "correct_frame_to_interactive_ms": {
+          "median": 125.68,
+          "samples": [
+            125.68,
+            125.292,
+            133.858
+          ]
+        },
+        "local_queries_each": [
+          1,
+          1,
+          1
+        ],
+        "remote_queries_each": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "scenario": "slow-local",
+      "local_delay_ms": 380,
+      "remote_delay_ms": 700,
+      "global_sync_in_progress": true,
+      "samples_each": 3,
+      "before": {
+        "tap_to_correct_frame_ms": {
+          "median": 449.254,
+          "samples": [
+            443.119,
+            449.254,
+            451.16
+          ]
+        },
+        "tap_to_interactive_ms": {
+          "median": 670.101,
+          "samples": [
+            662.284,
+            670.964,
+            670.101
+          ]
+        },
+        "tap_to_route_push_ms": {
+          "median": 41.296,
+          "samples": [
+            41.296,
+            40.864,
+            41.77
+          ]
+        },
+        "route_push_to_correct_frame_ms": {
+          "median": 408.39,
+          "samples": [
+            401.823,
+            408.39,
+            409.39
+          ]
+        },
+        "correct_frame_to_interactive_ms": {
+          "median": 219.165,
+          "samples": [
+            219.165,
+            221.71,
+            218.941
+          ]
+        },
+        "local_queries_each": [
+          1,
+          1,
+          1
+        ],
+        "remote_queries_each": [
+          1,
+          1,
+          1
+        ]
+      },
+      "after": {
+        "tap_to_correct_frame_ms": {
+          "median": 401.303,
+          "samples": [
+            401.303,
+            401.615,
+            401.139
+          ]
+        },
+        "tap_to_interactive_ms": {
+          "median": 527.495,
+          "samples": [
+            526.529,
+            527.495,
+            535.205
+          ]
+        },
+        "tap_to_route_push_ms": {
+          "median": 42.146,
+          "samples": [
+            42.672,
+            40.973,
+            42.146
+          ]
+        },
+        "route_push_to_correct_frame_ms": {
+          "median": 358.993,
+          "samples": [
+            358.631,
+            360.642,
+            358.993
+          ]
+        },
+        "correct_frame_to_interactive_ms": {
+          "median": 125.88,
+          "samples": [
+            125.226,
+            125.88,
+            134.066
+          ]
+        },
+        "local_queries_each": [
+          1,
+          1,
+          1
+        ],
+        "remote_queries_each": [
+          1,
+          1,
+          1
+        ]
+      }
+    }
+  ],
+  "tests": {
+    "main_regression_passed": 538,
+    "preexisting_skips": 12,
+    "navigation_and_loading_additional_run_passed": 17,
+    "additional_run_overlaps_main": true,
+    "new_modules_analyzer": "No issues found",
+    "native_artifact_lock": "verified unchanged",
+    "covered": [
+      "prewarmed synchronous first publication",
+      "single native read sharing",
+      "expired/session invalidated proof cannot replace newer cache",
+      "private chat exclusion",
+      "bounded speculative reads",
+      "5003/5001/5002",
+      "A/B/A route isolation",
+      "continuous growth and reading anchor",
+      "hidden rows cannot mark read",
+      "reduced motion"
+    ]
+  },
+  "limits": [
+    "Synthetic transport delays are not production network benchmarks",
+    "No new physical phone or iOS result",
+    "Existing crash recovery tests were not rerun: native database unchanged"
+  ],
+  "package": {
+    "apk": "E:\\openim\\openim-flutter-demo\\release-artifacts\\99chat-chat-entry-3.0.1-2036-debug.apk",
+    "apk_bytes": 341228261,
+    "apk_sha256": "556f8b923f4a170096bb3f84f474a62437b768614f530d0640d9c84cb53eab17",
+    "aar_sha256": "9805b00a906039ae21c491a4360f6c0a47ac0e4dd3775e06235b41f58286b236",
+    "native": {
+      "arm64-v8a": {
+        "sha256": "264549531938425d7e1f38bef2b968ad91a703c12e54c7f30d0392429a6917f5",
+        "matches_built_aar_after_strip": true,
+        "runtime_version_string": "v3.8.3-patch.15+recovery.27-sync-heat.2"
+      },
+      "x86_64": {
+        "sha256": "538472e923fc36a3b341d045cafebf72be481b8ab7b4d4dbe644a4c29b94962f",
+        "matches_built_aar_after_strip": true,
+        "runtime_version_string": "v3.8.3-patch.15+recovery.27-sync-heat.2"
+      }
+    }
+  },
+  "installed": {
+    "device": "emulator-5554",
+    "version_name": "3.0.1",
+    "version_code": 2036,
+    "abi": "x86_64",
+    "install": "Success",
+    "fatal_records_for_process": 0,
+    "real_conversation_smoke_scope": "one complete debug sample; not comparable to profile benchmark",
+    "real_conversation_stages_ms": {
+      "tap": 0.004,
+      "prefetch_start": 0.085,
+      "local_window_start": 0.127,
+      "account_resolved": 2.143,
+      "route_push": 2.261,
+      "local_window_finished": 4.805,
+      "init_start": 6.17,
+      "window_ready": 6.603,
+      "init_finished": 7.023,
+      "first_frame": 40.141,
+      "first_correct_message_frame": 54.099,
+      "initial_history_finished": 297.989,
+      "interactive": 498.574
+    }
+  },
+  "source_sha256": {
+    "lib/pages/chat/navigation/chat_entry_trace.dart": "3e3044af37fb85cfe46b03739ff9dcb0b096775b7caa54c5275afb3800d6864f",
+    "lib/pages/chat/messages/loading/chat_entry_paint_observer.dart": "e106c7b7c623734298964ee366a7edf2595f88130daf2d312a7b7f25e2fb35ce",
+    "lib/pages/chat/messages/loading/chat_initial_window_transition.dart": "8887795963adebcee4e91789eab65fd7126804e833849887ed3355f877d62e3f",
+    "lib/pages/chat/messages/loading/chat_entry_loading_tokens.dart": "154f15a57eb66af832de1fa7cbb63f3495942aa1bf758769808df5ca3ba4b454",
+    "lib/pages/chat/history/chat_history_prefetcher.dart": "4e612a104806e2fa6ea88db9f254ce5ffc28792836ecda85decdce8e7281d5b6",
+    "lib/pages/chat/history/chat_timeline_controller.dart": "faadcae23c0462aad79f2dc3fe591ce6dc541075c4e25d5df27785d90104c244",
+    "lib/pages/chat/chat_logic.dart": "429d0f6195cb4fd82624cf6f7eb43333afe53196b69a4dbb5b9eb5236ecb0caf",
+    "lib/pages/chat/messages/widgets/chat_message_list.dart": "3be9e489155ac3bef26c43fd8fb3d16203ef22bdfcd6ff92aa56e6c7a0b2f5dd",
+    "lib/routes/app_navigator.dart": "a196063b503bf99a49716e017ddc82d847dbe2dd5b625a487e713f5ea06d6acf",
+    "lib/pages/conversation/conversation_logic.dart": "17d4d581a2e898c2ae88c8ab4235b5a23897d5ea52ccc5f94aaf99a66988f8ae",
+    "local_plugin/flutter_openim_sdk/lib/src/window/message_window_cache.dart": "84363272946022dbcf8fc473b02330271f8f95002603e1ae986eb5ea1553b2a9",
+    "local_plugin/flutter_openim_sdk/lib/src/manager/im_message_manager.dart": "6774296944a9835a65605dc66ff401e4a9bdb2e91c87ff2d05d33d67b5624b33",
+    "integration_test/performance/chat_window_profile_test.dart": "b96947348e1e1b57768fa4af41169bdfd3c3ada4a361a0d50ceec90c39216889"
+  }
+}

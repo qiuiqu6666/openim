@@ -378,7 +378,7 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) error {
 				// Messages sent by myself  //if  sent through  this terminal
 				existingMsg, ok := clientMsgMap[msg.ClientMsgID]
 				if ok {
-					log.ZInfo(ctx, "have message", "msg", msg)
+					log.ZDebug(ctx, "have message", "msg", msg)
 					if existingMsg.Seq == 0 {
 						if !isConversationUpdate {
 							msg.Status = constant.MsgStatusFiltered
@@ -409,7 +409,7 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) error {
 						exceptionMsg = append(exceptionMsg, dbMessage)
 					}
 				} else {
-					log.ZInfo(ctx, "sync message", "msg", msg)
+					log.ZDebug(ctx, "sync message", "msg", msg)
 					if isConversationUpdate {
 						if isSenderConversationUpdate {
 							c.updateSelfMessagePreview(conversationID, msg, conversationSet)
@@ -762,7 +762,7 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) error {
 			log.ZDebug(ctx, "decode message", "msg", msg)
 			if v.SendID == c.loginUserID {
 				// Messages sent by myself  //if  sent through  this terminal
-				log.ZInfo(ctx, "sync message in reinstalled", "msg", msg)
+				log.ZDebug(ctx, "sync message in reinstalled", "msg", msg)
 
 				latestMsg = msg
 

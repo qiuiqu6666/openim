@@ -59,12 +59,29 @@ class Logger {
       '$time ${logger._header} [Console]: $text, ${keyAndValues != null ? ', $keyAndValues' : ''}, isError [${isError || errorMsg != null}]',
     );
     if (!onlyConsole && logger.sdkIsInited) {
-      OpenIM.iMManager.logs(
+      unawaited(_writeNative(
         msgs:
             '$time ${logger._header} [${functionName ?? ''}]: $text, ${keyAndValues != null ? ', $keyAndValues' : ''}',
         err: errorMsg,
         keyAndValues: keyAndValues ?? [],
-      );
+      ));
+    }
+  }
+
+  static Future<void> _writeNative({
+    required String msgs,
+    String? err,
+    required List<dynamic> keyAndValues,
+  }) async {
+    try {
+      await OpenIM.iMManager
+          .logs(msgs: msgs, err: err, keyAndValues: keyAndValues);
+    } catch (error) {
+      // The SDK can be torn down after sdkIsInited was checked. The console
+      // already has this record; never recursively send a logging error back
+      // to the same unavailable SDK or make it an application error.
+      log('Native log unavailable (${error.runtimeType})',
+          name: '99Chat.Logger');
     }
   }
 }

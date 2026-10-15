@@ -52,6 +52,7 @@ const Map<String, String> en_US = {
       'Select up to 30 messages to forward separately.',
   'chatSelectionMergeLimit': 'Select up to 100 messages to forward together.',
   'chatMessageDeleteConfirm': 'Delete this message?',
+  'chatMessageRevokeConfirm': 'Recall this message?',
   'chatSelectionDeleteConfirm': 'Delete @count selected messages?',
   'chatSelectionDeleteFailed':
       'Some messages could not be deleted. Please retry.',

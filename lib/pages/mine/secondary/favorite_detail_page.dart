@@ -561,8 +561,12 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
                   title: _text('登录状态已改变，请重新打开收藏',
                       'Your account changed. Reopen favorites.'))
               : Column(children: [
-                  if (_loading || (_busy && !_confirmingDelete))
-                    const LinearProgressIndicator(),
+                  SizedBox(
+                    height: AppTokens.s2,
+                    child: _loading || (_busy && !_confirmingDelete)
+                        ? const LinearProgressIndicator()
+                        : null,
+                  ),
                   Expanded(
                       child: Center(
                           child: ConstrainedBox(

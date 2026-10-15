@@ -10,6 +10,7 @@ import 'package:openim/pages/chat/group_setup/group_member_list/group_member_lis
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -67,6 +68,33 @@ void main() {
       await tester.tap(find.text('Public peer'));
       await tester.pump();
       expect(logic.checkedList.single.userID, 'im_visible_peer');
+      logic.memberList.assignAll(List.generate(
+          100,
+          (i) => GroupMembersInfo(
+              groupID: 'group',
+              userID: 'old-${i.toString().padLeft(3, '0')}',
+              nickname: 'Old $i',
+              joinTime: 100 - i)));
+      await tester.pump();
+      final refresher = find.byType(SmartRefresher);
+      final scrollable = tester.state<ScrollableState>(find
+          .descendant(of: refresher, matching: find.byType(Scrollable))
+          .first);
+      scrollable.position.jumpTo(800);
+      await tester.pump();
+      final before = scrollable.position.pixels;
+      expect(before, greaterThan(0));
+      final firstIDs = logic.visibleMembers.map((m) => m.userID).toList();
+      logic.memberList.addAll(List.generate(
+          100,
+          (i) => GroupMembersInfo(
+              groupID: 'group',
+              userID: 'new-$i',
+              nickname: 'New $i',
+              joinTime: 200 + i)));
+      await tester.pump();
+      expect(scrollable.position.pixels, closeTo(before, 0.1));
+      expect(logic.visibleMembers.take(100).map((m) => m.userID), firstIDs);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       logic.onClose();

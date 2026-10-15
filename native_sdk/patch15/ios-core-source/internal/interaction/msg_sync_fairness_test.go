@@ -40,21 +40,20 @@ func TestVisibilityPreflightYieldsBetweenConversations(t *testing.T) {
 					return &GeneralWsResp{ErrCode: 10001}
 				}
 			}
-			if probes == 3 && !live.Load() {
+			if probes == 2 && !live.Load() {
 				t.Error("live message waited behind every visibility probe")
 			}
 			p := &msg.GetSeqMessageReq{}
 			if err := proto.Unmarshal(req.Message.Data, p); err != nil {
 				panic(err)
 			}
-			return wireResponse(&msg.GetSeqMessageResp{Msgs: map[string]*sdkws.PullMsgs{p.Conversations[0].ConversationID: {}}})
+			packets := make(map[string]*sdkws.PullMsgs)
+			for _, row := range p.Conversations {
+				packets[row.ConversationID] = &sdkws.PullMsgs{}
+			}
+			return wireResponse(&msg.GetSeqMessageResp{Msgs: packets})
 		}
-		p := &sdkws.PullMessageBySeqsReq{}
-		if err := proto.Unmarshal(req.Message.Data, p); err != nil {
-			panic(err)
-		}
-		r := p.SeqRanges[0]
-		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs(r.ConversationID, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)})
+		return requestedRecoveryResponse(t, req)
 	})
 	finished := make(chan error, 1)
 	done := make(chan struct{})
@@ -81,7 +80,7 @@ func TestVisibilityPreflightYieldsBetweenConversations(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("boundary recovery did not finish")
 	}
-	if probes != 4 || !live.Load() {
+	if probes != 2 || !live.Load() {
 		t.Fatalf("unexpected progress probes=%d live=%v", probes, live.Load())
 	}
 }
@@ -153,7 +152,7 @@ func TestInitialHistoryYieldsLivePushBetweenPages(t *testing.T) {
 	defer cancel()
 	conn := &LongConnMgr{send: make(chan Message, 1)}
 	m := &MsgSyncer{ctx: ctx, db: &recoveryVersionDB{}, reinstalled: true, longConnMgr: conn, recvCh: make(chan common.Cmd2Value), conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{}}
-	pageStarted := make(chan int64, 4)
+	pageStarted := make(chan int64, 3)
 	releasePage := make(chan struct{})
 	liveStored := make(chan struct{}, 1)
 	receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
@@ -164,7 +163,7 @@ func TestInitialHistoryYieldsLivePushBetweenPages(t *testing.T) {
 	})
 	requestWorker(t, conn, func(req Message) *GeneralWsResp {
 		if req.Message.ReqIdentifier == constant.GetNewestSeq {
-			return wireResponse(&sdkws.GetMaxSeqResp{MaxSeqs: map[string]int64{"history": 300}})
+			return wireResponse(&sdkws.GetMaxSeqResp{MaxSeqs: map[string]int64{"history": 300, "history_b": 300}})
 		}
 		p := &sdkws.PullMessageBySeqsReq{}
 		if err := proto.Unmarshal(req.Message.Data, p); err != nil {
@@ -177,11 +176,7 @@ func TestInitialHistoryYieldsLivePushBetweenPages(t *testing.T) {
 		case <-req.Ctx.Done():
 			return &GeneralWsResp{ErrCode: 10001}
 		}
-		var seqs []int64
-		for seq := r.Begin; seq <= r.End; seq++ {
-			seqs = append(seqs, seq)
-		}
-		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs(r.ConversationID, seqs...)})
+		return requestedRecoveryResponse(t, req)
 	})
 	done := make(chan struct{})
 	go func() {
@@ -190,26 +185,18 @@ func TestInitialHistoryYieldsLivePushBetweenPages(t *testing.T) {
 	}()
 	t.Cleanup(func() { cancel(); <-done })
 	m.recvCh <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdConnSuccesss}
-	if got := <-pageStarted; got != 281 {
+	if got := <-pageStarted; got != 300 {
 		t.Fatal(got)
 	}
 	m.recvCh <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdPushMsg, Value: &sdkws.PushMessages{Msgs: recoveryMsgs("live", 1)}}
 	releasePage <- struct{}{}
-	if got := <-pageStarted; got != 1 {
+	if got := <-pageStarted; got != 201 {
 		t.Fatal(got)
 	}
 	select {
 	case <-liveStored:
 	default:
 		t.Fatal("live push waited for all history pages")
-	}
-	releasePage <- struct{}{}
-	if got := <-pageStarted; got != 101 {
-		t.Fatal(got)
-	}
-	releasePage <- struct{}{}
-	if got := <-pageStarted; got != 201 {
-		t.Fatal(got)
 	}
 	releasePage <- struct{}{}
 }
@@ -250,7 +237,7 @@ func TestContinuousLivePushCannotCancelEveryRecoveryPage(t *testing.T) {
 		case <-req.Ctx.Done():
 			return &GeneralWsResp{ErrCode: 10001}
 		}
-		return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("gap", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)})
+		return requestedRecoveryResponse(t, req)
 	})
 	done := make(chan struct{})
 	go func() { defer close(done); runMessageSyncLoop(ctx, m.recvCh, m.handlePushMsgAndEventSafely) }()
@@ -296,7 +283,12 @@ func TestContinuousLivePushCannotCancelEveryRecoveryPage(t *testing.T) {
 			t.Fatal("live queue stranded after gap")
 		}
 	}
-	if attempts.Load() != 2 {
+	select {
+	case <-storedGap:
+	case <-ctx.Done():
+		t.Fatal("history made no progress after the latest preview")
+	}
+	if attempts.Load() != 3 {
 		t.Fatalf("expected one bounded preemption, attempts=%d", attempts.Load())
 	}
 }

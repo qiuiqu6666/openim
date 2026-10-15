@@ -140,8 +140,9 @@ class ConversationFeedRow extends StatelessWidget {
                     SizedBox(
                       height: ConversationFeedStyle.rowHeight(context),
                       child: Padding(
-                        padding:
-                            EdgeInsets.fromLTRB(editing ? 12 : 16, 8, 16, 0),
+                        padding: editing
+                            ? const EdgeInsets.fromLTRB(12, 8, 16, 0)
+                            : ConversationFeedStyle.rowPadding,
                         child: _buildContents(context),
                       ),
                     ),
@@ -162,7 +163,7 @@ class ConversationFeedRow extends StatelessWidget {
 
   Widget _buildArchivedLayout(BuildContext context) {
     final contents = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: ConversationFeedStyle.rowPadding,
       child: _buildContents(context),
     );
     if (!editing) return contents;

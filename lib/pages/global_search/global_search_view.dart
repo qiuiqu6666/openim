@@ -1,9 +1,7 @@
 import '../chat/history_search/widgets/chat_history_search_bar.dart';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import '../conversation/conversation_logic.dart';
@@ -16,12 +14,23 @@ import '../chat/history_search/context/search_context_strings.dart';
 import '../chat/history_search/chat_history_search_strings.dart';
 import 'widgets/global_search_conversation_subtitle.dart';
 import 'widgets/global_search_contact_account.dart';
+import 'widgets/global_search_result_tokens.dart';
+import 'loading/global_search_skeleton.dart';
 import '../official_account/widgets/official_account_name_label.dart';
 import '../group_features/identity/group_name_label.dart';
 
 class GlobalSearchPage extends StatelessWidget {
-  GlobalSearchPage({super.key});
-  final logic = Get.find<GlobalSearchLogic>();
+  GlobalSearchPage(
+      {super.key,
+      GlobalSearchLogic? logic,
+      this.onCancel,
+      this.searchBar,
+      this.autofocus = true})
+      : logic = logic ?? Get.find<GlobalSearchLogic>();
+  final GlobalSearchLogic logic;
+  final VoidCallback? onCancel;
+  final Widget? searchBar;
+  final bool autofocus;
   late final _messageNavigation = ChatHistoryMessageNavigation();
   List<String> get tabs => [
         StrRes.globalSearchContacts,
@@ -32,8 +41,7 @@ class GlobalSearchPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: AppTokens.surface(
-            dark: Theme.of(context).brightness == Brightness.dark),
+        backgroundColor: GlobalSearchResultTokens.background(context),
         body: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () => logic.focusNode.unfocus(),
@@ -41,6 +49,9 @@ class GlobalSearchPage extends StatelessWidget {
                 child: Column(children: [
               _searchHeader(context),
               Expanded(child: Obx(() {
+                if (logic.query.value.isNotEmpty && logic.loading.value) {
+                  return const GlobalSearchSkeleton();
+                }
                 final groupMessages = <String, ConversationInfo>{
                   for (final item in logic.source.currentConversations)
                     if (item.isGroupChat && item.groupID != null)
@@ -49,22 +60,17 @@ class GlobalSearchPage extends StatelessWidget {
                 final rows = <Widget>[];
                 void section(int id, List<Widget> children) {
                   if (children.isNotEmpty || logic.failures.contains(id)) {
-                    if (rows.isNotEmpty) rows.add(_divider(context));
+                    if (rows.isNotEmpty) {
+                      rows.add(const SizedBox(height: AppTokens.s3));
+                    }
                     rows.add(Semantics(
                         key: ValueKey('global-search-section-$id'),
                         header: true,
                         child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: AppTokens.s5,
-                                vertical: AppTokens.s3),
+                            padding: GlobalSearchResultTokens.sectionPadding,
                             child: Text(tabs[id - 1],
-                                style: TextStyle(
-                                    color: AppTokens.textSecondary(
-                                        dark: Theme.of(context).brightness ==
-                                            Brightness.dark),
-                                    fontSize: AppTokens.captionFontSize,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.3)))));
+                                style: GlobalSearchResultTokens.metadataStyle(
+                                    context)))));
                     for (var i = 0; i < children.length; i++) {
                       if (i > 0) {
                         rows.add(_divider(context, resultRow: true));
@@ -136,9 +142,7 @@ class GlobalSearchPage extends StatelessWidget {
                     logic.conversations
                         .map((item) => _row(
                             item.showName ?? '',
-                            item.isGroupChat
-                                ? StrRes.globalSearchGroup
-                                : StrRes.singleChat,
+                            '',
                             item.faceURL,
                             item.isGroupChat,
                             () => Get.find<ConversationLogic>().toChat(
@@ -154,8 +158,12 @@ class GlobalSearchPage extends StatelessWidget {
                                     ex: item.ex,
                                     isSingleChat: item.conversationType ==
                                         ConversationType.single),
-                            subtitleWidget: GlobalSearchConversationSubtitle(
-                                conversation: item)))
+                            subtitleWidget:
+                                GlobalSearchConversationSubtitle.hasContent(
+                                        item)
+                                    ? GlobalSearchConversationSubtitle(
+                                        conversation: item)
+                                    : null))
                         .toList());
                 section(4, [
                   ...logic.cloudHits
@@ -201,8 +209,7 @@ class GlobalSearchPage extends StatelessWidget {
                 return ListView.builder(
                     key: ValueKey(logic.query.value),
                     primary: false,
-                    padding: const EdgeInsets.only(
-                        top: AppTokens.s3, bottom: AppTokens.s5),
+                    padding: const EdgeInsets.only(bottom: AppTokens.s5),
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
                     itemCount: rows.length,
@@ -212,31 +219,30 @@ class GlobalSearchPage extends StatelessWidget {
       );
 
   Widget _searchHeader(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     return ColoredBox(
       key: const ValueKey('global-search-header'),
-      color: AppTokens.surface(dark: dark),
+      color: GlobalSearchResultTokens.background(context),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        ChatHistorySearchBar(
-          controller: logic.searchCtrl,
-          focusNode: logic.focusNode,
-          autofocus: true,
-          hintText: StrRes.search,
-          cancelColor: AppTokens.accent,
-          onChanged:
-              (_) {}, // The controller listener owns debounce and clearing.
-          onSubmitted: (_) => logic.search(),
-          onCancel: () {
-            logic.focusNode.unfocus();
-            Navigator.of(context).maybePop();
-          },
-        ),
+        searchBar ??
+            ChatHistorySearchBar(
+              controller: logic.searchCtrl,
+              focusNode: logic.focusNode,
+              autofocus: autofocus,
+              hintText: StrRes.search,
+              cancelColor: AppTokens.accent,
+              onChanged:
+                  (_) {}, // The controller listener owns debounce and clearing.
+              onSubmitted: (_) => logic.search(),
+              onCancel: () {
+                logic.focusNode.unfocus();
+                if (onCancel != null) {
+                  onCancel!();
+                } else {
+                  Navigator.of(context).maybePop();
+                }
+              },
+            ),
         const SizedBox(height: AppTokens.s2),
-        SizedBox(
-            height: AppTokens.s2,
-            child: Obx(() => logic.loading.value
-                ? const LinearProgressIndicator(minHeight: AppTokens.s2)
-                : const SizedBox.expand())),
         Obx(() => logic.query.value.isEmpty
             ? const SizedBox.shrink()
             : _divider(context)),
@@ -246,21 +252,11 @@ class GlobalSearchPage extends StatelessWidget {
 
   Widget _divider(BuildContext context, {bool resultRow = false}) {
     final theme = Theme.of(context);
-    final tileTheme = ListTileTheme.of(context);
-    final avatarSize = math.min(
-        (AppTokens.s8 + AppTokens.s4).w, (AppTokens.s8 + AppTokens.s4).h);
-    final leadingWidth = tileTheme.minLeadingWidth ??
-        (theme.useMaterial3 ? AppTokens.s7 : AppTokens.s8 + AppTokens.s3);
-    final density = tileTheme.visualDensity ?? theme.visualDensity;
     return Divider(
-        height: 1,
-        thickness: .5,
-        indent: resultRow
-            ? AppTokens.s5 +
-                math.max(leadingWidth, avatarSize) +
-                AppTokens.s4 +
-                density.horizontal * 2
-            : 0,
+        height: GlobalSearchResultTokens.dividerThickness,
+        thickness: GlobalSearchResultTokens.dividerThickness,
+        indent: resultRow ? GlobalSearchResultTokens.dividerInset : 0,
+        endIndent: resultRow ? GlobalSearchResultTokens.horizontalPadding : 0,
         color: AppTokens.border(dark: theme.brightness == Brightness.dark));
   }
 
@@ -340,45 +336,61 @@ class GlobalSearchPage extends StatelessWidget {
   Widget _row(String title, String subtitle, String? avatar, bool group,
           VoidCallback tap,
           {Widget? subtitleWidget, Widget? titleWidget, int? sentAt}) =>
-      ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: AppTokens.s5, vertical: AppTokens.s2),
-          horizontalTitleGap: AppTokens.s4,
-          leading: AvatarView(
-              url: avatar, text: title, isGroup: group, isCircle: true),
-          title: sentAt == null
-              ? titleWidget ??
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis)
-              : LayoutBuilder(
-                  builder: (context, constraints) => Row(children: [
-                        Expanded(
-                            child: titleWidget ??
-                                Text(title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis)),
-                        const SizedBox(width: AppTokens.s3),
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                              maxWidth: constraints.maxWidth * .4),
-                          child: Text(formatChatMessageTime(context, sentAt),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.end,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                      color: AppTokens.textSecondary(
-                                          dark: Theme.of(context).brightness ==
-                                              Brightness.dark))),
-                        ),
-                      ])),
-          subtitle: subtitleWidget ??
-              Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
-          onTap: () {
-            logic.focusNode.unfocus();
-            tap();
-          });
+      Builder(
+          builder: (context) => ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: GlobalSearchResultTokens.horizontalPadding),
+              minTileHeight: GlobalSearchResultTokens.rowMinHeight,
+              minVerticalPadding: GlobalSearchResultTokens.verticalPadding,
+              minLeadingWidth: GlobalSearchResultTokens.avatarSize,
+              visualDensity: VisualDensity.standard,
+              titleAlignment: ListTileTitleAlignment.center,
+              horizontalTitleGap: GlobalSearchResultTokens.avatarTextGap,
+              titleTextStyle: GlobalSearchResultTokens.titleStyle(context),
+              subtitleTextStyle:
+                  GlobalSearchResultTokens.subtitleStyle(context),
+              leading: AvatarView(
+                  url: avatar,
+                  text: title,
+                  isGroup: group,
+                  isCircle: true,
+                  width: GlobalSearchResultTokens.avatarSize,
+                  height: GlobalSearchResultTokens.avatarSize),
+              title: sentAt == null
+                  ? titleWidget ??
+                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis)
+                  : LayoutBuilder(
+                      builder: (context, constraints) => Row(children: [
+                            Expanded(
+                                child: titleWidget ??
+                                    Text(title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis)),
+                            const SizedBox(width: AppTokens.s3),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                  maxWidth: constraints.maxWidth * .4),
+                              child: Text(
+                                  formatChatMessageTime(context, sentAt),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.end,
+                                  style: GlobalSearchResultTokens.metadataStyle(
+                                      context)),
+                            ),
+                          ])),
+              subtitle: subtitleWidget == null && graphemeTrim(subtitle).isEmpty
+                  ? null
+                  : Padding(
+                      padding: const EdgeInsets.only(
+                          top: GlobalSearchResultTokens.textGap),
+                      child: subtitleWidget ??
+                          Text(subtitle,
+                              maxLines: 2, overflow: TextOverflow.ellipsis)),
+              onTap: () {
+                logic.focusNode.unfocus();
+                tap();
+              }));
 
   Widget _messages(SearchResultItems item, bool files) {
     final message = item.messageList?.firstOrNull;

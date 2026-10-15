@@ -14,20 +14,35 @@ import (
 
 func TestGetLatestValidateServerMessage(t *testing.T) {
 	ctx := context.Background()
-	db, err := NewDataBase(ctx, "1695766238", "../../", 6)
-	if err != nil {
-		return
-	}
-
-	message, err := db.GetLatestValidServerMessage(ctx, "sg_93606743", 1710774468519, true)
-
+	db, err := NewDataBase(ctx, "latest-valid-test", t.TempDir(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("message", message)
+	t.Cleanup(func() { _ = db.Close(ctx) })
+	if err := db.BatchInsertMessageList(ctx, "sg_test", []*model_struct.LocalChatLog{
+		{ClientMsgID: "server-old", Seq: 1, SendTime: 10},
+		{ClientMsgID: "server-new", Seq: 2, SendTime: 20},
+		{ClientMsgID: "pending", Seq: 0, SendTime: 25},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	message, err := db.GetLatestValidServerMessage(ctx, "sg_test", 30, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message == nil || message.ClientMsgID != "server-new" {
+		t.Fatalf("latest valid server row = %+v", message)
+	}
 }
 
 func TestCleanDuplicateInvalidMessages(t *testing.T) {
+	for _, conversationID := range []string{"test_conversation", "sg_@lg_4095981dfe6ecb5bd137312be4121ece"} {
+		t.Run(conversationID, func(t *testing.T) { testCleanDuplicateInvalidMessages(t, conversationID) })
+	}
+}
+
+func testCleanDuplicateInvalidMessages(t *testing.T, conversationID string) {
+	t.Helper()
 	ctx := context.Background()
 	conn, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
@@ -38,7 +53,6 @@ func TestCleanDuplicateInvalidMessages(t *testing.T) {
 		conn:         conn,
 		tableChecker: NewTableChecker(nil),
 	}
-	conversationID := "test_conversation"
 	if err := d.initChatLog(ctx, conversationID); err != nil {
 		t.Fatalf("init chat log: %v", err)
 	}

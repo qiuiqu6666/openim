@@ -26,10 +26,19 @@ type messageCheckpoint struct {
 
 // MAX(seq) is an observation, never a proof of coverage. A legacy database
 // replays its latest window once; existing rows are retained idempotently.
-func (m *MsgSyncer) loadMessageCheckpoints(ctx context.Context, ids []string) error {
+func (m *MsgSyncer) loadMessageCheckpoints(ctx context.Context, ids []string, snapshots ...map[string]*model_struct.LocalVersionSync) error {
 	m.checkpoints = make(map[string]messageCheckpoint)
 	m.checkpointIDs = make(map[string]bool)
-	index, err := m.db.GetVersionSync(ctx, messageCheckpointTable, "index")
+	read := func(id string) (*model_struct.LocalVersionSync, error) {
+		if len(snapshots) > 0 && snapshots[0] != nil {
+			if row := snapshots[0][id]; row != nil {
+				return row, nil
+			}
+			return nil, errs.ErrRecordNotFound
+		}
+		return m.db.GetVersionSync(ctx, messageCheckpointTable, id)
+	}
+	index, err := read("index")
 	if err != nil && !errors.Is(err, errs.ErrRecordNotFound) {
 		return err
 	}
@@ -50,7 +59,7 @@ func (m *MsgSyncer) loadMessageCheckpoints(ctx context.Context, ids []string) er
 			continue
 		}
 		state := messageCheckpoint{Target: m.syncedMaxSeqs[id]}
-		row, err := m.db.GetVersionSync(ctx, messageCheckpointTable, "conversation:"+id)
+		row, err := read("conversation:" + id)
 		if err != nil && !errors.Is(err, errs.ErrRecordNotFound) {
 			return err
 		}

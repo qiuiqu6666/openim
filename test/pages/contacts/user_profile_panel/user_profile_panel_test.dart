@@ -39,6 +39,56 @@ void main() {
         .setMode(NavigationGlassMode.translucent);
   });
 
+  for (final dark in [false, true]) {
+    for (final friend in [false, true]) {
+      testWidgets('group join metadata requires viewer management permission '
+          '(dark=$dark, friend=$friend)', (tester) async {
+        final fixture = ProfilePanelFixture(group: true, friend: friend);
+        fixture.joinGroupTime.value = 1700000000;
+        fixture.joinGroupMethod.value = '私密邀请记录';
+        fixture.inviterID.value = 'inviter';
+        fixture.inviterName.value = '私密邀请人';
+        final moments = profileMomentsRepository();
+        addTearDown(moments.dispose);
+        await mountProfilePanel(tester,
+            fixture: fixture, moments: moments, dark: dark);
+        expect(find.text(StrRes.joinGroupDate), findsNothing);
+        expect(find.text('私密邀请人'), findsNothing);
+        expect(_key('join_method'), findsNothing);
+        fixture.iHaveAdminOrOwnerPermission.value = true;
+        await tester.pumpAndSettle();
+        await _reveal(tester, find.text(StrRes.joinGroupDate));
+        expect(find.text(StrRes.joinGroupDate), findsOneWidget);
+        fixture.iHaveAdminOrOwnerPermission.value = false;
+        await tester.pumpAndSettle();
+        expect(find.text(StrRes.joinGroupDate), findsNothing);
+        expect(find.text('私密邀请人'), findsNothing);
+        expect(_key('join_method'), findsNothing);
+        await tester.pumpWidget(const SizedBox.shrink());
+      });
+    }
+    testWidgets('join method opens inviter only when known (dark=$dark)',
+        (tester) async {
+      final fixture = ProfilePanelFixture(group: true);
+      fixture.iHaveAdminOrOwnerPermission.value = true;
+      fixture.joinGroupMethod.value = '真实邀请人邀请进群';
+      fixture.inviterID.value = 'actual-inviter';
+      fixture.inviterName.value = '真实邀请人';
+      final moments = profileMomentsRepository();
+      addTearDown(moments.dispose);
+      await mountProfilePanel(tester,
+          fixture: fixture, moments: moments, dark: dark);
+      await _tap(tester, _key('join_method'));
+      expect(fixture.actions, contains('inviter'));
+      fixture.inviterID.value = '';
+      fixture.joinGroupMethod.value = '通过二维码入群';
+      await tester.pumpAndSettle();
+      await _reveal(tester, _key('join_method'));
+      expect(tester.widget<SettingsCell>(_key('join_method')).onTap, isNull);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('rapid Moments taps open one album and return to the profile',
       (tester) async {
     final fixture = ProfilePanelFixture();

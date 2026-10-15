@@ -1,0 +1,63 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.26-chat-window.2",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "6c00f45c6fd8a30e82626d29036f78cbdcffb55be1954a2f809cd67168d405aa",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "1200324fa8c53086a248e0c8cabc198c816c9ae3cc05bb4819618590b13fc634",
+  "created": "2026-10-15",
+  "previous_release": "history/recovery.26-chat-window.1.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "core_packages": "passed: syncer/group/conversation_msg/interaction",
+    "android_aar_build": "pending",
+    "ios_framework": "macOS rebuild required",
+    "device_runtime": "not run",
+    "patch_roundtrip": "passed"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.26-chat-window.2",
+    "sdk_version": "v3.8.3-patch.15+recovery.26-chat-window.2",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": false,
+    "runtime_validation": "not run",
+    "native_binary_integrated": false,
+    "application_validation": "pending"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.26-chat-window.2",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "not run",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "macOS rebuild required",
+    "app_validation_scope": "shared source; previous framework cannot represent recovery.25",
+    "native_binary_integrated": false,
+    "app_version": "3.0.1+2027"
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned existing gomobile dependency closure",
+    "version/version: unique recovery.26-chat-window.2 runtime identity"
+  ],
+  "verification_evidence": "verification/recovery.26-chat-window.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Versioned fixed message windows with atomic coverage reads, remote recall revalidation, durable mutation precedence and crash recovery; preserves prior group-profile recovery."
+  }
+}

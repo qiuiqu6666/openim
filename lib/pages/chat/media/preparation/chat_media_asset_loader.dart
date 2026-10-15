@@ -8,12 +8,14 @@ Future<File?> loadChatMediaAsset(
   AssetEntity asset, {
   required Duration timeout,
   required bool Function() isCancelled,
+  void Function(String stage, Object error)? onReadFailure,
 }) async {
-  for (final load in [() => asset.file, () => asset.originFile]) {
+  final readers = [() => asset.file, () => asset.originFile];
+  for (var index = 0; index < readers.length; index++) {
     if (isCancelled()) return null;
     try {
       final file = await (() async {
-        final candidate = await load();
+        final candidate = await readers[index]();
         if (candidate != null &&
             await candidate.exists() &&
             await candidate.length() > 0) {
@@ -24,7 +26,11 @@ Future<File?> loadChatMediaAsset(
           .timeout(timeout);
       if (isCancelled()) return null;
       if (file != null) return file;
-    } catch (_) {
+      onReadFailure?.call(index == 0 ? 'asset_export' : 'asset_original',
+          StateError('Empty or unavailable gallery file'));
+    } catch (error) {
+      onReadFailure?.call(
+          index == 0 ? 'asset_export' : 'asset_original', error);
       // A failed/timed-out export must not prevent trying the original file.
     }
   }

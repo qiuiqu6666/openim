@@ -1,0 +1,119 @@
+{
+  "date": "2026-10-15",
+  "sdk_version": "v3.8.3-patch.15+recovery.27-sync-heat.2",
+  "source_sha256": "5853b235185122e4f2db78281bbe6b08f73edcf7b2a6540fb9ec822856d19d32",
+  "patch_sha256": "afec87677ede4eb8e79f0bc3de1be2ee270e8c55a13038d20337adf43f427e77",
+  "log_findings": {
+    "first": {
+      "duration_seconds": 316.885,
+      "sync_attempts": 319,
+      "same_revoke_failure": 235,
+      "same_read_receipt_failure": 234,
+      "log_bytes": 37647342
+    },
+    "second": {
+      "duration_seconds": 1250.776,
+      "diagnostic_log_calls": 2191,
+      "sync_attempts": 286,
+      "zero_pull_uncancelled_attempts": 250,
+      "same_revoke_or_receipt_failure": 0
+    }
+  },
+  "changes": [
+    "internal/conversation_msg/conversation_msg.go",
+    "internal/conversation_msg/delete.go",
+    "internal/conversation_msg/notification.go",
+    "internal/conversation_msg/notification_heat_test.go",
+    "internal/conversation_msg/read_drawing.go",
+    "internal/conversation_msg/read_watermark_test.go",
+    "internal/conversation_msg/revoke.go",
+    "internal/interaction/msg_seq_reconciliation.go",
+    "internal/interaction/msg_sync.go",
+    "internal/interaction/msg_sync_boundary_heat_test.go",
+    "internal/interaction/msg_sync_page.go",
+    "internal/interaction/msg_sync_retry.go",
+    "internal/interaction/msg_sync_retry_test.go",
+    "internal/interaction/msg_sync_scheduler.go",
+    "internal/interaction/msg_sync_sparse_live_test.go",
+    "internal/interaction/msg_sync_visible_empty.go",
+    "open_im_sdk/caller.go",
+    "pkg/common/cmd.go",
+    "pkg/common/cmd_log_test.go",
+    "pkg/db/chat_log_model.go",
+    "pkg/db/notification_heat_test.go"
+  ],
+  "new_regression_tests": [
+    "TestRevokeIgnoresDeletedQuoteBodies",
+    "TestExplicitSelfReceiptReconcilesMissingAndAlreadyReadRows",
+    "TestExplicitSelfReceiptPreservesStorageError",
+    "TestExplicitSelfReceiptWithNoLocalSequenceOrPreview",
+    "TestEmptyPreviewClosesProvenInvisibleSuffixWithoutSkippingOlderGaps",
+    "TestNoProgressRetryBackoffCapsAndResetsOnProgress",
+    "TestNoProgressRetryCoalescesSignalsAndDeliversLivePush",
+    "TestCancelledAttemptDoesNotBecomeFailedRecovery",
+    "TestLivePreemptionCannotBypassRecordedFailure",
+    "TestRetryCooldownDrainsMoreThanOneBurstOfQueuedLiveMessages",
+    "TestCoveredSparseLiveWindowDoesNotEnqueueEmptySync",
+    "TestCommandInfoLogDoesNotSerializePayload",
+    "TestNotificationQueriesExcludeTombstonesAndAllowReadReplay"
+  ],
+  "validation": {
+    "maintenance_source_race": "E:\\openim\\artifacts\\heat-sync-20261015\\core-race-final-verified.log",
+    "shared_build_source_race": "E:\\openim\\artifacts\\heat-sync-20261015\\shared-source-race.log",
+    "source_lock_tests": {
+      "passed": 15,
+      "log": "E:\\openim\\artifacts\\heat-sync-20261015\\source-lock-tests.log"
+    },
+    "cumulative_patch_roundtrip": "passed",
+    "new_regressions_proved_before_fix": [
+      "deleted quote empty body",
+      "explicit read receipt missing local row",
+      "invisible sequence suffix",
+      "cooldown blocked live queue after 32 messages"
+    ]
+  },
+  "android": {
+    "receipt": {
+      "platform": "android",
+      "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+      "sdk_version": "v3.8.3-patch.15+recovery.27-sync-heat.2",
+      "source_sha256": "5853b235185122e4f2db78281bbe6b08f73edcf7b2a6540fb9ec822856d19d32",
+      "patch_sha256": "afec87677ede4eb8e79f0bc3de1be2ee270e8c55a13038d20337adf43f427e77",
+      "go_version": "1.24.0",
+      "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+      "core_tests": "passed",
+      "device_runtime": "not tested",
+      "binaries_sha256": {
+        "core-sdk-3.8.3-patch15-recovery.27-sync-heat.2.aar": "9805b00a906039ae21c491a4360f6c0a47ac0e4dd3775e06235b41f58286b236"
+      }
+    },
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "embedded_version_verified": true,
+    "application_apk_rebuilt": false
+  },
+  "ios": {
+    "shared_source_updated": true,
+    "framework_rebuilt": false,
+    "required_action": "rebuild with build-ios.sh on macOS before using the fixed SDK in the application"
+  },
+  "graph": {
+    "repository": "openim-core-followup-verified",
+    "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "indexed_at": "2026-10-15T01:14:41.438Z",
+    "runner_schema": 4,
+    "runner_version": "1.6.12",
+    "status": "up-to-date",
+    "incomplete_reasons": [],
+    "global_dirty_tree_changes_include_existing_work": true,
+    "hotfix_scope_files": 21
+  },
+  "physical_device": {
+    "temperature_profiled": false,
+    "power_profiled": false
+  }
+}

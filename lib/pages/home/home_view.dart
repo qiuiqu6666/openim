@@ -44,6 +44,7 @@ class _HomePageState extends State<HomePage> {
   Worker? _avatarWorker;
   String? _warmedAvatarUrl;
   final _conversationEditBars = <bool, Widget?>{};
+  final _inlineSearchModes = <int, bool>{};
   final _editBarRevision = ValueNotifier<int>(0);
   AppController? _notificationNavigation;
 
@@ -63,6 +64,12 @@ class _HomePageState extends State<HomePage> {
   void _setConversationEditBar(bool groupChats, Widget? bar) {
     if (!mounted) return;
     _conversationEditBars[groupChats] = bar;
+    _editBarRevision.value++;
+  }
+
+  void _setInlineSearchMode(int tabIndex, bool searching) {
+    if (!mounted) return;
+    _inlineSearchModes[tabIndex] = searching;
     _editBarRevision.value++;
   }
 
@@ -111,6 +118,8 @@ class _HomePageState extends State<HomePage> {
                 valueListenable: _activeTabIndex,
                 builder: (_, index, __) => ConversationPage(
                     liveUpdatesActive: routeCurrent && index == 0,
+                    onSearchModeChanged: (searching) =>
+                        _setInlineSearchMode(0, searching),
                     onEditActionBarChanged: (bar) =>
                         _setConversationEditBar(false, bar)))),
         item: ItemConfig(
@@ -131,6 +140,8 @@ class _HomePageState extends State<HomePage> {
                 builder: (_, index, __) => ConversationPage(
                     groupChats: true,
                     liveUpdatesActive: routeCurrent && index == 1,
+                    onSearchModeChanged: (searching) =>
+                        _setInlineSearchMode(1, searching),
                     onEditActionBarChanged: (bar) =>
                         _setConversationEditBar(true, bar)))),
         item: ItemConfig(
@@ -144,7 +155,10 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
       PersistentTabConfig(
-        screen: ThemeAwarePage(builder: (_) => ContactsPage()),
+        screen: ThemeAwarePage(
+            builder: (_) => ContactsPage(
+                onSearchModeChanged: (searching) =>
+                    _setInlineSearchMode(2, searching))),
         item: ItemConfig(
           icon: _setupIcon(
               _navIcon('nav_contact_active_99chat.png', selectedColor),
@@ -317,6 +331,9 @@ class _HomePageState extends State<HomePage> {
         navBarBuilder: (config) => ValueListenableBuilder<int>(
             valueListenable: _editBarRevision,
             builder: (context, __, ___) {
+              if (_inlineSearchModes[config.selectedIndex] == true) {
+                return const SizedBox.shrink();
+              }
               final editBar = config.selectedIndex < 2
                   ? _conversationEditBars[config.selectedIndex == 1]
                   : null;

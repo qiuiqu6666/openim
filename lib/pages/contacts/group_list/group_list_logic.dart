@@ -203,16 +203,14 @@ class GroupListLogic extends GetxController {
     var offset = refresh ? 0 : (iCreate ? iCreatedOffset : iJoinedOffset);
     final userID = _currentUserID();
     final token = DataSp.chatToken;
+    final groups = <String, GroupInfo>{
+      if (!refresh)
+        for (final group in target) group.groupID: group,
+    };
     try {
-      final groups = <String, GroupInfo>{
-        if (!refresh)
-          for (final group in target) group.groupID: group,
-      };
-      final previousLength = groups.length;
       final received = <GroupInfo>[];
       var hasMore = true;
-      // Preserve SDK order and load only until this tab gains rows. A page
-      // containing only the other ownership category is not an empty directory.
+      // Load the complete directory so every alphabet index is reachable.
       while (true) {
         final page = await _fetchPage(offset, count);
         if (_disposed ||
@@ -235,7 +233,7 @@ class GroupListLogic extends GetxController {
         // SDK offsets refer to the unfiltered page, not either ownership tab.
         offset += page.length;
         hasMore = page.length >= count;
-        if (!hasMore || groups.length > previousLength) break;
+        if (!hasMore) break;
       }
       _seedGroups(received);
       target.assignAll(
@@ -254,6 +252,15 @@ class GroupListLogic extends GetxController {
       }
     } catch (_) {
       if (_disposed || _versions[iCreate] != version) return;
+      if (groups.isNotEmpty) {
+        target.assignAll(
+            _changes.project(groups.values, created: iCreate, owner: userID));
+        if (iCreate) {
+          iCreatedOffset = offset;
+        } else {
+          iJoinedOffset = offset;
+        }
+      }
       loadFailed[iCreate] = true;
       if (refresh) {
         controller.refreshFailed();

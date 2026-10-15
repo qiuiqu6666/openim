@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/widgets.dart';
+import 'package:openim_common/openim_common.dart' show Config;
 
 import '../../network/transport_state.dart';
 
 import '../../server_nodes/node_availability_probe.dart';
 import '../../server_nodes/node_endpoint.dart';
+import '../../server_nodes/public_health_check.dart';
 
 /// One foreground API check loop per SDK login session. No user credentials.
 class ApiConnectionHealth with WidgetsBindingObserver {
@@ -15,13 +17,14 @@ class ApiConnectionHealth with WidgetsBindingObserver {
       Future<bool> Function()? check,
       Stream<List<ConnectivityResult>>? networkChanges,
       Future<List<ConnectivityResult>> Function()? networkSnapshot})
-      : _check = check ?? _probe,
+      : _check = check,
         _networkChanges = networkChanges,
         _networkSnapshot = networkSnapshot ??
             (networkChanges == null ? Connectivity().checkConnectivity : null);
 
   final bool Function() isCurrent;
-  final Future<bool> Function() _check;
+  final Future<bool> Function()? _check;
+  final _availability = NodeAvailabilityProbe();
   final Stream<List<ConnectivityResult>>? _networkChanges;
   final Future<List<ConnectivityResult>> Function()? _networkSnapshot;
   StreamSubscription<List<ConnectivityResult>>? _network;
@@ -38,9 +41,9 @@ class ApiConnectionHealth with WidgetsBindingObserver {
   int _failures = 0;
   static const _retrySeconds = [3, 6, 12, 30];
 
-  static Future<bool> _probe() async => (await NodeAvailabilityProbe()
-          .check(NodeEndpoint.current(), includeGateway: false))
-      .available;
+  Future<bool> _probe() async =>
+      (await _availability.check(NodeEndpoint.current(), includeGateway: false))
+          .available;
 
   void start() {
     if (_active) return;
@@ -48,6 +51,7 @@ class ApiConnectionHealth with WidgetsBindingObserver {
     _foreground = WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
+    Config.networkRouteRevision.addListener(_transportChanged);
     _network = (_networkChanges ?? Connectivity().onConnectivityChanged).listen(
         (results) {
       if (!_active || !_transport.update(results)) return;
@@ -58,6 +62,8 @@ class ApiConnectionHealth with WidgetsBindingObserver {
   }
 
   void _transportChanged() {
+    if (!_active) return;
+    _availability.cancel();
     _revision++;
     latencyMs.value = null;
     _timer?.cancel();
@@ -90,7 +96,8 @@ class ApiConnectionHealth with WidgetsBindingObserver {
     final watch = Stopwatch()..start();
     var healthy = false;
     try {
-      healthy = await _check().timeout(const Duration(seconds: 4));
+      healthy = await (_check?.call() ?? _probe())
+          .timeout(const Duration(seconds: 4));
     } catch (_) {
       healthy = false;
     } finally {
@@ -110,7 +117,11 @@ class ApiConnectionHealth with WidgetsBindingObserver {
     if (healthy) _failures = 0;
     final seconds = healthy ? 5 : _retrySeconds[_failures];
     if (!healthy && _failures < _retrySeconds.length - 1) _failures++;
-    _timer = Timer(Duration(seconds: seconds), _refresh);
+    _timer = Timer(
+        healthy
+            ? Duration(seconds: seconds)
+            : PublicHealthCheck.retryDelay(Duration(seconds: seconds)),
+        _refresh);
   }
 
   @override
@@ -118,6 +129,7 @@ class ApiConnectionHealth with WidgetsBindingObserver {
     final foreground = state == AppLifecycleState.resumed;
     if (_foreground == foreground) return;
     _revision++;
+    _availability.cancel();
     _foreground = foreground;
     if (!_foreground) _transport.invalidateSnapshot();
     _timer?.cancel();
@@ -132,6 +144,8 @@ class ApiConnectionHealth with WidgetsBindingObserver {
 
   void close() {
     _active = false;
+    _availability.cancel();
+    Config.networkRouteRevision.removeListener(_transportChanged);
     _transport.invalidateSnapshot();
     _timer?.cancel();
     unawaited(_network?.cancel());

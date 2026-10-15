@@ -644,6 +644,11 @@ func (c *Conversation) handleExceptionMessages(ctx context.Context, existingMess
 	if existingMessage == nil {
 		// Case: The message is marked as deleted
 		if message.Status == constant.MsgStatusHasDeleted {
+			if message.Seq > 0 {
+				message.ClientMsgID = "[SERVER_DELETED_SEQ_" + utils.Int64ToString(message.Seq) + "]"
+				message.Content = ""
+				return
+			}
 			// If ClientMsgID is empty, it's a placeholder for seq gap
 			if message.ClientMsgID == "" {
 				// Gap messages are typically caused by server downtime or prolonged periods of inactivity.
@@ -690,6 +695,9 @@ func (c *Conversation) handleExceptionMessages(ctx context.Context, existingMess
 
 func (c *Conversation) pullMessageIntoTable(ctx context.Context, conversationID string,
 	serverMessage []*model_struct.LocalChatLog, list *[]*model_struct.LocalChatLog) error {
+	if err := c.applyStoredRevocations(ctx, conversationID, serverMessage); err != nil {
+		return err
+	}
 	insertMsg := make(map[string][]*model_struct.LocalChatLog, 20)
 	updateMsg := make(map[string][]*model_struct.LocalChatLog, 30)
 	var insertMessage, selfInsertMessage, othersInsertMessage []*model_struct.LocalChatLog
@@ -713,9 +721,26 @@ func (c *Conversation) pullMessageIntoTable(ctx context.Context, conversationID 
 		log.ZDebug(ctx, "msg detail", "msg", msg, "conversationID", conversationID)
 
 		if existingMessage, ok := processedMsgIDs[msg.ClientMsgID]; ok {
+			if existingMessage.Seq == msg.Seq {
+				*msg = *existingMessage
+				continue
+			}
 			c.handleExceptionMessages(ctx, existingMessage, msg)
 			exceptionMsg = append(exceptionMsg, msg)
 			insertMessage = append(insertMessage, msg)
+			continue
+		}
+		if existing, ok := localMessagesMap[msg.ClientMsgID]; ok && existing.Seq == msg.Seq {
+			// Overlapping latest/history reads are ordinary replay. Preserve the
+			// stored identity and local deletion/read/recall state.
+			if msg.Status < constant.MsgStatusHasDeleted && existing.Status >= constant.MsgStatusHasDeleted {
+				*msg = *existing
+			} else if msg.ContentType != constant.RevokeNotification && msg.Status < constant.MsgStatusHasDeleted {
+				*msg = *existing
+			} else {
+				updateMessage = append(updateMessage, msg)
+			}
+			processedMsgIDs[msg.ClientMsgID] = msg
 			continue
 		}
 		//When the message has been marked and deleted by the cloud, it is directly inserted locally
@@ -767,11 +792,6 @@ func (c *Conversation) pullMessageIntoTable(ctx context.Context, conversationID 
 	log.ZDebug(ctx, "faceURLAndNicknameHandle, ", "cost time", time.Since(timeNow).String(),
 		"updateMsg", updateMessage, "insertMsg", insertMessage, "selfInsertMessage", selfInsertMessage, "othersInsertMessage", othersInsertMessage)
 
-	//update message
-	if err6 := c.batchUpdateMessageList(ctx, updateMsg); err6 != nil {
-		log.ZError(ctx, "sync seq normal message err  :", err6)
-		return err6
-	}
 	if len(updateMessage) > 0 {
 		updateMessageMap := datautil.SliceToMap(updateMessage, func(message *model_struct.LocalChatLog) string {
 			return message.ClientMsgID
@@ -789,7 +809,7 @@ func (c *Conversation) pullMessageIntoTable(ctx context.Context, conversationID 
 
 	timeNow = time.Now()
 	//Normal message storage
-	if err := c.batchInsertMessageList(ctx, insertMsg); err != nil {
+	if err := c.persistMessageSyncBatch(ctx, updateMsg, insertMsg, nil, nil); err != nil {
 		return err
 	}
 	log.ZDebug(ctx, "BatchInsertMessageListController, ", "cost time", time.Since(timeNow).String())

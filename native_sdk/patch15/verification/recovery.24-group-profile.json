@@ -1,0 +1,30 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.24-group-profile.1",
+  "source_sha256": "433bfca301f4d01a18141153b093017684e399a771439cfee595179621076366",
+  "patch_sha256": "7d1d4588b1014cb2c59b77a84dd415a6a6383e1206e702f995bb7810c35c13fe",
+  "checks": {
+    "flutter_regression": "653 passed; 8 existing skipped",
+    "flutter_analysis": "no errors/warnings; 2 pre-existing info lints in chat_logic.dart",
+    "core_race_sqlite": "passed: common/network/syncer/group/interaction/conversation_msg; CGO enabled; race detector enabled",
+    "source_lock_tests": "15 passed",
+    "patch_roundtrip": "passed against patch_base_commit with documented build overlays",
+    "android_aar_build": "passed: four ABIs; source receipt verified",
+    "android_debug_apk": "passed: arm64 and x86_64; packaged native libraries match stripped new AAR byte for byte and contain current SDK version",
+    "device_runtime": "not installed; two-account offline scenario not run",
+    "ios_framework": "not rebuilt for recovery.24; requires macOS"
+  },
+  "aar_sha256": "931d431e21c966bb78bb5c1314dceb8b290b5e4c562260515f39e8e816e2d9ee",
+  "apk_sha256": "dd472b6b1dfccbc678e4f09f38ad859db8f9920191ae3103ac3763ad9c082e80",
+  "apk_path": "E:\\openim\\release-artifacts\\group-profile-recovery.24-20261015.apk",
+  "embedded_native_sha256": {
+    "lib/arm64-v8a/libgojni.so": "bab164bfe16050f2f06b9c69c0ac7054aa092b871c45e0b4ac511b78ac6ccd8d",
+    "lib/x86_64/libgojni.so": "1900b2050b49019567431dada235cf362ff201b61da183e3996aca1e42ae73a5"
+  },
+  "test_logs": [
+    "E:/openim/group-profile-final-regression.log",
+    "E:/openim/group-profile-final-analysis.log",
+    "E:/openim/group-profile-core-race.log",
+    "E:/openim/group-profile-lock-tests.log"
+  ],
+  "scope": "Offline group name/avatar; full and incremental metadata; retryable writes; current chat and conversation refresh; avatar removal; stale request and account isolation."
+}

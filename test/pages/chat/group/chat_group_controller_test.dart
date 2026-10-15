@@ -5,113 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:openim/pages/chat/group/chat_group_controller.dart';
 
-class _GroupHarness {
-  _GroupHarness({
-    Future<bool> Function(String)? isJoined,
-    Future<List<GroupInfo>> Function(String)? groupInfo,
-    Future<List<GroupMembersInfo>> Function(String, String)? selfMember,
-    Future<List<GroupMembersInfo>> Function(String)? admins,
-    GroupInfo? Function(String)? readCachedGroupInfo,
-    Duration queryTimeout = const Duration(seconds: 15),
-  }) {
-    controller = ChatGroupController.withSources(
-      groupID: () => groupID,
-      currentUserID: () => userID,
-      messages: messages,
-      clearInput: () => inputCleared++,
-      onGroupProfileChanged: (name, face) => profiles.add((name, face)),
-      reportError: errors.add,
-      queryTimeout: queryTimeout,
-      nowSeconds: () => now,
-      readCachedGroupInfo: readCachedGroupInfo,
-      events: ChatGroupEvents(
-        joined: joined.stream,
-        left: left.stream,
-        memberAdded: added.stream,
-        memberDeleted: deleted.stream,
-        memberChanged: changed.stream,
-        groupChanged: groupChanged.stream,
-      ),
-      queries: ChatGroupQueries(
-        isJoined: (id) {
-          joinedReads++;
-          return isJoined?.call(id) ?? Future.value(true);
-        },
-        groupInfo: (id) {
-          profileReads++;
-          return groupInfo?.call(id) ??
-              Future.value([
-                GroupInfo(
-                    groupID: id,
-                    groupName: 'My group',
-                    faceURL: 'face',
-                    ownerUserID: 'me',
-                    memberCount: 5,
-                    notification: 'Announcement',
-                    notificationUpdateTime: 42)
-              ]);
-        },
-        selfMember: (id, user) {
-          selfReads++;
-          return selfMember?.call(id, user) ??
-              Future.value([
-                GroupMembersInfo(
-                    groupID: id,
-                    userID: user,
-                    nickname: 'My name',
-                    roleLevel: GroupRoleLevel.owner)
-              ]);
-        },
-        ownerAndAdmin: (id) {
-          adminReads++;
-          return admins?.call(id) ??
-              Future.value([
-                GroupMembersInfo(
-                    groupID: id, userID: 'me', roleLevel: GroupRoleLevel.owner)
-              ]);
-        },
-      ),
-    );
-    addTearDown(close);
-  }
-
-  final joined = StreamController<GroupInfo>.broadcast(sync: true);
-  final left = StreamController<GroupInfo>.broadcast(sync: true);
-  final added = StreamController<GroupMembersInfo>.broadcast(sync: true);
-  final deleted = StreamController<GroupMembersInfo>.broadcast(sync: true);
-  final changed = StreamController<GroupMembersInfo>.broadcast(sync: true);
-  final groupChanged = StreamController<GroupInfo>.broadcast(sync: true);
-  final messages = <Message>[].obs;
-  final profiles = <(String, String)>[];
-  final errors = <Object>[];
-  int inputCleared = 0;
-  int joinedReads = 0, profileReads = 0, selfReads = 0, adminReads = 0;
-  int now = 1000;
-  String? groupID = 'group';
-  String userID = 'me';
-  late final ChatGroupController controller;
-
-  Future<void> close() async {
-    controller.close();
-    await Future.wait([
-      joined.close(),
-      left.close(),
-      added.close(),
-      deleted.close(),
-      changed.close(),
-      groupChanged.close(),
-    ]);
-  }
-}
+import 'support/chat_group_harness.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('entry recovery loads metadata without any history callback',
       (tester) async {
-    final h = _GroupHarness();
+    final h = ChatGroupHarness();
     h.controller.initialize();
     expect(h.controller.memberCountKnown.value, isFalse);
     h.controller.recover();
@@ -130,7 +32,7 @@ void main() {
   testWidgets('failed reads have finite retries and reconnect renews recovery',
       (tester) async {
     var offline = true;
-    final h = _GroupHarness(isJoined: (_) async {
+    final h = ChatGroupHarness(isJoined: (_) async {
       if (offline) throw StateError('offline');
       return true;
     });
@@ -155,7 +57,7 @@ void main() {
   testWidgets('a timed-out profile releases the load but shares native work',
       (tester) async {
     final profile = Completer<List<GroupInfo>>();
-    final h = _GroupHarness(
+    final h = ChatGroupHarness(
       groupInfo: (_) => profile.future,
       queryTimeout: const Duration(seconds: 2),
     );
@@ -181,7 +83,7 @@ void main() {
   testWidgets('empty metadata preserves the cached count and retries',
       (tester) async {
     var empty = true;
-    final h = _GroupHarness(
+    final h = ChatGroupHarness(
       readCachedGroupInfo: (id) =>
           GroupInfo(groupID: id, groupName: 'Cached', memberCount: 7),
       groupInfo: (id) async => empty
@@ -204,7 +106,7 @@ void main() {
       (tester) async {
     final membership = Completer<bool>();
     var first = true;
-    final h = _GroupHarness(isJoined: (_) {
+    final h = ChatGroupHarness(isJoined: (_) {
       if (first) {
         first = false;
         return membership.future;
@@ -228,7 +130,7 @@ void main() {
   test('message roles wait for a complete admin list and respect live changes',
       () async {
     final admins = Completer<List<GroupMembersInfo>>();
-    final h = _GroupHarness(admins: (_) => admins.future);
+    final h = ChatGroupHarness(admins: (_) => admins.future);
     h.controller.initialize();
     final pending = h.controller.loadAfterHistory();
     await Future<void>.delayed(Duration.zero);
@@ -267,7 +169,8 @@ void main() {
   test(
       'failed admin lookup does not classify unknown senders as ordinary members',
       () async {
-    final h = _GroupHarness(admins: (_) async => throw StateError('offline'));
+    final h =
+        ChatGroupHarness(admins: (_) async => throw StateError('offline'));
     h.controller.initialize();
     await h.controller.loadAfterHistory();
     expect(h.controller.memberRoleFor('member'), isNull);
@@ -275,7 +178,7 @@ void main() {
 
   testWidgets('sender roles react to promotion without a new message',
       (tester) async {
-    final h = _GroupHarness();
+    final h = ChatGroupHarness();
     h.controller.initialize();
     await h.controller.loadAfterHistory();
     await tester.pumpWidget(MaterialApp(
@@ -294,7 +197,7 @@ void main() {
       () async {
     final membership = Completer<bool>();
     final cachedReads = <String>[];
-    final h = _GroupHarness(
+    final h = ChatGroupHarness(
       isJoined: (_) => membership.future,
       readCachedGroupInfo: (id) {
         cachedReads.add(id);
@@ -338,7 +241,7 @@ void main() {
   });
 
   test('foreign cached metadata and changed accounts cannot seed the chat', () {
-    final foreign = _GroupHarness(
+    final foreign = ChatGroupHarness(
       readCachedGroupInfo: (_) => GroupInfo(
           groupID: 'another-group',
           notification: 'Foreign announcement',
@@ -351,7 +254,7 @@ void main() {
     expect(foreign.profiles, isEmpty);
 
     var cacheReads = 0;
-    final changedAccount = _GroupHarness(readCachedGroupInfo: (id) {
+    final changedAccount = ChatGroupHarness(readCachedGroupInfo: (id) {
       cacheReads++;
       return GroupInfo(groupID: id, notification: 'Previous account');
     });
@@ -366,7 +269,7 @@ void main() {
     test('cached chat rejects a late metadata read after $invalidate',
         () async {
       final profile = Completer<List<GroupInfo>>();
-      final h = _GroupHarness(
+      final h = ChatGroupHarness(
         groupInfo: (_) => profile.future,
         readCachedGroupInfo: (id) => GroupInfo(
           groupID: id,
@@ -410,7 +313,7 @@ void main() {
   test('history notifications share queries and preserve group metadata',
       () async {
     final membership = Completer<bool>();
-    final h = _GroupHarness(isJoined: (_) => membership.future);
+    final h = ChatGroupHarness(isJoined: (_) => membership.future);
     h.controller.initialize();
     h.controller.initialize();
     expect(h.joinedReads, 0);
@@ -435,7 +338,7 @@ void main() {
   test('closing during membership lookup cannot query or apply late state',
       () async {
     final membership = Completer<bool>();
-    final h = _GroupHarness(isJoined: (_) => membership.future);
+    final h = ChatGroupHarness(isJoined: (_) => membership.future);
     h.controller.initialize();
     final pending = h.controller.loadAfterHistory();
     h.controller.close();
@@ -452,7 +355,7 @@ void main() {
 
   test('leaving the group invalidates an earlier joined response', () async {
     final membership = Completer<bool>();
-    final h = _GroupHarness(isJoined: (_) => membership.future);
+    final h = ChatGroupHarness(isJoined: (_) => membership.future);
     h.controller.initialize();
     final pending = h.controller.loadAfterHistory();
     h.left.add(GroupInfo(groupID: 'other'));
@@ -471,7 +374,7 @@ void main() {
     final profile = Completer<List<GroupInfo>>();
     final self = Completer<List<GroupMembersInfo>>();
     final admins = Completer<List<GroupMembersInfo>>();
-    final h = _GroupHarness(
+    final h = ChatGroupHarness(
         groupInfo: (_) => profile.future,
         selfMember: (_, __) => self.future,
         admins: (_) => admins.future);
@@ -504,7 +407,7 @@ void main() {
 
   test('leaving while metadata loads cannot apply old group state', () async {
     final profile = Completer<List<GroupInfo>>();
-    final h = _GroupHarness(groupInfo: (_) => profile.future);
+    final h = ChatGroupHarness(groupInfo: (_) => profile.future);
     h.controller.initialize();
     final pending = h.controller.loadAfterHistory();
     await Future<void>.delayed(Duration.zero);
@@ -519,7 +422,7 @@ void main() {
   test('an admin query merges role changes without losing other admins',
       () async {
     final admins = Completer<List<GroupMembersInfo>>();
-    final h = _GroupHarness(admins: (_) => admins.future);
+    final h = ChatGroupHarness(admins: (_) => admins.future);
     h.controller.initialize();
     final pending = h.controller.loadAfterHistory();
     await Future<void>.delayed(Duration.zero);
@@ -542,7 +445,7 @@ void main() {
 
   test('member events update messages and survive malformed notifications',
       () async {
-    final h = _GroupHarness();
+    final h = ChatGroupHarness();
     h.controller.initialize();
     final text = Message(sendID: 'alice', contentType: MessageType.text);
     final notice = Message(
@@ -588,7 +491,7 @@ void main() {
           (tester) async {
         final self = Completer<List<GroupMembersInfo>>();
         GroupInfo mutedGroup() => GroupInfo(groupID: 'group', status: 3);
-        final h = _GroupHarness(
+        final h = ChatGroupHarness(
           readCachedGroupInfo: cached ? (_) => mutedGroup() : null,
           groupInfo: (_) async => [mutedGroup()],
           selfMember: (_, __) => self.future,
@@ -621,7 +524,7 @@ void main() {
   for (final response in ['failed', 'empty', 'missing-role']) {
     test('unresolved self read $response stays neutral until a role event',
         () async {
-      final h = _GroupHarness(
+      final h = ChatGroupHarness(
         groupInfo: (_) async => [GroupInfo(groupID: 'group', status: 3)],
         selfMember: (_, __) async {
           if (response == 'failed') throw StateError('temporarily unavailable');
@@ -648,7 +551,7 @@ void main() {
 
   test('explicit personal mute is confirmed even while the role is missing',
       () {
-    final h = _GroupHarness();
+    final h = ChatGroupHarness();
     h.controller.initialize();
     h.groupChanged.add(GroupInfo(groupID: 'group', status: 3));
     h.changed.add(GroupMembersInfo(
@@ -659,7 +562,7 @@ void main() {
 
   testWidgets('mute expiration refreshes reactive send permission',
       (tester) async {
-    final h = _GroupHarness();
+    final h = ChatGroupHarness();
     h.controller.initialize();
     h.changed.add(GroupMembersInfo(
         groupID: 'group',
@@ -689,7 +592,7 @@ void main() {
       () async {
     final membership = Completer<bool>();
     var fail = true;
-    final h = _GroupHarness(isJoined: (_) {
+    final h = ChatGroupHarness(isJoined: (_) {
       if (fail) {
         fail = false;
         return Future<bool>.error(StateError('temporary failure'));
@@ -718,7 +621,7 @@ void main() {
   });
 
   test('deleted member stays non-actionable until an explicit new join', () {
-    final h = _GroupHarness();
+    final h = ChatGroupHarness();
     h.controller.initialize();
     final member = GroupMembersInfo(
         groupID: 'group', userID: 'other', roleLevel: GroupRoleLevel.member);
@@ -735,9 +638,62 @@ void main() {
     expect(h.controller.memberUpdateInfoMap['other'], same(member));
   });
 
+  test('sync profile refresh coalesces and ignores a newer live event',
+      () async {
+    final pending = Completer<List<GroupInfo>>();
+    final h = ChatGroupHarness(groupInfo: (_) => pending.future);
+    h.controller.initialize();
+    final first = h.controller.refreshProfileAfterSync();
+    final second = h.controller.refreshProfileAfterSync();
+    expect(identical(first, second), isTrue);
+    h.groupChanged.add(GroupInfo(
+        groupID: 'group', groupName: 'Newest live name', faceURL: 'newest'));
+    pending.complete([
+      GroupInfo(groupID: 'group', groupName: 'Stale query', faceURL: 'old')
+    ]);
+    await first;
+    expect(h.profiles.last, ('Newest live name', 'newest'));
+    expect(h.profileReads, 1);
+    expect(h.joinedReads, 0);
+    expect(h.selfReads, 0);
+  });
+
+  test('late profile refresh cannot write into another account', () async {
+    final pending = Completer<List<GroupInfo>>();
+    final h = ChatGroupHarness(groupInfo: (_) => pending.future);
+    h.controller.initialize();
+    final refresh = h.controller.refreshProfileAfterSync();
+    h.userID = 'other-account';
+    pending.complete(
+        [GroupInfo(groupID: 'group', groupName: 'Old account profile')]);
+    await refresh;
+    expect(h.profiles, isEmpty);
+  });
+
+  test('post-sync profile bypasses an older pending entry read', () async {
+    final old = Completer<List<GroupInfo>>();
+    var calls = 0;
+    final h = ChatGroupHarness(groupInfo: (_) {
+      if (++calls == 1) return old.future;
+      return Future.value([
+        GroupInfo(groupID: 'group', groupName: 'After sync', faceURL: 'new')
+      ]);
+    });
+    h.controller.initialize();
+    final entry = h.controller.loadAfterHistory();
+    await Future<void>.delayed(Duration.zero);
+    await h.controller.refreshProfileAfterSync();
+    old.complete([
+      GroupInfo(groupID: 'group', groupName: 'Before sync', faceURL: 'old')
+    ]);
+    await entry;
+    expect(h.profiles.last, ('After sync', 'new'));
+    expect(h.profileReads, 2);
+  });
+
   test('avatar revision ignores unrelated groups and updates on role/profile',
       () {
-    final h = _GroupHarness();
+    final h = ChatGroupHarness();
     h.controller.initialize();
     final initial = h.controller.memberActionRevision;
     h.changed.add(GroupMembersInfo(groupID: 'other', userID: 'member'));

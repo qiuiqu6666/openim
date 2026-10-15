@@ -448,7 +448,8 @@ class _SangongGameRulesSettingsPageState
                       ja: '保存',
                       ko: '저장',
                     ),
-              onPressed: _saving ? () {} : _save,
+              loading: _saving,
+              onPressed: _saving ? null : _save,
             )
           : null,
       children: [

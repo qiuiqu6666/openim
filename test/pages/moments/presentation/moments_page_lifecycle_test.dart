@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:openim/pages/moments/presentation/loading/moments_feed_skeleton.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/moments/moments_cover_page.dart';
 import 'package:openim/pages/moments/moments_detail_page.dart';
@@ -107,7 +108,7 @@ void main() {
     expect(fixture.api.albumRequests, isEmpty);
     expect(find.byKey(const ValueKey('moments_album_post_preview-own-post')),
         findsNothing);
-    expect(find.byType(CircularProgressIndicator), findsWidgets);
+    expect(find.byType(MomentsFeedSkeleton), findsOneWidget);
     gate.complete(const MomentsSettings(visibleRangeDays: 90));
     await tester.pumpAndSettle();
     expect(fixture.api.settingsRequests, 1);

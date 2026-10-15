@@ -23,7 +23,11 @@ class LegacyPasswordEnvelope {
               endpoint.port == 10008) ||
           (endpoint.scheme == 'https' &&
               endpoint.host == '99chatapi.99chat.vip' &&
-              endpoint.port == 443)) &&
+              endpoint.port == 443) ||
+          (endpoint.scheme == 'http' &&
+              endpoint.host ==
+                  'lhins-14l2mj2j.3w3hbb07j0xz.eo.dnse5.com' &&
+              endpoint.port == 10008)) &&
       endpoint.userInfo.isEmpty;
 
   static String encrypt(String plaintext, Uri endpoint) {

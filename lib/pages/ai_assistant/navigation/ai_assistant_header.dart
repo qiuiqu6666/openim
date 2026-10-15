@@ -122,19 +122,21 @@ class AiAssistantHeader extends StatelessWidget implements PreferredSizeWidget {
                             color: AiPalette.primary(dark),
                             fontSize: AiMetrics.font17,
                             fontWeight: FontWeight.w600)),
-                    Text(
-                        subtitle ??
-                            i18n.t(
-                                zhHans: '智能助手 · 更聪明的聊天体验',
-                                zhHant: '智慧助手 · 更聰明的聊天體驗',
-                                en:
-                                    'Smart assistant · A smarter chat experience'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: AiPalette.secondary(dark),
-                            fontSize: AiMetrics.font11,
-                            fontWeight: FontWeight.w400)),
+                    Semantics(
+                        liveRegion: true,
+                        child: Text(
+                            subtitle ??
+                                i18n.t(
+                                    zhHans: '智能助手 · 更聪明的聊天体验',
+                                    zhHant: '智慧助手 · 更聰明的聊天體驗',
+                                    en:
+                                        'Smart assistant · A smarter chat experience'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: AiPalette.secondary(dark),
+                                fontSize: AiMetrics.font11,
+                                fontWeight: FontWeight.w400))),
                   ])),
             ]),
       actions: [

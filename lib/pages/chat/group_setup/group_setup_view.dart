@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'group_setup_logic.dart';
+import '../complaints/complaint_reason_page.dart';
 import 'group_announcement_page.dart';
 import 'loading/group_setup_loading.dart';
 import '../group/announcements/group_announcement_banner.dart';
@@ -73,8 +74,11 @@ class GroupSetupPage extends StatelessWidget {
                 if (logic.isJoinedGroup.value)
                   _section([
                     _settingRow('groupReport'.tr,
-                        onTap: () =>
-                            IMViews.showToast('groupReportUnavailable'.tr))
+                        onTap: () => Get.to(() => ComplaintReasonPage(
+                          reportedUserID: '',
+                          targetName: logic.groupInfo.value.groupName ?? '',
+                          groupID: logic.groupInfo.value.groupID,
+                        )))
                   ]),
                 if (logic.isOwner || logic.isAdmin)
                   _section([
@@ -448,8 +452,5 @@ class GroupSetupPage extends StatelessWidget {
                     ? () => showGroupAnnouncementSheet(
                         Get.context!, logic.groupInfo.value.notification!)
                     : null),
-        _settingRow('groupMyNickname'.tr,
-            value: logic.myGroupNickname ?? 'groupNicknameUnset'.tr,
-            onTap: logic.editMyGroupNickname),
       ]);
 }

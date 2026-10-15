@@ -1,0 +1,368 @@
+{
+  "date": "2026-10-15",
+  "change": {
+    "chat_routes": [
+      "/chat",
+      "/ai_assistant_chat",
+      "/official_account_chat"
+    ],
+    "duration_ms_before": 480,
+    "duration_ms_after": 280,
+    "curve_after": "Cubic(0.22, 0.8, 0.25, 1.0)",
+    "other_routes_duration_ms": 480,
+    "skeleton_reveal_ms": 120,
+    "data_sdk_server_changed_this_stage": false,
+    "reused": [
+      "AppGetTransition",
+      "AppSwipeBackTransition",
+      "AppRouteSlide",
+      "ChatInitialWindowTransition",
+      "ChatMessageList"
+    ],
+    "new": "ChatEntryRouteTiming: independently observes visual route completion without waiting for message readiness or rebuilding the timeline.",
+    "reference": "Local reference-99chat app_chat_route.dart and app_route_depth_transition.dart; this tuning follows the user request to shorten the previous IMG_0076.MP4-inspired 480ms motion."
+  },
+  "measurement": {
+    "device": "Android 9 x86_64 emulator-5554",
+    "mode": "profile",
+    "scope": "Synthetic SDK delays with production AppNavigator, ChatLogic, ChatMessageList and message bubbles; not a real-network end-to-end benchmark.",
+    "samples_per_case_per_version": 3,
+    "total_entries": 24,
+    "parameters_ms": {
+      "local_normal": 5,
+      "remote_normal": 300,
+      "local_slow": 380,
+      "remote_slow": 700,
+      "user_lookup": 40,
+      "global_sync_busy": 1200
+    },
+    "metric_contract": {
+      "first_correct_message_frame": "First painted publishable visible message content, Flutter paint submission rather than display scan-out.",
+      "list_interactive": "Painted message content after skeleton reveal, current route, app resumed, no reverse animation or active back gesture; does not wait for forward transition completion.",
+      "transition_finished": "First visible frame after route animation completion; independent of messages. Reduced motion uses the first valid visible frame."
+    },
+    "baseline_note": "The same split metric instrumentation was added before collecting the 480ms baseline. Old combined interactive measurements are not reused.",
+    "limitations": [
+      "Three samples per condition show this controlled comparison, not population latency percentiles.",
+      "Raster/build P95 values are per-run Flutter frame values; emulator measurements are not physical-device smoothness guarantees.",
+      "Full production page plugins, cold JIT compilation and real media decoding are represented only by the separate debug installation smoke check."
+    ],
+    "cases": {
+      "ready_local": {
+        "before": {
+          "samples": 3,
+          "route_duration_ms": 480,
+          "median_ms": {
+            "first_correct_message_frame": 60.524,
+            "list_interactive": 61.049,
+            "transition_finished": 536.187
+          },
+          "range_ms": {
+            "first_correct_message_frame": [
+              53.919,
+              78.175
+            ],
+            "list_interactive": [
+              53.968,
+              78.229
+            ],
+            "transition_finished": [
+              530.473,
+              537.46
+            ]
+          },
+          "median_build_p95_ms": 0.5,
+          "median_raster_p95_ms": 9.975,
+          "one_local_and_one_remote_query_per_entry": true
+        },
+        "after": {
+          "samples": 3,
+          "route_duration_ms": 280,
+          "median_ms": {
+            "first_correct_message_frame": 60.935,
+            "list_interactive": 61.025,
+            "transition_finished": 331.429
+          },
+          "range_ms": {
+            "first_correct_message_frame": [
+              58.294,
+              79.275
+            ],
+            "list_interactive": [
+              58.333,
+              79.468
+            ],
+            "transition_finished": [
+              330.858,
+              333.63
+            ]
+          },
+          "median_build_p95_ms": 0.654,
+          "median_raster_p95_ms": 9.836,
+          "one_local_and_one_remote_query_per_entry": true
+        },
+        "transition_saved_ms": 204.758
+      },
+      "ready_local_global_sync_busy": {
+        "before": {
+          "samples": 3,
+          "route_duration_ms": 480,
+          "median_ms": {
+            "first_correct_message_frame": 53.171,
+            "list_interactive": 53.224,
+            "transition_finished": 531.326
+          },
+          "range_ms": {
+            "first_correct_message_frame": [
+              51.487,
+              60.918
+            ],
+            "list_interactive": [
+              51.531,
+              60.969
+            ],
+            "transition_finished": [
+              528.757,
+              540.635
+            ]
+          },
+          "median_build_p95_ms": 0.524,
+          "median_raster_p95_ms": 9.821,
+          "one_local_and_one_remote_query_per_entry": true
+        },
+        "after": {
+          "samples": 3,
+          "route_duration_ms": 280,
+          "median_ms": {
+            "first_correct_message_frame": 60.194,
+            "list_interactive": 60.23,
+            "transition_finished": 323.729
+          },
+          "range_ms": {
+            "first_correct_message_frame": [
+              53.848,
+              60.381
+            ],
+            "list_interactive": [
+              53.885,
+              60.556
+            ],
+            "transition_finished": [
+              322.438,
+              332.151
+            ]
+          },
+          "median_build_p95_ms": 0.693,
+          "median_raster_p95_ms": 9.643,
+          "one_local_and_one_remote_query_per_entry": true
+        },
+        "transition_saved_ms": 207.597
+      },
+      "slow_local": {
+        "before": {
+          "samples": 3,
+          "route_duration_ms": 480,
+          "median_ms": {
+            "first_correct_message_frame": 400.111,
+            "list_interactive": 521.335,
+            "transition_finished": 531.186
+          },
+          "range_ms": {
+            "first_correct_message_frame": [
+              399.466,
+              401.406
+            ],
+            "list_interactive": [
+              521.132,
+              522.676
+            ],
+            "transition_finished": [
+              530.901,
+              539.268
+            ]
+          },
+          "median_build_p95_ms": 0.514,
+          "median_raster_p95_ms": 10.017,
+          "one_local_and_one_remote_query_per_entry": true
+        },
+        "after": {
+          "samples": 3,
+          "route_duration_ms": 280,
+          "median_ms": {
+            "first_correct_message_frame": 401.095,
+            "list_interactive": 521.377,
+            "transition_finished": 323.696
+          },
+          "range_ms": {
+            "first_correct_message_frame": [
+              400.337,
+              401.839
+            ],
+            "list_interactive": [
+              521.0,
+              522.176
+            ],
+            "transition_finished": [
+              323.421,
+              324.738
+            ]
+          },
+          "median_build_p95_ms": 0.441,
+          "median_raster_p95_ms": 10.418,
+          "one_local_and_one_remote_query_per_entry": true
+        },
+        "transition_saved_ms": 207.49
+      },
+      "slow_local_global_sync_busy": {
+        "before": {
+          "samples": 3,
+          "route_duration_ms": 480,
+          "median_ms": {
+            "first_correct_message_frame": 401.795,
+            "list_interactive": 522.089,
+            "transition_finished": 538.115
+          },
+          "range_ms": {
+            "first_correct_message_frame": [
+              400.602,
+              402.272
+            ],
+            "list_interactive": [
+              521.064,
+              522.867
+            ],
+            "transition_finished": [
+              530.239,
+              538.47
+            ]
+          },
+          "median_build_p95_ms": 0.487,
+          "median_raster_p95_ms": 10.669,
+          "one_local_and_one_remote_query_per_entry": true
+        },
+        "after": {
+          "samples": 3,
+          "route_duration_ms": 280,
+          "median_ms": {
+            "first_correct_message_frame": 407.435,
+            "list_interactive": 529.21,
+            "transition_finished": 330.379
+          },
+          "range_ms": {
+            "first_correct_message_frame": [
+              406.157,
+              410.453
+            ],
+            "list_interactive": [
+              528.552,
+              531.423
+            ],
+            "transition_finished": [
+              324.339,
+              333.245
+            ]
+          },
+          "median_build_p95_ms": 0.552,
+          "median_raster_p95_ms": 10.578,
+          "one_local_and_one_remote_query_per_entry": true
+        },
+        "transition_saved_ms": 207.736
+      }
+    }
+  },
+  "tests": {
+    "passed": 579,
+    "skipped": 12,
+    "skip_reason": "Existing date-picker/calendar preview exports without an output directory; no new correctness test disabled.",
+    "analyze": "No issues found",
+    "coverage": [
+      "Android/iOS widget platform simulation, light/dark themes",
+      "Actual list taps before transition end",
+      "Slow messages, reduced motion, active back gesture, early disposal",
+      "Frame-by-frame monotonic geometry, no page gap/overshoot, stable element and scroll offset",
+      "Interrupted entry pop, cancelled/committed back gesture",
+      "Existing history, window readiness, out-of-order realtime merge, conversation ownership, loading, revocation and viewport regressions"
+    ],
+    "not_rerun_this_stage": "Native process-kill/SQLite recovery and server load tests: no native/database/server changes in this motion-only stage."
+  },
+  "installed": {
+    "first_entry_ms": {
+      "tap": 0.097,
+      "prefetch_start": 3.195,
+      "local_window_start": 4.332,
+      "local_window_finished": 33.504,
+      "account_resolved": 76.219,
+      "route_push": 76.77,
+      "init_start": 87.742,
+      "window_ready": 93.328,
+      "init_finished": 105.109,
+      "first_frame": 297.338,
+      "first_correct_message_frame": 356.027,
+      "list_interactive": 356.079,
+      "initial_history_finished": 363.192,
+      "transition_finished": 390.986
+    },
+    "repeat_entry_ms": {
+      "tap": 0.004,
+      "prefetch_start": 0.103,
+      "local_window_start": 0.139,
+      "local_window_finished": 4.177,
+      "account_resolved": 4.351,
+      "route_push": 4.39,
+      "init_start": 8.402,
+      "window_ready": 9.095,
+      "init_finished": 9.643,
+      "first_frame": 48.691,
+      "first_correct_message_frame": 66.304,
+      "list_interactive": 66.349,
+      "initial_history_finished": 278.418,
+      "transition_finished": 302.729
+    },
+    "pid": "1720",
+    "fatal_records_for_process_in_retained_crash_log": 0,
+    "device": "emulator-5554",
+    "version_code": 2037,
+    "version_name": "3.0.1",
+    "abi": "x86_64",
+    "install": "Success",
+    "scope": "Full application, real local SDK/database and account. Debug smoke samples, not a controlled before/after performance benchmark."
+  },
+  "package": {
+    "apk": "E:\\openim\\openim-flutter-demo\\release-artifacts\\99chat-chat-motion-3.0.1-2037-debug.apk",
+    "apk_bytes": 341222213,
+    "apk_sha256": "805fb4741daf9fcc080b312bd215f775598a433491ace4e29bb2ef98b62bb48c",
+    "aar_sha256": "9805b00a906039ae21c491a4360f6c0a47ac0e4dd3775e06235b41f58286b236",
+    "native": {
+      "arm64-v8a": {
+        "sha256": "264549531938425d7e1f38bef2b968ad91a703c12e54c7f30d0392429a6917f5",
+        "matches_built_aar_after_strip": true,
+        "runtime_version_string": "v3.8.3-patch.15+recovery.27-sync-heat.2"
+      },
+      "x86_64": {
+        "sha256": "538472e923fc36a3b341d045cafebf72be481b8ab7b4d4dbe644a4c29b94962f",
+        "matches_built_aar_after_strip": true,
+        "runtime_version_string": "v3.8.3-patch.15+recovery.27-sync-heat.2"
+      }
+    }
+  },
+  "source_sha256": {
+    "lib/pages/chat/navigation/chat_entry_trace.dart": "90f9ab241250ed3a66950c031510298192faf1cc3266ee0665a14a697c9de125",
+    "lib/pages/chat/navigation/chat_entry_route_timing.dart": "d6baa1e9c1ddf4323ab822d345f0dba45b81384e29d32fe68598a42d91e7a181",
+    "lib/pages/chat/messages/loading/chat_initial_window_transition.dart": "4b0c214184eefcdf0dfa6c735eb11c7449615c20f29d56408e6c188c62315e1c",
+    "lib/pages/chat/messages/loading/chat_entry_paint_observer.dart": "e106c7b7c623734298964ee366a7edf2595f88130daf2d312a7b7f25e2fb35ce",
+    "lib/pages/chat/messages/widgets/chat_message_list.dart": "1f3570c7ea1dadde113976dea68b23a8bbfc211458e35de1067e6c8504a575ad",
+    "lib/routes/app_pages.dart": "c6bfb6aae9b763cb2c89397bd2364fffcd64ead6a9ed1387626b70091c1f0100",
+    "lib/routes/swipe_back/app_get_transition.dart": "aa4391244b1e237e019c2cf05b2f56cadf2963054195f477a8212d4e110a9a18",
+    "lib/routes/swipe_back/app_swipe_back_tokens.dart": "719ca176eddfae97932c83811ae1b5afe47e57aeaed2adb1e7fd8c871948dbfd",
+    "lib/routes/swipe_back/app_swipe_back_transition.dart": "287eb9e1833ea62214fa525592d10d1395359cabd8958512a9135af6ea21080c",
+    "test/pages/chat/navigation/chat_entry_trace_test.dart": "c142428fd2b79984ee2d2e2b4f687b00ab8231791d6ea9844b2f66145a64b48d",
+    "test/pages/chat/navigation/chat_entry_route_timing_test.dart": "8a57f17746377574daff5cabba6d1bd532dce15060e0d427082a326b89142ca4",
+    "test/routes/swipe_back/chat_motion_continuity_test.dart": "928cdf2c0270303737e8b34b4c4a9e67071e98fcf7fc7a19049a641ed53c2907",
+    "test/routes/swipe_back/app_swipe_back_lifecycle_test.dart": "35b664d9fea61584d5891de42789165d6f52b461c4f47796df31701aabe8ad5a",
+    "integration_test/performance/chat_window_profile_test.dart": "611c660898696ad75b875938eb005bea62f275705ba2839337918883adbd2858"
+  },
+  "unverified": [
+    "Physical Android timing/gesture feel",
+    "iOS device build and runtime performance"
+  ]
+}

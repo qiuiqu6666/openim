@@ -1200,6 +1200,7 @@ class HistoryScanCursor extends Message {
 }
 
 class AdvancedMessage {
+  MessageWindow? window;
   List<Message>? messageList;
   bool? isEnd;
   int? errCode;
@@ -1209,6 +1210,7 @@ class AdvancedMessage {
   bool? scanLimited;
 
   AdvancedMessage({
+    this.window,
     this.messageList,
     this.isEnd,
     this.errCode,
@@ -1219,6 +1221,7 @@ class AdvancedMessage {
   });
 
   AdvancedMessage.fromJson(Map<String, dynamic> json) {
+    window = json['window'] == null ? null : MessageWindow.fromJson(Map<String,dynamic>.from(json['window']));
     messageList =
         json['messageList'] == null ? null : (json['messageList'] as List).map((e) => Message.fromJson(e)).toList();
     isEnd = json['isEnd'];
@@ -1240,6 +1243,7 @@ class AdvancedMessage {
     data['lastMinSeq'] = this.lastMinSeq;
     data['scanCursor'] = scanCursor?.toJson();
     data['scanLimited'] = scanLimited;
+    data['window'] = window?.toJson();
     return data;
   }
 }

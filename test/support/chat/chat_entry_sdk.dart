@@ -67,10 +67,11 @@ class EntryHistoryCall {
   final Map<String, dynamic> arguments;
   final result = Completer<String>();
 
-  void complete(List<Message> messages, {bool isEnd = true}) {
+  void complete(List<Message> messages,
+      {bool isEnd = true, MessageWindow? window}) {
     if (result.isCompleted) return;
-    result.complete(jsonEncode(
-        AdvancedMessage(messageList: messages, isEnd: isEnd, errCode: 0)
-            .toJson()));
+    result.complete(jsonEncode(AdvancedMessage(
+            messageList: messages, isEnd: isEnd, errCode: 0, window: window)
+        .toJson()));
   }
 }

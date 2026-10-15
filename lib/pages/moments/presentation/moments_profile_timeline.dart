@@ -79,7 +79,7 @@ class MomentsProfileTimelineItem extends StatelessWidget {
                     ),
                   ]),
                   // Preserve the user's existing controls in the album too.
-                  const SizedBox(height: 6),
+                  const SizedBox(height: MomentsLayout.timelineActionGap),
                   MomentsPostActions(
                       post: post,
                       busy: busy,

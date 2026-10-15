@@ -87,7 +87,7 @@ void main() {
   });
   for (final brightness in Brightness.values) {
     testWidgets(
-        '${brightness.name} My Groups scrolls through every page and counts each tab',
+        '${brightness.name} My Groups scrolls through every page and counts the unified directory',
         (tester) async {
       final fixture = FriendPickerPresenceFixture(action: SelAction.forward);
       await fixture.open(tester,
@@ -100,26 +100,22 @@ void main() {
           builder: (_) => GroupListPage(
               logic: logic, onSelected: (group) => selected = group)));
       await tester.pumpAndSettle();
-      expect(find.byType(IndexBar), findsNothing);
-      expect(logic.iCreatedList, hasLength(20));
-      expect(logic.iJoinedList, hasLength(18));
-      expect(find.text('共 42 个群聊').hitTestable(), findsNothing);
-      expect(find.text('共 20 个群聊'), findsNothing);
-      await scrollTo(tester, find.text('共 42 个群聊'));
-      expect(logic.iCreatedList.map((group) => group.groupID),
-          samples().map((group) => group.groupID));
-      expect(find.text('共 42 个群聊').hitTestable(), findsOneWidget);
-      await scrollTo(tester, find.byKey(const ValueKey('self-z')), delta: -300);
+      expect(find.byType(IndexBar), findsOneWidget);
+      expect(find.text(StrRes.iCreatedGroup), findsNothing);
+      expect(find.text(StrRes.iJoinedGroup), findsNothing);
+      expect(logic.iCreatedList, hasLength(42));
+      expect(logic.iJoinedList, hasLength(41));
+      await scrollTo(tester, find.text('共 83 个群聊'));
+      expect(find.text('共 83 个群聊').hitTestable(), findsOneWidget);
+      await tester.tap(
+          find.descendant(of: find.byType(IndexBar), matching: find.text('Z')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('self-z')));
       expect(selected?.groupID, 'self-z');
-      await tester.tap(find.text(StrRes.iJoinedGroup));
-      await tester.pumpAndSettle();
-      await scrollTo(tester, find.text('共 41 个群聊'));
-      expect(find.text('共 41 个群聊').hitTestable(), findsOneWidget);
-      expect(find.byKey(const ValueKey('peer-number')).hitTestable(),
-          findsOneWidget);
+      await scrollTo(tester, find.byKey(const ValueKey('peer-number')));
       await tester.tap(find.byKey(const ValueKey('peer-number')));
       expect(selected?.groupID, 'peer-number');
+      logic.iCreatedList.clear();
       logic.iJoinedList.assignAll([selected!]);
       await tester.pumpAndSettle();
       await scrollTo(tester, find.byKey(const ValueKey('peer-number')),

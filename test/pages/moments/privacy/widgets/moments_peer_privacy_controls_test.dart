@@ -321,6 +321,70 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('route change can reload privacy for the same account',
+      (tester) async {
+    var environment = 'first-route';
+    final scoped = MomentsRepository(
+      api: api,
+      userIdProvider: () => 'me',
+      environmentProvider: () => environment,
+      privacySelectionStore: store,
+      subscribeToSdk: false,
+    );
+    addTearDown(scoped.dispose);
+    await tester.pumpWidget(_host(scoped));
+    await tester.pumpAndSettle();
+    environment = 'second-route';
+    await scoped.loadPrivacySelections();
+    await tester.pumpAndSettle();
+    expect(_switch(tester, _hidden).onChanged, isNull);
+    expect(find.text('请重新登录后再试'), findsNothing);
+    expect(tester.widget<TextButton>(find.byKey(_retry)).onPressed, isNotNull);
+    await tester.tap(find.byKey(_retry));
+    await tester.pumpAndSettle();
+    expect(_switch(tester, _hidden).onChanged, isNotNull);
+    expect(api.capabilitiesReads, 2);
+    expect(api.commands, isEmpty);
+  });
+
+  testWidgets('explicit session reset cannot reload from an old profile',
+      (tester) async {
+    await tester.pumpWidget(_host(repository));
+    await tester.pumpAndSettle();
+    repository.resetSession();
+    await tester.pumpAndSettle();
+    expect(_switch(tester, _hidden).onChanged, isNull);
+    expect(tester.widget<TextButton>(find.byKey(_retry)).onPressed, isNull);
+    expect(api.commands, isEmpty);
+  });
+
+  testWidgets('route recovery never resends a pending privacy command',
+      (tester) async {
+    var environment = 'first-route';
+    final scoped = MomentsRepository(
+      api: api,
+      userIdProvider: () => 'me',
+      environmentProvider: () => environment,
+      privacySelectionStore: store,
+      subscribeToSdk: false,
+    );
+    addTearDown(scoped.dispose);
+    await tester.pumpWidget(_host(scoped));
+    await tester.pumpAndSettle();
+    final gate = api.nextCommandGate = Completer<MomentsSettings>();
+    await tester.tap(find.byKey(_hidden));
+    await tester.pump();
+    environment = 'second-route';
+    await scoped.loadPrivacySelections();
+    gate.complete(MomentsSettings.fromJson({}));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(_retry));
+    await tester.pumpAndSettle();
+    expect(api.commands, ['hidden:$_peer:true']);
+    expect(_switch(tester, _hidden).value, isFalse);
+    expect(_switch(tester, _hidden).onChanged, isNotNull);
+  });
+
   testWidgets('late hydration cannot expose a previous account selection',
       (tester) async {
     var account = 'me';

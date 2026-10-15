@@ -67,21 +67,34 @@ func (m *MsgSyncer) resolveEmptySyncPreviews(ctx context.Context, batch, visible
 		}
 	}
 	for id, r := range pending {
-		if r[0] <= r[1] {
-			continue
+		original := visible[id]
+		tail := batch[id][1]
+		if r[0] <= tail && tail <= r[1] {
+			continue // The missing preview is still readable, so proof is incomplete.
 		}
-		// Only a confirmed invisible prefix can advance the contiguous cursor.
-		// A reduced upper bound alone must not acknowledge unseen older rows.
-		if r[0] > visible[id][1] {
-			if err := m.commitMessageCheckpoint(ctx, id, visible[id][1]); err != nil {
+		var invisible [][2]int64
+		if r[0] > original[0] {
+			invisible = append(invisible, [2]int64{original[0], min(original[1], r[0]-1)})
+		}
+		if r[1] < original[1] {
+			invisible = append(invisible, [2]int64{max(original[0], r[1]+1), original[1]})
+		}
+		if len(invisible) > 0 {
+			// Directional history proves these sequences are outside visibility.
+			// Record only those ranges: a suffix must never acknowledge older holes.
+			if err := m.commitMessageCoverage(ctx, id, invisible); err != nil {
 				return err
 			}
-		} else {
-			continue
+			messageSyncPageCommitted(ctx)
 		}
+		// Tightening the upper bound must not expand the automatic recent window
+		// backwards into history which was deliberately left for on-demand reads.
+		r[0] = max(r[0], original[1]-recentMessageWindow+1)
 		visible[id] = r
-		delete(batch, id)
-		closed++
+		if m.syncedMaxSeqs[id] >= tail || m.messageAlreadyCovered(id, tail) {
+			delete(batch, id)
+			closed++
+		}
 	}
 	log.ZInfo(ctx, "sync_diag empty_previews_revalidated", "candidates", len(pending), "confirmedInvisible", closed, "stillIncomplete", len(pending)-closed)
 	return nil

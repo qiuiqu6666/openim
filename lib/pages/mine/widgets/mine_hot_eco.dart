@@ -66,6 +66,7 @@ class MineHotEcoSection extends StatelessWidget {
         final sectionWidth = constraints.maxWidth;
         final horizontalPadding = sectionWidth * 0.045;
         final tileGap = sectionWidth * 0.018;
+        final columns = MediaQuery.textScalerOf(context).scale(1) > 1.3 ? 2 : 4;
 
         return Container(
           key: const ValueKey('mine-hot-eco-section'),
@@ -78,73 +79,18 @@ class MineHotEcoSection extends StatelessWidget {
           ),
           child: Column(
             children: [
-              SizedBox(
-                key: const ValueKey('mine-hot-eco-title-row'),
-                height: sectionWidth * 0.11,
-                child: Row(
-                  children: [
-                    Text('🔥',
-                        style: TextStyle(fontSize: sectionWidth * 0.046)),
-                    SizedBox(width: sectionWidth * 0.018),
-                    Expanded(
-                      child: Text(
-                        mineText(
-                          context,
-                          zh: '热门生态',
-                          en: 'Popular Ecosystem',
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: primaryTextColor,
-                          fontSize: sectionWidth * 0.043,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(sectionWidth * 0.04),
-                      onTap: () => onFeatureTap(
-                        mineText(
-                          context,
-                          zh: '热门生态',
-                          en: 'Popular Ecosystem',
-                        ),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: sectionWidth * 0.01,
-                          vertical: sectionWidth * 0.014,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              mineText(context, zh: '查看更多', en: 'More'),
-                              style: TextStyle(
-                                color: secondaryTextColor,
-                                fontSize: sectionWidth * 0.036,
-                              ),
-                            ),
-                            SizedBox(width: sectionWidth * 0.004),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: arrowColor,
-                              size: sectionWidth * 0.052,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Row(
+              _buildHeading(context, sectionWidth),
+              Wrap(
                 key: const ValueKey('mine-hot-eco-tiles-row'),
+                spacing: tileGap,
+                runSpacing: AppTokens.s3,
                 children: [
                   for (var i = 0; i < items.length; i++) ...[
-                    if (i > 0) SizedBox(width: tileGap),
-                    Expanded(
+                    SizedBox(
+                      width: (sectionWidth -
+                              horizontalPadding * 2 -
+                              tileGap * (columns - 1)) /
+                          columns,
                       child: _MineHotEcoTile(
                         item: items[i],
                         onTap: () {
@@ -189,6 +135,40 @@ class MineHotEcoSection extends StatelessWidget {
       },
     );
   }
+
+  Widget _buildHeading(BuildContext context, double width) {
+    final large = MediaQuery.textScalerOf(context).scale(1) > 1.3;
+    final title = Row(children: [
+      Text('🔥', style: TextStyle(fontSize: width * 0.046)),
+      const SizedBox(width: AppTokens.s3),
+      Expanded(
+          child: Text(
+        mineText(context, zh: '热门生态', en: 'Popular Ecosystem'),
+        maxLines: large ? 2 : 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+            color: primaryTextColor,
+            fontSize: width * 0.043,
+            fontWeight: FontWeight.w600),
+      )),
+    ]);
+    final status = Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppTokens.s5, vertical: AppTokens.s3),
+        child: Text(mineText(context, zh: '后续开放', en: 'Coming soon'),
+            style: TextStyle(
+                color: secondaryTextColor,
+                fontSize: AppTokens.captionFontSize)));
+    return ConstrainedBox(
+      key: const ValueKey('mine-hot-eco-title-row'),
+      constraints: const BoxConstraints(minHeight: AppTokens.minimumTapSize),
+      child: large
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [title, status])
+          : Row(children: [Expanded(child: title), status]),
+    );
+  }
 }
 
 class _MineHotEcoItem {
@@ -227,6 +207,7 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
   Timer? _delayTimer;
   bool _delayElapsed = false;
   bool _tickerModeEnabled = true;
+  bool _reduceMotion = false;
   AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
 
   @override
@@ -250,10 +231,10 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final enabled =
-        TickerMode.of(context) && (ModalRoute.of(context)?.isCurrent ?? true);
-    if (_tickerModeEnabled == enabled) return;
+    final enabled = TickerMode.valuesOf(context).enabled &&
+        (ModalRoute.of(context)?.isCurrent ?? true);
     _tickerModeEnabled = enabled;
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
     _syncAnimationWork();
   }
 
@@ -265,14 +246,15 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
 
   void _syncAnimationWork() {
     if (!_delayElapsed || !mounted) return;
-    final shouldRun =
-        _tickerModeEnabled && _lifecycleState == AppLifecycleState.resumed;
+    final shouldRun = !_reduceMotion &&
+        _tickerModeEnabled &&
+        _lifecycleState == AppLifecycleState.resumed;
     if (!shouldRun) {
       _controller.stop();
       return;
     }
-    if (!_controller.isAnimating) {
-      _controller.repeat(period: const Duration(milliseconds: 3600));
+    if (!_controller.isAnimating && !_controller.isCompleted) {
+      _controller.forward();
     }
   }
 
@@ -296,7 +278,7 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(radius),
-                onTap: widget.onTap,
+                onTap: widget.item.enabled ? widget.onTap : null,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(radius),
                   child: Stack(
@@ -312,7 +294,8 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
                           gaplessPlayback: true,
                         ),
                       ),
-                      _MineHotEcoLightSweep(animation: _sweep),
+                      if (!_reduceMotion && widget.item.enabled)
+                        _MineHotEcoLightSweep(animation: _sweep),
                       Positioned(
                         left: tileWidth * 0.06,
                         bottom: tileWidth * 0.10,
@@ -333,7 +316,9 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
                                 ),
                               ),
                               child: Icon(
-                                Icons.arrow_forward_rounded,
+                                widget.item.enabled
+                                    ? Icons.arrow_forward_rounded
+                                    : Icons.lock_outline_rounded,
                                 color: AppTokens.onAccent,
                                 size: tileWidth * 0.1088,
                               ),

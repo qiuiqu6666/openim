@@ -31,6 +31,7 @@ class _MomentsPeerPrivacyControlsState
     extends State<MomentsPeerPrivacyControls> {
   late MomentsRepository _repository;
   late String _scope;
+  late int _accountScope;
   int _generation = 0;
   bool _loading = true;
   bool _saving = false;
@@ -64,6 +65,7 @@ class _MomentsPeerPrivacyControlsState
   void _bind() {
     _repository = widget.repository ?? MomentsRepository.instance;
     _scope = _repository.sessionScope;
+    _accountScope = _repository.accountScope;
     _repository.addListener(_repositoryChanged);
     _loading = true;
     _saving = false;
@@ -137,7 +139,13 @@ class _MomentsPeerPrivacyControlsState
   }
 
   Future<void> _load({bool force = false}) async {
-    if (!_sessionCurrent) return;
+    if (!_sessionCurrent) {
+      if (_repository.accountScope != _accountScope) return;
+      // A transport change may be retried for the same authenticated owner.
+      // Discard any old command; retry only reads the new environment.
+      _scope = _repository.sessionScope;
+      _pending = null;
+    }
     final generation = ++_generation;
     final scope = _scope;
     final peer = widget.userId;
@@ -307,13 +315,17 @@ class _MomentsPeerPrivacyControlsState
     final choices = current && _ready && _repository.privacySelectionsLoaded
         ? _repository.privacySelections
         : MomentsPrivacySelections.empty;
-    final error =
-        current ? _error : const MomentsException('会话已改变', authRequired: true);
+    final error = current
+        ? _error
+        : const MomentsException('会话已改变',
+            code: 'SESSION_CHANGED', authRequired: true);
     final persistenceError = current && _repository.privacySelectionsLoaded
         ? _persistenceRetryError ?? _repository.privacyPersistenceError
         : null;
-    final canRetry = current && !_loading && !_saving;
-    final pending = _pending;
+    final canRetry = (current || _repository.accountScope == _accountScope) &&
+        !_loading &&
+        !_saving;
+    final pending = current ? _pending : null;
     return Column(mainAxisSize: MainAxisSize.min, children: [
       _cell(MomentsPrivacySelectionKind.blockedViewer,
           choices.blockedViewerIds.contains(widget.userId)),

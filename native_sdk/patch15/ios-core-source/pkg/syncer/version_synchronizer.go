@@ -116,41 +116,46 @@ func (o *VersionSynchronizer[V, R]) IncrementalSync() error {
 			}
 		}
 
-		local, err := o.Local()
-		if err != nil {
-			return err
-		}
-
-		kv := datautil.SliceToMapAny(local, func(v V) (string, V) {
-			return o.Key(v), v
-		})
-
-		for i, change := range changes {
-			key := o.Key(change)
-			kv[key] = changes[i]
-		}
-
-		for _, id := range delIDs {
-			delete(kv, id)
-		}
-
-		server := datautil.Values(kv)
-		if err := o.Syncer(server, local); err != nil {
-			return err
-		}
-		if extraData != nil && o.ExtraDataProcessor != nil {
-			if err := o.ExtraDataProcessor(o.Ctx, extraData); err != nil {
-				return err
-			}
-		}
-
-		// The ordering of fullID has changed due to modifications such as group role level changes or friend list reordering.
-		// Therefore, it is necessary to refresh and obtain the fullID again.
-		if o.IDOrderChanged != nil && o.IDOrderChanged(resp) {
-			lvs.UIDList, err = o.FullID(o.Ctx)
+		// Profile-only changes do not require reading or comparing members.
+		if len(delIDs) > 0 || len(changes) > 0 {
+			local, err := o.Local()
 			if err != nil {
 				return err
 			}
+
+			kv := datautil.SliceToMapAny(local, func(v V) (string, V) {
+				return o.Key(v), v
+			})
+
+			for i, change := range changes {
+				key := o.Key(change)
+				kv[key] = changes[i]
+			}
+
+			for _, id := range delIDs {
+				delete(kv, id)
+			}
+
+			server := datautil.Values(kv)
+			if err := o.Syncer(server, local); err != nil {
+				return err
+			}
+		}
+		// The ordering of fullID has changed due to modifications such as group role level changes or friend list reordering.
+		// Therefore, it is necessary to refresh and obtain the fullID again.
+		if o.IDOrderChanged != nil && o.IDOrderChanged(resp) {
+			ids, err := o.FullID(o.Ctx)
+			if err != nil {
+				return err
+			}
+			lvs.UIDList = ids
+		}
+	}
+	// Group metadata is independent of whether members needed a full reload.
+	// Apply it before committing the version so a failed write remains retryable.
+	if extraData != nil && o.ExtraDataProcessor != nil {
+		if err := o.ExtraDataProcessor(o.Ctx, extraData); err != nil {
+			return err
 		}
 	}
 	return o.updateVersionInfo(lvs, resp)
@@ -199,27 +204,30 @@ func (o *VersionSynchronizer[V, R]) CheckVersionSync() error {
 			changes = append(changes, insert...)
 		}
 
-		local, err := o.Local()
-		if err != nil {
-			return err
-		}
+		// Profile-only changes do not require reading or comparing members.
+		if len(delIDs) > 0 || len(changes) > 0 {
+			local, err := o.Local()
+			if err != nil {
+				return err
+			}
 
-		kv := datautil.SliceToMapAny(local, func(v V) (string, V) {
-			return o.Key(v), v
-		})
+			kv := datautil.SliceToMapAny(local, func(v V) (string, V) {
+				return o.Key(v), v
+			})
 
-		for i, change := range changes {
-			key := o.Key(change)
-			kv[key] = changes[i]
-		}
+			for i, change := range changes {
+				key := o.Key(change)
+				kv[key] = changes[i]
+			}
 
-		for _, id := range delIDs {
-			delete(kv, id)
-		}
+			for _, id := range delIDs {
+				delete(kv, id)
+			}
 
-		server := datautil.Values(kv)
-		if err := o.Syncer(server, local); err != nil {
-			return err
+			server := datautil.Values(kv)
+			if err := o.Syncer(server, local); err != nil {
+				return err
+			}
 		}
 		if extraData != nil && o.ExtraDataProcessor != nil {
 			if err := o.ExtraDataProcessor(o.Ctx, extraData); err != nil {
@@ -231,10 +239,11 @@ func (o *VersionSynchronizer[V, R]) CheckVersionSync() error {
 		// The ordering of fullID has changed due to modifications such as group role level changes or friend list reordering.
 		// Therefore, it is necessary to refresh and obtain the fullID again.
 		if o.IDOrderChanged != nil && o.IDOrderChanged(resp) {
-			lvs.UIDList, err = o.FullID(o.Ctx)
+			ids, err := o.FullID(o.Ctx)
 			if err != nil {
 				return err
 			}
+			lvs.UIDList = ids
 		}
 		return o.updateVersionInfo(lvs, resp)
 	} else if version <= lvs.Version {

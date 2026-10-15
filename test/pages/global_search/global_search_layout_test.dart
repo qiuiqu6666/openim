@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/global_search/global_search_logic.dart';
 import 'package:openim/pages/global_search/global_search_view.dart';
+import 'package:openim/pages/global_search/loading/global_search_skeleton.dart';
 import 'package:openim/pages/official_account/widgets/official_account_name_label.dart';
 import 'package:openim/pages/group_features/identity/group_name_label.dart';
 import 'package:openim_common/openim_common.dart';
@@ -27,6 +28,7 @@ class _Source extends GlobalSearchSource {
   Completer<List<FriendInfo>>? pendingFriends;
   bool failFiles = false;
   List<FriendInfo>? friendResults;
+  List<GroupInfo>? groupResults;
   List<ConversationInfo>? conversationResults;
 
   void _count(String section) =>
@@ -42,7 +44,7 @@ class _Source extends GlobalSearchSource {
   @override
   Future<List<GroupInfo>> groups(String query) async {
     _count('groups');
-    return [GroupInfo(groupID: 'group', groupName: '搜索群聊')];
+    return groupResults ?? [GroupInfo(groupID: 'group', groupName: '搜索群聊')];
   }
 
   @override
@@ -151,8 +153,8 @@ Future<GlobalSearchLogic> _mount(WidgetTester tester, _Source source,
   return logic;
 }
 
-Future<void> _search(WidgetTester tester) async {
-  await tester.enterText(find.byType(TextField), '1');
+Future<void> _search(WidgetTester tester, {String query = '1'}) async {
+  await tester.enterText(find.byType(TextField), query);
   await tester.pump(const Duration(milliseconds: 350));
   await tester.pumpAndSettle();
   Get.find<GlobalSearchLogic>().focusNode.unfocus();
@@ -294,6 +296,45 @@ void main() {
   });
 
   for (final dark in [false, true]) {
+    testWidgets('empty result titles stay centered as previews appear: $dark',
+        (tester) async {
+      final source = _Source()
+        ..friendResults = []
+        ..conversationResults = [
+          ConversationInfo(
+              conversationID: 'empty',
+              showName: '空摘要会话',
+              conversationType: ConversationType.single),
+        ];
+      await _mount(tester, source, dark: dark);
+      await _search(tester);
+      for (final title in ['搜索群聊', '空摘要会话']) {
+        final row = _row(title);
+        final text = find.descendant(of: row, matching: find.text(title));
+        final avatar =
+            find.descendant(of: row, matching: find.byType(AvatarView));
+        expect(tester.widget<ListTile>(row).subtitle, isNull);
+        expect(tester.getCenter(text).dy,
+            closeTo(tester.getCenter(avatar).dy, .5));
+        expect(tester.getSize(row).height, greaterThanOrEqualTo(48));
+      }
+      source.previews.add(ConversationInfo(
+          conversationID: 'sg_group',
+          groupID: 'group',
+          conversationType: ConversationType.superGroup,
+          latestMsg: Message(
+              contentType: MessageType.text,
+              textElem: TextElem(content: '新收到的消息'))));
+      await tester.pumpAndSettle();
+      expect(find.text('新收到的消息'), findsOneWidget);
+      expect(tester.widget<ListTile>(_row('搜索群聊')).subtitle, isNotNull);
+      source.previews.clear();
+      await tester.pumpAndSettle();
+      expect(tester.getCenter(find.text('搜索群聊')).dy,
+          closeTo(tester.getCenter(_row('搜索群聊')).dy, .5));
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('first result and category headers are fully visible: $dark',
         (tester) async {
       final source = _Source();
@@ -342,21 +383,26 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets(
-        'narrow large text keeps categories and first row bounded: $dark',
-        (tester) async {
-      await _mount(tester, _Source(),
-          dark: dark, size: const Size(320, 720), scale: 1.6);
-      await _search(tester);
-      await _select(tester, StrRes.globalSearchChatHistory);
-      _expectTopSection(tester, 4, '群聊测试');
-      expect(find.byType(ChoiceChip), findsNothing);
-      expect(find.byType(GlassAppBar), findsNothing);
-      final cancel = find.byKey(const ValueKey('chat-history-search-cancel'));
-      expect(cancel, findsOneWidget);
-      expect(tester.getRect(cancel).right, lessThanOrEqualTo(320));
-      expect(tester.takeException(), isNull);
-    });
+    for (final size in [
+      const Size(320, 720),
+      const Size(812, 375),
+      const Size(1024, 768),
+    ]) {
+      testWidgets(
+          'large text keeps categories and first row bounded: $dark $size',
+          (tester) async {
+        await _mount(tester, _Source(), dark: dark, size: size, scale: 2);
+        await _search(tester);
+        await _select(tester, StrRes.globalSearchChatHistory);
+        _expectTopSection(tester, 4, '群聊测试');
+        expect(find.byType(ChoiceChip), findsNothing);
+        expect(find.byType(GlassAppBar), findsNothing);
+        final cancel = find.byKey(const ValueKey('chat-history-search-cancel'));
+        expect(cancel, findsOneWidget);
+        expect(tester.getRect(cancel).right, lessThanOrEqualTo(size.width));
+        expect(tester.takeException(), isNull);
+      });
+    }
   }
 
   testWidgets('entry focuses search and tapping blank space dismisses keyboard',
@@ -381,12 +427,17 @@ void main() {
     expect(
         find.byKey(const ValueKey('chat-history-search-clear')), findsNothing);
     await tester.enterText(find.byType(TextField), '1');
+    await tester.pump();
+    expect(find.byType(GlobalSearchSkeleton), findsOneWidget);
+    expect(find.byType(ShaderMask), findsOneWidget);
+    expect(find.byType(ListTile), findsNothing);
     await tester.pump(const Duration(milliseconds: 350));
     expect(logic.loading.value, isTrue);
     expect(tester.getSize(_header).height, greaterThan(before.height));
     source.pendingFriends!
         .complete([FriendInfo(userID: 'friend', nickname: '冬')]);
     await tester.pumpAndSettle();
+    expect(find.byType(GlobalSearchSkeleton), findsNothing);
     expect(tester.getSize(_header).height, greaterThan(before.height));
     await tester.tap(find.byKey(const ValueKey('chat-history-search-clear')));
     await tester.pumpAndSettle();
@@ -419,8 +470,35 @@ void main() {
     testWidgets('export actual search results ${dark ? 'dark' : 'light'}',
         (tester) async {
       final boundary = GlobalKey();
-      await _mount(tester, _Source(), dark: dark, boundary: boundary);
-      await _search(tester);
+      final previewConversation = ConversationInfo(
+          conversationID: 'sg_group',
+          groupID: 'group',
+          conversationType: ConversationType.superGroup,
+          showName: '太6了123123',
+          latestMsg: Message(
+              contentType: MessageType.text,
+              textElem: TextElem(content: '[视频]')));
+      final source = _Source()
+        ..friendResults = [FriendInfo(userID: 'friend', nickname: '测试1234')]
+        ..groupResults = [
+          GroupInfo(groupID: 'group', groupName: '太6了123123'),
+          GroupInfo(groupID: 'empty-one', groupName: '123123'),
+          GroupInfo(groupID: 'empty-two', groupName: '123123'),
+        ]
+        ..conversationResults = [
+          previewConversation,
+          for (final id in ['empty-one', 'empty-two'])
+            ConversationInfo(
+                conversationID: 'sg_$id',
+                groupID: id,
+                showName: '123123',
+                conversationType: ConversationType.superGroup),
+        ];
+      source.previews.add(previewConversation);
+      await _mount(tester, source, dark: dark, boundary: boundary);
+      await _search(tester, query: '123');
+      await _export(
+          tester, boundary, dark ? 'dark-overview' : 'light-overview');
       await _select(tester, StrRes.globalSearchChatHistory);
       await _export(tester, boundary, dark ? 'dark' : 'light');
       expect(tester.takeException(), isNull);

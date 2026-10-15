@@ -7,6 +7,7 @@ import '../../../contacts/user_profile_panel/set_remark/set_remark_view.dart';
 import '../settings_draft_store.dart';
 import '../settings_service.dart';
 import '../widgets/settings_widgets.dart';
+import '../../../../widgets/editing/unsaved_changes_guard.dart';
 
 class EditNicknamePage extends StatefulWidget {
   const EditNicknamePage({
@@ -251,7 +252,10 @@ class _EditNicknamePageState extends State<EditNicknamePage>
   }
 
   @override
-  Widget build(BuildContext context) => SetFriendRemarkPage.editor(
+  Widget build(BuildContext context) => UnsavedChangesGuard(
+      dirty: _controller.text != widget.initialNickname,
+      busy: _saving || _changingAvatar,
+      child: SetFriendRemarkPage.editor(
         controller: _controller,
         avatarURL: widget.avatarUrl,
         avatarName: widget.initialNickname,
@@ -298,5 +302,5 @@ class _EditNicknamePageState extends State<EditNicknamePage>
             ],
           ),
         ),
-      );
+      ));
 }

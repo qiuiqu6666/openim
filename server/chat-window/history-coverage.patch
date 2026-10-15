@@ -1,0 +1,225 @@
+diff --git a/pkg/common/storage/controller/history_missing_test.go b/pkg/common/storage/controller/history_missing_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/common/storage/controller/history_missing_test.go
+@@ -0,0 +1,30 @@
++package controller
++
++import (
++	"context"
++	"github.com/openimsdk/open-im-server/v3/pkg/common/storage/cache"
++	"github.com/openimsdk/open-im-server/v3/pkg/common/storage/model"
++	"github.com/openimsdk/protocol/constant"
++	"testing"
++)
++
++type incompleteHistoryCache struct {
++	cache.MsgCache
++	rows []*model.MsgInfoModel
++}
++
++func (c *incompleteHistoryCache) GetMessageBySeqs(context.Context, string, []int64) ([]*model.MsgInfoModel, error) {
++	return c.rows, nil
++}
++func TestMissingHistoryCannotProveDeletion(t *testing.T) {
++	c := &incompleteHistoryCache{}
++	db := &commonMsgDatabase{msgCache: c}
++	if _, err := db.GetMessageBySeqs(context.Background(), "chat", "self", []int64{5000}); err == nil {
++		t.Fatal("missing durable row was called deleted")
++	}
++	c.rows = []*model.MsgInfoModel{{Msg: &model.MsgDataModel{Seq: 5000, Status: constant.MsgStatusHasDeleted}}}
++	rows, err := db.GetMessageBySeqs(context.Background(), "chat", "self", []int64{5000})
++	if err != nil || len(rows) != 1 || rows[0].Status != constant.MsgStatusHasDeleted {
++		t.Fatalf("explicit tombstone rejected: %v %v", rows, err)
++	}
++}
+diff --git a/pkg/common/storage/controller/msg.go b/pkg/common/storage/controller/msg.go
+--- a/pkg/common/storage/controller/msg.go
++++ b/pkg/common/storage/controller/msg.go
+@@ -843,7 +843,7 @@
+ 		if v, ok := seqMsgs[seq]; ok {
+ 			res = append(res, convert.MsgDB2Pb(v.Msg))
+ 		} else {
+-			res = append(res, &sdkws.MsgData{Seq: seq, Status: constant.MsgStatusHasDeleted})
++			return nil, errs.ErrInternalServer.WrapMsg("history sequence missing without deletion evidence", "seq", seq)
+ 		}
+ 	}
+ 	return res, nil
+diff --git a/pkg/common/storage/database/mgo/history_find_seqs_test.go b/pkg/common/storage/database/mgo/history_find_seqs_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/common/storage/database/mgo/history_find_seqs_test.go
+@@ -0,0 +1,26 @@
++package mgo
++
++import (
++	"context"
++	"github.com/openimsdk/open-im-server/v3/pkg/common/storage/model"
++	"go.mongodb.org/mongo-driver/bson"
++	"go.mongodb.org/mongo-driver/mongo/integration/mtest"
++	"testing"
++)
++
++func TestFindSeqsRetriesUncommittedSlot(t *testing.T) {
++	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
++	mt.Run("empty then durable", func(mt *mtest.T) {
++		db := &MsgMgo{coll: mt.Coll}
++		ns := mt.DB.Name() + "." + mt.Coll.Name()
++		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{{Key: "msgs", Value: bson.A{bson.M{"msg": nil, "revoke": nil, "del_list": bson.A{}, "is_read": false}}}}))
++		if rows, err := db.FindSeqs(context.Background(), "chat", []int64{5000}); err == nil || len(rows) != 0 {
++			mt.Fatal("uncommitted slot became deletion proof")
++		}
++		mt.AddMockResponses(mtest.CreateCursorResponse(0, ns, mtest.FirstBatch, bson.D{{Key: "msgs", Value: bson.A{&model.MsgInfoModel{Msg: &model.MsgDataModel{Seq: 5000, SendTime: 10, Content: "arrived"}}}}}))
++		rows, err := db.FindSeqs(context.Background(), "chat", []int64{5000})
++		if err != nil || len(rows) != 1 || rows[0].Msg.Content != "arrived" {
++			mt.Fatalf("retry did not recover: %+v %v", rows, err)
++		}
++	})
++}
+diff --git a/pkg/common/storage/database/mgo/history_slot.go b/pkg/common/storage/database/mgo/history_slot.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/common/storage/database/mgo/history_slot.go
+@@ -0,0 +1,31 @@
++package mgo
++
++import (
++	"github.com/openimsdk/open-im-server/v3/pkg/common/storage/model"
++	"github.com/openimsdk/protocol/constant"
++	"go.mongodb.org/mongo-driver/bson"
++	"go.mongodb.org/mongo-driver/bson/bsontype"
++)
++
++// A preallocated slot has msg/revoke/del_list/is_read fields, even when empty.
++// Legacy physical deletion replaced the entire slot with exactly {msg:null}.
++// Preserve this distinction before decoding; unknown absence is never a tombstone.
++func decodeHistorySlot(raw bson.Raw) (*model.MsgInfoModel, error) {
++	if len(raw) == 0 {
++		return nil, nil
++	}
++	var row model.MsgInfoModel
++	if err := bson.Unmarshal(raw, &row); err != nil {
++		return nil, err
++	}
++	fields, err := raw.Elements()
++	if err != nil {
++		return nil, err
++	}
++	marker, ok := raw.Lookup("history_deleted").BooleanOK()
++	legacy := len(fields) == 1 && fields[0].Key() == "msg" && fields[0].Value().Type == bsontype.Null
++	if row.Msg == nil && ((ok && marker) || legacy) {
++		row.Msg = &model.MsgDataModel{Status: constant.MsgStatusHasDeleted}
++	}
++	return &row, nil
++}
+diff --git a/pkg/common/storage/database/mgo/history_slot_test.go b/pkg/common/storage/database/mgo/history_slot_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/common/storage/database/mgo/history_slot_test.go
+@@ -0,0 +1,42 @@
++package mgo
++
++import (
++	"github.com/openimsdk/open-im-server/v3/pkg/common/storage/model"
++	"github.com/openimsdk/protocol/constant"
++	"go.mongodb.org/mongo-driver/bson"
++	"testing"
++)
++
++func TestHistorySlotRequiresDeletionEvidence(t *testing.T) {
++	cases := []struct {
++		name    string
++		value   any
++		deleted bool
++	}{
++		{"preallocated", &model.MsgInfoModel{DelList: []string{}}, false},
++		{"unknown empty", bson.M{}, false},
++		{"revoke before body", &model.MsgInfoModel{Revoke: &model.RevokeModel{Time: 10}}, false},
++		{"legacy physical delete", bson.M{"msg": nil}, true},
++		{"explicit physical delete", bson.M{"msg": nil, "history_deleted": true}, true},
++		{"visible body", &model.MsgInfoModel{Msg: &model.MsgDataModel{Seq: 5000, SendTime: 10, Status: 2}}, false},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			raw, err := bson.Marshal(tc.value)
++			if err != nil {
++				t.Fatal(err)
++			}
++			row, err := decodeHistorySlot(raw)
++			if err != nil {
++				t.Fatal(err)
++			}
++			deleted := row != nil && row.Msg != nil && row.Msg.Status >= constant.MsgStatusHasDeleted
++			if deleted != tc.deleted {
++				t.Fatalf("false coverage for %s: %+v", tc.name, row)
++			}
++		})
++	}
++	if row, err := decodeHistorySlot(nil); row != nil || err != nil {
++		t.Fatal("missing slot was fabricated")
++	}
++}
+diff --git a/pkg/common/storage/database/mgo/msg.go b/pkg/common/storage/database/mgo/msg.go
+--- a/pkg/common/storage/database/mgo/msg.go
++++ b/pkg/common/storage/database/mgo/msg.go
+@@ -226,7 +226,7 @@
+ 	}
+ 	for _, index := range indexes {
+ 		update["$set"].(bson.M)[fmt.Sprintf("msgs.%d", index)] = bson.M{
+-			"msg": nil,
++			"msg": nil, "history_deleted": true,
+ 		}
+ 	}
+ 	_, err := mongoutil.UpdateMany(ctx, m.coll, bson.M{"doc_id": docID}, update)
+@@ -1081,14 +1081,25 @@
+ 			}},
+ 		}}},
+ 	}
+-	msgDocModel, err := mongoutil.Aggregate[*model.MsgDocModel](ctx, m.coll, pipeline)
++	type indexedDocument struct {
++		Msgs []bson.Raw `bson:"msgs"`
++	}
++	msgDocModel, err := mongoutil.Aggregate[*indexedDocument](ctx, m.coll, pipeline)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+ 	if len(msgDocModel) == 0 {
+ 		return nil, nil
+ 	}
+-	return msgDocModel[0].Msg, nil
++	rows := make([]*model.MsgInfoModel, 0, len(msgDocModel[0].Msgs))
++	for _, raw := range msgDocModel[0].Msgs {
++		row, err := decodeHistorySlot(raw)
++		if err != nil {
++			return nil, err
++		}
++		rows = append(rows, row)
++	}
++	return rows, nil
+ }
+ 
+ //func (m *MsgMgo) FindSeqs(ctx context.Context, conversationID string, seqs []int64) ([]*model.MsgInfoModel, error) {
+@@ -1189,14 +1200,19 @@
+ 		if err != nil {
+ 			return nil, err
+ 		}
+-		if len(res) == 0 {
+-			abnormalSeq = append(abnormalSeq, docSeqs...)
+-			continue
++		if len(res) != len(docSeqs) {
++			return nil, errs.ErrInternalServer.WrapMsg("history document not yet durable", "docID", docID)
+ 		}
+ 		for i, re := range res {
+-			if re == nil || re.Msg == nil || re.Msg.SendTime == 0 {
++			if re == nil || re.Msg == nil {
++				return nil, errs.ErrInternalServer.WrapMsg("history sequence not yet durable", "seq", docSeqs[i])
++			}
++			if re.Msg.Status >= constant.MsgStatusHasDeleted {
+ 				abnormalSeq = append(abnormalSeq, docSeqs[i])
+ 				continue
++			}
++			if re.Msg.Seq != docSeqs[i] || re.Msg.SendTime == 0 {
++				return nil, errs.ErrInternalServer.WrapMsg("incomplete history sequence", "seq", docSeqs[i])
+ 			}
+ 			result = append(result, res[i])
+ 		}

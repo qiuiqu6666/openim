@@ -103,16 +103,18 @@ class ChatHintTextView extends StatelessWidget {
             final bMap = <String, String>{};
             final infoMap = <String, GroupMembersInfo>{};
             final ntf = InvitedJoinGroupNotification.fromJson(map);
+            // Approval notifications carry the approver in opUser.
+            final inviter = ntf.inviterUser ?? ntf.opUser!;
 
-            aMap[ntf.opUser!.userID!] = IMUtils.getGroupMemberShowName(ntf.opUser!);
-            infoMap[ntf.opUser!.userID!] = ntf.opUser!;
+            aMap[inviter.userID!] = IMUtils.getGroupMemberShowName(inviter);
+            infoMap[inviter.userID!] = inviter;
 
             for (var user in ntf.invitedUserList!) {
               bMap[user.userID!] = IMUtils.getGroupMemberShowName(user);
               infoMap[user.userID!] = user;
             }
 
-            final a = ntf.opUser!.userID!;
+            final a = inviter.userID!;
             final b = bMap.keys.join('、');
             String pattern = '(${[a, ...bMap.keys].join('|')})';
 

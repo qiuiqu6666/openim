@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/mine/settings/node_switch/node_endpoint.dart';
@@ -11,7 +12,7 @@ import 'package:openim/pages/mine/settings/node_switch/node_probe_controller.dar
 class _Transport implements HttpClientAdapter {
   final requests = <RequestOptions>[];
   final started = Completer<void>();
-  Object body = {'errCode': 0, 'data': <String, dynamic>{}};
+  Object body = {'service': 'chat-api', 'status': 'ok'};
   int code = 200;
   Completer<void>? gate;
   @override
@@ -60,7 +61,7 @@ void main() {
     await direct.started.future;
     await Future<void>.delayed(Duration.zero);
     expect(direct.requests.map((request) => request.uri.toString()),
-        NodeEndpoint.builtIn.map((node) => '${node.chatApi}/chat/platform'));
+        NodeEndpoint.builtIn.map((node) => '${node.chatApi}/healthz'));
     expect(all.pending,
         NodeEndpoint.builtIn.map((node) => node.signature).toSet());
     direct.gate!.complete();
@@ -84,7 +85,7 @@ void main() {
     expect(transport.requests, isEmpty);
     await controller.test();
     final request = transport.requests.single;
-    expect(request.uri.toString(), 'https://chat.example/chat/platform');
+    expect(request.uri.toString(), 'https://chat.example/healthz');
     expect(request.method, 'GET');
     expect(request.headers['operationID'], isNotEmpty);
     expect(request.headers.keys.map((e) => e.toLowerCase()),
@@ -143,5 +144,31 @@ void main() {
     expect(controller.testing, isFalse);
     expect(controller.status, NodeProbeStatus.unknown);
     expect(transport.requests, hasLength(1));
+  });
+
+  test('network changes cancel old probes and never publish their result',
+      () async {
+    final network = StreamController<List<ConnectivityResult>>();
+    final adapter = _Transport()..gate = Completer<void>();
+    final owned = NodeProbeController(
+      readEndpoint: () => endpoint,
+      networkChanges: network.stream,
+      clientFactory: () => Dio()..httpClientAdapter = adapter,
+    );
+    owned.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    addTearDown(owned.dispose);
+    addTearDown(network.close);
+    final work = owned.test();
+    await adapter.started.future;
+    network.add([ConnectivityResult.mobile]);
+    await Future<void>.delayed(Duration.zero);
+    await work;
+    expect(owned.testing, isFalse);
+    expect(owned.results, isEmpty);
+    expect(owned.status, NodeProbeStatus.unknown);
+    adapter.gate!.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(owned.testedAt, isNull);
+    expect(adapter.requests, hasLength(1));
   });
 }

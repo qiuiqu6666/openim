@@ -1,4 +1,4 @@
-// Copyright © 2023 OpenIM SDK. All rights reserved.
+// Copyright 漏 2023 OpenIM SDK. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,13 +96,9 @@ func (c *Conversation) syncFlag(c2v common.Cmd2Value) error {
 		c.msgOffset = 0
 		c.ConversationListener().OnSyncServerStart(true)
 		c.ConversationListener().OnSyncServerProgress(1)
-		asyncWaitFunctions := []func(c context.Context) error{
-			c.group.SyncAllJoinedGroupsAndMembers,
-			c.relation.IncrSyncFriends,
-		}
-		if err := runRequiredSyncFunctions(ctx, asyncWaitFunctions, true); err != nil {
-			return err
-		}
+		// Visibility/settings and read watermarks are the required bootstrap.
+		// Friends and group-member profiles are refreshed by the serialized
+		// auxiliary job after messages, without delaying this first window.
 		c.addInitProgress(InitSyncProgress * 4 / 10)              // add 40% of InitSyncProgress as progress
 		c.ConversationListener().OnSyncServerProgress(c.progress) // notify server current Progress
 
@@ -117,15 +113,10 @@ func (c *Conversation) syncFlag(c2v common.Cmd2Value) error {
 		c.addInitProgress(InitSyncProgress * 6 / 10)              // add 60% of InitSyncProgress as progress
 		c.ConversationListener().OnSyncServerProgress(c.progress) // notify server current Progress
 
-		asyncNoWaitFunctions := []func(c context.Context) error{
-			c.user.SyncLoginUserInfoWithoutNotice,
-			c.relation.SyncAllBlackListWithoutNotice,
-		}
-		// Join optional metadata work before the interruptible attempt exits.
-		// Otherwise cancellation could leave lock-owning background jobs behind.
-		runSyncFunctions(ctx, asyncNoWaitFunctions, asyncWait)
-
 	case constant.AppDataSyncFinish:
+		if err := c.reconcileGroupConversationProfiles(ctx); err != nil {
+			return err
+		}
 		log.ZDebug(ctx, "AppDataSyncFinish", "time", time.Since(c.startTime).String())
 		c.progress = 100
 		c.ConversationListener().OnSyncServerProgress(c.progress)
@@ -238,7 +229,7 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
 	}
 	ctx := c2v.Ctx
 	node := c2v.Value.(common.UpdateConNode)
-	log.ZInfo(ctx, "doUpdateConversation", "node", node, "cmd", c2v.Cmd, "caller", c2v.Caller)
+	log.ZInfo(ctx, "doUpdateConversation", "action", node.Action, "conversationID", node.ConID, "cmd", c2v.Cmd, "caller", c2v.Caller)
 	switch node.Action {
 	case constant.AddConOrUpLatMsg:
 		var list []*model_struct.LocalConversation
@@ -254,7 +245,7 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
 					oc.LatestMsg = lc.LatestMsg
 					list = append(list, oc)
 					data := utils.StructToJsonString(list)
-					log.ZInfo(ctx, "OnConversationChanged", "data", data)
+					log.ZDebug(ctx, "OnConversationChanged", "data", data)
 					c.ConversationListener().OnConversationChanged(data)
 				}
 			}
@@ -293,6 +284,12 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
 			lc.GroupID = st.SourceID
 			lc.ConversationID = conversationID
 			lc.ConversationType = conversationType
+			// Catchup reconciliation may already have committed this profile.
+			// Its queued group notifications must not rewrite and republish it.
+			if current, err := c.db.GetConversation(ctx, conversationID); err == nil &&
+				current.ShowName == st.Nickname && current.FaceURL == st.FaceURL {
+				return
+			}
 		case constant.NotificationChatType:
 			lc.UserID = st.SourceID
 			lc.ConversationID = c.getConversationIDBySessionType(st.SourceID, constant.NotificationChatType)
@@ -303,7 +300,13 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
 		}
 		lc.ShowName = st.Nickname
 		lc.FaceURL = st.FaceURL
-		err := c.db.UpdateConversation(ctx, &lc)
+		var err error
+		if st.SessionType == constant.ReadGroupChatType {
+			// Map updates preserve explicit avatar removal (empty string).
+			err = c.db.UpdateColumnsConversation(ctx, lc.ConversationID, map[string]interface{}{"show_name": st.Nickname, "face_url": st.FaceURL})
+		} else {
+			err = c.db.UpdateConversation(ctx, &lc)
+		}
 		if err != nil {
 			// log.Error("internal", "setConversationFaceUrlAndNickName database err:", err.Error())
 			return
@@ -379,7 +382,7 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
 				}
 			}
 			data := utils.StructToJsonStringDefault(newCList)
-			log.ZInfo(ctx, "OnConversationChanged", "data", data)
+			log.ZDebug(ctx, "OnConversationChanged", "data", data)
 			c.ConversationListener().OnConversationChanged(data)
 		}
 	case constant.NewCon:
@@ -466,8 +469,9 @@ func (c *Conversation) syncData(c2v common.Cmd2Value) error {
 	//c.user.OnlineStatusCache.DeleteAll()
 
 	// Synchronous sync functions
-	syncFuncs := []func(c context.Context) error{
-		c.SyncAllConversationHashReadSeqs,
+	syncFuncs := []func(c context.Context) error{}
+	if !common.RecoveryMetadataPrepared(ctx) {
+		syncFuncs = append(syncFuncs, c.SyncAllConversationHashReadSeqs)
 	}
 
 	if err := runRequiredSyncFunctions(ctx, syncFuncs, false); err != nil {
@@ -480,12 +484,17 @@ func (c *Conversation) syncData(c2v common.Cmd2Value) error {
 		c.relation.SyncAllBlackList,
 		c.group.SyncAllJoinedGroupsAndMembersWithLock,
 		c.relation.IncrSyncFriendsWithLock,
-		c.IncrSyncConversationsWithLock,
+	}
+	if !common.RecoveryMetadataPrepared(ctx) {
+		asyncFuncs = append(asyncFuncs, c.IncrSyncConversationsWithLock)
 	}
 
 	// These jobs share the cancellable attempt and are joined before yielding
 	// to message updates, including jobs holding conversationSyncMutex.
-	return runRequiredSyncFunctions(ctx, asyncFuncs, true)
+	if err := runRequiredSyncFunctions(ctx, asyncFuncs, true); err != nil {
+		return err
+	}
+	return c.reconcileGroupConversationProfiles(ctx)
 }
 
 func runRequiredSyncFunctions(ctx context.Context, funcs []func(context.Context) error, parallel bool) error {

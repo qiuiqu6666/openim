@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -13,6 +14,43 @@ const _draft = TextEditingValue(
 );
 
 void main() {
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    for (final dark in [false, true]) {
+      testWidgets(
+          '$platform pending membership preserves draft and blocks send dark=$dark',
+          (tester) async {
+        debugDefaultTargetPlatformOverride = platform;
+        addTearDown(() => debugDefaultTargetPlatformOverride = null);
+        final fixture = await _DisabledComposer.mount(tester,
+            dark: dark,
+            textScale: 2,
+            initial: const _Availability(
+                enabled: false, hint: '同步中', showWarning: false));
+        fixture.controller.value = _draft;
+        final semantics = tester.ensureSemantics();
+        await tester.pump();
+        expect(find.text('同步中'), findsOneWidget);
+        expect(find.bySemanticsLabel('同步中'), findsOneWidget);
+        expect(find.text(StrRes.notSendMessageNotInGroup), findsNothing);
+        expect(find.text(StrRes.youMuted), findsNothing);
+        expect(find.byType(ChatTextField), findsNothing);
+        expect(_warningImage(), findsNothing);
+        expect(fixture.controller.value, _draft);
+        expect(fixture.sent, isEmpty);
+        fixture.availability.value = const _Availability();
+        await tester.pumpAndSettle();
+        expect(find.byType(ChatTextField), findsOneWidget);
+        expect(fixture.controller.value, _draft);
+        fixture.availability.value = const _Availability(exited: true);
+        await tester.pumpAndSettle();
+        expect(find.text(StrRes.notSendMessageNotInGroup), findsOneWidget);
+        expect(find.byType(ChatTextField), findsNothing);
+        semantics.dispose();
+        debugDefaultTargetPlatformOverride = null;
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
   setUp(() {
     Get.testMode = true;
     SharedPreferences.setMockInitialValues({});

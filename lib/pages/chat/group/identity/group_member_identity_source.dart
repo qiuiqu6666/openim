@@ -83,6 +83,32 @@ class GroupMemberIdentitySource {
     return _scopedMembers(data['members'], groupID, userIDs: requestedUserIDs);
   }
 
+  /// Only a well-formed successful server response can revoke membership.
+  /// Missing or out-of-scope data is unresolved, never proof of leaving.
+  Future<bool> containsMember({
+    required String groupID,
+    required String userID,
+  }) async {
+    _requiredID(groupID);
+    _requiredID(userID);
+    if (userID != _currentUserID() || userID != _sdkUserID()) {
+      throw const GroupMemberIdentitySessionChanged();
+    }
+    final data = await _request('/group/get_group_members_info', {
+      'groupID': groupID,
+      'userIDs': [userID],
+    });
+    final values = data['members'];
+    if (values is! List ||
+        values.any((value) =>
+            value is! Map ||
+            value['groupID'] != groupID ||
+            value['userID'] != userID)) {
+      throw const FormatException('Invalid membership verification response');
+    }
+    return values.isNotEmpty;
+  }
+
   Future<GroupMemberIdentityIncremental> incremental({
     required String groupID,
     String versionID = '',

@@ -124,8 +124,7 @@ void main() {
   }
 
   for (final dark in [false, true]) {
-    testWidgets(
-        'group search covers unloaded groups and preserves tabs ($dark)',
+    testWidgets('group search combines ownership categories ($dark)',
         (tester) async {
       final created = _group('later-page', name: '项目群');
       final joined = _group('joined-match', owner: 'peer', name: '加入项目群');
@@ -159,13 +158,12 @@ void main() {
       await _query(tester, ' 项目 ');
       expect(queries, ['项目']);
       expect(find.byKey(const ValueKey('later-page')), findsOneWidget);
-      expect(find.text('共 1 个群聊'), findsOneWidget);
+      expect(find.text('共 2 个群聊'), findsOneWidget);
       expect(find.byKey(const ValueKey('first')), findsNothing);
       expect(logic.iCreatedList.first.groupID, 'first');
-      await tester.tap(find.text(StrRes.iJoinedGroup));
-      await tester.pumpAndSettle();
+      expect(find.text(StrRes.iJoinedGroup), findsNothing);
       expect(find.byKey(const ValueKey('joined-match')), findsOneWidget);
-      expect(find.byKey(const ValueKey('later-page')), findsNothing);
+      expect(find.byKey(const ValueKey('later-page')), findsOneWidget);
       expect(queries, ['项目']);
       await tester.tap(find.byKey(const ValueKey('joined-match')));
       expect(selected, same(joined));
@@ -178,12 +176,12 @@ void main() {
           (widget.image as AssetImage).assetName == ImageRes.clearText));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      expect(logic.index.value, 1);
+      expect(logic.index.value, 0);
       expect(logic.search.controller.text, isEmpty);
       expect(logic.iJoinedList.any((group) => group.groupID == 'joined-first'),
           isTrue);
-      expect(logic.canLoadMore(false), isTrue);
-      expect(pageLoads, 2,
+      expect(logic.canLoadMore(false), isFalse);
+      expect(pageLoads, 4,
           reason: 'Search does not reload the two ownership pages.');
       expect(tester.takeException(), isNull);
     });

@@ -40,14 +40,18 @@ func TestVisibilityPreflightYieldsBetweenConversations(t *testing.T) {
 					return &GeneralWsResp{ErrCode: 10001}
 				}
 			}
-			if probes == 3 && !live.Load() {
+			if probes == 2 && !live.Load() {
 				t.Error("live message waited behind every visibility probe")
 			}
 			p := &msg.GetSeqMessageReq{}
 			if err := proto.Unmarshal(req.Message.Data, p); err != nil {
 				panic(err)
 			}
-			return wireResponse(&msg.GetSeqMessageResp{Msgs: map[string]*sdkws.PullMsgs{p.Conversations[0].ConversationID: {}}})
+			packets := make(map[string]*sdkws.PullMsgs)
+			for _, row := range p.Conversations {
+				packets[row.ConversationID] = &sdkws.PullMsgs{}
+			}
+			return wireResponse(&msg.GetSeqMessageResp{Msgs: packets})
 		}
 		return requestedRecoveryResponse(t, req)
 	})
@@ -76,7 +80,7 @@ func TestVisibilityPreflightYieldsBetweenConversations(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("boundary recovery did not finish")
 	}
-	if probes != 4 || !live.Load() {
+	if probes != 2 || !live.Load() {
 		t.Fatalf("unexpected progress probes=%d live=%v", probes, live.Load())
 	}
 }

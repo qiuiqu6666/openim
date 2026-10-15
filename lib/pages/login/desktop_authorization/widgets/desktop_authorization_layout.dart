@@ -33,7 +33,7 @@ class DesktopAuthorizationLayout extends StatelessWidget {
                 tooltip: '关闭',
                 onPressed: busy ? null : onClose,
                 icon: const Icon(Icons.close, size: 26),
-                color: AppTokens.textPrimary(dark: dark))),
+                color: AppTokens.accent)),
         Expanded(
             child: loading
                 ? const Center(child: CircularProgressIndicator())

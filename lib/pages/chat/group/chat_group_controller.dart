@@ -95,6 +95,7 @@ class ChatGroupController {
   final groupMemberRoleLevel = GroupRoleLevel.member.obs;
   final _adminListLoaded = false.obs;
   final isInGroup = true.obs;
+  final membershipPending = false.obs;
   final memberCount = 0.obs;
   final memberCountKnown = false.obs;
   final announcement = ''.obs;
@@ -160,7 +161,8 @@ class ChatGroupController {
   }
 
   bool get isGroupChat => groupID()?.trim().isNotEmpty == true;
-  bool get isInvalidGroup => isGroupChat && !isInGroup.value;
+  bool get isInvalidGroup =>
+      isGroupChat && !membershipPending.value && !isInGroup.value;
   bool get isAdminOrOwner =>
       groupMemberRoleLevel.value == GroupRoleLevel.admin ||
       groupMemberRoleLevel.value == GroupRoleLevel.owner;
@@ -171,6 +173,7 @@ class ChatGroupController {
   /// Keep sending blocked for mute-all without presenting an unconfirmed mute.
   bool get muteStatusPending {
     _muteRevision.value;
+    if (membershipPending.value) return true;
     return isGroupChat &&
         groupInfo?.status == 3 &&
         (groupMembersInfo?.muteEndTime ?? 0) <= _nowSeconds() &&
@@ -183,6 +186,7 @@ class ChatGroupController {
 
   bool get sendingMuted {
     _muteRevision.value;
+    if (membershipPending.value) return true;
     return isGroupChat &&
         ((groupMembersInfo?.muteEndTime ?? 0) > _nowSeconds() ||
             (groupInfo?.status == 3 &&
@@ -208,20 +212,20 @@ class ChatGroupController {
     _subscriptions.addAll([
       _events.joined.listen((info) {
         if (!_matches(info.groupID)) return;
-        _memberActionRevision.value++;
-        _adminListLoaded.value = false;
-        _removedMemberIDs.clear();
-        _membershipRevision++;
-        isInGroup.value = true;
-        _leftByEvent = false;
-        _loaded = false;
-        recover(resetAttempts: true);
+        _joinGroup();
       }),
       _events.left.listen((info) {
         if (_matches(info.groupID)) _leaveGroup();
       }),
       _events.memberAdded.listen((info) {
         if (!_matches(info.groupID)) return;
+        if (info.userID == currentUserID()) {
+          _joinGroup();
+          _selfRevision++;
+          groupMembersInfo = info;
+          groupMemberRoleLevel.value = info.roleLevel ?? GroupRoleLevel.member;
+          _refreshMute();
+        }
         _memberActionRevision.value++;
         _removedMemberIDs.remove(info.userID);
         _putMemberInfo(info);
@@ -277,17 +281,37 @@ class ChatGroupController {
     _memberActionRevision.value++;
     _membershipRevision++;
     isInGroup.value = false;
+    membershipPending.value = false;
     _leftByEvent = true;
     _loaded = false;
     _retryTimer?.cancel();
     _adminListLoaded.value = false;
+    groupMembersInfo = null;
+    groupMemberRoleLevel.value = GroupRoleLevel.member;
+    _refreshMute();
     clearInput();
+  }
+
+  void _joinGroup() {
+    _memberActionRevision.value++;
+    _adminListLoaded.value = false;
+    _removedMemberIDs.clear();
+    _membershipRevision++;
+    membershipPending.value = false;
+    isInGroup.value = true;
+    _leftByEvent = false;
+    _loaded = false;
+    recover(resetAttempts: true);
   }
 
   /// Entry and reconnect recovery are independent of history availability.
   /// Healthy metadata needs no repeated reads on history/sync notifications.
   void recover({bool resetAttempts = false}) {
-    if (!_matches(groupID()) || _leftByEvent || _loaded) return;
+    if (!_matches(groupID()) ||
+        _loaded ||
+        (_leftByEvent && _queries.verifyMembership == null)) {
+      return;
+    }
     if (resetAttempts) {
       _retryAttempts = 0;
       _retryTimer?.cancel();
@@ -296,10 +320,39 @@ class ChatGroupController {
     unawaited(loadAfterHistory());
   }
 
+  Future<void>? _profileRefresh;
+
+  /// A sync finish can repair native metadata without a live group callback.
+  /// Read only this profile, preserving loaded members and message history.
+  Future<void> refreshProfileAfterSync() {
+    if (!_matches(groupID())) return Future<void>.value();
+    if (_leftByEvent || membershipPending.value || !isInGroup.value) {
+      // Force a read begun after sync, not the negative entry snapshot.
+      _membershipRevision++;
+      _loaded = false;
+      if (_loadRequest != null) {
+        return _loadRequest!.then((_) => loadAfterHistory());
+      }
+      return loadAfterHistory();
+    }
+    if (_profileRefresh != null) return _profileRefresh!;
+    // An entry read started before native sync may still hold old metadata.
+    // Give the post-sync read its own key and invalidate that older result.
+    _profileRevision++;
+    return _profileRefresh = _queryGroupInfo(
+      groupID()!,
+      currentUserID(),
+      _membershipRevision,
+    ).whenComplete(() => _profileRefresh = null);
+  }
+
   /// Retained for callers that await metadata; history is not a prerequisite.
   /// Overlapping callers share one bounded membership/metadata load.
   Future<void> loadAfterHistory() {
-    if (!_matches(groupID()) || _leftByEvent) return Future<void>.value();
+    if (!_matches(groupID()) ||
+        (_leftByEvent && _queries.verifyMembership == null)) {
+      return Future<void>.value();
+    }
     if (_loadRequest != null) return _loadRequest!;
     _retryTimer?.cancel();
     _retryTimer = null;
@@ -334,8 +387,30 @@ class ChatGroupController {
     final userID = currentUserID();
     final revision = _membershipRevision;
     try {
-      final joined = await _read('membership', () => _queries.isJoined(id));
+      var joined = !_leftByEvent &&
+          await _read('membership', () => _queries.isJoined(id));
       if (!_queryStillCurrent(id, userID, revision)) return;
+      if (!joined) {
+        // Cache absence cannot distinguish sync lag from a real departure.
+        // Stop sending while unresolved, without claiming the user has left.
+        if (!_leftByEvent) membershipPending.value = true;
+        isInGroup.value = false;
+        _loadFailed = true; // Bounded retries also cover negative snapshots.
+        final verify = _queries.verifyMembership;
+        if (verify == null) return;
+        joined = await _read('server-membership', () => verify(id, userID));
+        if (!_queryStillCurrent(id, userID, revision)) return;
+        membershipPending.value = false;
+        if (!joined) {
+          if (!_leftByEvent) _leaveGroup();
+          return;
+        }
+        _leftByEvent = false;
+        _loadFailed = false;
+        _removedMemberIDs.remove(userID);
+        _memberActionRevision.value++;
+      }
+      membershipPending.value = false;
       isInGroup.value = joined;
       if (joined) await _loadJoinedGroup();
       if (_queryStillCurrent(id, userID, revision)) {

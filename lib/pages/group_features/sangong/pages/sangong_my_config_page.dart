@@ -598,7 +598,8 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
               text: _saving
                   ? i18n.t(zhHans: '保存中...', zhHant: '保存中...', en: 'Saving...')
                   : i18n.t(zhHans: '保存', zhHant: '保存', en: 'Save'),
-              onPressed: _saving ? () {} : _save,
+              loading: _saving,
+              onPressed: _saving ? null : _save,
             )
           : null,
       children: [

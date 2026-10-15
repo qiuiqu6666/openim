@@ -170,6 +170,36 @@ void main() {
     await directory.delete(recursive: true);
   });
 
+  for (final failure in ['error', 'null', 'original', 'timeout']) {
+    test(
+        'HEIF conversion $failure never sends undecodable source and advances batch',
+        () async {
+      final heif =
+          await File('${directory.path}/photo.heif').writeAsBytes([1, 2, 3]);
+      final stalled = Completer<File?>();
+      compress = (file) {
+        if (file.path.endsWith('.jpg')) return Future.value(file);
+        return switch (failure) {
+          'error' => Future.error(PlatformException(code: 'conversion-failed')),
+          'null' => Future.value(null),
+          'original' => Future.value(file),
+          _ => stalled.future,
+        };
+      };
+      selected = [
+        _Asset('heif', Future.value(heif)),
+        _Asset('jpeg', Future.value(photo))
+      ];
+      await media.onTapAlbum();
+      expect(failures, 1);
+      expect(paths, hasLength(1));
+      expect(paths.single, endsWith('.jpg'));
+      expect(sends, ['image-1']);
+      expect(media.preparingCount.value, 0);
+      stalled.complete(heif);
+    });
+  }
+
   test('first local image sends while the next file is still preparing',
       () async {
     final nextFile = Completer<File?>();

@@ -102,16 +102,41 @@ void main() {
         throwsA(isA<QrLoginFailure>().having((e) => e.code, 'code', 410)));
     expect(requests.length, 1);
   });
-  test('invalid code, insecure transport and desktop status are not sent',
+  test('HTTP backup and local shield support scan confirm and reject',
       () async {
+    for (final baseUrl in [
+      'http://example.test:10008',
+      'http://127.0.0.1:10008'
+    ]) {
+      final service = QrLoginApi(transport: dio, baseUrl: baseUrl);
+      await service.scan(id);
+      expect((await service.confirm(id, verificationCode: '012345')).state,
+          DesktopAuthorizationState.approved);
+      await service.cancel(id);
+      expect(requests.last.uri.origin, baseUrl);
+    }
+    expect(requests.length, 6);
+  });
+  test('invalid service addresses are rejected before sending credentials',
+      () async {
+    for (final baseUrl in [
+      'ftp://example.test',
+      'http:///path',
+      'http://user:password@example.test',
+      'http://example.test?token=value',
+      'http://example.test#fragment',
+    ]) {
+      await expectLater(QrLoginApi(transport: dio, baseUrl: baseUrl).scan(id),
+          throwsA(isA<QrLoginFailure>()));
+    }
+    expect(requests, isEmpty);
+  });
+  test('invalid code and desktop status are not sent', () async {
     await api.scan(id);
     await expectLater(api.confirm(id, verificationCode: '123'),
         throwsA(isA<QrLoginFailure>()));
     await expectLater(
         api.status(id), throwsA(isA<DesktopAuthorizationUnavailable>()));
-    await expectLater(
-        QrLoginApi(transport: dio, baseUrl: 'http://example.test').scan(id),
-        throwsA(isA<QrLoginFailure>()));
     expect(requests.length, 1);
   });
 }

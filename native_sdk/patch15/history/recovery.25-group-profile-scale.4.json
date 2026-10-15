@@ -1,0 +1,73 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.25-group-profile-scale.4",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "b1d18efa90b2d5867bf0ce7df97375322c634f7c414c810cd604767d68eb4abe",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "91f494d7fcdef3696a74946804b6a01495960ecf50beb0566be6998a50dea6d1",
+  "created": "2026-10-15",
+  "previous_release": "history/recovery.25-group-profile-scale.3.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "core_race": "passed: common/network/syncer/group/interaction/conversation_msg; CGO=1",
+    "sqlite_atomic_pages": "passed: rollback, retry, complete 257-row pagination, avatar removal, unread/draft/pin preservation",
+    "queued_notifications": "passed: post-sync queued group updates do not republish committed rows; genuine online changes still publish",
+    "large_group_verification": "passed: 5000 group profiles and 20000 conversations; all changed groups verified",
+    "flutter_regression": "653 passed; 8 existing skipped",
+    "flutter_analysis": "no issues in performance fixture and group controller",
+    "source_lock_tests": "15 passed",
+    "patch_roundtrip": "passed: cumulative patch recreates current locked source with documented overlays",
+    "android_core": "four ABIs built and source receipt verified",
+    "android_application": "debug APK built; arm64/x86_64 stripped native parity and SDK version verified",
+    "emulator_profile": "passed: independent processes, synthetic data, real feed rows and chat header controller; no production account",
+    "physical_phone": "not tested; install rejected; user chose emulator-only testing",
+    "ios_framework": "not rebuilt; shared source requires macOS build"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.25-group-profile-scale.4",
+    "sdk_version": "v3.8.3-patch.15+recovery.25-group-profile-scale.4",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "synthetic profile fixture on emulator passed; production app/account scenario not run",
+    "native_binary_integrated": true,
+    "application_validation": "653 Flutter tests passed; final application debug build and native parity passed",
+    "aar_sha256": "031cf7c0df3dab7733dff38faaf37ff0d855cf7ae3fb20b4563028a95969035d",
+    "debug_apk_sha256": "2a22f0b7a4379dd93488a58a028677a9e8e01a9317805283f64db890217f23c7"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.25-group-profile-scale.4",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "not run",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "macOS rebuild required",
+    "app_validation_scope": "shared source; previous framework cannot represent recovery.25",
+    "native_binary_integrated": false,
+    "app_version": "3.0.1+2027"
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned existing gomobile dependency closure",
+    "version/version: unique recovery.25-group-profile-scale.4 runtime identity"
+  ],
+  "verification_evidence": "verification/recovery.25-group-profile-scale.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Scale group catchup to thousands of groups with single-group comparisons and bounded transactional conversation-profile reconciliation; preserve all profile/version callbacks and retries."
+  }
+}

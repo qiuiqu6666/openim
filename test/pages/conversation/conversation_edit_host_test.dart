@@ -1,11 +1,19 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:rxdart/rxdart.dart';
+import 'package:openim/pages/contacts/contacts_logic.dart';
+import 'package:openim/pages/contacts/navigation/contacts_header.dart';
+import '../contacts/search/support/contacts_inline_fixture.dart';
 import '../../support/conversation_live_fixture.dart';
 import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/core/im_callback.dart';
@@ -24,6 +32,8 @@ class _Home extends GetxController implements HomeLogic {
   @override
   final unhandledCount = 0.obs;
   @override
+  void switchTab(dynamic index) {}
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -34,6 +44,16 @@ class _IM extends GetxController implements IMController {
   ApiConnectionHealth? get apiConnectionHealth => null;
   @override
   final userInfo = UserFullInfo(userID: 'viewer', nickname: 'Viewer').obs;
+  @override
+  final imSdkStatusSubject =
+      ReplaySubject<({IMSdkStatus status, bool reInstall, int? progress})>(
+          maxSize: 1);
+  @override
+  void onClose() {
+    imSdkStatusSubject.close();
+    super.onClose();
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -54,8 +74,9 @@ class _Conversations extends GetxController
   final archivedIds = <String>{};
   final markedIds = <String>[];
   Completer<void>? markGate;
+  bool sessionActive = true;
   @override
-  bool get isSessionActive => true;
+  bool get isSessionActive => sessionActive;
   @override
   String? get imSdkStatus => null;
   @override
@@ -122,8 +143,27 @@ ConversationInfo _conversation(int index) => ConversationInfo(
       }),
     );
 
+const _searchPreview =
+    String.fromEnvironment('CONVERSATION_INLINE_SEARCH_PREVIEW');
+bool _searchFontsLoaded = false;
+
+Future<void> _snapshotSearch(
+    WidgetTester tester, GlobalKey key, String name) async {
+  if (_searchPreview.isEmpty) return;
+  final boundary =
+      key.currentContext!.findRenderObject() as RenderRepaintBoundary;
+  await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: 1);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    final file = File('$_searchPreview/$name.png');
+    await file.parent.create(recursive: true);
+    await file.writeAsBytes(bytes!.buffer.asUint8List());
+    image.dispose();
+  });
+}
+
 Future<void> _mountHome(WidgetTester tester, _Conversations conversations,
-    {required bool dark}) async {
+    {required bool dark, GlobalKey? boundary, ContactsLogic? contacts}) async {
   Get.testMode = true;
   OpenIM.iMManager.userID = 'viewer';
   Styles.isDark = dark;
@@ -138,6 +178,7 @@ Future<void> _mountHome(WidgetTester tester, _Conversations conversations,
   Get.put<HomeLogic>(_Home());
   Get.put<IMController>(_IM());
   Get.put<ConversationLogic>(conversations);
+  if (contacts != null) Get.put<ContactsLogic>(contacts);
 
   await tester.pumpWidget(ScreenUtilInit(
     designSize: const Size(375, 812),
@@ -146,7 +187,9 @@ Future<void> _mountHome(WidgetTester tester, _Conversations conversations,
       locale: const Locale('zh', 'CN'),
       supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      theme: ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
+      theme: ThemeData(
+          brightness: dark ? Brightness.dark : Brightness.light,
+          fontFamily: _searchFontsLoaded ? 'InlineSearchPreviewFont' : null),
       builder: (_, child) => MediaQuery(
         data: const MediaQueryData(
           size: Size(375, 812),
@@ -154,14 +197,127 @@ Future<void> _mountHome(WidgetTester tester, _Conversations conversations,
         ),
         child: child!,
       ),
-      home: const HomePage(),
+      home: boundary == null
+          ? const HomePage()
+          : RepaintBoundary(key: boundary, child: const HomePage()),
     ),
   ));
   await tester.pumpAndSettle();
 }
 
 void main() {
+  testWidgets(
+      'entire search field responds while the SDK session is recovering',
+      (tester) async {
+    final conversations = _Conversations()
+      ..sessionActive = false
+      ..list.addAll([_conversation(1), _conversation(2)]);
+    await _mountHome(tester, conversations, dark: false);
+    final entry = find.byKey(const ValueKey('conversation-search-entry'));
+    final input = find.byKey(const ValueKey('chat-history-search-input'));
+    final cancel = find.byKey(const ValueKey('chat-history-search-cancel'));
+    for (final position in [.05, .5, .95]) {
+      final rect = tester.getRect(entry);
+      await tester
+          .tapAt(Offset(rect.left + rect.width * position, rect.center.dy));
+      await tester.pumpAndSettle();
+      expect(input, findsOneWidget);
+      expect(find.byTooltip('编辑'), findsNothing);
+      expect(
+          tester.getTopLeft(input).dy, closeTo(rect.top - kToolbarHeight, 1));
+      expect(tester.widget<TextField>(input).focusNode!.hasFocus, isTrue);
+      await tester.tap(cancel);
+      await tester.pumpAndSettle();
+      expect(entry, findsOneWidget);
+      expect(find.byTooltip('编辑'), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
   for (final dark in [false, true]) {
+    testWidgets(
+        'contacts search hides navigation and back restores its tab ($dark)',
+        (tester) async {
+      final contacts = InlineContactsFixture();
+      addTearDown(() => contacts.onDelete());
+      await _mountHome(tester, _Conversations(),
+          dark: dark, contacts: contacts);
+      await tester.tap(find.text('通讯录'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ContactsHeader), findsOneWidget);
+      final route = Get.currentRoute;
+      final input = find.byKey(const ValueKey('chat-history-search-input'));
+      final inputState = tester.state(input);
+      await tester.tap(find.byKey(const ValueKey('contacts-search-button')));
+      await tester.pumpAndSettle();
+      expect(find.byType(GlassBottomNavBar), findsNothing);
+      expect(find.byType(ContactsHeader), findsNothing);
+      expect(tester.state(input), same(inputState));
+      expect(tester.widget<TextField>(input).focusNode!.hasFocus, isTrue);
+      expect(Get.currentRoute, route);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(Get.currentRoute, route);
+      expect(find.byType(GlassBottomNavBar), findsOneWidget);
+      expect(find.byType(ContactsHeader), findsOneWidget);
+      expect(tester.state(input), same(inputState));
+      expect(tester.widget<TextField>(input).readOnly, isTrue);
+      expect(contacts.legacySearches, 0);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      contacts.presence.dispose();
+      contacts.stars.dispose();
+    });
+    for (final groups in [false, true]) {
+      testWidgets(
+          'home search hides navigation and system back restores it ($dark, $groups)',
+          (tester) async {
+        if (_searchPreview.isNotEmpty && !_searchFontsLoaded) {
+          await tester.runAsync(() async {
+            final font = File('C:/Windows/Fonts/msyh.ttc');
+            if (await font.exists()) {
+              await (FontLoader('InlineSearchPreviewFont')
+                    ..addFont(font.readAsBytes().then(ByteData.sublistView)))
+                  .load();
+              await (FontLoader('MaterialIcons')
+                    ..addFont(
+                        rootBundle.load('fonts/MaterialIcons-Regular.otf')))
+                  .load();
+              _searchFontsLoaded = true;
+            }
+          });
+        }
+        final conversations = _Conversations()
+          ..list.addAll([_conversation(1), _conversation(2)]);
+        final boundary = GlobalKey();
+        await _mountHome(tester, conversations, dark: dark, boundary: boundary);
+        if (groups) {
+          await tester.tap(find.text('群聊'));
+          await tester.pumpAndSettle();
+        }
+        final route = Get.currentRoute;
+        final theme = dark ? 'dark' : 'light';
+        final scope = groups ? 'groups' : 'messages';
+        await _snapshotSearch(tester, boundary, '$scope-$theme-before');
+        await tester
+            .tap(find.byKey(const ValueKey('conversation-search-entry')));
+        await tester.pumpAndSettle();
+        expect(Get.currentRoute, route);
+        expect(find.byType(GlassBottomNavBar), findsNothing);
+        expect(find.byType(TextField), findsOneWidget);
+        await _snapshotSearch(tester, boundary, '$scope-$theme-search');
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(Get.currentRoute, route);
+        expect(find.byType(TextField), findsOneWidget);
+        expect(
+            tester.widget<TextField>(find.byType(TextField)).readOnly, isTrue);
+        expect(find.byType(GlassBottomNavBar), findsOneWidget);
+        await _snapshotSearch(tester, boundary, '$scope-$theme-restored');
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      });
+    }
     testWidgets(
         'home swaps its navigation for selected conversation actions ($dark)',
         (tester) async {

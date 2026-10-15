@@ -48,6 +48,16 @@ ConversationInfo _conversation(String name,
     );
 
 String _subtitle(WidgetTester tester, String name) {
+  final subtitleWidget = find.byWidgetPredicate((widget) =>
+      widget is GlobalSearchConversationSubtitle &&
+      widget.conversation.showName == name);
+  if (subtitleWidget.evaluate().isEmpty) {
+    final row =
+        find.ancestor(of: find.text(name), matching: find.byType(ListTile));
+    expect(row, findsOneWidget);
+    expect(tester.widget<ListTile>(row).subtitle, isNull);
+    return '';
+  }
   final subtitle = _subtitleText(tester, name);
   return subtitle.data ?? subtitle.textSpan!.toPlainText();
 }
@@ -144,10 +154,14 @@ void main() {
   testWidgets('last message is shown unless a draft exists', (tester) async {
     OpenIM.iMManager.userID = 'me';
     final single = _conversation('冬')
-      ..latestMsg = Message(contentType: MessageType.text, sendID: 'me',
+      ..latestMsg = Message(
+          contentType: MessageType.text,
+          sendID: 'me',
           textElem: TextElem(content: '最后一条聊天消息'));
     final group = _conversation('群聊', group: true, draft: '待发送草稿')
-      ..latestMsg = Message(contentType: MessageType.text, sendID: 'me',
+      ..latestMsg = Message(
+          contentType: MessageType.text,
+          sendID: 'me',
           textElem: TextElem(content: '草稿下的旧消息'));
     await _mount(tester, items: [single, group]);
     expect(_subtitle(tester, '冬'), '最后一条聊天消息');
@@ -187,8 +201,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets(
-        'search header has inline cancel without navigation bar: $dark',
+    testWidgets('search header has inline cancel without navigation bar: $dark',
         (tester) async {
       await _mount(tester, dark: dark, items: []);
       expect(find.byType(GlassAppBar), findsNothing);
@@ -201,7 +214,7 @@ void main() {
     });
   }
 
-  testWidgets('empty drafts retain single and group conversation labels',
+  testWidgets('empty drafts and messages do not reserve a subtitle line',
       (tester) async {
     await _mount(tester, items: [
       _conversation('未保存草稿'),

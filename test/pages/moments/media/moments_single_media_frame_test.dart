@@ -72,7 +72,7 @@ void main() {
     expect(pendingPath, isNot(original));
     pathResponse.complete(fixture.api.mediaBytes['preview-cover']!);
     await tester.pumpAndSettle();
-    expect(tester.getSize(find.byKey(imageKey)), const Size(320, 240));
+    expect(tester.getSize(find.byKey(imageKey)), pendingPath);
 
     final idResponse = Completer<Uint8List>();
     fixture.api.mediaWork = (_, __) => idResponse.future;

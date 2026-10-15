@@ -16,6 +16,7 @@ import 'upload/chat_media_outbox.dart';
 import 'upload/chat_media_upload.dart';
 import 'video/chat_video_preparation.dart';
 import 'preparation/chat_media_asset_loader.dart';
+import 'diagnostics/chat_media_diagnostics.dart';
 
 typedef MediaMessageSender = Future Function(Message message,
     {bool addToUI, bool resetInput});
@@ -122,47 +123,67 @@ class ChatMediaController {
   }
 
   Future sendPicture({required String path, bool sendNow = true}) async {
-    final message = await _preparePicture(path);
-    if (message == null || isClosed) return;
-    if (sendNow) {
-      return _sendMessage(message);
-    } else {
-      _stageMessage(message);
-      tempMessages.add(message);
+    try {
+      final message = await _preparePicture(path);
+      if (message == null || isClosed) return;
+      if (sendNow) {
+        return await _sendMessage(message);
+      } else {
+        _stageMessage(message);
+        tempMessages.add(message);
+      }
+    } catch (error) {
+      ChatMediaDiagnostics.record('send_picture',
+          outcome: 'failed', error: error);
+      if (!isClosed) _onPreparationFailed();
     }
   }
 
   Future<Message?> _preparePicture(String path,
-      {bool Function()? cancelled}) async {
+      {bool Function()? cancelled, ChatMediaTrace? trace}) async {
+    trace ??= ChatMediaTrace();
     final stopped = cancelled ?? () => isClosed;
     if (stopped()) return null;
     // Keep the source and compression target unique while earlier photos upload.
-    final original = await _retainAttachment(path);
+    final original =
+        await trace.run('retain_image', () => _retainAttachment(path));
     if (stopped()) return null;
     if (await original.length() == 0) {
       throw StateError('Image file is empty');
     }
     var file = original;
+    final conversionRequired =
+        {'.heic', '.heif'}.contains(p.extension(path).toLowerCase());
     try {
-      final compressed =
-          await _compressImage(original).timeout(imageCompressionTimeout);
+      final compressed = await trace.run('compress_image',
+          () => _compressImage(original).timeout(imageCompressionTimeout));
       if (stopped()) return null;
       if (compressed != null &&
           await compressed.exists() &&
           await compressed.length() > 0) {
         file = compressed;
       }
-    } catch (_) {
+    } catch (error) {
+      if (conversionRequired) rethrow;
       // Compression is optional. A readable local source can still be sent.
-      Logger.print('Image compression failed; using retained source',
-          onlyConsole: true);
+      trace.record('compress_image', outcome: 'source_fallback', error: error);
     }
     if (stopped()) return null;
-    final message = await OpenIM.iMManager.messageManager
-        .createImageMessageFromFullPath(
-          imagePath: file.path,
-        )
-        .timeout(messageCreationTimeout);
+    if (conversionRequired &&
+        !{'.jpg', '.jpeg'}.contains(p.extension(file.path).toLowerCase())) {
+      trace.record('convert_heif', outcome: 'no_jpeg_output');
+      throw StateError('HEIF conversion did not produce JPEG');
+    }
+    final message = await trace.run(
+        'create_message',
+        () => OpenIM.iMManager.messageManager
+            .createImageMessageFromFullPath(
+              imagePath: file.path,
+              operationID: trace!.id,
+            )
+            .timeout(messageCreationTimeout));
+    trace.messageID = message.clientMsgID;
+    trace.record('image_ready');
     if (stopped()) return null;
     return message;
   }
@@ -189,21 +210,19 @@ class ChatMediaController {
   }
 
   Future<void> onTapAlbum() async {
-    if (isClosed ||
-        sendingMuted ||
-        isInvalidGroup ||
-        _pickingAttachment ||
-        _voiceBusy()) {
-      return;
-    }
+    if (_pickerBlocked('album_picker')) return;
     final releaseSelection = _lockAttachmentSelection();
+    final trace = ChatMediaTrace();
     try {
-      final assets = await (_pickAssets?.call() ?? _selectAlbumAssets());
+      final assets = await trace.run(
+          'album_picker', () => _pickAssets?.call() ?? _selectAlbumAssets());
+      trace.record('album_selection', count: assets?.length ?? 0);
       if (assets != null && assets.isNotEmpty && !isClosed) {
         closeToolbox();
         await _sendSelectedAssets(assets, onPrepared: releaseSelection);
       }
-    } catch (_) {
+    } catch (error) {
+      trace.record('album', outcome: 'failed', error: error);
       if (!isClosed) _onPreparationFailed();
     } finally {
       releaseSelection();
@@ -217,6 +236,7 @@ class ChatMediaController {
               sortPathsByModifiedDate: true,
               filterOptions: PMFilter.defaultValue(containsPathModified: true),
               selectPredicate: (_, entity, isSelected) async {
+                if (isSelected) return true;
                 if (entity.type == AssetType.image) {
                   if (await allowSendImageType(entity)) {
                     return true;
@@ -244,7 +264,17 @@ class ChatMediaController {
     // Only picker/quality dialogs are exclusive. Local preparation and upload
     // must not prevent opening the next attachment picker.
     final task = acceptSendTask?.call();
-    bool stopped() => task != null ? !task.current : isClosed;
+    var reportedCancellation = false;
+    bool stopped() {
+      final cancelled = task != null ? !task.current : isClosed;
+      if (cancelled && !reportedCancellation) {
+        reportedCancellation = true;
+        ChatMediaDiagnostics.record('media_batch', outcome: 'session_changed');
+        if (task?.visible == true && !isClosed) _onPreparationFailed();
+      }
+      return cancelled;
+    }
+
     onPrepared();
     final ready = List.generate(assets.length, (_) => Completer<Message?>());
     final messages = <int, Message>{};
@@ -270,7 +300,9 @@ class ChatMediaController {
                 }
               }
             }
-          } catch (_) {
+          } catch (error) {
+            ChatMediaDiagnostics.record('prepare_asset',
+                outcome: 'failed', error: error);
             // Accepted work may fail before the SDK can create a message.
             // Report that failure even if its original route has gone away.
             if (task?.current == true || !isClosed) _onPreparationFailed();
@@ -309,6 +341,8 @@ class ChatMediaController {
       },
       onError: (index, error) {
         final message = messages[index];
+        ChatMediaDiagnostics.record('upload_or_send',
+            messageID: message?.clientMsgID, outcome: 'failed', error: error);
         if (message != null) {
           task?.failed(message);
           message.status = MessageStatus.failed;
@@ -326,6 +360,23 @@ class ChatMediaController {
   }
 
   bool _pickingAttachment = false;
+  bool _pickerBlocked(String stage) {
+    final reason = isClosed
+        ? 'session_closed'
+        : sendingMuted
+            ? 'muted'
+            : isInvalidGroup
+                ? 'invalid_group'
+                : _pickingAttachment
+                    ? 'picker_busy'
+                    : _voiceBusy()
+                        ? 'voice_busy'
+                        : null;
+    if (reason == null) return false;
+    ChatMediaDiagnostics.record(stage, outcome: reason);
+    return true;
+  }
+
   void Function() _lockAttachmentSelection() {
     _pickingAttachment = true;
     var released = false;
@@ -348,24 +399,25 @@ class ChatMediaController {
 
   Future<void> onTapFile() => _pickAttachment(false);
   Future<void> onTapCamera() async {
-    if (_pickingAttachment ||
-        _voiceBusy() ||
-        isClosed ||
-        sendingMuted ||
-        isInvalidGroup) return;
+    if (_pickerBlocked('camera_picker')) return;
     final releaseSelection = _lockAttachmentSelection();
+    final trace = ChatMediaTrace();
     try {
-      final asset = await (_pickCamera?.call() ??
-          CameraPicker.pickFromCamera(Get.context!,
-              pickerConfig: const CameraPickerConfig(
-                  enableRecording: true,
-                  enableAudio: true,
-                  maximumRecordingDuration: Duration(seconds: 60))));
+      final asset = await trace.run(
+          'camera_picker',
+          () =>
+              _pickCamera?.call() ??
+              CameraPicker.pickFromCamera(Get.context!,
+                  pickerConfig: const CameraPickerConfig(
+                      enableRecording: true,
+                      enableAudio: true,
+                      maximumRecordingDuration: Duration(seconds: 60))));
       if (asset != null && !isClosed) {
         closeToolbox();
         await _sendSelectedAssets([asset], onPrepared: releaseSelection);
       }
-    } catch (_) {
+    } catch (error) {
+      trace.record('camera', outcome: 'failed', error: error);
       if (!isClosed) _onPreparationFailed();
     } finally {
       releaseSelection();
@@ -436,28 +488,51 @@ class ChatMediaController {
   }
 
   Future<bool> allowSendImageType(AssetEntity entity) async {
-    final mimeType = await entity.mimeTypeAsync;
-
-    return IMUtils.allowImageType(mimeType);
+    if (entity.type != AssetType.image) return false;
+    String? mimeType;
+    try {
+      mimeType =
+          (await entity.mimeTypeAsync.timeout(const Duration(seconds: 2)))
+              ?.trim()
+              .toLowerCase();
+    } catch (error) {
+      ChatMediaDiagnostics.record('image_metadata',
+          outcome: 'deferred', error: error);
+    }
+    // Metadata may be absent for cloud/limited-library assets. The actual file
+    // still has to pass compression and SDK decoding before it can be sent.
+    final allowed = mimeType == null ||
+        mimeType.isEmpty ||
+        mimeType == 'application/octet-stream' ||
+        mimeType.startsWith('image/heif') ||
+        IMUtils.allowImageType(mimeType);
+    if (!allowed) {
+      ChatMediaDiagnostics.record('image_metadata',
+          outcome: 'unsupported_type');
+    }
+    return allowed;
   }
 
   Future<Message?> _prepareAsset(AssetEntity asset,
       {ChatVideoQuality quality = ChatVideoQuality.original,
       bool Function()? cancelled}) async {
     final stopped = cancelled ?? () => isClosed;
-    Logger.print(
-        '--------assets type-----${asset.type} create time: ${asset.createDateTime}');
-    final originalFile = await loadChatMediaAsset(asset,
-        timeout: assetReadTimeout, isCancelled: stopped);
+    final trace = ChatMediaTrace();
+    final originalFile = await trace.run(
+        'load_asset',
+        () => loadChatMediaAsset(asset,
+            timeout: assetReadTimeout,
+            isCancelled: stopped,
+            onReadFailure: (stage, error) =>
+                trace.record(stage, outcome: 'failed', error: error)));
     if (stopped()) return null;
     if (originalFile == null) {
       throw StateError('Selected asset file is unavailable');
     }
     final path = originalFile.path;
-    Logger.print('--------assets path-----$path');
     switch (asset.type) {
       case AssetType.image:
-        return _preparePicture(path, cancelled: stopped);
+        return _preparePicture(path, cancelled: stopped, trace: trace);
       case AssetType.video:
         final prepared = await prepareChatVideo(originalFile, quality);
         if (stopped()) return null;

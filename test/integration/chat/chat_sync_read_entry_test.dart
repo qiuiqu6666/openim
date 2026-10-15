@@ -58,7 +58,8 @@ void main() {
     logic.conversationInfo =
         fixture.conversation(latest: logic.messageList.last);
     await tester.pumpWidget(_productionList(logic));
-    await tester.pumpAndSettle();
+    // The loading skeleton intentionally pulses until this sync barrier settles.
+    await tester.pump(const Duration(milliseconds: 300));
     expect(reads(fixture), 0);
     fixture.im.imSdkStatus(IMSdkStatus.syncFailed);
     await tester.pumpAndSettle();

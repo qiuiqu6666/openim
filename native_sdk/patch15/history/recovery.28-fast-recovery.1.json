@@ -1,0 +1,71 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.28-fast-recovery.1",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "475230988ba24024f7942461cde73a6a92615df46b8f6a3a95a6a84f8a583bf6",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "3d57d876079d5418ef1b6e94ce189680410da96c06f8debe4e3ef316720553e9",
+  "created": "2026-10-15",
+  "previous_release": "history/recovery.27-sync-heat.2.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "core_packages": "passed on final staged source",
+    "sqlite_and_race": "six packages passed on final shipped source with real SQLite and -race",
+    "source_lock": "15 tests passed; both platform stages byte-identical",
+    "patch_roundtrip": "passed",
+    "android_core": "four ABIs built and embedded version checked",
+    "ios_framework": "user deferred iOS binary build/testing; source locked identically",
+    "android_application": "3.0.1+2041 debug APK built; arm64 and x86_64 native parity verified"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.28-fast-recovery.1",
+    "sdk_version": "v3.8.3-patch.15+recovery.28-fast-recovery.1",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "new APK not installed or tested against a real account",
+    "native_binary_integrated": true,
+    "application_validation": "debug 3.0.1+2041 built; final APK native libraries match stripped AAR",
+    "aar_built": true,
+    "sdk_artifact_verified": true,
+    "aar_sha256": "d11ec34f9a0934837627f70264303c179084d9e15047b0010f28e4ca50f0afed",
+    "apk_sha256": "fad36f7ab70c86b9eece7c74489773b3c517ca52740a1d536db034d4cb0476e1"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.28-fast-recovery.1",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "deferred by user; source consistency only",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "user will rebuild on macOS",
+    "app_validation_scope": "same locked Core source as Android; previous binary is rejected",
+    "native_binary_integrated": false,
+    "source_consistency_verified": true,
+    "source_files": 428
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned existing gomobile dependency closure",
+    "version/version: unique recovery.28-fast-recovery.1 runtime identity"
+  ],
+  "verification_evidence": "verification/recovery.28-fast-recovery.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Suppress cancellation feedback; batch visibility and bounded recent gaps; durable bulk startup checkpoints; isolate auxiliary metadata after permission/read-safe message readiness. Preserves existing chat-window source changes."
+  },
+  "chat_window_verification_evidence": "verification/recovery.26-chat-window.json"
+}

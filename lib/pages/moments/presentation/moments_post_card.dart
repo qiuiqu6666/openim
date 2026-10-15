@@ -5,6 +5,7 @@ import '../../../services/moments_repository.dart';
 import '../interactions/moments_post_actions.dart';
 import '../media/moments_media_grid.dart';
 import 'moments_engagement_panel.dart';
+import 'moments_post_text.dart';
 import 'moments_text.dart';
 import 'moments_theme.dart';
 
@@ -43,46 +44,65 @@ class MomentsPostCard extends StatelessWidget {
       children: [
         if (!detail)
           Row(children: [
-            AvatarView(
-                width: MomentsLayout.avatarSize,
-                height: MomentsLayout.avatarSize,
-                isCircle: true,
-                url: post.author.avatarUrl,
-                text: post.author.displayName,
-                onTap: onAuthor),
-            const SizedBox(width: 10),
-            Expanded(
+            Semantics(
+              button: true,
+              label: post.author.displayName,
               child: InkWell(
                 onTap: onAuthor,
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(post.author.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: MomentsTheme.text(dark),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 4),
-                      Text(momentsTime(context, post.createdAt),
-                          style: TextStyle(
-                              color: MomentsTheme.secondary(dark),
-                              fontSize: 12)),
-                    ]),
+                customBorder: const CircleBorder(),
+                child: SizedBox.square(
+                  dimension: MomentsLayout.touchTarget,
+                  child: Center(
+                      child: ExcludeSemantics(
+                          child: AvatarView(
+                    width: MomentsLayout.avatarSize,
+                    height: MomentsLayout.avatarSize,
+                    isCircle: true,
+                    url: post.author.avatarUrl,
+                    text: post.author.displayName,
+                  ))),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Semantics(
+                button: true,
+                child: InkWell(
+                  onTap: onAuthor,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                        minHeight: MomentsLayout.touchTarget),
+                    child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(post.author.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: MomentsTheme.text(dark),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 4),
+                          Text(momentsTime(context, post.createdAt),
+                              style: TextStyle(
+                                  color: MomentsTheme.secondary(dark),
+                                  fontSize: 12)),
+                        ]),
+                  ),
+                ),
               ),
             ),
             _menu(context),
           ]),
         if (post.text.trim().isNotEmpty) ...[
           if (!detail) const SizedBox(height: 10),
-          InkWell(
-            onTap: detail ? null : onOpen,
-            child: Text(post.text,
-                style: TextStyle(
-                    color: MomentsTheme.text(dark),
-                    fontSize: 15,
-                    height: detail ? 1.45 : 1.5)),
+          MomentsPostText(
+            key: ValueKey('moments_text_${post.momentId}'),
+            text: post.text,
+            detail: detail,
+            onOpen: onOpen,
           ),
         ],
         if (post.mediaList.isNotEmpty) ...[

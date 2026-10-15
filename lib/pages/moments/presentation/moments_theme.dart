@@ -13,6 +13,7 @@ abstract final class MomentsLayout {
   static const cardRadius = 18.0;
   static const cardMargin = 10.0;
   static const cardPadding = EdgeInsets.fromLTRB(14, 12, 14, 6);
+  static const previewTextLines = 6;
   static const bodySize = 15.0;
   static const nameSize = 16.0;
   // These retain the existing like and comment button label sizes.
@@ -32,7 +33,11 @@ abstract final class MomentsLayout {
   static const timelineDateWidth = 64.0;
   static const timelineGap = 12.0;
   static const timelineMediaSize = 104.0;
-  static const timelinePadding = EdgeInsets.fromLTRB(16, 14, 16, 14);
+  static const timelinePadding = EdgeInsets.fromLTRB(
+      AppTokens.s5, AppTokens.s3, AppTokens.s5, AppTokens.s2);
+  static const timelineDividerSpace = AppTokens.s3;
+  static const timelineActionGap = AppTokens.s2;
+  static const timelineListBottom = AppTokens.s3;
 }
 
 abstract final class MomentsTheme {
@@ -45,7 +50,7 @@ abstract final class MomentsTheme {
   static Color text(bool dark) =>
       dark ? const Color(0xFFF4F4F4) : const Color(0xFF1C1C1E);
   static Color secondary(bool dark) =>
-      dark ? const Color(0xFF9A9CA3) : const Color(0xFF7B8491);
+      dark ? const Color(0xFF9A9CA3) : const Color(0xFF626B78);
   static Color border(bool dark) =>
       dark ? const Color(0xFF2A2D33) : const Color(0xFFE6E8EC);
   static Color name(bool dark) => dark ? text(dark) : const Color(0xFF374151);
@@ -59,6 +64,8 @@ abstract final class MomentsTheme {
       dark ? secondary(dark).withValues(alpha: .55) : const Color(0xFFD0D0D0);
   static const coverForeground = Color(0xFFFFFFFF);
   static const coverSecondary = Color(0xB3FFFFFF);
+  static const coverScrim = Color(0xB3000000);
+  static const coverClear = Color(0x00000000);
   static const coverShadow = Color(0x42000000);
   static const coverFallback = Color(0xFF3A3A3A);
   static const notificationBadge = Color(0xFFE60022);

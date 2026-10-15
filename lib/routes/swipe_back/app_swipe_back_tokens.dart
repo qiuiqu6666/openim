@@ -8,6 +8,11 @@ abstract final class AppSwipeBackTokens {
   static const distanceFraction = 0.16;
   static const velocity = 320.0;
   static const transitionDuration = Duration(milliseconds: 480);
+  // Chat entry should settle promptly once its local window is available.
+  // Monotonic, zero velocity at the end; no spring overshoot or scaling.
+  static const chatTransitionDuration = Duration(milliseconds: 280);
+  static const chatCurve = Cubic(0.22, 0.8, 0.25, 1.0);
+  static const chatReverseCurve = FlippedCurve(chatCurve);
   static const curve = Curves.fastEaseInToSlowEaseOut;
   static const reverseCurve = FlippedCurve(curve);
   static const parallaxFraction = 0.25;

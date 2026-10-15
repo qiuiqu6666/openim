@@ -16,6 +16,7 @@ import 'package:openim/pages/contacts/select_contacts/friend_list/group_contact_
 import 'package:openim/pages/contacts/select_contacts/select_contacts_logic.dart';
 import 'package:openim/pages/global_search/global_search_logic.dart';
 import 'package:openim/pages/global_search/global_search_view.dart';
+import 'package:openim/pages/global_search/loading/global_search_skeleton.dart';
 import 'package:openim/services/common_group_count_service.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -167,6 +168,7 @@ void main() {
     OpenIM.iMManager.userID = 'audit-viewer';
     final fixture = _MotionProfileFixture()
       ..groupAccount.value = null
+      ..iHaveAdminOrOwnerPermission.value = true
       ..joinGroupTime.value = 1790878326000
       ..inviterID.value = 'fixed-inviter'
       ..inviterName.value = '固定邀请人';
@@ -193,8 +195,8 @@ void main() {
     final disclosedJoin = tester.getRect(joinDate);
     final disclosedInviter = tester.getRect(inviter);
     expect(tester.getRect(avatar), initialAvatar);
-    expect(disclosedJoin.top, greaterThan(initialJoin.top));
-    expect(disclosedInviter.top, greaterThan(initialInviter.top));
+    expect(disclosedJoin.top, closeTo(initialJoin.top, .01));
+    expect(disclosedInviter.top, closeTo(initialInviter.top, .01));
 
     // GroupProfileAccountState.refresh revokes the previous account before the
     // lookup. A same-result reply then recreates the same conditional row.
@@ -213,7 +215,8 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('audit: late search sections displace an existing result',
+  testWidgets(
+      'search loading reserves a stable surface until sections are ready',
       (tester) async {
     final source = _StaggeredSearch();
     final logic = Get.put(GlobalSearchLogic(source: source));
@@ -232,14 +235,15 @@ void main() {
     final header = find.byKey(const ValueKey('global-search-header'));
     final conversation = find.byKey(const ValueKey('global-search-section-3'));
     final initialHeader = tester.getRect(header);
-    final initialConversation = tester.getRect(conversation);
+    expect(conversation, findsNothing);
+    expect(find.byType(GlobalSearchSkeleton), findsOneWidget);
 
     source.friendReply.complete([
       FriendInfo(userID: 'audit-friend', nickname: 'Late friend result'),
     ]);
     await tester.pump();
-    final withFriend = tester.getRect(conversation);
-    expect(withFriend.top, greaterThan(initialConversation.top));
+    expect(conversation, findsNothing);
+    expect(find.byType(GlobalSearchSkeleton), findsOneWidget);
     expect(tester.getRect(header), initialHeader);
     source.groupReply.complete([
       GroupInfo(groupID: 'audit-group', groupName: 'Late group result'),
@@ -247,18 +251,17 @@ void main() {
     await searching;
     await tester.pump();
     final withGroup = tester.getRect(conversation);
-    expect(withGroup.top, greaterThan(withFriend.top));
+    expect(withGroup.top, greaterThanOrEqualTo(initialHeader.bottom));
+    expect(find.byType(GlobalSearchSkeleton), findsNothing);
     expect(tester.getRect(header), initialHeader);
     expect(logic.query.value, 'audit');
     expect(logic.index.value, 1);
-    debugPrint('[contacts-motion] search result: friend delta='
-        '${withFriend.top - initialConversation.top}, group delta='
-        '${withGroup.top - withFriend.top}, header delta=0');
+    debugPrint('[contacts-motion] completed search keeps header stable');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('audit: common-group refresh collapses the current scroll offset',
+  testWidgets('common-group refresh preserves the current scroll offset',
       (tester) async {
     final service = _CommonGroupsService();
     final store = CommonGroupsStore('peer',
@@ -283,15 +286,15 @@ void main() {
     // unrelated navigation and real SDK traffic.
     final refreshing = store.refresh();
     await tester.pump();
-    expect(store.items, isEmpty);
-    expect(controller.offset, lessThan(oldOffset));
-    final emptyOffset = controller.offset;
+    expect(store.items.length, 30);
+    expect(controller.offset, oldOffset);
+    final refreshingOffset = controller.offset;
     service.refreshing.complete(_CommonGroupsService.page());
     await refreshing;
     await tester.pumpAndSettle();
-    expect(controller.offset, emptyOffset);
+    expect(controller.offset, oldOffset);
     debugPrint('[contacts-motion] common groups: before=$oldOffset, '
-        'while refreshing=$emptyOffset, after=${controller.offset}');
+        'while refreshing=$refreshingOffset, after=${controller.offset}');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });

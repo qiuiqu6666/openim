@@ -229,6 +229,9 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) error {
 			return err
 		}
 	}
+	if len(allMsg) == 0 {
+		return nil
+	}
 	var isTriggerUnReadCount bool
 	insertMsg := make(map[string][]*model_struct.LocalChatLog, 10)
 	updateMsg := make(map[string][]*model_struct.LocalChatLog, 10)
@@ -269,6 +272,9 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) error {
 	onlineMap := make(map[onlineMsgKey]struct{})
 
 	for conversationID, msgs := range allMsg {
+		if err := c.applyIncomingRevocations(ctx, conversationID, msgs.Msgs); err != nil {
+			return err
+		}
 		pending, err := c.loadMessageDeliveries(ctx, conversationID)
 		if err != nil {
 			return err
@@ -372,7 +378,7 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) error {
 				// Messages sent by myself  //if  sent through  this terminal
 				existingMsg, ok := clientMsgMap[msg.ClientMsgID]
 				if ok {
-					log.ZInfo(ctx, "have message", "msg", msg)
+					log.ZDebug(ctx, "have message", "msg", msg)
 					if existingMsg.Seq == 0 {
 						if !isConversationUpdate {
 							msg.Status = constant.MsgStatusFiltered
@@ -403,7 +409,7 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) error {
 						exceptionMsg = append(exceptionMsg, dbMessage)
 					}
 				} else {
-					log.ZInfo(ctx, "sync message", "msg", msg)
+					log.ZDebug(ctx, "sync message", "msg", msg)
 					if isConversationUpdate {
 						if isSenderConversationUpdate {
 							c.updateSelfMessagePreview(conversationID, msg, conversationSet)
@@ -434,6 +440,14 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) error {
 					lc.UserID = v.SendID
 				}
 				if existing := clientMsgMap[msg.ClientMsgID]; existing != nil && existing.Seq == msg.Seq {
+					// A latest-page read can store a body before its first live
+					// delivery. Cache presence alone must not suppress unread.
+					// The commit below rechecks this watermark under the same
+					// lock as server reconciliation before incrementing it.
+					if isHistory && isConversationUpdate && isUnreadCount && !existing.IsRead && msg.Seq > c.maxSeqRecorder.Get(conversationID) && pending[msg.ClientMsgID] != msg.Seq {
+						pending[msg.ClientMsgID] = msg.Seq
+						deliveryAcknowledgements[conversationID] = append(deliveryAcknowledgements[conversationID], msg.ClientMsgID)
+					}
 					if pending[msg.ClientMsgID] == msg.Seq && existing.Status != constant.MsgStatusHasDeleted && existing.Status != constant.MsgStatusFiltered {
 						// Storage survived, delivery did not. Rebuild the batch;
 						// read-watermark reconciliation prevents duplicate unread.
@@ -665,6 +679,13 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) error {
 	}
 
 	//Exception message storage
+	for id, rows := range allMsg {
+		ids := make([]string, 0, len(rows.Msgs))
+		for _, row := range rows.Msgs {
+			ids = append(ids, row.ClientMsgID)
+		}
+		c.maintainMessageCache(ctx, id, ids)
+	}
 	for _, v := range exceptionMsg {
 		log.ZWarn(ctx, "exceptionMsg show: ", nil, "msg", *v)
 	}
@@ -703,6 +724,9 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) error {
 	for conversationID, msgs := range allMsg {
 		log.ZDebug(ctx, "parse message in one conversation", "conversationID",
 			conversationID, "message length", len(msgs.Msgs))
+		if err := c.applyIncomingRevocations(ctx, conversationID, msgs.Msgs); err != nil {
+			return err
+		}
 		var insertMessage, selfInsertMessage, othersInsertMessage []*model_struct.LocalChatLog
 		var latestMsg *sdk_struct.MsgStruct
 		if len(msgs.Msgs) == 0 {
@@ -738,7 +762,7 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) error {
 			log.ZDebug(ctx, "decode message", "msg", msg)
 			if v.SendID == c.loginUserID {
 				// Messages sent by myself  //if  sent through  this terminal
-				log.ZInfo(ctx, "sync message in reinstalled", "msg", msg)
+				log.ZDebug(ctx, "sync message in reinstalled", "msg", msg)
 
 				latestMsg = msg
 
@@ -751,11 +775,20 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) error {
 		}
 
 		if latestMsg != nil {
-			conversationList = append(conversationList, &model_struct.LocalConversation{
+			next := &model_struct.LocalConversation{
 				LatestMsg:         utils.StructToJsonString(latestMsg),
 				LatestMsgSendTime: latestMsg.SendTime,
 				ConversationID:    conversationID,
-			})
+			}
+			current, err := c.db.GetConversation(ctx, conversationID)
+			if err != nil && !isLocalRecordMissing(err) {
+				return err
+			}
+			// Backfill follows the preview pass and may also follow a live push.
+			// Persist its rows without rolling the conversation preview backwards.
+			if err != nil || current == nil || newerConversationPreview(next, current) {
+				conversationList = append(conversationList, next)
+			}
 		} else {
 			log.ZWarn(ctx, "latestMsg is nil", errs.New("latestMsg is nil"), "conversationID", conversationID)
 		}
@@ -767,10 +800,26 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) error {
 		return err
 	}
 	log.ZDebug(ctx, "doMsgSyncByReinstalled before callbacks", "duration", time.Since(b).String(), "conversations", len(allMsg))
+	for id, rows := range insertMsg {
+		ids := make([]string, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, row.ClientMsgID)
+		}
+		c.maintainMessageCache(ctx, id, ids)
+	}
 
 	// log.ZDebug(ctx, "progress is", "msgLen", msgLen, "msgOffset", c.msgOffset, "total", total, "now progress is", (c.msgOffset*(100-InitSyncProgress))/total + InitSyncProgress)
+	if c2v.Value.(sdk_struct.CmdMsgSyncInReinstall).NotifyConversations {
+		ids := make([]string, 0, len(insertMsg))
+		for id := range insertMsg { ids = append(ids, id) }
+		// Replay the committed snapshot too: the preceding attempt may have
+		// saved its rows but failed before notifying the application.
+		if len(ids) > 0 {
+			if err := c.notifySyncedConversations(ctx, ids); err != nil { return err }
+		}
+	}
 	if total > 0 {
-		c.ConversationListener().OnSyncServerProgress((c.msgOffset*(100-InitSyncProgress))/total + InitSyncProgress)
+		c.ConversationListener().OnSyncServerProgress(min(99, (c.msgOffset*(100-InitSyncProgress))/total+InitSyncProgress))
 	}
 	//Exception message storage
 	for _, v := range exceptionMsg {

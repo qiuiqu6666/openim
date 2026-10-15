@@ -81,7 +81,7 @@ IndexBarOptions directoryIndexBarOptions({
   TextStyle? selectTextStyle,
   Color? accentColor,
   bool highlightSelection = false,
-  bool hapticFeedback = false,
+  bool hapticFeedback = true,
 }) =>
     IndexBarOptions(
       needRebuild: true,
@@ -95,7 +95,10 @@ IndexBarOptions directoryIndexBarOptions({
           : null,
       downItemDecoration: BoxDecoration(
           color: accentColor ?? Styles.c_0089FF, shape: BoxShape.circle),
+      indexHintWidth: 48.w,
+      indexHintHeight: 48.w,
+      indexHintTextStyle: Styles.ts_0C1C33_20sp_semibold,
       indexHintDecoration: BoxDecoration(
-          color: accentColor ?? Styles.c_0089FF,
+          color: Styles.c_E8EAEF.withValues(alpha: .85),
           borderRadius: BorderRadius.circular(12.r)),
     );

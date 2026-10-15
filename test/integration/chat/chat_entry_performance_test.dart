@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -54,6 +55,8 @@ void main() {
   late List<ChatLogic> controllers;
   late List<Map<String, dynamic>> draftCalls;
   late List<Message> localSnapshot;
+  late bool snapshotReady;
+  Completer<void>? snapshotGate;
 
   ChatLogic open([ConversationInfo? conversation]) {
     // Get.arguments reads Routing.args; invoking the real onInit here lets the
@@ -95,7 +98,9 @@ void main() {
     expect(logic.newMessages.awayFromLatest.value, isTrue);
   }
 
-  registerDeferredHistoryCases(open: () => open(), calls: () => calls,
+  registerDeferredHistoryCases(
+      open: () => open(),
+      calls: () => calls,
       seed: (rows) => localSnapshot = rows);
 
   setUp(() {
@@ -106,6 +111,8 @@ void main() {
     controllers = [];
     draftCalls = [];
     localSnapshot = [];
+    snapshotReady = true;
+    snapshotGate = null;
     Get.put<AppController>(EntryTestApp());
     im = Get.put<IMController>(EntryTestIM()) as EntryTestIM;
     Get.put<ConversationLogic>(EntryTestConversation());
@@ -115,9 +122,11 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdkChannel, (call) async {
       if (call.method == 'getLocalHistorySnapshot') {
+        if (snapshotGate != null) await snapshotGate!.future;
         expect((call.arguments as Map)['localSnapshot'], isTrue);
         return jsonEncode({
           'localSnapshot': true,
+          'snapshotReady': snapshotReady,
           'errCode': 0,
           'messageList': localSnapshot.map((m) => m.toJson()).toList()
         });
@@ -156,7 +165,8 @@ void main() {
         .setMockMethodCallHandler(sdkChannel, null);
   });
 
-  testWidgets('cold entry paints local history before network completes',
+  testWidgets(
+      'cold entry paints verified local history before network completes',
       (tester) async {
     localSnapshot =
         List.generate(40, (i) => _entryMessage('local-$i', time: i + 1));
@@ -172,6 +182,77 @@ void main() {
     await tester.pump();
     expect(logic.messageList.map((m) => m.clientMsgID), ['server-latest']);
     expect(logic.initialHistoryLoading.value, isFalse);
+    logic.onDelete();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+      'entry hides stale cache and incomplete native rows until latest commits',
+      (tester) async {
+    final old = List.generate(40, (i) => _entryMessage('old-$i', time: i + 1));
+    ChatHistoryCache.write('self', 'chat', old);
+    localSnapshot = [...old, _entryMessage('latest', time: 100)];
+    snapshotReady = false;
+    final logic = open(_entryConversation(latest: localSnapshot.last));
+    await tester.pumpWidget(buildChatEntryList(logic));
+    await tester.pump();
+    expect(logic.initialWindowReady.value, isFalse);
+    expect(logic.messageList, isEmpty);
+    expect(find.text('old-39'), findsNothing);
+    final latest =
+        List.generate(40, (i) => _entryMessage('new-$i', time: 61 + i));
+    calls.single.complete(latest);
+    await tester.pump();
+    await tester.pump();
+    expect(logic.initialWindowReady.value, isTrue);
+    expect(logic.messageList.map((m) => m.clientMsgID),
+        latest.map((m) => m.clientMsgID));
+    expect(find.text('new-39'), findsOneWidget);
+    expect(find.text('old-39'), findsNothing);
+    logic.onDelete();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+      'live delivery during entry is painted together with initial history',
+      (tester) async {
+    final logic = open();
+    await tester.pumpWidget(buildChatEntryList(logic));
+    im.recvNewMessage(_entryMessage('arrival', time: 3));
+    await tester.pump();
+    expect(find.text('arrival'), findsNothing);
+    calls.single.complete(
+        [_entryMessage('first', time: 1), _entryMessage('second', time: 2)]);
+    await tester.pump();
+    await tester.pump();
+    expect(logic.messageList.map((m) => m.clientMsgID),
+        ['first', 'second', 'arrival']);
+    expect(find.text('arrival'), findsOneWidget);
+    logic.onDelete();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('snapshot racing a newer live edge cannot paint a sequence gap',
+      (tester) async {
+    snapshotGate = Completer<void>();
+    localSnapshot =
+        List.generate(40, (i) => _entryMessage('old-$i', time: i + 1));
+    final logic = open();
+    await tester.pumpWidget(buildChatEntryList(logic));
+    im.recvNewMessage(_entryMessage('new-39', time: 100));
+    snapshotGate!.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(logic.initialWindowReady.value, isFalse);
+    expect(find.text('old-39'), findsNothing);
+    expect(find.text('new-39'), findsNothing);
+    calls.single.complete(
+        List.generate(40, (i) => _entryMessage('new-$i', time: 61 + i)));
+    await tester.pump();
+    await tester.pump();
+    expect(logic.messageList.length, 40);
+    expect(logic.messageList.first.seq, 61);
+    expect(find.text('new-39'), findsOneWidget);
     logic.onDelete();
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -403,12 +484,12 @@ void main() {
     logic.onDelete();
   });
 
-  testWidgets('cache and latest seed show immediately and replace once',
+  testWidgets('unverified cache and preview stay hidden; SDK commits once',
       (tester) async {
     ChatHistoryCache.write('self', 'chat', [_entryMessage('cached')]);
     final latest = _entryMessage('latest', time: 2);
     final logic = open(_entryConversation(latest: latest));
-    expect(logic.messageList.map((m) => m.clientMsgID), ['cached', 'latest']);
+    expect(logic.messageList, isEmpty);
     final emissions = <List<String?>>[];
     final subscription = logic.messageList.listen(
         (rows) => emissions.add(rows.map((m) => m.clientMsgID).toList()));

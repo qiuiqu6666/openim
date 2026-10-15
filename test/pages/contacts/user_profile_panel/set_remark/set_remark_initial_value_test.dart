@@ -121,7 +121,7 @@ void main() {
         final input = tester.widget<TextField>(find.byType(TextField));
         expect(input.controller!.text, expected);
         expect(input.decoration!.hintText, '秋啊');
-        expect(find.text('${expected.characters.length}/30'), findsOneWidget);
+        expect(find.text('${30 - expected.characters.length}'), findsOneWidget);
         expect(tester.testTextInput.isVisible, isFalse);
         await tester.tap(find.byType(TextField));
         await tester.pump();
@@ -131,7 +131,7 @@ void main() {
         expect(input.controller!.selection,
             TextSelection.collapsed(offset: editableName.length));
         await tester.enterText(find.byType(TextField), '新备注');
-        await tester.tap(find.text(StrRes.determine));
+        await tester.tap(find.text(StrRes.done));
         await tester.runAsync(
             () async => Future<void>.delayed(const Duration(milliseconds: 30)));
         await tester.pumpAndSettle();
@@ -166,7 +166,7 @@ void main() {
     await _open(tester, remark: '旧备注');
     await tester.enterText(find.byType(TextField), '临时备注');
     await tester.enterText(find.byType(TextField), '');
-    await tester.tap(find.text(StrRes.determine));
+    await tester.tap(find.text(StrRes.done));
     await tester.runAsync(
         () async => Future<void>.delayed(const Duration(milliseconds: 30)));
     await tester.pumpAndSettle();
@@ -228,7 +228,7 @@ void main() {
     expect(logic.inputCtrl.selection.isCollapsed, isTrue);
     expect(logic.inputCtrl.selection.baseOffset, greaterThan(3));
     await tester.pump(const Duration(milliseconds: 600));
-    await gesture.moveBy(const Offset(-90, 0));
+    await gesture.moveTo(start);
     await tester.pump();
     expect(logic.inputCtrl.selection.isCollapsed, isTrue);
     expect(logic.inputCtrl.selection.baseOffset, lessThan(3));
@@ -249,12 +249,12 @@ void main() {
         text: '秋啊朋友', selection: TextSelection.collapsed(offset: 4)));
     await tester.pump();
     expect(logic.inputCtrl.text, '秋啊朋友');
-    await tester.tap(find.byKey(const ValueKey('name-editor-clear')));
+    await tester.enterText(find.byType(TextField), '');
     await tester.pump();
     await tester.tap(find.byType(TextField));
     await tester.pump();
     expect(logic.inputCtrl.text, isEmpty);
-    expect(find.text('0/30'), findsOneWidget);
+    expect(find.text('30'), findsOneWidget);
     expect(calls, isEmpty);
   });
 }

@@ -121,6 +121,12 @@ class AppPages {
         binding: binding,
         preventDuplicates: preventDuplicates,
         customTransition: AppGetTransition(
+          pushCurve: AppRoutes.isConversationRoute(name)
+              ? AppSwipeBackTokens.chatCurve
+              : AppSwipeBackTokens.curve,
+          popCurve: AppRoutes.isConversationRoute(name)
+              ? AppSwipeBackTokens.chatReverseCurve
+              : AppSwipeBackTokens.reverseCurve,
           enableBackGesture: popGesture &&
               name != AppRoutes.home &&
               name != AppRoutes.login &&
@@ -129,7 +135,9 @@ class AppPages {
               ? AppSwipeBackTokens.chatEdgeWidth
               : AppSwipeBackTokens.edgeWidth,
         ),
-        transitionDuration: AppSwipeBackTokens.transitionDuration,
+        transitionDuration: AppRoutes.isConversationRoute(name)
+            ? AppSwipeBackTokens.chatTransitionDuration
+            : AppSwipeBackTokens.transitionDuration,
         popGesture: false,
       );
 

@@ -176,6 +176,9 @@ func (c *Conversation) updateMsgStatusAndTriggerConversation(ctx context.Context
 	lc.LatestMsg = utils.StructToJsonString(s)
 	lc.LatestMsgSendTime = sendTime
 	_ = common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{ConID: lc.ConversationID, Action: constant.AddConOrUpLatMsg, Args: *lc}, c.GetCh())
+	if status == constant.MsgStatusSendSuccess {
+		c.maintainMessageCache(ctx, lc.ConversationID, []string{clientMsgID})
+	}
 }
 
 func (c *Conversation) fileName(ftype string, id string) string {

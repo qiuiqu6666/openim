@@ -173,29 +173,17 @@ func (c *Conversation) unreadChangeTrigger(ctx context.Context, conversationID s
 func (c *Conversation) doUnreadCount(ctx context.Context, conversation *model_struct.LocalConversation, hasReadSeq int64, seqs []int64) error {
 	if conversation.ConversationType == constant.SingleChatType {
 		if len(seqs) != 0 {
-			hasReadMessage, err := c.db.GetMessageBySeq(ctx, conversation.ConversationID, hasReadSeq)
-			if err != nil && !isLocalRecordMissing(err) {
+			// Apply every listed sequence even if the tail is already read or
+			// outside the local cache. The database treats zero matches as a no-op.
+			if _, err := c.db.MarkConversationMessageAsReadBySeqs(ctx, conversation.ConversationID, seqs); err != nil {
 				return err
-			}
-			if err == nil && hasReadMessage.IsRead {
-				// A replayed acknowledgement is already applied, not a failed
-				// notification page. Let the following notifications advance.
-				return nil
-
-			} else {
-				_, err := c.db.MarkConversationMessageAsReadBySeqs(ctx, conversation.ConversationID, seqs)
-				if err != nil {
-					return err
-				}
 			}
 
 		} else {
 			return errs.New("seqList is empty", "conversationID", conversation.ConversationID, "hasReadSeq", hasReadSeq).Wrap()
 		}
 		currentMaxSeq := c.maxSeqRecorder.Get(conversation.ConversationID)
-		if currentMaxSeq == 0 {
-			return errs.New("currentMaxSeq is 0", "conversationID", conversation.ConversationID).Wrap()
-		} else {
+		if currentMaxSeq > 0 {
 			unreadCount := currentMaxSeq - hasReadSeq
 			if unreadCount < 0 {
 				log.ZWarn(ctx, "unread count is less than 0", nil, "conversationID", conversation.ConversationID, "currentMaxSeq", currentMaxSeq, "hasReadSeq", hasReadSeq)
@@ -207,9 +195,11 @@ func (c *Conversation) doUnreadCount(ctx context.Context, conversation *model_st
 			}
 		}
 		latestMsg := &sdk_struct.MsgStruct{}
-		if err := json.Unmarshal([]byte(conversation.LatestMsg), latestMsg); err != nil {
-			log.ZError(ctx, "Unmarshal err", err, "conversationID", conversation.ConversationID, "latestMsg", conversation.LatestMsg)
-			return err
+		if conversation.LatestMsg != "" {
+			if err := json.Unmarshal([]byte(conversation.LatestMsg), latestMsg); err != nil {
+				log.ZError(ctx, "Unmarshal err", err, "conversationID", conversation.ConversationID, "latestMsg", conversation.LatestMsg)
+				return err
+			}
 		}
 		if (!latestMsg.IsRead) && datautil.Contain(latestMsg.Seq, seqs...) {
 			c.doUpdateConversation(common.Cmd2Value{Value: common.UpdateConNode{ConID: conversation.ConversationID,

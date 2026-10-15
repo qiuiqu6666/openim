@@ -50,6 +50,7 @@ void main() {
   late int created;
   late int selectedCount;
   late FavoriteTarget destination;
+  late int preparationFailures;
   setUpAll(() async {
     PackageInfo.setMockInitialValues(
         appName: 'test',
@@ -72,6 +73,7 @@ void main() {
     created = 0;
     selectedCount = 1;
     destination = target;
+    preparationFailures = 0;
     transport = (message, destination) async {
       destinations.add(destination.userID!);
       return Message.fromJson(message.toJson())
@@ -98,7 +100,7 @@ void main() {
           List.generate(selectedCount, (_) => _Asset(asset)),
       compressImage: (f) async => f,
       pickCamera: () async => _Asset(asset),
-      onPreparationFailed: () => fail('Preparation failed'),
+      onPreparationFailed: () => preparationFailures++,
     );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
@@ -138,12 +140,81 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
     media.close();
     outbox.clear();
+    Config.useRuntimeNetworkRoute(null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
     await directory.delete(recursive: true);
   });
   void finishUpload() =>
       upload.complete(jsonEncode({'url': 'https://example.test/photo.jpg'}));
+
+  void switchRoute() => Config.useRuntimeNetworkRoute(const RuntimeNetworkRoute(
+      authUrl: 'https://backup.test/auth',
+      apiUrl: 'https://backup.test/api',
+      wsUrl: 'wss://backup.test/ws',
+      customerServiceUrl: 'https://backup.test/support'));
+
+  test('node switch makes preupload visibly failed and cannot revive old work',
+      () async {
+    final pending = media.onTapAlbum();
+    await until(() => uploads == 1);
+    final messages = <Message>[].obs;
+    final delivery = ChatDeliveryController(
+        messageList: messages,
+        conversation: () => ConversationInfo(
+            conversationID: 'chat-a', userID: 'a', conversationType: 1),
+        isClosed: () => false,
+        groupStatus: () => null,
+        scrollBottom: () {},
+        resetInput: (_) {});
+    final subscription = bindMediaOutbox(
+        conversationID: 'chat-a',
+        messages: messages,
+        isClosed: () => false,
+        removedIDs: {},
+        delivery: delivery,
+        outbox: outbox);
+    switchRoute();
+    expect(messages.single.status, MessageStatus.failed);
+    expect(
+        outbox.entries('chat-a').single.message.status, MessageStatus.failed);
+    expect(delivery.retainedTransferCount, 0);
+    // Returning to the old endpoint must not silently revive cancelled uploads.
+    Config.useRuntimeNetworkRoute(null);
+    finishUpload();
+    await pending;
+    expect(destinations, isEmpty);
+    expect(messages.single.status, MessageStatus.failed);
+    expect(preparationFailures, 1);
+    await subscription.cancel();
+    delivery.close();
+  });
+
+  test(
+      'node switch after submission preserves uncertainty and accepts late ACK',
+      () async {
+    final receipt = Completer<Message>();
+    transport = (message, target) {
+      destinations.add(target.userID!);
+      return receipt.future;
+    };
+    final pending = media.onTapAlbum();
+    await until(() => uploads == 1);
+    finishUpload();
+    await until(() => destinations.isNotEmpty);
+    switchRoute();
+    await pending;
+    final entry = outbox.entries('chat-a').single;
+    expect(entry.message.status, MessageStatus.sending);
+    expect(entry.transfer.stage, ChatTransferStage.unknown);
+    await entry.task.send(entry.message);
+    expect(destinations, ['a']);
+    receipt.complete(Message.fromJson(entry.message.toJson())
+      ..status = MessageStatus.succeeded
+      ..seq = 42);
+    await until(() => entry.message.status == MessageStatus.succeeded);
+    expect(outbox.entries('chat-a').single.message.seq, 42);
+  });
 
   test('upload stages and ACK only refresh their row and preserve early reads',
       () async {

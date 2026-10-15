@@ -1,4 +1,4 @@
-// Copyright © 2023 OpenIM SDK. All rights reserved.
+// Copyright 漏 2023 OpenIM SDK. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -118,7 +118,7 @@ func (c *Conversation) deleteMessage(ctx context.Context, conversationID string,
 	}
 
 	if localMessage.Seq == 0 || localMessage.Status == constant.MsgStatusSendFailed {
-		log.ZInfo(ctx, "delete msg seq is 0 or msg status is send failed, only delete in local", "msg", localMessage)
+		log.ZDebug(ctx, "delete msg seq is 0 or msg status is send failed, only delete in local", "msg", localMessage)
 		return c.deleteMessageFromLocal(ctx, conversationID, clientMsgID)
 	}
 

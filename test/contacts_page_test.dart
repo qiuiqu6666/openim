@@ -103,8 +103,12 @@ void main() {
     expect(find.text('群通知'), findsOneWidget);
     expect(find.text('我的群聊'), findsOneWidget);
     expect(find.byType(AzListView), findsOneWidget);
-    await tester.tap(find.text('搜索'));
-    expect(logic.searches, 1);
+    await tester.tap(find.byKey(const ValueKey('contacts-search-button')));
+    await tester.pumpAndSettle();
+    expect(logic.searches, 0);
+    expect(tester.widget<TextField>(find.byType(TextField)).readOnly, isFalse);
+    await tester.tap(find.byKey(const ValueKey('chat-history-search-cancel')));
+    await tester.pumpAndSettle();
     logic.friends.add(IMUtils.setAzPinyinAndTag(
       ISUserInfo.fromJson({'userID': 'u1', 'nickname': '李雷'}),
     ) as ISUserInfo);

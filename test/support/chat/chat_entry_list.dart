@@ -22,7 +22,9 @@ Widget buildChatEntryList(ChatLogic logic,
         child: NotificationListener<ScrollNotification>(
           onNotification: logic.onChatScrollNotification,
           child: Obx(() {
-            final rows = logic.messageList.reversed.toList();
+            final rows = logic.initialWindowReady.value
+                ? logic.messageList.reversed.toList()
+                : <Message>[];
             if (commonList) {
               final ids = rows.map((message) => message.clientMsgID!).toList();
               final indices = <String, int>{

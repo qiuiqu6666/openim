@@ -1,0 +1,25 @@
+{
+  "version": "3.0.1+2042",
+  "mode": "profile",
+  "installed": true,
+  "loginPreserved": true,
+  "normalChatComposerPresent": true,
+  "ordinaryEntryStagesMs": {
+    "tap": 0.001,
+    "prefetch_start": 0.89,
+    "local_window_start": 0.912,
+    "local_window_finished": 6.344,
+    "account_resolved": 65.365,
+    "route_push": 65.394,
+    "init_start": 67.274,
+    "window_ready": 67.903,
+    "init_finished": 68.548,
+    "first_frame": 80.259,
+    "first_correct_message_frame": 88.213,
+    "list_interactive": 88.226,
+    "initial_history_finished": 255.253,
+    "transition_finished": 358.196
+  },
+  "signerSha256": "d3639980e1d8746b7ceea04eef046dcb4a9e6f9d411198a9fe9404cdb3e1f86f",
+  "note": "Single manual-entry smoke sample; excluded from the controlled performance comparison."
+}

@@ -1,0 +1,356 @@
+{
+  "date": "2026-10-15",
+  "environment": "Android 9 x86_64 emulator (SM-N9810 identity), profile AOT, full application, existing real account and native OpenIM SDK",
+  "comparison": {
+    "baseline": {
+      "runs": 2,
+      "coldCorrectMs": 83.1255,
+      "coldInteractiveMs": 187.1835,
+      "coldRouteMs": 290.20550000000003,
+      "localReadyMs": 38.5945,
+      "rapidCorrectMedianMs": 27.532
+    },
+    "candidate": {
+      "runs": 2,
+      "coldCorrectMs": 88.2435,
+      "coldInteractiveMs": 159.1265,
+      "coldRouteMs": 298.7205,
+      "localReadyMs": 49.857,
+      "rapidCorrectMedianMs": 28.799500000000002
+    }
+  },
+  "runs": [
+    {
+      "run": "pinned-baseline-1",
+      "startupMs": 1218,
+      "coldCorrectMs": 92.914,
+      "coldInteractiveMs": 193.824,
+      "coldRouteMs": 292.972,
+      "localReadyMs": 45.485,
+      "rapidCorrectMs": [
+        27.522,
+        26.601,
+        27.628,
+        27.542,
+        27.466,
+        31.989
+      ],
+      "groupMembers": 1978,
+      "groupReceived60s": 47,
+      "liveTextReceived": 43,
+      "liveTextMissing": 0,
+      "historyReceived": 22,
+      "historyOffsetBefore": 250.0,
+      "historyOffsetAfter": 250.0,
+      "observedFrames": 9590,
+      "maxUnexplainedShiftPx": 0.0,
+      "groupBuildP95Ms": 0.63,
+      "groupRasterP95Ms": 9.577,
+      "groupFrames": 7283,
+      "groupFramesOver16ms": 2,
+      "errors": {
+        "orderErrors": 0,
+        "duplicateErrors": 0,
+        "foreignRows": 0,
+        "relativeOrderChanges": 0,
+        "identityChanges": 0,
+        "prematureRows": 0,
+        "maxSequenceRegression": 0
+      }
+    },
+    {
+      "run": "pinned-baseline-2",
+      "startupMs": 1209,
+      "coldCorrectMs": 73.337,
+      "coldInteractiveMs": 180.543,
+      "coldRouteMs": 287.439,
+      "localReadyMs": 31.704,
+      "rapidCorrectMs": [
+        37.791,
+        20.078,
+        18.575,
+        31.071,
+        35.238,
+        23.436
+      ],
+      "groupMembers": 1978,
+      "groupReceived60s": 7,
+      "liveTextReceived": 5,
+      "liveTextMissing": 0,
+      "historyReceived": 1,
+      "historyOffsetBefore": 250.0,
+      "historyOffsetAfter": 250.0,
+      "observedFrames": 9611,
+      "maxUnexplainedShiftPx": 0.0,
+      "groupBuildP95Ms": 0.498,
+      "groupRasterP95Ms": 9.776,
+      "groupFrames": 7310,
+      "groupFramesOver16ms": 1,
+      "errors": {
+        "orderErrors": 0,
+        "duplicateErrors": 0,
+        "foreignRows": 0,
+        "relativeOrderChanges": 0,
+        "identityChanges": 0,
+        "prematureRows": 0,
+        "maxSequenceRegression": 0
+      }
+    },
+    {
+      "run": "candidate-1",
+      "startupMs": 1236,
+      "coldCorrectMs": 78.814,
+      "coldInteractiveMs": 153.863,
+      "coldRouteMs": 303.087,
+      "localReadyMs": 46.544,
+      "rapidCorrectMs": [
+        26.227,
+        28.082,
+        28.696,
+        28.903,
+        30.667,
+        27.283
+      ],
+      "groupMembers": 1978,
+      "groupReceived60s": 2,
+      "liveTextReceived": 1,
+      "liveTextMissing": 0,
+      "historyReceived": 0,
+      "historyOffsetBefore": 250.0,
+      "historyOffsetAfter": 250.0,
+      "observedFrames": 9604,
+      "maxUnexplainedShiftPx": 0.0,
+      "groupBuildP95Ms": 0.495,
+      "groupRasterP95Ms": 10.055,
+      "groupFrames": 7299,
+      "groupFramesOver16ms": 1,
+      "errors": {
+        "orderErrors": 0,
+        "duplicateErrors": 0,
+        "foreignRows": 0,
+        "relativeOrderChanges": 0,
+        "identityChanges": 0,
+        "prematureRows": 0,
+        "maxSequenceRegression": 0
+      }
+    },
+    {
+      "run": "candidate-2",
+      "startupMs": 1216,
+      "coldCorrectMs": 97.673,
+      "coldInteractiveMs": 164.39,
+      "coldRouteMs": 294.354,
+      "localReadyMs": 53.17,
+      "rapidCorrectMs": [
+        25.843,
+        25.884,
+        30.329,
+        31.853,
+        29.455,
+        38.196
+      ],
+      "groupMembers": 1978,
+      "groupReceived60s": 3,
+      "liveTextReceived": 3,
+      "liveTextMissing": 0,
+      "historyReceived": 0,
+      "historyOffsetBefore": 250.0,
+      "historyOffsetAfter": 250.0,
+      "observedFrames": 9598,
+      "maxUnexplainedShiftPx": 0.0,
+      "groupBuildP95Ms": 0.494,
+      "groupRasterP95Ms": 9.499,
+      "groupFrames": 7296,
+      "groupFramesOver16ms": 0,
+      "errors": {
+        "orderErrors": 0,
+        "duplicateErrors": 0,
+        "foreignRows": 0,
+        "relativeOrderChanges": 0,
+        "identityChanges": 0,
+        "prematureRows": 0,
+        "maxSequenceRegression": 0
+      }
+    }
+  ],
+  "fixedNativeControl": {
+    "differingEntries": [
+      "AndroidManifest.xml",
+      "lib/x86_64/libapp.so"
+    ],
+    "nativeBytesIdentical": true,
+    "nativeSha256": "ee27f9317dca9221ace23e287739820473670db7ab01d1613f6e8d7531161a2f",
+    "note": "Reused 120ms baseline Dart AOT; pinned identical candidate SDK native library; aligned and signed with the existing application key. Signing metadata is excluded from content comparison."
+  },
+  "finalAcceptance": {
+    "completed": true,
+    "normalEntries": 9,
+    "reconnections": 3,
+    "groupMembers": 1978,
+    "groupReceiveSeconds": 60,
+    "groupReceived": 17,
+    "liveTextReceived": 9,
+    "liveTextMissing": 0,
+    "observedFrames": 13378,
+    "errors": {
+      "orderErrors": 0,
+      "duplicateErrors": 0,
+      "foreignRows": 0,
+      "relativeOrderChanges": 0,
+      "identityChanges": 0,
+      "prematureRows": 0,
+      "maxSequenceRegression": 0
+    },
+    "maxUnexplainedShiftPx": 0.0,
+    "history": {
+      "offsetBefore": 250.0,
+      "offsetAfter": 250.0,
+      "received": 27,
+      "audit": {
+        "paintSamples": 1684,
+        "orderErrors": 0,
+        "duplicateErrors": 0,
+        "foreignRows": 0,
+        "relativeOrderChanges": 0,
+        "identityChanges": 0,
+        "prematureRows": 0,
+        "maxSequenceRegression": 0,
+        "firstVisibleMinSeq": 247931,
+        "firstVisibleMaxSeq": 247933,
+        "maxSeq": 247963,
+        "maxRows": 86,
+        "maxUnexplainedShiftPx": 0.0,
+        "observerTotalMs": 125.873,
+        "shifts": []
+      }
+    },
+    "nativeFailuresHandled": [
+      {
+        "method": "logs",
+        "code": "10006"
+      },
+      {
+        "method": "getAdvancedHistoryMessageList",
+        "code": "10003"
+      },
+      {
+        "method": "logs",
+        "code": "10006"
+      },
+      {
+        "method": "logs",
+        "code": "10006"
+      },
+      {
+        "method": "logs",
+        "code": "10006"
+      },
+      {
+        "method": "logs",
+        "code": "10006"
+      },
+      {
+        "method": "getAdvancedHistoryMessageList",
+        "code": "10003"
+      },
+      {
+        "method": "getAdvancedHistoryMessageList",
+        "code": "10005"
+      },
+      {
+        "method": "logs",
+        "code": "10006"
+      },
+      {
+        "method": "logs",
+        "code": "10006"
+      },
+      {
+        "method": "logs",
+        "code": "10006"
+      },
+      {
+        "method": "logs",
+        "code": "10006"
+      },
+      {
+        "method": "logs",
+        "code": "10006"
+      },
+      {
+        "method": "logs",
+        "code": "10006"
+      },
+      {
+        "method": "logs",
+        "code": "10006"
+      }
+    ],
+    "buildP95Ms": 0.512,
+    "rasterP95Ms": 2.534,
+    "framesOver16ms": 0,
+    "frames": 6766
+  },
+  "regression": {
+    "passed": 583,
+    "skipped": 12,
+    "staticAnalysis": "no issues"
+  },
+  "apk": {
+    "apk": "E:\\openim\\openim-flutter-demo\\release-artifacts\\99chat-chat-profile-3.0.1-2042.apk",
+    "apk_bytes": 295592197,
+    "apk_sha256": "5da0872b0e07055a0fc1c61716690b095b7c8b0edd5eed5daa4e090f35c1c409",
+    "aar_sha256": "d11ec34f9a0934837627f70264303c179084d9e15047b0010f28e4ca50f0afed",
+    "native": {
+      "arm64-v8a": {
+        "sha256": "3255eab12284d5f457e8018ecd9ee374c1e1fad4079fbb9277800769dc718dd0",
+        "matches_built_aar_after_strip": true,
+        "runtime_version_string": "v3.8.3-patch.15+recovery.28-fast-recovery.1"
+      },
+      "x86_64": {
+        "sha256": "ee27f9317dca9221ace23e287739820473670db7ab01d1613f6e8d7531161a2f",
+        "matches_built_aar_after_strip": true,
+        "runtime_version_string": "v3.8.3-patch.15+recovery.28-fast-recovery.1"
+      }
+    },
+    "matches_profiled_native_sdk": true,
+    "normal_application_entrypoint": true
+  },
+  "limitations": [
+    "Two runs per version for the controlled performance comparison; natural network, disk and scheduling variation remain.",
+    "Cold start means a fresh app process retaining the existing login/database, not a first install or cold OS page cache.",
+    "Correct frame means a publishable SDK window submitted to Flutter paint, not physical display scan-out or guaranteed server-absolute latest data.",
+    "Live traffic was passive production traffic, not injected thousands-of-messages-per-second load.",
+    "Android emulator evidence only; no physical Android/iOS device measurements in this round."
+  ],
+  "excluded": [
+    "Exploratory old-SDK samples and partial route observations were excluded from the comparison.",
+    "One run interrupted by external navigation and one SDK-reinitialization logging failure were retained privately for diagnosis, not counted as successful samples.",
+    "The logging failure was reproduced through the real SDK; a later three-reconnect run passed after the logger fix."
+  ],
+  "installedAppSmoke": {
+    "version": "3.0.1+2042",
+    "mode": "profile",
+    "installed": true,
+    "loginPreserved": true,
+    "normalChatComposerPresent": true,
+    "ordinaryEntryStagesMs": {
+      "tap": 0.001,
+      "prefetch_start": 0.89,
+      "local_window_start": 0.912,
+      "local_window_finished": 6.344,
+      "account_resolved": 65.365,
+      "route_push": 65.394,
+      "init_start": 67.274,
+      "window_ready": 67.903,
+      "init_finished": 68.548,
+      "first_frame": 80.259,
+      "first_correct_message_frame": 88.213,
+      "list_interactive": 88.226,
+      "initial_history_finished": 255.253,
+      "transition_finished": 358.196
+    },
+    "signerSha256": "d3639980e1d8746b7ceea04eef046dcb4a9e6f9d411198a9fe9404cdb3e1f86f",
+    "note": "Single manual-entry smoke sample; excluded from the controlled performance comparison."
+  }
+}

@@ -1,5 +1,7 @@
 library openim_common;
 
+export 'src/widgets/accessibility/app_accessibility_scope.dart';
+
 export 'src/widgets/feedback/easy_loading_interactions.dart';
 export 'src/widgets/feedback/easy_loading_appearance.dart';
 export 'src/widgets/feedback/feedback_colors.dart';

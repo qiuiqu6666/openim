@@ -6,26 +6,22 @@ import 'group_feature_api.dart';
 import 'group_feature_store.dart';
 export 'group_feature_store.dart';
 
-/// App owns one cache across routes; account/token/server changes replace it.
+/// One cache per login session, shared by every route. Transport switches keep
+/// its identity; GroupFeatureApi resolves and fences the current endpoint.
 class GroupFeatureRuntime {
   GroupFeatureRuntime._();
   static GroupFeatureStore? _store;
-  static String _user = '', _token = '', _base = '';
+  static String _user = '', _token = '';
   static GroupFeatureStore forAccount(IMController im) {
-    final user = OpenIM.iMManager.userID,
-        token = DataSp.chatToken ?? '',
-        base = Config.appAuthUrl;
-    if (_store == null || _user != user || _token != token || _base != base) {
-      _store?.dispose();
+    final user = OpenIM.iMManager.userID, token = DataSp.chatToken ?? '';
+    if (_store == null || _user != user || _token != token) {
+      _store?.retireSession();
       _user = user;
       _token = token;
-      _base = base;
       _store = GroupFeatureStore(
           api: GroupFeatureApi(),
           sessionCurrent: () =>
-              OpenIM.iMManager.userID == user &&
-              DataSp.chatToken == token &&
-              Config.appAuthUrl == base,
+              OpenIM.iMManager.userID == user && DataSp.chatToken == token,
           fetchGroups: (ids) =>
               OpenIM.iMManager.groupManager.getGroupsInfo(groupIDList: ids));
       _store!.bindSources(
@@ -46,11 +42,9 @@ class GroupFeatureRuntime {
   }
 
   static void reset() {
-    _store?.invalidateSession();
-    _store?.dispose();
+    _store?.retireSession();
     _store = null;
     _user = '';
     _token = '';
-    _base = '';
   }
 }

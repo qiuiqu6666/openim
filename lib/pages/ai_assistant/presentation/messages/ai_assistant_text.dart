@@ -145,11 +145,14 @@ class AiAssistantMarkdown extends StatelessWidget {
       return GestureDetector(
         onTap: () => onImageTap?.call(raw),
         child: _frame(
-          Image.memory(
-            bytes,
-            fit: BoxFit.contain,
-            width: double.infinity,
-            errorBuilder: (_, __, ___) => _placeholder(waiting: false),
+          AspectRatio(
+            aspectRatio: AiMetrics.imageAspectRatio,
+            child: Image.memory(
+              bytes,
+              fit: BoxFit.contain,
+              width: double.infinity,
+              errorBuilder: (_, __, ___) => _placeholder(waiting: false),
+            ),
           ),
         ),
       );

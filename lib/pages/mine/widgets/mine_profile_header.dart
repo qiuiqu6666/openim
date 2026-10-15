@@ -37,7 +37,10 @@ class MineProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenWidth = MediaQuery.sizeOf(context)
+        .width
+        .clamp(0.0, AppTokens.profileContentMaxWidth)
+        .toDouble();
     final signatureMaxWidth = screenWidth * 0.56;
     final signatureHPadding = screenWidth * 0.028;
     final signatureVPadding = screenWidth * 0.010;
@@ -76,7 +79,7 @@ class MineProfileHeader extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 15,
-                      color: secondaryTextColor.withValues(alpha: 0.92),
+                      color: secondaryTextColor,
                     ),
                   ),
                   const SizedBox(height: 10),

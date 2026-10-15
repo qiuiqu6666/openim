@@ -1,3 +1,4 @@
+import 'index/group_indexed_list.dart';
 import 'package:flutter/material.dart';
 import '../../group_features/identity/group_name_label.dart';
 import '../../group_features/widgets/group_live_avatar.dart';
@@ -6,7 +7,6 @@ import '../../group_features/live/widgets/live_list_scope.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:pull_to_refresh_new/pull_to_refresh.dart';
 
 import 'group_list_logic.dart';
 import 'count/group_count_footer.dart';
@@ -69,19 +69,11 @@ class GroupListPage extends StatelessWidget {
               FocusScope.of(context).unfocus();
             },
           ),
-          Obx(
-            () => CustomTabBar(
-              labels: [StrRes.iCreatedGroup, StrRes.iJoinedGroup],
-              index: logic.index.value,
-              onTabChanged: (i) => logic.switchTab(i),
-              showUnderline: true,
-            ),
-          ),
           Expanded(
             child: Obx(
               () => logic.search.query.isNotEmpty
                   ? _buildSearchResults(context)
-                  : _buildDirectory(context, created: logic.index.value == 0),
+                  : _buildDirectory(context),
             ),
           ),
         ],
@@ -91,7 +83,7 @@ class GroupListPage extends StatelessWidget {
 
   Widget _buildSearchResults(BuildContext context) {
     final search = logic.search;
-    final groups = search.groupsFor(created: logic.index.value == 0);
+    final groups = search.results.toList(growable: false);
     if (search.loading.value || search.failed.value || groups.isEmpty) {
       return contactListPlaceholder(
         context,
@@ -104,72 +96,55 @@ class GroupListPage extends StatelessWidget {
     }
     return _buildList(
       groups,
-      key: ValueKey('group-search-${logic.index.value}-${search.query.value}'),
+      key: ValueKey('group-search-${search.query.value}'),
       showCount: true,
     );
   }
 
-  Widget _buildDirectory(BuildContext context, {required bool created}) {
-    final groups = (created ? logic.iCreatedList : logic.iJoinedList)
-        .toList(growable: false);
-    final refresh = created ? logic.iCreatedInitial : logic.iJoinedInitial;
+  Widget _buildDirectory(BuildContext context) {
+    final groups = <String, GroupInfo>{
+      for (final group in [...logic.iCreatedList, ...logic.iJoinedList])
+        group.groupID: group,
+    }.values.toList(growable: false);
+    final loading = logic.loading[true]! || logic.loading[false]!;
+    final failed = logic.loadFailed[true]! || logic.loadFailed[false]!;
     final chinese = Localizations.localeOf(context).languageCode == 'zh';
-    final strings = RefreshLocalizations.of(context)?.currentLocalization ??
-        (chinese ? ChRefreshString() : EnRefreshString());
-    final list = SmartRefresher(
-      key: created ? logic.iCreateGlobalKey : logic.iJoinGlobalKey,
-      controller: created
-          ? logic.iCreateRefreshController
-          : logic.iJoinRefreshController,
-      header: IMViews.buildHeader(30),
-      footer: ClassicFooter(
-        textStyle: ContactCardPickerTokens.subtitleStyle(context),
-        idleText: strings.idleLoadingText,
-        loadingText: strings.loadingText,
-        canLoadingText: strings.canLoadingText,
-        failedText: strings.loadFailedText,
-        noDataText: strings.noMoreText,
-      ),
-      enablePullUp: logic.canLoadMore(created),
-      enablePullDown: true,
-      onRefresh: () {
+    return RefreshIndicator(
+      onRefresh: () async {
         GroupLiveListScope.maybeOf(context)?.refreshVisible();
-        refresh();
+        await Future.wait([logic.iCreatedInitial(), logic.iJoinedInitial()]);
       },
-      onLoading: created ? logic.iCreatedLoadMore : logic.iJoinedLoadMore,
       child: groups.isEmpty
-          ? contactListPlaceholder(
-              context,
-              title: chinese
-                  ? (created ? '暂无创建的群聊' : '暂无加入的群聊')
-                  : (created
-                      ? 'No groups created yet'
-                      : 'No groups joined yet'),
-              loading: logic.loading[created]!,
-              failed: logic.loadFailed[created]!,
-              onRetry: refresh,
-              footer: const GroupCountFooter(count: 0),
-            )
-          : _buildList(groups, showCount: logic.isComplete(created)),
+          ? contactListPlaceholder(context,
+              title: chinese ? '暂无群聊' : 'No groups yet',
+              loading: loading,
+              failed: failed, onRetry: () async {
+              await Future.wait(
+                  [logic.iCreatedInitial(), logic.iJoinedInitial()]);
+            }, footer: const GroupCountFooter(count: 0))
+          : Column(children: [
+              if (loading) const LinearProgressIndicator(),
+              if (failed)
+                TextButton(
+                  onPressed: () async {
+                    await Future.wait(
+                        [logic.iCreatedInitial(), logic.iJoinedInitial()]);
+                  },
+                  child: Text(chinese ? '加载失败，点击重试' : 'Loading failed. Retry'),
+                ),
+              Expanded(
+                  child: _buildList(groups, showCount: !loading && !failed)),
+            ]),
     );
-    final limit = logic.canLoadMore(created) ? null : 0.0;
-    return RefreshConfiguration.of(context) == null
-        ? RefreshConfiguration(maxUnderScrollExtent: limit, child: list)
-        : RefreshConfiguration.copyAncestor(
-            context: context, maxUnderScrollExtent: limit, child: list);
   }
 
-  ListView _buildList(List<GroupInfo> groups,
+  Widget _buildList(List<GroupInfo> groups,
           {Key? key, required bool showCount}) =>
-      ListView.builder(
+      GroupIndexedList(
         key: key,
-        physics: const AlwaysScrollableScrollPhysics(),
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        itemCount: groups.length + (showCount ? 1 : 0),
-        itemBuilder: (_, index) => index == groups.length
-            ? GroupCountFooter(count: groups.length)
-            : _buildItemView(groups[index],
-                showDivider: index < groups.length - 1),
+        groups: groups,
+        footer: showCount ? GroupCountFooter(count: groups.length) : null,
+        itemBuilder: (info) => _buildItemView(info, showDivider: true),
       );
 
   Widget _buildItemView(GroupInfo info, {required bool showDivider}) =>

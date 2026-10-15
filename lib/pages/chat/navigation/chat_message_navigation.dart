@@ -32,14 +32,35 @@ class ChatMessageNavigation {
   GroupInfo? get groupInfo => _groupInfo();
 
   void onTapLeftAvatar(Message message) {
-    viewUserInfo(UserInfo()
+    _viewAvatar(UserInfo()
       ..userID = message.sendID
       ..nickname = message.senderNickname
       ..faceURL = message.senderFaceUrl);
   }
 
   void onTapRightAvatar() {
-    viewUserInfo(UserInfo(userID: OpenIM.iMManager.userID));
+    _viewAvatar(UserInfo(
+      userID: OpenIM.iMManager.userID,
+      nickname: OpenIM.iMManager.userInfo.nickname,
+      faceURL: OpenIM.iMManager.userInfo.faceURL,
+    ));
+  }
+
+  void _viewAvatar(UserInfo userInfo) {
+    if (!isGroupChat) {
+      viewUserInfo(userInfo);
+      return;
+    }
+    if (isClosed) return;
+    final userID = userInfo.userID;
+    if (userID == null || userID.isEmpty) return;
+    // Match the member-list entry. The profile owns group privacy and actions.
+    AppNavigator.startUserProfilePane(
+      userID: userID,
+      groupID: groupID,
+      nickname: userInfo.nickname,
+      faceURL: userInfo.faceURL,
+    );
   }
 
   void viewUserInfo(UserInfo userInfo,

@@ -1,0 +1,173 @@
+{
+  "scope": "Production SDK on Android x86_64 emulator; two existing groups; no synthetic traffic sent",
+  "window_receipts": [
+    {
+      "version": 1,
+      "targetWatermark": 540,
+      "latestServerSeq": 0,
+      "lowerBound": 501,
+      "covered": [
+        [
+          501,
+          540
+        ]
+      ],
+      "missing": [],
+      "source": "local",
+      "readiness": "ready",
+      "coverageStatus": "covered",
+      "publishable": true,
+      "emptyConfirmed": false,
+      "conversation": "conversation-1",
+      "visibleCount": 40,
+      "visibleMinSeq": 501,
+      "visibleMaxSeq": 540,
+      "ordered": true,
+      "uniqueIDs": true,
+      "cost": "1.515094ms"
+    },
+    {
+      "version": 1,
+      "targetWatermark": 540,
+      "latestServerSeq": 540,
+      "lowerBound": 501,
+      "covered": [
+        [
+          501,
+          540
+        ]
+      ],
+      "missing": [],
+      "source": "remote",
+      "readiness": "ready",
+      "coverageStatus": "covered",
+      "publishable": true,
+      "emptyConfirmed": false,
+      "conversation": "conversation-1",
+      "visibleCount": 40,
+      "visibleMinSeq": 501,
+      "visibleMaxSeq": 540,
+      "ordered": true,
+      "uniqueIDs": true,
+      "cost": "248.131948ms"
+    },
+    {
+      "version": 1,
+      "targetWatermark": 52461,
+      "latestServerSeq": 0,
+      "lowerBound": 52422,
+      "covered": [
+        [
+          52422,
+          52461
+        ]
+      ],
+      "missing": [],
+      "source": "local",
+      "readiness": "ready",
+      "coverageStatus": "covered",
+      "publishable": true,
+      "emptyConfirmed": false,
+      "conversation": "conversation-2",
+      "visibleCount": 40,
+      "visibleMinSeq": 52422,
+      "visibleMaxSeq": 52461,
+      "ordered": true,
+      "uniqueIDs": true,
+      "cost": "4.987554ms"
+    },
+    {
+      "version": 1,
+      "targetWatermark": 52461,
+      "latestServerSeq": 52461,
+      "lowerBound": 52422,
+      "covered": [
+        [
+          52422,
+          52461
+        ]
+      ],
+      "missing": [],
+      "source": "remote",
+      "readiness": "ready",
+      "coverageStatus": "covered",
+      "publishable": true,
+      "emptyConfirmed": false,
+      "conversation": "conversation-2",
+      "visibleCount": 40,
+      "visibleMinSeq": 52422,
+      "visibleMaxSeq": 52461,
+      "ordered": true,
+      "uniqueIDs": true,
+      "cost": "250.669558ms"
+    }
+  ],
+  "events": [
+    {
+      "event": "request",
+      "source": "older_page",
+      "revision": 0,
+      "scanSeq": null
+    },
+    {
+      "event": "local_snapshot",
+      "count": 40,
+      "elapsedMs": 270
+    },
+    {
+      "event": "result",
+      "revision": 0,
+      "visibleCount": 40,
+      "isEnd": false,
+      "scanLimited": false,
+      "scanSeq": null
+    },
+    {
+      "event": "retry_reset",
+      "source": "route_visible",
+      "reason": "external_event",
+      "previousAttempts": 0,
+      "revision": 0
+    },
+    {
+      "event": "request",
+      "source": "older_page",
+      "revision": 0,
+      "scanSeq": null
+    },
+    {
+      "event": "local_snapshot",
+      "count": 40,
+      "elapsedMs": 89
+    },
+    {
+      "event": "result",
+      "revision": 0,
+      "visibleCount": 40,
+      "isEnd": false,
+      "scanLimited": false,
+      "scanSeq": null
+    },
+    {
+      "event": "retry_reset",
+      "source": "route_visible",
+      "reason": "external_event",
+      "previousAttempts": 0,
+      "revision": 0
+    },
+    {
+      "event": "retry_reset",
+      "source": "native_wake",
+      "reason": "external_event",
+      "previousAttempts": 0,
+      "revision": 0
+    },
+    {
+      "event": "retry_reset",
+      "source": "sync_ended",
+      "reason": "external_event",
+      "previousAttempts": 0,
+      "revision": 0
+    }
+  ]
+}

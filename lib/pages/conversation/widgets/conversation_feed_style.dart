@@ -6,6 +6,7 @@ class ConversationFeedStyle {
   ConversationFeedStyle._();
 
   static const lineHeight = 1.2;
+  static const rowPadding = EdgeInsets.fromLTRB(16, 8, 16, 0);
   static const dividerHeight = .6;
   static const dividerLight = Color(0xFFEAEAEA);
 

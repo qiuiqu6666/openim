@@ -10,6 +10,11 @@ bool momentsDark(BuildContext context) =>
 
 String momentsErrorText(BuildContext context, Object error) {
   if (error is MomentsException) {
+    if (error.code == 'SESSION_CHANGED') {
+      return momentsText(context,
+          zh: '连接或登录状态已变化，请重新加载',
+          en: 'Your connection or session changed. Reload to continue.');
+    }
     if (error.code == 'VERSION_CONFLICT') {
       return momentsText(context,
           zh: '内容已在其他设备变更，请刷新后重试',

@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:openim_common/openim_common.dart' show Config;
 import '../../../../core/youmeng/youmeng_runtime.dart';
+import '../../../../core/network/transport_state.dart';
 
-import '../../../../services/platform_config_service.dart';
+import '../../../../core/server_nodes/public_health_check.dart';
 import '../../../../core/server_nodes/manual_node_switch_runtime.dart';
 import '../../../../core/server_nodes/manual_node_switch_service.dart';
 import 'node_endpoint.dart';
@@ -23,6 +25,7 @@ class NodeProbeController extends ChangeNotifier with WidgetsBindingObserver {
   NodeProbeController(
       {NodeEndpoint Function()? readEndpoint,
       Dio Function()? clientFactory,
+      Stream<List<ConnectivityResult>>? networkChanges,
       ManualNodeSwitchService? switchService})
       : _readEndpoint = readEndpoint ?? NodeEndpoint.current,
         _switchService = switchService ?? ManualNodeSwitchRuntime.instance,
@@ -36,6 +39,13 @@ class NodeProbeController extends ChangeNotifier with WidgetsBindingObserver {
     _foreground = state == null || state == AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
     Config.networkRouteRevision.addListener(_routeChanged);
+    _network = (networkChanges ?? Connectivity().onConnectivityChanged).listen(
+        (values) {
+      if (!_disposed && _transport.update(values)) {
+        _cancelProbe();
+        notifyListeners();
+      }
+    }, onError: (Object _) {});
   }
 
   final NodeEndpoint Function() _readEndpoint;
@@ -54,12 +64,15 @@ class NodeProbeController extends ChangeNotifier with WidgetsBindingObserver {
   int _generation = 0;
   CancelToken? _token;
   Future<void>? _work;
+  StreamSubscription<List<ConnectivityResult>>? _network;
+  final _transport = NetworkTransportState();
   final Map<String, NodeProbeResult> results = {};
   final Set<String> pending = {};
   List<NodeEndpoint> get nodes => NodeEndpoint.selectable(endpoint);
 
   void _routeChanged() {
     if (_disposed || switching) return;
+    _cancelProbe();
     endpoint = _readEndpoint();
     notifyListeners();
   }
@@ -165,8 +178,15 @@ class NodeProbeController extends ChangeNotifier with WidgetsBindingObserver {
         throw const FormatException('Invalid Chat endpoint');
       }
       client = _clientFactory();
-      await PlatformConfigService.fetch(
-          client: client, baseUrl: requested.chatApi, cancelToken: token);
+      const timeout = Duration(seconds: 8);
+      PublicHealthCheck.isolate(client, timeout);
+      await PublicHealthCheck.get(client, requested.chatApi,
+              service: 'chat-api', cancelToken: token)
+          .timeout(timeout, onTimeout: () {
+        // Each candidate owns its client; close also aborts a stalled adapter.
+        client?.close(force: true);
+        throw TimeoutException('Line probe timed out');
+      });
       result = NodeProbeResult(NodeProbeStatus.normal,
           latencyMs: watch.elapsedMilliseconds);
     } catch (error) {
@@ -193,22 +213,31 @@ class NodeProbeController extends ChangeNotifier with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
     if (!_foreground && !_disposed) {
-      _generation++;
-      _token?.cancel('Node probe suspended');
-      _token = null;
-      _work = null;
-      testing = false;
-      pending.clear();
+      _cancelProbe();
+      _transport.invalidateSnapshot();
       notifyListeners();
     }
+  }
+
+  void _cancelProbe() {
+    _generation++;
+    _token?.cancel('Node probe superseded');
+    _token = null;
+    _work = null;
+    testing = false;
+    pending.clear();
+    results.clear();
+    status = NodeProbeStatus.unknown;
+    latencyMs = httpStatus = null;
+    testedAt = null;
   }
 
   @override
   void dispose() {
     Config.networkRouteRevision.removeListener(_routeChanged);
     _disposed = true;
-    _generation++;
-    _token?.cancel('Node probe closed');
+    _cancelProbe();
+    unawaited(_network?.cancel());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

@@ -17,13 +17,13 @@ class StartupNodeSelector {
     NodeEndpoint Function()? readCurrent,
     Future<void> Function(NodeEndpoint)? apply,
     this.preferred,
-  })  : _probe = probe ??
-            NodeAvailabilityProbe(timeout: const Duration(milliseconds: 2250))
-                .check,
+  })  : _probe = probe,
         _readCurrent = readCurrent ?? NodeEndpoint.current,
         _apply = apply ?? persist;
 
-  final Future<NodeAvailability> Function(NodeEndpoint) _probe;
+  final Future<NodeAvailability> Function(NodeEndpoint)? _probe;
+  final _availability =
+      NodeAvailabilityProbe(timeout: const Duration(milliseconds: 2250));
   final NodeEndpoint Function() _readCurrent;
   final Future<void> Function(NodeEndpoint) _apply;
   Future<NodeSelection>? _pending;
@@ -39,7 +39,10 @@ class StartupNodeSelector {
     final index =
         candidates.indexWhere((node) => node.signature == preferred?.signature);
     if (index > 0) candidates.insert(0, candidates.removeAt(index));
-    final checks = await TimedNodeProbe(probe: _probe).check(candidates);
+    final checks = await TimedNodeProbe(
+            probe: _probe ?? _availability.check,
+            cancelPending: _availability.cancel)
+        .check(candidates);
     // Prefer the first healthy built-in route. Custom deployments stay isolated.
     var selected = current;
     for (final check in checks) {

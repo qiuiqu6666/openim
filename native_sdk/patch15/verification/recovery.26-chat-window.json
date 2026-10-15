@@ -1,0 +1,470 @@
+{
+  "date": "2026-10-15",
+  "chat_window_version": "recovery.26-chat-window.2",
+  "delivered_sdk_version": "v3.8.3-patch.15+recovery.27-sync-heat.2",
+  "source_sha256": "5853b235185122e4f2db78281bbe6b08f73edcf7b2a6540fb9ec822856d19d32",
+  "patch_sha256": "afec87677ede4eb8e79f0bc3de1be2ee270e8c55a13038d20337adf43f427e77",
+  "android": {
+    "apk": "E:\\openim\\openim-flutter-demo\\release-artifacts\\99chat-chat-window-3.0.1-2035-debug.apk",
+    "apk_bytes": 341202017,
+    "apk_sha256": "87400f2ccec5cd89b279c90c3c1f0a0f3badf0371c491db4050460b41166d784",
+    "aar_sha256": "9805b00a906039ae21c491a4360f6c0a47ac0e4dd3775e06235b41f58286b236",
+    "native": {
+      "arm64-v8a": {
+        "sha256": "264549531938425d7e1f38bef2b968ad91a703c12e54c7f30d0392429a6917f5",
+        "matches_built_aar_after_strip": true,
+        "runtime_version_string": "v3.8.3-patch.15+recovery.27-sync-heat.2"
+      },
+      "x86_64": {
+        "sha256": "538472e923fc36a3b341d045cafebf72be481b8ab7b4d4dbe644a4c29b94962f",
+        "matches_built_aar_after_strip": true,
+        "runtime_version_string": "v3.8.3-patch.15+recovery.27-sync-heat.2"
+      }
+    }
+  },
+  "installed_runtime": {
+    "emulator": "Android 9 x86_64 (SM-N9810 profile)",
+    "pid": 27992,
+    "installed_apk_sha256": "87400f2ccec5cd89b279c90c3c1f0a0f3badf0371c491db4050460b41166d784",
+    "matches_delivered_apk": true,
+    "recovery_27_runtime_log_seen": true,
+    "fatal_exception_count_current_log_buffer": 0,
+    "build": "3.0.1+2035"
+  },
+  "server": {
+    "started_at": "2026-10-15T01:10:00.845317+00:00",
+    "unit": "openimservice-openim-rpc-msg-0.service",
+    "previous_pid": 13228,
+    "initial_health": {
+      "pid": 291162,
+      "sha256": "503ceb55ce9b5ce7965f652282545799aa0c70d72d7cb6e666c8f4aafd68b33c",
+      "listeners": [
+        "10.5.0.7:37493",
+        "10.5.0.7:38581"
+      ],
+      "tcp_connect": "passed"
+    },
+    "stable_health": {
+      "pid": 291162,
+      "sha256": "503ceb55ce9b5ce7965f652282545799aa0c70d72d7cb6e666c8f4aafd68b33c",
+      "listeners": [
+        "10.5.0.7:37493",
+        "10.5.0.7:38581"
+      ],
+      "tcp_connect": "passed"
+    },
+    "status": "deployed",
+    "finished_at": "2026-10-15T01:10:16.536240+00:00"
+  },
+  "tests": {
+    "flutter": {
+      "passed": 529,
+      "skipped_existing": 12
+    },
+    "analysis": "4 changed areas: no issues",
+    "core": "7 packages passed Linux/SQLite/race; final combined SDK db/conversation_msg/interaction rerun passed",
+    "crash_recovery": "actual child-process kill during transaction and after commit; reopened SQLite atomic and replay idempotent",
+    "mutations": "recall and deleted row survive stale snapshot and SQLite reopen",
+    "out_of_order": "5003 before 5001/5002; unified 4951-5003 without duplicates",
+    "route_isolation": "A/B/A with late completions passed",
+    "load": "10000 events bounded at 200 queued; 1000 UI events preserve reading anchor",
+    "server": "controller/mgo/rpc-msg race passed; missing/preallocated slots retry; explicit deletion valid",
+    "source_lock": "15 tests and final Android artifact/source lock passed"
+  },
+  "performance": {
+    "scope": "Android emulator profile; production ChatLogic/list/bubbles with synthetic SDK delays local 5ms, remote 300ms, global sync 1200ms; not production end-to-end latency",
+    "baseline": {
+      "scope": "synthetic transport, production controller and bubbles",
+      "results": [
+        {
+          "globalSync": false,
+          "run": 0,
+          "mountToFirstFrameMs": 12.893,
+          "mountToWindowVisibleMs": 267.439,
+          "frames": 66,
+          "buildP95Ms": 1.463,
+          "rasterP95Ms": 2.0,
+          "rssBytes": 196907008,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": false,
+          "run": 1,
+          "mountToFirstFrameMs": 9.207,
+          "mountToWindowVisibleMs": 256.594,
+          "frames": 82,
+          "buildP95Ms": 0.442,
+          "rasterP95Ms": 1.654,
+          "rssBytes": 202571776,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": false,
+          "run": 2,
+          "mountToFirstFrameMs": 9.072,
+          "mountToWindowVisibleMs": 259.048,
+          "frames": 70,
+          "buildP95Ms": 0.833,
+          "rasterP95Ms": 1.726,
+          "rssBytes": 202211328,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": true,
+          "run": 0,
+          "mountToFirstFrameMs": 9.321,
+          "mountToWindowVisibleMs": 1757.926,
+          "frames": 214,
+          "buildP95Ms": 0.271,
+          "rasterP95Ms": 1.033,
+          "rssBytes": 200511488,
+          "historyQueries": 2
+        },
+        {
+          "globalSync": true,
+          "run": 1,
+          "mountToFirstFrameMs": 9.683,
+          "mountToWindowVisibleMs": 1752.028,
+          "frames": 210,
+          "buildP95Ms": 0.251,
+          "rasterP95Ms": 1.111,
+          "rssBytes": 204111872,
+          "historyQueries": 2
+        },
+        {
+          "globalSync": true,
+          "run": 2,
+          "mountToFirstFrameMs": 9.719,
+          "mountToWindowVisibleMs": 1756.962,
+          "frames": 211,
+          "buildP95Ms": 0.291,
+          "rasterP95Ms": 1.192,
+          "rssBytes": 202391552,
+          "historyQueries": 2
+        }
+      ]
+    },
+    "first_after": {
+      "scope": "synthetic transport, production controller and bubbles",
+      "results": [
+        {
+          "globalSync": false,
+          "run": 0,
+          "mountToFirstFrameMs": 17.542,
+          "mountToWindowVisibleMs": 275.239,
+          "frames": 68,
+          "buildP95Ms": 1.031,
+          "rasterP95Ms": 10.703,
+          "rssBytes": 199192576,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": false,
+          "run": 1,
+          "mountToFirstFrameMs": 13.891,
+          "mountToWindowVisibleMs": 14.025,
+          "frames": 54,
+          "buildP95Ms": 0.515,
+          "rasterP95Ms": 9.551,
+          "rssBytes": 202498048,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": false,
+          "run": 2,
+          "mountToFirstFrameMs": 13.2,
+          "mountToWindowVisibleMs": 13.339,
+          "frames": 40,
+          "buildP95Ms": 1.041,
+          "rasterP95Ms": 9.192,
+          "rssBytes": 205103104,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": true,
+          "run": 0,
+          "mountToFirstFrameMs": 8.738,
+          "mountToWindowVisibleMs": 260.01,
+          "frames": 78,
+          "buildP95Ms": 0.322,
+          "rasterP95Ms": 10.014,
+          "rssBytes": 215859200,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": true,
+          "run": 1,
+          "mountToFirstFrameMs": 13.093,
+          "mountToWindowVisibleMs": 13.238,
+          "frames": 50,
+          "buildP95Ms": 0.654,
+          "rasterP95Ms": 1.886,
+          "rssBytes": 208867328,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": true,
+          "run": 2,
+          "mountToFirstFrameMs": 9.505,
+          "mountToWindowVisibleMs": 261.639,
+          "frames": 75,
+          "buildP95Ms": 0.77,
+          "rasterP95Ms": 1.994,
+          "rssBytes": 207060992,
+          "historyQueries": 1
+        }
+      ]
+    },
+    "controlled_final": {
+      "scope": "synthetic transport, production controller and bubbles",
+      "results": [
+        {
+          "globalSync": false,
+          "run": 0,
+          "mountToFirstFrameMs": 15.745,
+          "mountToWindowVisibleMs": 276.246,
+          "frames": 75,
+          "buildP95Ms": 0.657,
+          "rasterP95Ms": 4.326,
+          "rssBytes": 198602752,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": false,
+          "run": 1,
+          "mountToFirstFrameMs": 13.703,
+          "mountToWindowVisibleMs": 14.823,
+          "frames": 51,
+          "buildP95Ms": 0.624,
+          "rasterP95Ms": 1.534,
+          "rssBytes": 199557120,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": false,
+          "run": 2,
+          "mountToFirstFrameMs": 14.288,
+          "mountToWindowVisibleMs": 14.414,
+          "frames": 51,
+          "buildP95Ms": 0.981,
+          "rasterP95Ms": 1.92,
+          "rssBytes": 203706368,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": true,
+          "run": 0,
+          "mountToFirstFrameMs": 13.473,
+          "mountToWindowVisibleMs": 13.612,
+          "frames": 51,
+          "buildP95Ms": 0.866,
+          "rasterP95Ms": 1.438,
+          "rssBytes": 206303232,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": true,
+          "run": 1,
+          "mountToFirstFrameMs": 12.373,
+          "mountToWindowVisibleMs": 14.226,
+          "frames": 50,
+          "buildP95Ms": 0.908,
+          "rasterP95Ms": 1.521,
+          "rssBytes": 205086720,
+          "historyQueries": 1
+        },
+        {
+          "globalSync": true,
+          "run": 2,
+          "mountToFirstFrameMs": 10.882,
+          "mountToWindowVisibleMs": 11.018,
+          "frames": 51,
+          "buildP95Ms": 0.577,
+          "rasterP95Ms": 1.52,
+          "rssBytes": 211963904,
+          "historyQueries": 1
+        }
+      ]
+    }
+  },
+  "production_window_probe": {
+    "scope": "Production SDK on Android x86_64 emulator; two existing groups; no synthetic traffic sent",
+    "window_receipts": [
+      {
+        "version": 1,
+        "targetWatermark": 540,
+        "latestServerSeq": 0,
+        "lowerBound": 501,
+        "covered": [
+          [
+            501,
+            540
+          ]
+        ],
+        "missing": [],
+        "source": "local",
+        "readiness": "ready",
+        "coverageStatus": "covered",
+        "publishable": true,
+        "emptyConfirmed": false,
+        "conversation": "conversation-1",
+        "visibleCount": 40,
+        "visibleMinSeq": 501,
+        "visibleMaxSeq": 540,
+        "ordered": true,
+        "uniqueIDs": true,
+        "cost": "1.515094ms"
+      },
+      {
+        "version": 1,
+        "targetWatermark": 540,
+        "latestServerSeq": 540,
+        "lowerBound": 501,
+        "covered": [
+          [
+            501,
+            540
+          ]
+        ],
+        "missing": [],
+        "source": "remote",
+        "readiness": "ready",
+        "coverageStatus": "covered",
+        "publishable": true,
+        "emptyConfirmed": false,
+        "conversation": "conversation-1",
+        "visibleCount": 40,
+        "visibleMinSeq": 501,
+        "visibleMaxSeq": 540,
+        "ordered": true,
+        "uniqueIDs": true,
+        "cost": "248.131948ms"
+      },
+      {
+        "version": 1,
+        "targetWatermark": 52461,
+        "latestServerSeq": 0,
+        "lowerBound": 52422,
+        "covered": [
+          [
+            52422,
+            52461
+          ]
+        ],
+        "missing": [],
+        "source": "local",
+        "readiness": "ready",
+        "coverageStatus": "covered",
+        "publishable": true,
+        "emptyConfirmed": false,
+        "conversation": "conversation-2",
+        "visibleCount": 40,
+        "visibleMinSeq": 52422,
+        "visibleMaxSeq": 52461,
+        "ordered": true,
+        "uniqueIDs": true,
+        "cost": "4.987554ms"
+      },
+      {
+        "version": 1,
+        "targetWatermark": 52461,
+        "latestServerSeq": 52461,
+        "lowerBound": 52422,
+        "covered": [
+          [
+            52422,
+            52461
+          ]
+        ],
+        "missing": [],
+        "source": "remote",
+        "readiness": "ready",
+        "coverageStatus": "covered",
+        "publishable": true,
+        "emptyConfirmed": false,
+        "conversation": "conversation-2",
+        "visibleCount": 40,
+        "visibleMinSeq": 52422,
+        "visibleMaxSeq": 52461,
+        "ordered": true,
+        "uniqueIDs": true,
+        "cost": "250.669558ms"
+      }
+    ],
+    "events": [
+      {
+        "event": "request",
+        "source": "older_page",
+        "revision": 0,
+        "scanSeq": null
+      },
+      {
+        "event": "local_snapshot",
+        "count": 40,
+        "elapsedMs": 270
+      },
+      {
+        "event": "result",
+        "revision": 0,
+        "visibleCount": 40,
+        "isEnd": false,
+        "scanLimited": false,
+        "scanSeq": null
+      },
+      {
+        "event": "retry_reset",
+        "source": "route_visible",
+        "reason": "external_event",
+        "previousAttempts": 0,
+        "revision": 0
+      },
+      {
+        "event": "request",
+        "source": "older_page",
+        "revision": 0,
+        "scanSeq": null
+      },
+      {
+        "event": "local_snapshot",
+        "count": 40,
+        "elapsedMs": 89
+      },
+      {
+        "event": "result",
+        "revision": 0,
+        "visibleCount": 40,
+        "isEnd": false,
+        "scanLimited": false,
+        "scanSeq": null
+      },
+      {
+        "event": "retry_reset",
+        "source": "route_visible",
+        "reason": "external_event",
+        "previousAttempts": 0,
+        "revision": 0
+      },
+      {
+        "event": "retry_reset",
+        "source": "native_wake",
+        "reason": "external_event",
+        "previousAttempts": 0,
+        "revision": 0
+      },
+      {
+        "event": "retry_reset",
+        "source": "sync_ended",
+        "reason": "external_event",
+        "previousAttempts": 0,
+        "revision": 0
+      }
+    ]
+  },
+  "limitations": [
+    "Production window probe used build 2034/recovery.26; final 2035 combines unchanged window code with recovery.27 sync fixes and passes combined SQLite/race tests.",
+    "Initial emulator install retained ARM64 translation and produced an ANR in libhoudini; reinstall of same package with native x86_64 removed this observed failure. ARM64 physical-device behavior is not proven.",
+    "No iOS/macOS Framework build or physical Android/iOS tests; no production crash/chaos or synthetic mass-message injection.",
+    "Performance fixture does not measure a real 10000-user group, network variability, every complex media layout, or battery use.",
+    "Existing unknown single-account official-route resolution can still await profile lookup; preparation begins before it. No new generic message editing protocol."
+  ]
+}

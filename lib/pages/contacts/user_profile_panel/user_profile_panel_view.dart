@@ -109,7 +109,9 @@ class UserProfilePanelPage extends StatelessWidget {
                                       : user.gender == 2
                                           ? StrRes.woman
                                           : 'profileGenderPrivate'.tr),
-                              if (_showAccount)
+                              if (_showAccount ||
+                                  (logic.isGroupMemberPage &&
+                                      logic.iHaveAdminOrOwnerPermission.value))
                                 _row(
                                     context,
                                     logic.showMemberIMID
@@ -119,12 +121,16 @@ class UserProfilePanelPage extends StatelessWidget {
                                         ? '—'
                                         : logic.displayedUserID,
                                     valueColor: AppTokens.accent,
-                                    onTap: logic.copyID),
+                                    onTap: logic.displayedUserID.isEmpty
+                                        ? null
+                                        : logic.copyID),
                               if (logic.isGroupMemberPage &&
+                                  logic.iHaveAdminOrOwnerPermission.value &&
                                   logic.joinGroupTime.value > 0)
                                 _row(context, StrRes.joinGroupDate,
                                     value: _joinDate(withTime: true)),
                               if (logic.isGroupMemberPage &&
+                                  logic.iHaveAdminOrOwnerPermission.value &&
                                   logic.inviterID.value.isNotEmpty)
                                 _row(context, 'profileInviter'.tr,
                                     value: logic.inviterName.value,
@@ -187,6 +193,7 @@ class UserProfilePanelPage extends StatelessWidget {
                                 ],
                                 key: 'user_profile_personal_group'),
                           if (logic.isGroupMemberPage &&
+                              logic.iHaveAdminOrOwnerPermission.value &&
                               friend &&
                               (logic.joinGroupTime.value > 0 ||
                                   logic.joinGroupMethod.value.isNotEmpty))
@@ -196,7 +203,11 @@ class UserProfilePanelPage extends StatelessWidget {
                                     value: _joinDate()),
                               if (logic.joinGroupMethod.value.isNotEmpty)
                                 _row(context, StrRes.joinGroupMethod,
-                                    value: logic.joinGroupMethod.value),
+                                    key: 'user_profile_join_method',
+                                    value: logic.joinGroupMethod.value,
+                                    onTap: logic.inviterID.value.isNotEmpty
+                                        ? logic.viewInviter
+                                        : null),
                             ]),
                           if (friend)
                             _card(
@@ -243,6 +254,7 @@ class UserProfilePanelPage extends StatelessWidget {
     return UserProfileIdentity(
       key: const ValueKey('user_profile_identity'),
       compact: compact,
+      reserveAccountSpace: true,
       name: nickname.isNotEmpty
           ? nickname
           : (_showAccount && logic.displayedUserID.isNotEmpty
@@ -251,8 +263,6 @@ class UserProfilePanelPage extends StatelessWidget {
       avatarUrl: user.faceURL,
       gender: user.gender,
       account: _showAccount ? logic.displayedUserID : '',
-      // Group account disclosure arrives separately from the profile metadata.
-      reserveAccountSpace: true,
       copyLabel: _text(context, '复制聊天号', 'Copy chat ID'),
       onCopy: logic.copyID,
       signature: signature.isNotEmpty

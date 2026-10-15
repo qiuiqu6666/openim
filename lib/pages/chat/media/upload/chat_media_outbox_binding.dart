@@ -17,7 +17,7 @@ StreamSubscription<MediaOutboxEntry> bindMediaOutbox({
   var seeding = true;
   void apply(MediaOutboxEntry entry) {
     if (isClosed() ||
-        !entry.task.current ||
+        !entry.task.visible ||
         entry.task.target.conversationID != conversationID ||
         removedIDs.contains(entry.message.clientMsgID)) {
       return;

@@ -34,6 +34,12 @@ String securityErrorMessage(Object error,
     }
   }
   final known = <int, String>{
+    20110: text('投诉内容已变化，请重新提交', 'Complaint changed. Please submit again.'),
+    20111:
+        text('投诉提交过于频繁，请稍后重试', 'Too many complaints. Please try again later.'),
+    20112:
+        text('你已不在该群，无法投诉', 'You must be a group member to report this group.'),
+    20113: text('被投诉用户不存在', 'The reported user does not exist.'),
     20045: text('反馈不存在', 'Feedback not found.'),
     20046: text('反馈内容已变化，请重新提交', 'Feedback changed. Please submit again.'),
     20047: text('截图数量、大小或格式不符合要求', 'Invalid screenshot count, size or format.'),

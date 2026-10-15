@@ -1,0 +1,9 @@
+{
+  "emulator": "Android 9 x86_64 (SM-N9810 profile)",
+  "pid": 27992,
+  "installed_apk_sha256": "87400f2ccec5cd89b279c90c3c1f0a0f3badf0371c491db4050460b41166d784",
+  "matches_delivered_apk": true,
+  "recovery_27_runtime_log_seen": true,
+  "fatal_exception_count_current_log_buffer": 0,
+  "build": "3.0.1+2035"
+}

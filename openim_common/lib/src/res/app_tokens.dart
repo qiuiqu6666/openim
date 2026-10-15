@@ -8,6 +8,10 @@ import 'package:flutter/material.dart';
 class AppTokens {
   AppTokens._();
 
+  // In-place content transitions shared by surfaces such as conversation search.
+  static const Duration contentTransitionDuration = Duration(milliseconds: 180);
+  static const Curve contentTransitionCurve = Curves.easeOutCubic;
+
   // Semantic colors.
   static const Color accent = Color(0xFF1E90FF);
   static const Color groupAnnouncementConfirm = Color(0xFF2ED1B3);
@@ -23,7 +27,7 @@ class AppTokens {
   static const Color surfaceLight = Color(0xFFFFFFFF);
   static const Color surfaceAltLight = Color(0xFFF1F3F5);
   static const Color textPrimaryLight = Color(0xFF1C1C1E);
-  static const Color textSecondaryLight = Color(0xFF7B8491);
+  static const Color textSecondaryLight = Color(0xFF626C79);
   static const Color borderLight = Color(0xFFE6E8EC);
 
   static const Color backgroundDark = Color(0xFF101114);
@@ -98,6 +102,8 @@ class AppTokens {
   static const double secondaryFontSize = 15;
   static const double captionFontSize = 14;
   static const double profileAvatarSize = 72;
+  static const double profileContentMaxWidth = 600;
+  static const double minimumTapSize = 48;
   static const double profileMenuIconSize = 28;
   static const double profileQrIconSize = 20;
   static const double mainTabIndicatorWidth = 32;

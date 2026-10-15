@@ -125,6 +125,11 @@ func (c *Conversation) revokeMessage(ctx context.Context, tips *sdkws.RevokeMsgT
 }
 
 func (c *Conversation) quoteMsgRevokeHandle(ctx context.Context, conversationID string, v *model_struct.LocalChatLog, revokedMsg sdk_struct.MessageRevoked) error {
+	// Sequence tombstones intentionally retain their type but have no body.
+	// They cannot contain a live quote and must not block the notification page.
+	if v.Status >= constant.MsgStatusHasDeleted {
+		return nil
+	}
 	s := sdk_struct.QuoteElem{}
 	if v.Content == "" {
 		return errs.New("Chat Log Content not found")

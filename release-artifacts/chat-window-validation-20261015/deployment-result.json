@@ -1,0 +1,25 @@
+{
+  "started_at": "2026-10-15T01:10:00.845317+00:00",
+  "unit": "openimservice-openim-rpc-msg-0.service",
+  "previous_pid": 13228,
+  "initial_health": {
+    "pid": 291162,
+    "sha256": "503ceb55ce9b5ce7965f652282545799aa0c70d72d7cb6e666c8f4aafd68b33c",
+    "listeners": [
+      "10.5.0.7:37493",
+      "10.5.0.7:38581"
+    ],
+    "tcp_connect": "passed"
+  },
+  "stable_health": {
+    "pid": 291162,
+    "sha256": "503ceb55ce9b5ce7965f652282545799aa0c70d72d7cb6e666c8f4aafd68b33c",
+    "listeners": [
+      "10.5.0.7:37493",
+      "10.5.0.7:38581"
+    ],
+    "tcp_connect": "passed"
+  },
+  "status": "deployed",
+  "finished_at": "2026-10-15T01:10:16.536240+00:00"
+}

@@ -61,6 +61,7 @@ func (m *MsgSyncer) canReconcileMessageSeqs() bool {
 }
 
 func (m *MsgSyncer) doMessageSeqReconciliation(ctx context.Context) {
+	defer m.queuePendingAuxiliaryMetadata()
 	// Recheck after queueing. Bootstrap needs its normal metadata sync, and a
 	// foreground tick must not start new traffic once the app is backgrounded.
 	if ctx.Err() != nil || !m.canReconcileMessageSeqs() {
@@ -76,6 +77,7 @@ func (m *MsgSyncer) doMessageSeqReconciliation(ctx context.Context) {
 	}
 	var resp sdkws.GetMaxSeqResp
 	if err := m.longConnMgr.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: m.loginUserID}, constant.GetNewestSeq, &resp); err != nil {
+		recordMessageSyncFailure(ctx, err)
 		log.ZWarn(ctx, "message sequence reconciliation failed", err)
 		return
 	}

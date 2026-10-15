@@ -74,7 +74,14 @@ void main() {
           transition.enableBackGesture,
           ![AppRoutes.home, AppRoutes.login, AppRoutes.splash]
               .contains(page.name));
-      expect(page.transitionDuration, AppSwipeBackTokens.transitionDuration);
+      final chat = AppRoutes.isConversationRoute(page.name);
+      expect(
+          page.transitionDuration,
+          chat
+              ? AppSwipeBackTokens.chatTransitionDuration
+              : AppSwipeBackTokens.transitionDuration);
+      expect(transition.pushCurve,
+          chat ? AppSwipeBackTokens.chatCurve : AppSwipeBackTokens.curve);
     }
   });
 

@@ -1,0 +1,220 @@
+{
+  "date": "2026-10-15",
+  "sdk_version": "v3.8.3-patch.15+recovery.25-group-profile-scale.4",
+  "source_sha256": "91f494d7fcdef3696a74946804b6a01495960ecf50beb0566be6998a50dea6d1",
+  "patch_sha256": "b1d18efa90b2d5867bf0ce7df97375322c634f7c414c810cd604767d68eb4abe",
+  "scope": {
+    "groups": [
+      1000,
+      5000
+    ],
+    "conversations": [
+      4000,
+      20000
+    ],
+    "latest_message_bytes": 2048,
+    "members": "unchanged; profile-only paths do not materialize member lists",
+    "native_host": "Windows x64; real SQLite; one catchup per sample; timings exclude setup and validation",
+    "network_fixture": "real loopback HTTP with synthetic fixed 10ms wait per request; not production RTT",
+    "ui": "Android x86_64 emulator, profile mode, separate app package; fresh process for bulk and paged cases; synthetic callbacks 4ms apart and scrolling",
+    "RSS": "sampled whole fixture process RSS, includes its loaded 20000 conversations and Flutter/plugins; not incremental sync-only RAM",
+    "alloc": "Go total allocations over a catchup, not simultaneous resident memory",
+    "limitations": "single-host synthetic component timings; not whole login/history sync or a phone performance guarantee"
+  },
+  "native_before": [
+    {
+      "test": "BenchmarkGroupProfileCatchup/1000-32",
+      "seconds": 10.8997595,
+      "metrics": {
+        "alloc-MiB/op": 2378.0,
+        "peak-heap-MiB": 6.792,
+        "verified-groups/op": 1000.0
+      }
+    },
+    {
+      "test": "BenchmarkGroupProfileCatchup/5000-32",
+      "seconds": 261.8185865,
+      "metrics": {
+        "alloc-MiB/op": 56268.0,
+        "peak-heap-MiB": 17.04,
+        "verified-groups/op": 5000.0
+      }
+    },
+    {
+      "test": "BenchmarkConversationProfileCatchup/groups1000-conversations4000-changedfalse-32",
+      "seconds": 0.0517209,
+      "metrics": {
+        "alloc-MiB/op": 10.86,
+        "callback-MiB": 0.0,
+        "end-heap-MiB": 12.45,
+        "largest-callback-rows": 0.0
+      }
+    },
+    {
+      "test": "BenchmarkConversationProfileCatchup/groups1000-conversations4000-changedtrue-32",
+      "seconds": 1.7252458,
+      "metrics": {
+        "alloc-MiB/op": 32.03,
+        "callback-MiB": 2.373,
+        "end-heap-MiB": 17.04,
+        "largest-callback-rows": 1000.0
+      }
+    },
+    {
+      "test": "BenchmarkConversationProfileCatchup/groups5000-conversations20000-changedfalse-32",
+      "seconds": 0.2799394,
+      "metrics": {
+        "alloc-MiB/op": 54.05,
+        "callback-MiB": 0.0,
+        "end-heap-MiB": 54.99,
+        "largest-callback-rows": 0.0
+      }
+    },
+    {
+      "test": "BenchmarkConversationProfileCatchup/groups5000-conversations20000-changedtrue-32",
+      "seconds": 10.9248618,
+      "metrics": {
+        "alloc-MiB/op": 174.5,
+        "callback-MiB": 11.87,
+        "end-heap-MiB": 85.24,
+        "largest-callback-rows": 5000.0
+      }
+    }
+  ],
+  "native_after": [
+    {
+      "test": "BenchmarkGroupProfileNetworkCatchup-32",
+      "seconds": 18.2101784,
+      "metrics": {
+        "HTTP-requests": 10.0,
+        "alloc-MiB": 384.0,
+        "end-heap-MiB": 6.147
+      }
+    },
+    {
+      "test": "BenchmarkGroupProfileCatchup/1000-32",
+      "seconds": 3.861161,
+      "metrics": {
+        "alloc-MiB/op": 61.26,
+        "peak-heap-MiB": 6.531,
+        "verified-groups/op": 1000.0
+      }
+    },
+    {
+      "test": "BenchmarkGroupProfileCatchup/5000-32",
+      "seconds": 44.7092266,
+      "metrics": {
+        "alloc-MiB/op": 303.9,
+        "peak-heap-MiB": 13.42,
+        "verified-groups/op": 5000.0
+      }
+    },
+    {
+      "test": "BenchmarkConversationProfileCatchup/groups1000-conversations4000-changedfalse-32",
+      "seconds": 0.0066823,
+      "metrics": {
+        "alloc-MiB/op": 0.05169,
+        "callback-MiB": 0.0,
+        "end-heap-MiB": 2.875,
+        "largest-callback-rows": 0.0
+      }
+    },
+    {
+      "test": "BenchmarkConversationProfileCatchup/groups1000-conversations4000-changedtrue-32",
+      "seconds": 0.0958256,
+      "metrics": {
+        "alloc-MiB/op": 21.47,
+        "callback-MiB": 2.373,
+        "end-heap-MiB": 7.396,
+        "largest-callback-rows": 128.0
+      }
+    },
+    {
+      "test": "BenchmarkConversationProfileCatchup/groups5000-conversations20000-changedfalse-32",
+      "seconds": 0.0312213,
+      "metrics": {
+        "alloc-MiB/op": 0.05152,
+        "callback-MiB": 0.0,
+        "end-heap-MiB": 7.077,
+        "largest-callback-rows": 0.0
+      }
+    },
+    {
+      "test": "BenchmarkConversationProfileCatchup/groups5000-conversations20000-changedtrue-32",
+      "seconds": 0.505157,
+      "metrics": {
+        "alloc-MiB/op": 101.0,
+        "callback-MiB": 11.87,
+        "end-heap-MiB": 12.35,
+        "largest-callback-rows": 128.0
+      }
+    }
+  ],
+  "native_timing_source": "recovery.25-group-profile-scale.3; delivery .4 additionally suppresses duplicate queued profile updates; covered by regression",
+  "ui_bulk": {
+    "groups": 5000,
+    "conversations": 20000,
+    "callback_rows": 5000,
+    "verified": 5000,
+    "wire_MiB": 15.589629173278809,
+    "apply_ms": 324,
+    "decode_total_ms": 98.113,
+    "decode_max_ms": 98.113,
+    "build_p95_ms": 0.771,
+    "build_max_ms": 10.078,
+    "ticker_p95_ms": 10.226,
+    "ticker_max_ms": 144.362,
+    "ticker_gaps_over_33ms": 2,
+    "frames": 262,
+    "rss_start_MiB": 218.19921875,
+    "rss_peak_MiB": 261.48046875
+  },
+  "ui_paged": {
+    "groups": 5000,
+    "conversations": 20000,
+    "callback_rows": 128,
+    "verified": 5000,
+    "wire_MiB": 15.589666366577148,
+    "apply_ms": 606,
+    "decode_total_ms": 102.256,
+    "decode_max_ms": 4.246,
+    "build_p95_ms": 0.902,
+    "build_max_ms": 2.643,
+    "ticker_p95_ms": 11.284,
+    "ticker_max_ms": 25.311,
+    "ticker_gaps_over_33ms": 0,
+    "frames": 280,
+    "rss_start_MiB": 205.88671875,
+    "rss_peak_MiB": 239.00390625
+  },
+  "repeated_unchanged": {
+    "iterations": 20,
+    "mean_ms": 31.718395,
+    "allocated_MiB_per_iteration": 0.01791,
+    "callback_rows": 0
+  },
+  "checks": {
+    "core_race": "passed: common/network/syncer/group/interaction/conversation_msg; CGO=1",
+    "sqlite_atomic_pages": "passed: rollback, retry, complete 257-row pagination, avatar removal, unread/draft/pin preservation",
+    "queued_notifications": "passed: post-sync queued group updates do not republish committed rows; genuine online changes still publish",
+    "large_group_verification": "passed: 5000 group profiles and 20000 conversations; all changed groups verified",
+    "flutter_regression": "653 passed; 8 existing skipped",
+    "flutter_analysis": "no issues in performance fixture and group controller",
+    "source_lock_tests": "15 passed",
+    "patch_roundtrip": "passed: cumulative patch recreates current locked source with documented overlays",
+    "android_core": "four ABIs built and source receipt verified",
+    "android_application": "debug APK built; arm64/x86_64 stripped native parity and SDK version verified",
+    "emulator_profile": "passed: independent processes, synthetic data, real feed rows and chat header controller; no production account",
+    "physical_phone": "not tested; install rejected; user chose emulator-only testing",
+    "ios_framework": "not rebuilt; shared source requires macOS build"
+  },
+  "apk": "E:\\openim\\release-artifacts\\group-profile-scale-recovery.25-20261015.apk",
+  "apk_sha256": "2a22f0b7a4379dd93488a58a028677a9e8e01a9317805283f64db890217f23c7",
+  "aar_sha256": "031cf7c0df3dab7733dff38faaf37ff0d855cf7ae3fb20b4563028a95969035d",
+  "native_sha256": {
+    "arm64-v8a": "f8f567a56d0204e64e4e56acb94dda0f04be9db8b4b89df77e1b37214adeaebf",
+    "x86_64": "bddab79636923e08302ec698c98c6817459cda1a0064e587a81597ea46954724"
+  },
+  "logs_directory": "E:\\openim\\artifacts\\group-profile-stress-20261015",
+  "fixture_source": "integration_test/performance/group_profile_stress_test.dart"
+}

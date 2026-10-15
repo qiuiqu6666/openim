@@ -39,21 +39,19 @@ func TestLossMatrixPushOrderAndDuplicates(t *testing.T) {
 				m := &MsgSyncer{ctx: ctx, longConnMgr: conn,
 					conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{id: 998}}
 				var delivered []int64
-				persisted := make(map[int64]bool)
 				var mu sync.Mutex
 				receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
+					p := cmd.Value.(sdk_struct.CmdNewMsgComeToConversation)
+					if p.ReconcileReadSeq && len(p.Msgs) == 0 {
+						return nil
+					}
 					if cmd.Cmd != constant.CmdNewMsgCome && cmd.Cmd != constant.CmdNotification {
 						return fmt.Errorf("unexpected failure notification: %s", cmd.Cmd)
 					}
 					mu.Lock()
 					defer mu.Unlock()
 					for _, msg := range cmd.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs[id].Msgs {
-						// Receipt is a storage boundary. The consumer deduplicates
-						// tail delivery followed by full coverage replay.
-						if msg.Seq > 998 && !persisted[msg.Seq] {
-							persisted[msg.Seq] = true
-							delivered = append(delivered, msg.Seq)
-						}
+						delivered = append(delivered, msg.Seq)
 					}
 					return nil
 				})
@@ -87,7 +85,9 @@ func TestLossMatrixPushOrderAndDuplicates(t *testing.T) {
 				}
 				mu.Lock()
 				defer mu.Unlock()
-				sort.Slice(delivered, func(i, j int) bool { return delivered[i] < delivered[j] })
+				if !IsNotification(id) {
+					sort.Slice(delivered, func(i, j int) bool { return delivered[i] < delivered[j] })
+				}
 				if !reflect.DeepEqual(delivered, []int64{999, 1000}) {
 					t.Fatalf("lost or replayed stored messages: %v", delivered)
 				}
@@ -271,7 +271,7 @@ func TestLossMatrixMultiConversationPushFailureAndPeriodicRecovery(t *testing.T)
 					for _, msg := range msgs.Msgs {
 						// The sync owner is blocked on this receipt, so this also
 						// catches advancing any batch before durable acceptance.
-						if msg.Seq <= m.syncedMaxSeqs[id] && !stored[id][msg.Seq] {
+						if msg.Seq <= m.syncedMaxSeqs[id] {
 							t.Errorf("%s seq %d was acknowledged before storage (cursor %d)", id, msg.Seq, m.syncedMaxSeqs[id])
 						}
 					}
@@ -438,7 +438,7 @@ func TestLossMatrixTwoOnlineDevicesHotConversationDoesNotHideSilentGap(t *testin
 	if len(stored[0]["quiet_group"]) != 0 {
 		t.Fatal("current device replayed an already committed quiet conversation")
 	}
-	if !reflect.DeepEqual(stored[1]["quiet_group"], []int64{999, 1000}) {
+	if !reflect.DeepEqual(stored[1]["quiet_group"], []int64{1000, 999}) {
 		t.Fatalf("second device still needs a quiet-chat push: %v", stored[1]["quiet_group"])
 	}
 	for index, device := range devices {

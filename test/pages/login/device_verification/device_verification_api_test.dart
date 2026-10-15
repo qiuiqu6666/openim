@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openim/core/server_nodes/node_endpoint.dart';
 import 'package:openim/pages/login/device_verification/data/device_verification_code_result.dart';
 import 'package:openim/pages/login/device_verification/data/password_device_login_attempt.dart';
 import 'package:openim_common/openim_common.dart';
@@ -79,7 +80,44 @@ void main() {
     adapter = _HTTP();
     http.dio.httpClientAdapter = adapter;
   });
-  tearDown(() => http.dio.close(force: true));
+  tearDown(() {
+    Config.useRuntimeNetworkRoute(null);
+    http.dio.close(force: true);
+  });
+
+  for (final node in [...NodeEndpoint.builtIn, NodeEndpoint.shield]) {
+    test('legacy challenge retries on built-in node ${node.diagnosticCode}',
+        () async {
+      Config.useRuntimeNetworkRoute(RuntimeNetworkRoute(
+        authUrl: node.chatApi,
+        apiUrl: node.imApi,
+        wsUrl: node.imWs,
+        customerServiceUrl: node.customerServiceUrl!,
+      ));
+      final attempt = await PasswordDeviceLoginAttempt.prepare(
+          phoneNumber: '13800138000',
+          areaCode: '+86',
+          password: 'Original-password-123');
+      addTearDown(attempt.close);
+      adapter.reply(null, code: 20084);
+      adapter.reply(_certificate);
+
+      final result = await attempt.submit();
+
+      expect(result.userID, _certificate['userID']);
+      expect(adapter.requests, hasLength(2));
+      expect(adapter.requests.map((r) => r.uri.toString()).toSet(),
+          {'${node.chatApi}/account/login'});
+      expect(adapter.requests.first.data['passwordPlaintext'], isNull);
+      expect(adapter.requests.last.data['passwordPlaintext'],
+          startsWith('rsa-oaep-sha256-v1:'));
+      expect(adapter.requests.every((r) => !r.followRedirects), isTrue);
+      expect(adapter.requests.every((r) => r.headers['token'] == null), isTrue);
+      expect(adapter.requests.map((r) => r.headers['operationID']).toSet(),
+          hasLength(2));
+      expect(DataSp.getLoginCertificate(), isNull);
+    });
+  }
 
   test('login preparation keeps one identity and a stable persisted device',
       () async {

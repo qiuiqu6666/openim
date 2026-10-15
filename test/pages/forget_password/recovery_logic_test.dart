@@ -43,27 +43,25 @@ Future<T> _phase<T>(Future<T> future, String phase) => future.timeout(
     onTimeout: () => throw TimeoutException('Recovery test stalled at $phase'));
 
 class _RecoveryApi implements HttpClientAdapter {
-  final verification = Completer<ResponseBody>();
   final reset = Completer<ResponseBody>();
-  final verificationStarted = Completer<void>();
   final resetStarted = Completer<void>();
   final requests = <RequestOptions>[];
   bool failConnection = false;
+  bool failTimeout = false;
 
   @override
   Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? body,
       Future<void>? cancelFuture) {
     requests.add(options);
-    if (failConnection) {
+    expect(options.path, endsWith('/account/password/reset'));
+    if (failConnection || failTimeout) {
       return Future.error(DioException(
         requestOptions: options,
-        type: DioExceptionType.connectionError,
+        type: failTimeout
+            ? DioExceptionType.receiveTimeout
+            : DioExceptionType.connectionError,
         error: 'Internal offline transport detail',
       ));
-    }
-    if (options.path.endsWith('/account/code/verify')) {
-      if (!verificationStarted.isCompleted) verificationStarted.complete();
-      return verification.future;
     }
     if (!resetStarted.isCompleted) resetStarted.complete();
     return reset.future;
@@ -159,15 +157,15 @@ void main() {
     expect(Get.currentRoute, AppRoutes.forgetPassword);
   });
 
-  testWidgets('verification failure keeps all fields and skips password reset',
+  testWidgets('reset rejects an incorrect code and keeps all fields',
       (tester) async {
     final logic = await _mount(tester);
     _validFields(logic);
     late Future<void> pending;
     await tester.runAsync(() async {
       pending = logic.nextStep();
-      await _phase(api.verificationStarted.future, 'verification request');
-      api.verification.complete(api.response(code: 20006));
+      await _phase(api.resetStarted.future, 'reset request');
+      api.reset.complete(api.response(code: 20006));
       await _phase(pending, 'request completion');
     });
     expect(api.requests, hasLength(1));
@@ -191,28 +189,23 @@ void main() {
     expect(logic.formError, isNull);
   });
 
-  testWidgets('one submission verifies and resets the same captured target',
+  testWidgets('one submission resets once using the captured target',
       (tester) async {
     final logic = await _mount(tester);
     _validFields(logic);
     late Future<void> pending;
     await tester.runAsync(() async {
       pending = logic.nextStep();
-      await _phase(api.verificationStarted.future, 'verification request');
+      await _phase(api.resetStarted.future, 'reset request');
     });
     await logic.nextStep();
     expect(api.requests, hasLength(1));
-    expect(api.requests.single.data, containsPair('usedFor', 2));
     logic.phoneCtrl.text = '13900139000';
     logic.areaCode.value = '+1';
     logic.verificationCodeCtrl.text = '654321';
     logic.pwdCtrl.text = 'password2';
     logic.pwdAgainCtrl.text = 'password2';
-    await tester.runAsync(() async {
-      api.verification.complete(api.response());
-      await _phase(api.resetStarted.future, 'reset request');
-    });
-    expect(api.requests, hasLength(2));
+    expect(api.requests, hasLength(1));
     final reset = api.requests.last;
     expect(reset.path, endsWith('/account/password/reset'));
     expect(reset.data, containsPair('phoneNumber', '13800138000'));
@@ -229,17 +222,16 @@ void main() {
     expect(DataSp.getLoginCertificate(), isNull);
   });
 
-  testWidgets('leaving during verification prevents the following reset',
-      (tester) async {
+  testWidgets('leaving during reset ignores a late rejection', (tester) async {
     final logic = await _mount(tester);
     _validFields(logic);
     await tester.runAsync(() async {
       final pending = logic.nextStep();
-      await _phase(api.verificationStarted.future, 'verification request');
+      await _phase(api.resetStarted.future, 'reset request');
       await Get.delete<ForgetPasswordLogic>(force: true);
       expect(logic.isClosed, isTrue);
-      api.verification.complete(api.response());
-      await _phase(pending, 'late verification completion');
+      api.reset.complete(api.response(code: 20006));
+      await _phase(pending, 'late reset rejection');
     });
     expect(api.requests, hasLength(1));
     expect(Get.currentRoute, AppRoutes.forgetPassword);
@@ -252,10 +244,8 @@ void main() {
     _validFields(logic);
     await tester.runAsync(() async {
       final pending = logic.nextStep();
-      await _phase(api.verificationStarted.future, 'verification request');
-      api.verification.complete(api.response());
       await _phase(api.resetStarted.future, 'reset request');
-      expect(api.requests, hasLength(2));
+      expect(api.requests, hasLength(1));
       await Get.delete<ForgetPasswordLogic>(force: true);
       expect(logic.isClosed, isTrue);
       api.reset.complete(api.response());
@@ -284,8 +274,6 @@ void main() {
         isCurrent: () => true,
       );
       final pending = logic.nextStep();
-      await _phase(api.verificationStarted.future, 'verification request');
-      api.verification.complete(api.response());
       await _phase(api.resetStarted.future, 'reset request');
       api.reset.complete(api.response());
       await _phase(pending, 'request completion');
@@ -317,8 +305,6 @@ void main() {
         isCurrent: () => true,
       );
       final pending = logic.nextStep();
-      await _phase(api.verificationStarted.future, 'verification request');
-      api.verification.complete(api.response());
       await _phase(api.resetStarted.future, 'reset request');
       api.reset.complete(api.response());
       await _phase(pending, 'request completion');
@@ -376,26 +362,29 @@ void main() {
     expect(EasyLoading.isShow, isFalse);
   });
 
-  testWidgets('reset business errors remain a form message with fields intact',
-      (tester) async {
-    final logic = await _mount(tester);
-    _validFields(logic);
-    await tester.runAsync(() async {
-      final pending = logic.nextStep();
-      await _phase(api.verificationStarted.future, 'verification request');
-      api.verification.complete(api.response());
-      await _phase(api.resetStarted.future, 'reset request');
-      api.reset.complete(api.response(code: 20007));
-      await _phase(pending, 'reset business error');
+  for (final code in [20007, 20008, 20009]) {
+    testWidgets('reset error $code keeps the form and restores submission',
+        (tester) async {
+      final logic = await _mount(tester);
+      _validFields(logic);
+      await tester.runAsync(() async {
+        final pending = logic.nextStep();
+        await _phase(api.resetStarted.future, 'reset request');
+        api.reset.complete(api.response(code: code));
+        await _phase(pending, 'reset business error');
+      });
+      expect(api.requests, hasLength(1));
+      expect(logic.phoneCtrl.text, '13800138000');
+      expect(logic.verificationCodeCtrl.text, '123456');
+      expect(logic.formError, code.toString().tr);
+      expect(logic.pwdCtrl.text, 'password1');
+      expect(logic.pwdAgainCtrl.text, 'password1');
+      expect(logic.submitting.value, isFalse);
+      expect(logic.fieldError(RecoveryField.password), isNull);
+      expect(EasyLoading.isShow, isFalse);
+      expect(Get.currentRoute, AppRoutes.forgetPassword);
     });
-    expect(logic.formError, '20007'.tr);
-    expect(logic.pwdCtrl.text, 'password1');
-    expect(logic.pwdAgainCtrl.text, 'password1');
-    expect(logic.submitting.value, isFalse);
-    expect(logic.fieldError(RecoveryField.password), isNull);
-    expect(EasyLoading.isShow, isFalse);
-    expect(Get.currentRoute, AppRoutes.forgetPassword);
-  });
+  }
 
   testWidgets('connection failure uses the current language form message',
       (tester) async {
@@ -412,5 +401,23 @@ void main() {
     expect(logic.formError, isNot(chinese));
     expect(EasyLoading.isShow, isFalse);
     expect(api.requests, hasLength(1));
+  });
+  testWidgets('timeout keeps inputs and does not automatically retry',
+      (tester) async {
+    final logic = await _mount(tester);
+    _validFields(logic);
+    api.failTimeout = true;
+    await tester.runAsync(() async {
+      await _phase(logic.nextStep(), 'reset timeout');
+    });
+    await tester.pump(const Duration(seconds: 10));
+    expect(api.requests, hasLength(1));
+    expect(logic.formError, isNotNull);
+    expect(logic.submitting.value, isFalse);
+    expect(logic.phoneCtrl.text, '13800138000');
+    expect(logic.verificationCodeCtrl.text, '123456');
+    expect(logic.pwdCtrl.text, 'password1');
+    expect(logic.pwdAgainCtrl.text, 'password1');
+    expect(Get.currentRoute, AppRoutes.forgetPassword);
   });
 }

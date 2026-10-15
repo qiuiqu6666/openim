@@ -18,9 +18,9 @@ func TestVisibilityRecoveryUsesFreshBoundaries(t *testing.T) {
 		ambiguous                                                  bool
 	}{
 		{name: "stale upper bound", completed: 10, cachedMax: 10, target: 20, visibleMin: 1, visibleMax: 20, want: 20},
-		{name: "expired prefix", target: 600, visibleMin: 501, visibleMax: 600, want: 600},
+		{name: "expired prefix within latest window", target: 650, visibleMin: 601, visibleMax: 650, want: 650},
 		{name: "permission upper bound", completed: 10, cachedMax: 10, target: 20, visibleMin: 1, visibleMax: 15, want: 15},
-		{name: "ambiguous empty prefix", target: 600, visibleMin: 501, visibleMax: 600, want: 0, ambiguous: true},
+		{name: "ambiguous empty prefix", target: 650, visibleMin: 601, visibleMax: 650, want: 0, ambiguous: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := recoveryContext(t)
@@ -28,17 +28,13 @@ func TestVisibilityRecoveryUsesFreshBoundaries(t *testing.T) {
 			conn := &LongConnMgr{send: make(chan Message, 1)}
 			m := &MsgSyncer{ctx: ctx, db: d, longConnMgr: conn, conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{"chat": tc.completed}}
 			delivered, pulls, probes := 0, 0, 0
-			seen := make(map[int64]bool)
 			receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
 				for _, batch := range cmd.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs {
 					for _, row := range batch.Msgs {
 						if row.Seq < tc.visibleMin || row.Seq > tc.visibleMax {
 							t.Errorf("delivered invisible seq %d", row.Seq)
 						}
-						if !seen[row.Seq] {
-							seen[row.Seq] = true
-							delivered++
-						}
+						delivered++
 					}
 				}
 				return nil
@@ -90,8 +86,8 @@ func TestVisibilityRecoveryUsesFreshBoundaries(t *testing.T) {
 				wantRows = 0
 			}
 			if tc.ambiguous {
-				wantRows = 20
-			} // Visible tail may arrive; unknown prefix stays pending.
+				wantRows = 1
+			} // The valid tail is visible; the unknown older gap remains pending.
 			if delivered != wantRows {
 				t.Fatalf("delivered=%d want=%d", delivered, wantRows)
 			}

@@ -1,0 +1,69 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.24-group-profile.1",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "7d1d4588b1014cb2c59b77a84dd415a6a6383e1206e702f995bb7810c35c13fe",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "433bfca301f4d01a18141153b093017684e399a771439cfee595179621076366",
+  "created": "2026-10-15",
+  "previous_release": "history/recovery.23-notification-tombstone.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "flutter_regression": "653 passed; 8 existing skipped",
+    "flutter_analysis": "no errors/warnings; 2 pre-existing info lints in chat_logic.dart",
+    "core_race_sqlite": "passed: common/network/syncer/group/interaction/conversation_msg; CGO enabled; race detector enabled",
+    "source_lock_tests": "15 passed",
+    "patch_roundtrip": "passed against patch_base_commit with documented build overlays",
+    "android_aar_build": "passed: four ABIs; source receipt verified",
+    "android_debug_apk": "passed: arm64 and x86_64; packaged native libraries match stripped new AAR byte for byte and contain current SDK version",
+    "device_runtime": "not installed; two-account offline scenario not run",
+    "ios_framework": "not rebuilt for recovery.24; requires macOS"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.24-group-profile.1",
+    "sdk_version": "v3.8.3-patch.15+recovery.24-group-profile.1",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "not run",
+    "native_binary_integrated": true,
+    "application_validation": "653 passed; 8 existing skipped; debug APK built and native parity verified",
+    "aar_sha256": "931d431e21c966bb78bb5c1314dceb8b290b5e4c562260515f39e8e816e2d9ee",
+    "debug_apk_sha256": "dd472b6b1dfccbc678e4f09f38ad859db8f9920191ae3103ac3763ad9c082e80"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.24-group-profile.1",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "not run",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "macOS rebuild required",
+    "app_validation_scope": "shared source; previous framework cannot represent recovery.24",
+    "native_binary_integrated": false,
+    "app_version": "3.0.1+2027"
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned existing gomobile dependency closure",
+    "version/version: unique recovery.24-group-profile.1 runtime identity"
+  ],
+  "verification_evidence": "verification/recovery.24-group-profile.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Repair offline group name/avatar synchronization, propagate member failures, preserve full-sync notifications and reconcile cached conversation profiles; reload only the open chat profile after sync."
+  }
+}

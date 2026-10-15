@@ -28,6 +28,8 @@ class ChatDeliveryController {
     this.onDeliveryFinished,
     this.onTimelineChanged,
     this.onMessageChanged,
+    this.canSendToGroup,
+    this.groupSendBlockedMessage,
   })  : _conversation = conversation,
         _isClosed = isClosed,
         _groupStatus = groupStatus,
@@ -131,6 +133,10 @@ class ChatDeliveryController {
   final void Function()? onTimelineChanged;
   // Mounted row notifications avoid invalidating ordering/history on each ACK.
   final void Function(Set<String>)? onMessageChanged;
+
+  /// Checked at dispatch, including retry/forward and async composition.
+  final bool Function(String groupID)? canSendToGroup;
+  final String Function()? groupSendBlockedMessage;
   final sendStatusSub = PublishSubject<MsgStreamEv<bool>>();
   bool _closed = false;
   bool get isClosed =>
@@ -222,6 +228,21 @@ class ChatDeliveryController {
         clientMsgID: message.clientMsgID,
         errorCode: 'CHAT_CLOSED',
         errorMessage: 'favoriteChatChanged'.tr,
+      ));
+      return Future<void>.value();
+    }
+    final explicitUser = IMUtils.emptyStrToNull(userId);
+    final explicitGroup = IMUtils.emptyStrToNull(groupId);
+    final destinationGroup =
+        explicitUser == null && explicitGroup == null ? groupID : explicitGroup;
+    if (destinationGroup != null &&
+        canSendToGroup?.call(destinationGroup) == false) {
+      favoriteResult?.call(FavoriteSendResult(
+        status: FavoriteSendStatus.failed,
+        clientMsgID: message.clientMsgID,
+        errorCode: 'GROUP_SEND_BLOCKED',
+        errorMessage:
+            groupSendBlockedMessage?.call() ?? StrRes.notSendMessageNotInGroup,
       ));
       return Future<void>.value();
     }

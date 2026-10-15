@@ -1,0 +1,134 @@
+{
+  "date": "2026-10-15",
+  "sdk_version": "v3.8.3-patch.15+recovery.28-fast-recovery.1",
+  "source_sha256": "3d57d876079d5418ef1b6e94ce189680410da96c06f8debe4e3ef316720553e9",
+  "source_files": 428,
+  "patch_sha256": "475230988ba24024f7942461cde73a6a92615df46b8f6a3a95a6a84f8a583bf6",
+  "source_consistency": {
+    "android_ios_stages_identical": true,
+    "maintenance_core_aligned": true,
+    "documented_build_overlays": [
+      "go.mod",
+      "go.sum",
+      "version/version"
+    ],
+    "patch_roundtrip": "clean base archive + cumulative patch byte-matched to final source except documented build overlays"
+  },
+  "fixes": [
+    "Deliberately cancelled/yielded sync retains scheduler work without feeding a syncFailed/network wake loop; a queued Dart failure timer rechecks recovery state.",
+    "Authenticated directional visibility probes batch up to 100 conversations. Missing or invalid packets fail the affected conversation without granting visibility.",
+    "Recent gap pulls batch at most 8 chats within a total 100-message budget, preserve per-conversation storage receipts, isolate failures and share existing foreground history lanes.",
+    "Required conversation settings/visibility/read metadata precedes messages. Auxiliary profiles follow message readiness on the same serialized scheduler and retain failed retry obligations.",
+    "Native startup reads durable checkpoints in one snapshot and omits per-chat MAX(seq) scans when a journal exists. Legacy MAX(seq) remains an observation, never coverage proof."
+  ],
+  "correctness_regressions": [
+    "30 conversations x 3 missing rows: 2 boundary requests, 5 message pulls, all 90 rows delivered exactly once; no response budget above 100.",
+    "An omitted visibility boundary blocks that chat while the other 29 recover; invalid/empty packets do not waive permission checks.",
+    "1000 journaled conversations + 1 legacy conversation: 1 checkpoint snapshot and 1 legacy MAX query; sparse coverage and target preserved; read errors remain errors.",
+    "Initial and ordinary message readiness precedes auxiliary metadata. Profile failure stays retryable, does not publish syncFailed, and does not replay saved messages.",
+    "Existing durable checkpoint, crash, sparse window, deletion/revocation, read watermark, foreground history adoption and real SQLite suites passed in final package regression."
+  ],
+  "tests": {
+    "core_build_tests": {
+      "result": "passed",
+      "packages": [
+        "pkg/common",
+        "pkg/network",
+        "internal/interaction",
+        "internal/conversation_msg"
+      ],
+      "log": "E:\\openim\\artifacts\\message-recovery-fix-20261015\\android-core-final-build.log"
+    },
+    "real_sqlite_and_race": {
+      "result": "passed",
+      "packages": [
+        "pkg/common",
+        "internal/interaction",
+        "internal/conversation_msg",
+        "internal/group",
+        "pkg/syncer",
+        "pkg/db"
+      ],
+      "command": "go test -race -ldflags=-linkmode=external ./pkg/common ./internal/interaction ./internal/conversation_msg ./internal/group ./pkg/syncer ./pkg/db -count=1 -timeout=240s",
+      "log": "E:\\openim\\artifacts\\message-recovery-fix-20261015\\shared-final-race.log"
+    },
+    "source_artifact_guards": {
+      "passed": 15,
+      "log": "E:\\openim\\artifacts\\message-recovery-fix-20261015\\source-final-lock-tests.log"
+    },
+    "flutter_connection": {
+      "passed": 53,
+      "skipped": 1,
+      "failed": 0,
+      "log": "E:\\openim\\artifacts\\message-recovery-fix-20261015\\connection-after.log"
+    },
+    "flutter_analyze": {
+      "result": "No issues found",
+      "scope": "changed recovery implementation and new test",
+      "log": "E:\\openim\\artifacts\\message-recovery-fix-20261015\\flutter-analyze.log"
+    },
+    "flutter_extended": {
+      "passed": 1066,
+      "skipped": 21,
+      "failed": 2,
+      "scope": [
+        "test/core/session",
+        "test/pages/conversation",
+        "test/pages/chat/history",
+        "test/pages/chat/receipts",
+        "test/integration/chat"
+      ],
+      "log": "E:\\openim\\artifacts\\message-recovery-fix-20261015\\flutter-regression.log",
+      "baseline_log": "E:\\openim\\artifacts\\message-recovery-fix-20261015\\peek-baseline.log",
+      "baseline_reproduction": "isolated current Flutter fixture with im_connection_recovery.dart restored from HEAD reproduces both failures",
+      "failures": [
+        "conversation_peek_content_test.dart: a short latest page automatically loads older history without reading it (viewport rect differs by 65)",
+        "conversation_peek_content_test.dart: older history retry retains the viewport and uses its raw cursor (latest-0 expected, latest-1 observed)"
+      ]
+    }
+  },
+  "android": {
+    "sdk_abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "aar_sha256": "d11ec34f9a0934837627f70264303c179084d9e15047b0010f28e4ca50f0afed",
+    "application_id": "chat.chat99.chatpro",
+    "app_version": "3.0.1+2041",
+    "apk_path": "E:\\openim\\artifacts\\message-recovery-fix-20261015\\99chat-fast-recovery-3.0.1-2041-debug.apk",
+    "apk_sha256": "fad36f7ab70c86b9eece7c74489773b3c517ca52740a1d536db034d4cb0476e1",
+    "apk_native": {
+      "arm64-v8a": {
+        "sha256": "3255eab12284d5f457e8018ecd9ee374c1e1fad4079fbb9277800769dc718dd0",
+        "aar_comparison": "identical after Android --strip-unneeded",
+        "embedded_sdk_version": "v3.8.3-patch.15+recovery.28-fast-recovery.1"
+      },
+      "x86_64": {
+        "sha256": "ee27f9317dca9221ace23e287739820473670db7ab01d1613f6e8d7531161a2f",
+        "aar_comparison": "identical after Android --strip-unneeded",
+        "embedded_sdk_version": "v3.8.3-patch.15+recovery.28-fast-recovery.1"
+      }
+    },
+    "build_log": "E:\\openim\\artifacts\\message-recovery-fix-20261015\\android-apk-final-build.log",
+    "device_runtime": "not performed for this APK; no real-account recovery timing or device acceptance claimed"
+  },
+  "ios": {
+    "scope": "source consistency only, as requested by user",
+    "same_locked_core_source_as_android": true,
+    "binary_built": false,
+    "runtime_tested": false,
+    "next_build": "Run native_sdk/patch15/build-ios.sh on macOS before using the new SDK. Old Framework receipt is rejected by the artifact guard."
+  },
+  "graph_review": {
+    "index": "openim-fast-recovery-final-20261015",
+    "result_file": "E:\\openim\\artifacts\\message-recovery-fix-20261015\\gitnexus-final-changes.json",
+    "scope_note": "92 changed symbols / 42 affected flows across the accumulated dirty maintenance repository are not solely this task. Static flow indexing reports truncation; manual source review and regression tests cover the edited recovery chain. Final follow-up changed formatting only."
+  },
+  "limitations": [
+    "No new Android real-account cold-start/reconnect acceptance or elapsed-time benchmark.",
+    "Two existing Flutter conversation preview failures remain reproducible without this recovery change.",
+    "iOS binary build and runtime testing deferred to user."
+  ]
+}

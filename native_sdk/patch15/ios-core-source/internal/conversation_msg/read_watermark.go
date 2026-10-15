@@ -28,6 +28,11 @@ func (c *Conversation) doReadWatermark(ctx context.Context, msg *sdkws.MsgData, 
 		return err
 	}
 	self := tips.MarkAsReadUserID == c.loginUserID
+	if self || conversation.ConversationType == constant.SingleChatType {
+		if err := c.saveReadWatermarks(ctx, map[string]int64{tips.ConversationID: tips.HasReadSeq}, self, msg.SendTime); err != nil {
+			return err
+		}
+	}
 	if conversation.ConversationType != constant.SingleChatType {
 		if self {
 			return c.doUnreadCount(ctx, conversation, tips.HasReadSeq, nil)

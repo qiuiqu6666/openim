@@ -215,16 +215,16 @@ void main() {
       final logic = _FakeRemarkLogic();
       addTearDown(logic.inputCtrl.dispose);
       await _mountEditor(tester, SetFriendRemarkPage(logic: logic), brightness);
-      await _expectUniformEditorSurface(tester);
-
-      expect(find.text('确定'), findsOneWidget);
-      expect(find.text('3/30'), findsOneWidget);
+      expect(find.byType(AvatarView), findsNothing);
+      expect(find.text(StrRes.nickname), findsOneWidget);
+      expect(find.text(StrRes.done), findsOneWidget);
+      expect(find.text('27'), findsOneWidget);
       await tester.enterText(
           find.byType(TextField), List.filled(31, '字').join());
       await tester.pumpAndSettle();
       expect(logic.inputCtrl.text, List.filled(30, '字').join());
-      expect(find.text('30/30'), findsOneWidget);
-      await tester.tap(find.text('确定'));
+      expect(find.text('0'), findsOneWidget);
+      await tester.tap(find.text(StrRes.done));
       expect(logic.saves, 1);
       expect(tester.takeException(), isNull);
     });

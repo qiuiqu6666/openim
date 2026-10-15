@@ -5,6 +5,7 @@ import 'media/chat_media_message_locator.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'messages/selection/message_selection_delete_sheet.dart';
+import 'messages/widgets/message_action_confirmation_sheet.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -171,6 +172,10 @@ class ChatLogic extends SuperController {
     showError: IMViews.showToast,
   );
   late final _delivery = ChatDeliveryController(
+    canSendToGroup: (id) => id != groupID || (!sendingMuted && !isInvalidGroup),
+    groupSendBlockedMessage: () => isInvalidGroup
+        ? StrRes.notSendMessageNotInGroup
+        : (groupMembershipPending ? StrRes.synchronizing : StrRes.youMuted),
     uploadProgress: imLogic.messageUploadProgress,
     accountID: _chatAccountID,
     messageList: messageList,
@@ -196,6 +201,7 @@ class ChatLogic extends SuperController {
   late final _readDiagnostics =
       ChatReadDiagnostics(conversationInfo.conversationID);
   bool get _historyBlocksRead =>
+      !_timeline.hasPublishableWindow &&
       historyLoading.value &&
       !canReadPersistedLatestDuringLoad(
           conversationInfo, messageList.lastOrNull);
@@ -239,12 +245,13 @@ class ChatLogic extends SuperController {
         !_historyBlocksRead &&
         historyError.value == null &&
         !viewingHistory.value &&
-        syncStatus.value != IMSdkStatus.syncStart &&
-        syncStatus.value != IMSdkStatus.syncProgress &&
-        // A global sync failure can concern another conversation. A healthy
-        // local history and its painted latest still permit an SDK read; the
-        // receipt owner separately rejects a missing/unseen preview target.
-        syncStatus.value != IMSdkStatus.synchronizing,
+        (_timeline.hasPublishableWindow ||
+            (syncStatus.value != IMSdkStatus.syncStart &&
+                syncStatus.value != IMSdkStatus.syncProgress &&
+                // A global sync failure can concern another conversation. A healthy
+                // local history and its painted latest still permit an SDK read; the
+                // receipt owner separately rejects a missing/unseen preview target.
+                syncStatus.value != IMSdkStatus.synchronizing)),
     isActive: () =>
         (_messageRoute?.isCurrent ?? Get.currentRoute == _chatRouteName) &&
         (WidgetsBinding.instance.lifecycleState == null ||
@@ -336,6 +343,16 @@ class ChatLogic extends SuperController {
     isClosed: () => _sessionInactive || isOfficialNotificationChat,
   );
   late final _revocation = ChatMessageRevocation(
+    confirm: () async {
+      final context = Get.context;
+      if (_sessionInactive || context == null || !context.mounted) return false;
+      return MessageActionConfirmationSheet.show(
+        context,
+        title: 'chatMessageRevokeConfirm'.tr,
+        action: StrRes.menuRevoke,
+        sheetKey: const ValueKey('message-revoke-confirmation-sheet'),
+      );
+    },
     conversationID: () => conversationInfo.conversationID,
     currentUserID: () => OpenIM.iMManager.userID,
     groupID: () => groupID,
@@ -454,6 +471,7 @@ class ChatLogic extends SuperController {
   bool get sendingMuted => isOfficialNotificationChat || _group.sendingMuted;
   bool get groupMutePending =>
       !isOfficialNotificationChat && _group.muteStatusPending;
+  bool get groupMembershipPending => _group.membershipPending.value;
 
   late final _memberActions = ChatMemberActionsController(
     groupID: () => groupID,
@@ -512,6 +530,8 @@ class ChatLogic extends SuperController {
   final forceCloseToolbox = PublishSubject<bool>();
 
   late ConversationInfo conversationInfo;
+  ChatEntryTrace? entryTrace;
+  Worker? _entryReadyWorker;
   OfficialAccount? _officialAccount;
   OfficialAccount? get officialAccount => isSingleChat
       ? _officialAccount ??
@@ -531,6 +551,16 @@ class ChatLogic extends SuperController {
     fetchLocalSnapshot: () => OpenIM.iMManager.messageManager
         .getLocalHistorySnapshot(
             conversationID: conversationInfo.conversationID),
+    fetchWindow: () =>
+        OpenIM.iMManager.messageManager.peekLocalMessageWindow(
+            conversationID: conversationInfo.conversationID) ??
+        OpenIM.iMManager.messageManager.getLocalMessageWindow(
+            conversationID: conversationInfo.conversationID),
+    canPaintInitialWindow: () => ![
+      IMSdkStatus.syncStart,
+      IMSdkStatus.synchronizing,
+      IMSdkStatus.syncProgress,
+    ].contains(imLogic.currentSdkStatus),
     accountID: _chatAccountID,
     isSessionCurrent: () => _sameAccount,
     conversation: () => conversationInfo,
@@ -590,6 +620,7 @@ class ChatLogic extends SuperController {
   List<Message> get scrollingCacheMessageList =>
       _timeline.scrollingCacheMessageList;
   RxBool get initialHistoryLoading => _timeline.initialHistoryLoading;
+  RxBool get initialWindowReady => _timeline.initialWindowReady;
   RxBool get historyLoading => _timeline.historyLoading;
   RxBool get historyPagingLoading => _timeline.historyPagingLoading;
   RxnString get historyError => _timeline.historyError;
@@ -998,7 +1029,7 @@ class ChatLogic extends SuperController {
   @override
   void onInit() {
     var arguments = Get.arguments;
-    final entryTrace = arguments['chatEntryTrace'] as ChatEntryTrace?;
+    entryTrace = arguments['chatEntryTrace'] as ChatEntryTrace?;
     entryTrace?.mark('init_start');
     conversationInfo = arguments['conversationInfo'];
     _readDiagnostics
@@ -1025,6 +1056,9 @@ class ChatLogic extends SuperController {
         if (!_sessionInactive) debugPrint('Mention lookup failed: $error');
       }));
     }
+    _entryReadyWorker = ever(initialWindowReady, (bool ready) {
+      if (ready && !_sessionInactive) entryTrace?.mark('window_ready');
+    });
     _timeline.initialize(prefetch: false);
     _messageSubscriptions.add(bindMediaOutbox(
         conversationID: conversationInfo.conversationID,
@@ -1078,7 +1112,8 @@ class ChatLogic extends SuperController {
           _historyRecovery.loadingSettled();
           if (isGroupChat) {
             unawaited(mentions.retryEntry().catchError((Object error) {
-              if (!_sessionInactive) debugPrint('Mention lookup failed: $error');
+              if (!_sessionInactive)
+                debugPrint('Mention lookup failed: $error');
             }));
           }
           messagePositionController.refreshViewport();
@@ -1419,6 +1454,8 @@ class ChatLogic extends SuperController {
 
   @override
   void onClose() {
+    entryTrace?.close();
+    _entryReadyWorker?.dispose();
     _readDiagnostics.record('route_leave', _readDiagnosticState());
     // GetX sets isClosed before calling onClose; the account fence still owns
     // the final painted read and list refresh during synchronous disposal.
@@ -1613,6 +1650,9 @@ class ChatLogic extends SuperController {
           deduplicate: true);
       if (statusChanged) _receipts.invalidateViewport();
       syncStatus.value = value.status;
+      if (value.status == IMSdkStatus.syncFailed) {
+        _timeline.showLoadedLocalWindow();
+      }
       if (statusChanged &&
           (value.status == IMSdkStatus.connecting ||
               value.status == IMSdkStatus.connectionFailed)) {
@@ -1623,6 +1663,7 @@ class ChatLogic extends SuperController {
       }
       if (value.status == IMSdkStatus.syncEnded) {
         _group.recover(resetAttempts: true);
+        if (statusChanged) unawaited(_group.refreshProfileAfterSync());
         _backgroundMessageRecovery.restart(verifyCheckpoint: true);
         _historyRecovery.request(
             resetAttempts: statusChanged, source: 'sync_ended');

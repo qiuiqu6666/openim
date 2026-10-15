@@ -4,6 +4,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/navigation/chat_message_navigation.dart';
+import 'package:openim/pages/chat/group_setup/group_member_list/group_member_list_logic.dart';
 import 'package:openim/pages/contacts/add_by_search/add_by_search_logic.dart';
 import 'package:openim/routes/app_pages.dart';
 import 'package:openim_common/openim_common.dart';
@@ -93,34 +94,48 @@ void main() {
     await DataSp.removeLoginCertificate();
   });
 
-  testWidgets('unknown group permissions wait safely and allow a later click',
+  for (final privacy in <int?>[null, 0, 1]) {
+    testWidgets(
+        'group avatar matches member-list navigation with privacy $privacy',
+        (tester) async {
+      final profiles = _Profiles();
+      if (privacy != null) {
+        profiles.group = GroupInfo(groupID: 'group', lookMemberInfo: privacy);
+      }
+      await profiles.mount(tester);
+      profiles.tapAvatar();
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(profiles.opened, hasLength(1));
+      expect(profiles.opened.single['userID'], 'member');
+      expect(profiles.opened.single['groupID'], 'group');
+      expect(profiles.opened.single['nickname'], 'Member');
+      expect(profiles.opened.single['faceURL'], 'member-face');
+      final avatarArguments = profiles.opened.single;
+      Get.back<void>();
+      await tester.pumpAndSettle();
+      final memberList = GroupMemberListLogic();
+      memberList.viewMemberInfo(GroupMembersInfo(
+        userID: 'member',
+        groupID: 'group',
+        nickname: 'Member',
+        faceURL: 'member-face',
+      ));
+      await tester.pumpAndSettle();
+      expect(profiles.opened, hasLength(2));
+      expect(profiles.opened.last, avatarArguments);
+      memberList.onClose();
+    });
+  }
+
+  testWidgets('mention profile entry retains its group privacy check',
       (tester) async {
     final profiles = _Profiles();
     await profiles.mount(tester);
-    profiles.tapAvatar();
-    await tester.pumpAndSettle();
-
-    expect(tester.takeException(), isNull);
-    expect(profiles.opened, isEmpty);
-    expect(find.text('Chat'), findsOneWidget);
-
-    profiles.group = GroupInfo(groupID: 'group', lookMemberInfo: 0);
-    profiles.tapAvatar();
-    await tester.pumpAndSettle();
-    expect(profiles.opened, hasLength(1));
-    expect(profiles.opened.single['userID'], 'member');
-    expect(profiles.opened.single['groupID'], 'group');
-    expect(profiles.opened.single['nickname'], 'Member');
-    expect(profiles.opened.single['faceURL'], 'member-face');
-  });
-
-  testWidgets('group privacy remains enforced after metadata arrives',
-      (tester) async {
-    final profiles = _Profiles();
-    await profiles.mount(tester);
-    profiles.tapAvatar();
+    profiles.navigation.viewUserInfo(UserInfo(userID: 'member'));
     profiles.group = GroupInfo(groupID: 'group', lookMemberInfo: 1);
-    profiles.tapAvatar();
+    profiles.navigation.viewUserInfo(UserInfo(userID: 'member'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -184,7 +199,8 @@ void main() {
   });
 
   for (final privacy in <int?>[null, 0, 1]) {
-    testWidgets('shared cards use personal identity with group privacy $privacy',
+    testWidgets(
+        'shared cards use personal identity with group privacy $privacy',
         (tester) async {
       final profiles = _Profiles();
       if (privacy != null) {

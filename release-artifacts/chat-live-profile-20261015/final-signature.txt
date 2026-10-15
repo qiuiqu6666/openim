@@ -1,0 +1,4 @@
+Signer #1 certificate DN: CN=99chat, OU=99chat, O=99chat, L=99chat, ST=99chat, C=99chat
+Signer #1 certificate SHA-256 digest: d3639980e1d8746b7ceea04eef046dcb4a9e6f9d411198a9fe9404cdb3e1f86f
+Signer #1 certificate SHA-1 digest: a07de7946cc212d19d89f86505ade1ed5360bd56
+Signer #1 certificate MD5 digest: a383bf5989b0987389af64a727cc8b4c

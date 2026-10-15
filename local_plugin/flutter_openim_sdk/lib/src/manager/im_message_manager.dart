@@ -1,7 +1,9 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import '../window/message_window_cache.dart';
 
 class MessageManager {
+  final windowCache = MessageWindowCache.shared;
   MethodChannel _channel;
 
   OnMsgSendProgressListener? msgSendProgressListener;
@@ -583,11 +585,45 @@ class MessageManager {
               }))
           .then((value) => Utils.toObj(value, (map) {
                 if (map['localSnapshot'] != true ||
+                    map['snapshotReady'] != true ||
                     (map['errCode'] != null && map['errCode'] != 0)) {
                   return <Message>[];
                 }
                 return AdvancedMessage.fromJson(map).messageList ?? <Message>[];
               }));
+
+  /// Versioned atomic window; older binaries return no window contract.
+  AdvancedMessage? peekLocalMessageWindow(
+          {required String conversationID, int count = 40}) =>
+      windowCache.peek((OpenIM.iMManager.userID, OpenIM.iMManager.token),
+          conversationID, count);
+
+  Future<AdvancedMessage> getLocalMessageWindow(
+          {required String conversationID, int count = 40}) =>
+      windowCache.read(
+          (OpenIM.iMManager.userID, OpenIM.iMManager.token),
+          conversationID,
+          count,
+          () => _channel
+              .invokeMethod(
+                  'getLocalHistorySnapshot',
+                  _buildParam({
+                    'conversationID': conversationID,
+                    'count': count,
+                    'startClientMsgID': '',
+                    'localSnapshot': true,
+                    'window': true,
+                    'operationID': Utils.checkOperationID(null),
+                  }))
+              .then((value) => Utils.toObj(value, (map) {
+                    if (map['window'] == null &&
+                        (map['localSnapshot'] != true ||
+                            map['snapshotReady'] != true ||
+                            (map['errCode'] != null && map['errCode'] != 0))) {
+                      return AdvancedMessage(messageList: []);
+                    }
+                    return AdvancedMessage.fromJson(map);
+                  })));
 
   /// Get chat history (messages prior to startMsg)
   /// [conversationID] Conversation ID, can be used for querying notifications
@@ -595,6 +631,7 @@ class MessageManager {
   /// [count] Total number of messages to retrieve in one request
   /// [lastMinSeq] Not required for the first page of messages, but necessary for getting the second page of history. Same as [startMsg]
   Future<AdvancedMessage> getAdvancedHistoryMessageList({
+    bool messageWindow = false,
     String? conversationID,
     Message? startMsg,
     GetHistoryViewType viewType = GetHistoryViewType.history,
@@ -606,6 +643,7 @@ class MessageManager {
               'getAdvancedHistoryMessageList',
               _buildParam({
                 'conversationID': conversationID ?? '',
+                if (messageWindow && startMsg == null) 'window': true,
                 'startClientMsgID': startMsg?.clientMsgID ?? '',
                 if (startMsg is HistoryScanCursor)
                   'scanCursor': startMsg.toJson(),

@@ -160,6 +160,19 @@ func (d *DataBase) BatchInsertMessageMap(ctx context.Context, insertMsg map[stri
 			if len(messages) == 0 {
 				continue
 			}
+			if err := applyMessageRevocations(tx, conversationID, messages); err != nil {
+				return err
+			}
+			if err := applyMessageReadWatermarks(tx, conversationID, d.loginUserID, messages); err != nil {
+				return err
+			}
+			for _, row := range messages {
+				if row.Seq > 0 && row.Status >= constant.MsgStatusHasDeleted {
+					if err := tx.Table(utils.GetTableName(conversationID)).Where("seq = ?", row.Seq).Updates(map[string]interface{}{"status": row.Status, "content": ""}).Error; err != nil {
+						return err
+					}
+				}
+			}
 			t0 := time.Now()
 			if err := tx.WithContext(ctx).
 				Table(utils.GetTableName(conversationID)).
@@ -297,6 +310,8 @@ func (d *DataBase) CleanDuplicateInvalidMessages(ctx context.Context, conversati
 
 	tableName := utils.GetTableName(conversationID)
 	err := d.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Raw SQL identifiers must use the same quoting as GORM's Table API.
+		quotedTable := tx.Statement.Quote(tableName)
 		zeroSendTimeResult := tx.Table(tableName).
 			Where("seq > ? AND send_time = ?", 0, 0).
 			Delete(&model_struct.LocalChatLog{})
@@ -311,7 +326,7 @@ WHERE seq > ?
   AND seq IN (
     SELECT seq FROM %s WHERE seq > ? AND status < ? GROUP BY seq
   )
-`, tableName, tableName), 0, constant.MsgStatusHasDeleted, 0, constant.MsgStatusHasDeleted)
+`, quotedTable, quotedTable), 0, constant.MsgStatusHasDeleted, 0, constant.MsgStatusHasDeleted)
 		if invalidWithValidResult.Error != nil {
 			return errs.WrapMsg(invalidWithValidResult.Error, "delete invalid messages with valid seq failed")
 		}
@@ -340,7 +355,7 @@ DELETE FROM %s
 WHERE client_msg_id IN (
   SELECT client_msg_id FROM ranked WHERE row_num > 1
 )
-`, tableName, tableName, tableName, tableName),
+`, quotedTable, quotedTable, quotedTable, quotedTable),
 			0, constant.MsgStatusHasDeleted,
 			0, constant.MsgStatusHasDeleted,
 			0, constant.MsgStatusHasDeleted)
@@ -465,7 +480,7 @@ func (d *DataBase) SearchAllMessageByContentType(ctx context.Context, conversati
 	defer d.mRWMutex.RUnlock()
 
 	query := d.conn.WithContext(ctx).Table(utils.GetTableName(conversationID)).
-		Where("content_type = ?", contentType)
+		Where("content_type = ? AND status < ?", contentType, constant.MsgStatusHasDeleted)
 
 	err = query.Find(&result).Error
 	return result, err
@@ -480,10 +495,11 @@ func (d *DataBase) GetUnreadMessage(ctx context.Context, conversationID string) 
 func (d *DataBase) MarkConversationMessageAsReadBySeqs(ctx context.Context, conversationID string, seqs []int64) (rowsAffected int64, err error) {
 	d.mRWMutex.Lock()
 	defer d.mRWMutex.Unlock()
-	t := d.conn.WithContext(ctx).Table(utils.GetConversationTableName(conversationID)).Where("seq in ? AND send_id != ?", seqs, d.loginUserID).Update("is_read", constant.HasRead)
-	if t.RowsAffected == 0 {
-		return 0, errs.WrapMsg(errors.New("RowsAffected == 0"), "no update")
-	}
+	// Sparse caches and replayed receipts can legitimately match zero rows.
+	// Preserve SQL errors, including missing tables and cancelled transactions.
+	t := d.conn.WithContext(ctx).Table(utils.GetConversationTableName(conversationID)).
+		Where("seq in ? AND send_id != ? AND status < ? AND is_read = ?", seqs, d.loginUserID, constant.MsgStatusHasDeleted, constant.NotRead).
+		Update("is_read", constant.HasRead)
 	return t.RowsAffected, errs.WrapMsg(t.Error, "UpdateMessageStatusBySourceID failed")
 }
 

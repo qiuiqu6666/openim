@@ -30,7 +30,6 @@ import (
 	"net/url"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/openimsdk/protocol/third"
@@ -64,46 +63,24 @@ func NewFile(database db_interface.DataBase, loginUserID string) *File {
 }
 
 type File struct {
-	database    db_interface.DataBase
-	loginUserID string
-	confLock    sync.Locker
-	partLimit   *third.PartLimitResp
-	mapLocker   sync.Locker
-	uploading   map[string]*lockInfo
-}
-
-type lockInfo struct {
-	count  int32
-	locker sync.Locker
-}
-
-func (f *File) lockHash(hash string) {
-	f.mapLocker.Lock()
-	locker, ok := f.uploading[hash]
-	if !ok {
-		locker = &lockInfo{count: 0, locker: &sync.Mutex{}}
-		f.uploading[hash] = locker
-	}
-	atomic.AddInt32(&locker.count, 1)
-	f.mapLocker.Unlock()
-	locker.locker.Lock()
-}
-
-func (f *File) unlockHash(hash string) {
-	f.mapLocker.Lock()
-	locker, ok := f.uploading[hash]
-	if !ok {
-		f.mapLocker.Unlock()
-		return
-	}
-	if atomic.AddInt32(&locker.count, -1) == 0 {
-		delete(f.uploading, hash)
-	}
-	f.mapLocker.Unlock()
-	locker.locker.Unlock()
+	database      db_interface.DataBase
+	loginUserID   string
+	confLock      sync.Locker
+	partLimit     *third.PartLimitResp
+	mapLocker     sync.Locker
+	uploading     map[string]*lockInfo
+	uploadTimeout time.Duration
 }
 
 func (f *File) UploadFile(ctx context.Context, req *UploadFileReq, cb UploadFileCallback) (*UploadFileResp, error) {
+	budget := f.uploadTimeout
+	if budget <= 0 {
+		// Finish before the app's ten-minute observer deadline. This context
+		// reaches the signed PUT, response body and all metadata requests.
+		budget = 9 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
 	if cb == nil {
 		cb = emptyUploadCallback{}
 	}
@@ -137,7 +114,9 @@ func (f *File) UploadFile(ctx context.Context, req *UploadFileReq, cb UploadFile
 	if err := file.StartSeek(0); err != nil {
 		return nil, err
 	}
-	f.lockHash(partMd5Val)
+	if err := f.lockHash(ctx, partMd5Val); err != nil {
+		return nil, err
+	}
 	defer f.unlockHash(partMd5Val)
 	maxParts := 20
 	if maxParts > len(partSizes) {
@@ -174,6 +153,9 @@ func (f *File) UploadFile(ctx context.Context, req *UploadFileReq, cb UploadFile
 	}
 	continueUpload := uploadedSize > 0
 	for i, currentPartSize := range partSizes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		partNumber := int32(i + 1)
 		md5Reader := NewMd5Reader(io.LimitReader(file, currentPartSize))
 		if uploadInfo.Bitmap.Get(i) {
@@ -555,6 +537,9 @@ func (f *File) getPartInfo(ctx context.Context, r io.Reader, fileSize int64, cb 
 		h := md5.New()
 		r := io.LimitReader(r, partSize)
 		for {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			if n, err := r.Read(buf); err == nil {
 				if contentType == "" {
 					contentType = http.DetectContentType(buf[:n])

@@ -108,6 +108,7 @@ class GroupMemberListPage extends StatelessWidget {
                 ),
               ),
             Flexible(
+              key: const ValueKey('group-member-list'),
               child: SmartRefresher(
                 controller: logic.controller,
                 onLoading: logic.onLoad,
@@ -116,6 +117,7 @@ class GroupMemberListPage extends StatelessWidget {
                 header: IMViews.buildHeader(),
                 footer: IMViews.buildFooter(),
                 child: ListView.separated(
+                  controller: logic.scrollController,
                   itemCount: members.length,
                   separatorBuilder: (_, __) => Padding(
                       padding: EdgeInsets.only(left: 58.w),

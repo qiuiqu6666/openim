@@ -5,6 +5,7 @@ package db
 import (
 	"context"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
 
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
 	"gorm.io/gorm"
@@ -38,10 +39,23 @@ func (d *DataBase) CommitMessageSyncBatch(ctx context.Context, updates, inserts 
 				return err
 			}
 			for _, row := range rows {
+				// A delete can commit while an overlapping history request is in
+				// flight. Re-check under this transaction, not only before it.
+				var current model_struct.LocalChatLog
+				if err := tx.Table(utils.GetTableName(id)).Where("client_msg_id = ?", row.ClientMsgID).Take(&current).Error; err != nil {
+					return err
+				}
+				if current.Status >= constant.MsgStatusHasDeleted && row.Status < constant.MsgStatusHasDeleted {
+					continue
+				}
 				ack := &model_struct.LocalChatLog{ClientMsgID: row.ClientMsgID, Seq: row.Seq, Status: row.Status, RecvID: row.RecvID, SessionType: row.SessionType, ServerMsgID: row.ServerMsgID, SendTime: row.SendTime}
 				if row.ContentType == constant.RevokeNotification {
 					ack.ContentType = row.ContentType
 					ack.Content = row.Content
+				}
+				if current.ContentType == constant.RevokeNotification && row.ContentType != constant.RevokeNotification {
+					ack.ContentType = current.ContentType
+					ack.Content = current.Content
 				}
 				if row.IsRead {
 					ack.IsRead = true

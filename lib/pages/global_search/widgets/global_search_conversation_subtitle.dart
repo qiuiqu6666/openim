@@ -13,6 +13,11 @@ class GlobalSearchConversationSubtitle extends StatelessWidget {
 
   final ConversationInfo conversation;
 
+  static bool hasContent(ConversationInfo conversation) =>
+      graphemeTrim(conversationDraftText(conversation.draftText) ?? '')
+          .isNotEmpty ||
+      graphemeTrim(conversationLatestMessageText(conversation)).isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
     final draft = conversationDraftText(conversation.draftText) ?? '';
@@ -23,7 +28,6 @@ class GlobalSearchConversationSubtitle extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       );
     }
-    final dark = Theme.of(context).brightness == Brightness.dark;
     return Text.rich(
       TextSpan(children: [
         TextSpan(
@@ -31,9 +35,6 @@ class GlobalSearchConversationSubtitle extends StatelessWidget {
             style: TextStyle(color: Styles.c_FF381F)),
         TextSpan(text: draft.replaceAll(RegExp(r'[\r\n]+'), ' ')),
       ]),
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppTokens.textSecondary(dark: dark),
-          ),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     );

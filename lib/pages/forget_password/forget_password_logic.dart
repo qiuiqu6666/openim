@@ -136,18 +136,6 @@ class ForgetPasswordLogic extends GetxController {
         usedFor: 2,
       );
 
-  Future<void> checkVerificationCode() async {
-    final request = _submission;
-    if (request == null || _closed || isClosed) return;
-    await Apis.checkVerificationCode(
-      areaCode: request.areaCode,
-      phoneNumber: request.phone,
-      verificationCode: request.code,
-      usedFor: 2,
-      showErrorToast: false,
-    );
-  }
-
   Future<void> resetPassword() async {
     final request = _submission;
     if (request == null || _closed || isClosed) return;
@@ -180,11 +168,10 @@ class ForgetPasswordLogic extends GetxController {
     );
     final request = _submission!;
     submitting.value = true;
-    var failurePath = Urls.checkVerificationCode;
+    final failurePath = Urls.resetPwd;
     try {
-      await checkVerificationCode();
-      if (_closed || isClosed) return;
-      failurePath = Urls.resetPwd;
+      // ResetPassword validates the code itself. A preview request can consume
+      // a provider-owned code before the actual password change.
       await resetPassword();
       if (_closed || isClosed) return;
       try {

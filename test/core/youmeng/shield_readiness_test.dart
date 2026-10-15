@@ -25,9 +25,9 @@ class _ShieldAdapter implements HttpClientAdapter {
     final body = port == brokenPort
         ? {'errCode': 500}
         : port == 10008
-            ? {'errCode': 0, 'data': <String, dynamic>{}}
+            ? {'service': 'chat-api', 'status': 'ok'}
             : port == 10002
-                ? {'errCode': 1001, 'errDlt': 'header must have token'}
+                ? {'service': 'openim-api', 'status': 'ok'}
                 : {'errCode': 1602, 'errMsg': 'args err, need token'};
     return ResponseBody.fromString(jsonEncode(body), 200, headers: {
       Headers.contentTypeHeader: [Headers.jsonContentType]

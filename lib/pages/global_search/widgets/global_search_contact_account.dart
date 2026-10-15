@@ -37,7 +37,7 @@ class _AccountState extends State<GlobalSearchContactAccount> {
           final account = ContactCardProfileResolver.shared.peek(widget.userID);
           return Text(
             account?.isNotEmpty == true ? account! : '--',
-            maxLines: 2,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           );
         },

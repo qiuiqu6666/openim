@@ -10,6 +10,8 @@ class AppSwipeBackTransition extends StatelessWidget {
       required this.secondaryAnimation,
       required this.pushCurve,
       required this.popCurve,
+      this.depthCurve,
+      this.depthReverseCurve,
       required this.edgeStartWidthPx,
       required this.enableBackGesture,
       required this.child});
@@ -17,6 +19,8 @@ class AppSwipeBackTransition extends StatelessWidget {
   final Animation<double> secondaryAnimation;
   final Curve pushCurve;
   final Curve popCurve;
+  final Curve? depthCurve;
+  final Curve? depthReverseCurve;
   final double edgeStartWidthPx;
   final bool enableBackGesture;
   final Widget child;
@@ -29,8 +33,8 @@ class AppSwipeBackTransition extends StatelessWidget {
         incoming: true,
         child: AppRouteDepthTransition(
             animation: secondaryAnimation,
-            curve: pushCurve,
-            reverseCurve: popCurve,
+            curve: depthCurve ?? pushCurve,
+            reverseCurve: depthReverseCurve ?? popCurve,
             child: AppSwipeBackInteractor(
                 edgeStartWidthPx: edgeStartWidthPx,
                 enableBackGesture: enableBackGesture,

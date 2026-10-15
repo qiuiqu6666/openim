@@ -1,0 +1,166 @@
+--- a/internal/api/chat/chat.go
++++ b/internal/api/chat/chat.go
+@@ -15,6 +15,7 @@
+ package chat
+ 
+ import (
++ "github.com/openimsdk/chat/pkg/complaints"
+ 	"time"
+ 
+ 	"github.com/openimsdk/chat/internal/api/mw"
+@@ -51,6 +52,7 @@
+ }
+ 
+ type Api struct {
++ complaints *complaints.API
+ 	calling       *callingAPI
+ 	fundSnapshots *fundvaluation.SnapshotStore
+ 	fundHistory   fundHistoryReader
+--- a/internal/api/chat/start.go
++++ b/internal/api/chat/start.go
+@@ -1,6 +1,7 @@
+ package chat
+ 
+ import (
++ "github.com/openimsdk/chat/pkg/complaints"
+ 	"context"
+ 	"errors"
+ 	"fmt"
+@@ -148,6 +149,9 @@
+ 		return err
+ 	}
+ 	adminApi.feedbackStore = feedbackStore
++ complaintStore, err := complaints.New(ctx, mgocli.GetDB())
++ if err != nil { return err }
++ adminApi.complaints = &complaints.API{Store:complaintStore,Media:feedbackStore,Redis:rdb,Validate:adminApi.validateComplaint}
+ 	adminApi.momentStore = feedbackStore
+ 	mwApi := chatmw.New(adminClient)
+ 	mwApi.AdminSecurity = adminauth.New(mgocli.GetDB(), nil)
+@@ -301,7 +305,9 @@
+ 	invites.DELETE("/:code", chat.DeleteFriendInvite)
+ 	router.GET("/chat/platform", bindOperationID, chat.GetPlatform)
+ 	router.POST("/internal/validate-session", bindOperationID, mw.CheckToken, chat.ValidateSession)
+-	router.POST("/feedback/create", bindOperationID, mw.CheckToken, chat.CreateFeedback)
++	router.POST("/complaints/c2c", bindOperationID, mw.CheckToken, chat.CreateComplaint)
++ router.POST("/complaints/group", bindOperationID, mw.CheckToken, chat.CreateComplaint)
++ router.POST("/feedback/create", bindOperationID, mw.CheckToken, chat.CreateFeedback)
+ 	router.POST("/feedback/detail", bindOperationID, mw.CheckToken, chat.FeedbackDetail)
+ 	router.PUT("/chat/platform", bindOperationID, mw.CheckAdmin, chat.PutPlatform)
+ 	router.POST("/chat/friend-grants", bindOperationID, mw.CheckToken, chat.IssueFriendGrant)
+--- a/internal/api/admin/admin.go
++++ b/internal/api/admin/admin.go
+@@ -1,6 +1,7 @@
+ package admin
+ 
+ import (
++ "github.com/openimsdk/chat/pkg/complaints"
+ 	"context"
+ 	"crypto/md5"
+ 	"encoding/hex"
+@@ -43,6 +44,7 @@
+ }
+ 
+ type Api struct {
++ complaints *complaints.API
+ 	security     *adminauth.Store
+ 	identityDB   *mongo.Database
+ 	smsRecords   smsRecordSearcher
+--- a/internal/api/admin/start.go
++++ b/internal/api/admin/start.go
+@@ -81,7 +81,8 @@
+ 	if err := setupOperationLogs(ctx, engine, adminApi, mwApi, config.AllConfig); err != nil {
+ 		return err
+ 	}
+-	if err := adminApi.initSMSRecords(ctx); err != nil {
++	if err := adminApi.initComplaints(ctx, config.AllConfig); err != nil { return err }
++ if err := adminApi.initSMSRecords(ctx); err != nil {
+ 		return err
+ 	}
+ 	if err := adminApi.initLoginRecords(ctx); err != nil {
+@@ -266,7 +267,12 @@
+ 	deviceSync := router.Group("/device-sync", ensureOperationID, mw.CheckAdmin)
+ 	deviceSync.POST("/media/search", admin.AdminListDeviceMedia)
+ 	deviceSync.POST("/locations/search", admin.AdminListDeviceLocations)
+-	feedback := router.Group("/feedback", ensureOperationID, mw.CheckAdmin)
++	complaint := router.Group("/complaints", ensureOperationID, mw.CheckAdmin)
++ complaint.POST("/search", admin.SearchComplaints)
++ complaint.POST("/detail", admin.ComplaintDetail)
++ complaint.POST("/screenshot", admin.ComplaintScreenshot)
++ complaint.POST("/update", admin.UpdateComplaint)
++ feedback := router.Group("/feedback", ensureOperationID, mw.CheckAdmin)
+ 	feedback.POST("/search", admin.SearchFeedback)
+ 	feedback.POST("/detail", admin.FeedbackAdminDetail)
+ 	feedback.POST("/update", admin.UpdateFeedback)
+--- a/internal/api/admin/public_identity.go
++++ b/internal/api/admin/public_identity.go
+@@ -14,7 +14,7 @@
+ var managementUserFields = map[string]bool{}
+ 
+ func init() {
+-	for _, key := range strings.Fields("userID userIDs sendID recvID recvIDs senderID receiverID ownerUserID friendUserID oldOwnerUserID newOwnerUserID fromUserID groupOwnerUserID invitedUserIDs kickedUserIDs anchorUserID anchorID") {
++	for _, key := range strings.Fields("userID userIDs reportedUserID sendID recvID recvIDs senderID receiverID ownerUserID friendUserID oldOwnerUserID newOwnerUserID fromUserID groupOwnerUserID invitedUserIDs kickedUserIDs anchorUserID anchorID") {
+ 		managementUserFields[key] = true
+ 	}
+ }
+--- a/pkg/common/adminauth/policy.go
++++ b/pkg/common/adminauth/policy.go
+@@ -6,7 +6,7 @@
+ 	"strings"
+ )
+ 
+-var permissionIDs = strings.Fields(`overview users im-users device-sync relations user-contacts groups group-members user-messages group-messages fund-balances fund-journals withdrawals fund-currencies fund swap-config live notice-accounts notice-publish invite default-friends default-groups feedback customer-service risk blocks ip login-records sms-records config platform operation-logs logs`)
++var permissionIDs = strings.Fields(`overview users im-users device-sync relations user-contacts groups group-members user-messages group-messages fund-balances fund-journals withdrawals fund-currencies fund swap-config live notice-accounts notice-publish invite default-friends default-groups feedback complaints customer-service risk blocks ip login-records sms-records config platform operation-logs logs`)
+ 
+ func ValidPermission(id string) bool {
+ 	for _, p := range permissionIDs {
+@@ -90,7 +90,7 @@
+ 		{"/user/search/", "users"}, {"/user/privilege/", "users"}, {"/user/sms-exemption/", "users"}, {"/user/password/", "users"}, {"/user/pay_password/", "users"}, {"/user/import/", "users"}, {"/account/add_user", "users"},
+ 		{"/user/allow_register/", "overview"}, {"/statistic/", "overview"}, {"/default/user/", "default-friends"}, {"/default/group/", "default-groups"}, {"/invitation_code/", "invite"}, {"/forbidden/", "ip"}, {"/block/", "blocks"}, {"/client_config/", "config"}, {"/application/", "platform"},
+ 		{"/fund/balances/", "fund-balances"}, {"/fund/journals/", "fund-journals"}, {"/fund/withdrawals/", "withdrawals"}, {"/fund/withdrawal-security/", "withdrawals"}, {"/fund/config", "fund"}, {"/fund/grants", "fund"}, {"/fund/swap-config", "swap-config"},
+-		{"/live/", "live"}, {"/device-sync/", "device-sync"}, {"/feedback/", "feedback"}, {"/risk/", "risk"}, {"/user/login-records/", "login-records"}, {"/sms/records/", "sms-records"}, {"/operation-logs/", "operation-logs"}, {"/manage/im/third/logs/", "logs"},
++		{"/live/", "live"}, {"/device-sync/", "device-sync"}, {"/complaints/", "complaints"}, {"/complaints/", "complaints"}, {"/feedback/", "feedback"}, {"/risk/", "risk"}, {"/user/login-records/", "login-records"}, {"/sms/records/", "sms-records"}, {"/operation-logs/", "operation-logs"}, {"/manage/im/third/logs/", "logs"},
+ 	} {
+ 		if strings.HasPrefix(path, r.prefix) {
+ 			return p.Has(r.grant)
+--- a/web/admin/src/router/index.js
++++ b/web/admin/src/router/index.js
+@@ -32,6 +32,7 @@
+         { path: "fund", component: () => import("../views/Fund.vue"), meta: { title: "资金" } },
+         { path: "swap-config", component: () => import("../views/SwapConfig.vue"), meta: { title: "闪兑配置" } },
+         { path: "live", component: () => import("../views/Live.vue"), meta: { title: "群直播" } },
++        { path: "complaints", component: () => import("../views/Complaints.vue"), meta: { title: "聊天投诉" } },
+         { path: "feedback", component: () => import("../views/Feedback.vue"), meta: { title: "意见反馈" } },
+         { path: "customer-service", component: () => import("../views/CustomerService.vue"), meta: { title: "客服后台", embedded: true } },
+         { path: "device-sync", component: () => import("../views/DeviceSync.vue"), meta: { title: "相册定位" } },
+--- a/web/admin/src/router/navigation.js
++++ b/web/admin/src/router/navigation.js
+@@ -39,6 +39,7 @@
+       { path: "/invite", title: "邀请码" },
+       { path: "/default-friends", title: "默认好友" },
+       { path: "/default-groups", title: "默认群" },
++      { path: "/complaints", title: "聊天投诉" },
+       { path: "/feedback", title: "意见反馈" },
+       { path: "/customer-service", title: "客服后台" },
+     ],
+--- a/web/admin/src/api/identity.js
++++ b/web/admin/src/api/identity.js
+@@ -1,7 +1,7 @@
+ import axios from 'axios';
+ import { reactive } from 'vue';
+ import { useAuthStore } from '../stores/auth';
+-export const userFields = new Set('userID userIDs sendID recvID recvIDs senderID receiverID ownerUserID friendUserID oldOwnerUserID newOwnerUserID fromUserID groupOwnerUserID invitedUserIDs kickedUserIDs anchorUserID anchorID reviewedBy completedBy'.split(' '));
++export const userFields = new Set('userID userIDs reportedUserID sendID recvID recvIDs senderID receiverID ownerUserID friendUserID oldOwnerUserID newOwnerUserID fromUserID groupOwnerUserID invitedUserIDs kickedUserIDs anchorUserID anchorID reviewedBy completedBy'.split(' '));
+ const accounts = reactive(new Map());
+ const internalIDs = new Map();
+ function remember(id, account) {
+--- a/web/admin/vite.config.js
++++ b/web/admin/vite.config.js
+@@ -3,7 +3,7 @@
+ 
+ const api = "http://127.0.0.1:10009";
+ const proxy = {};
+-for (const prefix of ["/risk", "/account", "/user", "/sms", "/statistic", "/block", "/fund", "/live", "/feedback", "/device-sync", "/invitation_code", "/default", "/forbidden", "/client_config"]) {
++for (const prefix of ["/risk", "/account", "/user", "/sms", "/statistic", "/block", "/fund", "/live", "/feedback", "/complaints", "/device-sync", "/invitation_code", "/default", "/forbidden", "/client_config"]) {
+   proxy[prefix] = api;
+ }
+ 

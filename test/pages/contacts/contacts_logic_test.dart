@@ -56,6 +56,38 @@ void main() {
 
   tearDown(Get.reset);
 
+  test('late full-sync friend notices fill an already empty login directory',
+      () async {
+    var fetches = 0;
+    final logic = ContactsLogic(
+      fetchFriendsPage: (_, __) async {
+        fetches++;
+        return [];
+      },
+      directoryIndexer: ContactDirectoryIndexer(
+          worker: (names) async => buildContactNameIndex(names)),
+    )..onInit();
+    addTearDown(() => logic.onDelete());
+    await logic.loadFriends();
+    expect(logic.friends, isEmpty);
+    expect(logic.friendsLoading.value, isFalse);
+
+    // Message readiness refreshed the still-empty local table. Auxiliary
+    // full friend sync completes later, without another sync-ended event.
+    final rendered = Completer<void>();
+    final subscription = logic.friends.listen((friends) {
+      if (friends.length == 21 && !rendered.isCompleted) rendered.complete();
+    });
+    addTearDown(subscription.cancel);
+    for (var i = 0; i < 21; i++) {
+      im.friendAdded(FriendInfo(userID: 'friend$i', nickname: 'Friend $i'));
+    }
+    await rendered.future.timeout(const Duration(seconds: 5));
+    expect(logic.friends, hasLength(21));
+    expect(logic.friendsLoadFailed.value, isFalse);
+    expect(fetches, 1);
+  });
+
   test(
       'home exposes the existing live contact directory with account isolation',
       () async {

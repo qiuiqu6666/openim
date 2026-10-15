@@ -177,6 +177,18 @@ class _MomentsMediaImageState extends State<MomentsMediaImage> {
                         MediaQuery.devicePixelRatioOf(context)),
                     fit: widget.fit,
                     gaplessPlayback: false,
+                    frameBuilder: (context, child, frame, synchronous) {
+                      if (synchronous ||
+                          MediaQuery.disableAnimationsOf(context)) {
+                        return child;
+                      }
+                      return AnimatedOpacity(
+                        opacity: frame == null ? 0 : 1,
+                        duration: AppTokens.contentTransitionDuration,
+                        curve: AppTokens.contentTransitionCurve,
+                        child: child,
+                      );
+                    },
                     filterQuality: FilterQuality.low,
                     errorBuilder: (_, __, ___) => Icon(
                         Icons.broken_image_outlined,
@@ -186,14 +198,20 @@ class _MomentsMediaImageState extends State<MomentsMediaImage> {
             color: MomentsTheme.panel(dark),
             child: Center(
               child: snapshot.hasError || _revoked
-                  ? IconButton(
-                      tooltip:
-                          momentsText(context, zh: '重试图片', en: 'Retry image'),
+                  ? TextButton(
                       onPressed: widget.repository.isSessionCurrent(_session)
                           ? () => setState(_load)
                           : null,
-                      icon: Icon(Icons.image_not_supported_outlined,
-                          color: AppTokens.textSecondary(dark: dark)))
+                      style: TextButton.styleFrom(
+                          foregroundColor: MomentsTheme.secondary(dark),
+                          minimumSize: const Size(MomentsLayout.touchTarget,
+                              MomentsLayout.touchTarget)),
+                      child: Text(
+                          momentsText(context, zh: '重试图片', en: 'Retry image'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: MomentsLayout.captionSize)),
+                    )
                   : const SizedBox.square(
                       dimension: AppTokens.s7,
                       child: CircularProgressIndicator(strokeWidth: 2)),

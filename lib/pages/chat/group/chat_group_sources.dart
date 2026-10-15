@@ -1,6 +1,7 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
 import '../../../core/controller/im_controller.dart';
+import 'identity/group_member_identity_source.dart';
 
 /// The six SDK event streams owned by the chat's group feature.
 class ChatGroupEvents {
@@ -35,22 +36,33 @@ class ChatGroupQueries {
     required this.selfMember,
     required this.ownerAndAdmin,
     this.members,
+    this.verifyMembership,
   });
 
-  factory ChatGroupQueries.sdk() => ChatGroupQueries(
-        isJoined: (id) =>
-            OpenIM.iMManager.groupManager.isJoinedGroup(groupID: id),
-        groupInfo: (id) =>
-            OpenIM.iMManager.groupManager.getGroupsInfo(groupIDList: [id]),
-        selfMember: (id, userID) => OpenIM.iMManager.groupManager
-            .getGroupMembersInfo(groupID: id, userIDList: [userID]),
-        ownerAndAdmin: (id) =>
-            OpenIM.iMManager.groupManager.getGroupOwnerAndAdmin(groupID: id),
-        members: (id, users) => OpenIM.iMManager.groupManager
-            .getGroupMembersInfo(groupID: id, userIDList: users),
-      );
+  factory ChatGroupQueries.sdk({GroupMemberIdentitySource? identitySource}) {
+    final identities = identitySource ?? GroupMemberIdentitySource();
+    return ChatGroupQueries(
+      isJoined: (id) =>
+          OpenIM.iMManager.groupManager.isJoinedGroup(groupID: id),
+      verifyMembership: (id, userID) => GroupMemberIdentitySource()
+          .containsMember(groupID: id, userID: userID),
+      groupInfo: (id) =>
+          OpenIM.iMManager.groupManager.getGroupsInfo(groupIDList: [id]),
+      selfMember: (id, userID) => OpenIM.iMManager.groupManager
+          .getGroupMembersInfo(groupID: id, userIDList: [userID]),
+      ownerAndAdmin: (id) =>
+          OpenIM.iMManager.groupManager.getGroupOwnerAndAdmin(groupID: id),
+      // SDK member reads may return an existing local row without checking
+      // the server. Do not confirm a stale nickname as the current identity.
+      members: (id, users) =>
+          identities.members(groupID: id, userIDList: users),
+    );
+  }
 
   final Future<bool> Function(String groupID) isJoined;
+
+  /// Server evidence, independent of the SDK's local joined-group version list.
+  final Future<bool> Function(String groupID, String userID)? verifyMembership;
   final Future<List<GroupInfo>> Function(String groupID) groupInfo;
   final Future<List<GroupMembersInfo>> Function(String groupID, String userID)
       selfMember;

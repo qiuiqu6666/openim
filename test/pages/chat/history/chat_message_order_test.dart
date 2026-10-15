@@ -17,13 +17,13 @@ void main() {
         ['known-29', 'known-30', 'live-zero', 'live-null']);
   });
 
-  test('unknown sequence does not place an older second after newer messages',
+  test('provisional rows stay after confirmed sequences despite client clocks',
       () {
     final result = ChatHistoryLoader.merge([
       _message('newer', 3, time: 31),
       _message('old-unknown', 0),
     ]);
-    expect(result.map((m) => m.clientMsgID), ['old-unknown', 'newer']);
+    expect(result.map((m) => m.clientMsgID), ['newer', 'old-unknown']);
   });
 
   test('equal unknown rows retain arrival order across history merges', () {

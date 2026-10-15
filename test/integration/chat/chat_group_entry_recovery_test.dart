@@ -24,6 +24,8 @@ void main() {
   late List<ChatLogic> owners;
   var metadataReads = 0;
   var metadataFails = false;
+  var groupName = 'Loaded group';
+  var groupFace = 'old-avatar';
 
   ChatLogic open() {
     Get.routing.args = {
@@ -59,6 +61,8 @@ void main() {
     owners = [];
     metadataReads = 0;
     metadataFails = false;
+    groupName = 'Loaded group';
+    groupFace = 'old-avatar';
     OpenIM.iMManager.userID = 'self';
     OpenIM.iMManager.userInfo = UserInfo(userID: 'self');
     Get.put<AppController>(EntryTestApp());
@@ -82,7 +86,8 @@ void main() {
           return jsonEncode([
             GroupInfo(
                     groupID: 'group',
-                    groupName: 'Loaded group',
+                    groupName: groupName,
+                    faceURL: groupFace,
                     memberCount: 12)
                 .toJson(),
           ]);
@@ -124,7 +129,7 @@ void main() {
     expect(first.memberStr, isEmpty, reason: 'Unknown is not zero members');
     await tester.pump();
     expect(first.historyLoading.value, isTrue);
-    expect(first.messageList.single.clientMsgID, 'cached-latest');
+    expect(first.messageList, isEmpty);
     expect(first.nickname.value, 'Loaded group');
     expect(first.memberCount.value, 12);
     expect(metadataReads, 1);
@@ -159,6 +164,40 @@ void main() {
     expect(logic.nickname.value, 'Loaded group');
     expect(logic.memberCount.value, 12);
     expect(metadataReads, 2);
+    logic.onDelete();
+    for (final pending in history) {
+      pending.complete([]);
+    }
+    await tester.pump();
+  });
+
+  testWidgets('offline profile changes refresh the open chat after sync',
+      (tester) async {
+    final logic = open();
+    await tester.pump();
+    expect(logic.nickname.value, 'Loaded group');
+    expect(logic.faceUrl.value, 'old-avatar');
+    groupName = 'Renamed while offline';
+    groupFace = 'new-avatar';
+    im.imSdkStatus(IMSdkStatus.connecting);
+    im.imSdkStatus(IMSdkStatus.connectionSucceeded);
+    await tester.pump();
+    expect(logic.nickname.value, 'Loaded group');
+    im.imSdkStatus(IMSdkStatus.syncEnded);
+    await tester.pump();
+    expect(logic.nickname.value, groupName);
+    expect(logic.faceUrl.value, groupFace);
+    expect(logic.messageList, isEmpty);
+    expect(logic.historyLoading.value, isTrue);
+    final reads = metadataReads;
+    im.imSdkStatus(IMSdkStatus.syncEnded);
+    await tester.pump();
+    expect(metadataReads, reads, reason: 'Duplicate finishes cannot reload');
+    im.imSdkStatus(IMSdkStatus.syncStart);
+    groupFace = '';
+    im.imSdkStatus(IMSdkStatus.syncEnded);
+    await tester.pump();
+    expect(logic.faceUrl.value, '', reason: 'Avatar removal must propagate');
     logic.onDelete();
     for (final pending in history) {
       pending.complete([]);

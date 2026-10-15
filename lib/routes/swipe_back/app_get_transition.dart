@@ -10,10 +10,14 @@ class AppGetTransition extends CustomTransition {
   AppGetTransition({
     this.enableBackGesture = true,
     this.edgeWidth = AppSwipeBackTokens.edgeWidth,
+    this.pushCurve = AppSwipeBackTokens.curve,
+    this.popCurve = AppSwipeBackTokens.reverseCurve,
   });
 
   final bool enableBackGesture;
   final double edgeWidth;
+  final Curve pushCurve;
+  final Curve popCurve;
 
   @override
   Widget buildTransition(
@@ -29,8 +33,12 @@ class AppGetTransition extends CustomTransition {
     return AppSwipeBackTransition(
       animation: route?.animation ?? animation,
       secondaryAnimation: secondaryAnimation,
-      pushCurve: AppSwipeBackTokens.curve,
-      popCurve: AppSwipeBackTokens.reverseCurve,
+      pushCurve: pushCurve,
+      popCurve: popCurve,
+      // A chat covered by a settings/wallet route retains the shared depth
+      // motion. Entry tuning belongs to this route's foreground surface.
+      depthCurve: AppSwipeBackTokens.curve,
+      depthReverseCurve: AppSwipeBackTokens.reverseCurve,
       edgeStartWidthPx: edgeWidth,
       enableBackGesture: enableBackGesture,
       child: child,

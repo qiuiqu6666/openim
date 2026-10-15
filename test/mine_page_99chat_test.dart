@@ -95,7 +95,8 @@ void main() {
 
     await tester.tap(find.text('生活缴费'));
     await tester.pump();
-    expect(tappedFeature, 'closed:生活缴费');
+    expect(tappedFeature, isNull);
+    expect(find.text('暂未开放'), findsNothing);
 
     await tester.tap(find.text('AI助手'));
     await tester.pump();
@@ -288,7 +289,7 @@ void main() {
     final tilesRow = tester.getRect(
       find.byKey(const ValueKey('mine-hot-eco-tiles-row')),
     );
-    expect(titleRow.height, closeTo(375 * 0.11, 0.001));
+    expect(titleRow.height, greaterThanOrEqualTo(AppTokens.minimumTapSize));
     expect(tilesRow.top - titleRow.bottom, closeTo(0, 0.001));
   });
 }

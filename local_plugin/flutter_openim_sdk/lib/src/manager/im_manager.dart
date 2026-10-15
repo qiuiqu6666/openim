@@ -54,9 +54,11 @@ class IMManager {
               _connectListener.connectSuccess();
               break;
             case 'onKickedOffline':
+              messageManager.windowCache.invalidate();
               _connectListener.kickedOffline();
               break;
             case 'onUserTokenExpired':
+              messageManager.windowCache.invalidate();
               _connectListener.userTokenExpired();
               break;
             case 'onUserTokenInvalid':
@@ -125,10 +127,12 @@ class IMManager {
               groupManager.listener.groupMemberInfoChanged(i);
               break;
             case 'onJoinedGroupAdded':
+              messageManager.windowCache.invalidate();
               final i = Utils.toObj(data, (map) => GroupInfo.fromJson(map));
               groupManager.listener.joinedGroupAdded(i);
               break;
             case 'onJoinedGroupDeleted':
+              messageManager.windowCache.invalidate();
               final i = Utils.toObj(data, (map) => GroupInfo.fromJson(map));
               groupManager.listener.joinedGroupDeleted(i);
               break;
@@ -140,14 +144,17 @@ class IMManager {
             case 'onMsgDeleted':
               var value = call.arguments['data']['message'];
               final msg = Utils.toObj(value, (map) => Message.fromJson(map));
+              messageManager.windowCache.received(msg, userID);
               messageManager.msgListener.msgDeleted(msg);
               break;
             case 'onNewRecvMessageRevoked':
+              messageManager.windowCache.invalidate();
               var value = call.arguments['data']['messageRevoked'];
               var info = Utils.toObj(value, (map) => RevokedInfo.fromJson(map));
               messageManager.msgListener.newRecvMessageRevoked(info);
               break;
             case 'onRecvC2CReadReceipt':
+              messageManager.windowCache.invalidate();
               var value = call.arguments['data']['msgReceiptList'];
               var list =
                   Utils.toList(value, (map) => ReadReceiptInfo.fromJson(map));
@@ -156,11 +163,13 @@ class IMManager {
             case 'onRecvNewMessage':
               var value = call.arguments['data']['message'];
               final msg = Utils.toObj(value, (map) => Message.fromJson(map));
+              messageManager.windowCache.received(msg, userID);
               messageManager.msgListener.recvNewMessage(msg);
               break;
             case 'onRecvOfflineNewMessage':
               var value = call.arguments['data']['message'];
               final msg = Utils.toObj(value, (map) => Message.fromJson(map));
+              messageManager.windowCache.received(msg, userID);
               messageManager.msgListener.recvOfflineNewMessage(msg);
               break;
             case 'onRecvOnlineOnlyMessage':
@@ -207,6 +216,10 @@ class IMManager {
             case 'onConversationChanged':
               var list =
                   Utils.toList(data, (map) => ConversationInfo.fromJson(map));
+              for (final conversation in list) {
+                messageManager.windowCache
+                    .invalidate(conversation.conversationID);
+              }
               conversationManager.listener.conversationChanged(list);
               break;
             case 'onTotalUnreadMessageCountChanged':
@@ -454,6 +467,7 @@ class IMManager {
     Future<UserInfo> Function()? defaultValue,
     bool checkLoginStatus = true,
   }) async {
+    messageManager.windowCache.invalidate();
     int? status;
     if (checkLoginStatus) {
       // 1: logout 2: logging  3: logged
@@ -487,6 +501,7 @@ class IMManager {
 
   /// Logout
   Future<dynamic> logout({String? operationID}) async {
+    messageManager.windowCache.invalidate();
     var value = await _channel.invokeMethod(
       'logout',
       _buildParam({

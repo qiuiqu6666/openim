@@ -1,0 +1,9 @@
+{
+  "differingEntries": [
+    "AndroidManifest.xml",
+    "lib/x86_64/libapp.so"
+  ],
+  "nativeBytesIdentical": true,
+  "nativeSha256": "ee27f9317dca9221ace23e287739820473670db7ab01d1613f6e8d7531161a2f",
+  "note": "Reused 120ms baseline Dart AOT; pinned identical candidate SDK native library; aligned and signed with the existing application key. Signing metadata is excluded from content comparison."
+}

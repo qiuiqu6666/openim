@@ -209,9 +209,11 @@ class ChatPage extends StatelessWidget {
             isNotInGroup: logic.isInvalidGroup,
             enabled: !logic.sendingMuted,
             showDisabledWarning: !logic.groupMutePending,
-            hintText: logic.groupMutePending
-                ? ''
-                : (logic.sendingMuted ? StrRes.youMuted : null),
+            hintText: logic.groupMembershipPending
+                ? StrRes.synchronizing
+                : logic.groupMutePending
+                    ? ''
+                    : (logic.sendingMuted ? StrRes.youMuted : null),
             directionalText: logic.directionalText(),
             onCloseDirectional: logic.onClearDirectional,
             onSend: (v) => logic.sendTextMsg(),

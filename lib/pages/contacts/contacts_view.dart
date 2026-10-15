@@ -8,7 +8,7 @@ import 'package:visibility_detector/visibility_detector.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'contacts_logic.dart';
-import 'directory/widgets/contacts_search_bar.dart';
+import '../global_search/inline/inline_global_search_surface.dart';
 import 'presence_label.dart';
 import 'presence/contact_presence_policy.dart';
 import '../../core/controller/im_controller.dart';
@@ -17,25 +17,38 @@ import 'navigation/contacts_header.dart';
 import '../official_account/widgets/official_account_name_label.dart';
 
 class ContactsPage extends StatelessWidget {
-  ContactsPage({super.key, ContactsLogic? logic})
+  ContactsPage({super.key, ContactsLogic? logic, this.onSearchModeChanged})
       : logic = logic ??
             (Get.isRegistered<ContactsLogic>()
                 ? Get.find<ContactsLogic>()
                 : Get.put(ContactsLogic()));
 
   final ContactsLogic logic;
+  final ValueChanged<bool>? onSearchModeChanged;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) {
+    final toolbarHeight = math.max(
+        kToolbarHeight,
+        MediaQuery.textScalerOf(context).scale(AppTokens.mainTabTitleFontSize) +
+            AppTokens.mainTabIndicatorDotSize +
+            AppTokens.mainTabIndicatorTitleGap +
+            AppTokens.s2 * 4);
+    return InlineGlobalSearchSurface(
+      entryKey: const ValueKey('contacts-search-button'),
+      toolbarHeight: toolbarHeight,
+      onSearchModeChanged: onSearchModeChanged,
+      feedBuilder: (searchPlaceholder) =>
+          _buildPage(context, toolbarHeight, searchPlaceholder),
+    );
+  }
+
+  Widget _buildPage(BuildContext context, double toolbarHeight,
+          Widget searchPlaceholder) =>
+      Scaffold(
         backgroundColor: Styles.c_F8F9FA,
         appBar: ContactsHeader(
-          toolbarHeight: math.max(
-              kToolbarHeight,
-              MediaQuery.textScalerOf(context)
-                      .scale(AppTokens.mainTabTitleFontSize) +
-                  AppTokens.mainTabIndicatorDotSize +
-                  AppTokens.mainTabIndicatorTitleGap +
-                  AppTokens.s2 * 4),
+          toolbarHeight: toolbarHeight,
           onSearchAdd: logic.searchAddContacts,
           onCreateGroup: logic.createContactsGroup,
           onScan: logic.scanContacts,
@@ -58,7 +71,7 @@ class ContactsPage extends StatelessWidget {
               : null,
         ),
         body: Column(children: [
-          ContactsSearchBar(onTap: logic.searchContacts),
+          searchPlaceholder,
           Expanded(child: Obx(() => _buildDirectory(context))),
         ]),
       );
@@ -208,44 +221,49 @@ class ContactsPage extends StatelessWidget {
           Widget? subtitle,
           bool reserveSubtitle = false,
           VoidCallback? onTap}) =>
-      Material(
-        color: Styles.c_FFFFFF,
-        child: InkWell(
-          onTap: onTap,
-          child: Column(children: [
-            SizedBox(
-              height: 63.h,
-              child: Padding(
-                padding: EdgeInsets.only(left: 16.w, right: 32.w),
-                child: Row(children: [
-                  SizedBox(width: 44.w, height: 44.w, child: avatar),
-                  12.horizontalSpace,
-                  Expanded(
-                      child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      titleWidget ??
-                          Text(title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: _nameStyle),
-                      if (subtitle != null)
-                        subtitle
-                      else if (reserveSubtitle)
-                        SizedBox(height: 16.h),
-                    ],
-                  )),
-                  if (trailing != null) trailing,
-                ]),
-              ),
-            ),
-            Padding(
-                padding: EdgeInsets.only(left: 72.w),
-                child: Container(height: 0.6, color: Styles.c_E8EAEF)),
-          ]),
-        ),
-      );
+      Builder(
+          builder: (context) => Material(
+                color: Styles.c_FFFFFF,
+                child: InkWell(
+                  onTap: onTap,
+                  child: Column(children: [
+                    SizedBox(
+                      height: (MediaQuery.textScalerOf(context).scale(16) *
+                                  1.3 +
+                              MediaQuery.textScalerOf(context).scale(12) * 1.3 +
+                              AppTokens.s4)
+                          .clamp(63.h, double.infinity),
+                      child: Padding(
+                        padding: EdgeInsets.only(left: 16.w, right: 32.w),
+                        child: Row(children: [
+                          SizedBox(width: 44.w, height: 44.w, child: avatar),
+                          12.horizontalSpace,
+                          Expanded(
+                              child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              titleWidget ??
+                                  Text(title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: _nameStyle),
+                              if (subtitle != null)
+                                subtitle
+                              else if (reserveSubtitle)
+                                SizedBox(height: 16.h),
+                            ],
+                          )),
+                          if (trailing != null) trailing,
+                        ]),
+                      ),
+                    ),
+                    Padding(
+                        padding: EdgeInsets.only(left: 72.w),
+                        child: Container(height: 0.6, color: Styles.c_E8EAEF)),
+                  ]),
+                ),
+              ));
 
   TextStyle get _nameStyle => TextStyle(
       color: Styles.c_0C1C33, fontSize: 16.sp, fontWeight: FontWeight.w500);

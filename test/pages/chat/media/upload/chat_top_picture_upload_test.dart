@@ -7,6 +7,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:openim/pages/chat/media/upload/chat_media_upload.dart';
+import 'package:openim/pages/chat/media/preview/chat_top_picture_preview.dart';
 import 'package:openim_common/openim_common.dart';
 
 const _sourceURL = 'https://media.test/object/original.png';
@@ -194,5 +195,64 @@ void main() {
         OpenIMMediaUrl.thumbnail(_sourceURL, width: 640, height: 640));
     expect(ChatPicturePreviewMetadata.topCrop(outgoing), isNull);
     expect(await original.readAsBytes(), orderedEquals(originalBytes));
+  });
+
+  test(
+      'preview preparation deadline includes queue wait and cleans late output',
+      () async {
+    final prepared = Completer<ChatTopPicturePreview?>();
+    uploader = ChatMediaUpload(
+        isClosed: () => closed,
+        onTransfer: (_, __) {},
+        previewTimeout: const Duration(milliseconds: 20),
+        createPreview: (_, {required isCancelled}) => prepared.future);
+    final outgoing = message();
+    await uploader.prepare(outgoing);
+    expect(uploads, hasLength(1));
+    expect(outgoing.pictureElem!.sourcePicture!.url, _sourceURL);
+    final before = jsonEncode(outgoing.toJson());
+    final lateDirectory =
+        await Directory.systemTemp.createTemp('late-preview-');
+    final lateFile =
+        await File('${lateDirectory.path}/preview.png').writeAsBytes([1]);
+    prepared.complete(ChatTopPicturePreview(lateFile.path, 10, 18, 1));
+    for (var i = 0; i < 100 && await lateDirectory.exists(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    expect(await lateDirectory.exists(), isFalse);
+    expect(uploads, hasLength(1),
+        reason: 'No upload starts after the deadline');
+    expect(jsonEncode(outgoing.toJson()), before);
+  });
+
+  test(
+      'late preview upload error cannot invalidate the already prepared message',
+      () async {
+    final previewUpload = Completer<dynamic>();
+    final entered = Completer<void>();
+    uploader = ChatMediaUpload(
+        isClosed: () => closed,
+        onTransfer: (_, __) {},
+        previewTimeout: const Duration(seconds: 1));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      final response = await upload(call);
+      if (uploads.length == 2) {
+        entered.complete();
+        return previewUpload.future;
+      }
+      return response;
+    });
+    final outgoing = message();
+    final pending = uploader.prepare(outgoing);
+    await entered.future;
+    await pending;
+    final before = jsonEncode(outgoing.toJson());
+    previewUpload.completeError(PlatformException(code: 'late-upload-failed'));
+    for (var i = 0; i < 100 && await File(previewPath!).exists(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    await expectDisposedPreview();
+    expect(jsonEncode(outgoing.toJson()), before);
   });
 }

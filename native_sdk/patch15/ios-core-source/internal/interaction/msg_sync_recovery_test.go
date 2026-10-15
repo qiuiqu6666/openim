@@ -177,6 +177,10 @@ type recoveryVersionDB struct {
 	journal         map[string]*model_struct.LocalVersionSync
 }
 
+func (d *recoveryVersionDB) GetAllConversationListDB(context.Context) ([]*model_struct.LocalConversation, error) {
+	return nil, nil
+}
+
 func (d *recoveryVersionDB) GetAllConversationIDList(context.Context) ([]string, error) {
 	return []string{"chat"}, nil
 }
@@ -261,7 +265,7 @@ func TestPushStorageFailureKeepsGapRecoverable(t *testing.T) {
 	}
 }
 
-func TestDuplicateOrOutOfOrderPushPullsTheEntireGap(t *testing.T) {
+func TestDuplicateOrOutOfOrderPushPullsOnlyUncoveredGap(t *testing.T) {
 	for _, seqs := range [][]int64{{7, 7}, {7, 6}} {
 		t.Run(fmt.Sprint(seqs), func(t *testing.T) {
 			ctx := recoveryContext(t)
@@ -274,7 +278,7 @@ func TestDuplicateOrOutOfOrderPushPullsTheEntireGap(t *testing.T) {
 					panic(err)
 				}
 				pulled <- [2]int64{p.SeqRanges[0].Begin, p.SeqRanges[0].End}
-				return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 6, 7)})
+				return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", 6)})
 			})
 			receiptWorker(t, m.conversationCh, func(common.Cmd2Value) error { return nil })
 			fastPath := false
@@ -284,11 +288,13 @@ func TestDuplicateOrOutOfOrderPushPullsTheEntireGap(t *testing.T) {
 			}
 			select {
 			case got := <-pulled:
-				if got != [2]int64{6, 7} {
+				if got != [2]int64{6, 6} || seqs[1] == 6 {
 					t.Fatalf("wrong gap: %v", got)
 				}
 			default:
-				t.Fatal("no gap pull")
+				if seqs[1] != 6 {
+					t.Fatal("no gap pull")
+				}
 			}
 			if m.syncedMaxSeqs["chat"] != 7 {
 				t.Fatal("gap recovery did not commit")

@@ -125,36 +125,37 @@ class WalletBalanceOverview extends StatelessWidget {
             ),
           ],
         ),
-        Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: AppTokens.s2,
-            runSpacing: AppTokens.s2,
-            children: [
-              Text(
-                !visible
-                    ? '••••••'
-                    : inspecting && inspected == null
-                        ? '历史价格暂缺'
-                        : '¥${walletAmountDisplay(inspecting ? inspected! : total)}',
-                key: const ValueKey('wallet-total-amount'),
-                // Preserve every supplied digit, even when the value wraps.
-                style: TextStyle(
-                  fontSize: WalletHomeTokens.totalAmount,
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  color: colors.text,
-                ),
-              ),
-              Text(
-                'CNY',
-                key: const ValueKey('wallet-display-currency'),
-                style: TextStyle(
-                    fontSize: WalletHomeTokens.body,
-                    fontWeight: FontWeight.w500,
-                    color: colors.text),
-              ),
-            ]),
+        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Flexible(
+              child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Text(
+                    !visible
+                        ? '••••••'
+                        : inspecting && inspected == null
+                            ? '历史价格暂缺'
+                            : '¥${walletAmountDisplay(inspecting ? inspected! : total)}',
+                    key: const ValueKey('wallet-total-amount'),
+                    // Keep every digit readable without reflowing the action area.
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: WalletHomeTokens.totalAmount,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: colors.text,
+                    ),
+                  ))),
+          const SizedBox(width: AppTokens.s2),
+          Text(
+            'CNY',
+            key: const ValueKey('wallet-display-currency'),
+            style: TextStyle(
+                fontSize: WalletHomeTokens.body,
+                fontWeight: FontWeight.w500,
+                color: colors.text),
+          ),
+        ]),
       ],
     );
   }

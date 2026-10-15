@@ -40,6 +40,7 @@ func (m *MsgSyncer) syncLatestMessagePreviews(ctx context.Context, ids []string,
 	}
 	failed := make(map[string]error)
 	priorities := m.conversationPriorities(ctx)
+	ctx = context.WithValue(ctx, recoveryPriorityKey{}, priorities)
 	for begin := 0; begin < len(ordered); begin += latestMessageBatchSize {
 		m.prioritizeConversations(ordered[begin:], priorities)
 		batch := make(map[string][2]int64)

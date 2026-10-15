@@ -1,5 +1,21 @@
 # 群直播、三公与六合彩前端模块
 
+## 共享缓存生命周期
+
+`GroupFeatureRuntime` 按账号与 Chat Token 持有一个 `GroupFeatureStore`。同一登录会话切换节点时保持对象身份，API 每次请求读取当前地址并校验响应来源；SDK 群资料读取及权限错误同样拒绝旧节点结果。
+
+退出或更换登录会话调用 `retireSession()`：清空数据、取消请求与重试、解除 SDK 和账号权限监听、关闭事件流，但保留空的 Listenable，供尚未卸载的旧路由或滚动列表安全退场。Runtime 随即释放引用；最后一个页面释放引用后由 GC 回收。页面不拥有共享 Store，不得调用它的 `dispose()`；独立创建 Store 的测试仍应调用 `dispose()`。
+
+2026-10-15 引用检查覆盖：
+
+- `ConversationLogic`、`ChatLogic` 的会话内固定引用，以及会话行、归档列表、聊天视图和全局搜索的传递引用。
+- 联系人群列表的 Runtime 访问、用户资料页传参、`SangongProfileSurface` 的监听与异步有效性检查。
+- `GroupLiveAvatar`、`GroupNameLabel`、群功能菜单的 ListenableBuilder。
+- `GroupChatFeatureSurface` 的事件订阅，以及 `GroupLiveListScope` / `GroupLiveListSync` 的可见性、定时器与请求所有权。
+- `HomeLogic` 与 `OpenIMProfileService` 的退出清理入口。
+
+回归测试位于 `test/pages/group_features/data/group_feature_runtime_lifecycle_test.dart` 和 `group_feature_transport_lifecycle_test.dart`：节点切换后进入群聊、返回并反复回收列表项；退出期间创建旧列表项；更换账号/Token；旧节点与旧会话的迟到响应。
+
 参考仓库：`E:/openim/reference-99chat`，提交 `d7c3c65`（Apache-2.0）。
 
 本次迁移保留当前 OpenIM 聊天、消息、群成员、登录和支付组件，移植 99chat 的业务页面、布局和资源。三个业务模块独立维护，共用群功能摘要、个人权限和账号范围的请求层。没有部署新后端，也没有把参考仓库的 JWT、租户或演示开奖数据写进生产环境。

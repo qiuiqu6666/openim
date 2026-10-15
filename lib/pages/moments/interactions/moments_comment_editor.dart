@@ -242,22 +242,33 @@ class _CommentEditorState extends State<_CommentEditor> {
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: AppTokens.s3),
-                    child: Text(_error!,
-                        style: const TextStyle(color: AppTokens.danger)),
+                    child: Semantics(
+                        liveRegion: true,
+                        child: Text(_error!,
+                            style: const TextStyle(color: AppTokens.danger))),
                   ),
                 const SizedBox(height: AppTokens.s4),
                 Align(
                     alignment: Alignment.centerRight,
                     child: FilledButton(
+                      style: FilledButton.styleFrom(
+                          minimumSize: const Size(MomentsLayout.touchTarget,
+                              MomentsLayout.touchTarget)),
                       onPressed: _sending ||
                               graphemeTrim(_text.text).isEmpty ||
                               graphemeTrim(_text.text).characters.length > 500
                           ? null
                           : _send,
                       child: _sending
-                          ? const SizedBox.square(
-                              dimension: AppTokens.s6,
-                              child: CircularProgressIndicator(strokeWidth: 2))
+                          ? Row(mainAxisSize: MainAxisSize.min, children: [
+                              const SizedBox.square(
+                                  dimension: AppTokens.s6,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2)),
+                              const SizedBox(width: AppTokens.s2),
+                              Text(momentsText(context,
+                                  zh: '发送中…', en: 'Sending…')),
+                            ])
                           : Text(_unknown
                               ? momentsText(context,
                                   zh: '确认并重试', en: 'Confirm and retry')

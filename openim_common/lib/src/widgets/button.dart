@@ -84,7 +84,9 @@ class Button extends StatelessWidget {
               excludeFromSemantics: true,
               borderRadius: BorderRadius.circular(radius ?? 4.r),
               child: Container(
-                constraints: BoxConstraints(minHeight: height ?? 44.h),
+                constraints: BoxConstraints(
+                    minHeight: (height ?? 44.h)
+                        .clamp(AppTokens.minimumTapSize, double.infinity)),
                 padding: padding,
                 child: Align(
                   heightFactor: 1,

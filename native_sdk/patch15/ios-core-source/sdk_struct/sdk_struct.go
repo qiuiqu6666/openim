@@ -297,7 +297,13 @@ func (n NewMsgList) Len() int {
 
 // Implement the sort.Interface interface comparison element method
 func (n NewMsgList) Less(i, j int) bool {
-	return n[i].SendTime < n[j].SendTime
+	if n[i].SendTime != n[j].SendTime {
+		return n[i].SendTime < n[j].SendTime
+	}
+	if n[i].Seq <= 0 || n[j].Seq <= 0 {
+		return n[i].Seq > 0 && n[j].Seq <= 0
+	}
+	return n[i].Seq < n[j].Seq
 }
 
 // Implement the sort.Interface interface exchange element method
@@ -326,8 +332,9 @@ type CmdNewMsgComeToConversation struct {
 }
 
 type CmdMsgSyncInReinstall struct {
-	Msgs  map[string]*sdkws.PullMsgs
-	Total int
+	Msgs                map[string]*sdkws.PullMsgs
+	Total               int
+	NotifyConversations bool
 }
 
 type BasicInfo struct {

@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-15",
+  "sdk_version": "v3.8.3-patch.15+recovery.29-friend-sync.1",
+  "source_sha256": "9f2b9fc0b00cbf63ae510754fa8bf93de8a9218a3bfe9a7769166c9c226eb698",
+  "fix": "After a successful full friend table replacement, publish added, changed and removed friends through existing friendship callbacks. Leave message readiness and auxiliary scheduling unchanged.",
+  "tests": {
+    "core_regression": "relation, interaction and syncer passed",
+    "android_build_suites": "common, network, interaction and conversation_msg passed",
+    "flutter_contacts": 12,
+    "source_lock": 15,
+    "flutter_analyze": "No issues found",
+    "patch_roundtrip": "passed"
+  },
+  "android": {
+    "version": "3.0.1+2042",
+    "apk": "E:\\openim\\artifacts\\contacts-sync-fix-20261015\\99chat-friend-sync-3.0.1-2042-debug.apk",
+    "apk_sha256": "b025d38ed6de417cc4ffcc00ca10488adba7533a147a8a3235215328133cfb94",
+    "aar_sha256": "fc6d3927a49937f1e2fb7f801ed434cdda54056d781dbbd47e2cf8d9bb8ab608",
+    "native": {
+      "arm64-v8a": {
+        "sha256": "7faa5491a091d64356e80f71608d23c4586234cb0d11c45b5b02fee9e750f1f1",
+        "aar_parity_after_strip": true
+      },
+      "x86_64": {
+        "sha256": "71635381dc9864c5628788eb0f3682412b536811640954aa1a1fe41b2dd0acf2",
+        "aar_parity_after_strip": true
+      }
+    }
+  },
+  "emulator": {
+    "serial": "emulator-5554",
+    "package": "chat.chat99.chatpro",
+    "procedure": "Installed replacement APK; backed up stopped account database; reset only local_friends and its local_sync_version row; restarted using saved account login; opened directory without a manual refresh; inspected footer.",
+    "friends_before_reset": 21,
+    "friends_after_reset": 0,
+    "unique_friend_added_notices": 21,
+    "visible_footer": "21位联系人",
+    "sdk_timestamps_utc": {
+      "message_ready": "2026-10-15 07:32:08.662",
+      "friend_table_saved": "2026-10-15 07:32:08.893",
+      "first_notice": "2026-10-15 07:32:08.894",
+      "last_notice": "2026-10-15 07:32:08.898"
+    },
+    "screenshots": [
+      "contacts-after-fresh-sync.png",
+      "contacts-footer.png"
+    ],
+    "preserved": "Message tables, credentials and server relationships; full database backup retained locally."
+  },
+  "source_platform_consistency": {
+    "canonical_android_ios_stages_identical": true,
+    "source_files": 430
+  },
+  "limitations": [
+    "iOS source is shared and staged identically; Framework build and device runtime not performed.",
+    "A second live slow-network trial was not run because this device does not expose the Android emulator network console. Delayed callback and concurrent page ordering are covered by automated regression tests."
+  ],
+  "graph_review": {
+    "repository": "openim-fast-recovery-final-20261015",
+    "index_date": "2026-10-15",
+    "scope": "Used before editing; confirmed callers in live maintenance source. Index predates this fix."
+  }
+}

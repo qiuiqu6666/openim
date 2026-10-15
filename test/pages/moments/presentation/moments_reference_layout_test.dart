@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/moments/moments_widgets.dart';
+import 'package:openim/pages/moments/interactions/moments_post_actions.dart';
 import 'package:openim/pages/moments/presentation/moments_engagement_panel.dart';
 import 'package:openim/pages/moments/presentation/moments_cover_header.dart';
 import 'package:openim/pages/moments/presentation/moments_profile_timeline.dart';
@@ -182,6 +183,11 @@ void main() {
       expect(date, findsOneWidget);
       expect(tester.getSize(date).width, 64);
       expect(_inside(sameDay, MomentsTimelineDate), findsNothing);
+      final firstActions = _inside(first, MomentsPostActions);
+      expect(
+          tester.getTopLeft(sameDay).dy - tester.getBottomLeft(firstActions).dy,
+          lessThanOrEqualTo(16),
+          reason: 'Avoid the old large action-to-next-post gap');
       expect(tester.widget<MomentsProfileTimelineItem>(first).showDate, isTrue);
       expect(
           tester.widget<MomentsProfileTimelineItem>(sameDay).showDate, isFalse);
@@ -305,11 +311,16 @@ void main() {
                 of: find.byType(MomentsCoverHeader),
                 matching: find.byType(Transform))
             .first);
+        // The sliver retains its layout extent; only its cover paint stretches
+        // upward to fill the overscroll, so no page background is exposed.
+        expect(tester.getSize(cover).height, 250);
+        final surface = tester.getRect(_key('moments_cover_surface'));
+        expect(surface.top, closeTo(0, .01));
+        expect(surface.height, greaterThan(250));
+        expect(surface.bottom, closeTo(tester.getBottomLeft(cover).dy, .01));
         if (reducedMotion) {
-          expect(tester.getSize(cover).height, 250);
           expect(transform.transform.getMaxScaleOnAxis(), 1);
         } else {
-          expect(tester.getSize(cover).height, greaterThan(250));
           expect(transform.transform.getMaxScaleOnAxis(), greaterThan(1));
         }
         expect(tester.takeException(), isNull);

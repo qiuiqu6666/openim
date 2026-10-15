@@ -332,9 +332,13 @@ class GroupFeatureStore extends ChangeNotifier {
         _requested.addAll(batch);
         final snapshots = {for (final id in batch) id: _groups[id]};
         final unresolved = batch.toSet();
+        final requestBase = api.baseUrl;
         try {
           final groups = await fetchGroups(batch);
           if (!active) return;
+          // The same store survives node switches. Do not seed a response from
+          // the previous transport; unresolved IDs use the bounded retry path.
+          if (requestBase != api.baseUrl) continue;
           // A sync event during the request requires a subsequent fresh read.
           final retry = batch.where(_queued.contains).toSet();
           _batching = true;
@@ -420,11 +424,13 @@ class GroupFeatureStore extends ChangeNotifier {
 
   Future<void> _loadCapabilities(
       String id, int epoch, CancelToken token) async {
+    final requestBase = api.baseUrl;
     try {
       final data = await api.get(
           '/chat/groups/${Uri.encodeComponent(id)}/feature-capabilities',
           cancelToken: token);
       if (!active ||
+          requestBase != api.baseUrl ||
           _left.contains(id) ||
           (_capabilityEpoch[id] ?? 0) != epoch) {
         return;
@@ -457,6 +463,7 @@ class GroupFeatureStore extends ChangeNotifier {
       });
     } catch (error) {
       if (!active ||
+          requestBase != api.baseUrl ||
           _left.contains(id) ||
           (_capabilityEpoch[id] ?? 0) != epoch) {
         return;
@@ -663,9 +670,28 @@ class GroupFeatureStore extends ChangeNotifier {
   }
 
   void invalidateSession() {
-    if (_closed) return;
+    if (_closed || _invalidated) return;
     _invalidated = true;
     clear();
+  }
+
+  // A retired shared store remains a valid, empty Listenable for routes that
+  // are still mounted (including lazy rows created during an exit transition).
+  // Release all external roots now; the notifier is collected with its last
+  // consumer. Calling ChangeNotifier.dispose here would break those routes.
+  void retireSession() {
+    if (_closed) return;
+    _releaseSources();
+    invalidateSession();
+  }
+
+  void _releaseSources() {
+    accountPrivilege.removeListener(_privilegeChanged);
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    _subscriptions.clear();
+    if (!_events.isClosed) _events.close();
   }
 
   void clear() {
@@ -698,14 +724,9 @@ class GroupFeatureStore extends ChangeNotifier {
 
   @override
   void dispose() {
-    accountPrivilege.removeListener(_privilegeChanged);
     _closed = true;
-    for (final subscription in _subscriptions) {
-      subscription.cancel();
-    }
-    _subscriptions.clear();
+    _releaseSources();
     clear();
-    _events.close();
     super.dispose();
   }
 }

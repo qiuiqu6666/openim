@@ -51,6 +51,7 @@ void main() {
         preview.sessionType = ConversationType.superGroup;
       }
       Get.routing.args = {'conversationInfo': info};
+      fixture.localSnapshot = [preview];
       final logic =
           fixture.logic = ChatLogic(receiptNow: tester.binding.clock.now);
       logic.onInit();

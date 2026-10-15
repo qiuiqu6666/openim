@@ -9,6 +9,50 @@ import 'package:openim/pages/chat/group/member_actions/chat_member_action_source
 import 'support/revocation_fixture.dart';
 
 void main() {
+  for (final confirmed in [false, true]) {
+    test('recall waits for explicit confirmation $confirmed', () async {
+      final answer = Completer<bool>();
+      var prompts = 0;
+      final f = RevocationFixture(confirm: () {
+        prompts++;
+        return answer.future;
+      });
+      final task = f.controller.revokeMessage(f.message());
+      await f.controller.revokeMessage(f.message());
+      expect(prompts, 1);
+      expect(f.reads, isEmpty);
+      expect(f.requests, isEmpty);
+      answer.complete(confirmed);
+      await task;
+      expect(f.requests.length, confirmed ? 1 : 0);
+      expect(f.removed.length, confirmed ? 1 : 0);
+    });
+  }
+  for (final change in ['closed', 'account', 'message', 'role', 'time']) {
+    test('recall revalidates $change after confirmation', () async {
+      final answer = Completer<bool>();
+      final f = RevocationFixture(confirm: () => answer.future);
+      final message = f.message();
+      final task = f.controller.revokeMessage(message);
+      switch (change) {
+        case 'closed':
+          f.closed = true;
+        case 'account':
+          f.account = 'other';
+        case 'message':
+          f.messageCurrent = false;
+        case 'role':
+          f.selfRole = GroupRoleLevel.member;
+        case 'time':
+          message.sendID = f.account;
+          message.sendTime = 0;
+      }
+      answer.complete(true);
+      await task;
+      expect(f.requests, isEmpty);
+      expect(f.removed, isEmpty);
+    });
+  }
   for (final age in [121, 3600, 86400]) {
     test('confirmed owner can recall departed sender after $age seconds',
         () async {

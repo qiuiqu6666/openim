@@ -1,0 +1,67 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.27-sync-heat.1",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "7edf2a59bec96161ae518e19a33fb9b659a5a3ea2afc8ec9bb044a98dfd94871",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "be845376238a2cfc31653ae4ad1729852a6f3f236ff22b96b0fb7048d27b827b",
+  "created": "2026-10-15",
+  "previous_release": "history/recovery.26-chat-window.2.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "core_packages": "passed: common/conversation_msg/interaction and SDK entry build, CGO=0",
+    "sqlite_receipts": "passed: tombstone filtering, replay, missing cache, real SQL error",
+    "core_race": "pending",
+    "source_lock": "pending",
+    "patch_roundtrip": "passed",
+    "android_core": "pending",
+    "ios_framework": "macOS rebuild required",
+    "physical_device": "not tested"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.27-sync-heat.1",
+    "sdk_version": "v3.8.3-patch.15+recovery.27-sync-heat.1",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": false,
+    "runtime_validation": "not run",
+    "native_binary_integrated": true,
+    "application_validation": "not built",
+    "aar_sha256": "a988c6735238ec9756bdaa5fe6059e3876193a9198d09756515cc91e259cb5d2"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.27-sync-heat.1",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "not run",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "macOS rebuild required",
+    "app_validation_scope": "shared source includes heat fixes; existing framework is older",
+    "native_binary_integrated": false,
+    "app_version": "3.0.1+2027"
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned existing gomobile dependency closure",
+    "version/version: unique recovery.27-sync-heat.1 runtime identity"
+  ],
+  "verification_evidence": "verification/recovery.27-sync-heat.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Prevent deleted quote bodies and idempotent read receipts from blocking notification checkpoints; honor authenticated visibility suffixes without acknowledging older holes; back off stalled recovery and suppress diagnostic payload/empty-sync churn."
+  }
+}

@@ -101,8 +101,9 @@ class _DesktopLoginBannerState extends State<DesktopLoginBanner>
             onTap: () async {
               final service = _service;
               if (service == null) return;
-              await Navigator.of(context).push<void>(AppMaterialPageRoute(
-                  builder: (_) => DesktopLoginDevicesPage(service: service)));
+              await Navigator.of(context, rootNavigator: true)
+                  .push<void>(AppMaterialPageRoute(
+                      builder: (_) => DesktopLoginDevicesPage(service: service)));
               if (mounted) await _refresh();
             },
             child: Padding(

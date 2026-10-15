@@ -183,7 +183,7 @@ class Apis {
         Logger.print('Login request failed: ${e.runtimeType}');
       }
 
-      return Future.error(e);
+      return Future.error(e, s);
     }
   }
 

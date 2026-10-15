@@ -611,7 +611,7 @@ class IMUtils {
                   .toList()
                   .join('、');
               text = sprintf(
-                  label, [getGroupMemberShowName(ntf.opUser!), b ?? '']);
+                  label, [getGroupMemberShowName(ntf.inviterUser ?? ntf.opUser!), b ?? '']);
             }
             break;
           case MessageType.memberKickedNotification:

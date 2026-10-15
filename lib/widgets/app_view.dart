@@ -9,7 +9,7 @@ import '../core/controller/app_controller.dart';
 import '../core/server_nodes/feedback/network_recovery_overlay.dart';
 
 class AppView extends StatelessWidget {
-  const AppView({Key? key, required this.builder}) : super(key: key);
+  const AppView({super.key, required this.builder});
   final Widget Function(Locale? locale, TransitionBuilder builder) builder;
 
   @override
@@ -39,10 +39,7 @@ class AppView extends StatelessWidget {
   static TransitionBuilder _builder() {
     final builder = EasyLoading.init(
       builder: (context, widget) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaleFactor: Config.textScaleFactor,
-          ),
+        return AppAccessibilityScope(
           child: AppSystemBars(
             background: Theme.of(context).appBarTheme.backgroundColor ??
                 Theme.of(context).colorScheme.surface,

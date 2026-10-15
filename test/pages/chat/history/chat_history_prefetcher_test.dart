@@ -15,6 +15,132 @@ void main() {
   setUp(ChatHistoryCache.clear);
   tearDown(ChatHistoryCache.clear);
 
+  test('local warming starts before remote work and never blocks navigation',
+      () async {
+    final local = Completer<AdvancedMessage>();
+    final remote = Completer<AdvancedMessage>();
+    final events = <String>[];
+    final prefetcher = ChatHistoryPrefetcher(
+        accountID: () => 'me',
+        token: () => 't',
+        epoch: () => 0,
+        fetchLocalWindow: (_, __) {
+          events.add('local');
+          return local.future;
+        },
+        fetch: (_, __) {
+          events.add('remote');
+          return remote.future;
+        });
+    addTearDown(prefetcher.clear);
+    prefetcher.prepare(conversation());
+    events.add('navigation');
+    expect(events, ['local', 'remote', 'navigation']);
+    final route = prefetcher.readLatest(conversation());
+    remote.complete(page('remote'));
+    expect((await route).messageList!.single.clientMsgID, 'remote');
+    local.complete(page('local'));
+    await Future<void>.delayed(Duration.zero);
+  });
+
+  test(
+      'private chats never warm local messages and speculative work is bounded',
+      () async {
+    final local = Completer<AdvancedMessage>();
+    final remote = Completer<AdvancedMessage>();
+    var localCalls = 0;
+    var remoteCalls = 0;
+    final prefetcher = ChatHistoryPrefetcher(
+        accountID: () => 'me',
+        token: () => 't',
+        epoch: () => 0,
+        fetchLocalWindow: (_, __) {
+          localCalls++;
+          return local.future;
+        },
+        fetch: (_, __) {
+          remoteCalls++;
+          return remote.future;
+        });
+    addTearDown(prefetcher.clear);
+    prefetcher.prepare(conversation(private: true));
+    expect(localCalls, 0);
+    expect(remoteCalls, 0);
+    for (var i = 0; i < 100; i++) {
+      prefetcher.prepare(ConversationInfo(conversationID: 'chat-$i'));
+    }
+    expect(localCalls, 2);
+    expect(remoteCalls, 2);
+    local.complete(page('local'));
+    remote.complete(page('remote'));
+    await Future<void>.delayed(Duration.zero);
+  });
+
+  for (final versioned in [false, true]) {
+    test('delivery before route claims preparation (versioned: $versioned)',
+        () async {
+      final pending = Completer<AdvancedMessage>();
+      var reads = 0;
+      final prefetcher = ChatHistoryPrefetcher(
+        accountID: () => 'me',
+        token: () => 'token',
+        epoch: () => 0,
+        fetch: (_, __) =>
+            ++reads == 1 ? pending.future : Future.value(page('fresh')),
+      );
+      addTearDown(prefetcher.clear);
+      prefetcher.prepare(conversation());
+      for (var i = 0; i < 100; i++) {
+        ChatHistoryCache.receivedMessage();
+        prefetcher.prepare(conversation());
+      }
+      final route = prefetcher.readLatest(conversation());
+      expect(reads, 1);
+      final prepared = page('prepared');
+      if (versioned) {
+        prepared.window = MessageWindow.fromJson({
+          'version': 1,
+          'conversationID': 'chat',
+          'lowerBound': 1,
+          'targetWatermark': 1,
+          'covered': [
+            [1, 1]
+          ],
+          'missing': [],
+          'publishable': true,
+          'visibilityKey': '1:1:false',
+          'snapshotRevision': 'fixed-window',
+          'readiness': 'ready',
+          'coverageStatus': 'covered',
+        });
+      }
+      pending.complete(prepared);
+      expect((await route).messageList!.single.clientMsgID,
+          versioned ? 'prepared' : 'fresh');
+      expect(reads, versioned ? 1 : 2);
+    });
+  }
+
+  test('delivery after preparation invalidates a full but stale first page',
+      () async {
+    final pending = Completer<AdvancedMessage>();
+    var reads = 0;
+    final prefetcher = ChatHistoryPrefetcher(
+      accountID: () => 'me',
+      token: () => 'token',
+      epoch: () => 0,
+      fetch: (_, __) =>
+          ++reads == 1 ? pending.future : Future.value(page('new')),
+    );
+    addTearDown(prefetcher.clear);
+    prefetcher.prepare(conversation());
+    final route = prefetcher.readLatest(conversation());
+    ChatHistoryCache.receivedMessage();
+    pending.complete(page('old'));
+    expect((await route).messageList!.single.clientMsgID, 'new');
+    expect(reads, 2);
+  });
+
   test('navigation and route share one pending native query', () async {
     final pending = Completer<AdvancedMessage>();
     var reads = 0;

@@ -1,0 +1,18 @@
+{
+  "apk": "E:\\openim\\openim-flutter-demo\\release-artifacts\\99chat-chat-motion-3.0.1-2037-debug.apk",
+  "apk_bytes": 341222213,
+  "apk_sha256": "805fb4741daf9fcc080b312bd215f775598a433491ace4e29bb2ef98b62bb48c",
+  "aar_sha256": "9805b00a906039ae21c491a4360f6c0a47ac0e4dd3775e06235b41f58286b236",
+  "native": {
+    "arm64-v8a": {
+      "sha256": "264549531938425d7e1f38bef2b968ad91a703c12e54c7f30d0392429a6917f5",
+      "matches_built_aar_after_strip": true,
+      "runtime_version_string": "v3.8.3-patch.15+recovery.27-sync-heat.2"
+    },
+    "x86_64": {
+      "sha256": "538472e923fc36a3b341d045cafebf72be481b8ab7b4d4dbe644a4c29b94962f",
+      "matches_built_aar_after_strip": true,
+      "runtime_version_string": "v3.8.3-patch.15+recovery.27-sync-heat.2"
+    }
+  }
+}

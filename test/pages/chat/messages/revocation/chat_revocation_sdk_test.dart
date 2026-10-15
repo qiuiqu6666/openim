@@ -79,6 +79,7 @@ void main() {
         isClosed: () => false,
         onRevoked: f.removed.add,
         showFeedback: f.feedback.add,
+        log: f.events.add,
       );
       await controller.revokeMessage(f.message());
       expect(calls.map((call) => call.method), [
@@ -91,6 +92,8 @@ void main() {
       expect(calls.last.arguments['ManagerName'], 'messageManager');
       expect(calls.last.arguments['conversationID'], 'sg_group');
       expect(calls.last.arguments['clientMsgID'], 'message');
+      expect(calls.last.arguments['operationID'], startsWith('revoke-'));
+      expect(calls.last.arguments['operationID'], f.events.first['operationID']);
       expect(f.removed, fail ? isEmpty : ['message']);
       expect(f.feedback.length, fail ? 1 : 0);
     });

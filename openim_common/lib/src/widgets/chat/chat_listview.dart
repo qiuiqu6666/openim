@@ -265,6 +265,7 @@ class ChatListView extends StatefulWidget {
     this.onViewportChanged,
     this.positionController,
     this.emptyView,
+    this.initialLoadingView,
   }) : super(key: key);
   final ScrollController? controller;
   final ScrollPhysics? physics;
@@ -297,6 +298,7 @@ class ChatListView extends StatefulWidget {
   final ChatViewportChanged? onViewportChanged;
   final ChatListPositionController? positionController;
   final Widget? emptyView;
+  final Widget? initialLoadingView;
 
   @override
   State<ChatListView> createState() => _ChatListViewState();
@@ -482,6 +484,7 @@ class _ChatListViewState extends State<ChatListView> {
 
   Widget _initialState() {
     if (widget.initialLoading || _historyLoading) {
+      if (widget.initialLoadingView != null) return widget.initialLoadingView!;
       return Center(
         child: Semantics(
           label: 'chatHistoryLoading'.tr,

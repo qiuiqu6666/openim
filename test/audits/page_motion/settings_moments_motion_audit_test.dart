@@ -57,15 +57,8 @@ void main() {
         await settleVisibleMomentsUiMedia(tester);
         final after = tester.getTopLeft(find.byKey(afterMedia));
         final delta = after.dy - before.dy;
-        if (hasDimensions) {
-          expect(delta, closeTo(0, .01),
-              reason: 'Supplied dimensions reserve the final image height.');
-        } else {
-          final finalHeight = sample == momentsUiPhotos.first ? 420.0 : 240.0;
-          expect(delta, closeTo(finalHeight - 320 / 1.08, .01),
-              reason: 'Decode changes an already visible post height.');
-          expect(delta.abs(), greaterThan(50));
-        }
+        expect(delta, closeTo(0, .01),
+            reason: 'Decode must preserve the initially reserved frame.');
         debugPrint('motion audit moments ${sample.mediaId} '
             'metadata=$hasDimensions downstream delta=${delta.toStringAsFixed(2)}');
         expect(tester.takeException(), isNull);
@@ -94,8 +87,8 @@ void main() {
     final progressHeight =
         tester.getSize(find.byType(LinearProgressIndicator)).height;
     expect(progressHeight, greaterThan(0));
-    expect(during.dy - before.dy, closeTo(progressHeight, .01),
-        reason: 'The pending-send indicator participates in the body Column.');
+    expect(during.dy - before.dy, closeTo(0, .01),
+        reason: 'The progress slot keeps a stable height while idle and busy.');
     pending.complete(const FavoriteSendResult(
         status: FavoriteSendStatus.failed, errorCode: 'CANCELLED'));
     await tester.pumpAndSettle();
