@@ -6,16 +6,16 @@
   "go_version": "1.24.0",
   "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
   "patch": "0001-background-message-recovery.patch",
-  "patch_sha256": "3f783f7b9fdbc02aa087eed5484d6015ca5c849709defcc8d3749c10222e353f",
+  "patch_sha256": "77de972fd62f847c356591b5761e811d75e3e98389a45b79e3317d40c6582444",
   "source_directory": "core-source",
   "source_manifest": "core-source-manifest.json",
-  "source_sha256": "3a0d0dafc9ea26d4dfaae6e05989c5a11cd2bae2c64362e96b65d07ab9c6f3e2",
+  "source_sha256": "bdd6c329ce82a4c144df59bfaa137746bd2a075372e6920959f141e93fac06ca",
   "created": "2026-10-15",
   "previous_release": "history/recovery.29-friend-sync.1.json",
   "native_binary_integrated": false,
   "checks": {
     "upload": "native HTTP header/body stalls, same-image retry, cancelled hash waiter and concurrent exclusion tests passed",
-    "source_lock": "15 tests passed; cumulative patch Go-source roundtrip verified",
+    "source_lock": "15 tests passed; cumulative patch roundtrip verified for 385 Go files; visible-empty lifecycle regression passed (3 scenarios).",
     "android_core": "four ABIs built and version checked; five relevant Core test packages passed",
     "android_application": "169 Flutter tests and scoped analyze passed; debug arm64 APK built and embedded SDK hash verified",
     "ios_framework": "shared source updated; macOS build required"
@@ -34,10 +34,10 @@
     "build_script": "build-android.ps1",
     "apk_native_parity_verified": true,
     "runtime_validation": "not tested on device",
-    "native_binary_integrated": true,
+    "native_binary_integrated": false,
     "aar_built": true,
-    "sdk_artifact_verified": true,
-    "application_validation": "debug arm64 built; embedded recovery.30 SDK parity verified; not installed",
+    "sdk_artifact_verified": false,
+    "application_validation": "Previous recovery.30 binary retained; added regression test changes source lock, rebuild required for a matching receipt.",
     "aar_sha256": "4ca03a3c3c1610f5759df46d4ca423e41fc0f5f670d524c7845d0fc80c4130d0",
     "apk_sha256": "09ef8f3a74017a5989ae7ac352d414d7fa49bdc520df8678bc81ddc773edd260"
   },
@@ -53,7 +53,7 @@
     "app_validation_scope": "same locked Core source as Android; previous binary is rejected",
     "native_binary_integrated": false,
     "source_consistency_verified": true,
-    "source_files": 432
+    "source_files": 433
   },
   "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
   "build_overlays": [

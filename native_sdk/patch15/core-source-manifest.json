@@ -5,8 +5,8 @@
   "sdk_version": "v3.8.3-patch.15+recovery.30-image-upload.1",
   "go_version": "1.24.0",
   "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-  "patch_sha256": "3f783f7b9fdbc02aa087eed5484d6015ca5c849709defcc8d3749c10222e353f",
-  "source_sha256": "3a0d0dafc9ea26d4dfaae6e05989c5a11cd2bae2c64362e96b65d07ab9c6f3e2",
+  "patch_sha256": "77de972fd62f847c356591b5761e811d75e3e98389a45b79e3317d40c6582444",
+  "source_sha256": "bdd6c329ce82a4c144df59bfaa137746bd2a075372e6920959f141e93fac06ca",
   "build_overlays": [
     "go.mod and go.sum: pinned existing gomobile dependency closure",
     "version/version: unique recovery.30-image-upload.1 runtime identity"
@@ -444,6 +444,7 @@
     "wasm/wasm_wrapper/wasm_init_login.go": "8b057069ade53373fc20150ad9fd4ff83f8cb81c9c900787ecc4b4f04eaa5ceb",
     "wasm/wasm_wrapper/wasm_signaling.go": "ce371dad00a5dd399724f5086c4316333554d035ecdb279b66a5b4806774cbf4",
     "wasm/wasm_wrapper/wasm_third.go": "331bc8a54538b9b9baad5a5b103639f50d3ac259ebb043196873a7537c5235f7",
-    "wasm/wasm_wrapper/wasm_user.go": "7ffd8770fbc4b40493d64e98909d13b0e04736fe1ce8cdc9eae007a5e3982ffe"
+    "wasm/wasm_wrapper/wasm_user.go": "7ffd8770fbc4b40493d64e98909d13b0e04736fe1ce8cdc9eae007a5e3982ffe",
+    "internal/interaction/msg_sync_visible_empty_lifecycle_test.go": "6023c3bd97396da8e6a687c9296330cd2b75da31621a9828bb6fd5f73254ab0f"
   }
 }

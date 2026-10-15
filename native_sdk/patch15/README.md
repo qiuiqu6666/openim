@@ -2,6 +2,12 @@
 
 当前会话同步优先级、前后台消息去重及 iOS 一致性核对见 [priority-sync.md](priority-sync.md)。版本以 `manifest.json` 为准，以下为历次修改记录。
 
+## 2026-10-15 Core 与 iOS 远端源码同步核对
+
+核对独立 Core 开发仓库 `9d0b64f` 与共享构建源码，补入遗漏的 `TestInvisiblePrefixLifecycleDoesNotSkipNewMessages` 回归测试，覆盖清空后收新消息、退群重入旧边界、断线及持久化检查点恢复。该测试三个子场景通过；15 项源码锁测试通过。业务实现未改变，共享源码保留较新的 recovery.30 上传修复、固定依赖及版本覆盖；运行时 `identifier.sqlite` 数据库不作为源码同步。
+
+Android 与 iOS 构建脚本继续读取 `manifest.json` 指定的 `core-source`（433 个锁定文件）；`ios-core-source` 为历史目录，不是当前构建输入。补丁和源码哈希已随新增测试更新。已有二进制回执不匹配新源码锁，需分别重建 Android AAR 和 iOS Framework；本次仅同步源码，未重建二进制或执行真机验收。
+
 ## recovery.30-image-upload.1：图片上传卡住与重试锁
 
 共享文件上传增加 9 分钟总期限，覆盖哈希检查、元数据 API、签名 PUT 和响应体读取。Dart 的 `Future.timeout` 只停止等待，不取消 Go 请求；旧实现的无时限 HTTP 请求可持续持有同内容上传锁。本版主动取消原生请求，锁等待也响应取消，失败后再次上传同一文件可以正常进入。已提交聊天消息的未知回执仍不自动重发。
