@@ -41,7 +41,7 @@ try {
         Invoke-Checked $goCommand @('install',"golang.org/x/mobile/cmd/gomobile@$mobile")
         Invoke-Checked $goCommand @('install',"golang.org/x/mobile/cmd/gobind@$mobile")
         $env:CGO_ENABLED = '0'
-        Invoke-Checked $goCommand @('test','./pkg/common','./pkg/network','./internal/interaction','./internal/conversation_msg','-count=1','-timeout=120s')
+        Invoke-Checked $goCommand @('test','./pkg/common','./pkg/network','./internal/interaction','./internal/conversation_msg','./internal/relation','-count=1','-timeout=120s')
         Invoke-Checked $goCommand @('test','./internal/third/file','-run','^(TestUploadDeadline|TestUploadHash)','-count=1','-timeout=30s')
         $env:CGO_ENABLED = '1'
         # gomobile init installs gobind@latest. Only its cache directory is needed.

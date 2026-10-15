@@ -2,29 +2,28 @@
   "upstream": "https://github.com/openimsdk/openim-sdk-core",
   "tag": "v3.8.3-patch.15",
   "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-  "sdk_version": "v3.8.3-patch.15+recovery.30-image-upload.1",
+  "sdk_version": "v3.8.3-patch.15+recovery.31-friend-profile.1",
   "go_version": "1.24.0",
   "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
   "patch": "0001-background-message-recovery.patch",
-  "patch_sha256": "77de972fd62f847c356591b5761e811d75e3e98389a45b79e3317d40c6582444",
+  "patch_sha256": "dc62c4f208ce9fe7e2f7e4fc907934aeac740e0d52fdb526354f7b3f1da59e28",
   "source_directory": "core-source",
   "source_manifest": "core-source-manifest.json",
-  "source_sha256": "bdd6c329ce82a4c144df59bfaa137746bd2a075372e6920959f141e93fac06ca",
+  "source_sha256": "3d5da83820d3bdd7e3fe40abdb16746451a52df0efecc7fe6926e384940c57fa",
   "created": "2026-10-15",
-  "previous_release": "history/recovery.29-friend-sync.1.json",
+  "previous_release": "history/recovery.30-image-upload.1.json",
   "native_binary_integrated": false,
   "checks": {
-    "upload": "native HTTP header/body stalls, same-image retry, cancelled hash waiter and concurrent exclusion tests passed",
-    "source_lock": "15 tests passed; cumulative patch roundtrip verified for 385 Go files; visible-empty lifecycle regression passed (3 scenarios).",
-    "android_core": "four ABIs built and version checked; five relevant Core test packages passed",
-    "android_application": "169 Flutter tests and scoped analyze passed; debug arm64 APK built and embedded SDK hash verified",
-    "ios_framework": "passed: device arm64, simulator arm64/x86_64; Core/SQLite/upload and added visible-empty lifecycle tests passed",
-    "ios_app_build": "passed: direct Xcode Release no-codesign; recovery.30-image-upload.1 in Runner binary"
+    "core_packages": "relation, conversation_msg, interaction, syncer passed",
+    "source_lock": "15 tests passed; 435 files; cumulative patch roundtrip verified",
+    "android_core": "four ABIs built and receipt verified; native regressions passed",
+    "android_application": "230 Flutter tests passed, 4 skipped; APK ABI parity verified; unchanged-version emulator repair passed",
+    "ios_framework": "macOS required"
   },
   "android": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.30-image-upload.1",
-    "sdk_version": "v3.8.3-patch.15+recovery.30-image-upload.1",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.31-friend-profile.1",
+    "sdk_version": "v3.8.3-patch.15+recovery.31-friend-profile.1",
     "abis": [
       "armeabi-v7a",
       "arm64-v8a",
@@ -34,45 +33,38 @@
     "recovery_patch_included": true,
     "build_script": "build-android.ps1",
     "apk_native_parity_verified": true,
-    "runtime_validation": "not tested on device",
-    "native_binary_integrated": false,
+    "runtime_validation": "emulator-5554: unchanged-version stale friend profile repaired; directory and profile UI verified",
+    "native_binary_integrated": true,
     "aar_built": true,
-    "sdk_artifact_verified": false,
-    "application_validation": "Previous recovery.30 binary retained; added regression test changes source lock, rebuild required for a matching receipt.",
-    "aar_sha256": "4ca03a3c3c1610f5759df46d4ca423e41fc0f5f670d524c7845d0fc80c4130d0",
-    "apk_sha256": "09ef8f3a74017a5989ae7ac352d414d7fa49bdc520df8678bc81ddc773edd260"
+    "sdk_artifact_verified": true,
+    "aar_sha256": "657b8f72dc827cac9b264f010d31e4139f35a21e71fcfbcdbf5b27e68d0b271f",
+    "apk_sha256": "bc130bd8155aad1e494aa7c56a59de81a4a25a2e9c7f6034a8a4e2f8695db6e3"
   },
   "ios": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "version": "v3.8.3-patch.15+recovery.30-image-upload.1",
-    "framework_prepared": true,
+    "version": "v3.8.3-patch.15+recovery.31-friend-profile.1",
+    "framework_prepared": false,
     "recovery_patch_included": true,
     "build_script": "build-ios.sh",
-    "runtime_validation": "not installed/tested",
-    "framework_sha256": {
-      "ios-arm64_x86_64-simulator/OpenIMCore.framework/OpenIMCore": "1a12d6b7d5fef6e5eee9716c7813934693044f58158b0610fed1c7dbe6cb1fa9",
-      "ios-arm64/OpenIMCore.framework/OpenIMCore": "99516825400c32fdba161bd9857669235429a2ef12cafa5e9b0730a9ee8c3ddf"
-    },
-    "pod_resolution_and_build": "passed: direct Xcode Release --no-codesign equivalent flags",
-    "app_validation_scope": "macOS working tree; source lock with 433 files; original local edits preserved; no signing/device runtime",
-    "native_binary_integrated": true,
+    "runtime_validation": "shared source verified; macOS build and device runtime required",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "user will rebuild on macOS",
+    "app_validation_scope": "same locked Core source as Android; previous binary is rejected",
+    "native_binary_integrated": false,
     "source_consistency_verified": true,
-    "source_files": 433,
-    "app_version": "3.0.1+2028",
-    "app_binary_sha256": "6a7c74378eb28b5bd97452845b32b1c176b0a1ea3c78c45ca731761455c42e8b",
-    "verified_at": "2026-10-15T12:25:49.271288+00:00"
+    "source_files": 435
   },
   "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
   "build_overlays": [
     "go.mod and go.sum: pinned existing gomobile dependency closure",
-    "version/version: unique recovery.30-image-upload.1 runtime identity"
+    "version/version: unique recovery.31-friend-profile.1 runtime identity"
   ],
-  "verification_evidence": "verification/recovery.30-image-upload.json",
+  "verification_evidence": "verification/recovery.31-friend-profile.json",
   "local_changes": {
     "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-    "description": "Bound native uploads and cancel hash-lock waiters while preserving all recovery.29 changes."
+    "description": "Retain failed friend notification checkpoints; reconcile designated profiles independently of roster versions; bounded auxiliary profile repair and full-sync user cache eviction. Includes all previous recovery fixes."
   },
   "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
-  "ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
+  "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
   "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json"
 }

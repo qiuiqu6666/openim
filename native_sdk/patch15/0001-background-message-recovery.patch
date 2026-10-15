@@ -3872,7 +3872,7 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
  		log.ZDebug(ctx, "AppDataSyncFinish", "time", time.Since(c.startTime).String())
  		c.progress = 100
  		c.ConversationListener().OnSyncServerProgress(c.progress)
-@@ -104,24 +124,40 @@
+@@ -104,32 +124,53 @@
  	case constant.MsgSyncBegin:
  		log.ZDebug(ctx, "MsgSyncBegin")
  		c.ConversationListener().OnSyncServerStart(false)
@@ -3915,9 +3915,12 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
 +				continue
 +			}
  			if msg.ContentType > constant.FriendNotificationBegin && msg.ContentType < constant.FriendNotificationEnd {
- 				c.relation.DoNotification(ctx, msg)
+-				c.relation.DoNotification(ctx, msg)
++				if err := c.relation.DoNotification(ctx, msg); err != nil {
++					return err
++				}
  			} else if msg.ContentType > constant.UserNotificationBegin && msg.ContentType < constant.UserNotificationEnd {
-@@ -129,7 +165,10 @@
+ 				c.user.DoNotification(ctx, msg)
  			} else if msg.ContentType > constant.GroupNotificationBegin && msg.ContentType < constant.GroupNotificationEnd {
  				c.group.DoNotification(ctx, msg)
  			} else {
@@ -3929,7 +3932,7 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
  			}
  		}
  
-@@ -140,12 +179,14 @@
+@@ -140,12 +181,14 @@
  			if lastMsg.Seq != 0 {
  				if err := c.db.SetNotificationSeq(ctx, conversationID, lastMsg.Seq); err != nil {
  					// Log an error if setting the sequence number fails
@@ -3950,7 +3953,7 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
  }
  
  func (c *Conversation) DoNotification(ctx context.Context, msg *sdkws.MsgData) {
-@@ -188,7 +229,7 @@
+@@ -188,7 +231,7 @@
  	}
  	ctx := c2v.Ctx
  	node := c2v.Value.(common.UpdateConNode)
@@ -3959,7 +3962,7 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
  	switch node.Action {
  	case constant.AddConOrUpLatMsg:
  		var list []*model_struct.LocalConversation
-@@ -204,7 +245,7 @@
+@@ -204,7 +247,7 @@
  					oc.LatestMsg = lc.LatestMsg
  					list = append(list, oc)
  					data := utils.StructToJsonString(list)
@@ -3968,7 +3971,7 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
  					c.ConversationListener().OnConversationChanged(data)
  				}
  			}
-@@ -243,6 +284,12 @@
+@@ -243,6 +286,12 @@
  			lc.GroupID = st.SourceID
  			lc.ConversationID = conversationID
  			lc.ConversationType = conversationType
@@ -3981,7 +3984,7 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
  		case constant.NotificationChatType:
  			lc.UserID = st.SourceID
  			lc.ConversationID = c.getConversationIDBySessionType(st.SourceID, constant.NotificationChatType)
-@@ -253,7 +300,13 @@
+@@ -253,7 +302,13 @@
  		}
  		lc.ShowName = st.Nickname
  		lc.FaceURL = st.FaceURL
@@ -3996,7 +3999,7 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
  		if err != nil {
  			// log.Error("internal", "setConversationFaceUrlAndNickName database err:", err.Error())
  			return
-@@ -329,7 +382,7 @@
+@@ -329,7 +384,7 @@
  				}
  			}
  			data := utils.StructToJsonStringDefault(newCList)
@@ -4005,7 +4008,7 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
  			c.ConversationListener().OnConversationChanged(data)
  		}
  	case constant.NewCon:
-@@ -408,21 +461,22 @@
+@@ -408,32 +463,62 @@
  
  }
  
@@ -4038,14 +4041,15 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
  
  	// Asynchronous sync functions
  	asyncFuncs := []func(c context.Context) error{
-@@ -430,10 +484,39 @@
+ 		c.user.SyncLoginUserInfo,
  		c.relation.SyncAllBlackList,
  		c.group.SyncAllJoinedGroupsAndMembersWithLock,
- 		c.relation.IncrSyncFriendsWithLock,
+-		c.relation.IncrSyncFriendsWithLock,
 -		c.IncrSyncConversationsWithLock,
 -	}
 -
 -	runSyncFunctions(ctx, asyncFuncs, asyncNoWait)
++		c.relation.SyncFriendsWithProfilesWithLock,
 +	}
 +	if !common.RecoveryMetadataPrepared(ctx) {
 +		asyncFuncs = append(asyncFuncs, c.IncrSyncConversationsWithLock)
@@ -4082,7 +4086,7 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
  }
  
  func runSyncFunctions(ctx context.Context, funcs []func(c context.Context) error, mode int) {
-@@ -463,7 +546,7 @@
+@@ -463,7 +548,7 @@
  
  	funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
  	startTime := time.Now()
@@ -4095,25 +4099,58 @@ diff --git a/internal/conversation_msg/notification_deleted_test.go b/internal/c
 new file mode 100644
 --- /dev/null
 +++ b/internal/conversation_msg/notification_deleted_test.go
-@@ -0,0 +1,60 @@
+@@ -0,0 +1,93 @@
 +package conversation_msg
 +
 +import (
 +	"context"
 +	"errors"
++	"net/http"
++	"net/http/httptest"
 +	"testing"
 +
++	"github.com/openimsdk/openim-sdk-core/v3/internal/relation"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/ccontext"
 +	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
 +	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
 +	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
 +	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
 +	"github.com/openimsdk/protocol/sdkws"
 +)
 +
 +type notificationCheckpointDB struct {
 +	db_interface.DataBase
-+	seq int64
-+	err error
++	seq        int64
++	err        error
++	profileErr error
++}
++
++func (d *notificationCheckpointDB) GetVersionSync(context.Context, string, string) (*model_struct.LocalVersionSync, error) {
++	return &model_struct.LocalVersionSync{VersionID: "friends", Version: 1}, d.profileErr
++}
++func (d *notificationCheckpointDB) GetFriendInfoList(context.Context, []string) ([]*model_struct.LocalFriend, error) {
++	return nil, nil
++}
++
++func TestFriendNotificationFailureDoesNotAdvanceCheckpoint(t *testing.T) {
++	failure := errors.New("temporary friend storage failure")
++	d := &notificationCheckpointDB{seq: 1, profileErr: failure}
++	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
++		_, _ = w.Write([]byte(`{"errCode":0,"data":{"versionID":"friends","version":1}}`))
++	}))
++	defer srv.Close()
++	ctx := ccontext.WithInfo(context.WithValue(context.Background(), "operationID", "friend-notification-retry"), &ccontext.GlobalConfig{UserID: "self", IMConfig: sdk_struct.IMConfig{ApiAddr: srv.URL}})
++	c := &Conversation{db: d, relation: relation.NewFriend("self", d, nil, nil)}
++	msg := &sdkws.MsgData{Seq: 2, ContentType: constant.FriendInfoUpdatedNotification, Content: []byte(`{"detail":"{\"userID\":\"peer\"}"}`)}
++	cmd := common.Cmd2Value{Ctx: ctx, Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: map[string]*sdkws.PullMsgs{"n_friend": {Msgs: []*sdkws.MsgData{msg}}}}}
++	if err := c.doNotificationManager(cmd); !errors.Is(err, failure) || d.seq != 1 {
++		t.Fatalf("friend failure was acknowledged: err=%v seq=%d", err, d.seq)
++	}
++	d.profileErr = nil
++	if err := c.doNotificationManager(cmd); err != nil || d.seq != 2 {
++		t.Fatalf("same notification did not retry successfully: err=%v seq=%d", err, d.seq)
++	}
 +}
 +
 +func (d *notificationCheckpointDB) SetNotificationSeq(_ context.Context, _ string, seq int64) error {
@@ -13476,6 +13513,123 @@ new file mode 100644
 +	log.ZInfo(ctx, "sync_diag empty_previews_revalidated", "candidates", len(pending), "confirmedInvisible", closed, "stillIncomplete", len(pending)-closed)
 +	return nil
 +}
+diff --git a/internal/interaction/msg_sync_visible_empty_lifecycle_test.go b/internal/interaction/msg_sync_visible_empty_lifecycle_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/interaction/msg_sync_visible_empty_lifecycle_test.go
+@@ -0,0 +1,112 @@
++package interaction
++
++import (
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/msg"
++	"github.com/openimsdk/protocol/sdkws"
++	"google.golang.org/protobuf/proto"
++)
++
++// Exercise the scheduler and delivery receipts, rather than only the boundary helper.
++func TestInvisiblePrefixLifecycleDoesNotSkipNewMessages(t *testing.T) {
++	for _, scenario := range []string{"clear_then_new", "rejoin_stale_upper", "reconnect_persisted_checkpoint"} {
++		t.Run(scenario, func(t *testing.T) {
++			ctx := recoveryContext(t)
++			store := &checkpointFaultDB{recoveryVersionDB: &recoveryVersionDB{installed: true}}
++			conn := &LongConnMgr{send: make(chan Message, 1)}
++			m := &MsgSyncer{ctx: ctx, db: store, longConnMgr: conn, conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{}}
++			lower, upper := int64(5), int64(4)
++			offline := false
++			delivered := map[int64]int{}
++			receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
++				for _, batch := range cmd.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs {
++					for _, row := range batch.Msgs {
++						delivered[row.Seq]++
++					}
++				}
++				return nil
++			})
++			requestWorker(t, conn, func(req Message) *GeneralWsResp {
++				if offline {
++					return &GeneralWsResp{ErrCode: 10001, ErrMsg: "connection lost"}
++				}
++				if req.Message.ReqIdentifier == constant.PullMsgBySeqList {
++					q := &msg.GetSeqMessageReq{}
++					if err := proto.Unmarshal(req.Message.Data, q); err != nil {
++						panic(err)
++					}
++					p := &sdkws.PullMsgs{}
++					seq := q.Conversations[0].Seqs[0]
++					if q.Order == sdkws.PullOrder_PullOrderDesc && seq <= lower {
++						p.IsEnd, p.EndSeq = true, lower
++					}
++					if q.Order == sdkws.PullOrder_PullOrderAsc && seq >= upper {
++						p.IsEnd, p.EndSeq = true, upper
++					}
++					return wireResponse(&msg.GetSeqMessageResp{Msgs: map[string]*sdkws.PullMsgs{"chat": p}})
++				}
++				q := &sdkws.PullMessageBySeqsReq{}
++				if err := proto.Unmarshal(req.Message.Data, q); err != nil {
++					panic(err)
++				}
++				r := q.SeqRanges[0]
++				var seqs []int64
++				for s := r.Begin; s <= r.End; s++ {
++					if s >= lower && s <= upper {
++						seqs = append(seqs, s)
++					}
++				}
++				return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", seqs...)})
++			})
++			if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"chat": 4}, 1); err != nil {
++				t.Fatal(err)
++			}
++			if m.syncedMaxSeqs["chat"] != 4 || len(delivered) != 0 {
++				t.Fatal("old invisible prefix was not closed safely")
++			}
++			if scenario == "rejoin_stale_upper" {
++				// Membership reopens at seq 5, while the local cache still says max 4.
++				store.boundary = model_struct.LocalConversation{MinSeq: 5, MaxSeq: 4}
++			}
++			if scenario == "reconnect_persisted_checkpoint" {
++				m = &MsgSyncer{ctx: ctx, db: store, longConnMgr: conn, conversationCh: m.conversationCh, syncedMaxSeqs: map[string]int64{}}
++				if err := m.loadMessageCheckpoints(ctx, []string{"chat"}); err != nil {
++					t.Fatal(err)
++				}
++				offline = true
++				if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"chat": 7}, 1); err == nil {
++					t.Fatal("outage accepted as completion")
++				}
++				if m.syncedMaxSeqs["chat"] != 4 {
++					t.Fatal("outage advanced checkpoint")
++				}
++				offline = false
++			}
++			upper = 7
++			if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"chat": upper}, 1); err != nil {
++				t.Fatal(err)
++			}
++			for seq := int64(5); seq <= upper; seq++ {
++				if delivered[seq] != 1 {
++					t.Fatalf("normal seq %d delivered %d times", seq, delivered[seq])
++				}
++			}
++			if m.syncedMaxSeqs["chat"] != upper {
++				t.Fatalf("checkpoint=%d", m.syncedMaxSeqs["chat"])
++			}
++			if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"chat": upper}, 1); err != nil {
++				t.Fatal(err)
++			}
++			for seq, count := range delivered {
++				if count != 1 {
++					t.Fatalf("seq %d repeated after completion", seq)
++				}
++			}
++		})
++	}
++}
 diff --git a/internal/interaction/msg_sync_visible_empty_test.go b/internal/interaction/msg_sync_visible_empty_test.go
 new file mode 100644
 --- /dev/null
@@ -14309,17 +14463,712 @@ new file mode 100644
 diff --git a/internal/relation/incremental_sync.go b/internal/relation/incremental_sync.go
 --- a/internal/relation/incremental_sync.go
 +++ b/internal/relation/incremental_sync.go
-@@ -47,7 +47,9 @@
+@@ -47,7 +47,20 @@
  			return r.friendSyncer.Sync(ctx, server, local, nil)
  		},
  		FullSyncer: func(ctx context.Context) error {
 -			return r.friendSyncer.FullSync(ctx, r.loginUserID)
 +			return syncFullFriendsWithNotice(ctx, r.db.GetAllFriendList, func(ctx context.Context) error {
-+				return r.friendSyncer.FullSync(ctx, r.loginUserID)
++				if err := r.friendSyncer.FullSync(ctx, r.loginUserID); err != nil {
++					return err
++				}
++				// Batch replacement bypasses WithUpdate's public-user cache eviction.
++				friends, err := r.db.GetAllFriendList(ctx)
++				if err != nil {
++					return err
++				}
++				for _, friend := range friends {
++					r.user.UserCache().Delete(friend.FriendUserID)
++				}
++				return nil
 +			}, r.friendshipListener)
  		},
  		FullID: func(ctx context.Context) ([]string, error) {
  			resp, err := r.getFullFriendUserIDs(ctx, &relation.GetFullFriendUserIDsReq{
+diff --git a/internal/relation/notification.go b/internal/relation/notification.go
+--- a/internal/relation/notification.go
++++ b/internal/relation/notification.go
+@@ -10,10 +10,12 @@
+ 	"github.com/openimsdk/tools/log"
+ )
+ 
+-func (r *Relation) DoNotification(ctx context.Context, msg *sdkws.MsgData) {
++func (r *Relation) DoNotification(ctx context.Context, msg *sdkws.MsgData) error {
+ 	if err := r.doNotification(ctx, msg); err != nil {
+ 		log.ZError(ctx, "doNotification error", err, "msg", msg)
++		return err
+ 	}
++	return nil
+ }
+ 
+ func (r *Relation) doNotification(ctx context.Context, msg *sdkws.MsgData) error {
+@@ -80,8 +82,16 @@
+ 		if err := utils.UnmarshalNotificationElem(msg.Content, &tips); err != nil {
+ 			return err
+ 		}
++		if tips.UserID == "" {
++			return fmt.Errorf("friend profile notification has no userID")
++		}
+ 		if tips.UserID != r.loginUserID {
+-			return r.IncrSyncFriends(ctx)
++			if err := r.IncrSyncFriends(ctx); err != nil {
++				return err
++			}
++			// A profile notification is evidence independent of roster versions.
++			// Re-read this existing friend even if the incremental response is empty.
++			return r.refreshFriendProfiles(ctx, []string{tips.UserID})
+ 		}
+ 	case constant.BlackAddedNotification:
+ 		var tips sdkws.BlackAddedTips
+diff --git a/internal/relation/profile_sync.go b/internal/relation/profile_sync.go
+new file mode 100644
+--- /dev/null
++++ b/internal/relation/profile_sync.go
+@@ -0,0 +1,85 @@
++package relation
++
++import (
++	"context"
++	"fmt"
++	"time"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++)
++
++const friendProfileBatchSize = 100
++
++// SyncFriendsWithProfilesWithLock runs in the existing auxiliary recovery job.
++// Roster versions alone cannot repair a profile missed by an older client.
++// Bound requests, retain offline data, and retry incomplete passes next time.
++func (r *Relation) SyncFriendsWithProfilesWithLock(ctx context.Context) error {
++	r.relationSyncMutex.Lock()
++	defer r.relationSyncMutex.Unlock()
++	if err := r.IncrSyncFriends(ctx); err != nil {
++		return err
++	}
++	if time.Since(r.friendProfilesSyncedAt) < time.Minute {
++		return nil
++	}
++	friends, err := r.db.GetAllFriendList(ctx)
++	if err != nil {
++		return err
++	}
++	for start := 0; start < len(friends); start += friendProfileBatchSize {
++		end := min(start+friendProfileBatchSize, len(friends))
++		ids := make([]string, 0, end-start)
++		for _, friend := range friends[start:end] {
++			ids = append(ids, friend.FriendUserID)
++		}
++		if err := r.refreshFriendProfiles(ctx, ids); err != nil {
++			return err
++		}
++	}
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	r.friendProfilesSyncedAt = time.Now()
++	return nil
++}
++
++// Caller holds relationSyncMutex. Only refresh persisted relationships: a
++// profile event must never re-add a deleted friend or replace a user's remark
++// with a group nickname. The designated-friend endpoint returns both fields.
++func (r *Relation) refreshFriendProfiles(ctx context.Context, ids []string) error {
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	local, err := r.db.GetFriendInfoList(ctx, ids)
++	if err != nil || len(local) == 0 {
++		return err
++	}
++	wanted := make(map[string]bool, len(local))
++	ids = make([]string, 0, len(local))
++	for _, friend := range local {
++		wanted[friend.FriendUserID] = false
++		ids = append(ids, friend.FriendUserID)
++	}
++	response, err := r.getDesignatedFriends(ctx, ids)
++	if err != nil {
++		return err
++	}
++	server := make([]*model_struct.LocalFriend, 0, len(local))
++	for _, friend := range response {
++		if friend == nil || friend.FriendUser == nil || friend.OwnerUserID != r.loginUserID {
++			return fmt.Errorf("invalid friend profile response")
++		}
++		seen, requested := wanted[friend.FriendUser.UserID]
++		if !requested || seen {
++			return fmt.Errorf("unexpected or duplicate friend profile response")
++		}
++		wanted[friend.FriendUser.UserID] = true
++		server = append(server, ServerFriendToLocalFriend(friend))
++	}
++	if len(server) != len(local) {
++		return fmt.Errorf("incomplete friend profile response: got %d want %d", len(server), len(local))
++	}
++	// Use the normal commit/cache invalidation/notices path. Never delete a
++	// relationship on a missing or partial profile response.
++	return r.friendSyncer.Sync(ctx, server, local, nil, true)
++}
+diff --git a/internal/relation/profile_sync_test.go b/internal/relation/profile_sync_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/relation/profile_sync_test.go
+@@ -0,0 +1,206 @@
++package relation
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++	"time"
++
++	"github.com/openimsdk/openim-sdk-core/v3/internal/user"
++	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/ccontext"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/sdkws"
++)
++
++type friendProfileDB struct {
++	db_interface.DataBase
++	rows     map[string]model_struct.LocalFriend
++	writeErr error
++	updates  int
++}
++
++func (d *friendProfileDB) GetVersionSync(context.Context, string, string) (*model_struct.LocalVersionSync, error) {
++	return &model_struct.LocalVersionSync{VersionID: "same", Version: 7}, nil
++}
++func (d *friendProfileDB) GetAllFriendList(ctx context.Context) ([]*model_struct.LocalFriend, error) {
++	ids := make([]string, 0, len(d.rows))
++	for id := range d.rows {
++		ids = append(ids, id)
++	}
++	return d.GetFriendInfoList(ctx, ids)
++}
++func (d *friendProfileDB) GetFriendInfoList(_ context.Context, ids []string) ([]*model_struct.LocalFriend, error) {
++	var result []*model_struct.LocalFriend
++	for _, id := range ids {
++		if row, ok := d.rows[id]; ok {
++			copy := row
++			result = append(result, &copy)
++		}
++	}
++	return result, nil
++}
++func (d *friendProfileDB) UpdateFriend(_ context.Context, row *model_struct.LocalFriend) error {
++	if d.writeErr != nil {
++		return d.writeErr
++	}
++	d.rows[row.FriendUserID] = *row
++	d.updates++
++	return nil
++}
++
++type friendProfileListener struct {
++	open_im_sdk_callback.OnFriendshipListenerSdk
++	db      *friendProfileDB
++	t       *testing.T
++	changed []model_struct.LocalFriend
++}
++
++func (l *friendProfileListener) OnFriendInfoChanged(row model_struct.LocalFriend) {
++	if l.db.rows[row.FriendUserID] != row {
++		l.t.Fatal("notification before persistence")
++	}
++	l.changed = append(l.changed, row)
++}
++
++func friendProfileFixture(t *testing.T, count int) (*Relation, *friendProfileDB, *friendProfileListener, context.Context, *int, *string) {
++	t.Helper()
++	d := &friendProfileDB{rows: map[string]model_struct.LocalFriend{}}
++	for i := 0; i < count; i++ {
++		id := fmt.Sprint(i)
++		d.rows[id] = model_struct.LocalFriend{OwnerUserID: "self", FriendUserID: id, Nickname: "old", FaceURL: "old-avatar", Remark: "my remark"}
++	}
++	calls := 0
++	mode := "success"
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
++		data := map[string]any{"versionID": "same", "version": 7}
++		if req.URL.Path == "/friend/get_designated_friends" {
++			calls++
++			if mode == "network" {
++				http.Error(w, "temporary failure", 503)
++				return
++			}
++			var body struct {
++				FriendUserIDs []string `json:"friendUserIDs"`
++			}
++			_ = json.NewDecoder(req.Body).Decode(&body)
++			if len(body.FriendUserIDs) > friendProfileBatchSize {
++				t.Error("unbounded profile request")
++			}
++			rows := []any{}
++			for _, id := range body.FriendUserIDs {
++				if mode == "partial" {
++					break
++				}
++				face := "new-avatar"
++				if mode == "clear" {
++					face = ""
++				}
++				rows = append(rows, map[string]any{"ownerUserID": "self", "remark": "my remark", "friendUser": map[string]any{"userID": id, "nickname": "latest", "faceURL": face}})
++			}
++			data = map[string]any{"friendsInfo": rows}
++		} else if req.URL.Path != "/friend/get_incremental_friends" {
++			t.Errorf("unexpected route %s", req.URL.Path)
++		}
++		_ = json.NewEncoder(w).Encode(map[string]any{"errCode": 0, "data": data})
++	}))
++	t.Cleanup(server.Close)
++	ctx := ccontext.WithInfo(context.WithValue(context.Background(), "operationID", "friend-profile-test"), &ccontext.GlobalConfig{UserID: "self", IMConfig: sdk_struct.IMConfig{ApiAddr: server.URL}})
++	ch := make(chan common.Cmd2Value, 1000)
++	r := NewFriend("self", d, user.NewUser(d, "self", ch), ch)
++	l := &friendProfileListener{t: t, db: d}
++	r.friendshipListener = l
++	return r, d, l, ctx, &calls, &mode
++}
++
++func TestFriendProfilesRepairUnchangedRosterInBoundedBatches(t *testing.T) {
++	r, d, l, ctx, calls, _ := friendProfileFixture(t, 205)
++	r.user.UserCache().Store("0", &model_struct.LocalUser{UserID: "0", Nickname: "stale cache"})
++	if err := r.SyncFriendsWithProfilesWithLock(ctx); err != nil {
++		t.Fatal(err)
++	}
++	if *calls != 3 || d.updates != 205 || len(l.changed) != 205 {
++		t.Fatalf("calls=%d writes=%d notices=%d", *calls, d.updates, len(l.changed))
++	}
++	if _, ok := r.user.UserCache().Load("0"); ok {
++		t.Fatal("public user cache was not invalidated")
++	}
++	if d.rows["0"].Nickname != "latest" || d.rows["0"].Remark != "my remark" {
++		t.Fatal(d.rows["0"])
++	}
++	if err := r.SyncFriendsWithProfilesWithLock(ctx); err != nil {
++		t.Fatal(err)
++	}
++	if *calls != 3 {
++		t.Fatal("duplicate recovery pass inside cooldown")
++	}
++	r.friendProfilesSyncedAt = time.Now().Add(-2 * time.Minute)
++	if err := r.SyncFriendsWithProfilesWithLock(ctx); err != nil {
++		t.Fatal(err)
++	}
++	if *calls != 6 || len(l.changed) != 205 {
++		t.Fatal("unchanged profiles duplicated notices")
++	}
++}
++
++func TestFriendProfileFailuresRemainRetryableAndKeepOldRows(t *testing.T) {
++	for _, failure := range []string{"network", "partial", "storage", "cancel"} {
++		t.Run(failure, func(t *testing.T) {
++			r, d, l, ctx, _, mode := friendProfileFixture(t, 1)
++			*mode = failure
++			if failure == "storage" {
++				d.writeErr = errors.New("disk unavailable")
++			}
++			if failure == "cancel" {
++				var cancel context.CancelFunc
++				ctx, cancel = context.WithCancel(ctx)
++				cancel()
++			}
++			if err := r.SyncFriendsWithProfilesWithLock(ctx); err == nil {
++				t.Fatal("failed pass acknowledged")
++			}
++			if !r.friendProfilesSyncedAt.IsZero() || len(l.changed) != 0 || d.rows["0"].Nickname != "old" {
++				t.Fatal("failed pass changed visible identity")
++			}
++			if failure != "cancel" {
++				*mode = "success"
++				d.writeErr = nil
++				if err := r.SyncFriendsWithProfilesWithLock(ctx); err != nil {
++					t.Fatal(err)
++				}
++				if len(l.changed) != 1 {
++					t.Fatal("retry failed")
++				}
++			}
++		})
++	}
++}
++
++func TestFriendProfileNotificationBypassesRosterVersionAndCooldown(t *testing.T) {
++	r, d, l, ctx, calls, mode := friendProfileFixture(t, 1)
++	r.friendProfilesSyncedAt = time.Now()
++	*mode = "clear"
++	content, _ := json.Marshal(map[string]any{"detail": "{\"userID\":\"0\"}"})
++	msg := &sdkws.MsgData{ContentType: constant.FriendInfoUpdatedNotification, Content: content}
++	if err := r.DoNotification(ctx, msg); err != nil {
++		t.Fatal(err)
++	}
++	if *calls != 1 || len(l.changed) != 1 || d.rows["0"].Nickname != "latest" || d.rows["0"].FaceURL != "" {
++		t.Fatal("profile event did not refresh cleared avatar")
++	}
++	delete(d.rows, "0")
++	if err := r.DoNotification(ctx, msg); err != nil {
++		t.Fatal(err)
++	}
++	if *calls != 1 || len(d.rows) != 0 {
++		t.Fatal("deleted friend was resurrected")
++	}
++}
+diff --git a/internal/relation/relation.go b/internal/relation/relation.go
+--- a/internal/relation/relation.go
++++ b/internal/relation/relation.go
+@@ -3,6 +3,7 @@
+ import (
+ 	"context"
+ 	"sync"
++	"time"
+ 
+ 	"github.com/openimsdk/openim-sdk-core/v3/internal/user"
+ 	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
+@@ -31,15 +32,16 @@
+ }
+ 
+ type Relation struct {
+-	friendshipListener open_im_sdk_callback.OnFriendshipListenerSdk
+-	loginUserID        string
+-	db                 db_interface.DataBase
+-	user               *user.User
+-	friendSyncer       *syncer.Syncer[*model_struct.LocalFriend, relation.GetPaginationFriendsResp, [2]string]
+-	blackSyncer        *syncer.Syncer[*model_struct.LocalBlack, syncer.NoResp, [2]string]
+-	conversationCh     chan common.Cmd2Value
+-	listenerForService open_im_sdk_callback.OnListenerForService
+-	relationSyncMutex  sync.Mutex
++	friendshipListener     open_im_sdk_callback.OnFriendshipListenerSdk
++	loginUserID            string
++	db                     db_interface.DataBase
++	user                   *user.User
++	friendSyncer           *syncer.Syncer[*model_struct.LocalFriend, relation.GetPaginationFriendsResp, [2]string]
++	blackSyncer            *syncer.Syncer[*model_struct.LocalBlack, syncer.NoResp, [2]string]
++	conversationCh         chan common.Cmd2Value
++	listenerForService     open_im_sdk_callback.OnListenerForService
++	relationSyncMutex      sync.Mutex
++	friendProfilesSyncedAt time.Time
+ }
+ 
+ func (r *Relation) initSyncer() {
+diff --git a/internal/third/file/upload.go b/internal/third/file/upload.go
+--- a/internal/third/file/upload.go
++++ b/internal/third/file/upload.go
+@@ -30,7 +30,6 @@
+ 	"net/url"
+ 	"strings"
+ 	"sync"
+-	"sync/atomic"
+ 	"time"
+ 
+ 	"github.com/openimsdk/protocol/third"
+@@ -64,46 +63,24 @@
+ }
+ 
+ type File struct {
+-	database    db_interface.DataBase
+-	loginUserID string
+-	confLock    sync.Locker
+-	partLimit   *third.PartLimitResp
+-	mapLocker   sync.Locker
+-	uploading   map[string]*lockInfo
+-}
+-
+-type lockInfo struct {
+-	count  int32
+-	locker sync.Locker
+-}
+-
+-func (f *File) lockHash(hash string) {
+-	f.mapLocker.Lock()
+-	locker, ok := f.uploading[hash]
+-	if !ok {
+-		locker = &lockInfo{count: 0, locker: &sync.Mutex{}}
+-		f.uploading[hash] = locker
+-	}
+-	atomic.AddInt32(&locker.count, 1)
+-	f.mapLocker.Unlock()
+-	locker.locker.Lock()
+-}
+-
+-func (f *File) unlockHash(hash string) {
+-	f.mapLocker.Lock()
+-	locker, ok := f.uploading[hash]
+-	if !ok {
+-		f.mapLocker.Unlock()
+-		return
+-	}
+-	if atomic.AddInt32(&locker.count, -1) == 0 {
+-		delete(f.uploading, hash)
+-	}
+-	f.mapLocker.Unlock()
+-	locker.locker.Unlock()
++	database      db_interface.DataBase
++	loginUserID   string
++	confLock      sync.Locker
++	partLimit     *third.PartLimitResp
++	mapLocker     sync.Locker
++	uploading     map[string]*lockInfo
++	uploadTimeout time.Duration
+ }
+ 
+ func (f *File) UploadFile(ctx context.Context, req *UploadFileReq, cb UploadFileCallback) (*UploadFileResp, error) {
++	budget := f.uploadTimeout
++	if budget <= 0 {
++		// Finish before the app's ten-minute observer deadline. This context
++		// reaches the signed PUT, response body and all metadata requests.
++		budget = 9 * time.Minute
++	}
++	ctx, cancel := context.WithTimeout(ctx, budget)
++	defer cancel()
+ 	if cb == nil {
+ 		cb = emptyUploadCallback{}
+ 	}
+@@ -137,7 +114,9 @@
+ 	if err := file.StartSeek(0); err != nil {
+ 		return nil, err
+ 	}
+-	f.lockHash(partMd5Val)
++	if err := f.lockHash(ctx, partMd5Val); err != nil {
++		return nil, err
++	}
+ 	defer f.unlockHash(partMd5Val)
+ 	maxParts := 20
+ 	if maxParts > len(partSizes) {
+@@ -174,6 +153,9 @@
+ 	}
+ 	continueUpload := uploadedSize > 0
+ 	for i, currentPartSize := range partSizes {
++		if err := ctx.Err(); err != nil {
++			return nil, err
++		}
+ 		partNumber := int32(i + 1)
+ 		md5Reader := NewMd5Reader(io.LimitReader(file, currentPartSize))
+ 		if uploadInfo.Bitmap.Get(i) {
+@@ -555,6 +537,9 @@
+ 		h := md5.New()
+ 		r := io.LimitReader(r, partSize)
+ 		for {
++			if err := ctx.Err(); err != nil {
++				return nil, err
++			}
+ 			if n, err := r.Read(buf); err == nil {
+ 				if contentType == "" {
+ 					contentType = http.DetectContentType(buf[:n])
+diff --git a/internal/third/file/upload_deadline_test.go b/internal/third/file/upload_deadline_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/third/file/upload_deadline_test.go
+@@ -0,0 +1,144 @@
++package file
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"path/filepath"
++	"sync"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/ccontext"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/third"
++)
++
++type deadlineDB struct{ db_interface.DataBase }
++
++func (deadlineDB) DeleteUpload(context.Context, string) error { return nil }
++
++func TestUploadDeadlineReleasesStalledPUTAndAllowsSameImageRetry(t *testing.T) {
++	for _, bodyStall := range []bool{false, true} {
++		t.Run(map[bool]string{false: "headers", true: "body"}[bodyStall], func(t *testing.T) {
++			var puts atomic.Int32
++			var server *httptest.Server
++			release := make(chan struct{})
++			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++				write := func(data any) { _ = json.NewEncoder(w).Encode(map[string]any{"errCode": 0, "data": data}) }
++				switch r.URL.Path {
++				case "/object/part_limit":
++					write(&third.PartLimitResp{MinPartSize: 1024, MaxPartSize: 1024, MaxNumSize: 10})
++				case "/object/initiate_multipart_upload":
++					write(&third.InitiateMultipartUploadResp{Upload: &third.UploadInfo{
++						UploadID: "test-upload", PartSize: 1024,
++						Sign: &third.AuthSignParts{Url: server.URL + "/put", Parts: []*third.SignPart{{PartNumber: 1}}},
++					}})
++				case "/put":
++					_, _ = io.Copy(io.Discard, r.Body)
++					if puts.Add(1) == 1 {
++						if bodyStall {
++							w.WriteHeader(http.StatusOK)
++							w.(http.Flusher).Flush()
++						}
++						select {
++						case <-r.Context().Done():
++						case <-release:
++						}
++						return
++					}
++					w.WriteHeader(http.StatusOK)
++				case "/object/complete_multipart_upload":
++					write(&third.CompleteMultipartUploadResp{Url: server.URL + "/image.jpg"})
++				default:
++					http.Error(w, "unexpected route", http.StatusNotFound)
++				}
++			}))
++			defer server.Close()
++			defer close(release)
++			ctx := ccontext.WithInfo(ccontext.WithOperationID(context.Background(), "upload-test"),
++				&ccontext.GlobalConfig{UserID: "test", Token: "test", IMConfig: sdk_struct.IMConfig{ApiAddr: server.URL}})
++			// Rescue the legacy unbounded implementation without hanging the test.
++			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
++			defer cancel()
++			f := NewFile(deadlineDB{}, "test")
++			f.uploadTimeout = 100 * time.Millisecond
++			path := filepath.Join(t.TempDir(), "image.jpg")
++			if err := os.WriteFile(path, []byte("image fixture"), 0600); err != nil {
++				t.Fatal(err)
++			}
++			request := &UploadFileReq{Filepath: path, Name: "image.jpg"}
++			started := time.Now()
++			_, err := f.UploadFile(ctx, request, nil)
++			if !errors.Is(err, context.DeadlineExceeded) {
++				t.Fatalf("expected deadline, got %v", err)
++			}
++			if time.Since(started) >= time.Second {
++				t.Fatal("native upload ignored its own deadline")
++			}
++			if len(f.uploading) != 0 {
++				t.Fatal("timed-out upload retained content lock")
++			}
++			f.uploadTimeout = time.Second
++			result, err := f.UploadFile(ctx, request, nil)
++			if err != nil || result.URL != server.URL+"/image.jpg" {
++				t.Fatalf("same image retry: %v, %v", result, err)
++			}
++		})
++	}
++}
++
++func TestUploadHashWaitCancellationKeepsOwnerAndReleasesWaiter(t *testing.T) {
++	f := NewFile(nil, "test")
++	if err := f.lockHash(context.Background(), "image"); err != nil {
++		t.Fatal(err)
++	}
++	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
++	defer cancel()
++	if err := f.lockHash(ctx, "image"); !errors.Is(err, context.DeadlineExceeded) {
++		t.Fatalf("wait result: %v", err)
++	}
++	if f.uploading["image"].count != 1 {
++		t.Fatal("cancelled waiter lost the active owner")
++	}
++	f.unlockHash("image")
++	if len(f.uploading) != 0 {
++		t.Fatal("content lock leaked")
++	}
++	if err := f.lockHash(context.Background(), "image"); err != nil {
++		t.Fatal(err)
++	}
++	f.unlockHash("image")
++}
++
++func TestUploadHashSerializesConcurrentRetries(t *testing.T) {
++	f := NewFile(nil, "test")
++	var active, overlaps atomic.Int32
++	var workers sync.WaitGroup
++	for i := 0; i < 60; i++ {
++		workers.Add(1)
++		go func() {
++			defer workers.Done()
++			if err := f.lockHash(context.Background(), "image"); err != nil {
++				t.Error(err)
++				return
++			}
++			if active.Add(1) != 1 {
++				overlaps.Add(1)
++			}
++			time.Sleep(time.Millisecond)
++			active.Add(-1)
++			f.unlockHash("image")
++		}()
++	}
++	workers.Wait()
++	if overlaps.Load() != 0 || len(f.uploading) != 0 {
++		t.Fatal("concurrent uploads overlap or leaked a lock")
++	}
++}
+diff --git a/internal/third/file/upload_lock.go b/internal/third/file/upload_lock.go
+new file mode 100644
+--- /dev/null
++++ b/internal/third/file/upload_lock.go
+@@ -0,0 +1,53 @@
++package file
++
++import "context"
++
++// Count the owner and waiters under mapLocker so cancelled waiters never delete
++// a lock still held by another upload of the same content.
++type lockInfo struct {
++	count int
++	token chan struct{}
++}
++
++func (f *File) lockHash(ctx context.Context, hash string) error {
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	f.mapLocker.Lock()
++	lock := f.uploading[hash]
++	if lock == nil {
++		lock = &lockInfo{token: make(chan struct{}, 1)}
++		f.uploading[hash] = lock
++	}
++	lock.count++
++	f.mapLocker.Unlock()
++	select {
++	case lock.token <- struct{}{}:
++		if err := ctx.Err(); err != nil {
++			f.unlockHash(hash)
++			return err
++		}
++		return nil
++	case <-ctx.Done():
++		f.releaseHash(hash, false)
++		return ctx.Err()
++	}
++}
++
++func (f *File) unlockHash(hash string) { f.releaseHash(hash, true) }
++
++func (f *File) releaseHash(hash string, acquired bool) {
++	f.mapLocker.Lock()
++	defer f.mapLocker.Unlock()
++	lock := f.uploading[hash]
++	if lock == nil {
++		return
++	}
++	if acquired {
++		<-lock.token
++	}
++	lock.count--
++	if lock.count == 0 {
++		delete(f.uploading, hash)
++	}
++}
 diff --git a/open_im_sdk/caller.go b/open_im_sdk/caller.go
 --- a/open_im_sdk/caller.go
 +++ b/open_im_sdk/caller.go
@@ -17234,431 +18083,3 @@ diff --git a/sdk_struct/sdk_struct.go b/sdk_struct/sdk_struct.go
  }
  
  type BasicInfo struct {
-diff --git a/internal/third/file/upload.go b/internal/third/file/upload.go
---- a/internal/third/file/upload.go
-+++ b/internal/third/file/upload.go
-@@ -30,7 +30,6 @@
- 	"net/url"
- 	"strings"
- 	"sync"
--	"sync/atomic"
- 	"time"
- 
- 	"github.com/openimsdk/protocol/third"
-@@ -64,46 +63,24 @@
- }
- 
- type File struct {
--	database    db_interface.DataBase
--	loginUserID string
--	confLock    sync.Locker
--	partLimit   *third.PartLimitResp
--	mapLocker   sync.Locker
--	uploading   map[string]*lockInfo
--}
--
--type lockInfo struct {
--	count  int32
--	locker sync.Locker
--}
--
--func (f *File) lockHash(hash string) {
--	f.mapLocker.Lock()
--	locker, ok := f.uploading[hash]
--	if !ok {
--		locker = &lockInfo{count: 0, locker: &sync.Mutex{}}
--		f.uploading[hash] = locker
--	}
--	atomic.AddInt32(&locker.count, 1)
--	f.mapLocker.Unlock()
--	locker.locker.Lock()
--}
--
--func (f *File) unlockHash(hash string) {
--	f.mapLocker.Lock()
--	locker, ok := f.uploading[hash]
--	if !ok {
--		f.mapLocker.Unlock()
--		return
--	}
--	if atomic.AddInt32(&locker.count, -1) == 0 {
--		delete(f.uploading, hash)
--	}
--	f.mapLocker.Unlock()
--	locker.locker.Unlock()
-+	database      db_interface.DataBase
-+	loginUserID   string
-+	confLock      sync.Locker
-+	partLimit     *third.PartLimitResp
-+	mapLocker     sync.Locker
-+	uploading     map[string]*lockInfo
-+	uploadTimeout time.Duration
- }
- 
- func (f *File) UploadFile(ctx context.Context, req *UploadFileReq, cb UploadFileCallback) (*UploadFileResp, error) {
-+	budget := f.uploadTimeout
-+	if budget <= 0 {
-+		// Finish before the app's ten-minute observer deadline. This context
-+		// reaches the signed PUT, response body and all metadata requests.
-+		budget = 9 * time.Minute
-+	}
-+	ctx, cancel := context.WithTimeout(ctx, budget)
-+	defer cancel()
- 	if cb == nil {
- 		cb = emptyUploadCallback{}
- 	}
-@@ -137,7 +114,9 @@
- 	if err := file.StartSeek(0); err != nil {
- 		return nil, err
- 	}
--	f.lockHash(partMd5Val)
-+	if err := f.lockHash(ctx, partMd5Val); err != nil {
-+		return nil, err
-+	}
- 	defer f.unlockHash(partMd5Val)
- 	maxParts := 20
- 	if maxParts > len(partSizes) {
-@@ -174,6 +153,9 @@
- 	}
- 	continueUpload := uploadedSize > 0
- 	for i, currentPartSize := range partSizes {
-+		if err := ctx.Err(); err != nil {
-+			return nil, err
-+		}
- 		partNumber := int32(i + 1)
- 		md5Reader := NewMd5Reader(io.LimitReader(file, currentPartSize))
- 		if uploadInfo.Bitmap.Get(i) {
-@@ -555,6 +537,9 @@
- 		h := md5.New()
- 		r := io.LimitReader(r, partSize)
- 		for {
-+			if err := ctx.Err(); err != nil {
-+				return nil, err
-+			}
- 			if n, err := r.Read(buf); err == nil {
- 				if contentType == "" {
- 					contentType = http.DetectContentType(buf[:n])
-diff --git a/internal/third/file/upload_lock.go b/internal/third/file/upload_lock.go
-new file mode 100644
---- /dev/null
-+++ b/internal/third/file/upload_lock.go
-@@ -0,0 +1,53 @@
-+package file
-+
-+import "context"
-+
-+// Count the owner and waiters under mapLocker so cancelled waiters never delete
-+// a lock still held by another upload of the same content.
-+type lockInfo struct {
-+	count int
-+	token chan struct{}
-+}
-+
-+func (f *File) lockHash(ctx context.Context, hash string) error {
-+	if err := ctx.Err(); err != nil {
-+		return err
-+	}
-+	f.mapLocker.Lock()
-+	lock := f.uploading[hash]
-+	if lock == nil {
-+		lock = &lockInfo{token: make(chan struct{}, 1)}
-+		f.uploading[hash] = lock
-+	}
-+	lock.count++
-+	f.mapLocker.Unlock()
-+	select {
-+	case lock.token <- struct{}{}:
-+		if err := ctx.Err(); err != nil {
-+			f.unlockHash(hash)
-+			return err
-+		}
-+		return nil
-+	case <-ctx.Done():
-+		f.releaseHash(hash, false)
-+		return ctx.Err()
-+	}
-+}
-+
-+func (f *File) unlockHash(hash string) { f.releaseHash(hash, true) }
-+
-+func (f *File) releaseHash(hash string, acquired bool) {
-+	f.mapLocker.Lock()
-+	defer f.mapLocker.Unlock()
-+	lock := f.uploading[hash]
-+	if lock == nil {
-+		return
-+	}
-+	if acquired {
-+		<-lock.token
-+	}
-+	lock.count--
-+	if lock.count == 0 {
-+		delete(f.uploading, hash)
-+	}
-+}
-diff --git a/internal/third/file/upload_deadline_test.go b/internal/third/file/upload_deadline_test.go
-new file mode 100644
---- /dev/null
-+++ b/internal/third/file/upload_deadline_test.go
-@@ -0,0 +1,144 @@
-+package file
-+
-+import (
-+	"context"
-+	"encoding/json"
-+	"errors"
-+	"io"
-+	"net/http"
-+	"net/http/httptest"
-+	"os"
-+	"path/filepath"
-+	"sync"
-+	"sync/atomic"
-+	"testing"
-+	"time"
-+
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/ccontext"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
-+	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
-+	"github.com/openimsdk/protocol/third"
-+)
-+
-+type deadlineDB struct{ db_interface.DataBase }
-+
-+func (deadlineDB) DeleteUpload(context.Context, string) error { return nil }
-+
-+func TestUploadDeadlineReleasesStalledPUTAndAllowsSameImageRetry(t *testing.T) {
-+	for _, bodyStall := range []bool{false, true} {
-+		t.Run(map[bool]string{false: "headers", true: "body"}[bodyStall], func(t *testing.T) {
-+			var puts atomic.Int32
-+			var server *httptest.Server
-+			release := make(chan struct{})
-+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-+				write := func(data any) { _ = json.NewEncoder(w).Encode(map[string]any{"errCode": 0, "data": data}) }
-+				switch r.URL.Path {
-+				case "/object/part_limit":
-+					write(&third.PartLimitResp{MinPartSize: 1024, MaxPartSize: 1024, MaxNumSize: 10})
-+				case "/object/initiate_multipart_upload":
-+					write(&third.InitiateMultipartUploadResp{Upload: &third.UploadInfo{
-+						UploadID: "test-upload", PartSize: 1024,
-+						Sign: &third.AuthSignParts{Url: server.URL + "/put", Parts: []*third.SignPart{{PartNumber: 1}}},
-+					}})
-+				case "/put":
-+					_, _ = io.Copy(io.Discard, r.Body)
-+					if puts.Add(1) == 1 {
-+						if bodyStall {
-+							w.WriteHeader(http.StatusOK)
-+							w.(http.Flusher).Flush()
-+						}
-+						select {
-+						case <-r.Context().Done():
-+						case <-release:
-+						}
-+						return
-+					}
-+					w.WriteHeader(http.StatusOK)
-+				case "/object/complete_multipart_upload":
-+					write(&third.CompleteMultipartUploadResp{Url: server.URL + "/image.jpg"})
-+				default:
-+					http.Error(w, "unexpected route", http.StatusNotFound)
-+				}
-+			}))
-+			defer server.Close()
-+			defer close(release)
-+			ctx := ccontext.WithInfo(ccontext.WithOperationID(context.Background(), "upload-test"),
-+				&ccontext.GlobalConfig{UserID: "test", Token: "test", IMConfig: sdk_struct.IMConfig{ApiAddr: server.URL}})
-+			// Rescue the legacy unbounded implementation without hanging the test.
-+			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-+			defer cancel()
-+			f := NewFile(deadlineDB{}, "test")
-+			f.uploadTimeout = 100 * time.Millisecond
-+			path := filepath.Join(t.TempDir(), "image.jpg")
-+			if err := os.WriteFile(path, []byte("image fixture"), 0600); err != nil {
-+				t.Fatal(err)
-+			}
-+			request := &UploadFileReq{Filepath: path, Name: "image.jpg"}
-+			started := time.Now()
-+			_, err := f.UploadFile(ctx, request, nil)
-+			if !errors.Is(err, context.DeadlineExceeded) {
-+				t.Fatalf("expected deadline, got %v", err)
-+			}
-+			if time.Since(started) >= time.Second {
-+				t.Fatal("native upload ignored its own deadline")
-+			}
-+			if len(f.uploading) != 0 {
-+				t.Fatal("timed-out upload retained content lock")
-+			}
-+			f.uploadTimeout = time.Second
-+			result, err := f.UploadFile(ctx, request, nil)
-+			if err != nil || result.URL != server.URL+"/image.jpg" {
-+				t.Fatalf("same image retry: %v, %v", result, err)
-+			}
-+		})
-+	}
-+}
-+
-+func TestUploadHashWaitCancellationKeepsOwnerAndReleasesWaiter(t *testing.T) {
-+	f := NewFile(nil, "test")
-+	if err := f.lockHash(context.Background(), "image"); err != nil {
-+		t.Fatal(err)
-+	}
-+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-+	defer cancel()
-+	if err := f.lockHash(ctx, "image"); !errors.Is(err, context.DeadlineExceeded) {
-+		t.Fatalf("wait result: %v", err)
-+	}
-+	if f.uploading["image"].count != 1 {
-+		t.Fatal("cancelled waiter lost the active owner")
-+	}
-+	f.unlockHash("image")
-+	if len(f.uploading) != 0 {
-+		t.Fatal("content lock leaked")
-+	}
-+	if err := f.lockHash(context.Background(), "image"); err != nil {
-+		t.Fatal(err)
-+	}
-+	f.unlockHash("image")
-+}
-+
-+func TestUploadHashSerializesConcurrentRetries(t *testing.T) {
-+	f := NewFile(nil, "test")
-+	var active, overlaps atomic.Int32
-+	var workers sync.WaitGroup
-+	for i := 0; i < 60; i++ {
-+		workers.Add(1)
-+		go func() {
-+			defer workers.Done()
-+			if err := f.lockHash(context.Background(), "image"); err != nil {
-+				t.Error(err)
-+				return
-+			}
-+			if active.Add(1) != 1 {
-+				overlaps.Add(1)
-+			}
-+			time.Sleep(time.Millisecond)
-+			active.Add(-1)
-+			f.unlockHash("image")
-+		}()
-+	}
-+	workers.Wait()
-+	if overlaps.Load() != 0 || len(f.uploading) != 0 {
-+		t.Fatal("concurrent uploads overlap or leaked a lock")
-+	}
-+}
-diff --git a/internal/interaction/msg_sync_visible_empty_lifecycle_test.go b/internal/interaction/msg_sync_visible_empty_lifecycle_test.go
-new file mode 100644
---- /dev/null
-+++ b/internal/interaction/msg_sync_visible_empty_lifecycle_test.go
-@@ -0,0 +1,112 @@
-+package interaction
-+
-+import (
-+	"testing"
-+
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
-+	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
-+	"github.com/openimsdk/protocol/msg"
-+	"github.com/openimsdk/protocol/sdkws"
-+	"google.golang.org/protobuf/proto"
-+)
-+
-+// Exercise the scheduler and delivery receipts, rather than only the boundary helper.
-+func TestInvisiblePrefixLifecycleDoesNotSkipNewMessages(t *testing.T) {
-+	for _, scenario := range []string{"clear_then_new", "rejoin_stale_upper", "reconnect_persisted_checkpoint"} {
-+		t.Run(scenario, func(t *testing.T) {
-+			ctx := recoveryContext(t)
-+			store := &checkpointFaultDB{recoveryVersionDB: &recoveryVersionDB{installed: true}}
-+			conn := &LongConnMgr{send: make(chan Message, 1)}
-+			m := &MsgSyncer{ctx: ctx, db: store, longConnMgr: conn, conversationCh: make(chan common.Cmd2Value), syncedMaxSeqs: map[string]int64{}}
-+			lower, upper := int64(5), int64(4)
-+			offline := false
-+			delivered := map[int64]int{}
-+			receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
-+				for _, batch := range cmd.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs {
-+					for _, row := range batch.Msgs {
-+						delivered[row.Seq]++
-+					}
-+				}
-+				return nil
-+			})
-+			requestWorker(t, conn, func(req Message) *GeneralWsResp {
-+				if offline {
-+					return &GeneralWsResp{ErrCode: 10001, ErrMsg: "connection lost"}
-+				}
-+				if req.Message.ReqIdentifier == constant.PullMsgBySeqList {
-+					q := &msg.GetSeqMessageReq{}
-+					if err := proto.Unmarshal(req.Message.Data, q); err != nil {
-+						panic(err)
-+					}
-+					p := &sdkws.PullMsgs{}
-+					seq := q.Conversations[0].Seqs[0]
-+					if q.Order == sdkws.PullOrder_PullOrderDesc && seq <= lower {
-+						p.IsEnd, p.EndSeq = true, lower
-+					}
-+					if q.Order == sdkws.PullOrder_PullOrderAsc && seq >= upper {
-+						p.IsEnd, p.EndSeq = true, upper
-+					}
-+					return wireResponse(&msg.GetSeqMessageResp{Msgs: map[string]*sdkws.PullMsgs{"chat": p}})
-+				}
-+				q := &sdkws.PullMessageBySeqsReq{}
-+				if err := proto.Unmarshal(req.Message.Data, q); err != nil {
-+					panic(err)
-+				}
-+				r := q.SeqRanges[0]
-+				var seqs []int64
-+				for s := r.Begin; s <= r.End; s++ {
-+					if s >= lower && s <= upper {
-+						seqs = append(seqs, s)
-+					}
-+				}
-+				return wireResponse(&sdkws.PullMessageBySeqsResp{Msgs: recoveryMsgs("chat", seqs...)})
-+			})
-+			if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"chat": 4}, 1); err != nil {
-+				t.Fatal(err)
-+			}
-+			if m.syncedMaxSeqs["chat"] != 4 || len(delivered) != 0 {
-+				t.Fatal("old invisible prefix was not closed safely")
-+			}
-+			if scenario == "rejoin_stale_upper" {
-+				// Membership reopens at seq 5, while the local cache still says max 4.
-+				store.boundary = model_struct.LocalConversation{MinSeq: 5, MaxSeq: 4}
-+			}
-+			if scenario == "reconnect_persisted_checkpoint" {
-+				m = &MsgSyncer{ctx: ctx, db: store, longConnMgr: conn, conversationCh: m.conversationCh, syncedMaxSeqs: map[string]int64{}}
-+				if err := m.loadMessageCheckpoints(ctx, []string{"chat"}); err != nil {
-+					t.Fatal(err)
-+				}
-+				offline = true
-+				if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"chat": 7}, 1); err == nil {
-+					t.Fatal("outage accepted as completion")
-+				}
-+				if m.syncedMaxSeqs["chat"] != 4 {
-+					t.Fatal("outage advanced checkpoint")
-+				}
-+				offline = false
-+			}
-+			upper = 7
-+			if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"chat": upper}, 1); err != nil {
-+				t.Fatal(err)
-+			}
-+			for seq := int64(5); seq <= upper; seq++ {
-+				if delivered[seq] != 1 {
-+					t.Fatalf("normal seq %d delivered %d times", seq, delivered[seq])
-+				}
-+			}
-+			if m.syncedMaxSeqs["chat"] != upper {
-+				t.Fatalf("checkpoint=%d", m.syncedMaxSeqs["chat"])
-+			}
-+			if err := m.compareSeqsAndBatchSync(ctx, map[string]int64{"chat": upper}, 1); err != nil {
-+				t.Fatal(err)
-+			}
-+			for seq, count := range delivered {
-+				if count != 1 {
-+					t.Fatalf("seq %d repeated after completion", seq)
-+				}
-+			}
-+		})
-+	}
-+}

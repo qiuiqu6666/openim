@@ -27,7 +27,7 @@ python3 "$root/prepare_source.py" --output "$work/source"
 cd "$work/source"
 "$go_bin" install "golang.org/x/mobile/cmd/gomobile@$mobile"
 "$go_bin" install "golang.org/x/mobile/cmd/gobind@$mobile"
-CGO_ENABLED=0 "$go_bin" test ./pkg/common ./pkg/network ./internal/interaction ./internal/conversation_msg -count=1 -timeout=120s
+CGO_ENABLED=0 "$go_bin" test ./pkg/common ./pkg/network ./internal/interaction ./internal/conversation_msg ./internal/relation -count=1 -timeout=120s
 CGO_ENABLED=0 "$go_bin" test ./internal/third/file -run '^(TestUploadDeadline|TestUploadHash)' -count=1 -timeout=30s
 # CGO=0 skips SQLite transaction/restart tests; run these on the Mac host too.
 CGO_ENABLED=1 "$go_bin" test ./internal/interaction ./internal/conversation_msg -count=1 -timeout=120s

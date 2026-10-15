@@ -425,6 +425,51 @@ void main() {
     expect(logic!.initialProfileFailed.value, isFalse);
   });
 
+  testWidgets('live friend identity updates both the profile and its cache',
+      (tester) async {
+    await open(tester);
+    friendReplies.single.complete(_friend());
+    await tester.pumpAndSettle();
+    im.friendInfoChanged(FriendInfo(
+      userID: _peer,
+      nickname: 'New nickname',
+      faceURL: 'new-avatar',
+      remark: 'My remark',
+    ));
+    await tester.pumpAndSettle();
+    expect(logic!.userInfo.value.nickname, 'New nickname');
+    expect(logic!.userInfo.value.faceURL, 'new-avatar');
+    expect(logic!.userInfo.value.remark, 'My remark');
+    expect(UserCacheManager().getUserInfo(_peer)!.faceURL, 'new-avatar');
+
+    im.friendInfoChanged(FriendInfo(
+      userID: _peer, nickname: 'New nickname', faceURL: '', remark: '',
+    ));
+    await tester.pumpAndSettle();
+    expect(logic!.userInfo.value.faceURL, '');
+    expect(logic!.userInfo.value.remark, '');
+  });
+
+  testWidgets('live identity survives an older in-flight friend snapshot',
+      (tester) async {
+    await open(tester);
+    im.friendInfoChanged(FriendInfo(
+      userID: _peer,
+      nickname: 'Latest nickname',
+      faceURL: 'latest-avatar',
+      remark: 'Latest remark',
+    ));
+    await tester.pump();
+    friendReplies.single.complete(_friend(nickname: 'Old nickname'));
+    await tester.pumpAndSettle();
+    expect(logic!.userInfo.value.nickname, 'Latest nickname');
+    expect(logic!.userInfo.value.faceURL, 'latest-avatar');
+    expect(logic!.userInfo.value.remark, 'Latest remark');
+    expect(logic!.userInfo.value.account, 'chat-number');
+    expect(logic!.profileLayoutReady.value, isTrue);
+    expect(UserCacheManager().getUserInfo(_peer)!.nickname, 'Latest nickname');
+  });
+
   testWidgets('self navigation opens own profile without a peer profile query',
       (tester) async {
     await open(tester, id: 'me');

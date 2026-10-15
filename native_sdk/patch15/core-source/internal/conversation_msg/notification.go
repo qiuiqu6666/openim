@@ -159,7 +159,9 @@ func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) error {
 				continue
 			}
 			if msg.ContentType > constant.FriendNotificationBegin && msg.ContentType < constant.FriendNotificationEnd {
-				c.relation.DoNotification(ctx, msg)
+				if err := c.relation.DoNotification(ctx, msg); err != nil {
+					return err
+				}
 			} else if msg.ContentType > constant.UserNotificationBegin && msg.ContentType < constant.UserNotificationEnd {
 				c.user.DoNotification(ctx, msg)
 			} else if msg.ContentType > constant.GroupNotificationBegin && msg.ContentType < constant.GroupNotificationEnd {
@@ -483,7 +485,7 @@ func (c *Conversation) syncData(c2v common.Cmd2Value) error {
 		c.user.SyncLoginUserInfo,
 		c.relation.SyncAllBlackList,
 		c.group.SyncAllJoinedGroupsAndMembersWithLock,
-		c.relation.IncrSyncFriendsWithLock,
+		c.relation.SyncFriendsWithProfilesWithLock,
 	}
 	if !common.RecoveryMetadataPrepared(ctx) {
 		asyncFuncs = append(asyncFuncs, c.IncrSyncConversationsWithLock)

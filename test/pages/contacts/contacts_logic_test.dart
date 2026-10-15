@@ -137,6 +137,37 @@ void main() {
     logic.onDelete();
   });
 
+  testWidgets('nickname and avatar events win over an older directory page',
+      (tester) async {
+    final page = Completer<List<FriendInfo>>();
+    var fetches = 0;
+    final logic = ContactsLogic(
+      fetchFriendsPage: (_, __) {
+        fetches++;
+        return page.future;
+      },
+      directoryIndexer: ContactDirectoryIndexer(
+          worker: (names) async => buildContactNameIndex(names)),
+    )..onInit();
+    addTearDown(() => logic.onDelete());
+    final loading = logic.loadFriends();
+    im.friendInfoChanged(FriendInfo(
+      userID: 'peer', nickname: 'Latest name', faceURL: 'latest-avatar',
+      remark: 'My remark',
+    ));
+    await tester.pump(const Duration(milliseconds: 100));
+    page.complete([FriendInfo(
+      userID: 'peer', nickname: 'Old name', faceURL: 'old-avatar',
+    )]);
+    await tester.pump();
+    await loading;
+    expect(logic.friends.single.nickname, 'Latest name');
+    expect(logic.friends.single.faceURL, 'latest-avatar');
+    expect(logic.friends.single.remark, 'My remark');
+    expect(fetches, 1);
+    logic.onDelete();
+  });
+
   test('friend event bursts apply locally without reloading the SDK directory',
       () async {
     var fetches = 0;

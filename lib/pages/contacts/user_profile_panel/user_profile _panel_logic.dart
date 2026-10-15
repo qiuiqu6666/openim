@@ -110,6 +110,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
   final iHaveAdminOrOwnerPermission = false.obs;
   int _profileRequest = 0;
   int _userInfoRequest = 0;
+  int _friendIdentityRevision = 0;
   final profileLayoutReady = false.obs;
   final initialProfileFailed = false.obs;
   final commonGroupCount = RxnInt();
@@ -236,8 +237,10 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
 
     _friendInfoChangedSub = imLogic.friendInfoChangedSubject.listen((user) {
       if (user.userID == userInfo.value.userID) {
+        _friendIdentityRevision++;
         userInfo.update((val) {
           val?.nickname = user.nickname;
+          val?.faceURL = user.faceURL;
           val?.remark = user.remark;
         });
 
@@ -437,6 +440,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
 
   Future<void> _getUsersInfo() async {
     final request = ++_userInfoRequest;
+    final identityRevision = _friendIdentityRevision;
     final owner = DataSp.userID;
     final sdkOwner = OpenIM.iMManager.userID;
     final token = DataSp.chatToken;
@@ -508,6 +512,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
         if (user != null) {
           if (stale()) return;
           userInfo.update((val) {
+            if (identityRevision != _friendIdentityRevision) return;
             val?.nickname = user.nickname;
             val?.faceURL = user.faceURL;
             val?.ex = user.ex;
@@ -518,9 +523,13 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
         }
       } else {
         userInfo.update((val) {
-          val?.nickname = friendInfo.nickname;
-          val?.faceURL = friendInfo.faceURL;
-          val?.remark = friendInfo.remark;
+          // A live friend event can arrive while the cached relation lookup
+          // is in flight. Keep its newer identity and finish loading metadata.
+          if (identityRevision == _friendIdentityRevision) {
+            val?.nickname = friendInfo.nickname;
+            val?.faceURL = friendInfo.faceURL;
+            val?.remark = friendInfo.remark;
+          }
           val?.isBlacklist = isBlack;
           val?.isFriendship = isFriendship;
         });

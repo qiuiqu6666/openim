@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-15",
+  "sdk_version": "v3.8.3-patch.15+recovery.31-friend-profile.1",
+  "source_sha256": "3d5da83820d3bdd7e3fe40abdb16746451a52df0efecc7fe6926e384940c57fa",
+  "cause_reproduced": {
+    "failure": "Friend notification processing errors were swallowed; the page still committed its checkpoint. Existing local friend rows were reused, and roster-version-only recovery could not repair a profile absent from the incremental response.",
+    "old_code_repro": "Isolated original notification dispatcher failed regression: err=nil and checkpoint advanced 1 -> 2 after temporary friend storage failure.",
+    "fixed_code": "Failure retains checkpoint 1; retry of the same notification commits 2 after recovery."
+  },
+  "changes": [
+    "Propagate friend notification failure before checkpoint persistence.",
+    "Refresh server-designated existing friend profiles on profile events independently of roster version and bulk cooldown.",
+    "Repair existing profiles in the auxiliary recovery job in batches <=100; cooldown one minute only after complete success; preserve offline data and retry failed passes.",
+    "Use existing commit, cache eviction and friendship callbacks; reject partial/duplicate/foreign responses; never re-add a deleted friend or copy group aliases.",
+    "Evict public user cache after full friend table replacement.",
+    "Flutter profile applies avatar changes and fences older identity reads."
+  ],
+  "tests": {
+    "core": "relation, conversation_msg, interaction and syncer passed",
+    "android_build": "common, network, interaction, conversation_msg, relation and isolated upload regressions passed",
+    "flutter": {
+      "passed": 230,
+      "skipped": 4
+    },
+    "source_lock_tests": 15,
+    "patch_roundtrip": true,
+    "scoped_analyze": "No errors; 11 pre-existing info/warning diagnostics remain."
+  },
+  "android": {
+    "sdk_version": "v3.8.3-patch.15+recovery.31-friend-profile.1",
+    "source_sha256": "3d5da83820d3bdd7e3fe40abdb16746451a52df0efecc7fe6926e384940c57fa",
+    "apk_sha256": "bc130bd8155aad1e494aa7c56a59de81a4a25a2e9c7f6034a8a4e2f8695db6e3",
+    "aar_sha256": "657b8f72dc827cac9b264f010d31e4139f35a21e71fcfbcdbf5b27e68d0b271f",
+    "native": {
+      "arm64-v8a": {
+        "sha256": "3f1c229c6aa04172b945f43b1f63ff342967f6d2b76642fef447c70173882990",
+        "aar_parity_after_strip": true
+      },
+      "x86_64": {
+        "sha256": "3f308206e0f34a85b259095de73adfae43f5762c2b8bc0ba9bdedfca5f35d367",
+        "aar_parity_after_strip": true
+      }
+    },
+    "version": "3.0.1+2045",
+    "apk": "E:\\openim\\artifacts\\profile-refresh-20261015\\99chat-friend-profile-3.0.1-2045-debug.apk"
+  },
+  "device": {
+    "serial": "emulator-5554",
+    "package": "chat.chat99.chatpro",
+    "method": "Retained real login and unchanged friend roster version. Backed up stopped SQLite database. Seeded only one existing local friend name/avatar with a test marker; retained group-member rows and all messages. Installed locked APK and launched normally; auxiliary repair restored server name and avatar.",
+    "repaired": true,
+    "roster_version_unchanged": true,
+    "friend_count": 21,
+    "ui": "Contacts directory and opened profile show restored name and real avatar, with no test marker.",
+    "screenshots": [
+      "contacts-repaired.png",
+      "profile-repaired.png"
+    ],
+    "server_profile_mutations": false
+  },
+  "ios": {
+    "shared_source": true,
+    "build_input": "manifest-selected core-source (435 locked files)",
+    "friend_regressions_in_build_script": true,
+    "framework_built": false,
+    "device_tested": false
+  },
+  "limits": [
+    "No original affected-user identifier was supplied; the failure mechanism was reproduced in regression and a controlled real-SDK local stale-cache repair trial.",
+    "Android validation used the named emulator, not the connected physical phone.",
+    "iOS needs macOS/Xcode Framework and app rebuild; old Framework is rejected by the existing source receipt check. No iOS runtime result is claimed.",
+    "No production server deployment was needed or performed."
+  ]
+}
