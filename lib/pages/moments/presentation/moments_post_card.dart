@@ -39,65 +39,29 @@ class MomentsPostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = momentsDark(context);
+    final singleMedia =
+        post.mediaList.length == 1 ? post.mediaList.first : null;
+    final isLongImage = singleMedia != null &&
+        !singleMedia.isVideo &&
+        (singleMedia.width ?? 0) > 0 &&
+        (singleMedia.height ?? 0) / singleMedia.width! >= 2;
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!detail)
-          Row(children: [
-            Semantics(
-              button: true,
-              label: post.author.displayName,
-              child: InkWell(
-                onTap: onAuthor,
-                customBorder: const CircleBorder(),
-                child: SizedBox.square(
-                  dimension: MomentsLayout.touchTarget,
-                  child: Center(
-                      child: ExcludeSemantics(
-                          child: AvatarView(
-                    width: MomentsLayout.avatarSize,
-                    height: MomentsLayout.avatarSize,
-                    isCircle: true,
-                    url: post.author.avatarUrl,
-                    text: post.author.displayName,
-                  ))),
-                ),
-              ),
+          Semantics(
+            button: true,
+            child: InkWell(
+              onTap: onAuthor,
+              child: Text(post.author.displayName,
+                  style: TextStyle(
+                      color: MomentsTheme.name(dark),
+                      fontSize: MomentsLayout.nameSize,
+                      fontWeight: FontWeight.w700)),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Semantics(
-                button: true,
-                child: InkWell(
-                  onTap: onAuthor,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                        minHeight: MomentsLayout.touchTarget),
-                    child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(post.author.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  color: MomentsTheme.text(dark),
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 4),
-                          Text(momentsTime(context, post.createdAt),
-                              style: TextStyle(
-                                  color: MomentsTheme.secondary(dark),
-                                  fontSize: 12)),
-                        ]),
-                  ),
-                ),
-              ),
-            ),
-            _menu(context),
-          ]),
+          ),
         if (post.text.trim().isNotEmpty) ...[
-          if (!detail) const SizedBox(height: 10),
+          if (!detail) const SizedBox(height: MomentsLayout.feedMediaRadius),
           MomentsPostText(
             key: ValueKey('moments_text_${post.momentId}'),
             text: post.text,
@@ -109,12 +73,21 @@ class MomentsPostCard extends StatelessWidget {
           if (post.text.trim().isNotEmpty || !detail)
             SizedBox(height: detail ? 8 : 10),
           ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: MomentsMediaGrid(
-                repository: repository,
-                post: post,
-                detail: detail,
-                onOpen: onMedia),
+            borderRadius: BorderRadius.circular(detail
+                ? MomentsLayout.mediaRadius
+                : MomentsLayout.feedMediaRadius),
+            child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxWidth: !detail && post.mediaList.length == 1
+                        ? (isLongImage
+                            ? MomentsLayout.feedLongImageWidth
+                            : MomentsLayout.feedSingleMediaWidth)
+                        : double.infinity),
+                child: MomentsMediaGrid(
+                    repository: repository,
+                    post: post,
+                    detail: detail,
+                    onOpen: onMedia)),
           ),
         ],
         if (detail) ...[
@@ -130,12 +103,22 @@ class MomentsPostCard extends StatelessWidget {
           ]),
         ],
         const SizedBox(height: 6),
-        MomentsPostActions(
-            post: post,
-            busy: busy,
-            onLike: onLike,
-            onComment: onComment,
-            onLikes: onLikes),
+        if (!detail)
+          Row(children: [
+            Expanded(
+                child: Text(momentsTime(context, post.createdAt),
+                    style: TextStyle(
+                        color: MomentsTheme.secondary(dark),
+                        fontSize: MomentsLayout.timeSize))),
+            _menu(context),
+          ]),
+        if (detail)
+          MomentsPostActions(
+              post: post,
+              busy: busy,
+              onLike: onLike,
+              onComment: onComment,
+              onLikes: onLikes),
         if (!detail &&
             (post.likesPreview.isNotEmpty || post.commentsPreview.isNotEmpty))
           Padding(
@@ -160,9 +143,38 @@ class MomentsPostCard extends StatelessWidget {
     }
     return Material(
       color: MomentsTheme.card(dark),
-      borderRadius: BorderRadius.circular(MomentsLayout.cardRadius),
       clipBehavior: Clip.antiAlias,
-      child: Padding(padding: MomentsLayout.cardPadding, child: content),
+      child: Padding(
+        padding: MomentsLayout.feedPadding,
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Semantics(
+            button: true,
+            label: post.author.displayName,
+            child: InkWell(
+              onTap: onAuthor,
+              child: SizedBox.square(
+                dimension: MomentsLayout.touchTarget,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ExcludeSemantics(
+                      child: ClipRRect(
+                    borderRadius:
+                        BorderRadius.circular(MomentsLayout.feedMediaRadius),
+                    child: AvatarView(
+                        width: MomentsLayout.avatarSize,
+                        height: MomentsLayout.avatarSize,
+                        isCircle: false,
+                        url: post.author.avatarUrl,
+                        text: post.author.displayName),
+                  )),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: MomentsLayout.feedColumnGap),
+          Expanded(child: content),
+        ]),
+      ),
     );
   }
 
@@ -178,12 +190,32 @@ class MomentsPostCard extends StatelessWidget {
       icon: Icon(Icons.more_horiz_rounded,
           color: MomentsTheme.secondary(momentsDark(context))),
       onSelected: (action) {
+        if (action == 'like') onLike();
+        if (action == 'comment') onComment();
+        if (action == 'likes') onLikes?.call();
         if (action == 'open') onOpen();
         if (action == 'delete') onDelete?.call();
         if (action == 'visibility') onVisibility?.call();
         if (action == 'report') onReport?.call();
       },
       itemBuilder: (_) => [
+        if (!detail) ...[
+          PopupMenuItem(
+              value: 'like',
+              enabled: !busy && post.canLike,
+              child: Text(momentsText(context,
+                  zh: post.likedByMe ? '取消点赞' : '赞',
+                  en: post.likedByMe ? 'Unlike' : 'Like'))),
+          PopupMenuItem(
+              value: 'comment',
+              enabled: !busy && post.canComment,
+              child: Text(momentsText(context, zh: '评论', en: 'Comment'))),
+          if (onLikes != null)
+            PopupMenuItem(
+                value: 'likes',
+                child:
+                    Text(momentsText(context, zh: '查看点赞', en: 'View likes'))),
+        ],
         if (!detail)
           PopupMenuItem(
               value: 'open',

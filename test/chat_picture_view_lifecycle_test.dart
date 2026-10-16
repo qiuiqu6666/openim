@@ -71,7 +71,7 @@ void main() {
       }
     });
   }
-  testWidgets('failed thumbnail falls back to distinct unmodified sources',
+  testWidgets('failed thumbnail never downloads the signed original',
       (tester) async {
     const original = 'https://example.test/original?signature=a%2Bb';
     final message = Message()
@@ -97,11 +97,7 @@ void main() {
       current = current.loadStateChanged!(_FailedImageState());
       if (current is GestureDetector) current = current.child;
     }
-    expect(urls, [
-      'https://example.test/thumb?height=960&width=960&type=image',
-      'https://example.test/thumb',
-      original,
-    ]);
+    expect(urls, ['https://example.test/thumb']);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

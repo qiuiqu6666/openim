@@ -12,6 +12,8 @@ class ConnectionHealthTitle extends StatelessWidget {
       required this.title,
       required this.connection,
       this.apiAvailable,
+      this.recovering,
+      this.connectionVerified,
       this.latencyMs,
       this.routeMarker,
       this.keyPrefix = 'main-tab-title'});
@@ -19,18 +21,21 @@ class ConnectionHealthTitle extends StatelessWidget {
   final String title;
   final IMSdkStatus? connection;
   final ValueListenable<bool?>? apiAvailable;
+  final ValueListenable<bool>? recovering;
+  final ValueListenable<bool>? connectionVerified;
   final ValueListenable<int?>? latencyMs;
   final String? Function()? routeMarker;
   final String keyPrefix;
 
   @override
   Widget build(BuildContext context) {
-    Widget render(bool? api) {
+    Widget render(bool? api, bool recovering, bool verified) {
       final failed = api == false || connection == IMSdkStatus.connectionFailed;
       final checking = !failed &&
-          (api == null ||
-              connection == null ||
-              connection == IMSdkStatus.connecting);
+          (!verified ||
+              recovering ||
+              api == null ||
+              connection != IMSdkStatus.connectionSucceeded);
       final chinese = Localizations.localeOf(context).languageCode == 'zh';
       final heading = MainTabTitle(
           title: title,
@@ -73,11 +78,25 @@ class ConnectionHealthTitle extends StatelessWidget {
     final source = apiAvailable;
     return ValueListenableBuilder<int>(
       valueListenable: Config.networkRouteRevision,
-      builder: (context, _, child) => source == null
-          ? render(true)
-          : ValueListenableBuilder<bool?>(
-              valueListenable: source,
-              builder: (context, value, _) => render(value)),
+      builder: (context, _, child) {
+        Widget withVerification(bool? api, bool recovering) =>
+            connectionVerified == null
+                ? render(api, recovering, true)
+                : ValueListenableBuilder<bool>(
+                    valueListenable: connectionVerified!,
+                    builder: (context, value, _) =>
+                        render(api, recovering, value));
+        Widget withRecovery(bool? api) => recovering == null
+            ? withVerification(api, false)
+            : ValueListenableBuilder<bool>(
+                valueListenable: recovering!,
+                builder: (context, value, _) => withVerification(api, value));
+        return source == null
+            ? withRecovery(true)
+            : ValueListenableBuilder<bool?>(
+                valueListenable: source,
+                builder: (context, value, _) => withRecovery(value));
+      },
     );
   }
 }

@@ -13,6 +13,29 @@ import '../support/moments_ui_fixture.dart';
 import '../support/moments_ui_host.dart';
 
 void main() {
+  testWidgets(
+      'compact previews cap tall images while preserving normal portraits',
+      (tester) async {
+    const imageKey = ValueKey('compact_image');
+    for (final height in [300, 360, 1800]) {
+      await tester.pumpWidget(renderTestHost(Align(
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+            width: 180,
+            child: MomentsSingleMediaFrame(
+              key: ValueKey(height),
+              media:
+                  MomentMedia(mediaId: '$height', width: 180, height: height),
+              compactTallImages: true,
+              imageBuilder: (_) => const SizedBox.expand(key: imageKey),
+            )),
+      )));
+      expect(tester.getSize(find.byKey(imageKey)),
+          Size(180, height >= 360 ? 270 : 300));
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('decoded ratio survives metadata removal and resets by resource',
       (tester) async {
     final fixture = MomentsUiFixture();

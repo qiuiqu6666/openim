@@ -89,6 +89,10 @@ type LongConnMgr struct {
 	//conn status mutex
 	w          sync.Mutex
 	connStatus int
+	// Closed when the socket that accepted a request is retired. Guarded by w.
+	connectionDone  chan struct{}
+	probeContext    context.Context  // immutable session lifetime, unlike diagnostic ctx
+	foregroundProbe *foregroundProbe // guarded by mutex
 	// The long connection,can be set tcp or websocket.
 	conn       LongConn
 	listener   open_im_sdk_callback.OnConnListener
@@ -156,6 +160,7 @@ func NewLongConnMgr(ctx context.Context, listener open_im_sdk_callback.OnConnLis
 	l.conn = NewWebSocket(WebSocket)
 	l.connWrite = new(sync.Mutex)
 	l.ctx = ctx
+	l.probeContext = ctx
 	l.mb = NewMessageBatcher(l.doBatch)
 	return l
 }
@@ -563,7 +568,7 @@ func getGoroutineID() int64 {
 }
 
 func (c *LongConnMgr) sendAndWaitResp(ctx context.Context, msg *GeneralWsReq) (*GeneralWsResp, error) {
-	tempChan, err := c.writeBinaryMsgAndRetry(ctx, msg)
+	tempChan, connectionDone, err := c.writeBinaryMsgAndRetry(ctx, msg)
 	defer c.Syncer.DelCh(msg.MsgIncr)
 	if err != nil {
 		return nil, err
@@ -573,6 +578,15 @@ func (c *LongConnMgr) sendAndWaitResp(ctx context.Context, msg *GeneralWsReq) (*
 			return nil, sdkerrs.ErrCtxDeadline
 		case resp := <-tempChan:
 			return resp, nil
+		case <-connectionDone:
+			// An ACK already routed before closure is still authoritative. Do not
+			// turn an acknowledged send into a failure merely because both are ready.
+			select {
+			case resp := <-tempChan:
+				return resp, nil
+			default:
+				return nil, sdkerrs.ErrNetwork.WrapMsg("request connection closed")
+			}
 		case <-time.After(sendAndWaitTime):
 			return nil, sdkerrs.ErrNetworkTimeOut
 		}
@@ -580,17 +594,20 @@ func (c *LongConnMgr) sendAndWaitResp(ctx context.Context, msg *GeneralWsReq) (*
 	}
 }
 
-func (c *LongConnMgr) writeBinaryMsgAndRetry(ctx context.Context, msg *GeneralWsReq) (chan *GeneralWsResp, error) {
+func (c *LongConnMgr) writeBinaryMsgAndRetry(ctx context.Context, msg *GeneralWsReq) (chan *GeneralWsResp, <-chan struct{}, error) {
 	msgIncr, tempChan := c.Syncer.AddCh(msg.SendID)
 	msg.MsgIncr = msgIncr
 	if c.GetConnectionStatus() != Connected && msg.ReqIdentifier == constant.GetNewestSeq {
-		return tempChan, sdkerrs.ErrNetwork.WrapMsg("connection closed,conning...")
+		return tempChan, nil, sdkerrs.ErrNetwork.WrapMsg("connection closed,conning...")
 	}
 	for i := 0; i < maxReconnectAttempts; i++ {
 		if ctx.Err() != nil {
-			return tempChan, sdkerrs.ErrCtxDeadline
+			return tempChan, nil, sdkerrs.ErrCtxDeadline
 		}
 		c.connWrite.Lock()
+		// Capture before writing, under the same lock that excludes redial.
+		// Looking up the current socket after the write can miss a fast reconnect.
+		connectionDone := c.requestConnectionDone()
 		var err error
 		if ctx.Err() != nil {
 			err = sdkerrs.ErrCtxDeadline
@@ -603,7 +620,7 @@ func (c *LongConnMgr) writeBinaryMsgAndRetry(ctx context.Context, msg *GeneralWs
 		}
 		c.connWrite.Unlock()
 		if errors.Is(err, sdkerrs.ErrCtxDeadline) {
-			return tempChan, err
+			return tempChan, nil, err
 		}
 		if err != nil {
 			log.ZError(c.ctx, "send binary message error", err, "message", msg)
@@ -613,15 +630,15 @@ func (c *LongConnMgr) writeBinaryMsgAndRetry(ctx context.Context, msg *GeneralWs
 			select {
 			case <-ctx.Done():
 				timer.Stop()
-				return tempChan, sdkerrs.ErrCtxDeadline
+				return tempChan, nil, sdkerrs.ErrCtxDeadline
 			case <-timer.C:
 			}
 			continue
 		} else {
-			return tempChan, nil
+			return tempChan, connectionDone, nil
 		}
 	}
-	return nil, sdkerrs.ErrNetwork.WrapMsg("send binary message error")
+	return nil, nil, sdkerrs.ErrNetwork.WrapMsg("send binary message error")
 }
 
 func (c *LongConnMgr) writeBinaryMsgAndNotRetry(msg *GeneralWsReq) (chan *GeneralWsResp, error) {
@@ -701,6 +718,7 @@ func (c *LongConnMgr) close() error {
 		return nil
 	}
 	c.connStatus = Closed
+	c.endConnectionRequestsLocked()
 	log.ZWarn(c.ctx, "conn closed", c.closeError())
 	c.metrics.disconnected(c.ctx, c.closeError(), c.GetBackground())
 	return c.conn.Close()
@@ -866,6 +884,12 @@ func (c *LongConnMgr) GetConnectionStatus() int {
 func (c *LongConnMgr) SetConnectionStatus(status int) {
 	c.w.Lock()
 	defer c.w.Unlock()
+	if status == Connected && c.connStatus != Connected {
+		c.endConnectionRequestsLocked()
+		c.connectionDone = make(chan struct{})
+	} else if status != Connected {
+		c.endConnectionRequestsLocked()
+	}
 	c.connStatus = status
 }
 
@@ -1017,9 +1041,17 @@ func (c *LongConnMgr) SetBackground(isBackground bool) {
 	c.mutex.Lock()
 	changed := c.IsBackground != isBackground
 	c.IsBackground = isBackground
+	if isBackground {
+		c.cancelForegroundProbeLocked()
+	}
 	c.mutex.Unlock()
 	if changed && !isBackground {
 		c.wakeReconnect()
+	}
+	// A lifecycle report may have been coalesced while an earlier server ACK
+	// was pending. An explicit foreground report still needs a liveness check.
+	if !isBackground {
+		c.probeForegroundConnection(foregroundProbeTimeout)
 	}
 }
 
@@ -1034,6 +1066,7 @@ func (c *LongConnMgr) pingHandler(_ string) error {
 
 // when client send pong.
 func (c *LongConnMgr) pongHandler(appData string) error {
+	c.acknowledgeForegroundProbe(appData)
 	c.metrics.lastPong.Store(time.Now().UnixMilli())
 	log.ZDebug(c.ctx, "server Pong Message Received", "appData", appData)
 	if err := c.conn.SetReadDeadline(pongWait); err != nil {

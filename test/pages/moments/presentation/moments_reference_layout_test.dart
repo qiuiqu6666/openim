@@ -33,7 +33,7 @@ void main() {
   });
 
   for (final dark in [false, true]) {
-    testWidgets('feed has full cover and reference card geometry ($dark)',
+    testWidgets('feed has full cover and divider list geometry ($dark)',
         (tester) async {
       final fixture = MomentsUiFixture();
       addTearDown(fixture.dispose);
@@ -44,12 +44,7 @@ void main() {
       expect(tester.getRect(cover), const Rect.fromLTWH(0, 0, 375, 250));
       expect(find.byType(TitleBar), findsNothing);
       expect(find.byType(GlassAppBar), findsNothing);
-      final title = _key('moments_header_title');
-      expect(tester.getTopLeft(title), const Offset(28, 88));
-      final titleWidget = tester.widget<Text>(title);
-      expect(titleWidget.style!.fontSize, 24);
-      expect(titleWidget.style!.fontWeight, FontWeight.w300);
-      expect(titleWidget.style!.color, Colors.white);
+      expect(_key('moments_header_title'), findsNothing);
       final avatar = _key('moments_header_avatar');
       expect(tester.getSize(avatar), const Size(72, 72));
       expect(tester.getTopLeft(avatar), const Offset(284, 153));
@@ -72,16 +67,16 @@ void main() {
           find.descendant(of: cover, matching: find.text('1')), findsOneWidget);
       expect(
           tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
-          dark ? const Color(0xFF101114) : const Color(0xFFF5F6F8));
+          dark ? const Color(0xFF1B1D22) : Colors.white);
 
       final post = _post(momentsUiFriendPostId);
-      expect(tester.getRect(post).left, 10);
-      expect(tester.getSize(post).width, 355);
+      expect(tester.getRect(post).left, 0);
+      expect(tester.getSize(post).width, 375);
       final material = tester.widget<Material>(_inside(post, Material).first);
       expect(material.color, dark ? const Color(0xFF1B1D22) : Colors.white);
-      expect(material.borderRadius, BorderRadius.circular(18));
+      expect(material.borderRadius, isNull);
       final padding = tester.widget<Padding>(_inside(post, Padding).first);
-      expect(padding.padding, const EdgeInsets.fromLTRB(14, 12, 14, 6));
+      expect(padding.padding, MomentsLayout.feedPadding);
       expect(
           tester.getSize(_inside(post, AvatarView).first), const Size(40, 40));
       final name = find.descendant(of: post, matching: find.text('小林'));
@@ -95,9 +90,13 @@ void main() {
       expect(textWidget.style!.fontSize, 15);
       expect(textWidget.style!.height, 1.5);
       expect(textWidget.maxLines, isNull);
-      final headerRow = _inside(post, Row).first;
+      expect(tester.getTopLeft(body).dx, tester.getTopLeft(name).dx);
+      expect(tester.getTopLeft(body).dy - tester.getBottomLeft(name).dy,
+          MomentsLayout.feedMediaRadius);
       expect(
-          tester.getTopLeft(body).dy - tester.getBottomLeft(headerRow).dy, 10);
+          tester.widget<AvatarView>(_inside(post, AvatarView).first).isCircle,
+          isFalse);
+      expect(_inside(post, MomentsPostActions), findsNothing);
       final media = [
         for (var i = 0; i < 3; ++i)
           tester.getRect(_key('moments_media_${momentsUiFriendPostId}_$i')),
@@ -116,6 +115,21 @@ void main() {
           tester.widget<Text>(_inside(find.byWidget(comment), Text).first);
       expect(richText.style!.fontSize, 13);
       expect(richText.style!.height, 1.25);
+      final menu = _inside(post, PopupMenuButton<String>);
+      await tester.ensureVisible(menu);
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      expect(find.text('评论'), findsWidgets);
+      final wasLiked = fixture.repository.feedState.items
+          .firstWhere((item) => item.momentId == momentsUiFriendPostId)
+          .likedByMe;
+      await tester.tap(find.text(wasLiked ? '取消点赞' : '赞').last);
+      await tester.pumpAndSettle();
+      expect(
+          fixture.repository.feedState.items
+              .firstWhere((item) => item.momentId == momentsUiFriendPostId)
+              .likedByMe,
+          !wasLiked);
       expect(tester.takeException(), isNull);
       await _close(tester);
     });
@@ -146,7 +160,7 @@ void main() {
     await _close(tester);
   });
 
-  testWidgets('single long image uses its ratio and caps feed height',
+  testWidgets('single long image uses a readable compact preview',
       (tester) async {
     const tall =
         MomentMedia(mediaId: 'preview-scenery', width: 576, height: 5760);
@@ -161,8 +175,9 @@ void main() {
     await mountMomentsUi(tester, fixture: fixture);
     final image = tester.getSize(_key('moments_media_${post.momentId}_0'));
     expect(image.width, lessThanOrEqualTo(327));
-    expect(image.height, 420);
-    expect(image.width / image.height, closeTo(.1, .001));
+    expect(image.width, MomentsLayout.feedLongImageWidth);
+    expect(image.height, MomentsLayout.feedLongImageWidth * 1.5);
+    expect(image.width / image.height, closeTo(2 / 3, .001));
     expect(find.text('长图'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await _close(tester);
@@ -269,7 +284,7 @@ void main() {
             expect(cover.left, (size.width - 640) / 2);
             expect(cover.top, 0);
             if (surface == MomentsUiSurface.feed) {
-              expect(tester.getSize(_post(momentsUiFriendPostId)).width, 620);
+              expect(tester.getSize(_post(momentsUiFriendPostId)).width, 640);
             } else {
               final album = _key('moments_album_post_$momentsUiOwnPostId');
               if (album.evaluate().isEmpty) {

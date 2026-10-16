@@ -52,6 +52,36 @@ void main() {
       await expectLater(api.comments('post'), throwsFormatException);
     }
   });
+  test('empty user timeline and notifications accept live protojson payloads',
+      () async {
+    body = {
+      'errCode': 0,
+      'data': {'viewerContextVersion': 'context'}
+    };
+    expect((await api.userMoments('me')).items, isEmpty);
+    expect((await api.feed()).items, isEmpty);
+    body = {
+      'errCode': 0,
+      'data': {'viewerContextVersion': 'context', 'seenWatermark': 'watermark'}
+    };
+    final notifications = await api.notifications();
+    expect(notifications.items, isEmpty);
+    expect(notifications.unreadCount, 0);
+    expect(notifications.seenWatermark, 'watermark');
+    expect(notifications.hasMore, isFalse);
+  });
+  test('user and notification pages still reject malformed payloads', () async {
+    for (final data in [
+      {},
+      {'viewerContextVersion': ''},
+      {'viewerContextVersion': 'context', 'items': 123},
+      {'viewerContextVersion': 'context', 'hasMore': true}
+    ]) {
+      body = {'errCode': 0, 'data': data};
+      await expectLater(api.userMoments('me'), throwsFormatException);
+      await expectLater(api.notifications(), throwsFormatException);
+    }
+  });
   test('media HTTP 200 business error is never returned as image bytes',
       () async {
     body = utf8.encode(jsonEncode({

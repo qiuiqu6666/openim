@@ -16,6 +16,7 @@ import 'moments_notifications_page.dart';
 import 'moments_settings_page.dart';
 import 'moments_widgets.dart';
 import 'presentation/moments_cover_header.dart';
+import 'presentation/moments_selected_builder.dart';
 import 'presentation/moments_profile_timeline.dart';
 import 'presentation/moments_profile_range_hint.dart';
 import 'presentation/loading/moments_feed_skeleton.dart';
@@ -36,6 +37,8 @@ class _MomentsPageState extends State<MomentsPage> {
   late final String _scope;
   final _scroll = ScrollController();
   final Set<String> _busyLikes = {};
+  final _likeChanges = ValueNotifier<int>(0);
+  late final Listenable _rowChanges;
   bool _loading = false;
   bool _refreshing = false;
   int _loadGeneration = 0;
@@ -63,6 +66,7 @@ class _MomentsPageState extends State<MomentsPage> {
     super.initState();
     _repository = widget.repository ?? MomentsRepository.instance;
     _scope = _repository.sessionScope;
+    _rowChanges = Listenable.merge([_repository, _likeChanges]);
     _scroll.addListener(_paginate);
     _load();
   }
@@ -207,7 +211,7 @@ class _MomentsPageState extends State<MomentsPage> {
 
   Future<void> _like(MomentPost post) async {
     if (!_busyLikes.add(post.momentId)) return;
-    setState(() {});
+    _likeChanges.value++;
     try {
       await _repository.setLiked(post.momentId, !post.likedByMe);
     } catch (error) {
@@ -216,23 +220,42 @@ class _MomentsPageState extends State<MomentsPage> {
       }
     } finally {
       _busyLikes.remove(post.momentId);
-      if (_current) setState(() {});
+      if (_current) _likeChanges.value++;
     }
   }
 
   @override
   void dispose() {
+    _likeChanges.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-      animation: _repository,
-      builder: (context, _) {
+  Widget build(BuildContext context) => MomentsSelectedBuilder(
+      listenable: _repository,
+      select: () => [
+            _repository.isSessionCurrent(_scope),
+            _repository.authorizationScope,
+            _repository.capabilities,
+            _repository.settings,
+            _repository.unreadCount,
+            _state.loading,
+            _state.error,
+            _state.hasMore,
+            _state.nextCursor,
+            _state.author,
+            _state.coverUrl,
+            _state.visibleRangeDays,
+            for (final post in _state.items) (post.momentId, post.createdAt),
+          ],
+      builder: (context) {
         final valid = _repository.isSessionCurrent(_scope);
         if (!valid) {
           return MomentsScaffold(
+              backgroundColor: _feed
+                  ? MomentsTheme.card(momentsDark(context))
+                  : MomentsTheme.detailBackground(momentsDark(context)),
               title: momentsText(context, zh: '朋友圈', en: 'Moments'),
               body: MomentsStatePanel(
                   icon: Icons.lock_outline,
@@ -252,6 +275,9 @@ class _MomentsPageState extends State<MomentsPage> {
                     zh: '${_profile.displayName}的朋友圈',
                     en: '${_profile.displayName}’s Moments');
         return MomentsScaffold(
+            backgroundColor: _feed
+                ? MomentsTheme.card(momentsDark(context))
+                : MomentsTheme.detailBackground(momentsDark(context)),
             title: title,
             fullBleed: true,
             body: RefreshIndicator(
@@ -326,80 +352,115 @@ class _MomentsPageState extends State<MomentsPage> {
                             sliver: SliverList.builder(
                                 itemCount: state.items.length,
                                 itemBuilder: (context, index) {
-                                  final post = state.items[index];
-                                  if (!_feed) {
-                                    final date =
-                                        DateTime.fromMillisecondsSinceEpoch(
-                                            post.createdAt);
-                                    final previous = index == 0
-                                        ? null
-                                        : DateTime.fromMillisecondsSinceEpoch(
-                                            state.items[index - 1].createdAt);
-                                    final showDate = previous == null ||
-                                        previous.year != date.year ||
-                                        previous.month != date.month ||
-                                        previous.day != date.day;
-                                    return Column(children: [
-                                      MomentsProfileTimelineItem(
-                                        key: ValueKey(
-                                            'moments_album_post_${post.momentId}'),
-                                        repository: _repository,
-                                        post: post,
-                                        showDate: showDate,
-                                        busy:
-                                            _busyLikes.contains(post.momentId),
-                                        onOpen: () => _detail(post.momentId),
-                                        onMedia: (index) => openMomentsMedia(
-                                            context, _repository, post, index),
-                                        onLike: () => _like(post),
-                                        onComment: () =>
-                                            showMomentsCommentSheet(
-                                                context, _repository, post),
-                                        onLikes: () => openMomentsLikes(
-                                            context, _repository, post.momentId,
-                                            onOpenAuthor: _author),
-                                      ),
-                                      if (index < state.items.length - 1)
-                                        Divider(
-                                            height: MomentsLayout
-                                                .timelineDividerSpace,
-                                            thickness: .6,
-                                            indent: 96,
-                                            color: MomentsTheme.border(
-                                                momentsDark(context))),
-                                    ]);
-                                  }
-                                  return Padding(
-                                      key: ValueKey(post.momentId),
-                                      padding: EdgeInsets.fromLTRB(
-                                          10,
-                                          0,
-                                          10,
-                                          index == state.items.length - 1
-                                              ? 0
-                                              : 10),
-                                      child: MomentsPostCard(
-                                          key: ValueKey(
-                                              'moments_post_${post.momentId}'),
-                                          repository: _repository,
-                                          post: post,
-                                          busy: _busyLikes
-                                              .contains(post.momentId),
-                                          onOpen: () => _detail(post.momentId),
-                                          onAuthor: () => _author(post.author),
-                                          onLike: () => _like(post),
-                                          onLikes: () => openMomentsLikes(
-                                              context, _repository, post.momentId,
-                                              onOpenAuthor: _author),
-                                          onComment: () => showMomentsCommentSheet(
-                                              context, _repository, post),
-                                          onMedia: (index) => openMomentsMedia(
-                                              context, _repository, post, index),
-                                          onCommentAction: (comment) => showMomentCommentActions(
-                                              context, _repository, post, comment),
-                                          onDelete: post.canDelete ? () => deleteMoment(context, _repository, post) : null,
-                                          onVisibility: post.canEditVisibility ? () => changeMomentVisibility(context, _repository, post) : null,
-                                          onReport: _repository.capabilities?.reportsEnabled == true ? () => reportMoment(context, _repository, post.momentId) : null));
+                                  final id = state.items[index].momentId;
+                                  return MomentsSelectedBuilder(
+                                      key: ValueKey(id),
+                                      listenable: _rowChanges,
+                                      select: () => [
+                                            _repository.postById(id),
+                                            _busyLikes.contains(id)
+                                          ],
+                                      builder: (context) {
+                                        final post = _repository.postById(id);
+                                        if (post == null) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        if (!_feed) {
+                                          final date = DateTime
+                                              .fromMillisecondsSinceEpoch(
+                                                  post.createdAt);
+                                          final previous = index == 0
+                                              ? null
+                                              : DateTime
+                                                  .fromMillisecondsSinceEpoch(
+                                                      state.items[index - 1]
+                                                          .createdAt);
+                                          final showDate = previous == null ||
+                                              previous.year != date.year ||
+                                              previous.month != date.month ||
+                                              previous.day != date.day;
+                                          return Column(children: [
+                                            MomentsProfileTimelineItem(
+                                              key: ValueKey(
+                                                  'moments_album_post_${post.momentId}'),
+                                              repository: _repository,
+                                              post: post,
+                                              showDate: showDate,
+                                              busy: _busyLikes
+                                                  .contains(post.momentId),
+                                              onOpen: () =>
+                                                  _detail(post.momentId),
+                                              onMedia: (index) =>
+                                                  openMomentsMedia(context,
+                                                      _repository, post, index),
+                                              onLike: () => _like(post),
+                                              onComment: () =>
+                                                  showMomentsCommentSheet(
+                                                      context,
+                                                      _repository,
+                                                      post),
+                                              onLikes: () => openMomentsLikes(
+                                                  context,
+                                                  _repository,
+                                                  post.momentId,
+                                                  onOpenAuthor: _author),
+                                            ),
+                                            if (index < state.items.length - 1)
+                                              Divider(
+                                                  height: MomentsLayout
+                                                      .timelineDividerSpace,
+                                                  thickness: .6,
+                                                  indent: 96,
+                                                  color: MomentsTheme.border(
+                                                      momentsDark(context))),
+                                          ]);
+                                        }
+                                        return Column(
+                                            key: ValueKey(post.momentId),
+                                            children: [
+                                              MomentsPostCard(
+                                                  key: ValueKey(
+                                                      'moments_post_${post.momentId}'),
+                                                  repository: _repository,
+                                                  post: post,
+                                                  busy: _busyLikes
+                                                      .contains(post.momentId),
+                                                  onOpen: () =>
+                                                      _detail(post.momentId),
+                                                  onAuthor: () =>
+                                                      _author(post.author),
+                                                  onLike: () => _like(post),
+                                                  onLikes: () => openMomentsLikes(
+                                                      context, _repository, post.momentId,
+                                                      onOpenAuthor: _author),
+                                                  onComment: () =>
+                                                      showMomentsCommentSheet(
+                                                          context, _repository, post),
+                                                  onMedia: (index) => openMomentsMedia(
+                                                      context, _repository, post, index),
+                                                  onCommentAction: (comment) =>
+                                                      showMomentCommentActions(
+                                                          context, _repository, post, comment),
+                                                  onDelete: post.canDelete
+                                                      ? () => deleteMoment(context, _repository, post)
+                                                      : null,
+                                                  onVisibility: post.canEditVisibility ? () => changeMomentVisibility(context, _repository, post) : null,
+                                                  onReport: _repository.capabilities?.reportsEnabled == true ? () => reportMoment(context, _repository, post.momentId) : null),
+                                              if (index <
+                                                  state.items.length - 1)
+                                                Divider(
+                                                    height: MomentsLayout
+                                                        .feedDividerThickness,
+                                                    thickness: MomentsLayout
+                                                        .feedDividerThickness,
+                                                    indent:
+                                                        MomentsLayout.feedInset,
+                                                    endIndent:
+                                                        MomentsLayout.feedInset,
+                                                    color: MomentsTheme.border(
+                                                        momentsDark(context))),
+                                            ]);
+                                      });
                                 })),
                       if (valid && state.items.isNotEmpty ||
                           valid && state.hasMore)

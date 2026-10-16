@@ -1,0 +1,156 @@
+{
+  "device": "emulator-5554",
+  "label": "recovery37-x64",
+  "trials": [
+    {
+      "trial": 1,
+      "resumeCommandEpoch": 1792151291.7813249,
+      "recoveredSeconds": 29.899,
+      "events": [
+        {
+          "time": 1792151321.618,
+          "event": "connection_disconnected",
+          "connectedAtMs": 1792151264583,
+          "background": false
+        },
+        {
+          "time": 1792151321.68,
+          "event": "connection_recovered",
+          "connectedAtMs": 1792151321680,
+          "attempts": 1,
+          "recoveryMs": 62,
+          "background": false
+        },
+        {
+          "time": 1792151321.68,
+          "event": "long conn establish success",
+          "localAddr": "172.16.1.15:56176"
+        }
+      ]
+    },
+    {
+      "trial": 2,
+      "resumeCommandEpoch": 1792151330.9995255,
+      "recoveredSeconds": 29.908,
+      "events": [
+        {
+          "time": 1792151360.848,
+          "event": "connection_disconnected",
+          "connectedAtMs": 1792151321680,
+          "background": false
+        },
+        {
+          "time": 1792151360.908,
+          "event": "connection_recovered",
+          "connectedAtMs": 1792151360908,
+          "attempts": 1,
+          "recoveryMs": 60,
+          "background": false
+        },
+        {
+          "time": 1792151360.908,
+          "event": "long conn establish success",
+          "localAddr": "172.16.1.15:44358"
+        }
+      ]
+    },
+    {
+      "trial": 3,
+      "resumeCommandEpoch": 1792151370.2382374,
+      "recoveredSeconds": 28.596,
+      "events": [
+        {
+          "time": 1792151398.773,
+          "event": "connection_disconnected",
+          "connectedAtMs": 1792151360908,
+          "background": false
+        },
+        {
+          "time": 1792151398.834,
+          "event": "connection_recovered",
+          "connectedAtMs": 1792151398834,
+          "attempts": 1,
+          "recoveryMs": 61,
+          "background": false
+        },
+        {
+          "time": 1792151398.834,
+          "event": "long conn establish success",
+          "localAddr": "172.16.1.15:44458"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "time": 1792151264.583,
+      "event": "connection_recovered",
+      "connectedAtMs": 1792151264583,
+      "attempts": 1,
+      "recoveryMs": 0,
+      "background": false
+    },
+    {
+      "time": 1792151264.583,
+      "event": "long conn establish success",
+      "localAddr": "172.16.1.15:56056"
+    },
+    {
+      "time": 1792151321.618,
+      "event": "connection_disconnected",
+      "connectedAtMs": 1792151264583,
+      "background": false
+    },
+    {
+      "time": 1792151321.68,
+      "event": "connection_recovered",
+      "connectedAtMs": 1792151321680,
+      "attempts": 1,
+      "recoveryMs": 62,
+      "background": false
+    },
+    {
+      "time": 1792151321.68,
+      "event": "long conn establish success",
+      "localAddr": "172.16.1.15:56176"
+    },
+    {
+      "time": 1792151360.848,
+      "event": "connection_disconnected",
+      "connectedAtMs": 1792151321680,
+      "background": false
+    },
+    {
+      "time": 1792151360.908,
+      "event": "connection_recovered",
+      "connectedAtMs": 1792151360908,
+      "attempts": 1,
+      "recoveryMs": 60,
+      "background": false
+    },
+    {
+      "time": 1792151360.908,
+      "event": "long conn establish success",
+      "localAddr": "172.16.1.15:44358"
+    },
+    {
+      "time": 1792151398.773,
+      "event": "connection_disconnected",
+      "connectedAtMs": 1792151360908,
+      "background": false
+    },
+    {
+      "time": 1792151398.834,
+      "event": "connection_recovered",
+      "connectedAtMs": 1792151398834,
+      "attempts": 1,
+      "recoveryMs": 61,
+      "background": false
+    },
+    {
+      "time": 1792151398.834,
+      "event": "long conn establish success",
+      "localAddr": "172.16.1.15:44458"
+    }
+  ]
+}

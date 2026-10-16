@@ -69,6 +69,8 @@ class GroupSetupLogic extends GetxController {
   StreamSubscription? _selfInfoSubscription;
   StreamSubscription? _sdkStatusSubscription;
   bool _membershipRevoked = false;
+  bool _membershipSyncEndedHandled = false;
+  IMSdkStatus? _membershipSyncPhase;
   final lock = Lock();
   final isJoinedGroup = false.obs;
   final avatar = Rx<File?>(null);
@@ -92,15 +94,26 @@ class GroupSetupLogic extends GetxController {
     groupInfo = Rx(_defaultGroupInfo);
     myGroupMembersInfo = Rx(_defaultMemberInfo);
     _initialPermissionContext = capturePermissionContext();
+    _membershipSyncPhase =
+        imLogic.initialSyncState?.status ?? imLogic.currentSdkStatus;
     _seedCurrentChat();
     _sdkStatusSubscription = imLogic.imSdkStatusPublishSubject.listen((event) {
       if (!_isCurrentGroupSession || _membershipRevoked) return;
-      if (_membershipSyncing) {
-        membership.defer();
+      // Consume the event's phase: several phases can be queued before the
+      // listener runs, while currentSdkStatus already contains the last one.
+      if (_isMembershipSyncing(event.status)) {
+        _membershipSyncPhase = event.status;
+        _membershipSyncEndedHandled = false;
+        membership.defer(isCurrent: () => _isCurrentGroupSession);
       } else if (event.status == IMSdkStatus.syncEnded) {
-        membership.defer();
+        _membershipSyncPhase = event.status;
+        // Duplicate completions must not restart reads and their deadlines.
+        if (_membershipSyncEndedHandled) return;
+        _membershipSyncEndedHandled = true;
         unawaited(refreshMembership());
       } else if (event.status == IMSdkStatus.syncFailed) {
+        _membershipSyncPhase = event.status;
+        _membershipSyncEndedHandled = false;
         membership.defer();
         membership.failed.value = true;
       }
@@ -337,17 +350,41 @@ class GroupSetupLogic extends GetxController {
     membership.accept();
     _permissionGeneration++;
     isJoinedGroup.value = false;
+    // A later join confirms membership, not the previous membership's role.
+    // Keep display metadata but require fresh evidence for elevated controls.
+    myGroupMembersInfo.update((value) {
+      if (value?.roleLevel == GroupRoleLevel.owner ||
+          value?.roleLevel == GroupRoleLevel.admin) {
+        value?.roleLevel = null;
+      }
+      value?.appManagerLevel = null;
+    });
+    if (groupInfo.value.ownerUserID == _initialPermissionContext.sdkAccount) {
+      groupInfo.update((value) => value?.ownerUserID = null);
+    }
     _memberPreview.invalidate();
   }
 
-  bool get _membershipSyncing => const {
+  bool get _membershipSyncing =>
+      _isMembershipSyncing(_membershipSyncPhase) ||
+      _isMembershipSyncing(imLogic.initialSyncState?.status) ||
+      _isMembershipSyncing(imLogic.currentSdkStatus);
+
+  bool _isMembershipSyncing(IMSdkStatus? status) => const {
         IMSdkStatus.syncStart,
         IMSdkStatus.syncProgress,
         IMSdkStatus.synchronizing,
-      }.contains(imLogic.currentSdkStatus);
+      }.contains(status);
 
   Future<void> refreshMembership() {
-    if (_membershipSyncing || _membershipRevoked) return Future.value();
+    if (_membershipRevoked || !_isCurrentGroupSession) return Future.value();
+    if (_membershipSyncing) {
+      membership.defer(
+        isCurrent: () => _isCurrentGroupSession,
+        restart: true,
+      );
+      return Future.value();
+    }
     return membership.refresh(
       query: () => OpenIM.iMManager.groupManager
           .isJoinedGroup(groupID: _initialPermissionContext.groupID),

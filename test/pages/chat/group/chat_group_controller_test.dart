@@ -449,6 +449,7 @@ void main() {
     h.controller.initialize();
     final text = Message(sendID: 'alice', contentType: MessageType.text);
     final notice = Message(
+        groupID: 'group',
         sendID: 'alice',
         contentType: 1501,
         notificationElem: NotificationElem(
@@ -472,10 +473,13 @@ void main() {
     expect(text.senderNickname, 'Alice');
     expect(text.senderFaceUrl, 'new-face');
     expect(jsonDecode(notice.notificationElem!.detail!)['opUser']['nickname'],
+        'Old');
+    expect(jsonDecode(h.controller.noticeFor(notice).notificationElem!.detail!)
+        ['opUser']['nickname'],
         'Alice');
     expect(h.controller.memberUpdateInfoMap['alice']?.nickname, 'Alice');
     expect(h.controller.ownerAndAdmin.single.userID, 'alice');
-    expect(h.errors, hasLength(1));
+    expect(h.errors, isEmpty);
     h.changed.add(GroupMembersInfo(
         groupID: 'group', userID: 'alice', roleLevel: GroupRoleLevel.member));
     expect(h.controller.ownerAndAdmin, isEmpty);

@@ -5,6 +5,52 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/group_setup/loading/group_setup_membership.dart';
 
 void main() {
+  test(
+      'sync progress cannot extend loading forever; retry and completion recover',
+      () {
+    fakeAsync((time) {
+      final state = GroupSetupMembership();
+      state.defer();
+      for (var i = 0; i < 4; i++) {
+        time.elapse(const Duration(seconds: 5));
+        state.defer();
+      }
+      expect(state.failed.value, isTrue);
+      expect(state.resolved.value, isFalse);
+      state.defer(restart: true);
+      expect(state.failed.value, isFalse);
+      time.elapse(const Duration(seconds: 20));
+      expect(state.failed.value, isTrue);
+      final results = <bool>[];
+      state.refresh(
+          query: () async => true,
+          isCurrent: () => true,
+          onResult: results.add);
+      time.flushMicrotasks();
+      time.elapse(const Duration(seconds: 30));
+      expect(results, [true]);
+      expect(state.resolved.value, isTrue);
+      expect(state.failed.value, isFalse);
+      state.dispose();
+    });
+  });
+
+  for (final reason in ['close', 'session changed', 'membership event']) {
+    test('sync deadline does not write after $reason', () {
+      fakeAsync((time) {
+        final state = GroupSetupMembership();
+        var current = true;
+        state.defer(isCurrent: () => current);
+        if (reason == 'close') state.dispose();
+        if (reason == 'session changed') current = false;
+        if (reason == 'membership event') state.accept();
+        time.elapse(const Duration(seconds: 30));
+        expect(state.failed.value, isFalse);
+        state.dispose();
+      });
+    });
+  }
+
   for (final stillAbsent in [false, true]) {
     test('negative cache result is confirmed before publishing $stillAbsent',
         () {

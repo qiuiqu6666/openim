@@ -6,17 +6,24 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
+import '../../utils/media/openim_media_url.dart';
+import '../../utils/media/shared_image_disk_cache.dart';
+
 /// One viewer owns this request, including its socket and decoded image.
 /// Encoded disk files are shared, but cancellation never affects another view.
 class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
-  ViewerImageProvider(this.url,
+  ViewerImageProvider(String url,
       {this.maxPixels = 16 * 1024 * 1024,
       HttpClient Function()? createClient,
-      BaseCacheManager? cache})
-      : _createClient = createClient ?? HttpClient.new,
+      BaseCacheManager? cache,
+      SharedImageDiskCache? sharedCache})
+      : url = OpenIMMediaUrl.repairThumbnail(url),
+        _sharedCache = sharedCache ?? SharedImageDiskCache(),
+        _createClient = createClient ?? HttpClient.new,
         _cache = cache;
   final HttpClient Function() _createClient;
   final BaseCacheManager? _cache;
+  final SharedImageDiskCache _sharedCache;
 
   final String url;
   final int maxPixels;
@@ -49,14 +56,23 @@ class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
     final cache = _cache ?? DefaultCacheManager();
     Uint8List? bytes;
     try {
-      final cached = await cache.getFileFromCache(url);
-      _check();
-      if (cached != null && await cached.file.exists()) {
-        bytes = await cached.file.readAsBytes();
-      }
+      bytes = await _sharedCache.read(url);
     } catch (_) {
-      _check();
-      // A missing disk cache must not prevent normal preview playback.
+      // A missing/unavailable shared cache must not prevent viewing.
+    }
+    _check();
+    final sharedHit = bytes != null;
+    if (bytes == null) {
+      try {
+        final cached = await cache.getFileFromCache(url);
+        _check();
+        if (cached != null && await cached.file.exists()) {
+          bytes = await cached.file.readAsBytes();
+        }
+      } catch (_) {
+        _check();
+        // A missing disk cache must not prevent normal preview playback.
+      }
     }
     if (bytes == null) {
       _check();
@@ -74,14 +90,22 @@ class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
         bytes = await consolidateHttpClientResponseBytes(response)
             .timeout(const Duration(seconds: 45));
         _check();
-        // Disk persistence is best effort; only the current request writes it.
-        try {
-          await cache.putFile(url, bytes);
-        } catch (_) {}
       } finally {
         client.close(force: true);
         _client = null;
         _request = null;
+      }
+    }
+    _check();
+    // Also migrate an existing viewer-only cache hit for future bubble reuse.
+    if (!sharedHit) {
+      try {
+        await _sharedCache.write(url, bytes, isCurrent: () => !_cancelled);
+      } catch (_) {
+        _check();
+        try {
+          await cache.putFile(url, bytes);
+        } catch (_) {}
       }
     }
     _check();

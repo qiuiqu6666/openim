@@ -53,13 +53,6 @@ class MomentsApi {
       {String? cursor, int pageSize = 20}) async {
     final data = await _request('/moments/${_id(momentId)}/comments',
         query: _pageQuery(cursor, pageSize));
-    // protojson omits an empty repeated field. Require the successful page's
-    // context marker so an unrelated/malformed object is still rejected.
-    if (!data.containsKey('items') &&
-        data['viewerContextVersion'] is String &&
-        (data['viewerContextVersion'] as String).isNotEmpty) {
-      data['items'] = const <dynamic>[];
-    }
     return MomentsPageResult.fromJson(data, MomentComment.fromJson);
   }
 
@@ -503,6 +496,9 @@ class MomentsApi {
 
   Never _throwBusinessError(Map body) {
     final errCode = body['errCode'];
+    if (errCode == 500) {
+      throw const MomentsException('服务暂时繁忙，请稍后重试', code: 'SERVER_ERROR');
+    }
     final semantic = errCode == 20012
         ? body['errDlt']
         : errCode == 1001

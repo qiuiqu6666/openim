@@ -3461,224 +3461,6 @@ new file mode 100644
 +		t.Fatal("recovery resurrected a deleted row")
 +	}
 +}
-diff --git a/internal/conversation_msg/message_window.go b/internal/conversation_msg/message_window.go
-new file mode 100644
---- /dev/null
-+++ b/internal/conversation_msg/message_window.go
-@@ -0,0 +1,213 @@
-+package conversation_msg
-+
-+import (
-+	"context"
-+	"crypto/sha256"
-+	"encoding/hex"
-+	"encoding/json"
-+	"fmt"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
-+	sdk "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
-+	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
-+	"github.com/openimsdk/protocol/sdkws"
-+	"sort"
-+)
-+
-+type messageWindowReader interface {
-+	ReadMessageWindow(context.Context, string, int, int64) (*model_struct.MessageWindowRead, error)
-+}
-+
-+func (c *Conversation) messageWindow(ctx context.Context, req sdk.GetAdvancedHistoryMessageListParams) (*sdk.GetAdvancedHistoryMessageListCallback, error) {
-+	reader, ok := c.db.(messageWindowReader)
-+	if !ok {
-+		return nil, fmt.Errorf("atomic message windows unavailable")
-+	}
-+	if req.ConversationID == "" || req.StartClientMsgID != "" || req.ScanCursor != nil {
-+		return nil, fmt.Errorf("window requires an unanchored conversation")
-+	}
-+	target := req.TargetWatermark
-+	latestServerSeq := int64(0)
-+	var visible [2]int64
-+	source := "local"
-+	remoteEmpty := false
-+	if !req.LocalSnapshot && c.LongConnMgr != nil && c.LongConnMgr.IsConnected() {
-+		if target <= 0 {
-+			var newest sdkws.GetMaxSeqResp
-+			if err := c.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: c.loginUserID}, constant.GetNewestSeq, &newest); err != nil {
-+				return nil, err
-+			}
-+			var exists bool
-+			target, exists = newest.MaxSeqs[req.ConversationID]
-+			if !exists {
-+				// Omission from a global summary is not an empty-conversation
-+				// receipt. Require the existing directional permission boundary.
-+				bounds, err := c.ResolveVisibleMessageRange(ctx, c.loginUserID, req.ConversationID, [2]int64{1, 1})
-+				if err != nil {
-+					return nil, err
-+				}
-+				if bounds[0] <= bounds[1] {
-+					return nil, fmt.Errorf("conversation watermark absent without empty-range evidence")
-+				}
-+			}
-+		}
-+		remoteEmpty = target == 0
-+		latestServerSeq = target
-+		if target > 0 {
-+			var err error
-+			visible, err = c.prepareMessageWindow(ctx, req.ConversationID, req.Count, target)
-+			if err != nil {
-+				return nil, err
-+			}
-+			target = max(0, visible[1])
-+			remoteEmpty = visible[0] > visible[1]
-+			if !remoteEmpty {
-+				req.Count = int(visible[1] - visible[0] + 1)
-+			}
-+		}
-+		source = "remote"
-+	}
-+	read, err := reader.ReadMessageWindow(ctx, req.ConversationID, req.Count, target)
-+	if err != nil {
-+		return nil, err
-+	}
-+	if read.Conversation.IsPrivateChat {
-+		req.Window = false
-+		return c.getAdvancedHistoryMessageList(ctx, req, false)
-+	}
-+	if remoteEmpty {
-+		read.Rows = nil
-+		read.Conversation.MinSeq = max(read.Conversation.MinSeq, target+1)
-+	}
-+	result := buildMessageWindow(req, read, target, source, remoteEmpty)
-+	target = result.Window.TargetWatermark
-+	// A tail made only of tombstones/control messages is not an empty chat.
-+	// Search at most two more bounded pages under the original fixed watermark.
-+	step := req.Count
-+	for attempt := 1; attempt < 3 && result.Window.Publishable && len(result.MessageList) == 0 && !result.IsEnd; attempt++ {
-+		if source == "remote" {
-+			if _, err := c.prepareMessageWindow(ctx, req.ConversationID, step, result.Window.LowerBound-1); err != nil {
-+				return nil, err
-+			}
-+		}
-+		req.Count += step
-+		read, err = reader.ReadMessageWindow(ctx, req.ConversationID, req.Count, target)
-+		if err != nil {
-+			return nil, err
-+		}
-+		result = buildMessageWindow(req, read, target, source, remoteEmpty)
-+	}
-+	if result.Window.Publishable && len(result.MessageList) == 0 && !result.IsEnd {
-+		if err := setInvisibleWindowCursor(result, read); err != nil {
-+			return nil, err
-+		}
-+	}
-+	result.Window.LatestServerSeq = latestServerSeq
-+	return result, nil
-+}
-+
-+func setInvisibleWindowCursor(result *sdk.GetAdvancedHistoryMessageListCallback, read *model_struct.MessageWindowRead) error {
-+	for _, row := range read.Rows {
-+		if row.Seq == result.Window.LowerBound && row.SendTime > 0 && row.ClientMsgID != "" {
-+			result.ScanLimited = true
-+			result.ScanCursor = &sdk.HistoryScanCursor{ConversationID: result.Window.ConversationID, ClientMsgID: row.ClientMsgID, Seq: row.Seq, SendTime: row.SendTime}
-+			return nil
-+		}
-+	}
-+	return fmt.Errorf("invisible window has no resumable history boundary")
-+}
-+
-+// Re-read the bounded remote window even when all bodies exist locally: seq
-+// orders messages, but cannot detect an offline recall of an earlier message.
-+// Existing durable recall/read overlays win over an older in-flight response.
-+func (c *Conversation) prepareMessageWindow(ctx context.Context, id string, count int, target int64) ([2]int64, error) {
-+	r := [2]int64{max(1, target-int64(min(max(count, 1), 100))+1), target}
-+	release, err := c.LockMessageHistory(ctx, id, true)
-+	if err != nil {
-+		return r, err
-+	}
-+	defer release()
-+	r, err = c.ResolveVisibleMessageRange(ctx, c.loginUserID, id, r)
-+	if err != nil || r[0] > r[1] {
-+		return r, err
-+	}
-+	seqs := getLostSeqListWithLimitLength(r[0], r[1], nil, false)
-+	var rows []*model_struct.LocalChatLog
-+	result := &sdk.GetAdvancedHistoryMessageListCallback{}
-+	c.fetchAndMergeMissingMessages(ctx, id, seqs, false, count, 0, &rows, result)
-+	if result.ErrCode != 0 {
-+		return r, historyFetchError(result.ErrMsg)
-+	}
-+	return r, nil
-+}
-+
-+func buildMessageWindow(req sdk.GetAdvancedHistoryMessageListParams, read *model_struct.MessageWindowRead, target int64, source string, remoteEmpty bool) *sdk.GetAdvancedHistoryMessageListCallback {
-+	conversation := read.Conversation
-+	result := &sdk.GetAdvancedHistoryMessageListCallback{LocalSnapshot: req.LocalSnapshot, MessageList: []*sdk_struct.MsgStruct{}}
-+	w := &sdk.MessageWindow{Version: 1, ConversationID: req.ConversationID, Source: source, Covered: [][2]int64{}, Missing: [][2]int64{}}
-+	result.Window = w
-+	if target <= 0 && !remoteEmpty {
-+		target = conversation.MaxSeq
-+		var latest sdk_struct.MsgStruct
-+		if json.Unmarshal([]byte(conversation.LatestMsg), &latest) == nil {
-+			target = max(target, latest.Seq)
-+		}
-+		for _, row := range read.Rows {
-+			target = max(target, row.Seq)
-+		}
-+	}
-+	w.TargetWatermark = target
-+	w.LowerBound = max(1, conversation.MinSeq, target-int64(req.Count)+1)
-+	w.VisibilityKey = fmt.Sprintf("%d:%d:%t", conversation.MinSeq, conversation.MaxSeq, conversation.IsPrivateChat)
-+	stored := map[int64]*model_struct.LocalChatLog{}
-+	for _, row := range read.Rows {
-+		if row.Seq >= w.LowerBound && row.Seq <= target {
-+			stored[row.Seq] = row
-+		}
-+	}
-+	appendRange := func(ranges *[][2]int64, seq int64) {
-+		if len(*ranges) > 0 && (*ranges)[len(*ranges)-1][1]+1 == seq {
-+			(*ranges)[len(*ranges)-1][1] = seq
-+		} else {
-+			*ranges = append(*ranges, [2]int64{seq, seq})
-+		}
-+	}
-+	for seq := w.LowerBound; seq <= target; seq++ {
-+		row, exists := stored[seq]
-+		if !exists {
-+			appendRange(&w.Missing, seq)
-+			continue
-+		}
-+		appendRange(&w.Covered, seq)
-+		if row.Status >= constant.MsgStatusHasDeleted || row.ContentType == constant.Typing {
-+			continue
-+		}
-+		message := LocalChatLogToMsgStruct(row)
-+		if message.AttachedInfoElem.IsPrivateChat {
-+			continue
-+		}
-+		result.MessageList = append(result.MessageList, message)
-+	}
-+	sort.SliceStable(result.MessageList, func(i, j int) bool { return result.MessageList[i].Seq < result.MessageList[j].Seq })
-+	w.Publishable = !conversation.IsPrivateChat && len(w.Missing) == 0 && (target > 0 || remoteEmpty)
-+	w.Readiness = "preparing"
-+	if w.Publishable {
-+		w.Readiness = "ready"
-+	}
-+	w.CoverageStatus = "partial"
-+	if len(w.Missing) == 0 && (target > 0 || remoteEmpty) {
-+		w.CoverageStatus = "covered"
-+	}
-+	result.SnapshotReady = w.Publishable
-+	result.IsEnd = w.Publishable && (remoteEmpty || w.LowerBound <= max(1, conversation.MinSeq))
-+	w.EmptyConfirmed = result.IsEnd && len(result.MessageList) == 0
-+	// Identity, not a sortable server mutation cursor. SDK window generations
-+	// fence response ordering; durable notification cursors protect mutations.
-+	payload, _ := json.Marshal(struct {
-+		Window *sdk.MessageWindow
-+		Rows   []*sdk_struct.MsgStruct
-+	}{w, result.MessageList})
-+	digest := sha256.Sum256(payload)
-+	w.SnapshotRevision = hex.EncodeToString(digest[:])
-+	return result
-+}
 diff --git a/internal/conversation_msg/message_window_test.go b/internal/conversation_msg/message_window_test.go
 new file mode 100644
 --- /dev/null
@@ -17168,48 +16950,6 @@ new file mode 100644
 +		t.Fatal("replay not idempotent", err)
 +	}
 +}
-diff --git a/pkg/db/message_window.go b/pkg/db/message_window.go
-new file mode 100644
---- /dev/null
-+++ b/pkg/db/message_window.go
-@@ -0,0 +1,37 @@
-+//go:build !js
-+
-+package db
-+
-+import (
-+	"context"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
-+	"gorm.io/gorm"
-+)
-+
-+// ReadMessageWindow reads permissions, rows and durable revocations together.
-+// A crash cannot leave a published coverage proof ahead of its messages: the
-+// proof is reconstructed from committed rows on every native snapshot read.
-+func (d *DataBase) ReadMessageWindow(ctx context.Context, id string, count int, target int64) (*model_struct.MessageWindowRead, error) {
-+	d.mRWMutex.RLock()
-+	defer d.mRWMutex.RUnlock()
-+	result := &model_struct.MessageWindowRead{Conversation: &model_struct.LocalConversation{}}
-+	err := d.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-+		if err := tx.Where("conversation_id = ?", id).Take(result.Conversation).Error; err != nil {
-+			return err
-+		}
-+		table := utils.GetTableName(id)
-+		if !tx.Migrator().HasTable(table) {
-+			return nil
-+		}
-+		q := tx.Table(table).Where("seq > 0")
-+		if target > 0 {
-+			q = q.Where("seq <= ?", target)
-+		}
-+		if err := q.Order("seq DESC").Limit(min(max(count, 1), 300)).Find(&result.Rows).Error; err != nil {
-+			return err
-+		}
-+		return applyMessageRevocations(tx, id, result.Rows)
-+	})
-+	return result, err
-+}
 diff --git a/pkg/db/message_window_crash_test.go b/pkg/db/message_window_crash_test.go
 new file mode 100644
 --- /dev/null
@@ -18332,3 +18072,1638 @@ diff --git a/internal/conversation_msg/read_receipt_cold_cache_test.go b/interna
  package conversation_msg
  
  import (
+diff --git a/internal/conversation_msg/message_window.go b/internal/conversation_msg/message_window.go
+new file mode 100644
+--- /dev/null
++++ b/internal/conversation_msg/message_window.go
+@@ -0,0 +1,214 @@
++package conversation_msg
++
++import (
++	"context"
++	"crypto/sha256"
++	"encoding/hex"
++	"encoding/json"
++	"fmt"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	sdk "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/sdkws"
++	"sort"
++)
++
++type messageWindowReader interface {
++	ReadMessageWindow(context.Context, string, int, int64) (*model_struct.MessageWindowRead, error)
++}
++
++func (c *Conversation) messageWindow(ctx context.Context, req sdk.GetAdvancedHistoryMessageListParams) (*sdk.GetAdvancedHistoryMessageListCallback, error) {
++	reader, ok := c.db.(messageWindowReader)
++	if !ok {
++		return nil, fmt.Errorf("atomic message windows unavailable")
++	}
++	if req.ConversationID == "" || req.StartClientMsgID != "" || req.ScanCursor != nil {
++		return nil, fmt.Errorf("window requires an unanchored conversation")
++	}
++	target := req.TargetWatermark
++	latestServerSeq := int64(0)
++	var visible [2]int64
++	source := "local"
++	remoteEmpty := false
++	if !req.LocalSnapshot && c.LongConnMgr != nil && c.LongConnMgr.IsConnected() {
++		if target <= 0 {
++			var newest sdkws.GetMaxSeqResp
++			if err := c.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: c.loginUserID}, constant.GetNewestSeq, &newest); err != nil {
++				return nil, err
++			}
++			var exists bool
++			target, exists = newest.MaxSeqs[req.ConversationID]
++			if !exists {
++				// Omission from a global summary is not an empty-conversation
++				// receipt. Require the existing directional permission boundary.
++				bounds, err := c.ResolveVisibleMessageRange(ctx, c.loginUserID, req.ConversationID, [2]int64{1, 1})
++				if err != nil {
++					return nil, err
++				}
++				if bounds[0] <= bounds[1] {
++					return nil, fmt.Errorf("conversation watermark absent without empty-range evidence")
++				}
++			}
++		}
++		remoteEmpty = target == 0
++		latestServerSeq = target
++		if target > 0 {
++			var err error
++			visible, err = c.prepareMessageWindow(ctx, req.ConversationID, req.Count, target)
++			if err != nil {
++				return nil, err
++			}
++			target = max(0, visible[1])
++			remoteEmpty = visible[0] > visible[1]
++			if !remoteEmpty {
++				req.Count = int(visible[1] - visible[0] + 1)
++			}
++		}
++		source = "remote"
++	}
++	read, err := reader.ReadMessageWindow(ctx, req.ConversationID, req.Count, target)
++	if err != nil {
++		return nil, err
++	}
++	if read.Conversation.IsPrivateChat {
++		req.Window = false
++		return c.getAdvancedHistoryMessageList(ctx, req, false)
++	}
++	if remoteEmpty {
++		read.Rows = nil
++		read.Conversation.MinSeq = max(read.Conversation.MinSeq, target+1)
++	}
++	result := buildMessageWindow(req, read, target, source, remoteEmpty)
++	target = result.Window.TargetWatermark
++	// A tail made only of tombstones/control messages is not an empty chat.
++	// Search at most two more bounded pages under the original fixed watermark.
++	step := req.Count
++	for attempt := 1; attempt < 3 && result.Window.Publishable && len(result.MessageList) == 0 && !result.IsEnd; attempt++ {
++		if source == "remote" {
++			if _, err := c.prepareMessageWindow(ctx, req.ConversationID, step, result.Window.LowerBound-1); err != nil {
++				return nil, err
++			}
++		}
++		req.Count += step
++		read, err = reader.ReadMessageWindow(ctx, req.ConversationID, req.Count, target)
++		if err != nil {
++			return nil, err
++		}
++		result = buildMessageWindow(req, read, target, source, remoteEmpty)
++	}
++	if result.Window.Publishable && len(result.MessageList) == 0 && !result.IsEnd {
++		if err := setInvisibleWindowCursor(result, read); err != nil {
++			return nil, err
++		}
++	}
++	result.Window.LatestServerSeq = latestServerSeq
++	return result, nil
++}
++
++func setInvisibleWindowCursor(result *sdk.GetAdvancedHistoryMessageListCallback, read *model_struct.MessageWindowRead) error {
++	for _, row := range read.Rows {
++		if row.Seq == result.Window.LowerBound && row.SendTime > 0 && row.ClientMsgID != "" {
++			result.ScanLimited = true
++			result.ScanCursor = &sdk.HistoryScanCursor{ConversationID: result.Window.ConversationID, ClientMsgID: row.ClientMsgID, Seq: row.Seq, SendTime: row.SendTime}
++			return nil
++		}
++	}
++	return fmt.Errorf("invisible window has no resumable history boundary")
++}
++
++// Re-read the bounded remote window even when all bodies exist locally: seq
++// orders messages, but cannot detect an offline recall of an earlier message.
++// Existing durable recall/read overlays win over an older in-flight response.
++func (c *Conversation) prepareMessageWindow(ctx context.Context, id string, count int, target int64) ([2]int64, error) {
++	r := [2]int64{max(1, target-int64(min(max(count, 1), 100))+1), target}
++	release, err := c.LockMessageHistory(ctx, id, true)
++	if err != nil {
++		return r, err
++	}
++	defer release()
++	r, err = c.ResolveVisibleMessageRange(ctx, c.loginUserID, id, r)
++	if err != nil || r[0] > r[1] {
++		return r, err
++	}
++	seqs := getLostSeqListWithLimitLength(r[0], r[1], nil, false)
++	var rows []*model_struct.LocalChatLog
++	result := &sdk.GetAdvancedHistoryMessageListCallback{}
++	c.fetchAndMergeMissingMessages(ctx, id, seqs, false, count, 0, &rows, result)
++	if result.ErrCode != 0 {
++		return r, historyFetchError(result.ErrMsg)
++	}
++	return r, nil
++}
++
++func buildMessageWindow(req sdk.GetAdvancedHistoryMessageListParams, read *model_struct.MessageWindowRead, target int64, source string, remoteEmpty bool) *sdk.GetAdvancedHistoryMessageListCallback {
++	conversation := read.Conversation
++	result := &sdk.GetAdvancedHistoryMessageListCallback{LocalSnapshot: req.LocalSnapshot, MessageList: []*sdk_struct.MsgStruct{}}
++	w := &sdk.MessageWindow{Version: 1, ConversationID: req.ConversationID, Source: source, Covered: [][2]int64{}, Missing: [][2]int64{}}
++	result.Window = w
++	if target <= 0 && !remoteEmpty {
++		target = conversation.MaxSeq
++		var latest sdk_struct.MsgStruct
++		if json.Unmarshal([]byte(conversation.LatestMsg), &latest) == nil {
++			target = max(target, latest.Seq)
++		}
++		for _, row := range read.Rows {
++			target = max(target, row.Seq)
++		}
++	}
++	w.TargetWatermark = target
++	w.LowerBound = max(1, conversation.MinSeq, target-int64(req.Count)+1)
++	w.VisibilityKey = fmt.Sprintf("%d:%d:%t", conversation.MinSeq, conversation.MaxSeq, conversation.IsPrivateChat)
++	stored := map[int64]*model_struct.LocalChatLog{}
++	for _, row := range read.Rows {
++		if row.Seq >= w.LowerBound && row.Seq <= target {
++			stored[row.Seq] = row
++		}
++	}
++	appendRange := func(ranges *[][2]int64, seq int64) {
++		if len(*ranges) > 0 && (*ranges)[len(*ranges)-1][1]+1 == seq {
++			(*ranges)[len(*ranges)-1][1] = seq
++		} else {
++			*ranges = append(*ranges, [2]int64{seq, seq})
++		}
++	}
++	for seq := w.LowerBound; seq <= target; seq++ {
++		row, exists := stored[seq]
++		if !exists {
++			appendRange(&w.Missing, seq)
++			continue
++		}
++		appendRange(&w.Covered, seq)
++		if row.Status >= constant.MsgStatusHasDeleted || row.ContentType == constant.Typing {
++			continue
++		}
++		message := LocalChatLogToMsgStruct(row)
++		if message.AttachedInfoElem.IsPrivateChat {
++			continue
++		}
++		result.MessageList = append(result.MessageList, message)
++	}
++	sort.SliceStable(result.MessageList, func(i, j int) bool { return result.MessageList[i].Seq < result.MessageList[j].Seq })
++	appendLocalWindowMessages(result, read, remoteEmpty)
++	w.Publishable = !conversation.IsPrivateChat && len(w.Missing) == 0 && (target > 0 || remoteEmpty)
++	w.Readiness = "preparing"
++	if w.Publishable {
++		w.Readiness = "ready"
++	}
++	w.CoverageStatus = "partial"
++	if len(w.Missing) == 0 && (target > 0 || remoteEmpty) {
++		w.CoverageStatus = "covered"
++	}
++	result.SnapshotReady = w.Publishable
++	result.IsEnd = w.Publishable && (remoteEmpty || w.LowerBound <= max(1, conversation.MinSeq))
++	w.EmptyConfirmed = result.IsEnd && len(result.MessageList) == 0
++	// Identity, not a sortable server mutation cursor. SDK window generations
++	// fence response ordering; durable notification cursors protect mutations.
++	payload, _ := json.Marshal(struct {
++		Window *sdk.MessageWindow
++		Rows   []*sdk_struct.MsgStruct
++	}{w, result.MessageList})
++	digest := sha256.Sum256(payload)
++	w.SnapshotRevision = hex.EncodeToString(digest[:])
++	return result
++}
+diff --git a/internal/conversation_msg/message_window_local.go b/internal/conversation_msg/message_window_local.go
+new file mode 100644
+--- /dev/null
++++ b/internal/conversation_msg/message_window_local.go
+@@ -0,0 +1,53 @@
++package conversation_msg
++
++import (
++	"sort"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	sdk "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
++)
++
++// Local records decorate the covered server window without proving coverage or
++// crossing a permission-empty boundary. Keep server sequence order intact.
++func appendLocalWindowMessages(result *sdk.GetAdvancedHistoryMessageListCallback, read *model_struct.MessageWindowRead, remoteEmpty bool) {
++	if remoteEmpty || read.Conversation.IsPrivateChat {
++		return
++	}
++	var floor int64
++	for _, row := range read.Rows {
++		if row.Seq == result.Window.LowerBound {
++			floor = row.SendTime
++			break
++		}
++	}
++	var local []*model_struct.LocalChatLog
++	for _, row := range read.Rows {
++		if row.Seq == 0 && row.Status == constant.MsgStatusSendSuccess &&
++			row.ContentType != constant.Typing && row.SendTime >= floor {
++			local = append(local, row)
++		}
++	}
++	sort.SliceStable(local, func(i, j int) bool {
++		if local[i].SendTime == local[j].SendTime {
++			return local[i].ClientMsgID < local[j].ClientMsgID
++		}
++		return local[i].SendTime < local[j].SendTime
++	})
++	for _, row := range local {
++		message := LocalChatLogToMsgStruct(row)
++		if message.AttachedInfoElem.IsPrivateChat {
++			continue
++		}
++		at := len(result.MessageList)
++		for i, existing := range result.MessageList {
++			if existing.SendTime > message.SendTime {
++				at = i
++				break
++			}
++		}
++		result.MessageList = append(result.MessageList, nil)
++		copy(result.MessageList[at+1:], result.MessageList[at:])
++		result.MessageList[at] = message
++	}
++}
+diff --git a/internal/conversation_msg/message_window_local_test.go b/internal/conversation_msg/message_window_local_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/conversation_msg/message_window_local_test.go
+@@ -0,0 +1,36 @@
++package conversation_msg
++
++import (
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	sdk "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
++)
++
++func TestWindowIncludesLocalCallWithoutClaimingCoverage(t *testing.T) {
++	req := sdk.GetAdvancedHistoryMessageListParams{ConversationID: "chat", Count: 2}
++	row := func(id string, seq, time int64) *model_struct.LocalChatLog {
++		return &model_struct.LocalChatLog{ClientMsgID: id, Seq: seq, SendTime: time, Status: constant.MsgStatusSendSuccess, ContentType: constant.Custom, Content: `{"data":"call"}`, AttachedInfo: "{}"}
++	}
++	read := &model_struct.MessageWindowRead{Conversation: &model_struct.LocalConversation{MaxSeq: 2}, Rows: []*model_struct.LocalChatLog{
++		row("first", 1, 100), row("last", 2, 300), row("call", 0, 200), row("old", 0, 90), row("deleted", 0, 400), row("private", 0, 500),
++	}}
++	read.Rows[4].Status = constant.MsgStatusHasDeleted
++	read.Rows[5].AttachedInfo = `{"isPrivateChat":true}`
++	p := buildMessageWindow(req, read, 2, "local", false)
++	if !p.Window.Publishable || len(p.MessageList) != 3 || p.MessageList[1].ClientMsgID != "call" || len(p.Window.Covered) != 1 || p.Window.Covered[0] != [2]int64{1, 2} {
++		t.Fatalf("local call missing or coverage changed: %+v, %+v", p.MessageList, p.Window)
++	}
++	read.Rows = read.Rows[1:]
++	p = buildMessageWindow(req, read, 2, "local", false)
++	if p.Window.Publishable || len(p.Window.Missing) != 1 {
++		t.Fatal("local record covered a missing server sequence")
++	}
++	p = buildMessageWindow(req, read, 0, "remote", true)
++	for _, m := range p.MessageList {
++		if m.Seq == 0 {
++			t.Fatal("local record crossed empty permission boundary")
++		}
++	}
++}
+diff --git a/internal/conversation_msg/message_window_upgrade_test.go b/internal/conversation_msg/message_window_upgrade_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/conversation_msg/message_window_upgrade_test.go
+@@ -0,0 +1,81 @@
++//go:build cgo && !js
++
++package conversation_msg
++
++import (
++	"context"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	sdk "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
++)
++
++// Seed the legacy persisted shape, close the database, then read it through
++// the new SDK window path. No resend, backfill or database rewrite is needed.
++func TestWindowUpgradeRecoversPersistedCallRecords(t *testing.T) {
++	ctx := context.Background()
++	dir := t.TempDir()
++	d, err := db.NewDataBase(ctx, "self", dir, 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	conversation := &model_struct.LocalConversation{ConversationID: "chat", MaxSeq: 1, UnreadCount: 3, LatestMsg: "{}"}
++	if err = d.BatchInsertConversationList(ctx, []*model_struct.LocalConversation{conversation}); err != nil {
++		t.Fatal(err)
++	}
++	const callContent = `{"data":"{\"customType\":901,\"data\":{\"type\":\"audio\",\"state\":\"cancel\",\"duration\":0}}","extension":"","description":""}`
++	rows := []*model_struct.LocalChatLog{
++		{ClientMsgID: "server", Seq: 1, SendTime: 100, Status: constant.MsgStatusSendSuccess, ContentType: constant.Text, Content: `{"content":"hello"}`, AttachedInfo: "{}"},
++		{ClientMsgID: "legacy-call", Seq: 0, SendTime: 200, Status: constant.MsgStatusSendSuccess, ContentType: constant.Custom, Content: callContent, AttachedInfo: "{}", IsRead: true},
++		{ClientMsgID: "deleted-call", Seq: 0, SendTime: 201, Status: constant.MsgStatusHasDeleted, ContentType: constant.Custom, Content: callContent, AttachedInfo: "{}"},
++	}
++	if err = d.BatchInsertMessageList(ctx, "chat", rows); err != nil {
++		t.Fatal(err)
++	}
++	if err = d.Close(ctx); err != nil {
++		t.Fatal(err)
++	}
++	d, err = db.NewDataBase(ctx, "self", dir, 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer d.Close(ctx)
++	c := &Conversation{db: d}
++	for attempt := 0; attempt < 3; attempt++ {
++		p, err := c.messageWindow(ctx, sdk.GetAdvancedHistoryMessageListParams{ConversationID: "chat", Count: 40, LocalSnapshot: true, Window: true})
++		if err != nil {
++			t.Fatal(err)
++		}
++		if !p.Window.Publishable || len(p.MessageList) != 2 || p.MessageList[1].ClientMsgID != "legacy-call" {
++			t.Fatalf("upgrade failed to recover old call exactly once: %+v", p)
++		}
++		call := p.MessageList[1]
++		if call.Seq != 0 || !call.IsRead || call.CustomElem == nil {
++			t.Fatalf("legacy call metadata changed: %+v", call)
++		}
++	}
++	stored, err := d.GetConversation(ctx, "chat")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if stored.UnreadCount != 3 || stored.LatestMsg != "{}" {
++		t.Fatal("recovery rewrote conversation state")
++	}
++	read, err := d.ReadMessageWindow(ctx, "chat", 40, 1)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(read.Rows) != 3 {
++		t.Fatal("recovery duplicated or removed stored messages")
++	}
++	for _, row := range read.Rows {
++		if row.ClientMsgID == "legacy-call" && (row.Content != callContent || row.Seq != 0) {
++			t.Fatal("recovery rewrote historical call")
++		}
++		if row.ClientMsgID == "deleted-call" && row.Status != constant.MsgStatusHasDeleted {
++			t.Fatal("recovery resurrected deletion")
++		}
++	}
++}
+diff --git a/pkg/db/message_window.go b/pkg/db/message_window.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/db/message_window.go
+@@ -0,0 +1,48 @@
++//go:build !js
++
++package db
++
++import (
++	"context"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
++	"gorm.io/gorm"
++)
++
++// ReadMessageWindow reads permissions, rows and durable revocations together.
++// A crash cannot leave a published coverage proof ahead of its messages: the
++// proof is reconstructed from committed rows on every native snapshot read.
++func (d *DataBase) ReadMessageWindow(ctx context.Context, id string, count int, target int64) (*model_struct.MessageWindowRead, error) {
++	d.mRWMutex.RLock()
++	defer d.mRWMutex.RUnlock()
++	result := &model_struct.MessageWindowRead{Conversation: &model_struct.LocalConversation{}}
++	err := d.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
++		if err := tx.Where("conversation_id = ?", id).Take(result.Conversation).Error; err != nil {
++			return err
++		}
++		table := utils.GetTableName(id)
++		if !tx.Migrator().HasTable(table) {
++			return nil
++		}
++		q := tx.Table(table).Where("seq > 0")
++		if target > 0 {
++			q = q.Where("seq <= ?", target)
++		}
++		if err := q.Order("seq DESC").Limit(min(max(count, 1), 300)).Find(&result.Rows).Error; err != nil {
++			return err
++		}
++		// Local call records have no server sequence. Read them in the same
++		// transaction; they must not contribute to server coverage.
++		var local []*model_struct.LocalChatLog
++		localQuery := tx.Table(table).Where("seq = 0")
++		if len(result.Rows) > 0 {
++			localQuery = localQuery.Where("send_time >= ?", result.Rows[len(result.Rows)-1].SendTime)
++		}
++		if err := localQuery.Order("send_time DESC, client_msg_id DESC").Limit(300).Find(&local).Error; err != nil {
++			return err
++		}
++		result.Rows = append(result.Rows, local...)
++		return applyMessageRevocations(tx, id, result.Rows)
++	})
++	return result, err
++}
+diff --git a/pkg/db/message_window_local_test.go b/pkg/db/message_window_local_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/db/message_window_local_test.go
+@@ -0,0 +1,38 @@
++//go:build cgo && !js
++
++package db
++
++import (
++	"context"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++)
++
++func TestReadWindowKeepsLocalRecordsInTimeBoundary(t *testing.T) {
++	ctx := context.Background()
++	d, err := NewDataBase(ctx, "self", t.TempDir(), 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer d.Close(ctx)
++	if err = d.BatchInsertConversationList(ctx, []*model_struct.LocalConversation{{ConversationID: "chat", MaxSeq: 1}}); err != nil {
++		t.Fatal(err)
++	}
++	rows := []*model_struct.LocalChatLog{
++		{ClientMsgID: "server", Seq: 1, SendTime: 100, Status: constant.MsgStatusSendSuccess},
++		{ClientMsgID: "call", SendTime: 200, Status: constant.MsgStatusSendSuccess},
++		{ClientMsgID: "old", SendTime: 50, Status: constant.MsgStatusSendSuccess},
++	}
++	if err = d.BatchInsertMessageList(ctx, "chat", rows); err != nil {
++		t.Fatal(err)
++	}
++	w, err := d.ReadMessageWindow(ctx, "chat", 40, 1)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(w.Rows) != 2 || w.Rows[1].ClientMsgID != "call" {
++		t.Fatalf("local record lost: %+v", w.Rows)
++	}
++}
+diff --git a/pkg/common/cmd_interruptible.go b/pkg/common/cmd_interruptible.go
+--- a/pkg/common/cmd_interruptible.go
++++ b/pkg/common/cmd_interruptible.go
+@@ -17,7 +17,26 @@
+ 	stop := func() {
+ 		if cancel != nil {
+ 			cancel()
+-			<-done
++			// A cancelled metadata job may still be waiting for a lock held by
++			// an API call that publishes to this queue. Keep draining until the
++			// job exits, but never apply updates concurrently with that job.
++			queue := worker.GetCh()
++		joining:
++			for {
++				select {
++				case <-done:
++					break joining
++				case cmd, ok := <-queue:
++					if !ok {
++						queue = nil
++						continue
++					}
++					if cmd.Ctx != nil && cmd.Ctx.Value(syncNotificationOwnerKey{}) == owner {
++						cmd.Ctx = ctx
++					}
++					pending = append(pending, cmd)
++				}
++			}
+ 			cancel, done = nil, nil
+ 		}
+ 	}
+diff --git a/pkg/common/cmd_cancel_drain_test.go b/pkg/common/cmd_cancel_drain_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/common/cmd_cancel_drain_test.go
+@@ -0,0 +1,100 @@
++package common
++
++import (
++	"context"
++	"sync"
++	"testing"
++	"time"
++)
++
++// A foreground group query owns the metadata lock and publishes more profile
++// notifications than fit in the queue. The cancelled sync must acquire that
++// lock before it can return, exactly as SyncAllJoinedGroupsAndMembersWithLock.
++type lockWaitingWorker struct {
++	queue     chan Cmd2Value
++	lock      sync.Mutex
++	started   chan struct{}
++	cancelled chan struct{}
++	applied   chan string
++}
++
++func (w *lockWaitingWorker) GetCh() chan Cmd2Value                   { return w.queue }
++func (w *lockWaitingWorker) InterruptibleCommand(cmd Cmd2Value) bool { return cmd.Cmd == "sync" }
++func (w *lockWaitingWorker) Work(cmd Cmd2Value) {
++	if cmd.Cmd != "sync" {
++		w.applied <- cmd.Cmd
++		return
++	}
++	close(w.started)
++	<-cmd.Ctx.Done()
++	close(w.cancelled)
++	w.lock.Lock()
++	w.lock.Unlock()
++	cmd.Receipt <- cmd.Ctx.Err()
++}
++
++func TestCancelledSyncDrainsNotificationsWhileJoiningLockWaiter(t *testing.T) {
++	t.Run("small queue", func(t *testing.T) { testCancelledSyncDrains(t, 2) })
++	t.Run("production queue", func(t *testing.T) { testCancelledSyncDrains(t, 1000) })
++}
++
++func testCancelledSyncDrains(t *testing.T, capacity int) {
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	count := capacity + 5
++	w := &lockWaitingWorker{queue: make(chan Cmd2Value, capacity), started: make(chan struct{}), cancelled: make(chan struct{}), applied: make(chan string, count+1)}
++	w.lock.Lock()
++	done := make(chan struct{})
++	go func() { defer close(done); DoListener(ctx, w) }()
++	receipt := make(chan error, 1)
++	w.queue <- Cmd2Value{Ctx: ctx, Cmd: "sync", Receipt: receipt}
++	<-w.started
++	w.queue <- Cmd2Value{Ctx: ctx, Cmd: "live"}
++	<-w.cancelled
++	// Allow cleanup even against the broken listener, without leaving goroutines.
++	producerCtx, stopProducer := context.WithTimeout(ctx, time.Second)
++	defer stopProducer()
++	produced := make(chan bool, 1)
++	go func() {
++		defer w.lock.Unlock()
++		for i := 0; i < count; i++ {
++			select {
++			case w.queue <- Cmd2Value{Ctx: ctx, Cmd: "profile"}:
++			case <-producerCtx.Done():
++				produced <- false
++				return
++			}
++		}
++		produced <- true
++	}()
++	ok := <-produced
++	if !ok {
++		cancel()
++		<-done
++		t.Fatal("cancel join stopped draining: group lock/queue cycle")
++	}
++	select {
++	case err := <-receipt:
++		if err != context.Canceled {
++			t.Errorf("cancelled sync receipt = %v", err)
++		}
++	case <-time.After(time.Second):
++		t.Error("sync failed to exit")
++	}
++	for i := 0; i < count+1; i++ {
++		select {
++		case got := <-w.applied:
++			want := "profile"
++			if i == 0 {
++				want = "live"
++			}
++			if got != want {
++				t.Errorf("update %d = %s, want %s", i, got, want)
++			}
++		case <-time.After(time.Second):
++			t.Error("notification lost")
++		}
++	}
++	cancel()
++	<-done
++}
+diff --git a/internal/conversation_msg/sync_priority.go b/internal/conversation_msg/sync_priority.go
+--- a/internal/conversation_msg/sync_priority.go
++++ b/internal/conversation_msg/sync_priority.go
+@@ -6,9 +6,12 @@
+ 	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
+ )
+ 
+-// First-login metadata is a prerequisite for message persistence. Keep the
+-// listener draining notifications, but do not cancel bootstrap for live work.
++// Bootstrap and notification persistence may publish back into this queue.
++// Drain while they run, but never preempt them for incoming live work.
+ func (c *Conversation) ProtectSyncCommand(cmd common.Cmd2Value) bool {
++	if cmd.Cmd == constant.CmdNotification {
++		return true
++	}
+ 	value, ok := cmd.Value.(sdk_struct.CmdNewMsgComeToConversation)
+ 	return cmd.Cmd == constant.CmdSyncFlag && ok && value.SyncFlag == constant.AppDataSyncStart
+ }
+@@ -16,7 +19,7 @@
+ // Metadata network waits must not hold up sent-message status/conversation
+ // updates. Keep all message persistence and callback application serialized.
+ func (c *Conversation) InterruptibleCommand(cmd common.Cmd2Value) bool {
+-	if cmd.Cmd == constant.CmdSyncData {
++	if cmd.Cmd == constant.CmdSyncData || cmd.Cmd == constant.CmdNotification {
+ 		return true
+ 	}
+ 	if cmd.Cmd != constant.CmdSyncFlag {
+diff --git a/internal/group/notification.go b/internal/group/notification.go
+--- a/internal/group/notification.go
++++ b/internal/group/notification.go
+@@ -32,10 +32,12 @@
+ 	groupSortIDChanged   = 1
+ )
+ 
+-func (g *Group) DoNotification(ctx context.Context, msg *sdkws.MsgData) {
++func (g *Group) DoNotification(ctx context.Context, msg *sdkws.MsgData) error {
+ 	if err := g.doNotification(ctx, msg); err != nil {
+ 		log.ZError(ctx, "DoGroupNotification failed", err)
++		return err
+ 	}
++	return nil
+ }
+ 
+ func (g *Group) doNotification(ctx context.Context, msg *sdkws.MsgData) error {
+diff --git a/internal/conversation_msg/notification.go b/internal/conversation_msg/notification.go
+--- a/internal/conversation_msg/notification.go
++++ b/internal/conversation_msg/notification.go
+@@ -141,7 +141,8 @@
+ }
+ 
+ func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) error {
+-	ctx := c2v.Ctx
++	ctx, cancel := syncCommandContext(c2v)
++	defer cancel()
+ 	allMsg := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs
+ 
+ 	for conversationID, msgs := range allMsg {
+@@ -153,6 +154,9 @@
+ 
+ 		// First, process all the notifications
+ 		for _, msg := range msgs.Msgs {
++			if err := ctx.Err(); err != nil {
++				return err
++			}
+ 			// Deleted sequence placeholders have no notification payload. They
+ 			// still count towards the page checkpoint, but must not be dispatched.
+ 			if msg.Status >= constant.MsgStatusHasDeleted && msg.Seq > 0 {
+@@ -165,7 +169,9 @@
+ 			} else if msg.ContentType > constant.UserNotificationBegin && msg.ContentType < constant.UserNotificationEnd {
+ 				c.user.DoNotification(ctx, msg)
+ 			} else if msg.ContentType > constant.GroupNotificationBegin && msg.ContentType < constant.GroupNotificationEnd {
+-				c.group.DoNotification(ctx, msg)
++				if err := c.group.DoNotification(ctx, msg); err != nil {
++					return err
++				}
+ 			} else {
+ 				if err := c.doNotification(ctx, msg); err != nil {
+ 					log.ZWarn(ctx, "notification page processing failed", err, "conversationID", conversationID, "seq", msg.Seq, "contentType", msg.ContentType, "clientMsgID", msg.ClientMsgID, "contextError", ctx.Err(), "duration", time.Since(started).String())
+@@ -175,6 +181,9 @@
+ 		}
+ 
+ 		// After all notifications are processed, update the sequence number
++		if err := ctx.Err(); err != nil {
++			return err
++		}
+ 		if len(msgs.Msgs) != 0 {
+ 			lastMsg := msgs.Msgs[len(msgs.Msgs)-1]
+ 			log.ZDebug(ctx, "SetNotificationSeq", "conversationID", conversationID, "seq", lastMsg.Seq)
+diff --git a/pkg/common/cmd_interruptible.go b/pkg/common/cmd_interruptible.go
+--- a/pkg/common/cmd_interruptible.go
++++ b/pkg/common/cmd_interruptible.go
+@@ -102,5 +102,10 @@
+ 			defer attemptCancel()
+ 			runCommandSafely(worker, command)
+ 		}(cmd, done)
++		// Live work can already be buffered behind a protected bootstrap.
++		// Do not make it wait for a newly started metadata retry to finish.
++		if !protected && len(pending) > 0 {
++			stop()
++		}
+ 	}
+ }
+diff --git a/internal/conversation_msg/notification_queue_extremes_test.go b/internal/conversation_msg/notification_queue_extremes_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/conversation_msg/notification_queue_extremes_test.go
+@@ -0,0 +1,119 @@
++package conversation_msg
++
++import (
++	"context"
++	"errors"
++	"testing"
++	"time"
++
++	"github.com/openimsdk/openim-sdk-core/v3/internal/group"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/sdkws"
++)
++
++// Use the real Conversation scheduling policy with a deterministic notification
++// handler. Group notifications can hold the group lock and emit many updates.
++type notificationBurstWorker struct {
++	Conversation
++	queue    chan common.Cmd2Value
++	started  chan struct{}
++	produced chan error
++	finish   chan struct{}
++	applied  chan error
++}
++
++type expiringGroupNotificationDB struct{ notificationCheckpointDB }
++
++func (d *expiringGroupNotificationDB) GetVersionSync(ctx context.Context, _, _ string) (*model_struct.LocalVersionSync, error) {
++	if _, ok := ctx.Deadline(); !ok {
++		return nil, errors.New("running notification lost its receipt deadline")
++	}
++	<-ctx.Done()
++	return nil, ctx.Err()
++}
++
++func TestRunningGroupNotificationHonorsReceiptDeadline(t *testing.T) {
++	d := &expiringGroupNotificationDB{notificationCheckpointDB{seq: 1}}
++	c := &Conversation{db: d, group: group.NewGroup("self", d, nil)}
++	msg := &sdkws.MsgData{Seq: 2, ContentType: constant.GroupInfoSetNameNotification, Content: []byte(`{"detail":"{\"group\":{\"groupID\":\"g\"},\"groupMemberVersion\":1,\"groupMemberVersionID\":\"friends\"}"}`)}
++	cmd := common.Cmd2Value{Ctx: context.Background(), ExpiresAt: time.Now().Add(20 * time.Millisecond), Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: map[string]*sdkws.PullMsgs{"n_group": {Msgs: []*sdkws.MsgData{msg}}}}}
++	if err := c.doNotificationManager(cmd); !errors.Is(err, context.DeadlineExceeded) || d.seq != 1 {
++		t.Fatalf("expired in-flight notification must remain retryable: err=%v seq=%d", err, d.seq)
++	}
++}
++
++func (w *notificationBurstWorker) GetCh() chan common.Cmd2Value { return w.queue }
++func (w *notificationBurstWorker) Work(cmd common.Cmd2Value) {
++	if cmd.Cmd != constant.CmdNotification {
++		w.applied <- cmd.Ctx.Err()
++		return
++	}
++	close(w.started)
++	for i := 0; i < 1005; i++ {
++		select {
++		case w.queue <- common.Cmd2Value{Cmd: constant.CmdUpdateConversation, Ctx: cmd.Ctx}:
++		case <-cmd.Ctx.Done():
++			w.produced <- cmd.Ctx.Err()
++			return
++		}
++	}
++	w.produced <- nil
++	select {
++	case <-w.finish:
++	case <-cmd.Ctx.Done():
++	}
++}
++
++func TestGroupNotificationBurstDrainsWithoutConcurrentWrites(t *testing.T) {
++	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
++	defer cancel()
++	w := &notificationBurstWorker{queue: make(chan common.Cmd2Value, 1000), started: make(chan struct{}), produced: make(chan error, 1), finish: make(chan struct{}), applied: make(chan error, 1006)}
++	done := make(chan struct{})
++	go func() { defer close(done); common.DoListener(ctx, w) }()
++	w.queue <- common.Cmd2Value{Cmd: constant.CmdNotification, Ctx: ctx}
++	<-w.started
++	w.queue <- common.Cmd2Value{Cmd: constant.CmdNewMsgCome, Ctx: ctx}
++	if err := <-w.produced; err != nil {
++		<-done
++		t.Fatalf("notification filled its own queue: %v", err)
++	}
++	select {
++	case <-w.applied:
++		t.Error("message applied while notification still running")
++	default:
++	}
++	close(w.finish)
++	for i := 0; i < 1006; i++ {
++		select {
++		case err := <-w.applied:
++			if err != nil {
++				t.Errorf("follow-up cancelled: %v", err)
++			}
++		case <-ctx.Done():
++			t.Fatal("queued update lost")
++		}
++	}
++	cancel()
++	<-done
++}
++
++func TestGroupNotificationFailureKeepsCheckpointForReplay(t *testing.T) {
++	for _, failure := range []error{errors.New("disk full"), context.DeadlineExceeded, context.Canceled} {
++		t.Run(failure.Error(), func(t *testing.T) {
++			d := &notificationCheckpointDB{seq: 1, profileErr: failure}
++			c := &Conversation{db: d, group: group.NewGroup("self", d, nil)}
++			msg := &sdkws.MsgData{Seq: 3, ContentType: constant.GroupInfoSetNameNotification, Content: []byte(`{"detail":"{\"group\":{\"groupID\":\"g\",\"groupName\":\"New\"},\"groupMemberVersion\":1,\"groupMemberVersionID\":\"friends\"}"}`)}
++			cmd := common.Cmd2Value{Ctx: context.Background(), Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: map[string]*sdkws.PullMsgs{"n_group": {Msgs: []*sdkws.MsgData{{Seq: 2, Status: constant.MsgStatusHasDeleted}, msg}}}}}
++			if err := c.doNotificationManager(cmd); !errors.Is(err, failure) || d.seq != 1 {
++				t.Fatalf("failed group notification acknowledged: err=%v seq=%d", err, d.seq)
++			}
++			d.profileErr = nil
++			if err := c.doNotificationManager(cmd); err != nil || d.seq != 3 {
++				t.Fatalf("replay failed: err=%v seq=%d", err, d.seq)
++			}
++		})
++	}
++}
+diff --git a/pkg/common/cmd_pending_extremes_test.go b/pkg/common/cmd_pending_extremes_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/common/cmd_pending_extremes_test.go
+@@ -0,0 +1,84 @@
++package common
++
++import (
++	"context"
++	"testing"
++	"time"
++)
++
++type pendingRetryWorker struct {
++	queue   chan Cmd2Value
++	started chan struct{}
++	finish  chan struct{}
++	applied chan struct{}
++}
++
++func (w *pendingRetryWorker) GetCh() chan Cmd2Value                   { return w.queue }
++func (w *pendingRetryWorker) InterruptibleCommand(cmd Cmd2Value) bool { return cmd.Cmd != "live" }
++func (w *pendingRetryWorker) ProtectSyncCommand(cmd Cmd2Value) bool   { return cmd.Cmd == "bootstrap" }
++func (w *pendingRetryWorker) Work(cmd Cmd2Value) {
++	switch cmd.Cmd {
++	case "bootstrap":
++		close(w.started)
++		select {
++		case <-w.finish:
++		case <-cmd.Ctx.Done():
++		}
++	case "retry":
++		<-cmd.Ctx.Done()
++	case "live":
++		close(w.applied)
++	}
++}
++
++func TestPendingLiveTrafficPreemptsPendingMetadataRetry(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	w := &pendingRetryWorker{make(chan Cmd2Value), make(chan struct{}), make(chan struct{}), make(chan struct{})}
++	done := make(chan struct{})
++	go func() { defer close(done); DoListener(ctx, w) }()
++	w.queue <- Cmd2Value{Cmd: "bootstrap", Ctx: ctx}
++	<-w.started
++	// Unbuffered sends guarantee both items have reached pending before release.
++	w.queue <- Cmd2Value{Cmd: "retry", Ctx: ctx}
++	w.queue <- Cmd2Value{Cmd: "live", Ctx: ctx}
++	close(w.finish)
++	select {
++	case <-w.applied:
++	case <-time.After(time.Second):
++		t.Error("pending live update trapped behind metadata retry")
++	}
++	cancel()
++	<-done
++}
++
++func TestLogoutDrainsLockOwnerButDoesNotApplyOldAccountUpdates(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	w := &lockWaitingWorker{queue: make(chan Cmd2Value, 2), started: make(chan struct{}), cancelled: make(chan struct{}), applied: make(chan string, 10)}
++	w.lock.Lock()
++	done := make(chan struct{})
++	go func() { defer close(done); DoListener(ctx, w) }()
++	w.queue <- Cmd2Value{Cmd: "sync", Ctx: ctx, Receipt: make(chan error, 1)}
++	<-w.started
++	cancel()
++	<-w.cancelled
++	deadline := time.After(time.Second)
++	for i := 0; i < 5; i++ {
++		select {
++		case w.queue <- Cmd2Value{Cmd: "old-account-update", Ctx: ctx}:
++		case <-deadline:
++			w.lock.Unlock()
++			<-done
++			t.Fatal("logout blocked group lock owner")
++		}
++	}
++	w.lock.Unlock()
++	select {
++	case <-done:
++	case <-time.After(time.Second):
++		t.Fatal("logout listener leaked")
++	}
++	if len(w.applied) != 0 {
++		t.Fatal("old account updates applied after logout")
++	}
++}
+diff --git a/internal/interaction/long_conn_mgr.go b/internal/interaction/long_conn_mgr.go
+--- a/internal/interaction/long_conn_mgr.go
++++ b/internal/interaction/long_conn_mgr.go
+@@ -89,6 +89,8 @@
+ 	//conn status mutex
+ 	w          sync.Mutex
+ 	connStatus int
++	// Closed when the socket that accepted a request is retired. Guarded by w.
++	connectionDone chan struct{}
+ 	// The long connection,can be set tcp or websocket.
+ 	conn       LongConn
+ 	listener   open_im_sdk_callback.OnConnListener
+@@ -563,7 +565,7 @@
+ }
+ 
+ func (c *LongConnMgr) sendAndWaitResp(ctx context.Context, msg *GeneralWsReq) (*GeneralWsResp, error) {
+-	tempChan, err := c.writeBinaryMsgAndRetry(ctx, msg)
++	tempChan, connectionDone, err := c.writeBinaryMsgAndRetry(ctx, msg)
+ 	defer c.Syncer.DelCh(msg.MsgIncr)
+ 	if err != nil {
+ 		return nil, err
+@@ -573,6 +575,15 @@
+ 			return nil, sdkerrs.ErrCtxDeadline
+ 		case resp := <-tempChan:
+ 			return resp, nil
++		case <-connectionDone:
++			// An ACK already routed before closure is still authoritative. Do not
++			// turn an acknowledged send into a failure merely because both are ready.
++			select {
++			case resp := <-tempChan:
++				return resp, nil
++			default:
++				return nil, sdkerrs.ErrNetwork.WrapMsg("request connection closed")
++			}
+ 		case <-time.After(sendAndWaitTime):
+ 			return nil, sdkerrs.ErrNetworkTimeOut
+ 		}
+@@ -580,17 +591,20 @@
+ 	}
+ }
+ 
+-func (c *LongConnMgr) writeBinaryMsgAndRetry(ctx context.Context, msg *GeneralWsReq) (chan *GeneralWsResp, error) {
++func (c *LongConnMgr) writeBinaryMsgAndRetry(ctx context.Context, msg *GeneralWsReq) (chan *GeneralWsResp, <-chan struct{}, error) {
+ 	msgIncr, tempChan := c.Syncer.AddCh(msg.SendID)
+ 	msg.MsgIncr = msgIncr
+ 	if c.GetConnectionStatus() != Connected && msg.ReqIdentifier == constant.GetNewestSeq {
+-		return tempChan, sdkerrs.ErrNetwork.WrapMsg("connection closed,conning...")
++		return tempChan, nil, sdkerrs.ErrNetwork.WrapMsg("connection closed,conning...")
+ 	}
+ 	for i := 0; i < maxReconnectAttempts; i++ {
+ 		if ctx.Err() != nil {
+-			return tempChan, sdkerrs.ErrCtxDeadline
++			return tempChan, nil, sdkerrs.ErrCtxDeadline
+ 		}
+ 		c.connWrite.Lock()
++		// Capture before writing, under the same lock that excludes redial.
++		// Looking up the current socket after the write can miss a fast reconnect.
++		connectionDone := c.requestConnectionDone()
+ 		var err error
+ 		if ctx.Err() != nil {
+ 			err = sdkerrs.ErrCtxDeadline
+@@ -603,7 +617,7 @@
+ 		}
+ 		c.connWrite.Unlock()
+ 		if errors.Is(err, sdkerrs.ErrCtxDeadline) {
+-			return tempChan, err
++			return tempChan, nil, err
+ 		}
+ 		if err != nil {
+ 			log.ZError(c.ctx, "send binary message error", err, "message", msg)
+@@ -613,15 +627,15 @@
+ 			select {
+ 			case <-ctx.Done():
+ 				timer.Stop()
+-				return tempChan, sdkerrs.ErrCtxDeadline
++				return tempChan, nil, sdkerrs.ErrCtxDeadline
+ 			case <-timer.C:
+ 			}
+ 			continue
+ 		} else {
+-			return tempChan, nil
+-		}
+-	}
+-	return nil, sdkerrs.ErrNetwork.WrapMsg("send binary message error")
++			return tempChan, connectionDone, nil
++		}
++	}
++	return nil, nil, sdkerrs.ErrNetwork.WrapMsg("send binary message error")
+ }
+ 
+ func (c *LongConnMgr) writeBinaryMsgAndNotRetry(msg *GeneralWsReq) (chan *GeneralWsResp, error) {
+@@ -701,6 +715,7 @@
+ 		return nil
+ 	}
+ 	c.connStatus = Closed
++	c.endConnectionRequestsLocked()
+ 	log.ZWarn(c.ctx, "conn closed", c.closeError())
+ 	c.metrics.disconnected(c.ctx, c.closeError(), c.GetBackground())
+ 	return c.conn.Close()
+@@ -866,6 +881,12 @@
+ func (c *LongConnMgr) SetConnectionStatus(status int) {
+ 	c.w.Lock()
+ 	defer c.w.Unlock()
++	if status == Connected && c.connStatus != Connected {
++		c.endConnectionRequestsLocked()
++		c.connectionDone = make(chan struct{})
++	} else if status != Connected {
++		c.endConnectionRequestsLocked()
++	}
+ 	c.connStatus = status
+ }
+ 
+diff --git a/internal/interaction/connection_request_lifetime.go b/internal/interaction/connection_request_lifetime.go
+new file mode 100644
+--- /dev/null
++++ b/internal/interaction/connection_request_lifetime.go
+@@ -0,0 +1,28 @@
++package interaction
++
++// requestConnectionDone binds a response wait to the socket used for its write.
++// The caller holds connWrite, so a redial cannot replace the socket in between.
++func (c *LongConnMgr) requestConnectionDone() <-chan struct{} {
++	c.w.Lock()
++	defer c.w.Unlock()
++	if c.connectionDone == nil {
++		c.connectionDone = make(chan struct{})
++		if c.connStatus != Connected {
++			close(c.connectionDone)
++		}
++	}
++	return c.connectionDone
++}
++
++// endConnectionRequestsLocked does not retry sent messages: the caller still
++// receives the normal network error and owns any idempotent recovery policy.
++func (c *LongConnMgr) endConnectionRequestsLocked() {
++	if c.connectionDone == nil {
++		return
++	}
++	select {
++	case <-c.connectionDone:
++	default:
++		close(c.connectionDone)
++	}
++}
+diff --git a/internal/interaction/connection_request_lifetime_test.go b/internal/interaction/connection_request_lifetime_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/interaction/connection_request_lifetime_test.go
+@@ -0,0 +1,164 @@
++package interaction
++
++import (
++	"context"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++)
++
++// Only the transport boundary is faked; requests use the real response router.
++type lifetimeTransport struct {
++	LongConn
++	written chan struct{}
++	onWrite func()
++}
++
++func (c *lifetimeTransport) WriteMessage(int, []byte) error {
++	c.written <- struct{}{}
++	if c.onWrite != nil {
++		c.onWrite()
++	}
++	return nil
++}
++func (c *lifetimeTransport) SetWriteDeadline(time.Duration) error { return nil }
++func (c *lifetimeTransport) Close() error                         { return nil }
++
++func lifetimeManager(t *testing.T) (*LongConnMgr, *lifetimeTransport) {
++	t.Helper()
++	transport := &lifetimeTransport{written: make(chan struct{}, 8)}
++	c := &LongConnMgr{ctx: recoveryContext(t), conn: transport, connWrite: new(sync.Mutex),
++		Syncer: NewWsRespAsyn(), encoder: NewGobEncoder()}
++	c.SetConnectionStatus(Connected)
++	return c, transport
++}
++
++func TestAcknowledgedRequestSurvivesImmediateDisconnect(t *testing.T) {
++	c, transport := lifetimeManager(t)
++	request := &GeneralWsReq{ReqIdentifier: constant.SendMsg}
++	transport.onWrite = func() {
++		if err := c.Syncer.NotifyResp(c.ctx, GeneralWsResp{MsgIncr: request.MsgIncr, Data: []byte("ack")}); err != nil {
++			t.Fatal(err)
++		}
++		_ = c.close()
++	}
++	response, err := c.sendAndWaitResp(c.ctx, request)
++	if err != nil || response == nil || string(response.Data) != "ack" {
++		t.Fatalf("lost acknowledged send on closure: response=%v error=%v", response, err)
++	}
++}
++
++func TestForegroundConfirmationRunsAfterDisconnectedQueuedRequest(t *testing.T) {
++	c, transport := lifetimeManager(t)
++	ctx, cancel := context.WithCancel(c.ctx)
++	defer cancel()
++	old := Message{Ctx: ctx, Message: GeneralWsReq{ReqIdentifier: constant.PullMsgByRange}, Resp: make(chan *GeneralWsResp, 1)}
++	foreground := Message{Ctx: ctx, Message: GeneralWsReq{ReqIdentifier: constant.SetBackgroundStatus}, Resp: make(chan *GeneralWsResp, 1)}
++	resume := make(chan struct{})
++	finished := make(chan struct{})
++	go func() {
++		defer close(finished)
++		c.dispatchMessage(old)
++		<-resume
++		c.dispatchMessage(foreground)
++	}()
++	<-transport.written
++	_ = c.close()
++	c.SetConnectionStatus(Connected)
++	close(resume)
++	select {
++	case <-transport.written:
++	case <-time.After(300 * time.Millisecond):
++		cancel()
++		<-finished
++		t.Fatal("foreground confirmation stayed behind a disconnected history request")
++	}
++	c.Syncer.wsMutex.RLock()
++	var id string
++	for key := range c.Syncer.wsNotification {
++		id = key
++	}
++	c.Syncer.wsMutex.RUnlock()
++	if id == "" {
++		t.Fatal("foreground request missing")
++	}
++	if err := c.Syncer.NotifyResp(ctx, GeneralWsResp{MsgIncr: id}); err != nil {
++		t.Fatal(err)
++	}
++	<-finished
++	if response := <-old.Resp; response.ErrCode == 0 {
++		t.Fatal("disconnected request reported success")
++	}
++	if response := <-foreground.Resp; response.ErrCode != 0 {
++		t.Fatalf("foreground confirmation failed: %v", response)
++	}
++}
++
++func TestDisconnectedRequestReleasesForegroundQueue(t *testing.T) {
++	c, transport := lifetimeManager(t)
++	ctx, cancel := context.WithCancel(c.ctx)
++	defer cancel()
++	done := make(chan error, 1)
++	go func() {
++		_, err := c.sendAndWaitResp(ctx, &GeneralWsReq{ReqIdentifier: constant.SetBackgroundStatus})
++		done <- err
++	}()
++	<-transport.written
++	if err := c.close(); err != nil {
++		t.Fatal(err)
++	}
++	select {
++	case err := <-done:
++		if err == nil {
++			t.Fatal("disconnected request reported success")
++		}
++	case <-time.After(300 * time.Millisecond):
++		cancel()
++		<-done
++		t.Fatal("old socket request still blocks foreground recovery after disconnect")
++	}
++	if len(c.Syncer.wsNotification) != 0 {
++		t.Fatal("response registration leaked")
++	}
++}
++
++func TestRecoveredConnectionDoesNotInheritOldRequestWait(t *testing.T) {
++	c, transport := lifetimeManager(t)
++	ctx, cancel := context.WithCancel(c.ctx)
++	defer cancel()
++	oldDone := make(chan error, 1)
++	go func() {
++		_, err := c.sendAndWaitResp(ctx, &GeneralWsReq{ReqIdentifier: constant.SetBackgroundStatus})
++		oldDone <- err
++	}()
++	<-transport.written
++	_ = c.close()
++	c.SetConnectionStatus(Connected)
++	select {
++	case err := <-oldDone:
++		if err == nil {
++			t.Fatal("old request succeeded on replacement connection")
++		}
++	case <-time.After(300 * time.Millisecond):
++		cancel()
++		<-oldDone
++		t.Fatal("replacement connection hid the old socket closure")
++	}
++	request := &GeneralWsReq{ReqIdentifier: constant.GetNewestSeq}
++	newDone := make(chan error, 1)
++	go func() { _, err := c.sendAndWaitResp(ctx, request); newDone <- err }()
++	<-transport.written
++	select {
++	case err := <-newDone:
++		t.Fatalf("new request inherited old cancellation: %v", err)
++	default:
++	}
++	if err := c.Syncer.NotifyResp(ctx, GeneralWsResp{MsgIncr: request.MsgIncr}); err != nil {
++		t.Fatal(err)
++	}
++	if err := <-newDone; err != nil {
++		t.Fatal(err)
++	}
++}
+diff --git a/internal/interaction/long_conn_mgr.go b/internal/interaction/long_conn_mgr.go
+--- a/internal/interaction/long_conn_mgr.go
++++ b/internal/interaction/long_conn_mgr.go
+@@ -90,7 +90,9 @@
+ 	w          sync.Mutex
+ 	connStatus int
+ 	// Closed when the socket that accepted a request is retired. Guarded by w.
+-	connectionDone chan struct{}
++	connectionDone  chan struct{}
++	probeContext    context.Context  // immutable session lifetime, unlike diagnostic ctx
++	foregroundProbe *foregroundProbe // guarded by mutex
+ 	// The long connection,can be set tcp or websocket.
+ 	conn       LongConn
+ 	listener   open_im_sdk_callback.OnConnListener
+@@ -158,6 +160,7 @@
+ 	l.conn = NewWebSocket(WebSocket)
+ 	l.connWrite = new(sync.Mutex)
+ 	l.ctx = ctx
++	l.probeContext = ctx
+ 	l.mb = NewMessageBatcher(l.doBatch)
+ 	return l
+ }
+@@ -1038,9 +1041,13 @@
+ 	c.mutex.Lock()
+ 	changed := c.IsBackground != isBackground
+ 	c.IsBackground = isBackground
++	if isBackground {
++		c.cancelForegroundProbeLocked()
++	}
+ 	c.mutex.Unlock()
+ 	if changed && !isBackground {
+ 		c.wakeReconnect()
++		c.probeForegroundConnection(foregroundProbeTimeout)
+ 	}
+ }
+ 
+@@ -1055,6 +1062,7 @@
+ 
+ // when client send pong.
+ func (c *LongConnMgr) pongHandler(appData string) error {
++	c.acknowledgeForegroundProbe(appData)
+ 	c.metrics.lastPong.Store(time.Now().UnixMilli())
+ 	log.ZDebug(c.ctx, "server Pong Message Received", "appData", appData)
+ 	if err := c.conn.SetReadDeadline(pongWait); err != nil {
+diff --git a/internal/interaction/foreground_probe.go b/internal/interaction/foreground_probe.go
+new file mode 100644
+--- /dev/null
++++ b/internal/interaction/foreground_probe.go
+@@ -0,0 +1,149 @@
++package interaction
++
++import (
++	"context"
++	"errors"
++	"time"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
++	"github.com/openimsdk/tools/log"
++)
++
++const foregroundProbeTimeout = 3 * time.Second
++
++// Optional: browser/custom transports retain their existing heartbeat policy.
++type foregroundPingTransport interface {
++	ForegroundPingWriter() func(string, time.Time) error
++}
++
++type foregroundProbe struct {
++	token      string
++	connection <-chan struct{}
++	ack        chan struct{}
++	cancel     chan struct{}
++	started    time.Time
++}
++
++func (c *LongConnMgr) cancelForegroundProbeLocked() {
++	if p := c.foregroundProbe; p != nil {
++		close(p.cancel)
++		c.foregroundProbe = nil
++	}
++}
++
++func (c *LongConnMgr) acknowledgeForegroundProbe(token string) {
++	c.mutex.Lock()
++	defer c.mutex.Unlock()
++	if p := c.foregroundProbe; p != nil && p.token == token {
++		select {
++		case p.ack <- struct{}{}:
++		default:
++		}
++	}
++}
++
++func (c *LongConnMgr) probeForegroundConnection(timeout time.Duration) {
++	transport, supported := c.conn.(foregroundPingTransport)
++	if !supported {
++		return
++	}
++	// Same lock order as close(): connection state, then visibility. A dial
++	// changes state to Connecting before replacing the underlying socket.
++	c.w.Lock()
++	if c.connStatus != Connected {
++		c.w.Unlock()
++		return
++	}
++	c.mutex.Lock()
++	if c.IsBackground {
++		c.mutex.Unlock()
++		c.w.Unlock()
++		return
++	}
++	if c.connectionDone == nil {
++		c.connectionDone = make(chan struct{})
++	}
++	if p := c.foregroundProbe; p != nil && p.connection == c.connectionDone {
++		c.mutex.Unlock()
++		c.w.Unlock()
++		return
++	}
++	c.cancelForegroundProbeLocked()
++	writePing := transport.ForegroundPingWriter() // captures this socket, never a later one
++	p := &foregroundProbe{token: "foreground-" + utils.OperationIDGenerator(), connection: c.connectionDone,
++		ack: make(chan struct{}, 1), cancel: make(chan struct{}), started: time.Now()}
++	c.foregroundProbe = p
++	ctx := c.probeContext
++	if ctx == nil {
++		ctx = context.Background()
++	}
++	c.mutex.Unlock()
++	c.w.Unlock()
++	log.ZInfo(ctx, "foreground_probe_started", "timeoutMs", timeout.Milliseconds())
++	go c.runForegroundProbe(ctx, p, writePing, timeout)
++}
++
++func (c *LongConnMgr) runForegroundProbe(ctx context.Context, p *foregroundProbe, writePing func(string, time.Time) error, timeout time.Duration) {
++	defer func() {
++		c.mutex.Lock()
++		if c.foregroundProbe == p {
++			c.foregroundProbe = nil
++		}
++		c.mutex.Unlock()
++	}()
++	select {
++	case <-ctx.Done():
++		return
++	case <-p.cancel:
++		return
++	case <-p.connection:
++		return
++	default:
++	}
++	deadline := p.started.Add(timeout)
++	err := writePing(p.token, deadline)
++	if err == nil {
++		timer := time.NewTimer(time.Until(deadline))
++		defer timer.Stop()
++		select {
++		case <-ctx.Done():
++			return
++		case <-p.cancel:
++			return
++		case <-p.connection:
++			return
++		case <-p.ack:
++			log.ZInfo(ctx, "foreground_probe_confirmed", "elapsedMs", time.Since(p.started).Milliseconds())
++			return
++		case <-timer.C:
++			err = errors.New("foreground pong deadline exceeded")
++		}
++	}
++	if c.retireForegroundConnection(ctx, p, err) {
++		log.ZInfo(ctx, "foreground_probe_reconnect", "elapsedMs", time.Since(p.started).Milliseconds())
++		c.wakeReconnect()
++	}
++}
++
++func (c *LongConnMgr) retireForegroundConnection(ctx context.Context, p *foregroundProbe, reason error) bool {
++	c.w.Lock()
++	defer c.w.Unlock()
++	c.mutex.Lock()
++	defer c.mutex.Unlock()
++	if ctx.Err() != nil || c.IsBackground || c.foregroundProbe != p || c.connStatus != Connected || c.connectionDone != p.connection {
++		return false
++	}
++	// A pong arriving as the timer fires wins over timeout.
++	select {
++	case <-p.ack:
++		return false
++	default:
++	}
++	c.foregroundProbe = nil
++	c.connStatus = Closed
++	c.endConnectionRequestsLocked()
++	c.setCloseError(reason)
++	c.metrics.disconnected(ctx, reason, false)
++	_ = c.conn.Close()
++	return true
++}
+diff --git a/internal/interaction/foreground_probe_default.go b/internal/interaction/foreground_probe_default.go
+new file mode 100644
+--- /dev/null
++++ b/internal/interaction/foreground_probe_default.go
+@@ -0,0 +1,18 @@
++//go:build !js
++
++package interaction
++
++import (
++	"github.com/gorilla/websocket"
++	"time"
++)
++
++// Called while the manager guards a Connected socket. WriteControl is safe
++// alongside normal writes and has its own deadline; it never alters the data
++// writer's deadline or waits behind the serialized request/ACK queue.
++func (d *Default) ForegroundPingWriter() func(string, time.Time) error {
++	socket := d.conn
++	return func(token string, deadline time.Time) error {
++		return socket.WriteControl(websocket.PingMessage, []byte(token), deadline)
++	}
++}
+diff --git a/internal/interaction/foreground_probe_test.go b/internal/interaction/foreground_probe_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/interaction/foreground_probe_test.go
+@@ -0,0 +1,112 @@
++package interaction
++
++import (
++	"context"
++	"sync/atomic"
++	"testing"
++	"time"
++)
++
++func probeFixture(t *testing.T) (*LongConnMgr, *probeTransport) {
++	c, transport := lifetimeManager(t)
++	p := &probeTransport{lifetimeTransport: transport, pings: make(chan string, 8)}
++	c.conn = p
++	ctx, cancel := context.WithCancel(context.Background())
++	c.probeContext = ctx
++	t.Cleanup(cancel)
++	return c, p
++}
++
++func TestForegroundProbeHalfOpenDeadline(t *testing.T) {
++	c, p := probeFixture(t)
++	c.probeForegroundConnection(40 * time.Millisecond)
++	<-p.pings
++	deadline := time.After(time.Second)
++	for c.IsConnected() {
++		select {
++		case <-deadline:
++			t.Fatal("half-open connection not retired")
++		default:
++			time.Sleep(time.Millisecond)
++		}
++	}
++	if p.closes.Load() != 1 {
++		t.Fatal("probe did not close exactly its old socket")
++	}
++}
++
++func TestForegroundProbeIgnoresUnrelatedPong(t *testing.T) {
++	c, p := probeFixture(t)
++	c.probeForegroundConnection(40 * time.Millisecond)
++	<-p.pings
++	c.acknowledgeForegroundProbe("regular-heartbeat")
++	time.Sleep(80 * time.Millisecond)
++	if c.IsConnected() {
++		t.Fatal("unrelated pong satisfied foreground probe")
++	}
++}
++
++func TestForegroundProbeCancellationAndReplacement(t *testing.T) {
++	for _, action := range []string{"background", "logout", "replacement", "pong"} {
++		t.Run(action, func(t *testing.T) {
++			c, p := probeFixture(t)
++			ctx, cancel := context.WithCancel(context.Background())
++			defer cancel()
++			c.probeContext = ctx
++			c.probeForegroundConnection(40 * time.Millisecond)
++			token := <-p.pings
++			for i := 0; i < 20; i++ {
++				c.probeForegroundConnection(40 * time.Millisecond)
++			}
++			if len(p.pings) != 0 {
++				t.Fatal("duplicate foreground probes")
++			}
++			switch action {
++			case "background":
++				c.SetBackground(true)
++			case "logout":
++				cancel()
++			case "replacement":
++				c.SetConnectionStatus(Closed)
++				c.SetConnectionStatus(Connected)
++			case "pong":
++				c.acknowledgeForegroundProbe(token)
++			}
++			time.Sleep(80 * time.Millisecond)
++			if p.closes.Load() != 0 || !c.IsConnected() {
++				t.Fatal("obsolete probe closed connection")
++			}
++		})
++	}
++}
++
++type probeTransport struct {
++	*lifetimeTransport
++	pings  chan string
++	closes atomic.Int32
++}
++
++func (p *probeTransport) ForegroundPingWriter() func(string, time.Time) error {
++	return func(token string, deadline time.Time) error { p.pings <- token; return nil }
++}
++func (p *probeTransport) SetReadDeadline(time.Duration) error { return nil }
++func (p *probeTransport) Close() error                        { p.closes.Add(1); return nil }
++
++func TestForegroundTransitionProbesConnectedSocketImmediately(t *testing.T) {
++	c, transport := lifetimeManager(t)
++	p := &probeTransport{lifetimeTransport: transport, pings: make(chan string, 8)}
++	c.conn = p
++	c.SetBackground(true)
++	c.SetBackground(false)
++	select {
++	case token := <-p.pings:
++		if err := c.pongHandler(token); err != nil {
++			t.Fatal(err)
++		}
++	case <-time.After(300 * time.Millisecond):
++		t.Fatal("foreground did not probe the supposedly connected socket; still waiting for heartbeat")
++	}
++	if !c.IsConnected() || p.closes.Load() != 0 {
++		t.Fatal("healthy socket was closed")
++	}
++}
+diff --git a/internal/interaction/long_conn_mgr.go b/internal/interaction/long_conn_mgr.go
+--- a/internal/interaction/long_conn_mgr.go
++++ b/internal/interaction/long_conn_mgr.go
+@@ -1047,6 +1047,10 @@
+ 	c.mutex.Unlock()
+ 	if changed && !isBackground {
+ 		c.wakeReconnect()
++	}
++	// A lifecycle report may have been coalesced while an earlier server ACK
++	// was pending. An explicit foreground report still needs a liveness check.
++	if !isBackground {
+ 		c.probeForegroundConnection(foregroundProbeTimeout)
+ 	}
+ }
+diff --git a/internal/interaction/foreground_probe_test.go b/internal/interaction/foreground_probe_test.go
+--- a/internal/interaction/foreground_probe_test.go
++++ b/internal/interaction/foreground_probe_test.go
+@@ -110,3 +110,14 @@
+ 		t.Fatal("healthy socket was closed")
+ 	}
+ }
++
++func TestForegroundReportProbesEvenWhenAlreadyMarkedForeground(t *testing.T) {
++	c, p := probeFixture(t)
++	c.SetBackground(false)
++	select {
++	case token := <-p.pings:
++		c.acknowledgeForegroundProbe(token)
++	case <-time.After(300 * time.Millisecond):
++		t.Fatal("foreground report skipped probe because local visibility was already foreground")
++	}
++}

@@ -19,6 +19,7 @@ void main() {
   late ChatMediaController media;
   setUp(() {
     media = ChatMediaController(
+      chooseOriginal: () async => false,
       conversationID: () => 'chat',
       isClosed: () => false,
       sendingMuted: () => false,

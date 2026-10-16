@@ -155,7 +155,7 @@ void main() {
     final fallback =
         (failed.child! as ExtendedImage).image as ExtendedResizeImage;
     expect((fallback.imageProvider as ExtendedNetworkImageProvider).url,
-        'https://media.test/original.png');
+        'https://media.test/original.png?height=640&width=640&type=image');
     expect(fallback.width, 270);
     expect(fallback.height, 3240);
     await tester.pumpWidget(const SizedBox.shrink());

@@ -1583,6 +1583,8 @@ class ChatLogic extends SuperController {
     }
   }
 
+  Message resolveGroupNotice(Message message) => _group.noticeFor(message);
+
   String? getNewestNickname(Message message) {
     if (isSingleChat) return message.senderNickname;
     final remark = Get.isRegistered<ContactsLogic>()

@@ -17,7 +17,26 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
 	stop := func() {
 		if cancel != nil {
 			cancel()
-			<-done
+			// A cancelled metadata job may still be waiting for a lock held by
+			// an API call that publishes to this queue. Keep draining until the
+			// job exits, but never apply updates concurrently with that job.
+			queue := worker.GetCh()
+		joining:
+			for {
+				select {
+				case <-done:
+					break joining
+				case cmd, ok := <-queue:
+					if !ok {
+						queue = nil
+						continue
+					}
+					if cmd.Ctx != nil && cmd.Ctx.Value(syncNotificationOwnerKey{}) == owner {
+						cmd.Ctx = ctx
+					}
+					pending = append(pending, cmd)
+				}
+			}
 			cancel, done = nil, nil
 		}
 	}
@@ -83,5 +102,10 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
 			defer attemptCancel()
 			runCommandSafely(worker, command)
 		}(cmd, done)
+		// Live work can already be buffered behind a protected bootstrap.
+		// Do not make it wait for a newly started metadata retry to finish.
+		if !protected && len(pending) > 0 {
+			stop()
+		}
 	}
 }

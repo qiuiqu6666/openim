@@ -232,6 +232,11 @@ class MomentsUiApi extends MomentsApi {
       MomentsPageResult(items: posts[momentId]!.likesPreview);
 
   @override
+  Future<void> deletePost(String momentId) async {
+    posts.remove(momentId);
+  }
+
+  @override
   Future<void> setLiked(String momentId, bool liked) async {
     likeWrites.add({'momentId': momentId, 'liked': liked});
     final post = posts[momentId]!;

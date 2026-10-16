@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:extended_image/extended_image.dart' show getCachedImageFile;
 import 'package:flutter_cache_manager/flutter_cache_manager.dart' hide Config;
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
@@ -136,6 +137,10 @@ class StorageMediaRepository {
       } catch (_) {
         // A stale cache entry does not make the whole scan fail.
       }
+      try {
+        final file = await getCachedImageFile(url);
+        if (file != null && await _isOwnedFile(file.path)) paths.add(file.path);
+      } catch (_) {}
     }
     if (paths.isEmpty) return null;
 
@@ -177,6 +182,10 @@ class StorageMediaRepository {
     return {
       url,
       OpenIMMediaUrl.resolve(url, imApiUrl: Config.imApiUrl),
+      for (final size in [640, 960, 1600])
+        OpenIMMediaUrl.resolve(
+            OpenIMMediaUrl.thumbnail(url, width: size, height: size),
+            imApiUrl: Config.imApiUrl),
     };
   }
 
@@ -184,6 +193,10 @@ class StorageMediaRepository {
     for (final key in _cacheKeys(url)) {
       try {
         final file = (await _cacheManager.getFileFromCache(key))?.file;
+        if (file != null && await _isOwnedFile(file.path)) return file.path;
+      } catch (_) {}
+      try {
+        final file = await getCachedImageFile(key);
         if (file != null && await _isOwnedFile(file.path)) return file.path;
       } catch (_) {}
     }

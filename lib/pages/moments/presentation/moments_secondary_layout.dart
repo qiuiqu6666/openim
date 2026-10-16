@@ -32,3 +32,11 @@ abstract final class MomentsSecondaryLayout {
   static const addButtonRadius = 6.0;
   static const sectionLabelHeight = 32.0;
 }
+
+abstract final class MomentsComposerSpacing {
+  static const photoTile = 88.0;
+  static const photoIcon = 28.0;
+  static const sectionGap = 24.0;
+  static const publishWidth = 64.0;
+  static const pageInset = 20.0;
+}

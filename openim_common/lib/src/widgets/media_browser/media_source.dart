@@ -8,6 +8,10 @@ import '../../utils/media/openim_media_url.dart';
 class MediaSource {
   final String? url;
   final String thumbnail;
+
+  /// Chat preview rendition. The original URL is loaded only on explicit demand.
+  final String? previewUrl;
+  final bool deferOriginal;
   final File? file;
   final Uint8List? bytes;
   final bool isVideo;
@@ -20,6 +24,8 @@ class MediaSource {
   MediaSource(
       {required String thumbnail,
       String? url,
+      String? previewUrl,
+      this.deferOriginal = false,
       this.file,
       this.bytes,
       this.isVideo = false,
@@ -28,7 +34,10 @@ class MediaSource {
       this.sentAt,
       this.loading = false,
       this.onRetry})
-      : thumbnail =
+      : previewUrl = previewUrl == null
+            ? null
+            : OpenIMMediaUrl.resolve(previewUrl, imApiUrl: Config.imApiUrl),
+        thumbnail =
             OpenIMMediaUrl.resolve(thumbnail, imApiUrl: Config.imApiUrl),
         url = url == null
             ? null

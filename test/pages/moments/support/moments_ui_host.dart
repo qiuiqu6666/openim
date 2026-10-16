@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -150,14 +151,16 @@ Future<void> mountMomentsUi(
         supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         theme: momentsUiTheme(dark, fontFamily: fontFamily),
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            padding: const EdgeInsets.only(top: 24, bottom: 34),
-            textScaler: TextScaler.linear(textScale),
-            disableAnimations: reducedMotion,
-          ),
-          child: child!,
-        ),
+        builder: (context, child) => EasyLoading.init()(
+            context,
+            MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                padding: const EdgeInsets.only(top: 24, bottom: 34),
+                textScaler: TextScaler.linear(textScale),
+                disableAnimations: reducedMotion,
+              ),
+              child: child!,
+            )),
         home: page,
       );
       return previewKey == null

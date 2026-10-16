@@ -124,7 +124,8 @@ void main() {
       expect(find.text('正在加载群资料'), findsOneWidget);
       expect(find.text(StrRes.delete), findsNothing);
       expect(find.text(StrRes.exitGroup), findsNothing);
-      logic.membership.failed.value = true;
+      logic.membership.defer();
+      await tester.pump(const Duration(seconds: 20));
       await tester.pump();
       expect(find.text('群资料加载失败'), findsOneWidget);
       expect(find.text('测试群聊'), findsOneWidget);

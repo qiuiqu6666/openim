@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
+import 'group_notice_identity.dart';
 
 /// Current group identity per sender, independent of message snapshots.
 class GroupSenderAvatars {
@@ -24,6 +25,12 @@ class GroupSenderAvatars {
 
   String? nicknameFor(Message message) =>
       _names[message.sendID] ?? message.senderNickname;
+
+  Message noticeFor(Message message) => resolveGroupNoticeIdentity(
+        message,
+        nickname: (id) => _names[id],
+        face: (id) => _faces[id],
+      );
 
   void updateNickname(String? id, String? nickname) {
     if (_closed ||
@@ -58,6 +65,17 @@ class GroupSenderAvatars {
   void sync(Iterable<Message> messages) {
     if (_closed || !isCurrent()) return;
     for (final message in messages) {
+      final detail = groupNoticeDetail(message);
+      if (detail != null) {
+        for (final member in groupNoticeMembers(detail)) {
+          final memberID = member['userID'];
+          if (memberID is String &&
+              memberID.isNotEmpty &&
+              _requested.add(memberID)) {
+            _pending.add(memberID);
+          }
+        }
+      }
       final id = message.sendID, face = message.senderFaceUrl;
       if (id == null || id.isEmpty) continue;
       final time = message.sendTime ?? message.createTime ?? 0;

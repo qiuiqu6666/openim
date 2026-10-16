@@ -1,0 +1,36 @@
+{
+  "version": "v3.8.3-patch.15+recovery.35-group-sync.1",
+  "date": "2026-10-16",
+  "root_cause": {
+    "consumer": "pkg/common/cmd_interruptible.go: stop waited for cancelled metadata work without draining the queue",
+    "cycle": [
+      "GetSpecifiedGroupsInfo holds groupSyncMutex during initial group synchronization",
+      "SyncAllJoinedGroupsAndMembersWithLock waits for groupSyncMutex",
+      "runInterruptibleListener cancels sync and waits for done",
+      "group insert notices fill conversationCh; lock owner cannot finish"
+    ],
+    "client_evidence": "operationID 1792142894393 enqueued exactly 1000 updates at 09:28:23.636-09:28:23.929, then 14 enqueue timeouts through 09:30:44.002",
+    "server_evidence": "same operationID: 16 group RPC spans at UTC+8 17:28:15-17:28:23, failed=false, 302-506ms",
+    "confidence": "source-level cycle reproduced; no device goroutine dump captured"
+  },
+  "fix": [
+    "Continue draining into deferred notifications while joining cancelled work; apply serially only after it exits",
+    "Bound unresolved Flutter sync wait to 20 seconds; progress does not extend deadline; retry resets wait; existing membership/session protections retained"
+  ],
+  "verification": {
+    "before_fix": "both small and production queue reproductions failed on prior listener",
+    "core": "four packages pass CGO=0 and CGO=1/race, including locked build source",
+    "repeat": "queue regressions repeated 30 times with race detector",
+    "flutter": "34 state/controller/recovery tests + 2 light/dark page tests passed",
+    "analyze": "no issues",
+    "source_lock": "15 tests; cumulative patch roundtrip; 443 files"
+  },
+  "known_preexisting_failure": "group info cards fit on a narrow screen expects 5 chevrons; current page renders 4. Same failure confirmed with HEAD test. Not changed.",
+  "not_verified": [
+    "Android AAR/APK not rebuilt",
+    "iOS Framework/App not rebuilt; macOS required",
+    "No physical device first-sync acceptance test"
+  ],
+  "scope": "Existing unrelated workspace changes preserved; no production services modified or restarted",
+  "logs_directory": "E:/openim/artifacts/group-sync-20261016"
+}

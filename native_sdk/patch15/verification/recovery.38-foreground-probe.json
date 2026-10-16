@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-16",
+  "sdk_version": "v3.8.3-patch.15+recovery.38-foreground-probe.2",
+  "scope": "Native foreground WebSocket probe with a three-second deadline, socket lifetime fencing and coalescing; repeated foreground reports also probe when local visibility has not changed.",
+  "implementation_files": [
+    "internal/interaction/long_conn_mgr.go",
+    "internal/interaction/foreground_probe.go",
+    "internal/interaction/foreground_probe_default.go"
+  ],
+  "regression_file": "internal/interaction/foreground_probe_test.go",
+  "checks": {
+    "baseline": "Old Core fails immediate foreground probe regression; intermediate version fails already-foreground regression.",
+    "core": "Locked mobile source interaction/conversation_msg/common passed CGO race detector; open_im_sdk compiled.",
+    "stress": "Foreground regression suite passed 10 repetitions with race detector.",
+    "flutter": "53 recovery/startup tests passed.",
+    "source_lock": "15 tests passed; 450 locked files; cumulative patch reproduces 447 files plus 3 declared overlays.",
+    "android": "Four-ABI AAR built; arm64 and x86_64 APKs built and native binary parity verified."
+  },
+  "measurement": {
+    "device": "emulator-5554",
+    "abi": "x86_64",
+    "package": "chat.chat99.chatpro",
+    "method": "Drop only the established Core socket four-tuple in INPUT and OUTPUT; new connections remain allowed. Remove exact rules in finally. No outgoing chat messages.",
+    "clock": "Device epoch from resume command to connection_recovered telemetry; not message synchronization or UI completion.",
+    "baseline_packaging": "Same final x86_64 APK with only libgojni.so replaced by verified recovery.37 AAR library and re-signed with project signing configuration.",
+    "baseline": {
+      "samples_seconds": [
+        29.899,
+        29.908,
+        28.596
+      ],
+      "median_seconds": 29.899,
+      "min_seconds": 28.596,
+      "max_seconds": 29.908
+    },
+    "final": {
+      "samples_seconds": [
+        3.121,
+        3.109,
+        3.115
+      ],
+      "median_seconds": 3.115,
+      "min_seconds": 3.109,
+      "max_seconds": 3.121
+    },
+    "healthy_probe_ms": [
+      54,
+      53,
+      53,
+      54,
+      53,
+      53
+    ],
+    "median_reduction_percent": 89.6
+  },
+  "apk": {
+    "sdk_version": "v3.8.3-patch.15+recovery.38-foreground-probe.2",
+    "apk_sha256": "e8275d9ce684843299b97226386a5eb10721fcf84fd24c7557c2a2bd046799d1",
+    "aar_sha256": "64cad20b893731e73a98484e99bea73cf2af6d0d91a239165fa3d1778fb90e6e",
+    "packaged_arm64_sha256": "6e8fec812112ee3a2f2c99ef9c0de3982b556aa679d6c6dc596d7129d63543fd",
+    "parity": "APK arm64 Core matches AAR after optional symbol stripping"
+  },
+  "emulator_apk": {
+    "sdk_version": "v3.8.3-patch.15+recovery.38-foreground-probe.2",
+    "apk_sha256": "f9a61d0a08b88543fa44802e92e0a78b1f74cb1b83699273031e91543e0796a7",
+    "aar_sha256": "64cad20b893731e73a98484e99bea73cf2af6d0d91a239165fa3d1778fb90e6e",
+    "packaged_x64_sha256": "4cec09a0abdd1416bba24d6f7a43555c612285085092e8791be51feceb3b06cf",
+    "parity": "APK x64 Core matches AAR after optional symbol stripping"
+  },
+  "graph": {
+    "status": "up-to-date",
+    "cli": "1.6.12",
+    "index": "E:\\openim\\artifacts\\foreground-probe-20261016\\index-verified",
+    "scope_note": "Whole dirty-tree detect_changes reports critical across 13 pre-existing changed files; reviewed current scope and new files directly. Graph process coverage is bounded and does not prove absence of other callers."
+  },
+  "limitations": [
+    "Three controlled samples per condition on one emulator; not physical-device/P95 validation.",
+    "iOS shares locked source but Framework/App has not been rebuilt; macOS required.",
+    "Early arm64-on-x86 runs encountered libhoudini crashes in both versions and are excluded from final comparison.",
+    "Cold-start rapid-background runs on intermediate recovery.38.1 measured 5.459/14.488/14.438 seconds and motivated an additional repeated-foreground regression; final version adds a regression and probes repeated foreground reports.",
+    "Local connection confirmation is measured; full message catch-up, battery use and prolonged weak-network behavior are not measured."
+  ],
+  "evidence_directory": "E:\\openim\\artifacts\\foreground-probe-20261016"
+}

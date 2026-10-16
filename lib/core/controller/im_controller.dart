@@ -39,6 +39,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   final Duration _loginStartTimeout;
   final _sessionQueue = SdkSessionQueue();
   IMConnectionRecovery? _connectionRecovery;
+  final connectionChecking = ValueNotifier<bool>(false);
+  final connectionVerified = ValueNotifier<bool>(false);
   ApiConnectionHealth? apiConnectionHealth;
   IMNativeConnectionWake? _nativeConnectionWake;
   late Rx<UserFullInfo> userInfo;
@@ -154,6 +156,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     apiConnectionHealth = null;
     _connectionRecovery?.close();
     _nativeConnectionWake?.close();
+    connectionChecking.dispose();
+    connectionVerified.dispose();
     if (_privilegeListenerAttached) {
       AccountPrivilegeRuntime.store.removeListener(_syncAccountPrivilege);
       _privilegeListenerAttached = false;
@@ -482,6 +486,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
         isSyncFailed: () => currentSdkStatus == IMSdkStatus.syncFailed,
         isSyncing: () => currentSdkStatus == IMSdkStatus.syncStart,
         wake: nativeWake.wake,
+        onCheckingChanged: (value) => connectionChecking.value = value,
+        onConnectionVerified: (value) => connectionVerified.value = value,
         onWakeSucceeded: () => historyRecoverySignals.addSafely(null),
         onError: (error) =>
             Logger.print('IM reconnect wake unavailable: ${error.runtimeType}'),

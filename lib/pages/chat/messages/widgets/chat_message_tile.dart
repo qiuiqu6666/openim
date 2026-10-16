@@ -82,7 +82,7 @@ class ChatMessageTile extends StatelessWidget {
 
   Widget _buildItemView(BuildContext context, Message message) => ChatItemView(
         key: logic.itemKey(message),
-        message: message,
+        message: logic.resolveGroupNotice(message),
         onTapQuotedMessage: (quoted) =>
             logic.openQuotedMessage(context, quoted),
         isStickerMedia: isStickerVideoMessage(message),
@@ -378,7 +378,7 @@ class ChatMessageTile extends StatelessWidget {
               sources: gallery.sources,
               initialIndex: gallery.initialIndex,
               onAutoPlay: (index) {
-                return !logic.playOnce;
+                return index == gallery.initialIndex && !logic.playOnce;
               },
               muted: logic.rtcIsBusy,
               onPageChanged: (index) {

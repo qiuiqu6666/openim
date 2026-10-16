@@ -15,6 +15,7 @@ class MomentsMediaImage extends StatefulWidget {
     required this.media,
     this.thumbnail = true,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
     this.onDimensions,
   });
 
@@ -22,6 +23,7 @@ class MomentsMediaImage extends StatefulWidget {
   final MomentMedia media;
   final bool thumbnail;
   final BoxFit fit;
+  final Alignment alignment;
   final ValueChanged<Size>? onDimensions;
 
   @override
@@ -176,6 +178,7 @@ class _MomentsMediaImageState extends State<MomentsMediaImage> {
                     image: _provider(image, constraints,
                         MediaQuery.devicePixelRatioOf(context)),
                     fit: widget.fit,
+                    alignment: widget.alignment,
                     gaplessPlayback: false,
                     frameBuilder: (context, child, frame, synchronous) {
                       if (synchronous ||

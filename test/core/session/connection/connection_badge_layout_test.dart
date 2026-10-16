@@ -12,32 +12,35 @@ import 'package:openim/core/session/connection/widgets/connection_signal_icon.da
 import 'package:openim/pages/conversation/widgets/conversation_header_actions.dart';
 import 'package:openim_common/openim_common.dart';
 
-Widget header(int latency, {bool offline = false}) => SizedBox(
-    height: kToolbarHeight,
-    child: GlassAppBar(
-      toolbarHeight: kToolbarHeight,
-      automaticallyImplyLeading: false,
-      centerTitle: false,
-      titleSpacing: 16,
-      title: ConnectionHealthTitle(
-        title: '消息',
-        connection: offline
-            ? IMSdkStatus.connectionFailed
-            : IMSdkStatus.connectionSucceeded,
-        apiAvailable: const AlwaysStoppedAnimation(true),
-        latencyMs: AlwaysStoppedAnimation(latency),
-        routeMarker: () => '2',
-      ),
-      actions: [
-        ConversationHeaderActions(
-            editing: false,
-            onSupport: () {},
-            onToggleEditing: () {},
-            plusKey: GlobalKey(),
-            plusTurns: 0,
-            onPlus: () {})
-      ],
-    ));
+Widget header(int latency, {bool offline = false, bool checking = false}) =>
+    SizedBox(
+        height: kToolbarHeight,
+        child: GlassAppBar(
+          toolbarHeight: kToolbarHeight,
+          automaticallyImplyLeading: false,
+          centerTitle: false,
+          titleSpacing: 16,
+          title: ConnectionHealthTitle(
+            title: '消息',
+            connection: offline
+                ? IMSdkStatus.connectionFailed
+                : checking
+                    ? IMSdkStatus.connecting
+                    : IMSdkStatus.connectionSucceeded,
+            apiAvailable: const AlwaysStoppedAnimation(true),
+            latencyMs: AlwaysStoppedAnimation(latency),
+            routeMarker: () => '2',
+          ),
+          actions: [
+            ConversationHeaderActions(
+                editing: false,
+                onSupport: () {},
+                onToggleEditing: () {},
+                plusKey: GlobalKey(),
+                plusTurns: 0,
+                onPlus: () {})
+          ],
+        ));
 
 Widget app(Widget child,
         {Brightness brightness = Brightness.light,
@@ -56,6 +59,20 @@ Widget app(Widget child,
     );
 
 void main() {
+  testWidgets('Chinese connecting label replaces latency in a compact header',
+      (tester) async {
+    for (final brightness in Brightness.values) {
+      await tester.pumpWidget(app(
+          SizedBox(width: 320, child: header(62, checking: true)),
+          brightness: brightness,
+          textScale: 2));
+      expect(find.text('消息'), findsOneWidget);
+      expect(find.text('连接中...'), findsOneWidget);
+      expect(find.text('62 ms · 2'), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   for (final brightness in Brightness.values) {
     testWidgets(
         'capsules without captions and actions fit the toolbar in $brightness',

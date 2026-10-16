@@ -3,6 +3,8 @@ import 'dart:io';
 import 'media_browser/media_page_gesture.dart';
 import 'media_browser/gallery_image_precache.dart';
 import 'media_browser/media_image_loading.dart';
+import 'media_browser/on_demand_image.dart';
+import 'media_browser/on_demand_video.dart';
 
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/cupertino.dart';
@@ -130,6 +132,12 @@ class _MediaBrowserState extends State<MediaBrowser> {
   ImageProvider? _warmProvider(int index) {
     final source = widget.sources[index];
     if (source.isVideo || source.loading) return null;
+    if (source.deferOriginal &&
+        source.bytes == null &&
+        source.file == null &&
+        (source.thumbnail.isEmpty || source.thumbnail == source.url)) {
+      return null;
+    }
     return _warmImages.putIfAbsent(index, () {
       final size = MediaQuery.sizeOf(context);
       final dpr = MediaQuery.devicePixelRatioOf(context);
@@ -275,19 +283,24 @@ class _MediaBrowserState extends State<MediaBrowser> {
       }
     }
     final source = widget.sources[currentIndex];
-    final urls = {source.url, source.thumbnail};
+    final urls = {source.url, source.thumbnail, source.previewUrl};
     // A visible neighbor starts loading before the halfway page notification.
     // Keep that request alive through the drag and reuse it after selection.
     for (final index in [currentIndex - 1, currentIndex + 1]) {
       if (index >= 0 && index < widget.sources.length) {
         final neighbor = widget.sources[index];
-        if (!neighbor.isVideo) urls.addAll([neighbor.url, neighbor.thumbnail]);
+        if (!neighbor.isVideo) {
+          urls.addAll([neighbor.url, neighbor.thumbnail, neighbor.previewUrl]);
+        }
       }
     }
     final origin = _dragOrigin;
     if (origin != null && origin < widget.sources.length) {
-      urls.addAll(
-          [widget.sources[origin].url, widget.sources[origin].thumbnail]);
+      urls.addAll([
+        widget.sources[origin].url,
+        widget.sources[origin].thumbnail,
+        widget.sources[origin].previewUrl
+      ]);
     }
     for (final url in _imageRequests.keys.toList()) {
       if (!urls.contains(url)) _imageRequests.remove(url)!.cancel();
@@ -380,23 +393,32 @@ class _MediaBrowserState extends State<MediaBrowser> {
                               }
                               return s.isVideo
                                   ? ExtendedImageSlidePageHandler(
-                                      child: VideoPlayerView(
-                                        key: ValueKey(s.tag ?? s.url),
-                                        url: s.url,
-                                        coverUrl: s.thumbnail,
-                                        file: s.file,
-                                        heroTag: s.tag,
-                                        autoPlay:
-                                            widget.onAutoPlay?.call(index) ??
-                                                false,
-                                        muted: widget.closeOnly || widget.muted,
-                                        showControls: !widget.closeOnly,
-                                        looping: widget.closeOnly,
-                                        onDownload: widget.closeOnly
-                                            ? null
-                                            : (url, file) => widget.onSave
-                                                ?.call(currentIndex),
-                                      ),
+                                      child: OnDemandVideo(
+                                          key: ValueKey(
+                                              'deferred:${s.tag ?? s.url}'),
+                                          autoPlay:
+                                              widget.onAutoPlay?.call(index) ??
+                                                  false,
+                                          poster: MediaGridThumbnail(
+                                              source: s,
+                                              availability: _localFiles),
+                                          player: (_) => VideoPlayerView(
+                                                key: ValueKey(s.tag ?? s.url),
+                                                url: s.url,
+                                                coverUrl: s.thumbnail,
+                                                file: s.file,
+                                                heroTag: s.tag,
+                                                autoPlay: true,
+                                                muted: widget.closeOnly ||
+                                                    widget.muted,
+                                                showControls: !widget.closeOnly,
+                                                looping: widget.closeOnly,
+                                                onDownload: widget.closeOnly
+                                                    ? null
+                                                    : (url, file) => widget
+                                                        .onSave
+                                                        ?.call(currentIndex),
+                                              )),
                                       heroBuilderForSlidingPage: (result) =>
                                           MediaVideoHero(
                                         tag: s.tag ?? s.thumbnail,
@@ -581,25 +603,51 @@ class _MediaBrowserState extends State<MediaBrowser> {
     ]);
   }
 
-  Widget _buildNetworkImage(MediaSource s, int index) => AdaptiveMediaImage(
-        image: _image(s.url ?? s.thumbnail),
-        loadStateChanged: (state) {
-          if (state.extendedImageLoadState == LoadState.loading) {
-            return AdaptiveMediaImage(
-              image: _warmImages[index] ?? _image(s.thumbnail, thumbnail: true),
-              loadStateChanged: (preview) =>
-                  preview.extendedImageLoadState == LoadState.loading
-                      ? const MediaImageLoading()
-                      : null,
-            );
-          } else if (state.extendedImageLoadState == LoadState.failed) {
-            state.imageProvider.evict();
+  Widget _buildNetworkImage(MediaSource s, int index) {
+    Widget render(String url) => AdaptiveMediaImage(
+          image: _image(url),
+          loadStateChanged: (state) {
+            if (state.extendedImageLoadState == LoadState.loading) {
+              final preview = s.previewUrl ?? s.thumbnail;
+              if (_warmImages[index] != null ||
+                  (preview.isNotEmpty && preview != url)) {
+                return AdaptiveMediaImage(
+                  image: _warmImages[index] ?? _image(preview, thumbnail: true),
+                  loadStateChanged: (state) =>
+                      state.extendedImageLoadState == LoadState.loading
+                          ? const MediaImageLoading()
+                          : null,
+                );
+              }
+              return const MediaImageLoading();
+            }
+            if (state.extendedImageLoadState == LoadState.failed) {
+              return Center(child: _mediaRetry(() {
+                state.imageProvider.evict();
+                state.reLoadImage();
+              }));
+            }
+            return null;
+          },
+        );
+    final original = s.url ?? s.thumbnail;
+    final preview = s.previewUrl;
+    final hasPreview =
+        preview != null && preview.isNotEmpty && preview != original;
+    if (!hasPreview && !s.deferOriginal) {
+      return render(original);
+    }
+    return OnDemandImage(
+      key: ValueKey('original:${s.tag}:$original:$preview'),
+      preview: (_) => hasPreview
+          ? render(preview)
+          : Center(
+              child: Icon(Icons.image_outlined,
+                  color: AppTokens.textSecondary(dark: true))),
+      original: (_) => render(original),
+    );
+  }
 
-            return ImageRes.pictureError.toImage;
-          }
-          return null;
-        },
-      );
   void _selectGridPage(int index) {
     currentIndex = index;
     _showGrid = false;

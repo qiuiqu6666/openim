@@ -385,7 +385,12 @@ class MomentsPageResult<T> {
   final String viewerContextVersion;
   factory MomentsPageResult.fromJson(
       Map<String, dynamic> json, T Function(Map<String, dynamic>) parse) {
-    if (!json.containsKey('items') ||
+    // Protojson omits empty repeated fields. Only accept that omission for
+    // a recognized page, never for an arbitrary successful response object.
+    final emptyProtoPage = !json.containsKey('items') &&
+        json['viewerContextVersion'] is String &&
+        (json['viewerContextVersion'] as String).isNotEmpty;
+    if ((!json.containsKey('items') && !emptyProtoPage) ||
         json['items'] != null && json['items'] is! List) {
       throw const FormatException('Missing moments page');
     }

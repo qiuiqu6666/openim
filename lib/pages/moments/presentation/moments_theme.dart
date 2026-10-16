@@ -10,6 +10,13 @@ abstract final class MomentsLayout {
   static const detailAvatarSize = 44.0;
   static const headerAvatarSize = 72.0;
   static const headerAvatarTop = 150.0;
+  static const feedSingleMediaWidth = 180.0;
+  static const feedLongImageWidth = 150.0;
+  static const feedColumnGap = AppTokens.s2;
+  static const feedMediaRadius = 4.0;
+  static const feedInset = AppTokens.s6;
+  static const feedDividerThickness = 1.0;
+  static const feedPadding = EdgeInsets.fromLTRB(feedInset, 12, feedInset, 6);
   static const cardRadius = 18.0;
   static const cardMargin = 10.0;
   static const cardPadding = EdgeInsets.fromLTRB(14, 12, 14, 6);
@@ -53,7 +60,7 @@ abstract final class MomentsTheme {
       dark ? const Color(0xFF9A9CA3) : const Color(0xFF626B78);
   static Color border(bool dark) =>
       dark ? const Color(0xFF2A2D33) : const Color(0xFFE6E8EC);
-  static Color name(bool dark) => dark ? text(dark) : const Color(0xFF374151);
+  static Color name(bool dark) => dark ? text(dark) : const Color(0xFF576B95);
   static Color nav(bool dark) => name(dark);
   static Color icon(bool dark) => secondary(dark);
   static Color detailBackground(bool dark) =>

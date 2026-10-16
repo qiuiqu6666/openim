@@ -198,7 +198,7 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
         message: message,
         sources: gallery.sources,
         initialIndex: gallery.initialIndex,
-        onAutoPlay: (index) => gallery.sources[index].isVideo,
+        onAutoPlay: (index) => index == gallery.initialIndex && gallery.sources[index].isVideo,
         onlySave: true,
       );
     } catch (_) {

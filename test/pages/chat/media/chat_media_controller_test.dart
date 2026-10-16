@@ -35,6 +35,7 @@ void main() {
     sdkCalls = 0;
     voiceBusy = false;
     media = ChatMediaController(
+      chooseOriginal: () async => false,
       conversationID: () => 'chat',
       // Mirrors the chat route's session-invalid callback after extraction.
       isClosed: () => OpenIM.iMManager.userID != 'self',

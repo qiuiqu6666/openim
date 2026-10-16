@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-16",
+  "sdk_version": "v3.8.3-patch.15+recovery.36-group-extremes.1",
+  "scope": "Cross-factor regression of first-sync group loading, queue cancellation, notification recovery and membership state",
+  "findings_fixed": [
+    {"case": "Normal notification emits 1005 updates into capacity-1000 own queue while live work arrives", "baseline": "Context deadline exceeded because synchronous notification consumer cannot drain itself", "fix": "Run notification persistence as protected work while listener drains; apply pending writes serially after completion"},
+    {"case": "Protected bootstrap buffers metadata retry followed by live update", "baseline": "Pending live update waits indefinitely behind metadata retry", "fix": "Cancel newly started unprotected metadata when pending work already exists"},
+    {"case": "Deleted placeholder plus group notification with injected storage failure, deadline or cancellation", "baseline": "Group error is swallowed and checkpoint advances from 1 to 3", "fix": "Propagate group notification error; retain checkpoint 1 and advance to 3 only on successful replay"},
+    {"case": "Receipt expires after notification processing starts", "baseline": "Running notification has no receipt deadline in context", "fix": "Derive notification context from receipt deadline and check cancellation before dispatch and checkpoint"},
+    {"case": "Repeated syncEnded plus slow membership query", "baseline": "8 queries instead of 1; each completion restarts timeout", "fix": "Handle completion once per sync cycle and preserve single-flight query"},
+    {"case": "First sync plus connecting, connection failure or connection success plus retry", "baseline": "Connection state overwrites sync status and permits 2 premature membership reads", "fix": "Retain sync phase across connection changes; non-reinstall completion still clears initial sync state"},
+    {"case": "Leave, rejoin and delayed role query", "baseline": "Previous owner/admin claim becomes active again", "fix": "Invalidate elevated self role, app-manager level and self-owner claim on leaving"}
+  ],
+  "checks": {
+    "sdk_workspace": "PASS: CGO enabled, race detector, common/group/conversation_msg/interaction/relation",
+    "mobile_locked_source": "PASS: same five packages with CGO and race detector",
+    "stress": "PASS: targeted queue, cancellation, pending retry, checkpoint and deadline regressions repeated 30 times under race detector",
+    "logout": "PASS: canceled lock owner can drain more than channel capacity; no old-account updates applied",
+    "flutter": "PASS: 90 loading, permission and member lifecycle tests, including 12 new cases",
+    "flutter_page": "PASS: 2 unresolved-membership page tests, light and dark",
+    "analysis": "PASS: scoped Dart analyze, no issues",
+    "source_lock": "PASS: 15 tests, 445 source files",
+    "patch_roundtrip": "PASS: 442 files match reconstructed cumulative patch; go.mod, go.sum and version/version are declared overlays"
+  },
+  "evidence_directory": "E:/openim/artifacts/group-sync-extremes-20261016",
+  "logs": ["notification-before.log", "pending-before.log", "deadline-before.log", "core-race.log", "locked-core-race.log", "stress-race.log", "flutter-membership-90-tests.log", "flutter-membership-analyze.log", "flutter-page.log", "source-lock-tests.log"],
+  "limitations": [
+    "Storage failure is injected, not a physical disk-full test. Queue and SDK-channel scenarios are deterministic fixtures, not production load testing.",
+    "No Android AAR/APK or iOS framework/app rebuilt in this pass; old native binaries do not contain these fixes.",
+    "No physical-device weak-network, long-duration or process-kill acceptance test in this pass.",
+    "Existing unrelated narrow-screen page test expects 5 chevrons but renders 4; previously reproduced against HEAD and not modified.",
+    "No production restart, deployment or data mutation performed. Arbitrary combinations are not claimed exhaustively verified."
+  ]
+}

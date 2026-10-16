@@ -10,6 +10,11 @@ bool momentsDark(BuildContext context) =>
 
 String momentsErrorText(BuildContext context, Object error) {
   if (error is MomentsException) {
+    if (error.code == 'SERVER_ERROR' || (error.statusCode ?? 0) >= 500) {
+      return momentsText(context,
+          zh: '服务暂时繁忙，请稍后重试',
+          en: 'The service is temporarily busy. Please try again later.');
+    }
     if (error.code == 'SESSION_CHANGED') {
       return momentsText(context,
           zh: '连接或登录状态已变化，请重新加载',

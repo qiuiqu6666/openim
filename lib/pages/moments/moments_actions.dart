@@ -1,5 +1,6 @@
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 
 import '../../services/moments_repository.dart';
 import '../mine/settings/widgets/settings_widgets.dart';
@@ -9,7 +10,10 @@ import 'moments_widgets.dart';
 
 void showMomentsFeedback(BuildContext context, String message) {
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  EasyLoading.showToast(message,
+      toastPosition: EasyLoadingToastPosition.center,
+      maskType: EasyLoadingMaskType.none,
+      dismissOnTap: false);
 }
 
 Future<void> deleteMoment(

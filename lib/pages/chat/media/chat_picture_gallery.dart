@@ -86,9 +86,16 @@ class ChatPictureGallery {
       }
       sources.add(MediaSource(
         url: url,
+        previewUrl: video ? null : _previewUrl(picture, url),
+        deferOriginal: !video,
         thumbnail: video
             ? message.videoElem?.snapshotUrl ?? ''
-            : _firstUrl([picture?.snapshotPicture?.url, url]) ?? '',
+            : _firstUrl([
+                  picture?.snapshotPicture?.url,
+                  if (url != null)
+                    OpenIMMediaUrl.thumbnail(url, width: 640, height: 640)
+                ]) ??
+                '',
         isVideo: video,
         file: file,
         tag: message.clientMsgID,
@@ -120,6 +127,17 @@ class ChatPictureGallery {
       if (value != null && value.trim().isNotEmpty) return value;
     }
     return null;
+  }
+
+  static String? _previewUrl(PictureElem? picture, String? original) {
+    final big = _firstUrl([picture?.bigPicture?.url]);
+    if (big != null && big != original) return big;
+    if (original != null) {
+      final resized =
+          OpenIMMediaUrl.thumbnail(original, width: 1600, height: 1600);
+      if (resized != original) return resized;
+    }
+    return _firstUrl([picture?.snapshotPicture?.url, original]);
   }
 
   static Message _snapshot(Message message) =>

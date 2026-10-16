@@ -328,6 +328,12 @@ class _ConversationPageState extends State<ConversationPage> {
                       ? '消息'
                       : 'Messages'),
               connection: _headerConnection(logic.imStatus.value),
+              connectionVerified: Get.isRegistered<IMController>()
+                  ? Get.find<IMController>().connectionVerified
+                  : null,
+              recovering: Get.isRegistered<IMController>()
+                  ? Get.find<IMController>().connectionChecking
+                  : null,
               apiAvailable: Get.isRegistered<IMController>()
                   ? Get.find<IMController>().apiConnectionHealth?.available
                   : null,

@@ -80,6 +80,7 @@ void main() {
   late int pickerCalls;
   late int toolboxClosed;
   late bool sdkFailure;
+  bool? sendOriginal;
   late Future<List<AssetEntity>?> Function() pick;
   late int cameraCalls;
   late _Files files;
@@ -87,12 +88,35 @@ void main() {
   late int uploadCalls;
   late Future<void> Function() beforeCreate;
 
+  test('original image choice bypasses optional compression', () async {
+    sendOriginal = true;
+    var compressed = false;
+    compress = (file) async {
+      compressed = true;
+      return file;
+    };
+    selected = [_Asset('original', Future.value(photo))];
+    await media.onTapAlbum();
+    expect(compressed, isFalse);
+    expect(sends, hasLength(1));
+    expect(await File(paths.single).readAsBytes(), await photo.readAsBytes());
+  });
+  test('cancelled quality choice neither stages nor uploads', () async {
+    sendOriginal = null;
+    selected = [_Asset('cancelled', Future.value(photo))];
+    await media.onTapAlbum();
+    expect(staged, isEmpty);
+    expect(uploadCalls, 0);
+    expect(media.pickingAttachment, isFalse);
+  });
+
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('chat-album-send-');
     Config.cachePath = directory.path;
     photo = await File('${directory.path}/photo.jpg').writeAsBytes([1, 2, 3]);
     OpenIM.iMManager.userID = 'self';
     selected = [];
+    sendOriginal = false;
     staged = [];
     sends = [];
     paths = [];
@@ -109,6 +133,7 @@ void main() {
     upload = () async =>
         jsonEncode({'url': 'https://im.test/object/media/image.png'});
     media = ChatMediaController(
+      chooseOriginal: () async => sendOriginal,
       conversationID: () => 'chat',
       isClosed: () => OpenIM.iMManager.userID != 'self',
       sendingMuted: () => false,
@@ -215,6 +240,7 @@ void main() {
     expect(media.pickingAttachment, isFalse);
     expect(toolboxClosed, 1);
     selected = [];
+    sendOriginal = false;
     await media.onTapAlbum();
     await media.onTapCamera();
     await media.onTapFile();

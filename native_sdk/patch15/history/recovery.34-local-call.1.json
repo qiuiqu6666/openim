@@ -1,0 +1,69 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.34-local-call.1",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "dbbaacf3e63617e7a855cbccbea4e67762030ec0a3e8697016d830c20c771467",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "ea4966a677b81d45063a944aec9f882e5623d5a65f9a75f54a1c95d67844a62a",
+  "created": "2026-10-16",
+  "previous_release": "history/recovery.33-cold-receipt.1.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "targeted_regressions": "CGO SQLite window, persisted legacy call reopen and repeated-read tests passed",
+    "core_packages": "SQLite enabled: db, conversation_msg, interaction passed; conversation_msg CGO=0 passed",
+    "source_lock": "15 tests passed; 442 locked files; cumulative patch roundtrip verified",
+    "android_core": "Four ABI AAR built; receipt verified; arm64 debug APK built; stripped native parity passed",
+    "ios_framework": "not rebuilt; macOS required",
+    "device_runtime": "Debug APK installed and launched on emulator-5554; call history UI not manually verified"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.34-local-call.1",
+    "sdk_version": "v3.8.3-patch.15+recovery.34-local-call.1",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "Installed and launched on emulator-5554 (SM N9810); historical call UI not manually verified",
+    "native_binary_integrated": true,
+    "aar_built": true,
+    "sdk_artifact_verified": true
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.34-local-call.1",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "shared source verified; macOS build and device runtime required",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "user will rebuild on macOS",
+    "app_validation_scope": "same locked Core source as Android; previous binary is rejected",
+    "native_binary_integrated": false,
+    "source_consistency_verified": true,
+    "source_files": 442
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned existing gomobile dependency closure",
+    "version/version: unique recovery.34-local-call.1 runtime identity"
+  ],
+  "verification_evidence": "verification/recovery.34-local-call.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Preserve persisted local call records in atomic message windows, without contributing to server coverage or reviving deleted/private messages. Includes recovery.33 fixes."
+  },
+  "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
+  "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
+  "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json"
+}

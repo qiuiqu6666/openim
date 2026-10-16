@@ -28,9 +28,11 @@ class ConnectionLatencyBadge extends StatelessWidget {
     final palette = ConnectionBadgeStyle.palette(measured, dark);
     final label = failed
         ? (chinese ? '不可用' : 'Unavailable')
-        : measured == null
-            ? (chinese ? '检测中' : 'Checking')
-            : '$measured ms';
+        : checking
+            ? (chinese ? '连接中...' : 'Connecting...')
+            : measured == null
+                ? (chinese ? '检测中' : 'Checking')
+                : '$measured ms';
     final quality = failed
         ? (chinese ? '离线' : 'Offline')
         : measured == null
@@ -48,6 +50,7 @@ class ConnectionLatencyBadge extends StatelessWidget {
           ? '$quality$routeDescription · 当前线路 API 响应耗时，约每 5 秒更新'
           : '$quality$routeDescription · Current route API response time, updated about every 5 seconds',
       child: Semantics(
+        liveRegion: checking || failed,
         label: '$quality, $label$routeDescription',
         child: ExcludeSemantics(
           child: Container(

@@ -432,7 +432,8 @@ void main() {
     });
     tearDown(() => Get.reset());
 
-    testWidgets('map and string data invalidate and deduplicate only event IDs',
+    testWidgets(
+        'interaction echoes update only their parent and deduplicate event IDs',
         (tester) async {
       await repository.loadFeed();
       await repository.loadUser('friend');
@@ -454,13 +455,13 @@ void main() {
       };
       im.recvCustomBusinessMessage(jsonEncode(event));
       await tester.pump();
-      expect(repository.authorizationScope, isNot(scope));
-      expect(repository.postsById, isEmpty);
-      expect(repository.notifications, isEmpty);
+      expect(repository.authorizationScope, scope);
+      expect(repository.feedState.items, isNotEmpty);
       await tester.pump(const Duration(milliseconds: 250));
       await tester.pump();
       expect(repository.postById('post')!.version, 2);
       expect(repository.postById('post')!.text, 'authorised content');
+      expect(api.feedCursors, [null]);
       expect(api.detailCalls, 2);
       expect(api.commentCursors, [null, null]);
       expect(api.notificationCursors, [null, null]);
@@ -481,6 +482,39 @@ void main() {
       await tester.pump();
       expect(repository.postById('post')!.version, 3);
     });
+
+    for (final action in [
+      'like',
+      'unlike',
+      'comment',
+      'delete-comment',
+      'COMMENT_CREATED',
+      'COMMENT_ADDED',
+      'COMMENT_DELETED',
+      'COMMENT_CHANGED'
+    ]) {
+      testWidgets('$action keeps loaded queries during authoritative refresh',
+          (tester) async {
+        await repository.loadFeed();
+        await repository.loadDetail('post');
+        final scope = repository.authorizationScope;
+        api.version = 2;
+        im.recvCustomBusinessMessage(jsonEncode({
+          'key': 'moments',
+          'data': {
+            'eventId': action,
+            'momentId': 'post',
+            'action': action,
+          }
+        }));
+        expect(repository.feedState.items, isNotEmpty);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
+        expect(repository.authorizationScope, scope);
+        expect(api.feedCursors, [null]);
+        expect(repository.postById('post')!.version, 2);
+      });
+    }
 
     testWidgets('matching key with malformed data still safely refreshes',
         (tester) async {

@@ -6,6 +6,74 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/core/session/connection/im_connection_recovery.dart';
 
 void main() {
+  testWidgets('only a current successful ACK verifies connection after timeout',
+      (tester) async {
+    final network = StreamController<List<ConnectivityResult>>();
+    final old = Completer<void>();
+    final current = Completer<void>();
+    final verified = <bool>[];
+    var calls = 0;
+    final recovery = IMConnectionRecovery(
+        isCurrent: () => true,
+        isDisconnected: () => false,
+        networkChanges: network.stream,
+        wakeTimeout: const Duration(seconds: 1),
+        wake: (_) => ++calls == 1 ? old.future : current.future,
+        onConnectionVerified: verified.add,
+        onError: (_) {})
+      ..start();
+    network.add([ConnectivityResult.wifi]);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(verified.contains(true), isFalse);
+    final retry = recovery.recoverNow();
+    await tester.pump();
+    old.complete();
+    await tester.pump();
+    expect(verified.contains(true), isFalse);
+    current.complete();
+    await tester.pump();
+    await retry;
+    expect(verified.last, true);
+    recovery.didChangeAppLifecycleState(AppLifecycleState.paused);
+    expect(verified.last, false);
+    recovery.close();
+    unawaited(network.close());
+    await tester.pump();
+  });
+
+  testWidgets('checking follows current wake and ignores a cancelled old wake',
+      (tester) async {
+    final network = StreamController<List<ConnectivityResult>>();
+    final first = Completer<void>(), second = Completer<void>();
+    final changes = <bool>[];
+    var calls = 0;
+    final recovery = IMConnectionRecovery(
+        isCurrent: () => true,
+        isDisconnected: () => false,
+        networkChanges: network.stream,
+        wake: (_) => ++calls == 1 ? first.future : second.future,
+        onCheckingChanged: changes.add,
+        onError: (e) => fail('$e'))
+      ..start();
+    network.add([ConnectivityResult.wifi]);
+    await tester.pump();
+    expect(changes, [true]);
+    recovery.didChangeAppLifecycleState(AppLifecycleState.paused);
+    recovery.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(changes, [true, false, true]);
+    first.complete();
+    await tester.pump();
+    expect(changes.last, true);
+    second.complete();
+    await tester.pump();
+    expect(changes, [true, false, true, false]);
+    recovery.close();
+    unawaited(network.close());
+    await tester.pump();
+  });
+
   testWidgets(
       'duplicate network and resume events do not repeat a healthy sync',
       (tester) async {

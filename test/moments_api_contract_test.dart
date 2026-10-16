@@ -44,6 +44,16 @@ void main() {
           tokenProvider: () => token);
     });
     tearDown(() => client.close(force: true));
+    test('business 500 is a service failure, not a network failure', () async {
+      payload = {
+        'errCode': 500,
+        'errMsg': 'context deadline exceeded mongodb transaction failed'
+      };
+      await expectLater(
+          api.setLiked('post', true),
+          throwsA(isA<MomentsException>()
+              .having((e) => e.code, 'code', 'SERVER_ERROR')));
+    });
     test(
         'post length counts graphemes and preserves their complete request data',
         () async {

@@ -1,0 +1,149 @@
+{
+  "device": "emulator-5554",
+  "label": "recovery38-final-healthy",
+  "trials": [
+    {
+      "trial": 1,
+      "resumeCommandEpoch": 1792151495.2484725,
+      "recoveredSeconds": null,
+      "events": [
+        {
+          "time": 1792151495.291,
+          "event": "foreground_probe_started",
+          "timeoutMs": 3000
+        },
+        {
+          "time": 1792151495.346,
+          "event": "foreground_probe_confirmed",
+          "elapsedMs": 54
+        },
+        {
+          "time": 1792151495.37,
+          "event": "foreground_probe_started",
+          "timeoutMs": 3000
+        },
+        {
+          "time": 1792151495.424,
+          "event": "foreground_probe_confirmed",
+          "elapsedMs": 53
+        }
+      ]
+    },
+    {
+      "trial": 2,
+      "resumeCommandEpoch": 1792151507.5771852,
+      "recoveredSeconds": null,
+      "events": [
+        {
+          "time": 1792151507.63,
+          "event": "foreground_probe_started",
+          "timeoutMs": 3000
+        },
+        {
+          "time": 1792151507.684,
+          "event": "foreground_probe_confirmed",
+          "elapsedMs": 53
+        },
+        {
+          "time": 1792151507.708,
+          "event": "foreground_probe_started",
+          "timeoutMs": 3000
+        },
+        {
+          "time": 1792151507.763,
+          "event": "foreground_probe_confirmed",
+          "elapsedMs": 54
+        }
+      ]
+    },
+    {
+      "trial": 3,
+      "resumeCommandEpoch": 1792151519.9093928,
+      "recoveredSeconds": null,
+      "events": [
+        {
+          "time": 1792151519.96,
+          "event": "foreground_probe_started",
+          "timeoutMs": 3000
+        },
+        {
+          "time": 1792151520.013,
+          "event": "foreground_probe_confirmed",
+          "elapsedMs": 53
+        },
+        {
+          "time": 1792151520.034,
+          "event": "foreground_probe_started",
+          "timeoutMs": 3000
+        },
+        {
+          "time": 1792151520.087,
+          "event": "foreground_probe_confirmed",
+          "elapsedMs": 53
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "time": 1792151495.291,
+      "event": "foreground_probe_started",
+      "timeoutMs": 3000
+    },
+    {
+      "time": 1792151495.346,
+      "event": "foreground_probe_confirmed",
+      "elapsedMs": 54
+    },
+    {
+      "time": 1792151495.37,
+      "event": "foreground_probe_started",
+      "timeoutMs": 3000
+    },
+    {
+      "time": 1792151495.424,
+      "event": "foreground_probe_confirmed",
+      "elapsedMs": 53
+    },
+    {
+      "time": 1792151507.63,
+      "event": "foreground_probe_started",
+      "timeoutMs": 3000
+    },
+    {
+      "time": 1792151507.684,
+      "event": "foreground_probe_confirmed",
+      "elapsedMs": 53
+    },
+    {
+      "time": 1792151507.708,
+      "event": "foreground_probe_started",
+      "timeoutMs": 3000
+    },
+    {
+      "time": 1792151507.763,
+      "event": "foreground_probe_confirmed",
+      "elapsedMs": 54
+    },
+    {
+      "time": 1792151519.96,
+      "event": "foreground_probe_started",
+      "timeoutMs": 3000
+    },
+    {
+      "time": 1792151520.013,
+      "event": "foreground_probe_confirmed",
+      "elapsedMs": 53
+    },
+    {
+      "time": 1792151520.034,
+      "event": "foreground_probe_started",
+      "timeoutMs": 3000
+    },
+    {
+      "time": 1792151520.087,
+      "event": "foreground_probe_confirmed",
+      "elapsedMs": 53
+    }
+  ]
+}

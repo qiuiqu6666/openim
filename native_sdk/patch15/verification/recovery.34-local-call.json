@@ -1,0 +1,13 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.34-local-call.1",
+  "source_sha256": "ea4966a677b81d45063a944aec9f882e5623d5a65f9a75f54a1c95d67844a62a",
+  "aar_sha256": "de56f2333254b2d9ec3b12403e824323b7fcafb410f625ad775834a4004c8fe6",
+  "apk_sha256": "d7a3208d7bd3af94670778c958200b8ff50cd041c5220cfeb525989dd6481e06",
+  "sqlite_regressions": "passed on locked source, including legacy database reopen",
+  "source_lock_tests": 15,
+  "patch_roundtrip": "passed",
+  "android_debug_build": "passed",
+  "apk_arm64_native_parity": "passed after llvm-strip --strip-unneeded",
+  "ios": "not rebuilt; macOS required",
+  "device_runtime": "Debug APK installed and launched on emulator-5554; call history UI not manually verified"
+}

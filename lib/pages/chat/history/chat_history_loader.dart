@@ -670,6 +670,13 @@ class ChatHistoryLoader {
       status == MessageStatus.sending || status == MessageStatus.failed;
 
   static int _compare(Message a, Message b) {
+    if (_isLocalRecord(a) || _isLocalRecord(b)) {
+      if (_isPendingSend(a.status)) return 1;
+      if (_isPendingSend(b.status)) return -1;
+      final time = (a.sendTime ?? a.createTime ?? 0)
+          .compareTo(b.sendTime ?? b.createTime ?? 0);
+      if (time != 0) return time;
+    }
     if ((a.seq ?? 0) > 0 && (b.seq ?? 0) > 0) {
       return a.seq!.compareTo(b.seq!);
     }
@@ -689,6 +696,9 @@ class ChatHistoryLoader {
 
   static int compareMessageOrder(Message a, Message b) => _compare(a, b);
 
+  static bool _isLocalRecord(Message message) =>
+      (message.seq ?? 0) == 0 && message.status == MessageStatus.succeeded;
+
   static List<Message> merge(Iterable<Message> values,
       {Set<String> removedIDs = const {}}) {
     final unique = <Object, Message>{};
@@ -699,12 +709,26 @@ class ChatHistoryLoader {
     }
     // List.sort is not stable. Preserve arrival order explicitly when neither
     // same-time row has a server sequence, including across history merges.
-    final indexed = unique.values.indexed.toList();
+    // Server sequence and local wall-clock order are different domains.
+    // Sort each separately to avoid a non-transitive mixed comparator when
+    // server timestamps go backwards, then insert persisted local records.
+    final indexed =
+        unique.values.where((m) => !_isLocalRecord(m)).indexed.toList();
     indexed.sort((a, b) {
       final order = _compare(a.$2, b.$2);
       return order != 0 ? order : a.$1.compareTo(b.$1);
     });
-    return indexed.map((entry) => entry.$2).toList();
+    final result = indexed.map((entry) => entry.$2).toList();
+    final local = unique.values.where(_isLocalRecord).indexed.toList();
+    local.sort((a, b) {
+      final order = _compare(a.$2, b.$2);
+      return order != 0 ? order : a.$1.compareTo(b.$1);
+    });
+    for (final entry in local) {
+      final at = result.indexWhere((m) => _compare(entry.$2, m) < 0);
+      result.insert(at < 0 ? result.length : at, entry.$2);
+    }
+    return result;
   }
 
   void close() {

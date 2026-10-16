@@ -1,0 +1,72 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openim/pages/chat/media/video/chat_video_preparation.dart';
+import 'package:video_compress/video_compress.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const channel = MethodChannel('video_compress');
+  late Directory dir;
+  late File source, output;
+  final calls = <MethodCall>[];
+  setUp(() async {
+    dir = await Directory.systemTemp.createTemp('video-quality-');
+    source =
+        await File('${dir.path}/source.mp4').writeAsBytes(List.filled(100, 1));
+    output =
+        await File('${dir.path}/small.mp4').writeAsBytes(List.filled(20, 1));
+    calls.clear();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return jsonEncode({'path': output.path});
+    });
+  });
+  tearDown(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+    await dir.delete(recursive: true);
+  });
+  test('standard selects 720p preset, 30 fps, keeps source and audio',
+      () async {
+    expect((await prepareChatVideo(source, ChatVideoQuality.standard)).path,
+        output.path);
+    final args = calls.single.arguments as Map;
+    expect(args['quality'], VideoQuality.Res1280x720Quality.index);
+    expect(args['frameRate'], 30);
+    expect(args['deleteOrigin'], false);
+    expect(args['includeAudio'], true);
+    expect(await source.exists(), true);
+  });
+  test('original bypasses encoder', () async {
+    expect(await prepareChatVideo(source, ChatVideoQuality.original), source);
+    expect(calls, isEmpty);
+  });
+  test('empty output fails rather than silently uploading the original',
+      () async {
+    await output.writeAsBytes([]);
+    await expectLater(
+        prepareChatVideo(source, ChatVideoQuality.standard), throwsStateError);
+  });
+  test('overlapping standard sends both go through compressor', () async {
+    final release = Completer<String>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return calls.length == 1
+          ? release.future
+          : jsonEncode({'path': output.path});
+    });
+    final first = prepareChatVideo(source, ChatVideoQuality.standard);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final second = prepareChatVideo(source, ChatVideoQuality.standard);
+    expect(calls, hasLength(1));
+    release.complete(jsonEncode({'path': output.path}));
+    final results = await Future.wait([first, second]);
+    expect(calls, hasLength(2));
+    expect(results.map((file) => file.path), everyElement(output.path));
+  });
+}

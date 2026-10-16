@@ -101,6 +101,7 @@ void main() {
         final photo = await File('${root.path}/photo.$extension')
             .writeAsBytes([0, 0, 0, 24, 102, 116, 121, 112]);
         final media = ChatMediaController(
+      chooseOriginal: () async => false,
             conversationID: () => 'chat',
             isClosed: () => false,
             sendingMuted: () => false,

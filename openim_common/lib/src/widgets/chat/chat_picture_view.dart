@@ -56,7 +56,7 @@ class _ChatPictureViewState extends State<ChatPictureView> {
         ? picture?.bigPicture?.url
         : picture?.sourcePicture?.url;
     _snapshotUrl = ChatPicturePreviewMetadata.topCrop(widget.message)?.url ??
-        picture?.snapshotPicture?.url?.adjustThumbnailAbsoluteString(960);
+        picture?.snapshotPicture?.url;
     final path = picture?.sourcePath;
     final messageID = widget.message.clientMsgID;
     if (!force && path == _inputPath && messageID == _messageID) return;
@@ -131,21 +131,25 @@ class _ChatPictureViewState extends State<ChatPictureView> {
     final alignment = cropped ? Alignment.topCenter : Alignment.center;
     final thumbnailURL =
         IMUtils.isNotNullEmptyStr(_snapshotUrl) ? _snapshotUrl : _sourceUrl;
-    final remoteURL = topPreview?.url ??
-        (cropped
-            ? ChatPictureQuality.croppedSource(picture, decodeSize) ??
-                thumbnailURL
-            : thumbnailURL);
+    // Never silently upgrade a failed bubble preview to the full attachment.
+    final remoteURL = topPreview?.url ?? thumbnailURL;
+    String? small(String original) {
+      final resized =
+          OpenIMMediaUrl.thumbnail(original, width: 640, height: 640);
+      return resized == original ? null : resized;
+    }
 
-    // Only mount the next source after a failure, avoiding parallel downloads.
     final urls = <String>{
-      if (remoteURL != null && remoteURL.trim().isNotEmpty) remoteURL,
-      if (picture?.snapshotPicture?.url case final String url)
-        if (url.trim().isNotEmpty) url,
-      if (picture?.bigPicture?.url case final String url)
-        if (url.trim().isNotEmpty) url,
-      if (picture?.sourcePicture?.url case final String url)
-        if (url.trim().isNotEmpty) url,
+      if (remoteURL != null && remoteURL.trim().isNotEmpty)
+        if (topPreview != null ||
+            (remoteURL != picture?.sourcePicture?.url &&
+                remoteURL != picture?.bigPicture?.url))
+          remoteURL
+        else if (small(remoteURL) case final String resized)
+          resized,
+      if (topPreview != null)
+        if (picture?.sourcePicture?.url case final String original)
+          if (small(original) case final String resized) resized,
     }.toList();
 
     Widget? remote([int index = 0]) {

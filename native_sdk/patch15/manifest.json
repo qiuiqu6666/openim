@@ -2,29 +2,31 @@
   "upstream": "https://github.com/openimsdk/openim-sdk-core",
   "tag": "v3.8.3-patch.15",
   "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-  "sdk_version": "v3.8.3-patch.15+recovery.33-cold-receipt.1",
+  "sdk_version": "v3.8.3-patch.15+recovery.38-foreground-probe.2",
   "go_version": "1.24.0",
   "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
   "patch": "0001-background-message-recovery.patch",
-  "patch_sha256": "1b0bd730f38ebdc5f6761e6527c285ce9a010a50f3e1725515886fda24334dd2",
+  "patch_sha256": "00cfb4ec6188cb4adc010a085158c03964b51dd4fd515abd7e3163b7d4b55c54",
   "source_directory": "core-source",
   "source_manifest": "core-source-manifest.json",
-  "source_sha256": "2ad791701d5eda1e579e1f2274be87212ab856a64a17c9e57f0d7d4633e00e5d",
+  "source_sha256": "c65f88618f19e29f17668c35d72a658228195a8ae8ac36de07367e8177ae8e96",
   "created": "2026-10-16",
-  "previous_release": "history/recovery.32-read-receipt.1.json",
+  "previous_release": "history/recovery.38-foreground-probe.1.json",
   "native_binary_integrated": false,
   "checks": {
-    "targeted_regressions": "SQLite cold-cache lookup, real notification page and Flutter resume regressions passed; pre-fix failures reproduced",
-    "core_packages": "SQLite enabled: db, conversation_msg, interaction passed; conversation_msg CGO=0 passed",
-    "source_lock": "15 tests passed; 438 locked files; cumulative patch roundtrip matches 435 non-overlay files",
-    "android_core": "not rebuilt",
-    "ios_framework": "not rebuilt; macOS required",
-    "device_runtime": "not tested"
+    "baseline": "Old Core fails immediate foreground probe regression; intermediate version fails already-foreground regression.",
+    "core": "Locked mobile source interaction/conversation_msg/common passed CGO race detector; open_im_sdk compiled.",
+    "stress": "Foreground regression suite passed 10 repetitions with race detector.",
+    "flutter": "53 recovery/startup tests passed.",
+    "source_lock": "15 tests passed; 450 locked files; cumulative patch reproduces 447 files plus 3 declared overlays.",
+    "android": "Four-ABI AAR built; arm64 and x86_64 APKs built and native binary parity verified.",
+    "device_runtime": "x86_64 emulator: baseline median 29.899s, final median 3.115s, three samples each",
+    "ios_framework": "not rebuilt; macOS required"
   },
   "android": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.33-cold-receipt.1",
-    "sdk_version": "v3.8.3-patch.15+recovery.33-cold-receipt.1",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.38-foreground-probe.2",
+    "sdk_version": "v3.8.3-patch.15+recovery.38-foreground-probe.2",
     "abis": [
       "armeabi-v7a",
       "arm64-v8a",
@@ -33,35 +35,35 @@
     ],
     "recovery_patch_included": true,
     "build_script": "build-android.ps1",
-    "apk_native_parity_verified": false,
-    "runtime_validation": "not tested; rebuild required",
-    "native_binary_integrated": false,
-    "aar_built": false,
-    "sdk_artifact_verified": false
+    "apk_native_parity_verified": true,
+    "runtime_validation": "x86_64 emulator: baseline median 29.899s, final median 3.115s, three samples each",
+    "native_binary_integrated": true,
+    "aar_built": true,
+    "sdk_artifact_verified": true
   },
   "ios": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "version": "v3.8.3-patch.15+recovery.33-cold-receipt.1",
+    "version": "v3.8.3-patch.15+recovery.38-foreground-probe.2",
     "framework_prepared": false,
     "recovery_patch_included": true,
     "build_script": "build-ios.sh",
-    "runtime_validation": "shared source verified; macOS build and device runtime required",
+    "runtime_validation": "not run; macOS rebuild required",
     "framework_sha256": {},
     "pod_resolution_and_build": "user will rebuild on macOS",
     "app_validation_scope": "same locked Core source as Android; previous binary is rejected",
     "native_binary_integrated": false,
     "source_consistency_verified": true,
-    "source_files": 438
+    "source_files": 450
   },
   "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
   "build_overlays": [
     "go.mod and go.sum: pinned existing gomobile dependency closure",
-    "version/version: unique recovery.33-cold-receipt.1 runtime identity"
+    "version/version: unique recovery.38-foreground-probe.2 runtime identity"
   ],
-  "verification_evidence": "verification/recovery.33-cold-receipt.json",
+  "verification_evidence": "verification/recovery.38-foreground-probe.json",
   "local_changes": {
     "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-    "description": "Initialize a cold conversation message cache before sequence-based receipt reads so notification checkpoints can advance; preserve real database errors. Flutter resumes a loaded latest-following chat across a disjoint latest window while retaining explicit history readers."
+    "description": "Probe native foreground connections immediately with a socket-bound WebSocket ping and a three-second deadline; cancel obsolete probes and reconnect only the failed socket."
   },
   "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
   "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",

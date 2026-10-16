@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-16",
+  "sdk_version": "v3.8.3-patch.15+recovery.37-foreground-wait.1",
+  "scope": "Release old connection response waits during foreground recovery; preserve existing SDK session, synchronization and push architecture",
+  "implementation_files": [
+    "internal/interaction/long_conn_mgr.go",
+    "internal/interaction/connection_request_lifetime.go"
+  ],
+  "regression_file": "internal/interaction/connection_request_lifetime_test.go",
+  "baseline": "Both disconnected-request and replacement-connection tests failed on the original implementation: response wait did not release within 300ms of known disconnect. Tests cancel and join their requests on failure.",
+  "checks": {
+    "core": "interaction/conversation_msg/common passed with CGO and race; open_im_sdk compiled (no tests)",
+    "stress": "Four new lifetime scenarios plus existing cancellation/foreground cases passed 30 repetitions with CGO and race against mobile locked source",
+    "flutter": "37 recovery and startup tests passed",
+    "source": "15 source lock tests passed; 447 locked files; 444-file cumulative patch roundtrip plus 3 declared overlays",
+    "android": "Four ABI AAR and arm64 debug APK built; APK native binary matches AAR after symbol stripping"
+  },
+  "apk": {
+    "path": "release-artifacts/99chat-foreground-recovery.37-debug.apk",
+    "sdk_version": "v3.8.3-patch.15+recovery.37-foreground-wait.1",
+    "apk_sha256": "fb8c22e7a9d3a37f7d10ab5a83a3064988214014c89b86aefe7bbdc3484d060e",
+    "aar_sha256": "d6c7df15279e9d983119dc63956ca4a67dd9f44abdfd1b7e7aa32ef566667dac",
+    "packaged_arm64_sha256": "f4aa7f8738f2b0345616d33d7cec6de0372ee853475cde823f5919e0256458de",
+    "parity": "APK arm64 Core matches AAR after optional symbol stripping"
+  },
+  "graph": {
+    "repository": "openim-fast-recovery-final-20261015",
+    "head": "9d0b64f1d2fd7d127309fc56d20de690d512ff89",
+    "index_status": "up-to-date",
+    "runner_identity_schema": 4,
+    "cli": "1.6.12",
+    "final_changed_symbols_in_scope": [
+      "LongConnMgr",
+      "connectionDone",
+      "sendAndWaitResp",
+      "writeBinaryMsgAndRetry",
+      "close",
+      "SetConnectionStatus"
+    ],
+    "scope_note": "Whole dirty-tree change scan includes pre-existing unrelated edits. New files also reviewed directly. Initial refresh hit an existing database lock; successfully rebuilt in an isolated index directory."
+  },
+  "limitations": [
+    "No physical device or emulator installation/acceptance in this task; no end-to-end latency or battery measurement.",
+    "iOS uses the same locked source but Framework/App not rebuilt; macOS required.",
+    "Does not detect a half-open socket earlier; only retires response waits once socket closure is known.",
+    "No new push integration, automatic resend, database migration, production deployment, git commit or push."
+  ],
+  "evidence_directory": "E:\\openim\\artifacts\\foreground-recovery-20261016"
+}

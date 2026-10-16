@@ -58,6 +58,7 @@ void main() {
     closed = false;
     previewPath = null;
     uploader = ChatMediaUpload(
+        createRenditions: (_) async => null,
         isClosed: () => closed,
         onTransfer: (_, state) => stages.add(state.stage));
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -112,9 +113,10 @@ void main() {
     final picture = outgoing.pictureElem!;
     expect(picture.sourcePath, original.path);
     expect(picture.sourcePicture!.url, _sourceURL);
-    expect(picture.bigPicture!.toJson(), picture.sourcePicture!.toJson());
+    expect(picture.bigPicture!.url,
+        OpenIMMediaUrl.thumbnail(_sourceURL, width: 1600, height: 1600));
     expect(
-        [picture.bigPicture!.width, picture.bigPicture!.height], [600, 2400]);
+        [picture.bigPicture!.width, picture.bigPicture!.height], [400, 1600]);
     expect(picture.snapshotPicture!.url, _previewURL);
     expect(picture.snapshotPicture!.size, uploadedBytes.last.length);
     expect(ChatPicturePreviewMetadata.topCrop(outgoing),
@@ -146,7 +148,7 @@ void main() {
       final extraBefore = outgoing.ex;
       await uploader.prepare(outgoing);
       expect(outgoing.pictureElem!.sourcePicture!.url, _sourceURL);
-      expect(outgoing.pictureElem!.bigPicture!.height, 2400);
+      expect(outgoing.pictureElem!.bigPicture!.height, 1600);
       expect(outgoing.pictureElem!.snapshotPicture!.url,
           OpenIMMediaUrl.thumbnail(_sourceURL, width: 640, height: 640));
       expect(outgoing.ex, extraBefore);
@@ -202,6 +204,7 @@ void main() {
       () async {
     final prepared = Completer<ChatTopPicturePreview?>();
     uploader = ChatMediaUpload(
+        createRenditions: (_) async => null,
         isClosed: () => closed,
         onTransfer: (_, __) {},
         previewTimeout: const Duration(milliseconds: 20),
@@ -231,6 +234,7 @@ void main() {
     final previewUpload = Completer<dynamic>();
     final entered = Completer<void>();
     uploader = ChatMediaUpload(
+        createRenditions: (_) async => null,
         isClosed: () => closed,
         onTransfer: (_, __) {},
         previewTimeout: const Duration(seconds: 1));

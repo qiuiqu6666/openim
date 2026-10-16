@@ -1,10 +1,10 @@
 // Adapted from 99chat lottery_dashboard.dart _livePredictions.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
 import '../data/mark_six_controller.dart';
 import 'mark_six_style.dart';
+import 'mark_six_prediction_copy.dart';
 
 const markSixAttributes = <String, String>{
   'special': '特码',
@@ -128,53 +128,47 @@ class _MarkSixPredictionsState extends State<MarkSixPredictions> {
         : status == 'miss'
             ? MarkSixStyle.red
             : style.secondary;
-    return Container(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: style.divider))),
-        child: Row(children: [
-          Icon(
-              switch (key) {
-                'zodiac' => Icons.pets_rounded,
-                'wave' => Icons.waves_rounded,
-                'size' => Icons.swap_vert_rounded,
-                'zuhe' => Icons.link_rounded,
-                _ => Icons.circle_outlined
-              },
-              size: 17,
-              color: style.primary),
-          const SizedBox(width: 4),
-          SizedBox(
-              width: 48,
-              child: Text(markSixAttributes[key] ?? key,
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600))),
-          Expanded(
-              child: InkWell(
-                  onLongPress: values.isEmpty
-                      ? null
-                      : () async {
-                          await Clipboard.setData(
-                              ClipboardData(text: values.join(' ')));
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('预测号码已复制')));
-                          }
-                        },
-                  child: Text(values.isEmpty ? '—' : values.join(' '),
-                      style: const TextStyle(fontSize: 12)))),
-          if (markSixMap(row['actual'])[key] != null)
-            Text('${markSixMap(row['actual'])[key]}',
-                style: const TextStyle(fontSize: 11)),
-          const SizedBox(width: 5),
-          Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                  color: color.withValues(alpha: .09),
-                  borderRadius: BorderRadius.circular(12)),
-              child: Text(labels[status] ?? '—',
-                  style: TextStyle(fontSize: 11, color: color))),
-        ]));
+    return MarkSixPredictionCopy(
+      attribute: key,
+      label: markSixAttributes[key] ?? key,
+      values: values,
+      child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: style.divider))),
+          child: Row(children: [
+            Icon(
+                switch (key) {
+                  'zodiac' => Icons.pets_rounded,
+                  'wave' => Icons.waves_rounded,
+                  'size' => Icons.swap_vert_rounded,
+                  'zuhe' => Icons.link_rounded,
+                  _ => Icons.circle_outlined
+                },
+                size: 17,
+                color: style.primary),
+            const SizedBox(width: 4),
+            SizedBox(
+                width: 48,
+                child: Text(markSixAttributes[key] ?? key,
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600))),
+            Expanded(
+                child: Text(values.isEmpty ? '—' : values.join(' '),
+                    style: const TextStyle(fontSize: 12))),
+            if (markSixMap(row['actual'])[key] != null)
+              Text('${markSixMap(row['actual'])[key]}',
+                  style: const TextStyle(fontSize: 11)),
+            const SizedBox(width: 5),
+            Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                    color: color.withValues(alpha: .09),
+                    borderRadius: BorderRadius.circular(12)),
+                child: Text(labels[status] ?? '—',
+                    style: TextStyle(fontSize: 11, color: color))),
+          ])),
+    );
   }
 
   Future<void> _selectWindow(BuildContext context) async {

@@ -31,6 +31,17 @@ func (d *DataBase) ReadMessageWindow(ctx context.Context, id string, count int, 
 		if err := q.Order("seq DESC").Limit(min(max(count, 1), 300)).Find(&result.Rows).Error; err != nil {
 			return err
 		}
+		// Local call records have no server sequence. Read them in the same
+		// transaction; they must not contribute to server coverage.
+		var local []*model_struct.LocalChatLog
+		localQuery := tx.Table(table).Where("seq = 0")
+		if len(result.Rows) > 0 {
+			localQuery = localQuery.Where("send_time >= ?", result.Rows[len(result.Rows)-1].SendTime)
+		}
+		if err := localQuery.Order("send_time DESC, client_msg_id DESC").Limit(300).Find(&local).Error; err != nil {
+			return err
+		}
+		result.Rows = append(result.Rows, local...)
 		return applyMessageRevocations(tx, id, result.Rows)
 	})
 	return result, err

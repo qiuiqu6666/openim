@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -88,6 +87,7 @@ class ChatGroupController {
   );
   String? avatarFor(Message message) => _senderAvatars.faceFor(message);
   String? nicknameFor(Message message) => _senderAvatars.nicknameFor(message);
+  Message noticeFor(Message message) => _senderAvatars.noticeFor(message);
   void refreshSenderIdentity(String? id) => _senderAvatars.refreshMember(id);
   void updateSenderAvatar(String? id, String? face) =>
       _senderAvatars.update(id, face);
@@ -539,17 +539,9 @@ class ChatGroupController {
     for (final message in affected) {
       if (message.sendID != info.userID) continue;
       if (message.isNotificationType) {
-        changed = true;
-        final detail = message.notificationElem?.detail;
-        if (detail == null) continue;
-        try {
-          final notification = GroupNotification.fromJson(jsonDecode(detail));
-          notification.opUser?.nickname = info.nickname;
-          notification.opUser?.faceURL = info.faceURL;
-          message.notificationElem?.detail = jsonEncode(notification);
-        } catch (error) {
-          _report(error);
-        }
+        // The reactive identity cache resolves every participant at render
+        // time. Re-serializing as GroupNotification loses invitation fields.
+        continue;
       } else {
         changed = changed ||
             message.senderFaceUrl != info.faceURL ||

@@ -233,7 +233,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.getRect(post), rect);
     expect(find.byType(CustomScrollView), findsOneWidget);
-    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.text('暂时无法完成，请检查网络后重试'), findsOneWidget);
+    final notice = tester.getCenter(find.text('暂时无法完成，请检查网络后重试'));
+    expect(notice.dy, closeTo(406, 30));
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
     expect(fixture.api.detailRequests.length, 2);
     expect(tester.takeException(), isNull);
     await _close(tester);

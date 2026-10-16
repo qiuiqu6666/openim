@@ -19,6 +19,8 @@ class IMConnectionRecovery with WidgetsBindingObserver {
     Future<List<ConnectivityResult>> Function()? networkSnapshot,
     this.syncRecoverySignals,
     this.onWakeSucceeded,
+    this.onCheckingChanged,
+    this.onConnectionVerified,
     this.retryInterval = const Duration(seconds: 3),
     this.maxRetryInterval = const Duration(seconds: 30),
     this.connectedCheckInterval = const Duration(minutes: 1),
@@ -41,6 +43,8 @@ class IMConnectionRecovery with WidgetsBindingObserver {
   final Future<List<ConnectivityResult>> Function()? _networkSnapshot;
   final Stream<void>? syncRecoverySignals;
   final VoidCallback? onWakeSucceeded;
+  final ValueChanged<bool>? onCheckingChanged;
+  final ValueChanged<bool>? onConnectionVerified;
   StreamSubscription<List<ConnectivityResult>>? _network;
   StreamSubscription<void>? _syncRecovery;
   Timer? _retry;
@@ -69,6 +73,7 @@ class IMConnectionRecovery with WidgetsBindingObserver {
       },
     );
     _syncRecovery = syncRecoverySignals?.listen((_) {
+      if (isDisconnected()) onConnectionVerified?.call(false);
       // Connection transitions and sync failures may arrive without an OS
       // event. Sync finishes are not fed back here: our own wake must not
       // create a repeating successful-sync/wake loop.
@@ -153,6 +158,8 @@ class IMConnectionRecovery with WidgetsBindingObserver {
     }
     final cancelled = Completer<void>();
     _wakeWait = cancelled;
+    onConnectionVerified?.call(false);
+    onCheckingChanged?.call(true);
     bool currentAttempt() =>
         _active &&
         _foreground &&
@@ -166,6 +173,7 @@ class IMConnectionRecovery with WidgetsBindingObserver {
           .timeout(wakeTimeout);
       if (currentAttempt()) {
         _wakeFailed = false;
+        onConnectionVerified?.call(true);
         onWakeSucceeded?.call();
         if (isDisconnected() ||
             isSyncFailed?.call() == true ||
@@ -178,15 +186,21 @@ class IMConnectionRecovery with WidgetsBindingObserver {
     } catch (error) {
       if (currentAttempt()) {
         _wakeFailed = true;
+        onConnectionVerified?.call(false);
         _unhealthyAttempts++;
         onError(error);
       }
     } finally {
-      if (identical(_wakeWait, cancelled)) _wakeWait = null;
+      if (identical(_wakeWait, cancelled)) {
+        _wakeWait = null;
+        onCheckingChanged?.call(false);
+      }
     }
   }
 
   void _cancelWakeWait() {
+    onConnectionVerified?.call(false);
+    if (_wakeWait != null) onCheckingChanged?.call(false);
     _wakeWait?.complete();
     _wakeWait = null;
   }

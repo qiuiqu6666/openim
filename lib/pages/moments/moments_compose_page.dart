@@ -539,10 +539,18 @@ class _MomentsComposePageState extends State<MomentsComposePage>
                     ? _publish
                     : null,
                 style: TextButton.styleFrom(
-                    foregroundColor: MomentsTheme.name(dark),
-                    disabledForegroundColor: MomentsTheme.secondary(dark)),
+                    foregroundColor: MomentsTheme.card(false),
+                    backgroundColor: MomentsTheme.name(false),
+                    disabledBackgroundColor: MomentsTheme.panel(dark),
+                    disabledForegroundColor: MomentsTheme.secondary(dark),
+                    minimumSize: const Size(MomentsComposerSpacing.publishWidth,
+                        MomentsLayout.touchTarget),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                            MomentsSecondaryLayout.addButtonRadius))),
                 child: Text(_publishLabel(),
                     style: const TextStyle(fontWeight: FontWeight.w600))),
+            const SizedBox(width: MomentsSecondaryLayout.avatarGap),
           ],
         ),
         body: SafeArea(
@@ -568,7 +576,7 @@ class _MomentsComposePageState extends State<MomentsComposePage>
                             keyboardDismissBehavior:
                                 ScrollViewKeyboardDismissBehavior.onDrag,
                             padding: const EdgeInsets.all(
-                                MomentsSecondaryLayout.pageInset),
+                                MomentsComposerSpacing.pageInset),
                             children: [
                                 if (!_store.sessionCurrent)
                                   _banner(

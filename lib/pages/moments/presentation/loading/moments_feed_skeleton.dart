@@ -30,42 +30,36 @@ class MomentsFeedSkeleton extends StatelessWidget {
       child: Column(children: [
         for (var i = 0; i < 3; i++)
           Padding(
-            padding: const EdgeInsets.all(MomentsLayout.cardMargin),
-            child: Padding(
-              padding: MomentsLayout.cardPadding,
-              child: LayoutBuilder(
-                  builder: (context, bounds) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [
-                            bone(MomentsLayout.avatarSize,
-                                MomentsLayout.avatarSize,
-                                avatar: true),
-                            const SizedBox(width: AppTokens.s3),
-                            Expanded(
-                                child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                  bone(bounds.maxWidth * .35,
-                                      MomentsLayout.nameSize),
-                                  const SizedBox(height: AppTokens.s2),
-                                  bone(bounds.maxWidth * .2,
-                                      MomentsLayout.timeSize),
-                                ])),
-                          ]),
-                          const SizedBox(height: AppTokens.s4),
-                          bone(bounds.maxWidth, MomentsLayout.bodySize),
-                          const SizedBox(height: AppTokens.s2),
-                          bone(bounds.maxWidth * .65, MomentsLayout.bodySize),
-                          const SizedBox(height: AppTokens.s3),
-                          bone(bounds.maxWidth * .65,
-                              MomentsLayout.timelineMediaSize),
-                          const SizedBox(height: AppTokens.s4),
-                          Divider(color: fill),
-                        ],
-                      )),
-            ),
+            padding: MomentsLayout.feedPadding,
+            child: Column(children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                SizedBox(
+                    width: MomentsLayout.touchTarget,
+                    child: Center(
+                        child: bone(MomentsLayout.avatarSize,
+                            MomentsLayout.avatarSize))),
+                const SizedBox(width: MomentsLayout.feedColumnGap),
+                Expanded(
+                    child: LayoutBuilder(
+                        builder: (context, bounds) => Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                bone(bounds.maxWidth * .35,
+                                    MomentsLayout.nameSize),
+                                const SizedBox(height: AppTokens.s2),
+                                bone(bounds.maxWidth, MomentsLayout.bodySize),
+                                const SizedBox(height: AppTokens.s3),
+                                bone(bounds.maxWidth * .65,
+                                    MomentsLayout.timelineMediaSize),
+                                const SizedBox(height: AppTokens.s3),
+                                bone(bounds.maxWidth * .2,
+                                    MomentsLayout.timeSize),
+                              ],
+                            ))),
+              ]),
+              const SizedBox(height: AppTokens.s3),
+              Divider(color: fill),
+            ]),
           ),
       ]),
     );

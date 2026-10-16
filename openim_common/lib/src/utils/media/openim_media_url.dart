@@ -6,6 +6,7 @@ class OpenIMMediaUrl {
   OpenIMMediaUrl._();
 
   static String resolve(String value, {required String imApiUrl}) {
+    value = repairThumbnail(value);
     final source = _HttpUrl.read(value);
     if (source == null || hasSignedQuery(value) || _unsafePath(source.path)) {
       return value;
@@ -87,8 +88,41 @@ class OpenIMMediaUrl {
             .any((part) => !_transformKeys.contains(_queryKey(part)))) {
       return value;
     }
+    if (_isOwnedOss(url.uri)) {
+      return '${url.head}?x-oss-process=image/resize,m_lfit,w_$width,h_$height'
+          '${url.fragment}';
+    }
     return '${url.head}?height=$height&width=$width&type=image${url.fragment}';
   }
+
+  /// Repair persisted SDK thumbnails as they enter any image/cache consumer.
+  /// Originals, signatures and pre-existing OSS transformations stay untouched.
+  static String repairThumbnail(String value) {
+    final url = _HttpUrl.read(value);
+    if (url == null || !_isOwnedOss(url.uri)) return value;
+    try {
+      final query = url.uri.queryParametersAll;
+      if (query['type']?.singleOrNull != 'image' ||
+          query.values.any((values) => values.length != 1)) {
+        return value;
+      }
+      final width = int.tryParse(query['width']?.singleOrNull ?? '');
+      final height = int.tryParse(query['height']?.singleOrNull ?? '');
+      if (width == null || height == null) return value;
+      return thumbnail(value, width: width, height: height);
+    } on FormatException {
+      return value;
+    }
+  }
+
+  static bool _isOwnedOss(Uri uri) =>
+      (uri.port == 443 && uri.scheme == 'https' ||
+          uri.port == 80 && uri.scheme == 'http') &&
+      const {
+        '99chat-openim-media.oss-cn-hongkong.aliyuncs.com',
+        '99chat.oss-cn-hongkong.aliyuncs.com',
+        '99chat-attachments.oss-cn-hongkong.aliyuncs.com',
+      }.contains(uri.host.toLowerCase());
 
   static const _transformKeys = {'height', 'width', 'type'};
   static const _signedKeys = {

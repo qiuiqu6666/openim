@@ -53,6 +53,10 @@ class MomentsMediaGrid extends StatelessWidget {
                         ((item.width ?? 0) <= 0 || (item.height ?? 0) <= 0)
                     ? BoxFit.contain
                     : BoxFit.cover,
+                alignment:
+                    !detail && media.length == 1 && longImage && !item.isVideo
+                        ? Alignment.topCenter
+                        : Alignment.center,
                 onDimensions: onDimensions,
               ),
               if (item.isVideo)
@@ -83,6 +87,7 @@ class MomentsMediaGrid extends StatelessWidget {
       return MomentsSingleMediaFrame(
           media: media.first,
           maxLongImageHeight: detail ? 520 : 420,
+          compactTallImages: !detail && !media.first.isVideo,
           imageBuilder: (callback) => tile(0, onDimensions: callback));
     }
     return GridView.builder(

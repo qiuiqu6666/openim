@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:extended_image/extended_image.dart';
 
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -65,10 +66,16 @@ class MediaGridThumbnail extends StatelessWidget {
             if (!source.isVideo && source.bytes != null) {
               return image(MemoryImage(source.bytes!));
             }
-            Widget remote() =>
-                !source.isVideo && source.url?.startsWith('http') == true
-                    ? image(NetworkImage(source.url!))
-                    : placeholder(failed: true);
+            Widget remote() => !source.isVideo &&
+                    (!source.deferOriginal ||
+                        (source.previewUrl != null &&
+                            source.previewUrl != source.url)) &&
+                    (source.previewUrl ?? source.url)?.startsWith('http') ==
+                        true
+                ? image(ExtendedNetworkImageProvider(
+                    source.previewUrl ?? source.url!,
+                    cache: true))
+                : placeholder(failed: true);
             final file = source.isVideo ? null : source.file;
             if (file == null) return remote();
             return FutureBuilder<bool>(
@@ -82,9 +89,11 @@ class MediaGridThumbnail extends StatelessWidget {
           }
 
           final uri = source.thumbnail;
+          if (source.deferOriginal && uri == source.url) return original();
           if (uri.isEmpty) return original();
           if (uri.startsWith('http')) {
-            return image(NetworkImage(uri), onFailure: original);
+            return image(ExtendedNetworkImageProvider(uri, cache: true),
+                onFailure: original);
           }
           final file = File(
               uri.startsWith('file://') ? Uri.parse(uri).toFilePath() : uri);

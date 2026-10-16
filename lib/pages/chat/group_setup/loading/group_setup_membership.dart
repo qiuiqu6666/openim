@@ -7,10 +7,12 @@ class GroupSetupMembership {
   GroupSetupMembership({
     this.timeout = const Duration(seconds: 8),
     this.retryDelay = const Duration(milliseconds: 500),
+    this.syncTimeout = const Duration(seconds: 20),
   });
 
   final Duration timeout;
   final Duration retryDelay;
+  final Duration syncTimeout;
   final resolved = false.obs;
   final failed = false.obs;
   Future<void>? _flight;
@@ -18,6 +20,8 @@ class GroupSetupMembership {
   Completer<bool>? _retry;
   int _generation = 0;
   bool _closed = false;
+  Timer? _syncTimer;
+  bool _waitingForSync = false;
 
   Future<void> refresh({
     required Future<bool> Function() query,
@@ -25,6 +29,7 @@ class GroupSetupMembership {
     required void Function(bool) onResult,
   }) {
     if (_closed || !isCurrent()) return Future.value();
+    _cancelSyncWait();
     if (_flight != null) return _flight!;
     final generation = ++_generation;
     failed.value = false;
@@ -68,13 +73,27 @@ class GroupSetupMembership {
   }
 
   /// Sync completion will start a fresh read; keep the last known page state.
-  void defer() {
+  void defer({bool Function()? isCurrent, bool restart = false}) {
+    if (_closed || (isCurrent != null && !isCurrent())) return;
+    // Progress events must not keep extending an unresolved page's deadline.
+    if (_waitingForSync && !restart) return;
+    _cancelSyncWait();
     _invalidate();
+    _waitingForSync = true;
     failed.value = false;
+    if (!resolved.value) {
+      _syncTimer = Timer(syncTimeout, () {
+        _syncTimer = null;
+        if (!_closed && (isCurrent == null || isCurrent())) {
+          failed.value = true;
+        }
+      });
+    }
   }
 
   /// A current chat snapshot or SDK membership event supersedes pending reads.
   void accept() {
+    _cancelSyncWait();
     _invalidate();
     resolved.value = true;
     failed.value = false;
@@ -92,6 +111,13 @@ class GroupSetupMembership {
 
   void dispose() {
     _closed = true;
+    _cancelSyncWait();
     _invalidate();
+  }
+
+  void _cancelSyncWait() {
+    _syncTimer?.cancel();
+    _syncTimer = null;
+    _waitingForSync = false;
   }
 }

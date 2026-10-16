@@ -84,6 +84,7 @@ void main() {
         sender: ChatMessageSender(transport: (m, t) => transport(m, t)),
         confirmTimeout: const Duration(milliseconds: 20));
     media = ChatMediaController(
+      chooseOriginal: () async => false,
       conversationID: () => 'chat-a',
       isClosed: () => false,
       sendingMuted: () => false,

@@ -31,3 +31,5 @@ iOS SDK 清理使用 `endRemotePushSession(waitForRemote: false)`：等待本机
 `CurrentUserProfileSource` 使用现有 Chat `/user/find/full` 接口（`Urls.getUsersFullInfo`）与 `HttpUtil`，请求携带捕获的账号和 token；后台失败本身不会清凭据或导航。`HttpUtil` 统一负责当前 token 的 1501–1507、20101 和 100010 失效事件，`IMController` 只识别错误，不再重复发布事件，并在所有异步返回后检查代次、账号、token、关闭状态和目标 Rx 所有权。旧 token 或未携带 token 的响应不会结束当前会话。主页按当前语言显示登录失效提示；请求层记录该提示的所有权，避免同一次请求重复提示。
 
 登录页通过 `Apis.login` 的可选 `isCurrent`/`showErrorToast` 请求所有权参数管理认证异常反馈；当前失败由页面反馈，关闭或凭据已改变的旧失败丢弃。共用 API helper 仅记录错误，网络异常不清凭据或导航，登录失效由请求层的 token 保护和主页退出流程处理。登录页认证返回后再次检查所有权，避免旧成功覆盖后来写入的凭据。
+
+消息和群聊标题通过 `IMController.connectionChecking` 观察当前恢复等待，并用独立的 `connectionVerified` 保存本轮原生前台确认结果。只有当前恢复获得成功确认、SDK 明确为连接成功、API 检查正常且延迟有效时，才显示正常延迟胶囊。等待结束不等于确认成功：超时、失败、后台、网络断开或新一轮恢复均不能沿用旧确认，迟到回调也不能确认后续恢复；未确认时保留“连接中...”，明确连接或服务失败仍显示失败状态。确认连接不代表消息已全部同步完成。

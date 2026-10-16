@@ -117,46 +117,6 @@ class _MomentsCoverHeaderState extends State<MomentsCoverHeader> {
                       ),
                     ),
                     Positioned(
-                      left: 28,
-                      right: 96,
-                      top: MediaQuery.paddingOf(context).top + 64,
-                      child: IgnorePointer(
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                            Text(
-                                momentsText(context,
-                                    zh: '生活很美好', en: 'Life is beautiful'),
-                                key: const ValueKey('moments_header_title'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    color: MomentsTheme.coverForeground,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w300,
-                                    shadows: [
-                                      Shadow(
-                                          color: MomentsTheme.coverShadow,
-                                          blurRadius: 8)
-                                    ])),
-                            const SizedBox(height: 6),
-                            Text(
-                                momentsText(context,
-                                    zh: '记录每一个平凡的日子',
-                                    en: 'Record each ordinary day'),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    color: MomentsTheme.coverSecondary,
-                                    fontSize: 13,
-                                    shadows: [
-                                      Shadow(
-                                          color: MomentsTheme.coverShadow,
-                                          blurRadius: 8)
-                                    ])),
-                          ])),
-                    ),
-                    Positioned(
                       top: 0,
                       left: 0,
                       right: 0,

@@ -39,6 +39,7 @@ class ChatMediaController {
     Future<List<AssetEntity>?> Function()? pickAssets,
     Future<AssetEntity?> Function()? pickCamera,
     Future<File?> Function(File)? compressImage,
+    Future<bool?> Function()? chooseOriginal,
     this.assetReadTimeout = const Duration(seconds: 30),
     this.imageCompressionTimeout = const Duration(seconds: 10),
     this.messageCreationTimeout = const Duration(seconds: 15),
@@ -54,6 +55,7 @@ class ChatMediaController {
         _pickAssets = pickAssets,
         _pickCamera = pickCamera,
         _compressImage = compressImage ?? _compressChatImage,
+        _chooseOriginal = chooseOriginal ?? chooseChatMediaOriginal,
         _onPreparationFailed =
             onPreparationFailed ?? (() => IMViews.showToast(StrRes.sendFailed));
 
@@ -69,6 +71,7 @@ class ChatMediaController {
   final Future<List<AssetEntity>?> Function()? _pickAssets;
   final Future<AssetEntity?> Function()? _pickCamera;
   final Future<File?> Function(File) _compressImage;
+  final Future<bool?> Function() _chooseOriginal;
   final void Function() _onPreparationFailed;
   final Duration assetReadTimeout,
       imageCompressionTimeout,
@@ -122,9 +125,12 @@ class ChatMediaController {
       ..sort((a, b) => (a.sendTime ?? 0).compareTo(b.sendTime ?? 0));
   }
 
-  Future sendPicture({required String path, bool sendNow = true}) async {
+  Future sendPicture(
+      {required String path,
+      bool sendNow = true,
+      bool original = false}) async {
     try {
-      final message = await _preparePicture(path);
+      final message = await _preparePicture(path, originalQuality: original);
       if (message == null || isClosed) return;
       if (sendNow) {
         return await _sendMessage(message);
@@ -140,7 +146,9 @@ class ChatMediaController {
   }
 
   Future<Message?> _preparePicture(String path,
-      {bool Function()? cancelled, ChatMediaTrace? trace}) async {
+      {bool Function()? cancelled,
+      ChatMediaTrace? trace,
+      bool originalQuality = false}) async {
     trace ??= ChatMediaTrace();
     final stopped = cancelled ?? () => isClosed;
     if (stopped()) return null;
@@ -155,12 +163,21 @@ class ChatMediaController {
     final conversionRequired =
         {'.heic', '.heif'}.contains(p.extension(path).toLowerCase());
     try {
-      final compressed = await trace.run('compress_image',
-          () => _compressImage(original).timeout(imageCompressionTimeout));
+      final compressed = originalQuality && !conversionRequired
+          ? original
+          : await trace.run(
+              'compress_image',
+              () => (originalQuality
+                      ? IMUtils.compressImageAndGetFile(original,
+                          quality: 100, convertToJpeg: true)
+                      : _compressImage(original))
+                  .timeout(imageCompressionTimeout));
       if (stopped()) return null;
       if (compressed != null &&
           await compressed.exists() &&
-          await compressed.length() > 0) {
+          await compressed.length() > 0 &&
+          (conversionRequired ||
+              await compressed.length() <= await original.length())) {
         file = compressed;
       }
     } catch (error) {
@@ -257,10 +274,10 @@ class ChatMediaController {
 
   Future<void> _sendSelectedAssets(List<AssetEntity> assets,
       {required void Function() onPrepared}) async {
-    final quality = assets.any((asset) => asset.type == AssetType.video)
-        ? await chooseChatVideoQuality()
-        : ChatVideoQuality.original;
-    if (quality == null || isClosed) return;
+    final original = await _chooseOriginal();
+    if (original == null || isClosed) return;
+    final quality =
+        original ? ChatVideoQuality.original : ChatVideoQuality.standard;
     // Only picker/quality dialogs are exclusive. Local preparation and upload
     // must not prevent opening the next attachment picker.
     final task = acceptSendTask?.call();
@@ -514,7 +531,7 @@ class ChatMediaController {
   }
 
   Future<Message?> _prepareAsset(AssetEntity asset,
-      {ChatVideoQuality quality = ChatVideoQuality.original,
+      {ChatVideoQuality quality = ChatVideoQuality.standard,
       bool Function()? cancelled}) async {
     final stopped = cancelled ?? () => isClosed;
     final trace = ChatMediaTrace();
@@ -532,7 +549,10 @@ class ChatMediaController {
     final path = originalFile.path;
     switch (asset.type) {
       case AssetType.image:
-        return _preparePicture(path, cancelled: stopped, trace: trace);
+        return _preparePicture(path,
+            cancelled: stopped,
+            trace: trace,
+            originalQuality: quality == ChatVideoQuality.original);
       case AssetType.video:
         final prepared = await prepareChatVideo(originalFile, quality);
         if (stopped()) return null;

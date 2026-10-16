@@ -9,11 +9,13 @@ class MomentsSingleMediaFrame extends StatefulWidget {
     required this.media,
     required this.imageBuilder,
     this.maxLongImageHeight = 420,
+    this.compactTallImages = false,
   });
 
   final MomentMedia media;
   final Widget Function(ValueChanged<Size> onDimensions) imageBuilder;
   final double maxLongImageHeight;
+  final bool compactTallImages;
 
   @override
   State<MomentsSingleMediaFrame> createState() =>
@@ -49,6 +51,9 @@ class _MomentsSingleMediaFrameState extends State<MomentsSingleMediaFrame> {
     final ratio = _ratio;
     final child = widget.imageBuilder(_dimensions);
     return LayoutBuilder(builder: (context, constraints) {
+      if (widget.compactTallImages && ratio <= .5) {
+        return AspectRatio(aspectRatio: 2 / 3, child: child);
+      }
       if (ratio < .75 && constraints.maxWidth.isFinite) {
         final imageHeight = (constraints.maxWidth / ratio)
             .clamp(0.0, widget.maxLongImageHeight);

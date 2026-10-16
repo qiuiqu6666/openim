@@ -347,13 +347,53 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
           if (!_seenEvents.add(eventId)) return;
           if (_seenEvents.length > 256) _seenEvents.remove(_seenEvents.first);
         }
-        // Only the key and event ID are trusted here. Payloads are never posts,
-        // and aggregateVersion has no confirmed relation to post.version.
-        _relationChanged();
+        // Interaction events only invalidate their parent. Read authoritative
+        // data instead of clearing every visible query on our own SDK echo.
+        final action = data is Map ? data['action'] : null;
+        final momentId = data is Map ? data['momentId'] : null;
+        if (momentId is String &&
+            momentId.isNotEmpty &&
+            const {
+              'like',
+              'unlike',
+              'comment',
+              'delete-comment',
+              'LIKE_CHANGED',
+              'COMMENT_CREATED',
+              'COMMENT_ADDED',
+              'COMMENT_DELETED',
+              'COMMENT_CHANGED'
+            }.contains(action)) {
+          unawaited(_reloadInteraction(momentId));
+        } else {
+          // Unknown and permission-related events retain defensive invalidation.
+          _relationChanged();
+        }
       } catch (_) {
         /* Other business event types are handled by their owners. */
       }
     }));
+  }
+
+  Future<void> _reloadInteraction(String momentId) async {
+    final scope = sessionScope;
+    final permission = _permissionGeneration;
+    try {
+      if (_posts.containsKey(momentId) || _detailIds.contains(momentId)) {
+        await loadDetail(momentId, trackForSync: false);
+        if (!isSessionCurrent(scope) || permission != _permissionGeneration) {
+          return;
+        }
+        if (_detailIds.contains(momentId)) await loadComments(momentId);
+      }
+      if (!isSessionCurrent(scope) || permission != _permissionGeneration) {
+        return;
+      }
+      await loadNotifications();
+    } catch (_) {
+      // Reads enforce privacy/session failures themselves. A transient network
+      // failure must not erase unrelated, previously loaded posts.
+    }
   }
 
   void _relationChanged({List<MomentUser>? verifiedFriends}) {
