@@ -99,80 +99,120 @@ class ChatHistorySearchBar extends StatelessWidget {
                     height: inputHeight,
                     child: ValueListenableBuilder<TextEditingValue>(
                       valueListenable: controller,
-                      builder: (context, value, _) => TextField(
-                        key: const ValueKey('chat-history-search-input'),
-                        controller: controller,
-                        focusNode: focusNode,
-                        autofocus: autofocus,
-                        onTap: onTap,
-                        readOnly: readOnly,
-                        canRequestFocus: !readOnly,
-                        showCursor: !readOnly,
-                        enableInteractiveSelection: !readOnly,
-                        textInputAction: TextInputAction.search,
-                        textAlignVertical: TextAlignVertical.center,
-                        style: style,
-                        cursorColor: AppTokens.accent,
-                        onChanged: (value) => onChanged(graphemeTrim(value)),
-                        onSubmitted: (value) =>
-                            onSubmitted(graphemeTrim(value)),
-                        decoration: InputDecoration(
-                          hintText: hintText ??
-                              chatHistorySearchText(context, 'search'),
-                          hintStyle: style.copyWith(color: secondaryText),
-                          prefixIcon: Icon(
-                            Icons.search,
-                            size: ChatHistorySearchTokens.searchIconSize,
-                            color: secondaryText,
-                          ),
-                          prefixIconConstraints: const BoxConstraints(
-                            minWidth:
-                                ChatHistorySearchTokens.searchIconMinWidth,
-                            minHeight:
-                                ChatHistorySearchTokens.searchIconMinHeight,
-                          ),
-                          suffixIcon: graphemeTrim(value.text).isNotEmpty
-                              ? IconButton(
-                                  key: const ValueKey(
-                                      'chat-history-search-clear'),
-                                  tooltip:
-                                      chatHistorySearchText(context, 'clear'),
-                                  onPressed: () {
-                                    controller.clear();
-                                    onChanged('');
-                                  },
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: ChatHistorySearchTokens
-                                        .searchIconMinWidth,
-                                    minHeight: ChatHistorySearchTokens
-                                        .searchIconMinHeight,
-                                  ),
-                                  icon: Icon(
-                                    Icons.cancel,
-                                    size:
-                                        ChatHistorySearchTokens.searchIconSize,
-                                    color: secondaryText,
-                                  ),
-                                )
-                              : null,
-                          suffixIconConstraints: const BoxConstraints(
-                            minWidth:
-                                ChatHistorySearchTokens.searchIconMinWidth,
-                            minHeight:
-                                ChatHistorySearchTokens.searchIconMinHeight,
-                          ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          filled: false,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical:
-                                ChatHistorySearchTokens.searchVerticalPadding,
-                          ),
-                        ),
-                      ),
+                      builder: (context, value, _) {
+                        final centerHint = readOnly && value.text.isEmpty;
+                        final label = hintText ??
+                            chatHistorySearchText(context, 'search');
+                        return Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            TextField(
+                              key: const ValueKey('chat-history-search-input'),
+                              controller: controller,
+                              focusNode: focusNode,
+                              autofocus: autofocus,
+                              onTap: onTap,
+                              readOnly: readOnly,
+                              canRequestFocus: !readOnly,
+                              showCursor: !readOnly,
+                              enableInteractiveSelection: !readOnly,
+                              textInputAction: TextInputAction.search,
+                              textAlignVertical: TextAlignVertical.center,
+                              style: style,
+                              cursorColor: AppTokens.accent,
+                              onChanged: (value) =>
+                                  onChanged(graphemeTrim(value)),
+                              onSubmitted: (value) =>
+                                  onSubmitted(graphemeTrim(value)),
+                              decoration: InputDecoration(
+                                hintText: centerHint ? null : label,
+                                hintStyle: style.copyWith(color: secondaryText),
+                                prefixIcon: centerHint
+                                    ? null
+                                    : Icon(
+                                        Icons.search,
+                                        size: ChatHistorySearchTokens
+                                            .searchIconSize,
+                                        color: secondaryText,
+                                      ),
+                                prefixIconConstraints: const BoxConstraints(
+                                  minWidth: ChatHistorySearchTokens
+                                      .searchIconMinWidth,
+                                  minHeight: ChatHistorySearchTokens
+                                      .searchIconMinHeight,
+                                ),
+                                suffixIcon: graphemeTrim(value.text).isNotEmpty
+                                    ? IconButton(
+                                        key: const ValueKey(
+                                            'chat-history-search-clear'),
+                                        tooltip: chatHistorySearchText(
+                                            context, 'clear'),
+                                        onPressed: () {
+                                          controller.clear();
+                                          onChanged('');
+                                        },
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(
+                                          minWidth: ChatHistorySearchTokens
+                                              .searchIconMinWidth,
+                                          minHeight: ChatHistorySearchTokens
+                                              .searchIconMinHeight,
+                                        ),
+                                        icon: Icon(
+                                          Icons.cancel,
+                                          size: ChatHistorySearchTokens
+                                              .searchIconSize,
+                                          color: secondaryText,
+                                        ),
+                                      )
+                                    : null,
+                                suffixIconConstraints: const BoxConstraints(
+                                  minWidth: ChatHistorySearchTokens
+                                      .searchIconMinWidth,
+                                  minHeight: ChatHistorySearchTokens
+                                      .searchIconMinHeight,
+                                ),
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                filled: false,
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: ChatHistorySearchTokens
+                                      .searchVerticalPadding,
+                                ),
+                              ),
+                            ),
+                            if (centerHint)
+                              IgnorePointer(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.search,
+                                      size: ChatHistorySearchTokens
+                                          .searchIconSize,
+                                      color: secondaryText,
+                                    ),
+                                    const SizedBox(
+                                      width:
+                                          ChatHistorySearchTokens.searchHintGap,
+                                    ),
+                                    Flexible(
+                                      child: Text(
+                                        label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: style.copyWith(
+                                            color: secondaryText),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),

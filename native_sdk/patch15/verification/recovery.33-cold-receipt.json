@@ -1,0 +1,26 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.33-cold-receipt.1",
+  "date": "2026-10-16",
+  "log_evidence": {
+    "file": "open-im-sdk-core_temp.2026-10-15",
+    "interval": "2026-10-15 16:10:33–19:03:58 (timestamps as recorded)",
+    "cold_receipt_sync_failures": 107,
+    "error": "no such table: chat_logs_sg_...; GetMessagesBySeqs; pull-storage-checkpoint",
+    "limit": "Native log does not contain Flutter viewport/lifecycle state; exact UI incident time not supplied."
+  },
+  "pre_fix_reproduced": [
+    "Loaded chat following latest incorrectly defers a disjoint refreshed window",
+    "Real SQLite cold sequence lookup fails",
+    "Real notification receipt page fails without advancing checkpoint"
+  ],
+  "checks": {
+    "flutter": "33 tests passed: resume, history reader preservation, deferred paging, loader, background loading and message ingress",
+    "analyze": "No issues found in changed Dart implementation and test",
+    "sqlite_cgo": "go test ./pkg/db ./internal/conversation_msg ./internal/interaction -count=1 -timeout=120s passed with CGO_ENABLED=1",
+    "cgo_disabled_build_gate": "conversation_msg passed with CGO_ENABLED=0; real SQLite integration test is cgo-tagged",
+    "source_lock": "15 Python tests passed; 438 files locked; cumulative patch applies and 435 non-overlay source files match"
+  },
+  "android_binary": "not rebuilt",
+  "ios_framework": "not rebuilt; macOS required",
+  "device_runtime": "not tested; long-background device verification pending"
+}

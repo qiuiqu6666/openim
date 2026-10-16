@@ -16,7 +16,7 @@ typedef IOSCallKitSession = ({String accountID, String sessionKey});
 
 /// One native provider and one SDK/RTC owner share the same room identity.
 /// A PushKit payload alone is not proof that an OpenIM invitation is live.
-class IOSCallKitRuntime implements SystemCallAdapter {
+class IOSCallKitRuntime implements SystemCallAdapter, IncomingSystemCallPolicy {
   IOSCallKitRuntime({
     required this.sessionReady,
     required this.acceptCall,
@@ -285,6 +285,22 @@ class IOSCallKitRuntime implements SystemCallAdapter {
         _audioActive = false;
         await _platform.invoke<bool>('releaseAudioSession', _identity(owner));
       }
+    }
+  }
+
+  @override
+  Future<bool> usesSystemIncomingCall(String roomID) async {
+    await onSessionReady();
+    final owner = _owner;
+    if (owner == null || !_owns(owner, _generation)) return true;
+    // Native state includes PushKit calls delivered before Dart was ready.
+    // A missing/older bridge conservatively retains the system call path.
+    try {
+      return await _platform.invoke<bool>(
+              'usesSystemIncomingCall', _identity(owner, roomID)) !=
+          false;
+    } catch (_) {
+      return true;
     }
   }
 

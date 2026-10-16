@@ -76,6 +76,18 @@ class _Fixture {
 void main() {
   tearDown(Get.reset);
 
+  testWidgets('a one-row snapshot expanding to a full page fills the viewport',
+      (tester) async {
+    final f = _Fixture()..addHistory(1);
+    addTearDown(f.controller.dispose);
+    await f.pump(tester);
+    f.update(() => f.addHistory(30));
+    await tester.pumpAndSettle();
+    expect(f.visible(tester).length, greaterThanOrEqualTo(5));
+    expect(f.reports.last.distance, closeTo(0, 0.5));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'short history is top aligned on its first frame and has no scroll',
       (tester) async {

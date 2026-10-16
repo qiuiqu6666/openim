@@ -50,6 +50,22 @@ class _HeroWidgetState extends State<HeroWidget> {
         }
 
         if (flightDirection == HeroFlightDirection.pop) {
+          final destinationRoute = ModalRoute.of(toHeroContext);
+          // The shuttle lives above every route in the Navigator overlay.
+          // Stop painting as soon as its destination is popped as well, even
+          // when this return flight has not finished yet.
+          Widget scopedToDestination(Widget child) => AnimatedBuilder(
+                animation: Listenable.merge([
+                  animation,
+                  if (destinationRoute?.animation != null)
+                    destinationRoute!.animation!,
+                ]),
+                builder: (_, child) => Offstage(
+                  offstage: destinationRoute?.isActive == false,
+                  child: child,
+                ),
+                child: child,
+              );
           final bool fixTransform = widget.slideType == SlideType.onlyImage &&
               (widget.slidePagekey.currentState!.offset != Offset.zero ||
                   widget.slidePagekey.currentState!.scale != 1.0);
@@ -76,9 +92,9 @@ class _HeroWidgetState extends State<HeroWidget> {
             ],
           );
 
-          if (!fixTransform) return content;
+          if (!fixTransform) return scopedToDestination(content);
           final slidePage = widget.slidePagekey.currentState!;
-          return MatrixTransition(
+          return scopedToDestination(MatrixTransition(
             animation: animation,
             onTransform: (value) {
               final offset = slidePage.offset * value;
@@ -87,7 +103,7 @@ class _HeroWidgetState extends State<HeroWidget> {
                 ..scaleByDouble(scale, scale, 1, 1);
             },
             child: content,
-          );
+          ));
         }
         // The shuttle has its own subtree; never duplicate _contentKey here.
         return widget.child;

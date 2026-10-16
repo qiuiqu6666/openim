@@ -548,6 +548,11 @@ func (d *DataBase) GetMessagesByClientMsgIDs(ctx context.Context, conversationID
 }
 
 func (d *DataBase) GetMessagesBySeqs(ctx context.Context, conversationID string, seqs []int64) (msgs []*model_struct.LocalChatLog, err error) {
+	// A receipt can precede the first cached message for this conversation.
+	// Match ID-based reads: an uninitialized cache is empty, not a sync error.
+	if err = d.initChatLog(ctx, conversationID); err != nil {
+		return nil, err
+	}
 	d.mRWMutex.RLock()
 	defer d.mRWMutex.RUnlock()
 	err = errs.WrapMsg(d.conn.WithContext(ctx).Table(utils.GetConversationTableName(conversationID)).Where("seq IN ?", seqs).Order("send_time DESC").Find(&msgs).Error, "GetMessagesBySeqs error")

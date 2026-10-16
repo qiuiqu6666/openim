@@ -92,10 +92,9 @@ packages:
   azlistview:
     dependency: "direct main"
     description:
-      name: azlistview
-      sha256: "93e865f11777a271b439f0d6b00799c0797e9daeec2e082a2e01373809c4b90d"
-      url: "https://pub.dev"
-    source: hosted
+      path: "local_plugin/azlistview"
+      relative: true
+    source: path
     version: "2.0.0"
   boolean_selector:
     dependency: transitive

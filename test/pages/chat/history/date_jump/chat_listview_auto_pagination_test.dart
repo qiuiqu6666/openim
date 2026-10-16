@@ -16,6 +16,7 @@ class _PagingFixture {
   Object? pagingWindow;
   bool historyLoading = false;
   bool initialLoading = false;
+  bool fillViewport = false;
   String? historyError;
   int olderCalls = 0;
   int newerCalls = 0;
@@ -30,6 +31,7 @@ class _PagingFixture {
           itemCount: ids.length,
           messageIDs: withIDs ? ids : null,
           loadOnInit: false,
+          fillViewport: fillViewport,
           hasMore: olderHasMore,
           newerHasMore: newerHasMore,
           pagingWindow: pagingWindow,
@@ -101,6 +103,88 @@ class _PagingFixture {
 
 void main() {
   tearDown(Get.reset);
+
+  for (final brightness in Brightness.values) {
+    testWidgets('short latest page fills without a drag in ${brightness.name}',
+        (tester) async {
+      final f = _PagingFixture()
+        ..ids = ['latest']
+        ..fillViewport = true
+        ..enabledNewer = false
+        ..olderHasMore = true;
+      f.readOlder = () async {
+        f.update(() => f.ids.addAll(
+            List.generate(3, (i) => 'older-${f.olderCalls}-$i')));
+        return true;
+      };
+      await f.mount(tester, brightness: brightness);
+      expect(f.olderCalls, 2);
+      expect(f.scroll.position.maxScrollExtent,
+          greaterThan(f.scroll.position.minScrollExtent));
+      expect(f.scroll.offset, closeTo(f.scroll.position.minScrollExtent, 0.5));
+      expect(find.text('older-1-0'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('viewport fill stops when a page makes no progress', (tester) async {
+    final f = _PagingFixture()
+      ..ids = ['latest']
+      ..fillViewport = true
+      ..enabledNewer = false;
+    f.readOlder = () async => true;
+    await f.mount(tester);
+    expect(f.olderCalls, 1);
+    f.update(() {});
+    await tester.pumpAndSettle();
+    expect(f.olderCalls, 1);
+  });
+
+  testWidgets('viewport fill waits for initial history and stops at its end',
+      (tester) async {
+    final f = _PagingFixture()
+      ..ids = ['latest']
+      ..fillViewport = true
+      ..enabledNewer = false
+      ..initialLoading = true;
+    await f.mount(tester);
+    expect(f.olderCalls, 0);
+    f.update(() => f.initialLoading = false);
+    await tester.pumpAndSettle();
+    expect(f.olderCalls, 1);
+    f.update(() => f.ids.add('another'));
+    await tester.pumpAndSettle();
+    expect(f.olderCalls, 1);
+  });
+
+  testWidgets('viewport fill leaves a date window at its selected anchor',
+      (tester) async {
+    final f = _PagingFixture()
+      ..ids = ['selected']
+      ..fillViewport = true;
+    await f.mount(tester);
+    expect(f.olderCalls, 0);
+    expect(f.newerCalls, 0);
+  });
+
+  testWidgets('viewport fill failure waits for explicit retry', (tester) async {
+    final f = _PagingFixture()
+      ..ids = ['latest']
+      ..fillViewport = true
+      ..enabledNewer = false;
+    f.readOlder = () async => throw StateError('offline');
+    await f.mount(tester);
+    expect(f.olderCalls, 1);
+    expect(find.byType(TextButton), findsOneWidget);
+    f.update(() {});
+    await tester.pumpAndSettle();
+    expect(f.olderCalls, 1);
+    f.readOlder = () async => false;
+    await tester.tap(find.byType(TextButton));
+    await tester.pumpAndSettle();
+    expect(f.olderCalls, 2);
+    expect(find.byType(TextButton), findsNothing);
+  });
 
   testWidgets('reversing to newer while older loads keeps its own boundary',
       (tester) async {

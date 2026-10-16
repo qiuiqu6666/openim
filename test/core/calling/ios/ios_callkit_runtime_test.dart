@@ -13,6 +13,7 @@ class FakePlatform implements IOSCallKitPlatform {
   final tokenStream = StreamController<APNsDeviceToken>.broadcast();
   final operations = <(String, Map<String, dynamic>?)>[];
   bool failPause = false;
+  bool? systemIncoming;
   @override
   Stream<Map<String, dynamic>> get events => eventStream.stream;
   @override
@@ -26,6 +27,7 @@ class FakePlatform implements IOSCallKitPlatform {
       throw StateError('offline native');
     }
     final Object? value = switch (method) {
+      'usesSystemIncomingCall' => systemIncoming,
       'getState' => {'audioActive': false},
       'getCachedTokens' => null,
       'drainPendingEvents' => <Object?>[],
@@ -129,6 +131,24 @@ void main() {
   });
   tearDown(() async {
     await runtime.dispose();
+  });
+
+  test('foreground incoming selects in-app ownership without reporting CallKit', () async {
+    platform.systemIncoming = false;
+    expect(await runtime.usesSystemIncomingCall(call.roomID), isFalse);
+    expect(platform.operations.last.$1, 'usesSystemIncomingCall');
+    expect(platform.operations.last.$2,
+        {'accountID': 'me', 'sessionKey': 'key', 'roomID': call.roomID});
+    expect(platform.operations.any((op) => op.$1 == 'reportIncomingCall'), isFalse);
+  });
+
+  test('background or existing PushKit calls retain system ownership', () async {
+    platform.systemIncoming = true;
+    expect(await runtime.usesSystemIncomingCall(call.roomID), isTrue);
+  });
+
+  test('older native bridge retains system ownership', () async {
+    expect(await runtime.usesSystemIncomingCall(call.roomID), isTrue);
   });
 
   test('local-only cleanup still waits for media and releases old audio', () async {

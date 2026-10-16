@@ -184,7 +184,10 @@ class SelectContactsLogic extends GetxController
           showNotificationAccounts: action == SelAction.forward);
 
   Future<void> reloadRecentConversations() async {
-    if (!selectionCurrent || hiddenConversations || _validatingRecipients) {
+    if (!selectionCurrent ||
+        hiddenConversations ||
+        _validatingRecipients ||
+        _confirmingSelection.value) {
       return;
     }
     final generation = ++_recentGeneration;
@@ -329,24 +332,37 @@ class SelectContactsLogic extends GetxController
 
   Future<void> confirmSelectedList() async {
     if (!enabledConfirmButton || !selectionCurrent) return;
+    final resumeLoading = recentLoading.value;
+    // Confirmation owns the selected recipients. Unrelated directory checks
+    // must neither delay it nor change its selection while the dialog is open.
+    ++_recentGeneration;
+    recentLoading.value = false;
     _confirmingSelection.value = true;
+    var submitted = false;
     try {
-      await _confirmSelectedList();
+      submitted = await _confirmSelectedList();
     } finally {
-      if (!isClosed) _confirmingSelection.value = false;
+      if (!isClosed) {
+        _confirmingSelection.value = false;
+        if (!submitted &&
+            selectionCurrent &&
+            (resumeLoading || recentLoadFailed.value)) {
+          unawaited(reloadRecentConversations());
+        }
+      }
     }
   }
 
-  Future<void> _confirmSelectedList() async {
+  Future<bool> _confirmSelectedList() async {
     _removeUnavailableSelections();
     if (action == SelAction.recommend &&
         sharedContact != null &&
         !allowsSelection(sharedContact)) {
-      return;
+      return false;
     }
     if (action == SelAction.forward || action == SelAction.recommend) {
       final recipients = checkedList.values.toList();
-      if (recipients.isEmpty) return;
+      if (recipients.isEmpty) return false;
       final contact = sharedContact;
       final sure =
           await Get.dialog(action == SelAction.recommend && contact != null
@@ -403,7 +419,7 @@ class SelectContactsLogic extends GetxController
         } finally {
           _validatingRecipients = false;
         }
-        if (!selectionCurrent) return;
+        if (!selectionCurrent) return false;
         _removeUnavailableSelections();
         if (!valid ||
             recipients.any((info) =>
@@ -412,16 +428,19 @@ class SelectContactsLogic extends GetxController
           IMViews.showToast(Get.locale?.languageCode == 'zh'
               ? '部分群聊已不可用或暂时无法确认入群状态，请检查后重试'
               : 'Some groups are unavailable or could not be verified. Please review and retry.');
-          unawaited(reloadRecentConversations());
-          return;
+          recentLoadFailed.value = true;
+          return false;
         }
         Get.back(result: {
           "checkedList": recipients,
         });
+        return true;
       }
     } else {
       Get.back(result: Map<String, dynamic>.from(checkedList));
+      return true;
     }
+    return false;
   }
 
   Future<void> confirmSelectedItem(dynamic info) async {

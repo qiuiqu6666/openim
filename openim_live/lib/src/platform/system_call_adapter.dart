@@ -38,3 +38,9 @@ abstract interface class SystemCallAdapter {
   Future<void> speakerChanged(SystemCallDescriptor call, bool enabled);
   Future<void> callEnded(SystemCallDescriptor call, CallTermination result);
 }
+
+/// Chooses the owner once per incoming call, before media or ringing starts.
+/// Existing native calls must retain their system answer/audio lifecycle.
+abstract interface class IncomingSystemCallPolicy {
+  Future<bool> usesSystemIncomingCall(String roomID);
+}

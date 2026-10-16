@@ -26,6 +26,74 @@ Widget host(Widget child,
 
 void main() {
   testWidgets(
+      'sweep advances without relayout and stops when motion is disabled',
+      (tester) async {
+    Widget view({bool reduced = false, bool active = true}) => host(
+        TickerMode(
+            enabled: active, child: const ChatEntrySkeleton(isGroup: false)),
+        reduceMotion: reduced);
+    await tester.pumpWidget(view());
+    final firstMask = tester.widget<ShaderMask>(find.byType(ShaderMask));
+    final bubble = find.byType(ChatBubble).last;
+    final rect = tester.getRect(bubble);
+    final element = tester.element(bubble);
+    await tester.pump(const Duration(milliseconds: 450));
+    expect(tester.widget<ShaderMask>(find.byType(ShaderMask)).shaderCallback,
+        isNot(same(firstMask.shaderCallback)));
+    expect(tester.getRect(bubble), rect);
+    expect(tester.element(bubble), same(element));
+    await tester.pumpWidget(view(reduced: true));
+    await tester.pumpAndSettle();
+    expect(find.byType(ShaderMask), findsNothing);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.pumpWidget(view(active: false));
+    await tester.pumpAndSettle();
+    expect(find.byType(ShaderMask), findsNothing);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.pumpWidget(view());
+    await tester.pump(const Duration(milliseconds: 450));
+    expect(find.byType(ShaderMask), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('latest placeholder geometry stays anchored on viewport resize',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(375, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    List<Size>? previousSizes;
+    List<BubbleType>? previousDirections;
+    for (final height in [720.0, 420.0, 180.0]) {
+      await tester.pumpWidget(host(
+          const ChatEntrySkeleton(isGroup: false, latestOutgoing: true),
+          size: Size(375, height),
+          reduceMotion: true));
+      await tester.pumpAndSettle();
+      final bubbles = find.byType(ChatBubble);
+      final latest = bubbles.evaluate().length - 1;
+      final sizes = [
+        for (var i = latest - 2; i <= latest; i++) tester.getSize(bubbles.at(i))
+      ];
+      final directions = [
+        for (var i = latest - 2; i <= latest; i++)
+          tester.widget<ChatBubble>(bubbles.at(i)).bubbleType
+      ];
+      if (previousSizes != null) {
+        expect(sizes, previousSizes);
+        expect(directions, previousDirections);
+      }
+      previousSizes = sizes;
+      previousDirections = directions;
+      expect(
+          tester.getBottomRight(find.byType(ChatEntrySkeleton)).dy -
+              tester.getBottomRight(bubbles.last).dy,
+          closeTo(AppTokens.s4, .01));
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets(
       'paint timing ignores hidden content and separates reveal from interaction',
       (tester) async {
     final frames = <bool>[];
@@ -69,11 +137,15 @@ void main() {
               in tester.widgetList<ChatBubble>(find.byType(ChatBubble))) {
             expect(
                 bubble.backgroundColor,
-                Color.alphaBlend(
-                    AppTokens.border(dark: brightness == Brightness.dark),
-                    AppTokens.background(dark: brightness == Brightness.dark)),
+                bubble.bubbleType == BubbleType.send
+                    ? Color.lerp(
+                        AppTokens.surface(dark: brightness == Brightness.dark),
+                        ChatBubbleTokens.outgoing(
+                            dark: brightness == Brightness.dark),
+                        brightness == Brightness.dark ? .14 : .65)
+                    : AppTokens.surface(dark: brightness == Brightness.dark),
                 reason:
-                    'The entire bubble is gray, including outgoing bubbles');
+                    'Loading uses a light surface with a soft outgoing tint');
           }
         }
         await tester.pumpWidget(const SizedBox.shrink());

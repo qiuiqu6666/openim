@@ -2,6 +2,7 @@ import CallKit
 import Flutter
 import Foundation
 import PushKit
+import UIKit
 
 /// PushKit/CallKit stay alive before Flutter is ready. Only a successfully
 /// authenticated Dart session may bind calls or upload the in-memory token.
@@ -166,6 +167,12 @@ final class IOSVoIPCallBridge: NSObject, PKPushRegistryDelegate {
             let released = coordinator.releaseAudioSession()
             if released && retired { retiredAudioSessionKey = "" }
             result(released)
+        case "usesSystemIncomingCall":
+            guard matches(args), let room = nonemptyRoom(args) else { result(Self.error("session_changed")); return }
+            // A foreground SDK invitation uses the existing in-app call UI.
+            // Never detach a call already reported by PushKit from CallKit.
+            result(UIApplication.shared.applicationState != .active
+                || coordinator.call(roomID: room, accountID: accountID) != nil)
         case "reportIncomingCall":
             guard matches(args) else { result(Self.error("session_changed")); return }
             let incoming = VoIPCallPayload(args["payload"] as? [String: Any] ?? args)

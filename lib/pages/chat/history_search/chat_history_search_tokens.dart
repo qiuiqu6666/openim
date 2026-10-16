@@ -12,6 +12,7 @@ abstract final class ChatHistorySearchTokens {
   static const searchFontSize = 15.0;
   static const searchRadius = 10.0;
   static const searchIconSize = 18.0;
+  static const searchHintGap = 4.0;
   static const searchLineHeight = 1.2;
   static const searchVerticalPadding = 10.0;
   static const searchIconMinWidth = 34.0;

@@ -7,10 +7,12 @@ class SkeletonShimmer extends StatefulWidget {
       required this.baseColor,
       required this.highlightColor,
       required this.label,
+      this.duration = const Duration(milliseconds: 1400),
       required this.child});
 
   final Color baseColor, highlightColor;
   final String label;
+  final Duration duration;
   final Widget child;
 
   @override
@@ -19,8 +21,17 @@ class SkeletonShimmer extends StatefulWidget {
 
 class _SkeletonShimmerState extends State<SkeletonShimmer>
     with SingleTickerProviderStateMixin {
-  late final _sweep = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1400));
+  late final _sweep =
+      AnimationController(vsync: this, duration: widget.duration);
+
+  @override
+  void didUpdateWidget(covariant SkeletonShimmer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.duration != widget.duration) {
+      _sweep.duration = widget.duration;
+      if (_sweep.isAnimating) _sweep.repeat();
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -48,7 +59,10 @@ class _SkeletonShimmerState extends State<SkeletonShimmer>
           child: AnimatedBuilder(
             animation: _sweep,
             builder: (context, child) {
-              if (MediaQuery.disableAnimationsOf(context)) return child!;
+              if (MediaQuery.disableAnimationsOf(context) ||
+                  !TickerMode.valuesOf(context).enabled) {
+                return child!;
+              }
               return ShaderMask(
                 blendMode: BlendMode.srcATop,
                 shaderCallback: (bounds) => LinearGradient(

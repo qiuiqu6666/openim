@@ -260,6 +260,7 @@ class ChatListView extends StatefulWidget {
     this.newerHasMore,
     this.pagingWindow,
     this.loadOnInit = true,
+    this.fillViewport = false,
     this.findChildIndexCallback,
     this.messageIDs,
     this.onViewportChanged,
@@ -293,6 +294,9 @@ class ChatListView extends StatefulWidget {
   // rather than when another page or live message extends the current list.
   final Object? pagingWindow;
   final bool loadOnInit;
+  /// Continue a short latest page until it fills the viewport or history ends.
+  /// Date/search windows leave this off to preserve their selected anchor.
+  final bool fillViewport;
   final int? Function(Key)? findChildIndexCallback;
   final List<String>? messageIDs;
   final ChatViewportChanged? onViewportChanged;
@@ -313,6 +317,42 @@ class _ChatListViewState extends State<ChatListView> {
   bool _topFailed = false;
   bool _emptyViewportScheduled = false;
   int _pagingGeneration = 0;
+  bool _fillScheduled = false;
+  (int, String?)? _lastFillBoundary;
+
+  void _scheduleViewportFill() {
+    if (!widget.fillViewport || _fillScheduled) return;
+    _fillScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fillScheduled = false;
+      if (!mounted ||
+          !widget.fillViewport ||
+          _pagingBusy ||
+          !_hasMore ||
+          _hasHistoryError ||
+          widget.historyScanLimited ||
+          widget.enabledScrollTopLoad ||
+          widget.onScrollToBottomLoad == null ||
+          (widget.itemCount ?? 0) == 0 ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      final controller = widget.controller;
+      if (controller == null || !controller.hasClients) return;
+      final position = controller.position;
+      if (!position.hasContentDimensions ||
+          position.viewportDimension <= 0 ||
+          position.isScrollingNotifier.value ||
+          position.maxScrollExtent - position.minScrollExtent > 1) {
+        return;
+      }
+      final boundary = (widget.itemCount!, widget.messageIDs?.lastOrNull);
+      // A successful but unchanged page must not create a request loop.
+      if (_lastFillBoundary == boundary) return;
+      _lastFillBoundary = boundary;
+      _onScrollToBottomLoadMore();
+    });
+  }
 
   static const _historyStatusKey = ValueKey('chat-history-status');
   bool get _hasMore => widget.hasMore ?? _scrollToBottomLoadMore;
@@ -438,6 +478,7 @@ class _ChatListViewState extends State<ChatListView> {
       // A seek supersedes old SDK requests. Their eventual completions must
       // neither hold this window busy nor release its new paging owner.
       _pagingGeneration++;
+      _lastFillBoundary = null;
       _loadingBottom = false;
       _loadingTop = false;
       _bottomFailed = false;
@@ -507,6 +548,7 @@ class _ChatListViewState extends State<ChatListView> {
 
   @override
   Widget build(BuildContext context) {
+    _scheduleViewportFill();
     if ((widget.itemCount ?? 0) == 0 &&
         !_emptyViewportScheduled &&
         widget.onViewportChanged != null) {

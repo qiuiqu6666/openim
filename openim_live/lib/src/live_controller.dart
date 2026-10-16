@@ -42,6 +42,7 @@ mixin OpenIMLive {
   final _roomAccounts = <String, String>{};
   final _peerProfiles = <String, UserInfo>{};
   SignalingInfo? _activeSignal;
+  Future<SystemCallAdapter?>? _incomingSystemCalls;
   SignalingInfo? _pendingInvitation;
   Timer? _pendingTimeout;
   DateTime? _connectedAt;
@@ -127,6 +128,15 @@ mixin OpenIMLive {
 
   @protected
   SystemCallAdapter? get systemCallAdapter => null;
+
+  Future<SystemCallAdapter?> _selectIncomingSystemCalls(String room) async {
+    final adapter = systemCallAdapter;
+    if (adapter is IncomingSystemCallPolicy &&
+        !await (adapter as IncomingSystemCallPolicy).usesSystemIncomingCall(room)) {
+      return null;
+    }
+    return adapter;
+  }
 
   SystemCallDescriptor? get currentSystemCall =>
       OpenIMLiveClient().currentSystemCall;
@@ -231,12 +241,13 @@ mixin OpenIMLive {
     }
     _roomAccounts[room] = owner;
     _activeSignal = info;
+    _incomingSystemCalls = _selectIncomingSystemCalls(room);
     _connectedAt = null;
     _incomingWaitingStoppedRoomID = null;
     _incomingCallPreferences.value = preferencesForIncomingCall(owner);
     onCallWaitingStarted();
     // System actions can arrive before the next frame or stream delivery.
-    // Establish the shared owner synchronously, even without a call surface.
+    // Begin ownership selection immediately, even without a call surface.
     if (systemCallAdapter != null) _run(_openIncoming(info));
     signalingSubject.add(CallEvent(CallState.beCalled, info));
     return true;
@@ -347,6 +358,7 @@ mixin OpenIMLive {
   }
 
   Future<void> _openIncoming(SignalingInfo signal) async {
+    final systemCalls = await _incomingSystemCalls;
     if (!_isCurrent(signal)) return;
     final deadline = callInviteDeadline(signal.invitation);
     if (deadline != null && !deadline.isAfter(DateTime.now())) {
@@ -355,14 +367,15 @@ mixin OpenIMLive {
       return;
     }
     final owner = _owner(signal)!;
-    final context = _isRunningBackground && systemCallAdapter != null
+    final context = _isRunningBackground && systemCalls != null
         ? null
         : Get.overlayContext;
+    if (context != null && !context.mounted) return;
     if (OpenIMLiveClient().currentRoomID == signal.invitation!.roomID) {
       if (context != null) OpenIMLiveClient().showActiveCall(context);
       return;
     }
-    if (context == null && systemCallAdapter == null) {
+    if (context == null && systemCalls == null) {
       await _declineUnavailable(signal);
       _releaseRoom(signal);
       await _stopSound();
@@ -394,7 +407,7 @@ mixin OpenIMLive {
       onRoomDisconnected: () => onRoomDisconnected(signal),
       onClose: () => _releaseRoom(signal),
       systemCall: _systemCall(signal),
-      systemCalls: systemCallAdapter,
+      systemCalls: systemCalls,
     );
     if (!started) {
       await _declineUnavailable(signal);
@@ -761,7 +774,9 @@ mixin OpenIMLive {
   }
 
   Future<void> _playSound(SignalingInfo signal, {bool outgoing = false}) async {
-    final systemAudio = systemCallAdapter != null;
+    final systemAudio = outgoing
+        ? systemCallAdapter != null
+        : await _incomingSystemCalls != null;
     // CallKit supplies the incoming ring, while outgoing ringback is ours.
     if ((systemAudio && !outgoing) ||
         _liveClosed ||
@@ -859,6 +874,7 @@ mixin OpenIMLive {
     _guard.release(room);
     if (_activeSignal?.invitation?.roomID != room) return;
     _activeSignal = null;
+    _incomingSystemCalls = null;
     _connectedAt = null;
     _serverAcceptedRoomID = null;
     _outgoingWaitingStoppedRoomID = null;
@@ -893,6 +909,7 @@ mixin OpenIMLive {
     _pendingTimeout = null;
     _pendingInvitation = null;
     _activeSignal = null;
+    _incomingSystemCalls = null;
     _connectedAt = null;
     _serverAcceptedRoomID = null;
     _outgoingWaitingStoppedRoomID = null;

@@ -191,6 +191,8 @@ class _ChatMessageListState extends State<ChatMessageList>
                       onScrollToTopLoad: logic.onScrollToTopLoad,
                       onScrollToTop: logic.onScrollToTop,
                       loadOnInit: false,
+                      fillViewport: !logic.viewingHistory.value &&
+                          !logic.hasDeferredLatest,
                       initialLoading: logic.initialHistoryLoading.value,
                       initialLoadingView: const SizedBox.expand(),
                       historyLoading: logic.historyPagingLoading.value,

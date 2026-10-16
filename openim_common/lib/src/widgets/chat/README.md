@@ -1,5 +1,7 @@
 # 聊天公共组件
 
+`ChatListView.fillViewport` 由正式聊天的最新消息窗口开启：首批消息不足一屏时，布局后通过已有历史分页回调继续补齐，直到能滚动或历史结束。初始加载、历史请求、错误和扫描暂停期间不补页；同一消息边界没有进展时不重复请求。日期/搜索历史窗口保持原定位，默认调用方行为不变。回归覆盖 `chat_listview_auto_pagination_test.dart` 与真实控制器的 `chat_entry_skeleton_test.dart`。
+
 正文排版复用 `res/typography/chat_message_typography.dart` 与现有 `PlatformTextFonts`。与 99chat `MessageBubbleTextColor.messageBodyBaseStyle` 一致，使用非继承样式、16px、w400、1.3 倍行高和 alphabetic 基线，避免 Material 主题的字距、字体或段落高度混入气泡。移动端保留系统字体与完整 Unicode 回退，桌面复用同一组中文 UI 字体；普通文字、@、引用回复正文、自定义 Markdown 和实体格式化文字保持一致。显式调用方样式和正文自身的加粗等格式仍生效。`test/widgets/chat/typography/` 在相同测试环境下比较参考样式的行框与像素，并覆盖亮暗主题、系统放大和平台字体选择；原生字体效果仍需设备验收。
 
 普通文字、@消息和引用正文按普通文字显示，保留换行及复制源文本，复用现有链接与提及回调，不自动套用 Markdown 格式。显示规则归属 [文字与 Markdown 气泡](markdown/README.md)；高级格式化消息及应用自定义文字渲染保留各自路径。

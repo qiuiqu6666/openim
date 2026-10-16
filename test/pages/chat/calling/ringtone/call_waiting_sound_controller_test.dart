@@ -39,6 +39,23 @@ class _Live extends Object with OpenIMLive {
       UserInfo(userID: userID, nickname: 'Local call peer');
 }
 
+class _IncomingPolicyProbe extends WaitingSystemCallProbe
+    implements IncomingSystemCallPolicy {
+  bool useSystem = false;
+  int selections = 0, reports = 0;
+
+  @override
+  Future<bool> usesSystemIncomingCall(String roomID) async {
+    selections++;
+    return useSystem;
+  }
+
+  @override
+  Future<void> reportIncoming(SystemCallDescriptor call) async {
+    reports++;
+  }
+}
+
 class _CertificateAdapter implements HttpClientAdapter {
   Completer<void>? gate;
   bool fail = false;
@@ -259,6 +276,52 @@ void main() {
     await flushWaitingToneTasks();
     expect(player.starts, 0);
     expect(player.assets, isEmpty);
+  });
+
+  for (final mediaType in ['audio', 'video']) {
+    testWidgets('foreground $mediaType rings in-app without a system report',
+        (tester) async {
+      final policy = _IncomingPolicyProbe();
+      live.system = policy;
+      OpenIM.iMManager.userID = 'bob';
+      await mountHost(tester, system: true);
+      live.backgroundSubject.add(false);
+      await tester.pump();
+      final signal = _signal();
+      signal.invitation!.mediaType = mediaType;
+      live.receiveNewInvitation(signal);
+      live.receiveNewInvitation(signal);
+      for (var cycle = 0; cycle < 4; cycle++) {
+        await tester.pump();
+        await tester.runAsync(flushWaitingToneTasks);
+      }
+      expect(policy.selections, 1);
+      expect(policy.reports, 0);
+      expect(OpenIMLiveClient().isBusy, isTrue);
+      expect(find.byType(IncomingCallView), findsOneWidget);
+      expect(player.prepared, [CallWaitingTone.incoming]);
+      expect(player.systemAudioPreparations, [false]);
+      live.invitationCancelled(signal);
+      await tester.pumpAndSettle();
+      for (var cycle = 0; cycle < 4; cycle++) {
+        await tester.pump();
+        await tester.runAsync(flushWaitingToneTasks);
+      }
+      expect(player.playback.single.isCompleted, isTrue);
+      expect(policy.reports, 0);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  test('system policy retains background ringing without in-app sound', () async {
+    final policy = _IncomingPolicyProbe()..useSystem = true;
+    live.system = policy;
+    OpenIM.iMManager.userID = 'bob';
+    live.receiveNewInvitation(_signal());
+    await flushWaitingToneTasks();
+    expect(policy.selections, 1);
+    expect(policy.reports, 1);
+    expect(player.starts, 0);
   });
 
   testWidgets('invite and credentials succeed before outgoing waiting sound',

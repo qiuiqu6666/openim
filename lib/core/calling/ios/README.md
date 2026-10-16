@@ -15,3 +15,5 @@
 对照参考 99chat 的 `push_token_api.dart`、`livekit_call_api.dart` 与 `SelfHostedVoipCallKit.swift` 的独立令牌、服务端状态及昵称更新行为，复用当前 OpenIM 邀请、CallKit provider、SingleCallOwner 和 RTC 房间。未引入新的通话页面或主题组件。`ios_callkit_runtime.dart` 保留原有系统动作协调职责；新增网络流程集中在独立 backend 文件，避免把新业务继续堆入运行时。完整接口、旧客户端兼容范围和真机验证要求见 [接入说明](../../../../docs/ios-voip-callkit.md)。
 
 测试位于 `test/core/calling/ios/`、`test/pages/chat/calling/system/`。
+
+前台 SDK 来电通过 `IncomingSystemCallPolicy` 在原生主线程查询应用状态；未被 PushKit 上报的来电只使用现有应用内界面、铃声和 RTC 音频，不创建 CallKit 接听横幅。选择结果按本次来电固定，重复邀请和铃声共用同一结果。后台、锁屏或已存在的 PushKit 系统来电继续使用 CallKit，避免恢复前台时丢失系统接听和音频所有权。旧版 PushKit 回调仍必须向系统上报；已在后台发出的延迟推送不属于可直接忽略的前台 SDK 邀请。

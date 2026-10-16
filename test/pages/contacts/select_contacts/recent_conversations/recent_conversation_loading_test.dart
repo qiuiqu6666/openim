@@ -21,6 +21,91 @@ Future<void> _accept(WidgetTester tester) async {
 }
 
 void main() {
+  for (final brightness in Brightness.values) {
+    testWidgets('selected group submits while other chats load ($brightness)',
+        (tester) async {
+      final pending = Completer<bool>();
+      var background = false;
+      var sending = false;
+      final sendChecks = <String>[];
+      final fixture = RecentConversationFixture(isJoinedGroup: (id) {
+        if (sending) {
+          sendChecks.add(id);
+          return Future.value(true);
+        }
+        return background ? pending.future : Future.value(true);
+      });
+      await fixture.open(tester, brightness: brightness);
+      await fixture.selection.reloadRecentConversations();
+      background = true;
+      final loading = fixture.selection.reloadRecentConversations();
+      await tester.pump();
+      await tester.tap(recentConversationRow('group'));
+      await tester.pump();
+      expect(fixture.selection.recentLoading.value, isTrue);
+      expect(tester.widget<Button>(_confirm).enabled, isTrue);
+      await tester.tap(_confirm);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('forward-send')), findsOneWidget);
+      // A late background response must not remove the dialog's recipient.
+      pending.complete(false);
+      await loading;
+      expect(fixture.selection.checkedList.keys, ['group-group']);
+      sending = true;
+      await tester.tap(find.byKey(const ValueKey('forward-send')));
+      await tester.pumpAndSettle();
+      final result = await fixture.result as Map;
+      expect((result['checkedList'] as List).single.groupID, 'group-group');
+      expect(sendChecks, ['group-group']);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('single chat submits before pending group checks finish',
+      (tester) async {
+    final pending = Completer<bool>();
+    final fixture =
+        RecentConversationFixture(isJoinedGroup: (_) => pending.future);
+    await fixture.open(tester);
+    final loading = fixture.selection.reloadRecentConversations();
+    await tester.pump();
+    await tester.tap(recentConversationRow('single'));
+    await tester.pump();
+    await _accept(tester);
+    await tester.pumpAndSettle();
+    final result = await fixture.result as Map;
+    expect((result['checkedList'] as List).single.userID, 'user-single');
+    expect(pending.isCompleted, isFalse);
+    pending.complete(true);
+    await loading;
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cancel confirmation resumes interrupted directory loading',
+      (tester) async {
+    final pending = Completer<bool>();
+    var calls = 0;
+    final fixture = RecentConversationFixture(isJoinedGroup: (_) {
+      calls++;
+      return calls <= 2 ? pending.future : Future.value(true);
+    });
+    await fixture.open(tester);
+    final loading = fixture.selection.reloadRecentConversations();
+    await tester.pump();
+    await tester.tap(recentConversationRow('single'));
+    await tester.pump();
+    await tester.tap(_confirm);
+    await tester.pumpAndSettle();
+    fixture.navigator.currentState!.pop(false);
+    await tester.pumpAndSettle();
+    expect(calls, 4);
+    expect(fixture.selection.checkedList.keys, ['user-single']);
+    expect(recentConversationRow('group'), findsOneWidget);
+    pending.complete(true);
+    await loading;
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('reopening displays confirmed groups while SDK is blocked',
       (tester) async {
     final fixture = RecentConversationFixture();
