@@ -5,6 +5,8 @@ import 'package:openim_common/openim_common.dart';
 import '../data/call_backend_api.dart';
 import '../data/call_state_runtime.dart';
 import '../../push/apns/apns_platform.dart';
+import '../../notifications/message_notification_preferences.dart';
+import '../../notifications/call_notification_preferences.dart';
 import 'ios_call_invitation.dart';
 
 /// Session-owned token binding and authoritative cold-call recovery. The native
@@ -33,14 +35,18 @@ class IOSVoIPBackend {
   bool _logoutRequested = false;
   APNsDeviceToken? _token;
   Timer? _retryBinding;
+  StreamSubscription<String>? _notificationChanges;
+  StreamSubscription<String>? _callPreferenceChanges;
   Future<void> _binding = Future.value();
   final _recovering = <String, Future<bool>>{};
   final _ended = <String>{};
   int _generation = 0;
 
   bool _owns(CallBackendApi api, int generation) =>
-      identical(_api, api) && _generation == generation &&
-      isSessionCurrent() && api.isCurrent;
+      identical(_api, api) &&
+      _generation == generation &&
+      isSessionCurrent() &&
+      api.isCurrent;
 
   Future<void> start(String accountID) async {
     await _stopping;
@@ -57,6 +63,15 @@ class IOSVoIPBackend {
     _pausedApi = null;
     _api = api;
     _ended.clear();
+    unawaited(_notificationChanges?.cancel());
+    _notificationChanges =
+        MessageNotificationPreferences.changes.listen((owner) {
+      if (owner == api.accountID && _owns(api, generation)) bind(_token);
+    });
+    unawaited(_callPreferenceChanges?.cancel());
+    _callPreferenceChanges = CallNotificationPreferences.changes.listen((owner) {
+      if (owner == api.accountID && _owns(api, generation)) bind(_token);
+    });
     bind(_token);
   }
 
@@ -64,11 +79,21 @@ class IOSVoIPBackend {
     _token = token;
     _retryBinding?.cancel();
     final api = _api, generation = _generation;
-    if (api == null || token == null) return;
+    if (api == null) return;
     _binding = _binding.then((_) async {
       if (!_owns(api, generation) || _token != token) return;
       try {
-        await api.bind(token);
+        // Read inside the serialized queue: an older registration must finish
+        // before unregistering, and token refresh must never bypass opt-out.
+        final quickAnswer =
+            CallNotificationPreferences.read(api.accountID).quickAnswerPopup;
+        if (!MessageNotificationPreferences.read(api.accountID)
+                .notifyWhenClosed ||
+            !quickAnswer) {
+          await api.unbind();
+        } else if (token != null) {
+          await api.bind(token);
+        }
       } catch (error) {
         if (_owns(api, generation)) {
           _retryBinding = Timer(const Duration(seconds: 5), () => bind(_token));
@@ -96,7 +121,8 @@ class IOSVoIPBackend {
 
   Future<bool> _recover(String room) async {
     final api = _api, generation = _generation;
-    if (api == null || !_owns(api, generation) || _ended.contains(room)) return false;
+    if (api == null || !_owns(api, generation) || _ended.contains(room))
+      return false;
     try {
       final snapshot = await _runtime.status(room);
       final status = snapshot.raw;
@@ -121,12 +147,13 @@ class IOSVoIPBackend {
     } catch (error) {
       Logger.print('VoIP recovery unavailable: ${error.runtimeType}',
           onlyConsole: true);
-      if (_owns(api, generation) && error is CallBackendException &&
-          (error.authorizationFailed || error.code == 404)) await endRemote(room);
+      if (_owns(api, generation) &&
+          error is CallBackendException &&
+          (error.authorizationFailed || error.code == 404))
+        await endRemote(room);
       return false;
     }
   }
-
 
   Future<void> invalidateToken() async {
     _token = null;
@@ -147,8 +174,7 @@ class IOSVoIPBackend {
     try {
       final state = await _runtime.status(room);
       if (!_owns(api, generation) || !state.incoming(api.accountID)) return;
-      await _runtime.persist(
-          CustomMessageType.callingReject, state.invitation);
+      await _runtime.persist(CustomMessageType.callingReject, state.invitation);
     } catch (error) {
       Logger.print('Cold call rejection unavailable: ${error.runtimeType}',
           onlyConsole: true);
@@ -174,6 +200,10 @@ class IOSVoIPBackend {
     _api = null;
     _pausedApi = null;
     _retryBinding?.cancel();
+    unawaited(_notificationChanges?.cancel());
+    _notificationChanges = null;
+    unawaited(_callPreferenceChanges?.cancel());
+    _callPreferenceChanges = null;
     _ended.clear();
     _recovering.clear();
     late Future<void> stopping;

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'media_browser/media_page_gesture.dart';
 import 'media_browser/gallery_image_precache.dart';
-import 'media_browser/media_image_loading.dart';
+import 'media_browser/progressive_media_image.dart';
 import 'media_browser/on_demand_video.dart';
 
 import 'package:extended_image/extended_image.dart';
@@ -632,31 +632,21 @@ class _MediaBrowserState extends State<MediaBrowser> {
   }
 
   Widget _buildNetworkImage(MediaSource s, int index) {
-    Widget render(String url) => AdaptiveMediaImage(
+    Widget render(String url) => ProgressiveMediaImage(
           image: _image(url),
-          loadStateChanged: (state) {
-            if (state.extendedImageLoadState == LoadState.loading) {
-              final preview = s.previewUrl ?? s.thumbnail;
-              if (_warmImages[index] != null ||
-                  (preview.isNotEmpty && preview != url)) {
-                return AdaptiveMediaImage(
-                  image: _warmImages[index] ?? _image(preview, thumbnail: true),
-                  loadStateChanged: (state) =>
-                      state.extendedImageLoadState == LoadState.loading
-                          ? const MediaImageLoading()
-                          : null,
-                );
-              }
-              return const MediaImageLoading();
-            }
-            if (state.extendedImageLoadState == LoadState.failed) {
-              return Center(child: _mediaRetry(() {
-                state.imageProvider.evict();
-                state.reLoadImage();
-              }));
-            }
-            return null;
-          },
+          previews: [
+            if (s.previewUrl != null &&
+                s.previewUrl!.isNotEmpty &&
+                s.previewUrl != url)
+              _image(s.previewUrl!),
+            // A pending/failed warmup must not hide the shared cached thumbnail.
+            if (_warmImages[index] != null) _warmImages[index]!,
+            if (s.thumbnail.isNotEmpty &&
+                s.thumbnail != url &&
+                s.thumbnail != s.previewUrl)
+              _image(s.thumbnail, thumbnail: true),
+          ],
+          retryBuilder: _mediaRetry,
         );
     final original = s.url ?? s.thumbnail;
     final preview = s.previewUrl;

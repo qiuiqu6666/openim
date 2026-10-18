@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:openim/core/calling/data/call_state_runtime.dart';
+import 'package:openim/core/notifications/message_notification_preferences.dart';
+import 'package:openim/pages/mine/settings/settings_draft_store.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/core/calling/data/call_backend_api.dart';
@@ -19,6 +21,7 @@ class FakeCallApi extends CallBackendApi {
   int queries = 0;
   final actions = <String>[];
   final bindings = <String>[];
+  bool failUnbind = false;
   Completer<void>? bindingGate;
   Completer<Map<String, dynamic>>? statusGate;
   Map<String, dynamic> value = {
@@ -50,6 +53,10 @@ class FakeCallApi extends CallBackendApi {
 
   @override
   Future<void> unbind() async {
+    if (failUnbind) {
+      bindings.add('unbind-failed');
+      throw StateError('network unavailable');
+    }
     bindings.add('unbound');
   }
 
@@ -110,6 +117,112 @@ void main() {
   tearDown(() async {
     await backend.stop(logout: false);
     runtime.close();
+  });
+
+  test('both notification switches must be enabled to restore call push',
+      () async {
+    final settings = SettingsDraftStore();
+    addTearDown(settings.dispose);
+    final token = APNsDeviceToken(
+        token: 'ab' * 32,
+        bundleID: 'vip.99chat.ios',
+        environment: 'production');
+    backend.bind(token);
+    await flush();
+    settings.updateNotifications(quickAnswer: false);
+    await flush();
+    expect(api.bindings.last, 'unbound');
+    backend.bind(token);
+    await flush();
+    expect(api.bindings.where((v) => v == 'binding'), hasLength(1));
+    settings.updateNotifications(closed: false);
+    settings.updateNotifications(quickAnswer: true);
+    await flush();
+    expect(api.bindings.last, 'unbound');
+    settings.updateNotifications(closed: true);
+    await flush();
+    expect(api.bindings.last, 'bound');
+  });
+
+  final pushToken = APNsDeviceToken(
+      token: 'ab' * 32, bundleID: 'vip.99chat.ios', environment: 'production');
+
+  test('failed opt-out retries without registering while disabled', () async {
+    backend.bind(pushToken);
+    await flush();
+    api.failUnbind = true;
+    final settings = SettingsDraftStore();
+    addTearDown(settings.dispose);
+    settings.updateNotifications(closed: false);
+    await flush();
+    expect(api.bindings.last, 'unbind-failed');
+    api.failUnbind = false;
+    await Future<void>.delayed(const Duration(milliseconds: 5100));
+    await flush();
+    expect(api.bindings.last, 'unbound');
+    expect(api.bindings.where((v) => v == 'binding'), hasLength(1));
+  });
+
+  test('system notification switch unregisters and restores VoIP push',
+      () async {
+    final settings = SettingsDraftStore();
+    addTearDown(settings.dispose);
+    backend.bind(pushToken);
+    await flush();
+    settings.updateNotifications(closed: false);
+    await flush();
+    expect(api.bindings, ['binding', 'bound', 'unbound']);
+    backend.bind(pushToken);
+    await flush();
+    expect(api.bindings.last, 'unbound');
+    expect(api.bindings.where((v) => v == 'binding'), hasLength(1));
+    settings.updateNotifications(closed: true);
+    await flush();
+    expect(api.bindings.sublist(api.bindings.length - 2), ['binding', 'bound']);
+  });
+
+  test('disabled preference is enforced on restart without a cached token',
+      () async {
+    await backend.stop(logout: false);
+    final settings = SettingsDraftStore();
+    addTearDown(settings.dispose);
+    settings.updateNotifications(closed: false);
+    await backend.start('callee');
+    await flush();
+    expect(api.bindings, ['unbound']);
+    backend.bind(pushToken);
+    await flush();
+    expect(api.bindings, ['unbound', 'unbound']);
+  });
+
+  test('disable waits for in-flight registration; other accounts are ignored',
+      () async {
+    api.bindingGate = Completer();
+    backend.bind(pushToken);
+    await flush();
+    MessageNotificationPreferences.notifyChanged('someone_else');
+    final settings = SettingsDraftStore();
+    addTearDown(settings.dispose);
+    settings.updateNotifications(closed: false);
+    await flush();
+    expect(api.bindings, ['binding']);
+    api.bindingGate!.complete();
+    await flush();
+    expect(api.bindings, ['binding', 'bound', 'unbound']);
+  });
+
+  test('rapid off and on converges to enabled after an old bind', () async {
+    api.bindingGate = Completer();
+    backend.bind(pushToken);
+    await flush();
+    final settings = SettingsDraftStore();
+    addTearDown(settings.dispose);
+    settings.updateNotifications(closed: false);
+    settings.updateNotifications(closed: true);
+    api.bindingGate!.complete();
+    await flush();
+    expect(api.bindings.last, 'bound');
+    expect(api.bindings, isNot(contains('unbound')));
   });
 
   test('cold recovery requires server invitation and retains nickname',
