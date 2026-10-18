@@ -1,6 +1,9 @@
 package common
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type syncNotificationOwnerKey struct{}
 type syncNotificationOwner struct{ marker bool }
@@ -14,10 +17,36 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
 	owner := &syncNotificationOwner{}
 	var pending []Cmd2Value
 	protected := false
+	var grace *time.Timer
+	var graceDone <-chan time.Time
 	stop := func() {
+		if grace != nil {
+			grace.Stop()
+			grace = nil
+			graceDone = nil
+		}
 		if cancel != nil {
 			cancel()
-			<-done
+			// A cancelled metadata job may still be waiting for a lock held by
+			// an API call that publishes to this queue. Keep draining until the
+			// job exits, but never apply updates concurrently with that job.
+			queue := worker.GetCh()
+		joining:
+			for {
+				select {
+				case <-done:
+					break joining
+				case cmd, ok := <-queue:
+					if !ok {
+						queue = nil
+						continue
+					}
+					if cmd.Ctx != nil && cmd.Ctx.Value(syncNotificationOwnerKey{}) == owner {
+						cmd.Ctx = ctx
+					}
+					pending = append(pending, cmd)
+				}
+			}
 			cancel, done = nil, nil
 		}
 	}
@@ -35,6 +64,9 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
 			select {
 			case <-ctx.Done():
 				return
+			case <-graceDone:
+				stop()
+				continue
 			case <-done:
 				stop()
 				continue
@@ -59,8 +91,9 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
 		}
 		if done != nil {
 			pending = append(pending, cmd)
-			if !protected {
-				stop()
+			if !protected && grace == nil {
+				grace = time.NewTimer(100 * time.Millisecond)
+				graceDone = grace.C
 			}
 			continue
 		}
@@ -83,5 +116,10 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
 			defer attemptCancel()
 			runCommandSafely(worker, command)
 		}(cmd, done)
+		// Live work can already be buffered behind a protected bootstrap.
+		// Do not make it wait for a newly started metadata retry to finish.
+		if !protected && len(pending) > 0 {
+			stop()
+		}
 	}
 }

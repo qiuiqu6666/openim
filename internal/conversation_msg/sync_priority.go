@@ -6,9 +6,12 @@ import (
 	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
 )
 
-// First-login metadata is a prerequisite for message persistence. Keep the
-// listener draining notifications, but do not cancel bootstrap for live work.
+// Bootstrap and notification persistence may publish back into this queue.
+// Drain while they run, but never preempt them for incoming live work.
 func (c *Conversation) ProtectSyncCommand(cmd common.Cmd2Value) bool {
+	if cmd.Cmd == constant.CmdNotification {
+		return true
+	}
 	value, ok := cmd.Value.(sdk_struct.CmdNewMsgComeToConversation)
 	return cmd.Cmd == constant.CmdSyncFlag && ok && value.SyncFlag == constant.AppDataSyncStart
 }
@@ -16,7 +19,7 @@ func (c *Conversation) ProtectSyncCommand(cmd common.Cmd2Value) bool {
 // Metadata network waits must not hold up sent-message status/conversation
 // updates. Keep all message persistence and callback application serialized.
 func (c *Conversation) InterruptibleCommand(cmd common.Cmd2Value) bool {
-	if cmd.Cmd == constant.CmdSyncData {
+	if cmd.Cmd == constant.CmdSyncData || cmd.Cmd == constant.CmdNotification {
 		return true
 	}
 	if cmd.Cmd != constant.CmdSyncFlag {

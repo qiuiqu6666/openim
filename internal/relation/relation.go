@@ -3,6 +3,7 @@ package relation
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/openimsdk/openim-sdk-core/v3/internal/user"
 	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
@@ -31,15 +32,17 @@ func NewFriend(loginUserID string, db db_interface.DataBase, user *user.User, co
 }
 
 type Relation struct {
-	friendshipListener open_im_sdk_callback.OnFriendshipListenerSdk
-	loginUserID        string
-	db                 db_interface.DataBase
-	user               *user.User
-	friendSyncer       *syncer.Syncer[*model_struct.LocalFriend, relation.GetPaginationFriendsResp, [2]string]
-	blackSyncer        *syncer.Syncer[*model_struct.LocalBlack, syncer.NoResp, [2]string]
-	conversationCh     chan common.Cmd2Value
-	listenerForService open_im_sdk_callback.OnListenerForService
-	relationSyncMutex  sync.Mutex
+	friendshipListener     open_im_sdk_callback.OnFriendshipListenerSdk
+	loginUserID            string
+	db                     db_interface.DataBase
+	user                   *user.User
+	friendSyncer           *syncer.Syncer[*model_struct.LocalFriend, relation.GetPaginationFriendsResp, [2]string]
+	blackSyncer            *syncer.Syncer[*model_struct.LocalBlack, syncer.NoResp, [2]string]
+	conversationCh         chan common.Cmd2Value
+	listenerForService     open_im_sdk_callback.OnListenerForService
+	relationSyncMutex      sync.Mutex
+	friendProfilesSyncedAt time.Time
+	friendProfilePending   []string
 }
 
 func (r *Relation) initSyncer() {

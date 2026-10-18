@@ -16,7 +16,6 @@ package group
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
@@ -65,7 +64,7 @@ type Group struct {
 	groupSyncer        *syncer.Syncer[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string]
 	groupMemberSyncer  *syncer.Syncer[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string]
 	conversationCh     chan common.Cmd2Value
-	groupSyncMutex     sync.Mutex
+	groupSyncMutex     groupSyncGate
 	listenerForService open_im_sdk_callback.OnListenerForService
 	groupMemberCache   *cache.Cache[string, *model_struct.LocalGroupMember]
 	groupInfoCache     *cache.Cache[string, *model_struct.LocalGroup]
@@ -165,9 +164,11 @@ func (g *Group) initSyncer() {
 	)
 	g.groupMemberSyncer = syncer.New2[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](
 		syncer.WithInsert[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, value *model_struct.LocalGroupMember) error {
+			g.groupMemberCache.Delete(g.buildGroupMemberKey(value.GroupID, value.UserID))
 			return g.db.InsertGroupMember(ctx, value)
 		}),
 		syncer.WithDelete[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, value *model_struct.LocalGroupMember) error {
+			g.groupMemberCache.Delete(g.buildGroupMemberKey(value.GroupID, value.UserID))
 			return g.db.DeleteGroupMember(ctx, value.GroupID, value.UserID)
 		}),
 		syncer.WithUpdate[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, server, local *model_struct.LocalGroupMember) error {

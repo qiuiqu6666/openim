@@ -48,7 +48,18 @@ func (r *Relation) IncrSyncFriends(ctx context.Context) error {
 		},
 		FullSyncer: func(ctx context.Context) error {
 			return syncFullFriendsWithNotice(ctx, r.db.GetAllFriendList, func(ctx context.Context) error {
-				return r.friendSyncer.FullSync(ctx, r.loginUserID)
+				if err := r.friendSyncer.FullSync(ctx, r.loginUserID); err != nil {
+					return err
+				}
+				// Batch replacement bypasses WithUpdate's public-user cache eviction.
+				friends, err := r.db.GetAllFriendList(ctx)
+				if err != nil {
+					return err
+				}
+				for _, friend := range friends {
+					r.user.UserCache().Delete(friend.FriendUserID)
+				}
+				return nil
 			}, r.friendshipListener)
 		},
 		FullID: func(ctx context.Context) ([]string, error) {

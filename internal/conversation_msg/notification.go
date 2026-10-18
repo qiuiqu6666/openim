@@ -141,7 +141,8 @@ func (c *Conversation) syncFlag(c2v common.Cmd2Value) error {
 }
 
 func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) error {
-	ctx := c2v.Ctx
+	ctx, cancel := syncCommandContext(c2v)
+	defer cancel()
 	allMsg := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs
 
 	for conversationID, msgs := range allMsg {
@@ -153,17 +154,24 @@ func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) error {
 
 		// First, process all the notifications
 		for _, msg := range msgs.Msgs {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			// Deleted sequence placeholders have no notification payload. They
 			// still count towards the page checkpoint, but must not be dispatched.
 			if msg.Status >= constant.MsgStatusHasDeleted && msg.Seq > 0 {
 				continue
 			}
 			if msg.ContentType > constant.FriendNotificationBegin && msg.ContentType < constant.FriendNotificationEnd {
-				c.relation.DoNotification(ctx, msg)
+				if err := c.relation.DoNotification(ctx, msg); err != nil {
+					return err
+				}
 			} else if msg.ContentType > constant.UserNotificationBegin && msg.ContentType < constant.UserNotificationEnd {
 				c.user.DoNotification(ctx, msg)
 			} else if msg.ContentType > constant.GroupNotificationBegin && msg.ContentType < constant.GroupNotificationEnd {
-				c.group.DoNotification(ctx, msg)
+				if err := c.group.DoNotification(ctx, msg); err != nil {
+					return err
+				}
 			} else {
 				if err := c.doNotification(ctx, msg); err != nil {
 					log.ZWarn(ctx, "notification page processing failed", err, "conversationID", conversationID, "seq", msg.Seq, "contentType", msg.ContentType, "clientMsgID", msg.ClientMsgID, "contextError", ctx.Err(), "duration", time.Since(started).String())
@@ -173,6 +181,9 @@ func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) error {
 		}
 
 		// After all notifications are processed, update the sequence number
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if len(msgs.Msgs) != 0 {
 			lastMsg := msgs.Msgs[len(msgs.Msgs)-1]
 			log.ZDebug(ctx, "SetNotificationSeq", "conversationID", conversationID, "seq", lastMsg.Seq)
@@ -480,10 +491,10 @@ func (c *Conversation) syncData(c2v common.Cmd2Value) error {
 
 	// Asynchronous sync functions
 	asyncFuncs := []func(c context.Context) error{
-		c.user.SyncLoginUserInfo,
-		c.relation.SyncAllBlackList,
-		c.group.SyncAllJoinedGroupsAndMembersWithLock,
-		c.relation.IncrSyncFriendsWithLock,
+		metadataStage("login-user", c.user.SyncLoginUserInfo),
+		metadataStage("blacklist", c.relation.SyncAllBlackList),
+		metadataStage("groups", c.group.SyncAllJoinedGroupsAndMembersWithLock),
+		metadataStage("friends", c.relation.SyncFriendsWithProfilesWithLock),
 	}
 	if !common.RecoveryMetadataPrepared(ctx) {
 		asyncFuncs = append(asyncFuncs, c.IncrSyncConversationsWithLock)

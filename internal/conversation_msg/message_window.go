@@ -189,6 +189,7 @@ func buildMessageWindow(req sdk.GetAdvancedHistoryMessageListParams, read *model
 		result.MessageList = append(result.MessageList, message)
 	}
 	sort.SliceStable(result.MessageList, func(i, j int) bool { return result.MessageList[i].Seq < result.MessageList[j].Seq })
+	appendLocalWindowMessages(result, read, remoteEmpty)
 	w.Publishable = !conversation.IsPrivateChat && len(w.Missing) == 0 && (target > 0 || remoteEmpty)
 	w.Readiness = "preparing"
 	if w.Publishable {

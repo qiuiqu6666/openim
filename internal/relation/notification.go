@@ -10,10 +10,12 @@ import (
 	"github.com/openimsdk/tools/log"
 )
 
-func (r *Relation) DoNotification(ctx context.Context, msg *sdkws.MsgData) {
+func (r *Relation) DoNotification(ctx context.Context, msg *sdkws.MsgData) error {
 	if err := r.doNotification(ctx, msg); err != nil {
 		log.ZError(ctx, "doNotification error", err, "msg", msg)
+		return err
 	}
+	return nil
 }
 
 func (r *Relation) doNotification(ctx context.Context, msg *sdkws.MsgData) error {
@@ -80,8 +82,16 @@ func (r *Relation) doNotification(ctx context.Context, msg *sdkws.MsgData) error
 		if err := utils.UnmarshalNotificationElem(msg.Content, &tips); err != nil {
 			return err
 		}
+		if tips.UserID == "" {
+			return fmt.Errorf("friend profile notification has no userID")
+		}
 		if tips.UserID != r.loginUserID {
-			return r.IncrSyncFriends(ctx)
+			if err := r.IncrSyncFriends(ctx); err != nil {
+				return err
+			}
+			// A profile notification is evidence independent of roster versions.
+			// Re-read this existing friend even if the incremental response is empty.
+			return r.refreshFriendProfiles(ctx, []string{tips.UserID})
 		}
 	case constant.BlackAddedNotification:
 		var tips sdkws.BlackAddedTips

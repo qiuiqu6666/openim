@@ -2,7 +2,6 @@ package group
 
 import (
 	"context"
-	"sync"
 
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/syncer"
@@ -10,7 +9,6 @@ import (
 	"github.com/openimsdk/protocol/group"
 	"github.com/openimsdk/protocol/sdkws"
 	"github.com/openimsdk/tools/errs"
-	"github.com/openimsdk/tools/log"
 	"github.com/openimsdk/tools/utils/datautil"
 )
 
@@ -31,8 +29,13 @@ func (g *Group) groupTableName() string {
 }
 
 func (g *Group) SyncAllJoinedGroupsAndMembersWithLock(ctx context.Context) error {
-	g.groupSyncMutex.Lock()
+	if err := g.groupSyncMutex.LockContext(ctx); err != nil {
+		return err
+	}
 	defer g.groupSyncMutex.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	groupIDs, err := g.IncrSyncJoinGroupAndGetIDs(ctx)
 	if err != nil {
 		return err
@@ -54,7 +57,9 @@ func (g *Group) IncrSyncJoinGroupMember(ctx context.Context, groupIDs ...string)
 }
 
 func (g *Group) IncrSyncGroupAndMember(ctx context.Context, groupIDs ...string) error {
-	var wg sync.WaitGroup
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if len(groupIDs) == 0 {
 		return nil
 	}
@@ -67,10 +72,16 @@ func (g *Group) IncrSyncGroupAndMember(ctx context.Context, groupIDs ...string) 
 		groups = make([]*group.GetIncrementalGroupMemberReq, 0, len(groupIDs))
 	}
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if len(groupIDSet) == 0 {
 			return nil
 		}
 		for groupID := range groupIDSet {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if len(groups) == cap(groups) {
 				break
 			}
@@ -87,51 +98,44 @@ func (g *Group) IncrSyncGroupAndMember(ctx context.Context, groupIDs ...string) 
 			}
 			groups = append(groups, &req)
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		groupVersion, err := g.getIncrementalGroupMemberBatch(ctx, groups)
 		if err != nil {
 			return err
 		}
 		// Unchanged groups may be omitted by the batch endpoint. Retire the
 		// requested batch together and reset it even when the response is empty.
-		results := make(chan error, len(groups))
-		requested := make(map[string]bool, len(groups))
+		tasks := make([]func() error, 0, len(groups))
 		for _, req := range groups {
-			requested[req.GroupID] = true
-			delete(groupIDSet, req.GroupID)
-		}
-		groups = groups[:0]
-		for groupID, resp := range groupVersion {
-			if !requested[groupID] {
-				continue
-			}
-			if resp == nil {
-				results <- errs.New("nil incremental group response", "groupID", groupID)
-				continue
-			}
-			tempResp := resp
-			tempGroupID := groupID
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				err := g.syncGroupAndMember(ctx, tempGroupID, tempResp)
-				if err != nil {
-					log.ZError(ctx, "sync Group And Member error", errs.Wrap(err))
-				}
-				results <- err
-			}()
-			delete(groupIDSet, tempGroupID)
-		}
-		wg.Wait()
-		close(results)
-		for err := range results {
-			if err != nil {
+			if err := ctx.Err(); err != nil {
 				return err
 			}
+			id := req.GroupID
+			delete(groupIDSet, id)
+			resp, present := groupVersion[id]
+			if !present {
+				continue
+			}
+			tasks = append(tasks, func() error {
+				if resp == nil {
+					return errs.New("nil incremental group response", "groupID", id)
+				}
+				return g.syncGroupAndMember(ctx, id, resp)
+			})
+		}
+		groups = groups[:0]
+		if err := runGroupSyncBatch(ctx, tasks); err != nil {
+			return err
 		}
 	}
 }
 
 func (g *Group) syncGroupAndMember(ctx context.Context, groupID string, resp *group.GetIncrementalGroupMemberResp) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	groupMemberSyncer := syncer.VersionSynchronizer[*model_struct.LocalGroupMember, *group.GetIncrementalGroupMemberResp]{
 		Ctx:       ctx,
 		DB:        g.db,
@@ -178,7 +182,7 @@ func (g *Group) syncGroupAndMember(ctx context.Context, groupID string, resp *gr
 			return g.groupMemberSyncer.Sync(ctx, server, local, nil)
 		},
 		FullSyncer: func(ctx context.Context) error {
-			return g.groupMemberSyncer.FullSync(ctx, groupID)
+			return g.syncFullGroupMembers(ctx, groupID)
 		},
 		FullID: func(ctx context.Context) ([]string, error) {
 			resp, err := g.getFullGroupMemberUserIDs(ctx, &group.GetFullGroupMemberUserIDsReq{
@@ -277,7 +281,7 @@ func (g *Group) onlineSyncGroupAndMember(ctx context.Context, groupID string, de
 			return g.groupMemberSyncer.Sync(ctx, server, local, nil)
 		},
 		FullSyncer: func(ctx context.Context) error {
-			return g.groupMemberSyncer.FullSync(ctx, groupID)
+			return g.syncFullGroupMembers(ctx, groupID)
 		},
 		FullID: func(ctx context.Context) ([]string, error) {
 			resp, err := g.getFullGroupMemberUserIDs(ctx, &group.GetFullGroupMemberUserIDsReq{

@@ -34,7 +34,13 @@ type VersionSynchronizer[V, R any] struct {
 }
 
 func (o *VersionSynchronizer[V, R]) getVersionInfo() (*model_struct.LocalVersionSync, error) {
+	if err := o.Ctx.Err(); err != nil {
+		return nil, err
+	}
 	versionInfo, err := o.DB.GetVersionSync(o.Ctx, o.TableName, o.EntityID)
+	if err := o.Ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err != nil && !errs.ErrRecordNotFound.Is(errs.Unwrap(err)) {
 		log.ZWarn(o.Ctx, "get version info", err)
 		return nil, err
@@ -44,6 +50,9 @@ func (o *VersionSynchronizer[V, R]) getVersionInfo() (*model_struct.LocalVersion
 }
 
 func (o *VersionSynchronizer[V, R]) updateVersionInfo(lvs *model_struct.LocalVersionSync, resp R) error {
+	if err := o.Ctx.Err(); err != nil {
+		return err
+	}
 	lvs.Table = o.TableName
 	lvs.EntityID = o.EntityID
 	lvs.VersionID, lvs.Version = o.Version(resp)
@@ -76,6 +85,9 @@ func (o *VersionSynchronizer[V, R]) IncrementalSync() error {
 		resp = o.ServerVersion()
 	}
 
+	if err := o.Ctx.Err(); err != nil {
+		return err
+	}
 	delIDs := o.Delete(resp)
 	changes := o.Update(resp)
 	insert := o.Insert(resp)
@@ -137,6 +149,9 @@ func (o *VersionSynchronizer[V, R]) IncrementalSync() error {
 			}
 
 			server := datautil.Values(kv)
+			if err := o.Ctx.Err(); err != nil {
+				return err
+			}
 			if err := o.Syncer(server, local); err != nil {
 				return err
 			}
@@ -154,6 +169,9 @@ func (o *VersionSynchronizer[V, R]) IncrementalSync() error {
 	// Group metadata is independent of whether members needed a full reload.
 	// Apply it before committing the version so a failed write remains retryable.
 	if extraData != nil && o.ExtraDataProcessor != nil {
+		if err := o.Ctx.Err(); err != nil {
+			return err
+		}
 		if err := o.ExtraDataProcessor(o.Ctx, extraData); err != nil {
 			return err
 		}
@@ -169,6 +187,9 @@ func (o *VersionSynchronizer[V, R]) CheckVersionSync() error {
 
 	var extraData any
 	resp := o.ServerVersion()
+	if err := o.Ctx.Err(); err != nil {
+		return err
+	}
 	delIDs := o.Delete(resp)
 	changes := o.Update(resp)
 	insert := o.Insert(resp)
@@ -225,11 +246,17 @@ func (o *VersionSynchronizer[V, R]) CheckVersionSync() error {
 			}
 
 			server := datautil.Values(kv)
+			if err := o.Ctx.Err(); err != nil {
+				return err
+			}
 			if err := o.Syncer(server, local); err != nil {
 				return err
 			}
 		}
 		if extraData != nil && o.ExtraDataProcessor != nil {
+			if err := o.Ctx.Err(); err != nil {
+				return err
+			}
 			if err := o.ExtraDataProcessor(o.Ctx, extraData); err != nil {
 				return err
 			}
