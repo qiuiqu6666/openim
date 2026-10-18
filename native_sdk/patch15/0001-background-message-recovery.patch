@@ -20007,3 +20007,908 @@ new file mode 100644
 +		t.Fatalf("retry incomplete: %+v members=%d", l, len(d.members))
 +	}
 +}
+diff --git a/internal/group/incremental_sync.go b/internal/group/incremental_sync.go
+--- a/internal/group/incremental_sync.go
++++ b/internal/group/incremental_sync.go
+@@ -2,7 +2,6 @@
+ 
+ import (
+ 	"context"
+-	"sync"
+ 
+ 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
+ 	"github.com/openimsdk/openim-sdk-core/v3/pkg/syncer"
+@@ -10,7 +9,6 @@
+ 	"github.com/openimsdk/protocol/group"
+ 	"github.com/openimsdk/protocol/sdkws"
+ 	"github.com/openimsdk/tools/errs"
+-	"github.com/openimsdk/tools/log"
+ 	"github.com/openimsdk/tools/utils/datautil"
+ )
+ 
+@@ -33,6 +31,9 @@
+ func (g *Group) SyncAllJoinedGroupsAndMembersWithLock(ctx context.Context) error {
+ 	g.groupSyncMutex.Lock()
+ 	defer g.groupSyncMutex.Unlock()
++	if err := ctx.Err(); err != nil {
++		return err
++	}
+ 	groupIDs, err := g.IncrSyncJoinGroupAndGetIDs(ctx)
+ 	if err != nil {
+ 		return err
+@@ -54,7 +55,9 @@
+ }
+ 
+ func (g *Group) IncrSyncGroupAndMember(ctx context.Context, groupIDs ...string) error {
+-	var wg sync.WaitGroup
++	if err := ctx.Err(); err != nil {
++		return err
++	}
+ 	if len(groupIDs) == 0 {
+ 		return nil
+ 	}
+@@ -67,10 +70,16 @@
+ 		groups = make([]*group.GetIncrementalGroupMemberReq, 0, len(groupIDs))
+ 	}
+ 	for {
++		if err := ctx.Err(); err != nil {
++			return err
++		}
+ 		if len(groupIDSet) == 0 {
+ 			return nil
+ 		}
+ 		for groupID := range groupIDSet {
++			if err := ctx.Err(); err != nil {
++				return err
++			}
+ 			if len(groups) == cap(groups) {
+ 				break
+ 			}
+@@ -87,51 +96,44 @@
+ 			}
+ 			groups = append(groups, &req)
+ 		}
++		if err := ctx.Err(); err != nil {
++			return err
++		}
+ 		groupVersion, err := g.getIncrementalGroupMemberBatch(ctx, groups)
+ 		if err != nil {
+ 			return err
+ 		}
+ 		// Unchanged groups may be omitted by the batch endpoint. Retire the
+ 		// requested batch together and reset it even when the response is empty.
+-		results := make(chan error, len(groups))
+-		requested := make(map[string]bool, len(groups))
++		tasks := make([]func() error, 0, len(groups))
+ 		for _, req := range groups {
+-			requested[req.GroupID] = true
+-			delete(groupIDSet, req.GroupID)
++			if err := ctx.Err(); err != nil {
++				return err
++			}
++			id := req.GroupID
++			delete(groupIDSet, id)
++			resp, present := groupVersion[id]
++			if !present {
++				continue
++			}
++			tasks = append(tasks, func() error {
++				if resp == nil {
++					return errs.New("nil incremental group response", "groupID", id)
++				}
++				return g.syncGroupAndMember(ctx, id, resp)
++			})
+ 		}
+ 		groups = groups[:0]
+-		for groupID, resp := range groupVersion {
+-			if !requested[groupID] {
+-				continue
+-			}
+-			if resp == nil {
+-				results <- errs.New("nil incremental group response", "groupID", groupID)
+-				continue
+-			}
+-			tempResp := resp
+-			tempGroupID := groupID
+-			wg.Add(1)
+-			go func() {
+-				defer wg.Done()
+-				err := g.syncGroupAndMember(ctx, tempGroupID, tempResp)
+-				if err != nil {
+-					log.ZError(ctx, "sync Group And Member error", errs.Wrap(err))
+-				}
+-				results <- err
+-			}()
+-			delete(groupIDSet, tempGroupID)
+-		}
+-		wg.Wait()
+-		close(results)
+-		for err := range results {
+-			if err != nil {
+-				return err
+-			}
++		if err := runGroupSyncBatch(ctx, tasks); err != nil {
++			return err
+ 		}
+ 	}
+ }
+ 
+ func (g *Group) syncGroupAndMember(ctx context.Context, groupID string, resp *group.GetIncrementalGroupMemberResp) error {
++	if err := ctx.Err(); err != nil {
++		return err
++	}
+ 	groupMemberSyncer := syncer.VersionSynchronizer[*model_struct.LocalGroupMember, *group.GetIncrementalGroupMemberResp]{
+ 		Ctx:       ctx,
+ 		DB:        g.db,
+diff --git a/internal/group/sync_batch.go b/internal/group/sync_batch.go
+new file mode 100644
+--- /dev/null
++++ b/internal/group/sync_batch.go
+@@ -0,0 +1,76 @@
++package group
++
++import (
++	"context"
++	"github.com/openimsdk/tools/log"
++	"sync"
++	"sync/atomic"
++	"time"
++)
++
++// Bound database/profile work independently of the server's batch size.
++// Cancellation stops dispatch and joins in-flight work before returning.
++func runGroupSyncBatch(ctx context.Context, tasks []func() error) error {
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	if len(tasks) == 0 {
++		return nil
++	}
++	const concurrency = 4
++	var started, active, peak atomic.Int64
++	var cancelledAt atomic.Int64
++	stopNotice := context.AfterFunc(ctx, func() { cancelledAt.CompareAndSwap(0, time.Now().UnixNano()) })
++	defer stopNotice()
++	defer func() {
++		join := time.Duration(0)
++		if at := cancelledAt.Load(); at != 0 {
++			join = time.Since(time.Unix(0, at))
++		}
++		log.ZDebug(ctx, "group_sync_batch_summary", "scheduled", len(tasks), "started", started.Load(), "peakActive", peak.Load(), "activeAtExit", active.Load(), "cancelled", ctx.Err() != nil, "cancelJoinElapsed", join)
++	}()
++	jobs := make(chan func() error)
++	var wg sync.WaitGroup
++	var firstErr error
++	var once sync.Once
++	for i := 0; i < concurrency; i++ {
++		wg.Add(1)
++		go func() {
++			defer wg.Done()
++			for task := range jobs {
++				if ctx.Err() != nil {
++					return
++				}
++				started.Add(1)
++				n := active.Add(1)
++				for old := peak.Load(); n > old; old = peak.Load() {
++					if peak.CompareAndSwap(old, n) {
++						break
++					}
++				}
++				err := task()
++				active.Add(-1)
++				if err != nil {
++					once.Do(func() { firstErr = err })
++				}
++			}
++		}()
++	}
++dispatch:
++	for _, task := range tasks {
++		if ctx.Err() != nil {
++			break
++		}
++		select {
++		case <-ctx.Done():
++			break dispatch
++		case jobs <- task:
++		}
++	}
++	close(jobs)
++	wg.Wait()
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	return firstErr
++}
+diff --git a/internal/group/sync_batch_test.go b/internal/group/sync_batch_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/group/sync_batch_test.go
+@@ -0,0 +1,60 @@
++package group
++
++import (
++	"context"
++	"errors"
++	"sync/atomic"
++	"testing"
++)
++
++func TestGroupBatchCancellationStopsQueuedWork(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	started := make(chan struct{}, 4)
++	var calls atomic.Int32
++	tasks := make([]func() error, 500)
++	for i := range tasks {
++		tasks[i] = func() error {
++			calls.Add(1)
++			started <- struct{}{}
++			<-ctx.Done()
++			return ctx.Err()
++		}
++	}
++	done := make(chan error, 1)
++	go func() { done <- runGroupSyncBatch(ctx, tasks) }()
++	for i := 0; i < 4; i++ {
++		<-started
++	}
++	cancel()
++	if err := <-done; !errors.Is(err, context.Canceled) {
++		t.Fatal(err)
++	}
++	if calls.Load() != 4 {
++		t.Fatalf("started %d tasks after cancellation", calls.Load())
++	}
++}
++
++func TestGroupBatchPreservesErrorAndProcessesRemainingGroups(t *testing.T) {
++	failure := errors.New("profile failure")
++	var calls atomic.Int32
++	tasks := make([]func() error, 20)
++	for i := range tasks {
++		tasks[i] = func() error { calls.Add(1); return failure }
++	}
++	if err := runGroupSyncBatch(context.Background(), tasks); !errors.Is(err, failure) {
++		t.Fatal(err)
++	}
++	if calls.Load() != 20 {
++		t.Fatal(calls.Load())
++	}
++}
++
++func TestGroupBatchAlreadyCancelledDoesNoWork(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	cancel()
++	err := runGroupSyncBatch(ctx, []func() error{func() error { t.Error("cancelled task ran"); return nil }})
++	if !errors.Is(err, context.Canceled) {
++		t.Fatal(err)
++	}
++}
+diff --git a/internal/interaction/msg_sync_scheduler.go b/internal/interaction/msg_sync_scheduler.go
+--- a/internal/interaction/msg_sync_scheduler.go
++++ b/internal/interaction/msg_sync_scheduler.go
+@@ -43,6 +43,21 @@
+ // coalesced sync command resumes after queued live messages have been handled.
+ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, handle func(common.Cmd2Value), protectInitialSync ...func() bool) {
+ 	var pending *common.Cmd2Value
++	var pendingAuxiliary *common.Cmd2Value
++	var auxiliaryRetry messageSyncRetry
++	// Keep metadata obligations and their cooldown separate from message recovery.
++	enqueue := func(cmd common.Cmd2Value) {
++		if cmd.Cmd == cmdSyncAuxiliaryMetadata {
++			pendingAuxiliary = coalesceMessageSync(pendingAuxiliary, cmd)
++			return
++		}
++		if pending != nil && pending.Cmd == cmdSyncAuxiliaryMetadata {
++			pendingAuxiliary = coalesceMessageSync(pendingAuxiliary, *pending)
++			pending = nil
++		}
++		pending = coalesceMessageSync(pending, cmd)
++	}
++
+ 	var active *common.Cmd2Value
+ 	var done chan struct{}
+ 	var cancel context.CancelFunc
+@@ -56,6 +71,13 @@
+ 	var preempt <-chan time.Time
+ 	reserveProgress := false
+ 	var retry messageSyncRetry
++	retryRemaining := func() time.Duration {
++		if pending != nil && pending.Cmd == cmdSyncAuxiliaryMetadata {
++			return auxiliaryRetry.remaining(time.Now())
++		}
++		return retry.remaining(time.Now())
++	}
++
+ 	var retryTimer *time.Timer
+ 	var retryWake <-chan time.Time
+ 	clearRetryTimer := func() {
+@@ -71,16 +93,20 @@
+ 		}
+ 		preemption, preempt = nil, nil
+ 	}
+-	stop := func() {
++	stop := func(interrupted ...bool) {
+ 		clearPreemption()
+ 		if cancel != nil {
+ 			cancel()
+ 			<-done // The sole state owner must exit before another command runs.
+ 			// A live push can win the select just as a failed worker exits.
+ 			// Preserve its failure here too, so traffic cannot bypass the cooldown.
+-			if pageOwner.failed.Load() {
+-				retry.failed(time.Now(), pageOwner.committed.Load() > 0)
+-				pending = coalesceMessageSync(pending, *active)
++			if pageOwner.failed.Load() || (active.Cmd == cmdSyncAuxiliaryMetadata && len(interrupted) > 0 && interrupted[0]) {
++				if active.Cmd == cmdSyncAuxiliaryMetadata {
++					auxiliaryRetry.failed(time.Now(), pageOwner.committed.Load() > 0)
++				} else {
++					retry.failed(time.Now(), pageOwner.committed.Load() > 0)
++				}
++				enqueue(*active)
+ 			}
+ 			cancel, done, active = nil, nil, nil
+ 			pageOwner, pageTurns = nil, nil
+@@ -91,7 +117,10 @@
+ 		if ctx.Err() != nil {
+ 			return
+ 		}
+-		if active == nil && len(queued) > 0 && (pending == nil || liveHandled < liveBurst || retry.remaining(time.Now()) > 0) {
++		if active == nil && pending == nil && pendingAuxiliary != nil {
++			pending, pendingAuxiliary = pendingAuxiliary, nil
++		}
++		if active == nil && len(queued) > 0 && (pending == nil || liveHandled < liveBurst || retryRemaining() > 0) {
+ 			cmd := queued[0]
+ 			queued[0] = common.Cmd2Value{}
+ 			queued = queued[1:]
+@@ -100,7 +129,7 @@
+ 			continue
+ 		}
+ 		// Drain already queued work before restarting an interrupted sync.
+-		if active == nil && pending != nil && retry.remaining(time.Now()) == 0 {
++		if active == nil && pending != nil && retryRemaining() == 0 {
+ 			clearRetryTimer()
+ 			protected = len(protectInitialSync) > 0 && protectInitialSync[0]()
+ 			if !protected && liveHandled < liveBurst {
+@@ -110,7 +139,7 @@
+ 						return
+ 					}
+ 					if isBackgroundSyncCommand(cmd) {
+-						pending = coalesceMessageSync(pending, cmd)
++						enqueue(cmd)
+ 					} else {
+ 						handle(cmd)
+ 						liveHandled++
+@@ -144,7 +173,7 @@
+ 			}(done)
+ 		}
+ 		if active == nil && pending != nil && retryTimer == nil {
+-			retryTimer = time.NewTimer(retry.remaining(time.Now()))
++			retryTimer = time.NewTimer(retryRemaining())
+ 			retryWake = retryTimer.C
+ 		}
+ 		select {
+@@ -154,7 +183,11 @@
+ 			clearRetryTimer()
+ 		case <-done:
+ 			if !pageOwner.failed.Load() {
+-				retry = messageSyncRetry{}
++				if active.Cmd == cmdSyncAuxiliaryMetadata {
++					auxiliaryRetry = messageSyncRetry{}
++				} else {
++					retry = messageSyncRetry{}
++				}
+ 			}
+ 			reserveProgress = false
+ 			stop()
+@@ -163,9 +196,9 @@
+ 			// page until completion, so busy chats cannot cancel it forever.
+ 			if active != nil {
+ 				resume := *active
+-				pending = coalesceMessageSync(pending, resume)
+-				reserveProgress = true
+-				stop()
++				enqueue(resume)
++				reserveProgress = active.Cmd != cmdSyncAuxiliaryMetadata
++				stop(true)
+ 			}
+ 		case resume := <-pageTurns:
+ 			clearPreemption()
+@@ -192,7 +225,7 @@
+ 					}
+ 				}
+ 				if isBackgroundSyncCommand(cmd) {
+-					pending = coalesceMessageSync(pending, cmd)
++					enqueue(cmd)
+ 				} else {
+ 					handle(cmd)
+ 				}
+@@ -203,6 +236,9 @@
+ 				return
+ 			}
+ 			if isBackgroundSyncCommand(cmd) {
++				if pending != nil && pending.Cmd == cmdSyncAuxiliaryMetadata && cmd.Cmd != cmdSyncAuxiliaryMetadata {
++					clearRetryTimer()
++				}
+ 				if cmd.Cmd == constant.CmdConnSuccesss {
+ 					// A fresh transport may recover a network failure immediately.
+ 					retry = messageSyncRetry{}
+@@ -211,8 +247,13 @@
+ 				// Repeated foreground/reconnect signals describe the same desired
+ 				// catch-up. Do not accumulate full sync jobs behind live traffic.
+ 				if active == nil || cmd.Cmd == constant.CmdConnSuccesss || cmd.Cmd == cmdSyncAuxiliaryMetadata ||
+-					(active.Cmd == cmdReconcileMessageSeq && messageSyncPriority(cmd.Cmd) > 1) {
+-					pending = coalesceMessageSync(pending, cmd)
++					(active.Cmd == cmdReconcileMessageSeq && messageSyncPriority(cmd.Cmd) > 1) || active.Cmd == cmdSyncAuxiliaryMetadata {
++					enqueue(cmd)
++				}
++				if active != nil && active.Cmd == cmdSyncAuxiliaryMetadata && cmd.Cmd != cmdSyncAuxiliaryMetadata {
++					enqueue(*active)
++					reserveProgress = false
++					stop(true)
+ 				}
+ 				if active != nil && active.Cmd == cmdReconcileMessageSeq && messageSyncPriority(cmd.Cmd) > 1 {
+ 					stop()
+@@ -228,13 +269,14 @@
+ 					}
+ 					continue
+ 				}
+-				resume := *active
+-				if pending == nil {
+-					pending = &resume
+-				}
+-				// Metadata/max-sequence I/O must also get an uninterrupted retry.
+-				reserveProgress = true
+-				stop()
++				// Let a short in-flight operation finish before cancelling it.
++				// Slow work still yields within the existing 100 ms budget.
++				queued = append(queued, cmd)
++				if preemption == nil {
++					preemption = time.NewTimer(100 * time.Millisecond)
++					preempt = preemption.C
++				}
++				continue
+ 			}
+ 			handle(cmd)
+ 		}
+diff --git a/internal/interaction/msg_sync_scheduler_test.go b/internal/interaction/msg_sync_scheduler_test.go
+--- a/internal/interaction/msg_sync_scheduler_test.go
++++ b/internal/interaction/msg_sync_scheduler_test.go
+@@ -147,3 +147,42 @@
+ 	cancel()
+ 	<-done
+ }
++
++func TestShortSyncCompletesWithoutLivePushCancellation(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	input := make(chan common.Cmd2Value, 4)
++	started, release, live, done := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
++	var attempts atomic.Int32
++	go func() {
++		defer close(done)
++		runMessageSyncLoop(ctx, input, func(cmd common.Cmd2Value) {
++			if cmd.Cmd == constant.CmdPushMsg {
++				close(live)
++				return
++			}
++			attempts.Add(1)
++			close(started)
++			select {
++			case <-release:
++			case <-cmd.Ctx.Done():
++				t.Error("short sync was cancelled")
++			}
++		})
++	}()
++	input <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdWakeUpDataSync}
++	<-started
++	input <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdPushMsg}
++	time.Sleep(10 * time.Millisecond)
++	close(release)
++	select {
++	case <-live:
++	case <-time.After(time.Second):
++		t.Fatal("live push blocked")
++	}
++	cancel()
++	<-done
++	if attempts.Load() != 1 {
++		t.Fatal(attempts.Load())
++	}
++}
+diff --git a/pkg/common/cmd_interruptible.go b/pkg/common/cmd_interruptible.go
+--- a/pkg/common/cmd_interruptible.go
++++ b/pkg/common/cmd_interruptible.go
+@@ -1,6 +1,9 @@
+ package common
+ 
+-import "context"
++import (
++	"context"
++	"time"
++)
+ 
+ type syncNotificationOwnerKey struct{}
+ type syncNotificationOwner struct{ marker bool }
+@@ -14,7 +17,14 @@
+ 	owner := &syncNotificationOwner{}
+ 	var pending []Cmd2Value
+ 	protected := false
++	var grace *time.Timer
++	var graceDone <-chan time.Time
+ 	stop := func() {
++		if grace != nil {
++			grace.Stop()
++			grace = nil
++			graceDone = nil
++		}
+ 		if cancel != nil {
+ 			cancel()
+ 			// A cancelled metadata job may still be waiting for a lock held by
+@@ -54,6 +64,9 @@
+ 			select {
+ 			case <-ctx.Done():
+ 				return
++			case <-graceDone:
++				stop()
++				continue
+ 			case <-done:
+ 				stop()
+ 				continue
+@@ -78,8 +91,9 @@
+ 		}
+ 		if done != nil {
+ 			pending = append(pending, cmd)
+-			if !protected {
+-				stop()
++			if !protected && grace == nil {
++				grace = time.NewTimer(100 * time.Millisecond)
++				graceDone = grace.C
+ 			}
+ 			continue
+ 		}
+diff --git a/pkg/common/cmd_interruptible_test.go b/pkg/common/cmd_interruptible_test.go
+--- a/pkg/common/cmd_interruptible_test.go
++++ b/pkg/common/cmd_interruptible_test.go
+@@ -149,3 +149,27 @@
+ 	cancel()
+ 	<-done
+ }
++
++func TestShortMetadataCompletesBeforePreemptionGrace(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	w := &selfNotifyingWorker{make(chan Cmd2Value, 4), make(chan struct{}), make(chan struct{}), make(chan error, 2)}
++	done := make(chan struct{})
++	go func() { defer close(done); DoListener(ctx, w) }()
++	receipt := make(chan error, 1)
++	w.queue <- Cmd2Value{Ctx: ctx, Cmd: "sync", Receipt: receipt}
++	<-w.generated
++	w.queue <- Cmd2Value{Ctx: ctx, Cmd: "external-live-update"}
++	time.Sleep(10 * time.Millisecond)
++	close(w.finish)
++	select {
++	case err := <-receipt:
++		if err != nil {
++			t.Fatal(err)
++		}
++	case <-time.After(time.Second):
++		t.Fatal("sync blocked")
++	}
++	cancel()
++	<-done
++}
+diff --git a/internal/conversation_msg/conversion.go b/internal/conversation_msg/conversion.go
+--- a/internal/conversation_msg/conversion.go
++++ b/internal/conversation_msg/conversion.go
+@@ -16,6 +16,7 @@
+ 
+ import (
+ 	"context"
++	"strings"
+ 
+ 	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
+ 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
+@@ -119,14 +120,15 @@
+ 		LocalEx:          localMessage.LocalEx,
+ 	}
+ 	var attachedInfo sdk_struct.AttachedInfoElem
+-	err := utils.JsonStringToStruct(localMessage.AttachedInfo, &attachedInfo)
+-	if err != nil {
+-		log.ZWarn(context.Background(), "JsonStringToStruct error", err, "localMessage.AttachedInfo", localMessage.AttachedInfo)
++	if strings.TrimSpace(localMessage.AttachedInfo) != "" {
++		if err := utils.JsonStringToStruct(localMessage.AttachedInfo, &attachedInfo); err != nil {
++			log.ZWarn(context.Background(), "JsonStringToStruct error", err, "localMessage.AttachedInfo", localMessage.AttachedInfo)
++		}
+ 	}
+ 	message.AttachedInfoElem = &attachedInfo
+ 	errParse := msgHandleByContentType(message)
+ 	if errParse != nil {
+-		log.ZWarn(context.Background(), "Parsing data error", err, "messageContent", message.Content)
++		log.ZWarn(context.Background(), "Parsing data error", errParse, "messageContent", message.Content)
+ 	}
+ 	switch localMessage.SessionType {
+ 	case constant.WriteGroupChatType:
+diff --git a/internal/conversation_msg/conversion_attached_info_test.go b/internal/conversation_msg/conversion_attached_info_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/conversation_msg/conversion_attached_info_test.go
+@@ -0,0 +1,21 @@
++package conversation_msg
++
++import (
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"testing"
++)
++
++func TestOptionalAttachedInfoEmptyAndPresent(t *testing.T) {
++	for _, raw := range []string{"", " \t\r\n", "{}", "null", `{"isPrivateChat":true,"burnDuration":60}`} {
++		t.Run(raw, func(t *testing.T) {
++			msg := LocalChatLogToMsgStruct(&model_struct.LocalChatLog{ContentType: constant.Text, Content: `{"content":"hello"}`, AttachedInfo: raw})
++			if msg.AttachedInfoElem == nil || msg.TextElem == nil || msg.TextElem.Content != "hello" {
++				t.Fatalf("lost message: %+v", msg)
++			}
++			if raw == `{"isPrivateChat":true,"burnDuration":60}` && (!msg.AttachedInfoElem.IsPrivateChat || msg.AttachedInfoElem.BurnDuration != 60) {
++				t.Fatal("lost attached metadata")
++			}
++		})
++	}
++}
+diff --git a/pkg/converter/conversation.go b/pkg/converter/conversation.go
+--- a/pkg/converter/conversation.go
++++ b/pkg/converter/conversation.go
+@@ -2,6 +2,7 @@
+ 
+ import (
+ 	"context"
++	"strings"
+ 
+ 	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
+ 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
+@@ -193,7 +194,7 @@
+ 		msg.NotificationElem = &elem
+ 	}
+ 	var attachedInfo sdk_struct.AttachedInfoElem
+-	if msg.AttachedInfo != "" {
++	if strings.TrimSpace(msg.AttachedInfo) != "" {
+ 		if err := utils.JsonStringToStruct(msg.AttachedInfo, &attachedInfo); err != nil {
+ 			log.ZWarn(context.Background(), "JsonStringToStruct error", err, "localMessage.AttachedInfo", msg.AttachedInfo)
+ 		}
+diff --git a/pkg/syncer/version_synchronizer.go b/pkg/syncer/version_synchronizer.go
+--- a/pkg/syncer/version_synchronizer.go
++++ b/pkg/syncer/version_synchronizer.go
+@@ -34,7 +34,13 @@
+ }
+ 
+ func (o *VersionSynchronizer[V, R]) getVersionInfo() (*model_struct.LocalVersionSync, error) {
++	if err := o.Ctx.Err(); err != nil {
++		return nil, err
++	}
+ 	versionInfo, err := o.DB.GetVersionSync(o.Ctx, o.TableName, o.EntityID)
++	if err := o.Ctx.Err(); err != nil {
++		return nil, err
++	}
+ 	if err != nil && !errs.ErrRecordNotFound.Is(errs.Unwrap(err)) {
+ 		log.ZWarn(o.Ctx, "get version info", err)
+ 		return nil, err
+@@ -44,6 +50,9 @@
+ }
+ 
+ func (o *VersionSynchronizer[V, R]) updateVersionInfo(lvs *model_struct.LocalVersionSync, resp R) error {
++	if err := o.Ctx.Err(); err != nil {
++		return err
++	}
+ 	lvs.Table = o.TableName
+ 	lvs.EntityID = o.EntityID
+ 	lvs.VersionID, lvs.Version = o.Version(resp)
+@@ -76,6 +85,9 @@
+ 		resp = o.ServerVersion()
+ 	}
+ 
++	if err := o.Ctx.Err(); err != nil {
++		return err
++	}
+ 	delIDs := o.Delete(resp)
+ 	changes := o.Update(resp)
+ 	insert := o.Insert(resp)
+@@ -137,6 +149,9 @@
+ 			}
+ 
+ 			server := datautil.Values(kv)
++			if err := o.Ctx.Err(); err != nil {
++				return err
++			}
+ 			if err := o.Syncer(server, local); err != nil {
+ 				return err
+ 			}
+@@ -154,6 +169,9 @@
+ 	// Group metadata is independent of whether members needed a full reload.
+ 	// Apply it before committing the version so a failed write remains retryable.
+ 	if extraData != nil && o.ExtraDataProcessor != nil {
++		if err := o.Ctx.Err(); err != nil {
++			return err
++		}
+ 		if err := o.ExtraDataProcessor(o.Ctx, extraData); err != nil {
+ 			return err
+ 		}
+@@ -169,6 +187,9 @@
+ 
+ 	var extraData any
+ 	resp := o.ServerVersion()
++	if err := o.Ctx.Err(); err != nil {
++		return err
++	}
+ 	delIDs := o.Delete(resp)
+ 	changes := o.Update(resp)
+ 	insert := o.Insert(resp)
+@@ -225,11 +246,17 @@
+ 			}
+ 
+ 			server := datautil.Values(kv)
++			if err := o.Ctx.Err(); err != nil {
++				return err
++			}
+ 			if err := o.Syncer(server, local); err != nil {
+ 				return err
+ 			}
+ 		}
+ 		if extraData != nil && o.ExtraDataProcessor != nil {
++			if err := o.Ctx.Err(); err != nil {
++				return err
++			}
+ 			if err := o.ExtraDataProcessor(o.Ctx, extraData); err != nil {
+ 				return err
+ 			}
+diff --git a/pkg/syncer/version_cancel_test.go b/pkg/syncer/version_cancel_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/syncer/version_cancel_test.go
+@@ -0,0 +1,39 @@
++package syncer
++
++import (
++	"context"
++	"errors"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"testing"
++)
++
++func TestCancelledVersionSyncSkipsDatabaseAndServer(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	cancel()
++	s := VersionSynchronizer[string, *int]{Ctx: ctx}
++	if err := s.IncrementalSync(); !errors.Is(err, context.Canceled) {
++		t.Fatal(err)
++	}
++	if err := s.CheckVersionSync(); !errors.Is(err, context.Canceled) {
++		t.Fatal(err)
++	}
++	if err := s.updateVersionInfo(&model_struct.LocalVersionSync{}, nil); !errors.Is(err, context.Canceled) {
++		t.Fatal(err)
++	}
++}
++
++func TestCancellationAfterResponseDoesNotApplyOrCommit(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	db := &profileVersionDB{}
++	s := VersionSynchronizer[string, *int]{Ctx: ctx, DB: db,
++		ServerVersion: func() *int { cancel(); v := 1; return &v },
++		Delete:        func(*int) []string { t.Error("processed cancelled response"); return nil },
++	}
++	if err := s.IncrementalSync(); !errors.Is(err, context.Canceled) {
++		t.Fatal(err)
++	}
++	if db.saved != 0 {
++		t.Fatal("cancelled version committed")
++	}
++}
+diff --git a/internal/group/group.go b/internal/group/group.go
+--- a/internal/group/group.go
++++ b/internal/group/group.go
+@@ -16,7 +16,6 @@
+ 
+ import (
+ 	"context"
+-	"sync"
+ 	"time"
+ 
+ 	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
+@@ -65,7 +64,7 @@
+ 	groupSyncer        *syncer.Syncer[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string]
+ 	groupMemberSyncer  *syncer.Syncer[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string]
+ 	conversationCh     chan common.Cmd2Value
+-	groupSyncMutex     sync.Mutex
++	groupSyncMutex     groupSyncGate
+ 	listenerForService open_im_sdk_callback.OnListenerForService
+ 	groupMemberCache   *cache.Cache[string, *model_struct.LocalGroupMember]
+ 	groupInfoCache     *cache.Cache[string, *model_struct.LocalGroup]
+diff --git a/internal/group/incremental_sync.go b/internal/group/incremental_sync.go
+--- a/internal/group/incremental_sync.go
++++ b/internal/group/incremental_sync.go
+@@ -29,7 +29,9 @@
+ }
+ 
+ func (g *Group) SyncAllJoinedGroupsAndMembersWithLock(ctx context.Context) error {
+-	g.groupSyncMutex.Lock()
++	if err := g.groupSyncMutex.LockContext(ctx); err != nil {
++		return err
++	}
+ 	defer g.groupSyncMutex.Unlock()
+ 	if err := ctx.Err(); err != nil {
+ 		return err
+diff --git a/internal/group/sync_gate.go b/internal/group/sync_gate.go
+new file mode 100644
+--- /dev/null
++++ b/internal/group/sync_gate.go
+@@ -0,0 +1,32 @@
++package group
++
++import (
++	"context"
++	"sync"
++)
++
++// Keep API writes and recovery serialized, but let cancelled recovery leave
++// the wait queue without waiting for an unrelated API's network operation.
++type groupSyncGate struct {
++	once  sync.Once
++	token chan struct{}
++}
++
++func (g *groupSyncGate) LockContext(ctx context.Context) error {
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	g.once.Do(func() { g.token = make(chan struct{}, 1) })
++	select {
++	case <-ctx.Done():
++		return ctx.Err()
++	case g.token <- struct{}{}:
++		if err := ctx.Err(); err != nil {
++			g.Unlock()
++			return err
++		}
++		return nil
++	}
++}
++func (g *groupSyncGate) Lock()   { _ = g.LockContext(context.Background()) }
++func (g *groupSyncGate) Unlock() { <-g.token }
+diff --git a/internal/group/sync_gate_test.go b/internal/group/sync_gate_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/group/sync_gate_test.go
+@@ -0,0 +1,30 @@
++package group
++
++import (
++	"context"
++	"errors"
++	"testing"
++	"time"
++)
++
++func TestCancelledGroupRecoveryDoesNotWaitForAPILock(t *testing.T) {
++	var gate groupSyncGate
++	gate.Lock()
++	ctx, cancel := context.WithCancel(context.Background())
++	done := make(chan error, 1)
++	go func() { done <- gate.LockContext(ctx) }()
++	cancel()
++	select {
++	case err := <-done:
++		if !errors.Is(err, context.Canceled) {
++			t.Fatal(err)
++		}
++	case <-time.After(time.Second):
++		t.Fatal("cancelled waiter blocked")
++	}
++	gate.Unlock()
++	if err := gate.LockContext(context.Background()); err != nil {
++		t.Fatal(err)
++	}
++	gate.Unlock()
++}

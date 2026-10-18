@@ -43,6 +43,21 @@ func messageSyncPriority(cmd string) int {
 // coalesced sync command resumes after queued live messages have been handled.
 func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, handle func(common.Cmd2Value), protectInitialSync ...func() bool) {
 	var pending *common.Cmd2Value
+	var pendingAuxiliary *common.Cmd2Value
+	var auxiliaryRetry messageSyncRetry
+	// Keep metadata obligations and their cooldown separate from message recovery.
+	enqueue := func(cmd common.Cmd2Value) {
+		if cmd.Cmd == cmdSyncAuxiliaryMetadata {
+			pendingAuxiliary = coalesceMessageSync(pendingAuxiliary, cmd)
+			return
+		}
+		if pending != nil && pending.Cmd == cmdSyncAuxiliaryMetadata {
+			pendingAuxiliary = coalesceMessageSync(pendingAuxiliary, *pending)
+			pending = nil
+		}
+		pending = coalesceMessageSync(pending, cmd)
+	}
+
 	var active *common.Cmd2Value
 	var done chan struct{}
 	var cancel context.CancelFunc
@@ -56,6 +71,13 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 	var preempt <-chan time.Time
 	reserveProgress := false
 	var retry messageSyncRetry
+	retryRemaining := func() time.Duration {
+		if pending != nil && pending.Cmd == cmdSyncAuxiliaryMetadata {
+			return auxiliaryRetry.remaining(time.Now())
+		}
+		return retry.remaining(time.Now())
+	}
+
 	var retryTimer *time.Timer
 	var retryWake <-chan time.Time
 	clearRetryTimer := func() {
@@ -71,16 +93,20 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 		}
 		preemption, preempt = nil, nil
 	}
-	stop := func() {
+	stop := func(interrupted ...bool) {
 		clearPreemption()
 		if cancel != nil {
 			cancel()
 			<-done // The sole state owner must exit before another command runs.
 			// A live push can win the select just as a failed worker exits.
 			// Preserve its failure here too, so traffic cannot bypass the cooldown.
-			if pageOwner.failed.Load() {
-				retry.failed(time.Now(), pageOwner.committed.Load() > 0)
-				pending = coalesceMessageSync(pending, *active)
+			if pageOwner.failed.Load() || (active.Cmd == cmdSyncAuxiliaryMetadata && len(interrupted) > 0 && interrupted[0]) {
+				if active.Cmd == cmdSyncAuxiliaryMetadata {
+					auxiliaryRetry.failed(time.Now(), pageOwner.committed.Load() > 0)
+				} else {
+					retry.failed(time.Now(), pageOwner.committed.Load() > 0)
+				}
+				enqueue(*active)
 			}
 			cancel, done, active = nil, nil, nil
 			pageOwner, pageTurns = nil, nil
@@ -91,7 +117,10 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 		if ctx.Err() != nil {
 			return
 		}
-		if active == nil && len(queued) > 0 && (pending == nil || liveHandled < liveBurst || retry.remaining(time.Now()) > 0) {
+		if active == nil && pending == nil && pendingAuxiliary != nil {
+			pending, pendingAuxiliary = pendingAuxiliary, nil
+		}
+		if active == nil && len(queued) > 0 && (pending == nil || liveHandled < liveBurst || retryRemaining() > 0) {
 			cmd := queued[0]
 			queued[0] = common.Cmd2Value{}
 			queued = queued[1:]
@@ -100,7 +129,7 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 			continue
 		}
 		// Drain already queued work before restarting an interrupted sync.
-		if active == nil && pending != nil && retry.remaining(time.Now()) == 0 {
+		if active == nil && pending != nil && retryRemaining() == 0 {
 			clearRetryTimer()
 			protected = len(protectInitialSync) > 0 && protectInitialSync[0]()
 			if !protected && liveHandled < liveBurst {
@@ -110,7 +139,7 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 						return
 					}
 					if isBackgroundSyncCommand(cmd) {
-						pending = coalesceMessageSync(pending, cmd)
+						enqueue(cmd)
 					} else {
 						handle(cmd)
 						liveHandled++
@@ -144,7 +173,7 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 			}(done)
 		}
 		if active == nil && pending != nil && retryTimer == nil {
-			retryTimer = time.NewTimer(retry.remaining(time.Now()))
+			retryTimer = time.NewTimer(retryRemaining())
 			retryWake = retryTimer.C
 		}
 		select {
@@ -154,7 +183,11 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 			clearRetryTimer()
 		case <-done:
 			if !pageOwner.failed.Load() {
-				retry = messageSyncRetry{}
+				if active.Cmd == cmdSyncAuxiliaryMetadata {
+					auxiliaryRetry = messageSyncRetry{}
+				} else {
+					retry = messageSyncRetry{}
+				}
 			}
 			reserveProgress = false
 			stop()
@@ -163,9 +196,9 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 			// page until completion, so busy chats cannot cancel it forever.
 			if active != nil {
 				resume := *active
-				pending = coalesceMessageSync(pending, resume)
-				reserveProgress = true
-				stop()
+				enqueue(resume)
+				reserveProgress = active.Cmd != cmdSyncAuxiliaryMetadata
+				stop(true)
 			}
 		case resume := <-pageTurns:
 			clearPreemption()
@@ -192,7 +225,7 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 					}
 				}
 				if isBackgroundSyncCommand(cmd) {
-					pending = coalesceMessageSync(pending, cmd)
+					enqueue(cmd)
 				} else {
 					handle(cmd)
 				}
@@ -203,6 +236,9 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 				return
 			}
 			if isBackgroundSyncCommand(cmd) {
+				if pending != nil && pending.Cmd == cmdSyncAuxiliaryMetadata && cmd.Cmd != cmdSyncAuxiliaryMetadata {
+					clearRetryTimer()
+				}
 				if cmd.Cmd == constant.CmdConnSuccesss {
 					// A fresh transport may recover a network failure immediately.
 					retry = messageSyncRetry{}
@@ -211,8 +247,13 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 				// Repeated foreground/reconnect signals describe the same desired
 				// catch-up. Do not accumulate full sync jobs behind live traffic.
 				if active == nil || cmd.Cmd == constant.CmdConnSuccesss || cmd.Cmd == cmdSyncAuxiliaryMetadata ||
-					(active.Cmd == cmdReconcileMessageSeq && messageSyncPriority(cmd.Cmd) > 1) {
-					pending = coalesceMessageSync(pending, cmd)
+					(active.Cmd == cmdReconcileMessageSeq && messageSyncPriority(cmd.Cmd) > 1) || active.Cmd == cmdSyncAuxiliaryMetadata {
+					enqueue(cmd)
+				}
+				if active != nil && active.Cmd == cmdSyncAuxiliaryMetadata && cmd.Cmd != cmdSyncAuxiliaryMetadata {
+					enqueue(*active)
+					reserveProgress = false
+					stop(true)
 				}
 				if active != nil && active.Cmd == cmdReconcileMessageSeq && messageSyncPriority(cmd.Cmd) > 1 {
 					stop()
@@ -228,13 +269,14 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 					}
 					continue
 				}
-				resume := *active
-				if pending == nil {
-					pending = &resume
+				// Let a short in-flight operation finish before cancelling it.
+				// Slow work still yields within the existing 100 ms budget.
+				queued = append(queued, cmd)
+				if preemption == nil {
+					preemption = time.NewTimer(100 * time.Millisecond)
+					preempt = preemption.C
 				}
-				// Metadata/max-sequence I/O must also get an uninterrupted retry.
-				reserveProgress = true
-				stop()
+				continue
 			}
 			handle(cmd)
 		}

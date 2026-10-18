@@ -1,6 +1,9 @@
 package common
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type syncNotificationOwnerKey struct{}
 type syncNotificationOwner struct{ marker bool }
@@ -14,7 +17,14 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
 	owner := &syncNotificationOwner{}
 	var pending []Cmd2Value
 	protected := false
+	var grace *time.Timer
+	var graceDone <-chan time.Time
 	stop := func() {
+		if grace != nil {
+			grace.Stop()
+			grace = nil
+			graceDone = nil
+		}
 		if cancel != nil {
 			cancel()
 			// A cancelled metadata job may still be waiting for a lock held by
@@ -54,6 +64,9 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
 			select {
 			case <-ctx.Done():
 				return
+			case <-graceDone:
+				stop()
+				continue
 			case <-done:
 				stop()
 				continue
@@ -78,8 +91,9 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
 		}
 		if done != nil {
 			pending = append(pending, cmd)
-			if !protected {
-				stop()
+			if !protected && grace == nil {
+				grace = time.NewTimer(100 * time.Millisecond)
+				graceDone = grace.C
 			}
 			continue
 		}

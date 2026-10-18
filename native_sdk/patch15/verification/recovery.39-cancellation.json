@@ -1,0 +1,14 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.39-group-offline.2",
+  "source_sha256": "27e2f591aa3b2b4d79735dcbaf007f308d741d4cd68139a8e78ccbe2664d495a",
+  "checks": {
+    "core": "Locked-source group, interaction, conversation_msg, common and syncer tests passed; converter compiled (no tests). Cancellation/preemption regressions passed 10 repetitions. Race detector not run.",
+    "source_lock": "15 tooling tests passed; 458 locked files verified; cumulative patch replay matches 455 files with 3 declared overlays.",
+    "android": "Not rebuilt for this source revision.",
+    "ios_framework": "Not rebuilt; macOS required.",
+    "device_runtime": "Not run; CPU/thermal/frame-time improvement not measured."
+  },
+  "log_directory": "E:/openim/outputs/heat-log-20261018",
+  "diagnostics": "group_sync_batch_summary: scheduled, started, peakActive, activeAtExit, cancelled, cancelJoinElapsed (observed cancellation callback to joined batch; debug-level).",
+  "limits": "No device CPU, thermal, network-rate, DB-write-rate or Flutter frame-time measurements. No native binaries rebuilt."
+}

@@ -149,3 +149,27 @@ func TestMetadataNotificationsDoNotRestartTheirOwnSync(t *testing.T) {
 	cancel()
 	<-done
 }
+
+func TestShortMetadataCompletesBeforePreemptionGrace(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := &selfNotifyingWorker{make(chan Cmd2Value, 4), make(chan struct{}), make(chan struct{}), make(chan error, 2)}
+	done := make(chan struct{})
+	go func() { defer close(done); DoListener(ctx, w) }()
+	receipt := make(chan error, 1)
+	w.queue <- Cmd2Value{Ctx: ctx, Cmd: "sync", Receipt: receipt}
+	<-w.generated
+	w.queue <- Cmd2Value{Ctx: ctx, Cmd: "external-live-update"}
+	time.Sleep(10 * time.Millisecond)
+	close(w.finish)
+	select {
+	case err := <-receipt:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("sync blocked")
+	}
+	cancel()
+	<-done
+}

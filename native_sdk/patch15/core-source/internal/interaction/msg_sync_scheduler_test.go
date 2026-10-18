@@ -147,3 +147,42 @@ func TestReconnectDuringSyncIsRetained(t *testing.T) {
 	cancel()
 	<-done
 }
+
+func TestShortSyncCompletesWithoutLivePushCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	input := make(chan common.Cmd2Value, 4)
+	started, release, live, done := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var attempts atomic.Int32
+	go func() {
+		defer close(done)
+		runMessageSyncLoop(ctx, input, func(cmd common.Cmd2Value) {
+			if cmd.Cmd == constant.CmdPushMsg {
+				close(live)
+				return
+			}
+			attempts.Add(1)
+			close(started)
+			select {
+			case <-release:
+			case <-cmd.Ctx.Done():
+				t.Error("short sync was cancelled")
+			}
+		})
+	}()
+	input <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdWakeUpDataSync}
+	<-started
+	input <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdPushMsg}
+	time.Sleep(10 * time.Millisecond)
+	close(release)
+	select {
+	case <-live:
+	case <-time.After(time.Second):
+		t.Fatal("live push blocked")
+	}
+	cancel()
+	<-done
+	if attempts.Load() != 1 {
+		t.Fatal(attempts.Load())
+	}
+}

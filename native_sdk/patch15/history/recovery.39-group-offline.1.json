@@ -1,0 +1,71 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.39-group-offline.1",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "6d40d323094dc28fadee890a8292dc1253b00a94d25850f308b281e909fed685",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "c59ba12935a69e4ac79fc8c3be5d0b2b084e201729843f346e1e2dbcd691b6d1",
+  "created": "2026-10-17",
+  "previous_release": "history/recovery.38-foreground-probe.2.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "flutter_regression": "360 tests passed before the final preview bound; all 51 preview tests passed after it (one new burst regression).",
+    "flutter_analyze": "Six changed implementation/test files: no issues.",
+    "native_race": "group, conversation_msg, interaction, syncer, common packages passed with race detector.",
+    "native_stress": "New member recovery suite passed 10 repetitions with race detector against locked mobile source.",
+    "source_lock": "15 tests passed; 452 locked files; cumulative patch reproduces 449 files plus 3 declared overlays.",
+    "android": "Four-ABI AAR and ARM64 debug APK built; AAR equals merged input and independently stripped AAR equals APK native libraries.",
+    "ios_framework": "not rebuilt; macOS required",
+    "device_runtime": "not run for this release"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.39-group-offline.1",
+    "sdk_version": "v3.8.3-patch.15+recovery.39-group-offline.1",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "not run for this release",
+    "native_binary_integrated": true,
+    "aar_built": true,
+    "sdk_artifact_verified": true
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.39-group-offline.1",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "not run; macOS rebuild required",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "user will rebuild on macOS",
+    "app_validation_scope": "same locked Core source as Android; previous binary is rejected",
+    "native_binary_integrated": false,
+    "source_consistency_verified": true,
+    "source_files": 452
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned existing gomobile dependency closure",
+    "version/version: unique recovery.39-group-offline.1 runtime identity"
+  ],
+  "verification_evidence": "verification/recovery.39-group-offline.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Differential full member recovery preserves events and cache invalidation; fetch failures preserve the directory. Flutter rejects superseded group/self/preview reads and retries failed profile recovery."
+  },
+  "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
+  "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
+  "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json"
+}

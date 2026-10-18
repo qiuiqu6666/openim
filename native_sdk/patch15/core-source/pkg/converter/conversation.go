@@ -2,6 +2,7 @@ package converter
 
 import (
 	"context"
+	"strings"
 
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
@@ -193,7 +194,7 @@ func PopulateMsgStructByContentType(msg *sdk_struct.MsgStruct) (err error) {
 		msg.NotificationElem = &elem
 	}
 	var attachedInfo sdk_struct.AttachedInfoElem
-	if msg.AttachedInfo != "" {
+	if strings.TrimSpace(msg.AttachedInfo) != "" {
 		if err := utils.JsonStringToStruct(msg.AttachedInfo, &attachedInfo); err != nil {
 			log.ZWarn(context.Background(), "JsonStringToStruct error", err, "localMessage.AttachedInfo", msg.AttachedInfo)
 		}
