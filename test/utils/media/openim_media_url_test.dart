@@ -2,6 +2,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openim_common/src/utils/media/openim_media_url.dart';
 
 void main() {
+  test('preserves COS signatures, CDN reads and legacy OSS originals', () {
+    const origin =
+        'https://99chat-1416337673.cos.ap-hongkong.myqcloud.com/a.jpg';
+    for (final query in [
+      'q-sign-algorithm=sha1&q-signature=abc',
+      'q-signature=abc',
+      'x-cos-security-token=abc',
+      'X-Amz-Signature=abc',
+    ]) {
+      final url = '$origin?$query';
+      expect(OpenIMMediaUrl.hasSignedQuery(url), isTrue);
+      expect(OpenIMMediaUrl.thumbnail(url, width: 100, height: 100), url);
+      expect(
+          OpenIMMediaUrl.resolve(url, imApiUrl: 'https://99imapi.99chat.vip'),
+          url);
+    }
+    for (final url in [
+      'https://oss.99chat.vip/cos/device-sync/a.jpg',
+      'https://99chat-openim-media.oss-cn-hongkong.aliyuncs.com/old.jpg',
+      'https://99chat.oss-cn-hongkong.aliyuncs.com/old.jpg',
+    ]) {
+      expect(
+          OpenIMMediaUrl.resolve(url, imApiUrl: 'https://99imapi.99chat.vip'),
+          url);
+    }
+  });
   const api = 'http://129.226.192.93:10002';
   const objectPath = '/object/sangong/'
       '3d964f1b-745f-46cd-8b68-7f06a3dac076/openim-test.png';

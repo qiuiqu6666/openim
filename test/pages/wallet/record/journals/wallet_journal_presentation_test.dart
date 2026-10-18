@@ -20,7 +20,7 @@ void main() {
         available: '2.123456',
         frozen: '0',
         asset: '2.123456',
-        display: '+2.123456 USDT',
+        display: '+2.12 USDT',
         title: '用户资金事件'
       ),
       (
@@ -29,7 +29,7 @@ void main() {
         available: '0',
         frozen: '-2.123456',
         asset: '-2.123456',
-        display: '-2.123456 USDT',
+        display: '-2.12 USDT',
         title: '用户资金事件'
       ),
       (
@@ -38,7 +38,7 @@ void main() {
         available: '-10',
         frozen: '10',
         asset: '0',
-        display: '10 USDT',
+        display: '10.00 USDT',
         title: '用户资金事件 · 冻结'
       ),
       (
@@ -47,7 +47,7 @@ void main() {
         available: '8',
         frozen: '-8',
         asset: '0',
-        display: '8 USDT',
+        display: '8.00 USDT',
         title: '用户资金事件 · 解冻'
       ),
       (
@@ -56,7 +56,7 @@ void main() {
         available: '0',
         frozen: '0',
         asset: '0',
-        display: '0 USDT',
+        display: '0.00 USDT',
         title: '用户资金事件 · 无资产变动'
       ),
     ]) {
@@ -108,7 +108,7 @@ void main() {
       await _pump(tester,
           brightness: brightness,
           child: WalletRecordDetailScreen(item: _record(entry)));
-      expect(_text(tester, 'wallet-record-detail-amount'), '8 USDT');
+      expect(_text(tester, 'wallet-record-detail-amount'), '8.00 USDT');
       expect(_text(tester, 'wallet-journal-detail-title'), '用户资金事件 · 解冻');
       expect(find.text('冻结余额转回可用余额，资产总数量不变，不计入收入。'), findsOneWidget);
       expectCompactJournalDetail();
@@ -139,7 +139,7 @@ void main() {
           child: Scaffold(
               body: WalletRecordRow(item: _record(entry), onTap: () {})));
       expect(_text(tester, 'wallet-record-amount-event-id'), '+10.01 元');
-      expect(_text(tester, 'wallet-record-balance-event-id'), '可用余额 111 元');
+      expect(_text(tester, 'wallet-record-balance-event-id'), '可用余额 111.00 元');
       await _pump(tester,
           brightness: brightness,
           child: WalletRecordDetailScreen(item: _record(entry)));
@@ -149,7 +149,7 @@ void main() {
     });
 
     testWidgets(
-        'long TRX quantities keep six decimals at large text in $brightness',
+        'long TRX quantities show two decimals at large text in $brightness',
         (tester) async {
       const quantity = '123456789012345678.123456';
       final entry = _entry(
@@ -165,7 +165,8 @@ void main() {
           size: const Size(320, 700),
           textScale: 3,
           child: WalletRecordDetailScreen(item: _record(entry)));
-      expect(_text(tester, 'wallet-record-detail-amount'), '+$quantity TRX');
+      expect(_text(tester, 'wallet-record-detail-amount'),
+          '+123456789012345678.12 TRX');
       expectCompactJournalDetail();
       final amount = find.byKey(const ValueKey('wallet-record-detail-amount'));
       final rect = tester.getRect(amount);

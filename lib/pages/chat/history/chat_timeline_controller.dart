@@ -469,13 +469,10 @@ class ChatTimelineController {
     for (final row in visible) {
       _rememberRecoveryAnchor([row]);
     }
-    // Both confirmed segments are already ordered; pending sends remain a
-    // separate stable tail. Do not re-sort hundreds of unchanged bubbles.
-    var next = <Message>[
-      ...messageList.where((m) => (m.seq ?? 0) > 0),
-      ...visible,
-      ...messageList.where((m) => (m.seq ?? 0) <= 0),
-    ];
+    // Completed local records (including calls) have no server sequence but
+    // belong at their timestamp, not in the pending-send tail. Use the same
+    // mixed ordering as history loads without re-sorting server messages.
+    var next = ChatHistoryLoader.appendOrderedBatch(messageList, visible);
     if (preserveReading?.call() != true &&
         !_history.viewingHistory &&
         next.length > automaticWindowLimit) {

@@ -26,7 +26,8 @@ class ContactsLogic extends GetxController
         ViewUserProfileBridge,
         SelectContactsBridge,
         ScanBridge,
-        ContactRemarkSource {
+        ContactRemarkSource,
+        ContactDisplayNameSource {
   ContactsLogic({
     Future<List<FriendInfo>> Function(int offset, int count)? fetchFriendsPage,
     ContactDirectoryIndexer? directoryIndexer,
@@ -186,6 +187,14 @@ class ContactsLogic extends GetxController
     if (_inactive || userID == null) return null;
     final remark = friend?.remark?.trim();
     return remark == null || remark.isEmpty ? null : remark;
+  }
+
+  @override
+  String? friendDisplayNameFor(String? userID) {
+    final friend = _directory[userID];
+    if (_inactive || friend == null) return null;
+    return ContactRemarkSource.nameFromValues(userID,
+        remark: friend.remark, nickname: friend.nickname);
   }
 
   @override

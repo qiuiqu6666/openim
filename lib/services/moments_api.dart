@@ -11,14 +11,24 @@ export 'moments_models.dart';
 
 /// Uses the business chatToken. IM tokens are never sent to business endpoints.
 class MomentsApi {
-  MomentsApi({Dio? client, String? baseUrl, String? Function()? tokenProvider})
+  MomentsApi(
+      {Dio? client,
+      Dio? mediaClient,
+      String? baseUrl,
+      String? Function()? tokenProvider})
       : _client = client ??
+            Dio(BaseOptions(
+                connectTimeout: const Duration(seconds: 15),
+                receiveTimeout: const Duration(seconds: 30))),
+        _mediaClient = mediaClient ??
             Dio(BaseOptions(
                 connectTimeout: const Duration(seconds: 15),
                 receiveTimeout: const Duration(seconds: 30))),
         _baseUrl = baseUrl,
         _tokenProvider = tokenProvider;
   final Dio _client;
+  // No business interceptors, cookies or login headers cross the CDN boundary.
+  final Dio _mediaClient;
   final String? _baseUrl;
   final String? Function()? _tokenProvider;
   String get baseUrl =>
@@ -262,13 +272,33 @@ class MomentsApi {
     final token = _requireToken();
     final base = baseUrl;
     try {
-      final response = await _client.get<List<int>>(url,
+      var response = await _client.get<List<int>>(url,
           options: Options(
               headers: {'token': token, 'operationID': const Uuid().v4()},
               responseType: ResponseType.bytes,
               followRedirects: false,
               validateStatus: (_) => true));
       _checkSession(token, base);
+      if (const {302, 303, 307, 308}.contains(response.statusCode)) {
+        final target = Uri.tryParse(response.headers.value('location') ?? '');
+        if (target == null ||
+            target.scheme != 'https' ||
+            target.host != 'oss.99chat.vip' ||
+            target.port != 443 ||
+            target.userInfo.isNotEmpty ||
+            target.hasFragment ||
+            target.path.isEmpty ||
+            target.path == '/') {
+          throw const MomentsException('媒体访问地址不符合授权协议',
+              code: 'MEDIA_URL_INVALID');
+        }
+        response = await _mediaClient.get<List<int>>(target.toString(),
+            options: Options(
+                responseType: ResponseType.bytes,
+                followRedirects: false,
+                validateStatus: (_) => true));
+        _checkSession(token, base);
+      }
       final errorBody = _mediaErrorBody(
           response.data, response.headers.value(Headers.contentTypeHeader));
       _checkStatus(response.statusCode, false, errorBody);

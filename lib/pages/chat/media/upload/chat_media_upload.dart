@@ -34,7 +34,7 @@ class ChatMediaUpload {
       String id, String path, String? contentType, ChatMediaTrace trace) async {
     if (isClosed()) throw StateError('Chat closed');
     final result = await trace.run(
-        id.startsWith('chat-top-preview:') ? 'upload_preview' : 'upload_source',
+        id.startsWith('chat-media:') ? 'upload_source' : 'upload_preview',
         () => OpenIM.iMManager
             .uploadFile(
               id: id,
@@ -105,9 +105,20 @@ class ChatMediaUpload {
     if (message.contentType == MessageType.picture) {
       final picture = message.pictureElem!;
       final source = picture.sourcePicture!;
-      final url = await _upload(
-          'chat-media:$id', picture.sourcePath!, source.type, trace);
-      final renditions = await _optionalRenditions(message, trace);
+      // Attach both error handlers immediately, and wait for native readers before
+      // any temporary files are released. Optional work overlaps source upload.
+      String? sourceURL;
+      ({PictureInfo thumbnail, PictureInfo preview})? renditions;
+      await Future.wait<void>([
+        _upload('chat-media:$id', picture.sourcePath!, source.type, trace)
+            .then((value) {
+          sourceURL = value;
+        }),
+        _optionalRenditions(message, trace).then((value) {
+          renditions = value;
+        }),
+      ]);
+      final url = sourceURL!;
       PictureInfo? topPreview;
       String? previewExtra;
       if ((source.width ?? 0) > 0 &&
@@ -179,11 +190,14 @@ class ChatMediaUpload {
               type: image.type);
         }
 
-        final thumbnail = await upload(images.thumbnail, 'thumbnail');
+        // Non-eager Future.wait keeps both files alive until both native readers
+        // finish, including when one upload fails or the optional deadline wins.
+        final uploaded = await Future.wait([
+          upload(images.thumbnail, 'thumbnail'),
+          upload(images.preview, 'preview'),
+        ]);
         if (expired || isClosed()) return null;
-        final preview = await upload(images.preview, 'preview');
-        if (expired || isClosed()) return null;
-        return (thumbnail: thumbnail, preview: preview);
+        return (thumbnail: uploaded[0], preview: uploaded[1]);
       } finally {
         await images?.dispose();
       }

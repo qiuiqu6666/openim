@@ -108,7 +108,7 @@ class _ArchiveLogic extends GetxController
   String? getPrefixTag(ConversationInfo info) => '';
 
   @override
-  Future<void> refreshOrganizer() async {
+  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {
     refreshCount++;
     organizerLoading.value = true;
     organizerError.value = null;

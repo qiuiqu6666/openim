@@ -258,6 +258,7 @@ class ChatGroupController {
       _events.memberChanged.listen(_onMemberChanged),
       _events.groupChanged.listen((info) {
         if (!_matches(info.groupID)) return;
+        _profileRetryTimer?.cancel();
         _memberActionRevision.value++;
         _profileRevision++;
         _applyGroupInfo(info);
@@ -285,6 +286,7 @@ class ChatGroupController {
     _leftByEvent = true;
     _loaded = false;
     _retryTimer?.cancel();
+    _profileRetryTimer?.cancel();
     _adminListLoaded.value = false;
     groupMembersInfo = null;
     groupMemberRoleLevel.value = GroupRoleLevel.member;
@@ -321,10 +323,13 @@ class ChatGroupController {
   }
 
   Future<void>? _profileRefresh;
+  Timer? _profileRetryTimer;
 
   /// A sync finish can repair native metadata without a live group callback.
   /// Read only this profile, preserving loaded members and message history.
-  Future<void> refreshProfileAfterSync() {
+  Future<void> refreshProfileAfterSync() => _refreshProfile();
+
+  Future<void> _refreshProfile({int attempt = 0}) {
     if (!_matches(groupID())) return Future<void>.value();
     if (_leftByEvent || membershipPending.value || !isInGroup.value) {
       // Force a read begun after sync, not the negative entry snapshot.
@@ -336,14 +341,28 @@ class ChatGroupController {
       return loadAfterHistory();
     }
     if (_profileRefresh != null) return _profileRefresh!;
+    _profileRetryTimer?.cancel();
     // An entry read started before native sync may still hold old metadata.
     // Give the post-sync read its own key and invalidate that older result.
-    _profileRevision++;
-    return _profileRefresh = _queryGroupInfo(
-      groupID()!,
-      currentUserID(),
-      _membershipRevision,
-    ).whenComplete(() => _profileRefresh = null);
+    final revision = ++_profileRevision;
+    final id = groupID()!;
+    final user = currentUserID();
+    final membership = _membershipRevision;
+    return _profileRefresh = _queryGroupInfo(id, user, membership).then((ok) {
+      if (!ok &&
+          attempt < 2 &&
+          _queryStillCurrent(id, user, membership) &&
+          revision == _profileRevision &&
+          isInGroup.value) {
+        _profileRetryTimer = Timer(Duration(seconds: attempt == 0 ? 1 : 3), () {
+          if (_queryStillCurrent(id, user, membership) &&
+              revision == _profileRevision &&
+              isInGroup.value) {
+            unawaited(_refreshProfile(attempt: attempt + 1));
+          }
+        });
+      }
+    }).whenComplete(() => _profileRefresh = null);
   }
 
   /// Retained for callers that await metadata; history is not a prerequisite.
@@ -433,20 +452,26 @@ class ChatGroupController {
     ]);
   }
 
-  Future<void> _queryGroupInfo(String id, String userID, int membership) async {
+  Future<bool> _queryGroupInfo(String id, String userID, int membership) async {
     final revision = _profileRevision;
     try {
       final list =
           await _read(('profile', revision), () => _queries.groupInfo(id));
       if (!_queryStillCurrent(id, userID, membership) ||
           revision != _profileRevision) {
-        return;
+        return true;
       }
       final info = list.firstWhereOrNull((info) => info.groupID == id);
       if (info == null) throw StateError('Group metadata is not available yet');
       _applyGroupInfo(info);
+      return true;
     } catch (error) {
-      if (_queryStillCurrent(id, userID, membership)) _loadError(error);
+      if (_queryStillCurrent(id, userID, membership) &&
+          revision == _profileRevision) {
+        _loadError(error);
+        return false;
+      }
+      return true;
     }
   }
 
@@ -607,6 +632,7 @@ class ChatGroupController {
     if (_closed) return;
     _closed = true;
     _retryTimer?.cancel();
+    _profileRetryTimer?.cancel();
     _queryReads.close();
     _membershipRevision++;
     _messageIndexWorker?.dispose();

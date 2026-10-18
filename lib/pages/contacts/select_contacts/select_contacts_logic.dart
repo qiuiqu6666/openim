@@ -70,7 +70,6 @@ class SelectContactsLogic extends GetxController
   final RecentConversationDirectory _recentDirectory;
   int _recentGeneration = 0;
   final _confirmingSelection = false.obs;
-  bool _validatingRecipients = false;
   final _localMembershipCache = RecentMembershipCache();
   RecentMembershipCache get _membershipCache =>
       Get.isRegistered<ConversationLogic>()
@@ -186,7 +185,6 @@ class SelectContactsLogic extends GetxController
   Future<void> reloadRecentConversations() async {
     if (!selectionCurrent ||
         hiddenConversations ||
-        _validatingRecipients ||
         _confirmingSelection.value) {
       return;
     }
@@ -404,31 +402,12 @@ class SelectContactsLogic extends GetxController
                   ),
                 ));
       if (sure == true && selectionCurrent) {
-        // Stop background checks before issuing newer send-time checks.
-        ++_recentGeneration;
-        recentLoading.value = false;
-        _validatingRecipients = true;
-        bool valid;
-        try {
-          valid = await _recentDirectory.validateForSend(
-            recipients.map(IMUtils.convertCheckedToGroupID).whereType<String>(),
-            isCurrent: () => selectionCurrent,
-            cache: _membershipCache,
-            onExcluded: _excludeRecentGroup,
-          );
-        } finally {
-          _validatingRecipients = false;
-        }
-        if (!selectionCurrent) return false;
+        // Visible recipients can proceed immediately. The actual send handles
+        // membership errors; another SDK lookup here can block on sync/offline.
         _removeUnavailableSelections();
-        if (!valid ||
-            recipients.any((info) =>
-                !allowsSelection(info) ||
-                !checkedList.containsKey(parseID(info)))) {
-          IMViews.showToast(Get.locale?.languageCode == 'zh'
-              ? '部分群聊已不可用或暂时无法确认入群状态，请检查后重试'
-              : 'Some groups are unavailable or could not be verified. Please review and retry.');
-          recentLoadFailed.value = true;
+        if (recipients.any((info) =>
+            !allowsSelection(info) ||
+            !checkedList.containsKey(parseID(info)))) {
           return false;
         }
         Get.back(result: {

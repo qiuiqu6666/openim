@@ -26,8 +26,8 @@ maintained in separate files.
   with selected-state semantics and the existing themed tab indicator.
 - `widgets/wallet_record_month_section.dart`: month picker, themed record surface
   and separators between adjacent records.
-- `wallet_record_amount.dart`: exact original-currency journal display, plus the
-  legacy two-decimal formatter; large values never pass through floating point.
+- `wallet_record_amount.dart`: original-currency decimal normalization and the
+  shared two-decimal display formatter; large values never pass through floating point.
 - `widgets/wallet_record_amount_text.dart`: optional invisible digit wrap points
   for long numbers, with the complete formatted value retained for semantics.
 - `widgets/wallet_record_row.dart`: formatted amount strings, timestamp and status,
@@ -91,8 +91,9 @@ deposit and withdrawal routes use journal business filters.
 Journal rows and details display `afterAvailable` when provided. Null historical
 balances display `--`; current account balances never reconstruct history.
 
-Amounts remain backend strings. Journal USDT/TRX retain up to six decimals and
-BI99 up to two, without floating point or conversion to today's RMB price.
+Amounts remain backend strings with their original precision. Journal amounts and
+historical balances display exactly two decimal places, rounding half away from
+zero without floating point or conversion to today's RMB price.
 Income and expense use `assetDelta`; withdrawal application/return and packet
 send/return events retain their original ledger direction and operation amount.
 Their rows and compact receipts use business titles without freeze/unfreeze
@@ -172,7 +173,7 @@ The Android debug APK build passed. See
 Live wallet account data and iOS device behavior remain unverified.
 
 Journal details now use the supplied receipt reference: a single themed round
-card with the counterparty avatar, event title, exact original-currency amount
+card with the counterparty avatar, event title, two-decimal original-currency amount
 and compact, left-aligned fields. Transfer profile enrichment obtains nickname
 and faceURL in the same existing SDK batch; missing artwork falls back to a
 nickname avatar. The SDK does not expose the public account here, so the main

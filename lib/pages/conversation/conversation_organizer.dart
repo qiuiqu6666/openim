@@ -1,3 +1,4 @@
+import 'organizer/organizer_request_diagnostics.dart';
 import 'package:dio/dio.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -52,6 +53,31 @@ class ChatOrganizerApi {
 
   static String get _base => '${Config.appAuthUrl}/chat';
 
+  static Future<Map<String, dynamic>> _request(String method, String path,
+      {String? route,
+      String source = 'manual',
+      Map<String, dynamic>? data,
+      Map<String, dynamic>? queryParameters}) {
+    final options = _options;
+    options.method = method;
+    int? businessCode;
+    return OrganizerRequestDiagnostics.run(
+      route: '$method /chat/${route ?? path}',
+      source: source,
+      operationID: options.headers!['operationID'] as String,
+      businessCode: () => businessCode,
+      request: () async {
+        final response = await dio.request('$_base/$path',
+            options: options, data: data, queryParameters: queryParameters);
+        final body = response.data;
+        if (body is Map && body['errCode'] is int) {
+          businessCode = body['errCode'];
+        }
+        return _data(response);
+      },
+    );
+  }
+
   static Map<String, dynamic> _data(Response<dynamic> response) {
     final body = Map<String, dynamic>.from(response.data as Map);
     if (body['errCode'] != 0) {
@@ -64,8 +90,8 @@ class ChatOrganizerApi {
     return Map<String, dynamic>.from(body['data'] as Map);
   }
 
-  static Future<List<ChatFolder>> getFolders() async {
-    final data = _data(await dio.get('$_base/folders', options: _options));
+  static Future<List<ChatFolder>> getFolders({String source = 'manual'}) async {
+    final data = await _request('GET', 'folders', source: source);
     return (data['folders'] as List? ?? const [])
         .map((item) =>
             ChatFolder.fromJson(Map<String, dynamic>.from(item as Map)))
@@ -74,33 +100,30 @@ class ChatOrganizerApi {
 
   static Future<ChatFolder> createFolder(String name,
       {int sortOrder = 0}) async {
-    final data = _data(await dio.post('$_base/folders',
-        data: {'name': name, 'sortOrder': sortOrder}, options: _options));
+    final data = await _request('POST', 'folders',
+        data: {'name': name, 'sortOrder': sortOrder});
     return ChatFolder.fromJson(data);
   }
 
   static Future<ChatFolder> renameFolder(String id, String name) async {
-    final data = _data(await dio.patch(
-        '$_base/folders/${Uri.encodeComponent(id)}',
-        data: {'name': name},
-        options: _options));
+    final data = await _request('PATCH', 'folders/${Uri.encodeComponent(id)}',
+        route: 'folders/:id', data: {'name': name});
     return ChatFolder.fromJson(data);
   }
 
   static Future<ChatFolder> setFolderSortOrder(String id, int sortOrder) async {
-    final data = _data(await dio.patch(
-        '$_base/folders/${Uri.encodeComponent(id)}',
-        data: {'sortOrder': sortOrder},
-        options: _options));
+    final data = await _request('PATCH', 'folders/${Uri.encodeComponent(id)}',
+        route: 'folders/:id', data: {'sortOrder': sortOrder});
     return ChatFolder.fromJson(data);
   }
 
   static Future<void> deleteFolder(String id) async {
-    _data(await dio.delete('$_base/folders/${Uri.encodeComponent(id)}',
-        options: _options));
+    await _request('DELETE', 'folders/${Uri.encodeComponent(id)}',
+        route: 'folders/:id');
   }
 
-  static Future<ChatStatesSync> getStates({int updatedAfter = 0}) async {
+  static Future<ChatStatesSync> getStates(
+      {int updatedAfter = 0, String source = 'manual'}) async {
     final token = DataSp.chatToken;
     final states = <String, ChatConversationState>{};
     var cursor = updatedAfter;
@@ -108,9 +131,9 @@ class ChatOrganizerApi {
       if (DataSp.chatToken != token) {
         throw StateError('Session changed while loading conversation states');
       }
-      final data = _data(await dio.get('$_base/conversation-states',
-          queryParameters: {'updatedAfter': cursor, 'limit': 500},
-          options: _options));
+      final data = await _request('GET', 'conversation-states',
+          source: source,
+          queryParameters: {'updatedAfter': cursor, 'limit': 500});
       final page = data['states'] as List;
       for (final item in page) {
         final state = ChatConversationState.fromJson(
@@ -131,11 +154,10 @@ class ChatOrganizerApi {
     required bool archived,
     required int version,
   }) async {
-    final data = _data(await dio.put(
-      '$_base/conversation-states/${Uri.encodeComponent(conversationID)}',
-      data: {'folderID': folderID, 'archived': archived, 'version': version},
-      options: _options,
-    ));
+    final data = await _request(
+        'PUT', 'conversation-states/${Uri.encodeComponent(conversationID)}',
+        route: 'conversation-states/:id',
+        data: {'folderID': folderID, 'archived': archived, 'version': version});
     return ChatConversationState.fromJson(data);
   }
 }

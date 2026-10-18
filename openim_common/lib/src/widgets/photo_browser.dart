@@ -3,7 +3,6 @@ import 'dart:io';
 import 'media_browser/media_page_gesture.dart';
 import 'media_browser/gallery_image_precache.dart';
 import 'media_browser/media_image_loading.dart';
-import 'media_browser/on_demand_image.dart';
 import 'media_browser/on_demand_video.dart';
 
 import 'package:extended_image/extended_image.dart';
@@ -22,6 +21,7 @@ import 'custom_mk_controls.dart';
 import 'photo_browser_hero.dart';
 import 'video_media_cache.dart';
 import 'media_preview_glass.dart';
+import 'media_browser/media_preview_action_button.dart';
 import 'media_browser/local_media_availability.dart';
 import 'media_browser/media_action_sheet.dart';
 import 'media_browser/media_video_hero.dart';
@@ -78,6 +78,19 @@ class _MediaBrowserState extends State<MediaBrowser> {
   final _imageRequests = <String, ViewerImageProvider>{};
   int currentIndex = 0;
   bool _showControls = true;
+  final _requestedOriginals = Expando<bool>();
+
+  bool _offersOriginal(MediaSource source) =>
+      !source.isVideo &&
+      !source.loading &&
+      source.bytes == null &&
+      source.file == null &&
+      _requestedOriginals[source] != true &&
+      (source.deferOriginal ||
+          (source.previewUrl != null &&
+              source.previewUrl!.isNotEmpty &&
+              source.previewUrl != (source.url ?? source.thumbnail)));
+
   bool _showGrid = false;
   final _chromeTick = ValueNotifier(0);
   final _pageTick = ValueNotifier(0);
@@ -570,6 +583,21 @@ class _MediaBrowserState extends State<MediaBrowser> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   spacing: NavigationGlassTokens.gap,
                   children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _offersOriginal(source)
+                            ? MediaPreviewActionButton(
+                                label: 'mediaViewOriginal'.tr,
+                                onPressed: () {
+                                  _requestedOriginals[source] = true;
+                                  _pageTick.value++;
+                                  _notifyChrome();
+                                },
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ),
                     if (widget.onForward != null)
                       _roundAction(context,
                           icon: Icons.ios_share,
@@ -637,15 +665,12 @@ class _MediaBrowserState extends State<MediaBrowser> {
     if (!hasPreview && !s.deferOriginal) {
       return render(original);
     }
-    return OnDemandImage(
-      key: ValueKey('original:${s.tag}:$original:$preview'),
-      preview: (_) => hasPreview
-          ? render(preview)
-          : Center(
-              child: Icon(Icons.image_outlined,
-                  color: AppTokens.textSecondary(dark: true))),
-      original: (_) => render(original),
-    );
+    if (_requestedOriginals[s] == true) return render(original);
+    return hasPreview
+        ? render(preview)
+        : Center(
+            child: Icon(Icons.image_outlined,
+                color: AppTokens.textSecondary(dark: true)));
   }
 
   void _selectGridPage(int index) {
@@ -722,25 +747,10 @@ class _MediaBrowserState extends State<MediaBrowser> {
       {required IconData icon,
       required String tooltip,
       VoidCallback? onPressed}) {
-    final diameter =
-        (MediaQuery.sizeOf(context).width * 0.105).clamp(42.0, 52.0);
-    return SizedBox.square(
-      dimension: diameter,
-      child: MediaPreviewGlass(
-        borderRadius: BorderRadius.circular(diameter / 2),
-        interactive: onPressed != null,
-        child: IconButton.filled(
-          tooltip: tooltip,
-          onPressed: onPressed,
-          icon: Icon(icon, size: diameter * 0.48),
-          style: IconButton.styleFrom(
-            foregroundColor: Colors.white,
-            disabledForegroundColor: Colors.white70,
-            backgroundColor: Colors.transparent,
-            disabledBackgroundColor: Colors.transparent,
-          ),
-        ),
-      ),
+    return MediaPreviewActionButton(
+      icon: icon,
+      label: tooltip,
+      onPressed: onPressed,
     );
   }
 

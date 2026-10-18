@@ -170,6 +170,130 @@ void main() {
         throwsA(isA<TypeError>()));
   });
 
+  for (final manual in [false, true]) {
+    testWidgets('refresh timeout feedback manual=$manual preserves cache',
+        (tester) async {
+      await _mount(tester);
+      final logic = createLogic();
+      logic.folders.add(ChatFolder.fromJson(_folder('cached')));
+      await tester.runAsync(() async {
+        final work = logic.refreshOrganizer(
+            userInitiated: manual, source: manual ? 'manual' : 'resume');
+        await _waitForRequests(adapter, 1);
+        final request = adapter.requests.single;
+        request.response.completeError(DioException(
+            requestOptions: request.options,
+            type: DioExceptionType.receiveTimeout));
+        await work;
+        expect(logic.organizerError.value, isNotNull);
+        expect(logic.folders.single.id, 'cached');
+      });
+      await tester.pump();
+      expect(EasyLoading.isShow, manual);
+      await _disposeHost(tester);
+    });
+  }
+
+  testWidgets('manual refresh queued behind automatic keeps feedback and waits',
+      (tester) async {
+    await _mount(tester);
+    final logic = createLogic();
+    await tester.runAsync(() async {
+      final automatic =
+          logic.refreshOrganizer(userInitiated: false, source: 'resume');
+      await _waitForRequests(adapter, 1);
+      var manualDone = false;
+      final manual = logic.refreshOrganizer().then((_) => manualDone = true);
+      final extra =
+          logic.refreshOrganizer(userInitiated: false, source: 'reconnect');
+      final first = adapter.requests.single;
+      first.response.completeError(DioException(
+          requestOptions: first.options,
+          type: DioExceptionType.receiveTimeout));
+      await _waitForRequests(adapter, 2);
+      expect(manualDone, isFalse);
+      expect(EasyLoading.isShow, isFalse);
+      final second = adapter.requests.last;
+      second.response.completeError(DioException(
+          requestOptions: second.options,
+          type: DioExceptionType.receiveTimeout));
+      await Future.wait([automatic, manual, extra]);
+      expect(manualDone, isTrue);
+      expect(adapter.requests, hasLength(2));
+    });
+    await tester.pump();
+    expect(EasyLoading.isShow, isTrue);
+    await _disposeHost(tester);
+  });
+
+  testWidgets('manual folder mutation timeout still reports failure',
+      (tester) async {
+    await _mount(tester);
+    final logic = createLogic();
+    await tester.runAsync(() async {
+      final work = logic.createFolder('new folder');
+      await _waitForRequests(adapter, 1);
+      final request = adapter.requests.single;
+      request.response.completeError(DioException(
+          requestOptions: request.options,
+          type: DioExceptionType.connectionTimeout));
+      expect(await work, isFalse);
+      expect(logic.folders, isEmpty);
+    });
+    await tester.pump();
+    expect(EasyLoading.isShow, isTrue);
+    await _disposeHost(tester);
+  });
+
+  testWidgets(
+      'timeout diagnostics identify endpoint and source without secrets',
+      (tester) async {
+    await _mount(tester);
+    final records = <Map<String, dynamic>>[];
+    const channel = MethodChannel('flutter_openim_sdk');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'logs') {
+        records.add(jsonDecode((call.arguments as Map)['msgs'] as String)
+            as Map<String, dynamic>);
+      }
+      return null;
+    });
+    Logger().sdkIsInited = true;
+    addTearDown(() {
+      Logger().sdkIsInited = false;
+      messenger.setMockMethodCallHandler(channel, null);
+    });
+    final logic = createLogic();
+    await tester.runAsync(() async {
+      final work =
+          logic.refreshOrganizer(userInitiated: false, source: 'resume');
+      await _waitForRequests(adapter, 1);
+      adapter.requests.last.reply({'folders': []});
+      await _waitForRequests(adapter, 2);
+      final request = adapter.requests.last;
+      request.response.completeError(DioException(
+          requestOptions: request.options,
+          type: DioExceptionType.receiveTimeout,
+          message: 'SECRET exception detail'));
+      await work;
+      await Future<void>.delayed(Duration.zero);
+      expect(records, hasLength(1));
+      final record = records.single;
+      expect(record['route'], 'GET /chat/conversation-states');
+      expect(record['source'], 'resume');
+      expect(record['type'], 'receiveTimeout');
+      expect(record['operationID'], request.options.headers['operationID']);
+      expect(record['elapsedMs'], isNonNegative);
+      expect(jsonEncode(record), isNot(contains('SECRET')));
+      expect(jsonEncode(record), isNot(contains('self-chat')));
+    });
+    await tester.pump();
+    expect(EasyLoading.isShow, isFalse);
+    await _disposeHost(tester);
+  });
+
   testWidgets('refreshOrganizer loads zero sort order without an error toast',
       (tester) async {
     await _mount(tester);
@@ -302,7 +426,8 @@ void main() {
       expect(adapter.requests.last.options.queryParameters['updatedAfter'], 0);
       adapter.requests.last.reply({'states': firstPage, 'syncAt': 500});
       await _waitForRequests(adapter, 2);
-      expect(adapter.requests.last.options.queryParameters['updatedAfter'], 500);
+      expect(
+          adapter.requests.last.options.queryParameters['updatedAfter'], 500);
       adapter.requests.last.reply({'states': [], 'syncAt': 501});
       expect((await loading).states, hasLength(500));
       expect(
@@ -344,7 +469,9 @@ void main() {
         final count = adapter.requests.length;
         logic.onInit();
         await _waitForRequests(adapter, count + 1);
-        adapter.requests.last.reply({'folders': [_folder('a')]});
+        adapter.requests.last.reply({
+          'folders': [_folder('a')]
+        });
         await _waitForRequests(adapter, count + 2);
         adapter.requests.last.reply({'states': [], 'syncAt': 1});
         for (var i = 0; i < 100 && logic.organizerLoading.value; i++) {

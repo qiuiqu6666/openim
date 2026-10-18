@@ -1,0 +1,45 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.39-group-offline.1",
+  "source_sha256": "c59ba12935a69e4ac79fc8c3be5d0b2b084e201729843f346e1e2dbcd691b6d1",
+  "scope": "Offline group profile, member count and member identity recovery",
+  "fixes": [
+    "Reject delayed group and self-member reads after newer events.",
+    "Retry post-sync profile read failures twice, cancel on newer events, leave, close or account change.",
+    "Fetch full member snapshots before differential application; retain callbacks, invalidate cached identities and retain retryable versions on failure.",
+    "Merge member events over pending preview reads, deduplicate additions and bound preview to 20 rows."
+  ],
+  "checks": {
+    "flutter_regression": "360 tests passed before the final preview bound; all 51 preview tests passed after it (one new burst regression).",
+    "flutter_analyze": "Six changed implementation/test files: no issues.",
+    "native_race": "group, conversation_msg, interaction, syncer, common packages passed with race detector.",
+    "native_stress": "New member recovery suite passed 10 repetitions with race detector against locked mobile source.",
+    "source_lock": "15 tests passed; 452 locked files; cumulative patch reproduces 449 files plus 3 declared overlays.",
+    "android": "Four-ABI AAR and ARM64 debug APK built; AAR equals merged input and independently stripped AAR equals APK native libraries."
+  },
+  "apk": "E:\\openim\\openim-flutter-demo\\release-artifacts\\99chat-group-offline-recovery.39-arm64-debug.apk",
+  "apk_sha256": "eccd542b4f55cfeb2b1e2cc4b3a684186db6e49b82751280692cc288bb767eb5",
+  "aar_sha256": "6b5e138200f94df9a5951abc488027dc62d410c1f41c8f7da4d97275d64782c6",
+  "apk_native_libraries_sha256": {
+    "lib/arm64-v8a/libgojni.so": {
+      "aar_sha256": "4c571f9503a459d5157518f0c58b451d2071c84144df6e65de29ddc8c6d868dc",
+      "apk_sha256": "bfbcb48e4da2939f59b2b689eee96029a2e1d5061516db194424bf8b3cf9bb66",
+      "transform": "NDK 28.2 llvm-strip --strip-unneeded; independently reproduced"
+    }
+  },
+  "limitations": [
+    "Deterministic SDK-channel and HTTP fixtures; no two-account physical-device offline test.",
+    "iOS uses the same locked Core source but framework/app was not rebuilt; macOS is required.",
+    "No production group mutations, deployment or installation performed."
+  ],
+  "evidence_directory": "E:\\openim\\artifacts\\group-offline-audit-20261017",
+  "logs": [
+    "E:\\openim\\group-offline-fix-flutter-final.log",
+    "E:\\openim\\group-offline-fix-preview-final.log",
+    "E:\\openim\\group-offline-fix-core-race.log",
+    "E:\\openim\\group-offline-fix-core-stress.log",
+    "E:\\openim\\group-offline-fix-source-lock.log",
+    "E:\\openim\\group-offline-fix-analyze.log",
+    "E:\\openim\\group-offline-fix-aar-build.log",
+    "E:\\openim\\group-offline-fix-apk-final.log"
+  ]
+}

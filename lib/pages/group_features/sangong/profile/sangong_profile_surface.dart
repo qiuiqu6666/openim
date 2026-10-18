@@ -403,7 +403,14 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
           error: _error,
           selectionContext: selectionContext,
           selectionChanges: selectionStore,
-          onRetry: () => unawaited(_discover()),
+          onRetry: () {
+            if (runtime != null && identical(runtime, _runtime)) {
+              setState(() => _error = null);
+              unawaited(_recoverCapabilities(runtime));
+            } else {
+              unawaited(_discover());
+            }
+          },
           onSelectGroup: (id) => unawaited(_select(id)),
           onLedger: () {
             if (!scoped.mounted ||

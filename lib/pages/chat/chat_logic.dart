@@ -1342,6 +1342,8 @@ class ChatLogic extends SuperController {
 
   Future<void> onTapAlbum() => _media.onTapAlbum();
   int get preparingMediaCount => _media.preparingCount.value;
+  int get failedMediaPreparationCount => _media.failedPreparationCount.value;
+  void retryMediaPreparation() => _media.retryPreparation();
   Future<void> onTapFile() => _media.onTapFile();
   Future<void> onTapCamera() => _media.onTapCamera();
   Future<void> onTapRecord() => _voice.onTapRecord();

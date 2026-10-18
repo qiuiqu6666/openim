@@ -6,6 +6,7 @@ import '../models/sangong_game_settings.dart';
 import '../models/sangong_admin_realtime_state.dart';
 import '../sangong_scope.dart';
 import '../services/authorization/sangong_operation_scope.dart';
+import '../services/authorization/sangong_route_revalidation.dart';
 import '../support/sangong_ui.dart' show DioErrorMessage, ToastUtils;
 import '../utils/sangong_banker_setup_input.dart';
 
@@ -17,15 +18,22 @@ class SangongProfilePanel extends StatefulWidget {
       {super.key,
       required this.userID,
       this.nickname = '',
+      this.permissionError,
+      this.onRetryPermission,
       this.embedded = false});
   final String userID;
   final String nickname;
   final bool embedded;
+  final String? permissionError;
+  final VoidCallback? onRetryPermission;
   @override
   State<SangongProfilePanel> createState() => _SangongProfilePanelState();
 }
 
 class _SangongProfilePanelState extends State<SangongProfilePanel> {
+  // Identity lookup is rescoping independently of the form. Keep the inputs'
+  // elements/focus when its authorization key changes after a successful read.
+  final _layoutKey = GlobalKey();
   final _points = TextEditingController();
   final _banker = TextEditingController();
   final _joint = TextEditingController();
@@ -35,6 +43,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
   Map<String, dynamic> _detail = {};
   SangongRuntime? _runtime;
   SangongOperationScope? _scope;
+  SangongRouteRevalidation? _recovery;
   String? _error;
   bool _loading = true, _writing = false;
   int _generation = 0, _writeGeneration = 0;
@@ -55,13 +64,16 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     super.didChangeDependencies();
     final runtime =
         context.dependOnInheritedWidgetOfExactType<SangongScope>()?.notifier;
+    final retain =
+        identical(runtime, _runtime) && (_recovery?.canRevalidate ?? false);
     if (runtime == null || !runtime.canManage) {
+      if (retain) return;
       _runtime = runtime;
       _clearPrivateState();
     } else if (!identical(runtime, _runtime) ||
         _scope == null ||
         !_scope!.matches(runtime.featureContext, runtime.http.tenantId)) {
-      _clearPrivateState();
+      if (!retain) _clearPrivateState();
       _runtime = runtime;
       _load();
     }
@@ -80,6 +92,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     _generation++;
     _writeGeneration++;
     _scope = null;
+    _recovery = null;
     _user = null;
     _session = null;
     _settings = null;
@@ -117,6 +130,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
       !_loading &&
       !_writing &&
       _error == null &&
+      widget.permissionError == null &&
       _settings != null &&
       _session != null;
 
@@ -131,6 +145,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     final generation = ++_generation;
     final scope = _scope = SangongOperationScope.capture(
         runtime.featureContext, runtime.http.tenantId);
+    _recovery = runtime.operatorRouteRevalidation();
     bool current() =>
         _current &&
         generation == _generation &&
@@ -140,10 +155,6 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     setState(() {
       _loading = true;
       _error = null;
-      _user = null;
-      _session = null;
-      _settings = null;
-      _detail = {};
     });
     try {
       final results = await Future.wait<Object>([
@@ -161,6 +172,11 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
         throw StateError('游戏资料与当前用户不匹配');
       }
       setState(() {
+        // A draft for an old round must never become a new round's command.
+        if (_session != null && _session!.round?.id != state.round?.id) {
+          _banker.clear();
+          _joint.clear();
+        }
         _user = user;
         _detail = detail;
         _session = SangongAdminSession(
@@ -409,7 +425,9 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_current) return const SizedBox.shrink();
+    if (!_current && !(_recovery?.canRevalidate ?? false)) {
+      return const SizedBox.shrink();
+    }
     return SangongIdentityView(
       key: ValueKey((widget.userID, _scope?.token)),
       userID: _parentUserID,
@@ -419,20 +437,28 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
 
   Widget _buildLayout(String parentLabel) {
     return SangongProfileAdminLayout(
+        key: _layoutKey,
         embedded: widget.embedded,
         pointsController: _points,
         bankerController: _banker,
         jointController: _joint,
-        loading: _loading,
+        loading: _loading && _session == null,
         disabled: !_canSubmit,
+        inputsEnabled: !_writing &&
+            _session != null &&
+            (_recovery?.canRevalidate ?? _current),
         points: _user?.balance,
         parentLabel: parentLabel,
         rebatePer10000: _user?.rebatePer10000,
         bankerSummary: _bankerSummary,
         sharePercent: _sharePercent,
         coBankSummary: _coBankSummary,
-        error: _error,
-        onRetry: _loading || _writing ? null : _load,
+        error: widget.permissionError ?? _error,
+        onRetry: widget.permissionError != null
+            ? widget.onRetryPermission
+            : _loading || _writing
+                ? null
+                : _load,
         onCredit: () => _creditOrDebit(credit: true),
         onDebit: () => _creditOrDebit(credit: false),
         onAssignBanker: _banker.text.trim().isEmpty

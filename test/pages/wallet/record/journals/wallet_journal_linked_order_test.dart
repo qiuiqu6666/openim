@@ -11,15 +11,40 @@ import '../support/wallet_record_test_support.dart';
 import 'wallet_journal_entry_test.dart' show journalTestJson;
 
 void main() {
+  testWidgets('compensation orders parse and display their completed receipt',
+      (tester) async {
+    final api = _OrderApi()
+      ..respond = (_) async => WalletFundOrder.fromJson({
+            'orderID': 'packet-order',
+            'biz': 'compensation',
+            'scene': 'internal',
+            'currency': 'BI99',
+            'amount': '1.00',
+            'status': 'done',
+            'senderID': 'platform_compensation_pool',
+            'recvID': 'recipient',
+            'targetCurrency': '',
+            'targetAmount': '0',
+            'fee': '0',
+            'remark': '99Chat · 老用户专属补偿',
+          });
+    await _pump(tester, api);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('wallet-journal-order-error')), findsNothing);
+    expect(_fieldText(tester, 'biz'), '老用户补偿');
+    expect(_fieldText(tester, 'amount'), '1.00 元');
+    expect(find.text('已完成'), findsOneWidget);
+  });
+
   testWidgets('loads the associated order amount rather than its refund amount',
       (tester) async {
     final api = _OrderApi()..respond = (_) async => _order();
     await _pump(tester, api);
     await tester.pumpAndSettle();
     expect(api.requested, ['packet-order']);
-    expect(_fieldText(tester, 'amount'), '10 USDT');
+    expect(_fieldText(tester, 'amount'), '10.00 USDT');
     expect(_fieldText(tester, 'id').replaceAll('\u200B', ''), 'packet-order');
-    expect(find.text('8 USDT'), findsNothing);
+    expect(find.text('8.00 USDT'), findsNothing);
     expect(find.text('已退回'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -45,7 +70,7 @@ void main() {
     expect(api.requested, hasLength(2));
     reply.complete(_order());
     await tester.pumpAndSettle();
-    expect(_fieldText(tester, 'amount'), '10 USDT');
+    expect(_fieldText(tester, 'amount'), '10.00 USDT');
   });
 
   testWidgets('a reply from a previous login does not expose its order',
@@ -57,7 +82,7 @@ void main() {
     owner = false;
     reply.complete(_order());
     await tester.pumpAndSettle();
-    expect(find.text('10 USDT'), findsNothing);
+    expect(find.text('10.00 USDT'), findsNothing);
     expect(
         find.byKey(const ValueKey('wallet-journal-order-retry')), findsNothing);
     expect(find.byKey(const ValueKey('wallet-journal-order-error')),

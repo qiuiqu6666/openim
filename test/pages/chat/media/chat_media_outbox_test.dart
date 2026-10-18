@@ -289,7 +289,9 @@ void main() {
           expect(args['isOnlineOnly'], false);
           ids.add((args['message'] as Map)['clientMsgID'] as String);
         }
-        expect(ids, ['image', 'image-2', 'image-3']);
+        // SDK IDs follow preparation completion, not selection order.
+        // Selection-order delivery is covered with a stalled first asset.
+        expect(ids, unorderedEquals(['image', 'image-2', 'image-3']));
         expect(
             outbox
                 .entries(destination.conversationID)

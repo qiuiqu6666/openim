@@ -40,7 +40,11 @@ class _WalletScreenState extends State<WalletScreen> {
         isTabActive: widget.isTabActive,
         activeTabIndexListenable: widget.activeTabIndexListenable,
         mainTabIndex: widget.mainTabIndex,
-        child: WalletHomeView(embeddedInMainTab: widget.embeddedInMainTab),
+        child: WalletHomeView(
+            embeddedInMainTab: widget.embeddedInMainTab,
+            activeTabIndexListenable: widget.activeTabIndexListenable,
+            mainTabIndex: widget.mainTabIndex,
+            isTabActive: widget.isTabActive),
       ),
     );
   }

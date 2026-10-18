@@ -53,11 +53,7 @@ class SangongRouteRevalidation {
     // Invalidating the store produces an empty placeholder. An explicit,
     // current server denial is final and must not be refreshed into a grant.
     final denied = next.capabilitiesCurrent() &&
-        capability.raw.containsKey(agent
-            ? 'canOpenAgent'
-            : configuration
-                ? 'canConfigure'
-                : 'canManage') &&
+        (next.capabilities.version > 0 || capability.raw.isNotEmpty) &&
         !_permitted(next);
     return sessionCurrent() &&
         !denied &&

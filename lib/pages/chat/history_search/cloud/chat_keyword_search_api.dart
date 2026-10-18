@@ -45,14 +45,17 @@ class ChatKeywordSearchApi {
       int startTime = 0,
       int endTime = 0,
       List<int> types = contentTypes,
+      List<String> senderIDs = const [],
       bool Function()? isCurrent}) async {
+    final filtered = keyword.isEmpty &&
+        (senderIDs.isNotEmpty || (startTime > 0 && endTime > startTime));
     final length = keyword.runes.length;
-    if (conversationID.isEmpty || length < 2 || length > 64) {
+    if (conversationID.isEmpty || (!filtered && (length < 2 || length > 64))) {
       throw const FormatException(
           'Keyword must contain 2–64 Unicode characters');
     }
     final data = await client.request(
-        '/msg/search_messages',
+        filtered ? '/msg/search_history_filters' : '/msg/search_messages',
         {
           'conversationID': conversationID,
           'keyword': keyword,
@@ -61,7 +64,8 @@ class ChatKeywordSearchApi {
           'snapshotSeq': snapshotSeq,
           'startTime': startTime,
           'endTime': endTime,
-          'contentTypes': types
+          'contentTypes': types,
+          if (filtered) 'senderIDs': senderIDs
         },
         isCurrent: isCurrent);
     final next = data['nextBeforeSeq'];

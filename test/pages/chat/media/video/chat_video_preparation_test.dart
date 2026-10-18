@@ -45,6 +45,46 @@ void main() {
     expect(await prepareChatVideo(source, ChatVideoQuality.original), source);
     expect(calls, isEmpty);
   });
+  test('encoder timeout cancels owned operation and ignores late output',
+      () async {
+    final release = Completer<String>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      if (call.method == 'compressVideo') return release.future;
+      return null;
+    });
+    await expectLater(
+        prepareChatVideo(source, ChatVideoQuality.standard,
+            compressionTimeout: const Duration(milliseconds: 20)),
+        throwsA(isA<TimeoutException>()));
+    expect(calls.map((c) => c.method), ['compressVideo', 'cancelCompression']);
+    release.complete(jsonEncode({'path': output.path}));
+    await Future<void>.delayed(Duration.zero);
+    expect(VideoCompress.isCompressing, isFalse);
+    expect(await source.exists(), isTrue);
+  });
+
+  test('busy timeout does not cancel another operation', () async {
+    final release = Completer<String>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return release.future;
+    });
+    final first = prepareChatVideo(source, ChatVideoQuality.standard);
+    await Future<void>.delayed(Duration.zero);
+    try {
+      await expectLater(
+          prepareChatVideo(source, ChatVideoQuality.standard,
+              busyTimeout: Duration.zero),
+          throwsA(isA<TimeoutException>()));
+      expect(calls.map((c) => c.method), ['compressVideo']);
+    } finally {
+      release.complete(jsonEncode({'path': output.path}));
+      await first;
+    }
+  });
   test('empty output fails rather than silently uploading the original',
       () async {
     await output.writeAsBytes([]);

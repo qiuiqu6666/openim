@@ -15,7 +15,7 @@ String walletWithdrawalErrorMessage(Object failure, {bool unresolved = false}) {
   if (failure is FundApiException) {
     final reason = switch (failure.code) {
       20078 => '验证码已失效或不匹配，请重新获取',
-      20076 => '修改手机号或密码后需等待24小时',
+      20076 => '修改手机号或密码后需等待2小时',
       20079 => '设备验证失败，请重新登录',
       1001 => '提交参数无效',
       _ => walletOperationError(failure),

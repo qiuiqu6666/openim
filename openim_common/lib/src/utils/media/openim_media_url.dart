@@ -63,6 +63,8 @@ class OpenIMMediaUrl {
     return query.split('&').any((part) {
       final key = _queryKey(part);
       return key.startsWith('x-amz-') ||
+          key.startsWith('q-sign-') ||
+          key.startsWith('x-cos-') ||
           key.startsWith('x-goog-') ||
           key.startsWith('x-oss-') ||
           _signedKeys.contains(key);
@@ -129,6 +131,7 @@ class OpenIMMediaUrl {
     'sig',
     'sign',
     'signature',
+    'q-signature',
     'token',
     'access_token',
     'auth_token',

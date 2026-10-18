@@ -15,6 +15,7 @@ class GroupMemberPreviewController {
   }) : _source = source;
 
   final GroupMemberIdentitySource _source;
+  static const _pageSize = 20;
   final Duration retryDelay;
   final members = <GroupMembersInfo>[].obs;
   final loading = false.obs;
@@ -25,6 +26,29 @@ class GroupMemberPreviewController {
   Future<void>? _flight;
   Timer? _retryTimer;
   Completer<bool>? _waiting;
+  final _pendingChanges = <String, (GroupMembersInfo?, bool)>{};
+
+  /// Keep events received during an HTTP read newer than that read's snapshot.
+  void applyMemberChange(GroupMembersInfo member,
+      {bool deleted = false, bool addIfMissing = true}) {
+    final id = member.userID;
+    if (_closed || id == null || id.isEmpty) return;
+    if (_flight != null) {
+      _pendingChanges[id] = (deleted ? null : member, addIfMissing);
+    }
+    final index = members.indexWhere((value) => value.userID == id);
+    if (deleted) {
+      members.removeWhere((value) => value.userID == id);
+    } else if (index >= 0) {
+      members[index] = member;
+    } else if (addIfMissing) {
+      members.add(member);
+    }
+    members.sort(compareGroupMembers);
+    if (members.length > _pageSize) {
+      members.removeRange(_pageSize, members.length);
+    }
+  }
 
   Future<void> refresh({
     required String groupID,
@@ -37,6 +61,7 @@ class GroupMemberPreviewController {
     _stopRetry();
     if (_scope != null && scope != _scope) members.clear();
     final generation = ++_generation;
+    _pendingChanges.clear();
     _scope = scope;
     loading.value = true;
     failed.value = false;
@@ -45,6 +70,7 @@ class GroupMemberPreviewController {
       if (!isCurrent()) members.clear();
       loading.value = false;
       _flight = null;
+      _pendingChanges.clear();
     });
   }
 
@@ -56,7 +82,7 @@ class GroupMemberPreviewController {
         final page = await _source.list(
           groupID: groupID,
           pageNumber: 1,
-          showNumber: 20,
+          showNumber: _pageSize,
         );
         if (!current()) return;
         // A joined group contains at least its viewer. Empty/missing data must
@@ -70,7 +96,16 @@ class GroupMemberPreviewController {
           }
         }
         if (unique.isEmpty) throw const _EmptyMemberPreview();
-        members.assignAll(unique.values.toList()..sort(compareGroupMembers));
+        for (final entry in _pendingChanges.entries) {
+          final (member, addIfMissing) = entry.value;
+          if (member == null) {
+            unique.remove(entry.key);
+          } else if (unique.containsKey(entry.key) || addIfMissing) {
+            unique[entry.key] = member;
+          }
+        }
+        final ordered = unique.values.toList()..sort(compareGroupMembers);
+        members.assignAll(ordered.take(_pageSize));
         failed.value = false;
         return;
       } catch (error) {
@@ -121,6 +156,7 @@ class GroupMemberPreviewController {
     _generation++;
     _stopRetry();
     _flight = null;
+    _pendingChanges.clear();
     _scope = null;
     loading.value = false;
     failed.value = false;

@@ -40,7 +40,7 @@ void main() {
               .data,
           event['afterAvailable'] == null
               ? '可用余额 --'
-              : '可用余额 ${event['afterAvailable']} ${event['currency']}');
+              : '可用余额 12.35 ${event['currency']}');
     }
     final rows =
         tester.widgetList<WalletRecordRow>(find.byType(WalletRecordRow));

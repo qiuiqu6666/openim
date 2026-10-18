@@ -18,6 +18,75 @@ final _pages = <String, Type>{
 };
 
 void main() {
+  testWidgets('settlement draft survives failed refresh and explicit retry',
+      (tester) async {
+    final fixture = RouteRevalidationFixture();
+    await fixture.pumpChat(tester);
+    await fixture.open(tester, 'settle');
+    await tester.tap(find.text('7'));
+    await tester.pumpAndSettle();
+    final page = find.byType(SangongRoundSettleDialog);
+    final element = tester.element(page);
+    fixture.invalidate();
+    await RouteRevalidationFixture.flush(tester);
+    final pending = fixture.capabilityRead!;
+    fixture.capabilityRead = null;
+    pending.completeError(StateError('offline'));
+    await RouteRevalidationFixture.flush(tester);
+    expect(tester.element(page), same(element));
+    expect(find.text('暂时无法确认当前群权限，点击重试'), findsOneWidget);
+    await tester.tap(find.text('暂时无法确认当前群权限，点击重试'));
+    await RouteRevalidationFixture.flush(tester);
+    expect(tester.element(page), same(element));
+    expect(
+        tester
+            .widgetList<TextField>(find.byType(TextField))
+            .map((field) => field.controller!.text),
+        contains('7'));
+    fixture.expectNoCommands();
+    fixture.invalidate();
+    await RouteRevalidationFixture.flush(tester);
+    fixture.canManage = false;
+    fixture.resolveCapabilities();
+    await RouteRevalidationFixture.flush(tester);
+    expect(page, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final dark in [false, true]) {
+    testWidgets(
+        'settlement keeps draft and geometry while refreshing dark=$dark',
+        (tester) async {
+      final fixture = RouteRevalidationFixture();
+      await fixture.pumpChat(tester, dark: dark);
+      await fixture.open(tester, 'settle');
+      await tester.tap(find.text('7'));
+      await tester.pumpAndSettle();
+      final page = find.byType(SangongRoundSettleDialog);
+      final element = tester.element(page);
+      final bounds = tester.getRect(page);
+      final fields =
+          tester.widgetList<TextField>(find.byType(TextField)).toList();
+      final draft = fields.map((field) => field.controller!.text).toList();
+      expect(draft, contains('7'));
+      fixture.invalidate();
+      await RouteRevalidationFixture.flush(tester);
+      expect(tester.element(page), same(element));
+      expect(tester.getRect(page), bounds);
+      await tester.tap(find.text('8'), warnIfMissed: false);
+      await tester.pump();
+      expect(fields.map((field) => field.controller!.text).toList(), draft);
+      fixture.expectNoCommands();
+      fixture.resolveCapabilities();
+      await RouteRevalidationFixture.flush(tester);
+      expect(tester.element(page), same(element));
+      expect(fields.map((field) => field.controller!.text).toList(), draft);
+      await tester.tap(find.text('8'));
+      await tester.pumpAndSettle();
+      expect(fields.map((field) => field.controller!.text), contains('78'));
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final entry in _pages.keys) {
     for (final dark in [false, true]) {
       testWidgets(
@@ -33,16 +102,17 @@ void main() {
         fixture.invalidate();
         await RouteRevalidationFixture.flush(tester);
         expect(navigator.canPop(), isTrue);
-        expect(page, findsNothing);
+        expect(page, entry == 'settle' ? findsOneWidget : findsNothing);
         fixture.configRead = Completer<dynamic>();
         fixture.resolveCapabilities();
         await RouteRevalidationFixture.flush(tester);
         expect(navigator.canPop(), isTrue);
-        expect(page, findsNothing);
+        expect(page, entry == 'settle' ? findsOneWidget : findsNothing);
         fixture.resolveConfig();
         await RouteRevalidationFixture.flush(tester);
         expect(page, findsOneWidget);
-        expect(identical(tester.element(page), previousElement), isFalse);
+        expect(identical(tester.element(page), previousElement),
+            entry == 'settle');
         expect(navigator.canPop(), isTrue);
         expect(find.text('正在确认当前群的三公配置'), findsNothing);
         fixture.expectNoCommands();

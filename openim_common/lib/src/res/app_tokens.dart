@@ -38,6 +38,7 @@ class AppTokens {
   static const Color borderDark = Color(0xFF2A2D33);
 
   static const Color onAccent = Color(0xFFFFFFFF);
+  static const Color archiveUnreadBadge = Color(0xFFA6ABB3);
   static const Color profileSignatureBgLight = Color(0xFFEDEBFF);
   static const Color profileSignatureBgDark = Color(0xFF5D74F2);
   static const Color profileSignatureTextLight = Color(0xFF5D74F2);

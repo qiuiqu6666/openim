@@ -93,6 +93,47 @@ void main() {
   });
 
   for (final brightness in Brightness.values) {
+    testWidgets('filled SMS password form explains invalid password and submits correction: $brightness',
+        (tester) async {
+      final service = _Security()..exempt = false;
+      await tester.pumpWidget(_host(
+          ChangePasswordPage(service: service, phoneNumber: '13800138000'),
+          brightness));
+      await tester.pumpAndSettle();
+      final fields = find.byType(TextField);
+      final button = find.byType(ElevatedButton);
+      expect(tester.widget<ElevatedButton>(button).onPressed, isNull);
+      await tester.enterText(fields.at(0), '123456');
+      await tester.enterText(fields.at(1), 'abc123');
+      await tester.enterText(fields.at(2), 'abc123');
+      tester.testTextInput.hide();
+      await tester.pumpAndSettle();
+      expect(tester.widget<ElevatedButton>(button).onPressed, isNotNull);
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('密码不符合要求：'), findsOneWidget);
+      expect(service.saves, 0);
+      await tester.enterText(fields.at(1), 'Password123');
+      await tester.enterText(fields.at(2), 'Different123');
+      tester.testTextInput.hide();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(find.text('两次输入的密码不一致'), findsOneWidget);
+      expect(service.saves, 0);
+      await tester.enterText(fields.at(2), 'Password123');
+      tester.testTextInput.hide();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(service.saves, 1);
+      expect(service.code, '123456');
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('login password skips SMS with current exemption: $brightness',
         (tester) async {
       final service = _Security();

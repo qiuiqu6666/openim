@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'media_preview_action_button.dart';
+
 /// Keeps preview and original requests separate, including failed upgrades.
 class OnDemandImage extends StatefulWidget {
   const OnDemandImage(
@@ -20,14 +22,12 @@ class _OnDemandImageState extends State<OnDemandImage> {
         if (!_original)
           SafeArea(
             child: Align(
-              alignment: Alignment.bottomCenter,
+              alignment: Alignment.bottomLeft,
               child: Padding(
-                  padding: const EdgeInsets.only(
-                      bottom: kBottomNavigationBarHeight +
-                          kMinInteractiveDimension),
-                  child: FilledButton.tonal(
+                  padding: const EdgeInsets.only(left: 12, bottom: 72),
+                  child: MediaPreviewActionButton(
                     onPressed: () => setState(() => _original = true),
-                    child: Text('mediaViewOriginal'.tr),
+                    label: 'mediaViewOriginal'.tr,
                   )),
             ),
           ),

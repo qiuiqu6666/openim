@@ -93,6 +93,21 @@ class _ChatHistoryDatePageState extends State<ChatHistoryDatePage>
   }
 
   Future<void> _loadMonth(DateTime month, {bool force = false}) async {
+    // Cloud filters can search dates absent from the device database. Do not
+    // probe local history (or disable selection on a local SDK failure).
+    if (_cloudSearch) {
+      if (!_checkCurrent()) return;
+      final initial = _pendingInitial;
+      if (initial != null) {
+        setState(() {
+          _selected = initial;
+          _displayedMonth = DateTime(initial.year, initial.month);
+          _pendingInitial = null;
+          ++_calendarVersion;
+        });
+      }
+      return;
+    }
     await _dates.loadMonth(month, force: force);
     if (!_checkCurrent() ||
         _dates.loading ||

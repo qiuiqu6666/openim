@@ -1,3 +1,5 @@
+import 'organizer/organizer_refresh_queue.dart';
+import 'identity/conversation_display_name.dart';
 import 'updates/conversation_update_buffer.dart';
 import 'updates/conversation_row_equality.dart';
 import 'editing/batch_read/conversation_batch_read_api.dart';
@@ -56,7 +58,10 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final organizerLoading = false.obs;
   final organizerError = RxnString();
   int _organizerSyncAt = 0;
-  bool _refreshPending = false;
+  late final _organizerRefresh = OrganizerRefreshQueue(
+    isCurrent: () => _sessionActive,
+    run: _loadOrganizer,
+  );
   bool _reorderingFolders = false;
   StreamSubscription<String>? _businessSubscription;
   final _subscriptions = <StreamSubscription<dynamic>>[];
@@ -156,7 +161,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _businessSubscription = imLogic.customBusinessMessageSubject
         .listen(_handleBusinessNotification);
-    refreshOrganizer();
+    refreshOrganizer(userInitiated: false, source: 'startup');
     _subscriptions.add(imLogic.conversationAddedSubject.listen(queueChanges));
     _subscriptions.add(imLogic.conversationChangedSubject.listen(queueChanges));
     _subscriptions
@@ -177,7 +182,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       imStatus.value = status;
 
       if (status == IMSdkStatus.connectionSucceeded) {
-        refreshOrganizer();
+        refreshOrganizer(userInitiated: false, source: 'reconnect');
         if (previousStatus != IMSdkStatus.connectionSucceeded &&
             !_listFailed.value) {
           _unreadSync.reconcile();
@@ -264,7 +269,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_sessionActive && state == AppLifecycleState.resumed) {
-      refreshOrganizer();
+      refreshOrganizer(userInitiated: false, source: 'resume');
       groupFeatures.refreshKnownGroups();
       if (_listFailed.value) {
         _retryFailedList();
@@ -297,7 +302,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
           final id = data['id'] as String;
           folders.removeWhere((folder) => folder.id == id);
           // The server also clears folderID from associated conversations.
-          refreshOrganizer();
+          refreshOrganizer(userInitiated: false, source: 'folder_notification');
         } else if (data['op'] == 'upsert') {
           final folder = ChatFolder.fromJson(
               Map<String, dynamic>.from(data['folder'] as Map));
@@ -408,12 +413,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     return info.isGroupChat;
   }
 
-  String getShowName(ConversationInfo info) {
-    if (info.showName == null || info.showName.isBlank!) {
-      return info.userID!;
-    }
-    return info.showName!;
-  }
+  String getShowName(ConversationInfo info) => conversationDisplayName(info);
 
   String getTime(ConversationInfo info) {
     return IMUtils.getChatTimeline(info.latestMsgSendTime!);
@@ -937,20 +937,20 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   String? folderID(ConversationInfo info) =>
       states[info.conversationID]?.folderID;
 
-  Future<void> refreshOrganizer() async {
+  Future<void> refreshOrganizer(
+          {bool userInitiated = true, String source = 'manual'}) =>
+      _organizerRefresh.request(userInitiated: userInitiated, source: source);
+
+  Future<void> _loadOrganizer(bool userInitiated, String source) async {
     if (!_sessionActive || DataSp.chatToken == null) return;
-    if (organizerLoading.value) {
-      _refreshPending = true;
-      return;
-    }
     organizerLoading.value = true;
     organizerError.value = null;
     final foldersBefore = {for (final folder in folders) folder.id: folder};
     try {
-      final fetchedFolders = await ChatOrganizerApi.getFolders();
+      final fetchedFolders = await ChatOrganizerApi.getFolders(source: source);
       if (!_sessionActive) return;
-      final fetchedStates =
-          await ChatOrganizerApi.getStates(updatedAfter: _organizerSyncAt);
+      final fetchedStates = await ChatOrganizerApi.getStates(
+          updatedAfter: _organizerSyncAt, source: source);
       if (!_sessionActive) return;
       // A folder push/PATCH can arrive while folders and states are loading.
       // Keep newer changes and deletions instead of restoring the old snapshot.
@@ -981,15 +981,11 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     } catch (error) {
       if (_sessionActive) {
         organizerError.value = error.toString();
-        IMViews.showErrorToast(error);
+        if (userInitiated) IMViews.showErrorToast(error);
       }
     } finally {
       if (_sessionActive) {
         organizerLoading.value = false;
-        if (_refreshPending) {
-          _refreshPending = false;
-          unawaited(refreshOrganizer());
-        }
       }
     }
   }
@@ -1102,7 +1098,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     } catch (error) {
       if (_sessionActive) {
         IMViews.showErrorToast(error);
-        await refreshOrganizer();
+        await refreshOrganizer(
+            userInitiated: false, source: 'mutation_recovery');
       }
       return false;
     } finally {
@@ -1142,7 +1139,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     ConversationInfo? conversationInfo,
     Message? searchMessage,
   }) async {
-    final entryTrace = ChatEntryTrace(conversationInfo?.conversationType ?? sessionType);
+    final entryTrace =
+        ChatEntryTrace(conversationInfo?.conversationType ?? sessionType);
     if (groupID != null) groupID = LegacyGroupIdentity.canonical(groupID);
     conversationInfo ??= await _createConversation(
       sourceID: userID ?? groupID!,

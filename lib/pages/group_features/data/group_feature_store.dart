@@ -284,7 +284,9 @@ class GroupFeatureStore extends ChangeNotifier {
         old.live.anchorUserID != next.live.anchorUserID;
     final permissionsAdvanced =
         next.capabilityVersion > old.capabilityVersion &&
-            next.capabilityVersion > (_capabilities[id]?.version ?? -1);
+            next.capabilityVersion > (_capabilities[id]?.version ?? -1) &&
+            (!_pendingCapabilities.containsKey(id) ||
+                next.capabilityVersion > (_capabilityMinimumVersion[id] ?? 0));
     if (next.capabilityVersion > (_capabilityMinimumVersion[id] ?? 0)) {
       _capabilityMinimumVersion[id] = next.capabilityVersion;
     }
@@ -554,6 +556,7 @@ class GroupFeatureStore extends ChangeNotifier {
       final eventID = featureString(message['eventId'] ?? data['eventId']);
       if (eventID.isNotEmpty && !_seenEvents.add(eventID)) return;
       if (_seenEvents.length > 256) _seenEvents.remove(_seenEvents.first);
+      final previousEpoch = _capabilityEpoch[id] ?? 0;
       if (data['groupFeatures'] is Map) {
         apply(id, featureMap(data['groupFeatures']), publishEvent: false);
         // Routes must see the same accepted revision as the shared cache.
@@ -561,6 +564,7 @@ class GroupFeatureStore extends ChangeNotifier {
       }
       if (key == 'groupFeatureCapabilitiesChanged') {
         final version = data['capabilityVersion'];
+        final summaryInvalidated = (_capabilityEpoch[id] ?? 0) != previousEpoch;
         // Re-delivery can have a new event ID. A version already confirmed by
         // the server does not revoke the current scope or rebuild open routes.
         final confirmed = _capabilities[id];
@@ -572,8 +576,20 @@ class GroupFeatureStore extends ChangeNotifier {
         if (version is int && version < (_capabilityMinimumVersion[id] ?? 0)) {
           return;
         }
-        invalidateCapabilities(id,
-            expectedVersion: version is int ? version : null);
+        // Applying the summary above already invalidates and starts a read.
+        // Do not cancel that read again for the envelope's same version.
+        final alreadyRefreshing = version is int &&
+            version == (_capabilityMinimumVersion[id] ?? 0) &&
+            _pendingCapabilities.containsKey(id) &&
+            !_capabilities.containsKey(id);
+        if (alreadyRefreshing && !summaryInvalidated) return;
+        if (!(summaryInvalidated &&
+                (version is! int ||
+                    version <= (_capabilityMinimumVersion[id] ?? 0))) &&
+            !alreadyRefreshing) {
+          invalidateCapabilities(id,
+              expectedVersion: version is int ? version : null);
+        }
       }
       _events.add({
         ...message,

@@ -63,6 +63,37 @@ void main() {
     }
     expect(await file.exists(), true);
   });
+  test('source and both derivatives upload concurrently and retain live files',
+      () async {
+    final gates = List.generate(3, (_) => Completer<void>());
+    final allStarted = Completer<void>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      final args = call.arguments as Map;
+      final index = uploads.length;
+      uploads.add(args);
+      if (uploads.length == 3) allStarted.complete();
+      await gates[index].future;
+      expect(await File(args['filePath'] as String).exists(), true);
+      if (index == 1) throw PlatformException(code: 'upload_failed');
+      return jsonEncode({'url': 'https://media.test/$index.jpg'});
+    });
+    final work = ChatMediaUpload(isClosed: () => false, onTransfer: (_, __) {})
+        .prepare(message);
+    await allStarted.future.timeout(const Duration(seconds: 5));
+    gates[1].complete();
+    await Future<void>.delayed(Duration.zero);
+    for (final item in uploads.skip(1)) {
+      expect(await File(item['filePath'] as String).exists(), true);
+    }
+    gates[0].complete();
+    gates[2].complete();
+    await work;
+    expect(message.pictureElem!.sourcePicture!.url, 'https://media.test/0.jpg');
+    for (final item in uploads.skip(1)) {
+      expect(await File(item['filePath'] as String).exists(), false);
+    }
+  });
   test('late derivatives are cleaned and never uploaded after deadline',
       () async {
     final ready = Completer<ChatPictureRenditions?>();

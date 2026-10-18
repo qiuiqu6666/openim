@@ -9,7 +9,7 @@ String walletJournalAmount(String? raw, String currency,
     {bool signed = false}) {
   final amount = walletRecordAmountExact(raw, signed: signed);
   if (amount == '--') return amount;
-  return '$amount ${walletJournalCoin(currency)}';
+  return '${walletRecordAmountTwoDecimals(amount)} ${walletJournalCoin(currency)}';
 }
 
 /// Application/return events keep their ledger direction, but use business

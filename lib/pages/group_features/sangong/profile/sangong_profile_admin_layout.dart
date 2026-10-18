@@ -14,6 +14,7 @@ class SangongProfileAdminLayout extends StatelessWidget {
     required this.jointController,
     required this.loading,
     required this.disabled,
+    this.inputsEnabled,
     this.embedded = false,
     this.points,
     this.parentLabel = '',
@@ -37,6 +38,7 @@ class SangongProfileAdminLayout extends StatelessWidget {
       bankerController,
       jointController;
   final bool loading, disabled, embedded;
+  final bool? inputsEnabled;
   final int? points;
   final String parentLabel;
   final num? rebatePer10000;
@@ -83,6 +85,7 @@ class SangongProfileAdminLayout extends StatelessWidget {
             ]),
           ),
         _section(
+            'points',
             dark,
             _block(context,
                 caption: _caption(pointsText, primary, skeleton, spans: [
@@ -106,6 +109,7 @@ class SangongProfileAdminLayout extends StatelessWidget {
                 ],
                 muted: muted)),
         _section(
+            'banker',
             dark,
             _block(context,
                 caption: _caption(bankerSummary ?? '庄 —', body, skeleton),
@@ -119,6 +123,7 @@ class SangongProfileAdminLayout extends StatelessWidget {
                 ],
                 muted: muted)),
         _section(
+            'co-bank',
             dark,
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               _block(context,
@@ -162,7 +167,8 @@ class SangongProfileAdminLayout extends StatelessWidget {
     );
   }
 
-  Widget _section(bool dark, Widget child) => Padding(
+  Widget _section(String name, bool dark, Widget child) => Padding(
+      key: ValueKey(name),
       padding: SangongProfileAdminTokens.sectionMargin(embedded),
       child: DecoratedBox(
           decoration: BoxDecoration(
@@ -269,7 +275,7 @@ class SangongProfileAdminLayout extends StatelessWidget {
         borderSide: BorderSide(color: AppTokens.border(dark: dark)));
     return TextField(
         controller: controller,
-        enabled: !disabled,
+        enabled: inputsEnabled ?? !disabled,
         textAlign: TextAlign.right,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textInputAction: last ? TextInputAction.done : TextInputAction.next,

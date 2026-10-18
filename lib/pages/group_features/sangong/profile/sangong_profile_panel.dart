@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import '../sangong_scope.dart';
+import '../services/authorization/sangong_route_revalidation.dart';
 import '../widgets/authorization/privilege_route_guard.dart';
 import 'sangong_profile_admin_layout.dart';
 import 'sangong_profile_admin_panel.dart';
@@ -54,6 +55,8 @@ class SangongProfileEntryCard extends StatefulWidget {
 }
 
 class _SangongProfileEntryCardState extends State<SangongProfileEntryCard> {
+  SangongRuntime? _retainedRuntime;
+  SangongRouteRevalidation? _recovery;
   final _points = TextEditingController();
   final _banker = TextEditingController();
   final _joint = TextEditingController();
@@ -113,6 +116,12 @@ class _SangongProfileEntryCardState extends State<SangongProfileEntryCard> {
         context.dependOnInheritedWidgetOfExactType<SangongScope>()?.notifier;
     final ready =
         !entry.loading && entry.error == null && runtime?.canManage == true;
+    if (!identical(runtime, _retainedRuntime)) {
+      _retainedRuntime = runtime;
+      _recovery = null;
+    }
+    if (ready) _recovery ??= runtime!.operatorRouteRevalidation();
+    final retain = !entry.loading && (_recovery?.canRevalidate ?? false);
     final content = Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -124,10 +133,12 @@ class _SangongProfileEntryCardState extends State<SangongProfileEntryCard> {
                     onPressed: entry.loading ? null : () => _chooseGroup(entry),
                     child: Text(
                         entry.selectedGroupID == null ? '选择游戏群' : '切换游戏群'))),
-          if (ready)
+          if (ready || retain)
             SangongProfilePanel(
                 userID: widget.userID,
                 nickname: widget.nickname,
+                permissionError: entry.error,
+                onRetryPermission: entry.onRetry,
                 embedded: widget.embedded)
           else
             SangongProfileAdminLayout(

@@ -49,7 +49,7 @@ class _Conversations extends ConversationLogic {
   // Keep the real SDK list reads and lifecycle subscriptions, without business
   // HTTP or legacy maintenance unrelated to startup recovery.
   @override
-  Future<void> refreshOrganizer() async {}
+  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {}
   final _testGroupFeatures = GroupFeatureStore(
     api: GroupFeatureApi(
       baseUrl: 'https://fixture.example',

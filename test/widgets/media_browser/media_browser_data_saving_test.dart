@@ -31,7 +31,10 @@ void main() {
       const preview = 'https://image.test/preview';
       await tester.pumpWidget(renderTestHost(MediaBrowser(
         initialIndex: 0,
-        showGallery: false,
+        showGallery: true,
+        onSave: (_) {},
+        onForward: (_) {},
+        onDelete: (_) {},
         sources: [
           MediaSource(
               url: original,
@@ -48,7 +51,22 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       expect(requests, isNot(contains(original)));
       if (hasPreview) expect(requests, contains(preview));
-      await tester.tap(find.byType(FilledButton));
+      final originalButton = find.byType(TextButton);
+      final saveButton = find.byIcon(Icons.download);
+      expect(
+          tester.getCenter(originalButton).dy, tester.getCenter(saveButton).dy);
+      expect(tester.getRect(originalButton).right,
+          lessThan(tester.getRect(find.byIcon(Icons.ios_share)).left));
+      await tester.tapAt(const Offset(200, 200));
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(originalButton, findsNothing);
+      expect(saveButton, findsNothing);
+      expect(requests, isNot(contains(original)));
+      await tester.tapAt(const Offset(200, 200));
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(originalButton, findsOneWidget);
+      expect(saveButton, findsOneWidget);
+      await tester.tap(originalButton);
       await tester.pump();
       expect(requests.where((url) => url == original), hasLength(1));
       await tester.pumpWidget(const SizedBox.shrink());

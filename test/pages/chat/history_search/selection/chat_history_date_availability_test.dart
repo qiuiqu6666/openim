@@ -165,6 +165,8 @@ void main() {
       (tester) async {
     final fixture = _PickerFixture(_CloudDateSource(), initialDate: _today);
     await _mount(tester, fixture);
+    expect(fixture.source.calls, isEmpty,
+        reason: 'Cloud dates must not depend on local SDK availability');
     expect(_enabled(tester, _today), isTrue);
     expect(_canConfirm(tester), isTrue);
     await tester.tap(find.byKey(_confirmKey));

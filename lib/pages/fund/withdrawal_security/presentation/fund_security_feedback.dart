@@ -12,7 +12,7 @@ import '../../../mine/settings/pages/change_phone_page.dart';
 String fundSecurityErrorMessage(Object error) {
   if (error is FundApiException) {
     return switch (error.code) {
-      20076 => '手机号或密码变更后需等待24小时，请重新检查允许转出时间',
+      20076 => '手机号或密码变更后需等待2小时，请重新检查允许转出时间',
       20077 => '本次交易需要短信验证，请获取验证码后再试',
       20078 => '本次验证码错误或已失效，请重新获取验证码',
       20079 => '当前登录设备无法确认，请重新登录后再试',

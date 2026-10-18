@@ -470,8 +470,8 @@ String fundErrorMessage(Object error, {bool? chinese}) {
         'Review the original order before retrying.'
       ),
       20076: (
-        '手机号或密码修改后需等待24小时，请查看允许转出时间',
-        'Wait 24 hours after a phone or password change.'
+        '手机号或密码修改后需等待2小时，请查看允许转出时间',
+        'Wait 2 hours after a phone or password change.'
       ),
       20077: (
         '本次交易需要短信验证',

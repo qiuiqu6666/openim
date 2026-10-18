@@ -1,3 +1,4 @@
+import 'package:openim/pages/conversation/identity/conversation_display_name.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -11,9 +12,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../support/conversation_live_fixture.dart';
 
-class _Remarks extends GetxController implements ContactRemarkSource {
+class _Remarks extends GetxController
+    implements ContactRemarkSource, ContactDisplayNameSource {
   final remarks = <String, String>{}.obs;
   final owner = OpenIM.iMManager.userID;
+  final nicknames = <String, String>{}.obs;
+
+  @override
+  String? friendDisplayNameFor(String? userID) {
+    final nickname = nicknames[userID];
+    if (!isCurrentSession || nickname == null) return null;
+    return ContactRemarkSource.nameFromValues(userID,
+        nickname: nickname, remark: remarkFor(userID));
+  }
 
   @override
   bool get isCurrentSession => owner == OpenIM.iMManager.userID;
@@ -40,7 +51,7 @@ class _FeedLogic extends GetxController
   @override
   int getUnreadCount(ConversationInfo info) => info.unreadCount;
   @override
-  String getShowName(ConversationInfo info) => info.showName ?? '';
+  String getShowName(ConversationInfo info) => conversationDisplayName(info);
   @override
   String getContent(ConversationInfo info) => info.draftText?.isNotEmpty == true
       ? info.draftText!
@@ -104,8 +115,82 @@ void main() {
     expect(conversationLatestMessageText(group), '原昵称: 消息内容 ');
   });
 
+  test('names retain SDK fallback and isolate group/system/account identities',
+      () {
+    final peer = ConversationInfo(
+        conversationID: 'si_peer',
+        conversationType: ConversationType.single,
+        userID: 'peer',
+        showName: 'SDK名称');
+    expect(conversationDisplayName(peer), 'SDK名称');
+    remarks.remarks['peer'] = '备注';
+    expect(conversationDisplayName(peer), '备注');
+    remarks.nicknames['peer'] = '真实昵称';
+    remarks.remarks['peer'] = '';
+    expect(conversationDisplayName(peer), '真实昵称');
+    expect(conversationDisplayName(_group()), '群聊');
+    peer.conversationType = ConversationType.notification;
+    expect(conversationDisplayName(peer), 'SDK名称');
+    peer.conversationType = ConversationType.single;
+    OpenIM.iMManager.userID = 'another';
+    expect(conversationDisplayName(peer), 'SDK名称');
+  });
+
   for (final dark in [false, true]) {
     for (final archived in [false, true]) {
+      testWidgets(
+          'title follows directory without conversation events ($dark/$archived)',
+          (tester) async {
+        final logic = _FeedLogic();
+        addTearDown(logic.onDelete.call);
+        tester.view.physicalSize = const Size(375, 812);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final peer = ConversationInfo(
+            conversationID: 'si_peer',
+            conversationType: ConversationType.single,
+            userID: 'peer',
+            showName: 'SDK旧备注',
+            unreadCount: 3,
+            draftText: '保留草稿');
+        final before = peer.toJson();
+        await tester.pumpWidget(ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (_, __) => MaterialApp(
+            theme: ThemeData(
+                brightness: dark ? Brightness.dark : Brightness.light),
+            home: Scaffold(
+                body: ConversationFeedRow(
+                    logic: logic,
+                    info: peer,
+                    showDivider: true,
+                    editing: false,
+                    selected: false,
+                    archivedLayout: archived,
+                    onTap: () {},
+                    onLongPress: () {})),
+          ),
+        ));
+        expect(find.text('SDK旧备注'), findsWidgets);
+        // Directory arrives after the row, with no conversation callback.
+        remarks.nicknames['peer'] = '真实昵称';
+        remarks.remarks['peer'] = '通讯录备注';
+        await tester.pump();
+        expect(find.text('通讯录备注'), findsWidgets);
+        expect(find.text('SDK旧备注'), findsNothing);
+        remarks.remarks['peer'] = '修改后的备注';
+        await tester.pump();
+        expect(find.text('修改后的备注'), findsWidgets);
+        remarks.remarks['peer'] = '';
+        await tester.pump();
+        expect(find.text('真实昵称'), findsWidgets);
+        expect(find.text('SDK旧备注'), findsNothing);
+        expect(peer.toJson(), before);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      });
+
       testWidgets(
           'main/archive preview reacts to remark edits ($dark/$archived)',
           (tester) async {

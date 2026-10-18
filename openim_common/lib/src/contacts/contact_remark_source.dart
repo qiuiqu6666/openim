@@ -31,3 +31,9 @@ abstract interface class ContactRemarkSource {
     return '';
   }
 }
+
+/// Optional complete friend identity for projections whose SDK name may itself
+/// be an obsolete remark. Null means the directory has no current friend row.
+abstract interface class ContactDisplayNameSource {
+  String? friendDisplayNameFor(String? userID);
+}

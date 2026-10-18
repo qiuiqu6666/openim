@@ -55,7 +55,7 @@ class _Conversations extends ConversationLogic {
   // Preserve production subscriptions, native reads, merge and lifecycle;
   // organizer HTTP and legacy maintenance are unrelated to unread sync.
   @override
-  Future<void> refreshOrganizer() async {}
+  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {}
 
   final _testFeatures = GroupFeatureStore(
     api: GroupFeatureApi(

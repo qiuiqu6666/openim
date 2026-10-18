@@ -1,5 +1,4 @@
 import 'package:openim/core/user_activity/activity_sdk.dart';
-import 'group_member_order.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -163,6 +162,7 @@ class GroupSetupLogic extends GetxController {
       if (!_isCurrentGroupSession) return;
       if (e.groupID == groupInfo.value.groupID &&
           e.userID == myGroupMembersInfo.value.userID) {
+        ++_myMemberRequest;
         final permissionChanged = (e.roleLevel != null &&
                 myGroupMembersInfo.value.roleLevel != e.roleLevel) ||
             (e.appManagerLevel != null &&
@@ -178,14 +178,9 @@ class GroupSetupLogic extends GetxController {
         if (permissionChanged) _refreshMemberIdentity();
       }
       if (!isJoinedGroup.value || e.groupID != groupInfo.value.groupID) return;
-      final index = memberList.indexWhere((m) => m.userID == e.userID);
-      if (index >= 0) {
-        memberList[index] = e;
-      } else if (e.roleLevel == GroupRoleLevel.owner ||
-          e.roleLevel == GroupRoleLevel.admin) {
-        memberList.add(e);
-      }
-      memberList.sort(compareGroupMembers);
+      _memberPreview.applyMemberChange(e,
+          addIfMissing: e.roleLevel == GroupRoleLevel.owner ||
+              e.roleLevel == GroupRoleLevel.admin);
     });
     _mASub = imLogic.memberAddedSubject.listen((e) async {
       if (_isCurrentGroupSession && e.groupID == groupInfo.value.groupID) {
@@ -196,8 +191,7 @@ class GroupSetupLogic extends GetxController {
           isJoinedGroup.value = true;
           _queryAllInfo();
         } else {
-          memberList.add(e);
-          memberList.sort(compareGroupMembers);
+          _memberPreview.applyMemberChange(e);
         }
       }
     });
@@ -206,7 +200,7 @@ class GroupSetupLogic extends GetxController {
         if (e.userID == OpenIM.iMManager.userID) {
           _leaveGroup();
         } else {
-          memberList.removeWhere((element) => element.userID == e.userID);
+          _memberPreview.applyMemberChange(e, deleted: true);
         }
       }
     });
@@ -506,6 +500,9 @@ class GroupSetupLogic extends GetxController {
     if (!_isCurrentGroupSession || value.groupID != groupInfo.value.groupID) {
       return;
     }
+    // A server event supersedes any local read already in flight, including
+    // name/count-only changes that do not invalidate the permission context.
+    if (externalEvent) ++_groupInfoRequest;
     final firstMetadataRead = !_hasGroupInfo && !externalEvent;
     _hasGroupInfo = true;
     final privacyChanged = _memberLookMemberInfo != value.lookMemberInfo;

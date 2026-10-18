@@ -96,15 +96,20 @@ void main() {
     HomeBinding().dependencies();
     final source = ContactRemarkSource.current;
     expect(source, same(contacts));
-    im.friendInfoChanged(FriendInfo(userID: 'sender', remark: '老王'));
+    im.friendInfoChanged(
+        FriendInfo(userID: 'sender', nickname: '真实昵称', remark: '老王'));
     await Future<void>.delayed(Duration.zero);
     expect(source!.remarkFor('sender'), '老王');
+    expect(contacts.friendDisplayNameFor('sender'), '老王');
+    expect(contacts.friendDisplayNameFor('unknown'), isNull);
     contacts.applySavedRemark('sender', '新备注');
     expect(source.remarkFor('sender'), '新备注');
     contacts.applySavedRemark('sender', '');
     expect(source.remarkFor('sender'), isNull);
+    expect(contacts.friendDisplayNameFor('sender'), '真实昵称');
     OpenIM.iMManager.userID = 'other-account';
     expect(ContactRemarkSource.current, isNull);
+    expect(contacts.friendDisplayNameFor('sender'), isNull);
     expect(source.remarkFor('sender'), isNull);
   });
 
@@ -152,13 +157,19 @@ void main() {
     addTearDown(() => logic.onDelete());
     final loading = logic.loadFriends();
     im.friendInfoChanged(FriendInfo(
-      userID: 'peer', nickname: 'Latest name', faceURL: 'latest-avatar',
+      userID: 'peer',
+      nickname: 'Latest name',
+      faceURL: 'latest-avatar',
       remark: 'My remark',
     ));
     await tester.pump(const Duration(milliseconds: 100));
-    page.complete([FriendInfo(
-      userID: 'peer', nickname: 'Old name', faceURL: 'old-avatar',
-    )]);
+    page.complete([
+      FriendInfo(
+        userID: 'peer',
+        nickname: 'Old name',
+        faceURL: 'old-avatar',
+      )
+    ]);
     await tester.pump();
     await loading;
     expect(logic.friends.single.nickname, 'Latest name');

@@ -178,7 +178,7 @@ func (g *Group) syncGroupAndMember(ctx context.Context, groupID string, resp *gr
 			return g.groupMemberSyncer.Sync(ctx, server, local, nil)
 		},
 		FullSyncer: func(ctx context.Context) error {
-			return g.groupMemberSyncer.FullSync(ctx, groupID)
+			return g.syncFullGroupMembers(ctx, groupID)
 		},
 		FullID: func(ctx context.Context) ([]string, error) {
 			resp, err := g.getFullGroupMemberUserIDs(ctx, &group.GetFullGroupMemberUserIDsReq{
@@ -277,7 +277,7 @@ func (g *Group) onlineSyncGroupAndMember(ctx context.Context, groupID string, de
 			return g.groupMemberSyncer.Sync(ctx, server, local, nil)
 		},
 		FullSyncer: func(ctx context.Context) error {
-			return g.groupMemberSyncer.FullSync(ctx, groupID)
+			return g.syncFullGroupMembers(ctx, groupID)
 		},
 		FullID: func(ctx context.Context) ([]string, error) {
 			resp, err := g.getFullGroupMemberUserIDs(ctx, &group.GetFullGroupMemberUserIDsReq{

@@ -90,25 +90,25 @@ void main() {
           entry: _entry('withdraw', 'withdraw_freeze',
               id: 'withdraw-apply', title: '提现申请（冻结）', amount: '11'),
           title: '提现申请',
-          amount: '11 USDT',
+          amount: '11.00 USDT',
         ),
         (
           entry: _entry('withdraw', 'withdraw_refund',
               id: 'withdraw-return', title: '提现失败退回 · 解冻', currency: 'TRX'),
           title: '提现退回',
-          amount: '2 TRX',
+          amount: '2.00 TRX',
         ),
         (
           entry: _entry('packet_lucky', 'packet_freeze',
               id: 'packet-send', title: '发红包（冻结）', amount: '10'),
           title: '发出拼手气红包',
-          amount: '10 USDT',
+          amount: '10.00 USDT',
         ),
         (
           entry: _entry('packet_lucky', 'packet_refund',
               id: 'packet-return', title: '红包退回 · 解冻', amount: '8'),
           title: '红包退回',
-          amount: '8 USDT',
+          amount: '8.00 USDT',
         ),
       ];
       final repository = JournalTestRepository()

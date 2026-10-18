@@ -21,7 +21,12 @@ void main() {
       ));
       expect(originals, 0);
       expect(find.text('preview'), findsOneWidget);
-      await tester.tap(find.byType(FilledButton));
+      final button = find.byType(TextButton);
+      final rect = tester.getRect(button);
+      expect(rect.left, 12);
+      expect(rect.bottom, tester.getSize(find.byType(Scaffold)).height - 72);
+      expect(rect.height, greaterThanOrEqualTo(48));
+      await tester.tap(button);
       await tester.pump();
       expect(originals, 1);
       expect(find.text('original'), findsOneWidget);

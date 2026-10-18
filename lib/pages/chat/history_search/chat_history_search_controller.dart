@@ -28,10 +28,12 @@ class ChatHistorySearchController extends ChangeNotifier {
   bool _keywordHasMore = true;
   bool get _usesKeywordApi =>
       _keywordApi != null &&
-      _query.keyword.isNotEmpty &&
-      (_query.messageTypes.isEmpty ||
-          _query.messageTypes
-              .every(ChatKeywordSearchApi.contentTypes.contains));
+      ((_query.keyword.isEmpty &&
+              (_query.senderIDs.isNotEmpty || _query.startDate != null)) ||
+          (_query.keyword.isNotEmpty &&
+              (_query.messageTypes.isEmpty ||
+                  _query.messageTypes
+                      .every(ChatKeywordSearchApi.contentTypes.contains))));
 
   static const pageSize = 30;
   final String conversationID;
@@ -58,6 +60,7 @@ class ChatHistorySearchController extends ChangeNotifier {
   int? searchError;
   bool get invalidKeyword =>
       _usesKeywordApi &&
+      _query.keyword.isNotEmpty &&
       (_query.keyword.runes.length < 2 || _query.keyword.runes.length > 64);
   bool get hasSearched => _hasSearched;
   bool get hasMore =>
@@ -217,9 +220,14 @@ class ChatHistorySearchController extends ChangeNotifier {
             snapshotSeq: snapshot,
             startTime: query.localStart?.millisecondsSinceEpoch ?? 0,
             endTime: query.localEndExclusive?.millisecondsSinceEpoch ?? 0,
-            types: query.messageTypes.isEmpty
-                ? ChatKeywordSearchApi.contentTypes
-                : query.messageTypes);
+            senderIDs: query.senderIDs,
+            types: query.keyword.isEmpty
+                ? (query.messageTypes.isEmpty
+                    ? {...query.sdkMessageTypes, 115, 117}.toList()
+                    : query.messageTypes)
+                : query.messageTypes.isEmpty
+                    ? ChatKeywordSearchApi.contentTypes
+                    : query.messageTypes);
         if (!_isCurrent(generation)) return;
         final matches = page.items
             .where((m) => query.accepts(m) && acceptResult?.call(m) != false)

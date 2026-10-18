@@ -7,6 +7,7 @@ import 'package:openim/pages/group_features/data/group_feature_api.dart';
 import 'package:openim/pages/group_features/data/group_feature_store.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_entry_scope.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_panel.dart';
+import 'package:openim/pages/group_features/sangong/profile/sangong_profile_admin_layout.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_surface.dart';
 import 'package:openim/pages/group_features/sangong/profile/sangong_profile_ledger_floating_entry.dart';
 import '../sangong_test_support.dart';
@@ -106,6 +107,61 @@ void main() {
   setUp(() => OpenIM.iMManager.userID = 'owner');
 
   for (final dark in [false, true]) {
+    testWidgets(
+        'co-bank draft stays mounted through permission refresh dark=$dark',
+        (tester) async {
+      Completer<dynamic>? pending;
+      final api = SangongTestApi()
+        ..respond = (call) => call.path.endsWith('/feature-capabilities')
+            ? pending?.future ?? _capabilities('g', manage: true)
+            : _profileResponse(call);
+      final store = _store(api, FixtureAccountPrivilege());
+      await _mountSurface(tester,
+          store: store,
+          dark: dark,
+          groups: () async => [_group('g', enabled: true)]);
+      await tester.pumpAndSettle();
+      final panel = find.byType(SangongProfilePanel);
+      final element = tester.element(panel);
+      final fields =
+          tester.widgetList<TextField>(find.byType(TextField)).toList();
+      final values = ['123', '2.500', '456'];
+      for (var i = 0; i < fields.length; i++) {
+        await tester.enterText(find.byType(TextField).at(i), values[i]);
+      }
+      await tester.pumpAndSettle();
+      final bounds = tester.getRect(panel);
+      pending = Completer<dynamic>();
+      store.invalidateCapabilities('g');
+      await flushSangong(tester);
+      expect(tester.element(panel), same(element));
+      expect(tester.getRect(panel), bounds);
+      expect(fields.map((field) => field.controller!.text).toList(), values);
+      expect(
+          tester
+              .widget<SangongProfileAdminLayout>(
+                  find.byType(SangongProfileAdminLayout))
+              .disabled,
+          isTrue);
+      tester
+          .widget<SangongProfileAdminLayout>(
+              find.byType(SangongProfileAdminLayout))
+          .onSetCoBank!();
+      expect(tester.testTextInput.isVisible, isTrue);
+      expect(find.textContaining('当前积分 420'), findsOneWidget);
+      pending.complete(_capabilities('g', manage: true));
+      pending = null;
+      await flushSangong(tester);
+      await tester.pumpAndSettle();
+      expect(tester.element(panel), same(element));
+      expect(fields.map((field) => field.controller!.text).toList(), values);
+      expect(api.calls.where((call) => call.method != 'GET'), isEmpty);
+      expect(tester.testTextInput.isVisible, isTrue);
+      expect(tester.takeException(), isNull);
+      await unmountSangong(tester);
+      store.dispose();
+    });
+
     testWidgets(
         'fresh grant exposes services without old group metadata dark=$dark',
         (tester) async {
@@ -432,7 +488,7 @@ void main() {
     await flushSangong(tester);
     expect(configReads, 2);
     expect(find.text('重试'), findsNothing);
-    expect(find.textContaining('当前积分 420'), findsNothing);
+    expect(find.textContaining('当前积分 420'), findsOneWidget);
     binding.complete(sangongFixtureResponse(
         api.calls.lastWhere((call) => call.path.endsWith('/config'))));
     await flushSangong(tester);
@@ -468,7 +524,7 @@ void main() {
       store.invalidateCapabilities('g');
       await flushSangong(tester);
       expect(reads, 2);
-      expect(find.textContaining('当前积分 420'), findsNothing);
+      expect(find.textContaining('当前积分 420'), findsOneWidget);
       expect(find.text('重试'), findsNothing);
       expect(find.text('普通资料'), findsOneWidget);
       store.invalidateCapabilities('g');
@@ -531,15 +587,23 @@ void main() {
     await _mountSurface(tester,
         store: store, groups: () async => [_group('g', enabled: true)]);
     fail = true;
+    await tester.enterText(find.byType(TextField).last, '456');
+    await tester.pump();
     store.invalidateCapabilities('g');
     await flushSangong(tester);
     expect(find.text('网络暂时不可用'), findsOneWidget);
+    expect(
+        tester.widget<TextField>(find.byType(TextField).last).controller!.text,
+        '456');
     expect(api.count('/feature-capabilities'), 2);
     await tester.pump(const Duration(seconds: 5));
     expect(api.count('/feature-capabilities'), 2);
     fail = false;
     await tester.tap(find.text('重试'));
     await flushSangong(tester);
+    expect(
+        tester.widget<TextField>(find.byType(TextField).last).controller!.text,
+        '456');
     expect(find.textContaining('当前积分 420'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await unmountSangong(tester);

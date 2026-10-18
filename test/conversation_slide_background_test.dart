@@ -42,7 +42,7 @@ class _Logic extends GetxController
   @override
   String? getPrefixTag(ConversationInfo info) => '';
   @override
-  Future<void> refreshOrganizer() async {}
+  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {}
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

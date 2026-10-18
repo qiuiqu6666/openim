@@ -28,6 +28,7 @@ class ChatListViewport extends StatefulWidget {
     this.findChildIndexCallback,
     this.onViewportChanged,
     this.positionController,
+    this.followLatest = true,
   });
 
   final List<String> messageIDs;
@@ -39,6 +40,9 @@ class ChatListViewport extends StatefulWidget {
   final int? Function(Key)? findChildIndexCallback;
   final ChatViewportChanged? onViewportChanged;
   final ChatListPositionController? positionController;
+
+  /// Historical paging grows the window without moving the reader to its edge.
+  final bool followLatest;
 
   @override
   State<ChatListViewport> createState() => _ChatListViewportState();
@@ -100,7 +104,8 @@ class _ChatListViewportState extends State<ChatListViewport>
       _lastAnchors.clear();
       _centerID = null;
     } else if (!listEquals(_ids, widget.messageIDs)) {
-      if (!_jumping &&
+      if (widget.followLatest &&
+          !_jumping &&
           _distance <= 1 &&
           (!_controller.hasClients ||
               !_controller.position.isScrollingNotifier.value)) {
@@ -151,7 +156,8 @@ class _ChatListViewportState extends State<ChatListViewport>
   }
 
   void _onScroll() {
-    if (!_jumping &&
+    if (widget.followLatest &&
+        !_jumping &&
         _split > 0 &&
         _distance <= 1 &&
         !_controller.position.isScrollingNotifier.value) {
@@ -468,7 +474,8 @@ class _ChatListViewportState extends State<ChatListViewport>
               controller: _controller,
               physics: widget.physics,
               center: _historyKey,
-              positioning: _jumping,
+              // Historical page edges must not pin to the newly expanded edge.
+              positioning: _jumping || !widget.followLatest,
               slivers: [
                 SliverList(
                     key: _newerKey,

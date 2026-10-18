@@ -111,7 +111,7 @@ class _Conversations extends GetxController
   @override
   void createGroup() {}
   @override
-  Future<void> refreshOrganizer() async {}
+  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {}
   @override
   Future<void> markConversationRead(ConversationInfo info) async {
     markedIds.add(info.conversationID);

@@ -1,4 +1,5 @@
-import '../../mine/settings/widgets/settings_widgets.dart' show showSettingsConfirm;
+import '../../mine/settings/widgets/settings_widgets.dart'
+    show showSettingsConfirm;
 // Layout and actions adapted from 99chat's ArchivedConversationPage,
 // lib/src/conversation.dart at d7c3c65 (Apache License 2.0).
 // Uses the existing OpenIM conversation state and Chat organizer API.
@@ -50,11 +51,13 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
   @override
   void initState() {
     super.initState();
-    unawaited(_refresh());
+    unawaited(_refresh(userInitiated: false));
   }
 
-  Future<void> _refresh() async {
-    await _logic.refreshOrganizer();
+  Future<void> _refresh({bool userInitiated = true}) async {
+    await _logic.refreshOrganizer(
+        userInitiated: userInitiated,
+        source: userInitiated ? 'archive_manual' : 'archive_open');
     if (mounted && _initialLoading) {
       setState(() => _initialLoading = false);
     }
@@ -142,7 +145,8 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
     final confirmed = await showSettingsConfirm(
       context,
       title: StrRes.delete,
-      message: '${StrRes.delete} "${_logic.getShowName(info)}"?\n${StrRes.confirmClearChatHistory}',
+      message:
+          '${StrRes.delete} "${_logic.getShowName(info)}"?\n${StrRes.confirmClearChatHistory}',
       confirmText: StrRes.delete,
       destructive: true,
     );
@@ -338,9 +342,10 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
                     unarchive: true,
                     onMarkRead: () {
                       final group = widget.groupChats;
-                      _actions.markRead(conversations, scope: (info) =>
-                          _logic.isArchived(info) &&
-                          (group ? info.isGroupChat : info.isSingleChat));
+                      _actions.markRead(conversations,
+                          scope: (info) =>
+                              _logic.isArchived(info) &&
+                              (group ? info.isGroupChat : info.isSingleChat));
                     },
                     onArchive: () => _actions.unarchive(conversations),
                     onDelete: () => _actions.delete(context, conversations),

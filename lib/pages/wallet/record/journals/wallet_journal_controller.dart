@@ -194,8 +194,10 @@ class WalletJournalController extends ChangeNotifier {
     if (source == null || !_accept(generation)) return;
     final userIDs = <String>{
       for (final entry in entries)
-        if (const {'transfer', 'group_transfer'}.contains(entry.bizType) &&
-            const {'transfer_sent', 'transfer_received'}.contains(entry.type) &&
+        if (((const {'transfer', 'group_transfer'}.contains(entry.bizType) &&
+                    const {'transfer_sent', 'transfer_received'}
+                        .contains(entry.type)) ||
+                entry.bizType.startsWith('packet_')) &&
             entry.counterpartyID.isNotEmpty &&
             (_counterpartyProfiles[entry.counterpartyID]?.nickname.isNotEmpty !=
                     true ||

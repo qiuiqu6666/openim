@@ -1,3 +1,6 @@
+import '../../fund/compensation/data/compensation_api.dart';
+import 'package:flutter/foundation.dart';
+import '../../fund/compensation/entry/compensation_home_entry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -24,7 +27,18 @@ import 'widgets/wallet_withdraw_type_sheet.dart';
 /// Wallet home presentation. The public WalletScreen owns the controller and
 /// tab lifecycle; this view only observes its state and starts existing routes.
 class WalletHomeView extends StatefulWidget {
-  const WalletHomeView({super.key, this.embeddedInMainTab = false});
+  const WalletHomeView(
+      {super.key,
+      this.embeddedInMainTab = false,
+      this.activeTabIndexListenable,
+      this.mainTabIndex = 3,
+      this.isTabActive = true,
+      this.compensationSource});
+  final CompensationSource? compensationSource;
+
+  final ValueListenable<int>? activeTabIndexListenable;
+  final int mainTabIndex;
+  final bool isTabActive;
 
   final bool embeddedInMainTab;
 
@@ -107,6 +121,19 @@ class _WalletHomeViewState extends State<WalletHomeView> {
                       _overview(context),
                       const SizedBox(height: AppTokens.s5),
                       _assets(context, gutter: gutter),
+                      if (widget.activeTabIndexListenable != null)
+                        ValueListenableBuilder<int>(
+                            valueListenable: widget.activeTabIndexListenable!,
+                            builder: (context, index, _) =>
+                                CompensationHomeEntry(
+                                    poster: true,
+                                    source: widget.compensationSource,
+                                    active: index == widget.mainTabIndex))
+                      else
+                        CompensationHomeEntry(
+                            poster: true,
+                            source: widget.compensationSource,
+                            active: widget.isTabActive),
                     ],
                   ),
                 ),

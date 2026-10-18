@@ -128,7 +128,17 @@ class ConversationFeedRow extends StatelessWidget {
       );
 
   @override
-  Widget build(BuildContext context) => Material(
+  Widget build(BuildContext context) {
+    final contacts = ContactRemarkSource.current;
+    if (!info.isSingleChat || contacts == null) return _buildRow(context);
+    return Obx(() {
+      // Attach even before this peer is loaded; refresh title and avatar together.
+      contacts.remarkFor(info.userID);
+      return _buildRow(context);
+    });
+  }
+
+  Widget _buildRow(BuildContext context) => Material(
         color: _background(context),
         child: InkWell(
           onTap: onTap,
@@ -228,6 +238,7 @@ class ConversationFeedRow extends StatelessWidget {
                             )
                           : UnreadCountView(
                               count: logic.getUnreadCount(info),
+                              pill: true,
                               size: _spacing(18),
                               fontSize: 10,
                             ),

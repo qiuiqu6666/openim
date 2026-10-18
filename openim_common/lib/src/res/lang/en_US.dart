@@ -218,6 +218,8 @@ const Map<String, String> en_US = {
   'attachmentFile': 'File',
   'attachmentLoading': 'Downloading…',
   'chatMediaPreparing': 'Preparing attachments (@count remaining)…',
+  'chatMediaPreparationFailed': '@count attachments could not be prepared and were not sent',
+  'chatMediaPreparationRetry': 'Retry',
   'attachmentRetry': 'Failed. Tap to retry',
   'attachmentOpen': 'Tap to open',
   'attachmentDownload': 'Tap to download',

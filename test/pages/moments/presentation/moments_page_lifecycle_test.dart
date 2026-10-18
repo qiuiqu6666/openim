@@ -47,6 +47,45 @@ void main() {
     await SpUtil().init();
   });
 
+  for (final fails in [false, true]) {
+    testWidgets('header spinner follows initial load; failure=$fails',
+        (tester) async {
+      final fixture = MomentsUiFixture();
+      addTearDown(fixture.dispose);
+      await prepareMomentsUiPhotos(tester, fixture);
+      final gate = Completer<MomentsPageResult<MomentPost>>();
+      fixture.api.feedWork = (_) => gate.future;
+      await mountMomentsUi(tester, fixture: fixture, settle: false);
+      await _flush(tester);
+      final spinner = find.byKey(const ValueKey('moments_header_loading'));
+      expect(spinner, findsOneWidget);
+      expect(find.byType(MomentsFeedSkeleton), findsOneWidget);
+      final turns = tester
+          .widget<RotationTransition>(find.descendant(
+              of: spinner, matching: find.byType(RotationTransition)))
+          .turns;
+      await tester.pump(const Duration(milliseconds: 400));
+      final before = turns.value;
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(turns.value, isNot(before));
+      if (fails) {
+        gate.completeError(const MomentsException('offline'));
+      } else {
+        gate.complete(MomentsPageResult(
+            items: [fixture.api.posts[momentsUiFriendPostId]!]));
+      }
+      await _flush(tester);
+      expect(spinner, findsOneWidget);
+      expect(find.byType(MomentsFeedSkeleton), findsNothing);
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(spinner, findsNothing);
+      expect(find.byType(MomentsFeedSkeleton), findsNothing);
+      await _close(tester);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('slow cover metadata does not block feed pagination',
       (tester) async {
     final fixture = MomentsUiFixture();

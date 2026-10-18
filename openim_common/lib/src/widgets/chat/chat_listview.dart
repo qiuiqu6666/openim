@@ -261,6 +261,7 @@ class ChatListView extends StatefulWidget {
     this.pagingWindow,
     this.loadOnInit = true,
     this.fillViewport = false,
+    this.followLatest = true,
     this.findChildIndexCallback,
     this.messageIDs,
     this.onViewportChanged,
@@ -297,6 +298,7 @@ class ChatListView extends StatefulWidget {
   /// Continue a short latest page until it fills the viewport or history ends.
   /// Date/search windows leave this off to preserve their selected anchor.
   final bool fillViewport;
+  final bool followLatest;
   final int? Function(Key)? findChildIndexCallback;
   final List<String>? messageIDs;
   final ChatViewportChanged? onViewportChanged;
@@ -576,6 +578,7 @@ class _ChatListViewState extends State<ChatListView> {
             ? _initialState()
             : widget.messageIDs != null
                 ? ChatListViewport(
+                    followLatest: widget.followLatest,
                     messageIDs: widget.messageIDs!,
                     onViewportChanged: widget.onViewportChanged,
                     positionController: widget.positionController,

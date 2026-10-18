@@ -501,6 +501,62 @@ void main() {
     expect(snapshot.capabilitiesCurrent(), false);
     expect(store.capabilities('g').sangong.canManage, false);
   });
+  for (final withSummary in [false, true]) {
+    test('same-version notices share the pending read summary=$withSummary',
+        () async {
+      http.data = {
+        'errCode': 0,
+        'data': {
+          'groupID': 'g',
+          'capabilityVersion': 1,
+          'sangong': {'canManage': true}
+        }
+      };
+      store.apply('g', {..._summary(1), 'capabilityVersion': 1});
+      await store.loadCapabilities('g');
+      final response = Completer<ResponseBody>();
+      final started = Completer<void>();
+      http.respond = (_) {
+        if (!started.isCompleted) started.complete();
+        return response.future;
+      };
+      void notice(String eventID) => store.receiveBusiness(jsonEncode({
+            'key': 'groupFeatureCapabilitiesChanged',
+            'eventId': eventID,
+            'data': {
+              'groupID': 'g',
+              'capabilityVersion': 2,
+              if (withSummary)
+                'groupFeatures': {..._summary(2), 'capabilityVersion': 2}
+            }
+          }));
+      notice('first');
+      final read = store.loadCapabilities('g');
+      await started.future;
+      final count = http.requests.length;
+      notice('redelivery');
+      final shared = store.loadCapabilities('g');
+      expect(identical(read, shared), isTrue);
+      response.complete(ResponseBody.fromString(
+          jsonEncode({
+            'errCode': 0,
+            'data': {
+              'groupID': 'g',
+              'capabilityVersion': 2,
+              'sangong': {'canManage': true}
+            }
+          }),
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['application/json']
+          }));
+      await read;
+      expect(http.requests.length, count);
+      expect(http.requests.length, 2);
+      expect(store.capabilities('g').version, 2);
+      expect(store.capabilities('g').sangong.canManage, isTrue);
+    });
+  }
   test('session exit clears cached state and fences open contexts immediately',
       () {
     store.apply('g', _summary(2));

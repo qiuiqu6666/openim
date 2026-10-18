@@ -22,6 +22,53 @@ const _avatarUrl = 'https://fixture.example.test/journal-avatar.png';
 const _journalID = '670203000000000000000001-full-ledger-event-ID';
 
 void main() {
+  for (final brightness in Brightness.values) {
+    testWidgets('received lucky packet displays sender nickname in $brightness',
+        (tester) async {
+      final entry = WalletJournalEntry.fromJson(journalTestJson()..addAll({
+        'currency': 'BI99',
+        'bizType': 'packet_lucky',
+        'type': 'packet_received',
+        'direction': 'income',
+        'amount': '3000',
+        'availableDelta': '3000',
+        'frozenDelta': '0',
+        'assetDelta': '3000',
+        'counterpartyID': 'internal-packet-sender',
+      }));
+      await _pump(tester,
+          brightness: brightness,
+          child: WalletRecordDetailScreen(
+              item: entry.toWalletRecord(counterpartyNickname: '红包发送人昵称')));
+      expect(_text(tester, 'wallet-journal-detail-counterparty-user'), '红包发送人昵称');
+      expect(find.text('收到拼手气红包'), findsOneWidget);
+      expect(find.text('internal-packet-sender'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('exclusive packet shows full peer nickname in $brightness',
+        (tester) async {
+      const nickname = '对方用户的很长昵称用于检查大字号显示';
+      final entry = WalletJournalEntry.fromJson(journalTestJson()..addAll({
+        'bizType': 'packet_exclusive',
+        'type': 'packet_sent',
+        'direction': 'expense',
+        'availableDelta': '-8',
+        'frozenDelta': '0',
+        'assetDelta': '-8',
+        'counterpartyID': 'internal-packet-peer',
+      }));
+      await _pump(tester,
+          brightness: brightness,
+          textScale: 2,
+          child: WalletRecordDetailScreen(
+              item: entry.toWalletRecord(counterpartyNickname: nickname)));
+      expect(_text(tester, 'wallet-journal-detail-counterparty-user'), nickname);
+      expect(find.text('internal-packet-peer'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final scenario in const [
     (biz: 'deposit', type: 'deposit', label: '转入地址'),
     (biz: 'deposit_reversal', type: 'deposit_reversal', label: '转入地址'),
@@ -181,7 +228,7 @@ void main() {
       final card = _key('wallet-journal-detail-card');
       expect(card, findsOneWidget);
       expect(_text(tester, 'wallet-journal-detail-title'), '转账-测试好友');
-      expect(_text(tester, 'wallet-record-detail-amount'), '-3320.123456 USDT');
+      expect(_text(tester, 'wallet-record-detail-amount'), '-3320.12 USDT');
       expect(_text(tester, 'wallet-journal-detail-transaction-type'), '支出');
       expect(_text(tester, 'wallet-journal-detail-counterparty-user'), '测试好友');
       expect(_text(tester, 'wallet-journal-detail-journal-id'), _journalID);
@@ -225,7 +272,7 @@ void main() {
         await _pump(tester,
             brightness: brightness,
             child: WalletRecordDetailScreen(item: entry.toWalletRecord()));
-        expect(_text(tester, 'wallet-record-detail-amount'), '8 USDT');
+        expect(_text(tester, 'wallet-record-detail-amount'), '8.00 USDT');
         final title = freeze ? '发出普通红包' : '红包退回';
         expect(_text(tester, 'wallet-journal-detail-title'), title);
         expect(_text(tester, 'wallet-journal-detail-transaction-type'), title);

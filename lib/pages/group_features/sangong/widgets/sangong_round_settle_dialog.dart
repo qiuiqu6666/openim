@@ -16,6 +16,7 @@ class SangongRoundSettleDialog extends StatefulWidget {
     this.titleText,
     this.subtitleText,
     this.confirmLabel,
+    this.canSubmit,
   });
 
   final SangongDrawStatus drawStatus;
@@ -25,6 +26,7 @@ class SangongRoundSettleDialog extends StatefulWidget {
   final String? titleText;
   final String? subtitleText;
   final String? confirmLabel;
+  final bool Function()? canSubmit;
 
   static Future<List<SangongDrawInput>?> show(
     BuildContext context, {
@@ -51,6 +53,7 @@ class SangongRoundSettleDialog extends StatefulWidget {
       builder: (_) => SangongPrivilegeRouteGuard(
         featureContext: featureContext,
         refreshOnEntry: false,
+        preserveForm: recovery != null,
         requireCapabilitiesCurrent: recovery == null,
         scopeChanges: runtime,
         isCurrent: () => recovery?.current ?? runtime.canManage,
@@ -79,6 +82,7 @@ class SangongRoundSettleDialog extends StatefulWidget {
             titleText: titleText,
             subtitleText: subtitleText,
             confirmLabel: confirmLabel,
+            canSubmit: () => recovery?.current ?? runtime.canManage,
           ),
         ),
       ),
@@ -260,6 +264,7 @@ class _SangongRoundSettleDialogState extends State<SangongRoundSettleDialog> {
   }
 
   void _onConfirm() {
+    if (widget.canSubmit?.call() == false) return;
     final inputs = _readDrawInputs();
     if (inputs == null) {
       ToastUtils.toast(

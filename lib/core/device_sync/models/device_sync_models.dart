@@ -165,7 +165,11 @@ Uri deviceSyncOSSUri(String value) {
   final uri = Uri.tryParse(value);
   if (uri == null ||
       uri.scheme != 'https' ||
-      uri.host != '99chat.oss-cn-hongkong.aliyuncs.com' ||
+      !const {
+        '99chat-1416337673.cos.ap-hongkong.myqcloud.com',
+        '99chat.oss-cn-hongkong.aliyuncs.com',
+        '99chat-openim-media.oss-cn-hongkong.aliyuncs.com',
+      }.contains(uri.host) ||
       uri.port != 443 ||
       uri.userInfo.isNotEmpty ||
       uri.authority.contains('@') ||

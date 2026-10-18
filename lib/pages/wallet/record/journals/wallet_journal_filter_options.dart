@@ -40,6 +40,7 @@ const walletJournalBizTypes = {
 
 const _labels = <String, (String, String, String)>{
   'all': ('全部', '全部', 'All'),
+  'compensation': ('老用户补偿', '老用戶補償', 'Loyal user compensation'),
   'transfer': ('转账', '轉帳', 'Transfer'),
   'group_transfer': ('群转账', '群轉帳', 'Group transfer'),
   'packet_exclusive': ('专属红包', '專屬紅包', 'Exclusive packet'),

@@ -528,6 +528,9 @@ class _MomentsPageState extends State<MomentsPage> {
                 builder: (_) => MomentsNotificationsPage(
                     repository: _repository, onOpenMoment: _detail)))
             : null,
+        loading: (_loading || _state.loading) &&
+            (_state.items.isEmpty ||
+                (!_feed && _own && !_initialLoaded && _loading)),
         unreadCount: _repository.unreadCount,
       );
 }

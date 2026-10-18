@@ -15,7 +15,10 @@ Finder get _confirm => find.descendant(
 Future<void> _accept(WidgetTester tester) async {
   await tester.tap(_confirm);
   await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const ValueKey('forward-send')));
+  final card = find.byType(ContactCardSendDialog);
+  await tester.tap(card.evaluate().isNotEmpty
+      ? find.descendant(of: card, matching: find.byType(FilledButton))
+      : find.byKey(const ValueKey('forward-send')));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
 }
@@ -56,7 +59,7 @@ void main() {
       await tester.pumpAndSettle();
       final result = await fixture.result as Map;
       expect((result['checkedList'] as List).single.groupID, 'group-group');
-      expect(sendChecks, ['group-group']);
+      expect(sendChecks, isEmpty);
       expect(tester.takeException(), isNull);
     });
   }
@@ -123,94 +126,78 @@ void main() {
     reopened.onClose();
   });
 
-  testWidgets(
-      'departed selected group aborts the entire send and removes selection',
-      (tester) async {
-    var joined = true;
-    final fixture =
-        RecentConversationFixture(isJoinedGroup: (_) async => joined);
-    await fixture.open(tester);
-    await fixture.selection.reloadRecentConversations();
-    await tester.pumpAndSettle();
-    await tester.tap(recentConversationRow('single'));
-    await tester.tap(recentConversationRow('group'));
-    await tester.pumpAndSettle();
-    var returned = false;
-    fixture.result.then((_) => returned = true);
-    joined = false;
-    await _accept(tester);
-    await tester.pumpAndSettle();
-    expect(returned, isFalse);
-    expect(find.byType(SelectContactsPage), findsOneWidget);
-    expect(fixture.selection.checkedList.keys, ['user-single']);
-    expect(recentConversationRow('group'), findsNothing);
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-  });
+  for (final action in [SelAction.forward, SelAction.recommend]) {
+    for (final outcome in ['pending', 'failure', 'not joined']) {
+      testWidgets('$action searched group submits without $outcome SDK lookup',
+          (tester) async {
+        final pending = Completer<bool>();
+        var calls = 0;
+        final fixture = RecentConversationFixture(isJoinedGroup: (_) {
+          calls++;
+          if (outcome == 'failure') return Future.error(StateError('offline'));
+          if (outcome == 'not joined') return Future.value(false);
+          return pending.future;
+        });
+        await fixture.open(tester);
+        fixture.selection.action = action;
+        if (action == SelAction.recommend) {
+          fixture.selection.sharedContact =
+              UserInfo(userID: 'recommended-peer', nickname: '推荐好友');
+        }
+        fixture.selection.searchConversations('项目');
+        await tester.pumpAndSettle();
+        await tester.tap(recentConversationRow('group'));
+        await tester.pump();
+        await _accept(tester);
+        await tester.pumpAndSettle();
+        final result = await fixture.result as Map;
+        expect((result['checkedList'] as List).single.groupID, 'group-group');
+        expect(calls, 0);
+        expect(pending.isCompleted, isFalse);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
 
-  testWidgets('pending send check blocks duplicate confirmation and reload',
+  testWidgets('open confirmation blocks duplicate confirmation and reload',
       (tester) async {
-    final reply = Completer<bool>();
     var calls = 0;
-    final fixture = RecentConversationFixture(isJoinedGroup: (_) {
+    final fixture = RecentConversationFixture(isJoinedGroup: (_) async {
       calls++;
-      return reply.future;
+      return true;
     });
     await fixture.open(tester);
     await tester.tap(recentConversationRow('group'));
+    await tester.pump();
+    await tester.tap(_confirm);
     await tester.pumpAndSettle();
-    var returned = false;
-    fixture.result.then((_) => returned = true);
-    await _accept(tester);
-    expect(calls, 1);
-    expect(returned, isFalse);
     expect(fixture.selection.enabledConfirmButton, isFalse);
     await fixture.selection.confirmSelectedList();
     await fixture.selection.reloadRecentConversations();
-    expect(calls, 1);
-    reply.complete(true);
+    expect(calls, 0);
+    expect(find.byKey(const ValueKey('forward-send')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('forward-send')));
     await tester.pumpAndSettle();
-    expect(returned, isTrue);
+    final result = await fixture.result as Map;
+    expect((result['checkedList'] as List).length, 1);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('account changes during send check never return recipients',
+  testWidgets('account changes during confirmation never return recipients',
       (tester) async {
-    final reply = Completer<bool>();
-    final fixture =
-        RecentConversationFixture(isJoinedGroup: (_) => reply.future);
+    final fixture = RecentConversationFixture();
     await fixture.open(tester);
     await tester.tap(recentConversationRow('group'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     var returned = false;
     fixture.result.then((_) => returned = true);
-    await _accept(tester);
+    await tester.tap(_confirm);
+    await tester.pumpAndSettle();
     OpenIM.iMManager.userID = 'other';
-    reply.complete(true);
+    await tester.tap(find.byKey(const ValueKey('forward-send')));
     await tester.pumpAndSettle();
     expect(returned, isFalse);
     expect(find.byType(SelectContactsPage), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets(
-      'SDK failure retains selection for retry without returning recipients',
-      (tester) async {
-    final fixture = RecentConversationFixture(
-        isJoinedGroup: (_) async => throw StateError('offline'));
-    await fixture.open(tester);
-    await tester.tap(recentConversationRow('group'));
-    await tester.pumpAndSettle();
-    var returned = false;
-    fixture.result.then((_) => returned = true);
-    await _accept(tester);
-    await tester.pumpAndSettle();
-    expect(returned, isFalse);
-    expect(fixture.selection.checkedList.keys, ['group-group']);
-    expect(fixture.selection.enabledConfirmButton, isTrue);
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 }

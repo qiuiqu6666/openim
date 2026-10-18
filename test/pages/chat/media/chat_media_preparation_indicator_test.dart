@@ -16,6 +16,8 @@ void main() {
         addTearDown(tester.view.resetDevicePixelRatio);
         addTearDown(Get.reset);
         final count = 2.obs;
+        final failed = 0.obs;
+        var retries = 0;
         await tester.pumpWidget(GetMaterialApp(
           locale: locale,
           translations: TranslationService(),
@@ -29,8 +31,14 @@ void main() {
             body: Obx(() => Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    if (count.value > 0)
-                      ChatMediaPreparationIndicator(count: count.value),
+                    if (count.value > 0 || failed.value > 0)
+                      ChatMediaPreparationIndicator(
+                          count: count.value,
+                          failedCount: failed.value,
+                          onRetry: () {
+                            retries++;
+                            failed.value = 0;
+                          }),
                     const TextField(),
                   ],
                 )),
@@ -47,6 +55,18 @@ void main() {
         expect(find.text('next message'), findsOneWidget);
         count.value = 0;
         await tester.pump();
+        expect(
+            find.byKey(const ValueKey('chat-media-preparing')), findsNothing);
+        expect(tester.takeException(), isNull);
+        failed.value = 1;
+        await tester.pump();
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+        expect(find.byType(TextButton), findsOneWidget);
+        expect(tester.getSize(find.byType(TextButton)).height,
+            greaterThanOrEqualTo(AppTokens.minimumTapSize));
+        await tester.tap(find.byType(TextButton));
+        await tester.pump();
+        expect(retries, 1);
         expect(
             find.byKey(const ValueKey('chat-media-preparing')), findsNothing);
         expect(tester.takeException(), isNull);

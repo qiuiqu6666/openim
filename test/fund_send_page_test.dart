@@ -500,7 +500,7 @@ void main() {
     await _requestPin(tester);
     await tester.pumpAndSettle();
     expect(find.text('暂时无法转出'), findsOneWidget);
-    expect(find.textContaining('需等待24小时'), findsOneWidget);
+    expect(find.textContaining('需等待2小时'), findsOneWidget);
     expect(api.securityChecks, hasLength(1));
     expect(api.securityCodes, isEmpty);
     expect(api.ids, isEmpty);

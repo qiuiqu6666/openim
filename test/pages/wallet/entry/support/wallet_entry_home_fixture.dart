@@ -75,7 +75,7 @@ class _Conversations extends GetxController
   @override
   String? folderID(ConversationInfo info) => null;
   @override
-  Future<void> refreshOrganizer() async {}
+  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {}
   @override
   void globalSearch() {}
   @override

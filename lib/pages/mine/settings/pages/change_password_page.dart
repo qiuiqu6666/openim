@@ -38,6 +38,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
   bool _obscureNew = true;
   bool _obscureConfirm = true;
   bool _busy = false;
+  bool _submitted = false;
 
   bool get _isPhoneBound => widget.phoneNumber.trim().isNotEmpty;
 
@@ -54,11 +55,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
   bool get _canSubmit {
     if (!smsPolicyReady ||
         _busy ||
-        !_passwordPattern.hasMatch(_newPassword.text) ||
-        _confirmPasswordMismatch) {
+        _newPassword.text.isEmpty ||
+        _confirmPassword.text.isEmpty) {
       return false;
     }
-    if (_confirmPassword.text != _newPassword.text) return false;
     if (smsExempt) return true;
     if (_isPhoneBound) return _smsCode.text.length == 6;
     return _oldPassword.text.isNotEmpty;
@@ -125,7 +125,16 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
   Future<void> _submit() async {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!_canSubmit) return;
+    setState(() => _submitted = true);
+    if (!_passwordPattern.hasMatch(_newPassword.text) ||
+        _confirmPasswordMismatch) {
+      return;
+    }
     if (!await refreshSmsPolicy() || !mounted || !_canSubmit) return;
+    if (!_passwordPattern.hasMatch(_newPassword.text) ||
+        _confirmPasswordMismatch) {
+      return;
+    }
     if (!widget.service.isSecurityBackendAvailable) {
       showUnavailableSettingsAction(
         context,
@@ -250,7 +259,14 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          child: _confirmPasswordMismatch
+          child: _submitted && !_passwordPattern.hasMatch(_newPassword.text)
+              ? Text(
+                  settingsText(context,
+                      zh: '密码不符合要求：至少 8 位，且须同时包含英文字母和数字，仅支持这两类字符。',
+                      en: 'Use at least 8 characters, including both letters and numbers. Only English letters and digits are supported.'),
+                  style: const TextStyle(color: AppTokens.danger, fontSize: 12),
+                )
+              : _confirmPasswordMismatch
               ? Text(
                   settingsText(context,
                       zh: '两次输入的密码不一致', en: 'Passwords do not match'),
@@ -263,8 +279,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage>
               : Text(
                   settingsText(
                     context,
-                    zh: '新密码建议包含字母和数字组合。',
-                    en: 'We recommend using a password that contains both letters and numbers.',
+                    zh: '密码至少 8 位，须同时包含英文字母和数字，仅支持这两类字符。',
+                    en: 'Use at least 8 characters with both English letters and digits; no other characters are supported.',
                   ),
                   style: TextStyle(color: helperColor, fontSize: 12),
                 ),

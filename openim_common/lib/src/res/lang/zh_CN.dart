@@ -198,6 +198,8 @@ const Map<String, String> zh_CN = {
   'attachmentFile': '文件',
   'attachmentLoading': '正在下载…',
   'chatMediaPreparing': '正在准备附件（剩余 @count 个）…',
+  'chatMediaPreparationFailed': '@count 个附件准备失败，尚未发送',
+  'chatMediaPreparationRetry': '重试',
   'attachmentRetry': '失败，点击重试',
   'attachmentOpen': '点击打开',
   'attachmentDownload': '点击下载',

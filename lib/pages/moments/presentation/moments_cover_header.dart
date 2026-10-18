@@ -4,6 +4,7 @@ import 'package:openim_common/openim_common.dart';
 import '../../../services/moments_repository.dart';
 import '../media/moments_media_image.dart';
 import 'moments_text.dart';
+import 'loading/moments_header_loading.dart';
 import 'moments_theme.dart';
 
 class MomentsCoverHeader extends StatefulWidget {
@@ -18,6 +19,7 @@ class MomentsCoverHeader extends StatefulWidget {
     this.onCompose,
     this.onNotifications,
     this.unreadCount = 0,
+    this.loading = false,
   });
 
   final MomentsRepository repository;
@@ -26,6 +28,7 @@ class MomentsCoverHeader extends StatefulWidget {
   final String? coverPath;
   final VoidCallback? onCover, onProfile, onCompose, onNotifications;
   final int unreadCount;
+  final bool loading;
 
   @override
   State<MomentsCoverHeader> createState() => _MomentsCoverHeaderState();
@@ -134,6 +137,7 @@ class _MomentsCoverHeaderState extends State<MomentsCoverHeader> {
                                     Icons.arrow_back_ios_new_rounded),
                                 color: MomentsTheme.coverForeground,
                               ),
+                              MomentsHeaderLoading(loading: widget.loading),
                               const Spacer(),
                               if (widget.onNotifications != null)
                                 Stack(clipBehavior: Clip.none, children: [

@@ -26,6 +26,7 @@ void main() {
   var metadataFails = false;
   var groupName = 'Loaded group';
   var groupFace = 'old-avatar';
+  var groupCount = 12;
 
   ChatLogic open() {
     Get.routing.args = {
@@ -63,6 +64,7 @@ void main() {
     metadataFails = false;
     groupName = 'Loaded group';
     groupFace = 'old-avatar';
+    groupCount = 12;
     OpenIM.iMManager.userID = 'self';
     OpenIM.iMManager.userInfo = UserInfo(userID: 'self');
     Get.put<AppController>(EntryTestApp());
@@ -88,7 +90,7 @@ void main() {
                     groupID: 'group',
                     groupName: groupName,
                     faceURL: groupFace,
-                    memberCount: 12)
+                    memberCount: groupCount)
                 .toJson(),
           ]);
         case 'getGroupMembersInfo':
@@ -198,6 +200,53 @@ void main() {
     im.imSdkStatus(IMSdkStatus.syncEnded);
     await tester.pump();
     expect(logic.faceUrl.value, '', reason: 'Avatar removal must propagate');
+    logic.onDelete();
+    for (final pending in history) {
+      pending.complete([]);
+    }
+    await tester.pump();
+  });
+
+  testWidgets(
+      'delayed metadata after message sync updates name count and member identity',
+      (tester) async {
+    final logic = open();
+    await tester.pump();
+    im.imSdkStatus(IMSdkStatus.connecting);
+    im.imSdkStatus(IMSdkStatus.connectionSucceeded);
+    im.imSdkStatus(IMSdkStatus.syncEnded);
+    await tester.pump();
+    // Native auxiliary metadata has not reached the local database yet.
+    expect(logic.nickname.value, 'Loaded group');
+    expect(logic.memberCount.value, 12);
+    groupName = 'Renamed offline';
+    groupCount = 13;
+    im.groupMemberAdded(
+        GroupMembersInfo(groupID: 'group', userID: 'added', nickname: 'Added'));
+    im.groupMemberDeleted(
+        GroupMembersInfo(groupID: 'group', userID: 'removed'));
+    im.groupMemberInfoChanged(GroupMembersInfo(
+        groupID: 'group',
+        userID: 'self',
+        nickname: 'New self nickname',
+        roleLevel: GroupRoleLevel.member));
+    im.groupInfoChanged(GroupInfo(
+        groupID: 'group', groupName: groupName, memberCount: groupCount));
+    await tester.pump();
+    expect(logic.nickname.value, groupName);
+    expect(logic.memberCount.value, 13);
+    expect(logic.groupMembersInfo?.nickname, 'New self nickname');
+    expect(logic.memberUpdateInfoMap['added']?.nickname, 'Added');
+    expect(logic.memberUpdateInfoMap.containsKey('removed'), isFalse);
+    // A subsequent offline removal and rename must also propagate downward.
+    im.imSdkStatus(IMSdkStatus.syncStart);
+    im.imSdkStatus(IMSdkStatus.syncEnded);
+    await tester.pump();
+    im.groupInfoChanged(GroupInfo(
+        groupID: 'group', groupName: 'Renamed again', memberCount: 11));
+    await tester.pump();
+    expect(logic.nickname.value, 'Renamed again');
+    expect(logic.memberCount.value, 11);
     logic.onDelete();
     for (final pending in history) {
       pending.complete([]);

@@ -20,6 +20,7 @@ class SangongPrivilegeRouteGuard extends StatefulWidget {
     this.isCurrent,
     this.canRevalidate,
     this.revalidate,
+    this.preserveForm = false,
   })  : accountPrivilege = null,
         userID = null,
         baseUrl = null,
@@ -42,7 +43,8 @@ class SangongPrivilegeRouteGuard extends StatefulWidget {
         requireCapabilitiesCurrent = false,
         allowAssignedAgent = false,
         canRevalidate = null,
-        revalidate = null;
+        revalidate = null,
+        preserveForm = false;
 
   final GroupFeatureContext? featureContext;
   final AccountPrivilegeAccess? accountPrivilege;
@@ -58,6 +60,10 @@ class SangongPrivilegeRouteGuard extends StatefulWidget {
   final bool Function()? isCurrent;
   final bool Function()? canRevalidate;
   final Future<bool> Function(bool Function() active)? revalidate;
+
+  /// Only forms whose revalidation verifies the original business target may
+  /// retain their draft. Other private pages still discard stale content.
+  final bool preserveForm;
 
   @override
   State<SangongPrivilegeRouteGuard> createState() =>
@@ -77,6 +83,7 @@ class _SangongPrivilegeRouteGuardState
   bool _revalidating = false;
   bool _revalidationFailed = false;
   int _contentGeneration = 0;
+  bool _formMounted = false;
 
   bool get _agentAllowed =>
       widget.allowAssignedAgent &&
@@ -185,7 +192,7 @@ class _SangongPrivilegeRouteGuardState
         // Keep the route recoverable instead of treating that race as denial.
         if (!_current) throw StateError('群权限仍在更新');
         setState(() {
-          _contentGeneration++;
+          if (!widget.preserveForm) _contentGeneration++;
           _ready = true;
           _sawAllowed = true;
           _authorizedRevision = _privilege.revision;
@@ -250,6 +257,44 @@ class _SangongPrivilegeRouteGuardState
     }
     if (_ready && !_current) _recoverOrClose(notify: false);
     if (_closing) return const SizedBox.shrink();
+    if (widget.preserveForm && (_ready || _formMounted)) {
+      _formMounted = true;
+      final blocked = !_ready;
+      return Stack(
+        children: [
+          ExcludeFocus(
+            excluding: blocked,
+            child: AbsorbPointer(
+              absorbing: blocked,
+              child: ExcludeSemantics(
+                excluding: blocked,
+                child: Builder(builder: widget.builder),
+              ),
+            ),
+          ),
+          if (blocked)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Material(
+                color: Theme.of(context).colorScheme.surface,
+                child: _revalidationFailed
+                    ? TextButton(
+                        onPressed: () {
+                          _revalidationFailed = false;
+                          _recoverOrClose();
+                        },
+                        child: const Text('暂时无法确认当前群权限，点击重试'),
+                      )
+                    : const LinearProgressIndicator(
+                        semanticsLabel: '正在确认当前群权限',
+                      ),
+              ),
+            ),
+        ],
+      );
+    }
     if (_revalidationFailed) {
       return SettingsScaffold(title: '三公', children: [
         const Text('暂时无法确认当前群权限，请重试', textAlign: TextAlign.center),

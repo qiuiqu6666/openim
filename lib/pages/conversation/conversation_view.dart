@@ -1,3 +1,4 @@
+import '../fund/compensation/entry/compensation_home_entry.dart';
 import '../login/desktop_authorization/widgets/desktop_login_banner.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import '../mine/settings/widgets/settings_widgets.dart'
@@ -70,6 +71,7 @@ class _ConversationPageState extends State<ConversationPage> {
   bool _switchingEditing = false;
   final _editor = ConversationEditController();
   final _feedScrollController = ScrollController();
+  late final _compensationActive = ValueNotifier(widget.liveUpdatesActive);
   bool _publishedEditBar = false;
   int _editBarPublication = 0;
   final logic = Get.find<ConversationLogic>();
@@ -192,6 +194,12 @@ class _ConversationPageState extends State<ConversationPage> {
           onDelete: () => _editActions.delete(context, conversations));
 
   @override
+  void didUpdateWidget(covariant ConversationPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _compensationActive.value = widget.liveUpdatesActive;
+  }
+
+  @override
   void dispose() {
     final publish = widget.onEditActionBarChanged;
     if (_publishedEditBar && publish != null) {
@@ -201,6 +209,7 @@ class _ConversationPageState extends State<ConversationPage> {
     _folders.dispose();
     _editor.dispose();
     _feedScrollController.dispose();
+    _compensationActive.dispose();
     super.dispose();
   }
 
@@ -358,6 +367,13 @@ class _ConversationPageState extends State<ConversationPage> {
             searchPlaceholder,
             if (!widget.groupChats)
               DesktopLoginBanner(active: widget.liveUpdatesActive),
+            if (!widget.archivedOnly)
+              ValueListenableBuilder<bool>(
+                valueListenable: _compensationActive,
+                builder: (_, active, __) => CompensationHomeEntry(
+                    active: active && !_editor.editing,
+                    autoInvite: !widget.groupChats),
+              ),
             ConversationFolderBar(
               folders: _folders.displayFolders,
               selectedFolderID: _folders.selectedFolderID,
@@ -515,6 +531,9 @@ class _ConversationPageState extends State<ConversationPage> {
                           SizedBox(width: 8.w),
                           UnreadCountView(
                             count: unread,
+                            backgroundColor: AppTokens.archiveUnreadBadge,
+                            foregroundColor: AppTokens.onAccent,
+                            pill: true,
                             size: 22,
                             fontSize: 12,
                           ),

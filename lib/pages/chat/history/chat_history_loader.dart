@@ -719,7 +719,31 @@ class ChatHistoryLoader {
       return order != 0 ? order : a.$1.compareTo(b.$1);
     });
     final result = indexed.map((entry) => entry.$2).toList();
-    final local = unique.values.where(_isLocalRecord).indexed.toList();
+    return _insertLocalRecords(result, unique.values.where(_isLocalRecord));
+  }
+
+  /// The ingress has already ordered and deduplicated the new server batch.
+  /// Retain that order without sorting the full visible window on each event.
+  static List<Message> appendOrderedBatch(
+      Iterable<Message> current, List<Message> batch) {
+    final confirmed = <Message>[];
+    final provisional = <Message>[];
+    final local = <Message>[];
+    for (final message in current) {
+      if (_isLocalRecord(message)) {
+        local.add(message);
+      } else if ((message.seq ?? 0) > 0) {
+        confirmed.add(message);
+      } else {
+        provisional.add(message);
+      }
+    }
+    return _insertLocalRecords([...confirmed, ...batch, ...provisional], local);
+  }
+
+  static List<Message> _insertLocalRecords(
+      List<Message> result, Iterable<Message> records) {
+    final local = records.indexed.toList();
     local.sort((a, b) {
       final order = _compare(a.$2, b.$2);
       return order != 0 ? order : a.$1.compareTo(b.$1);

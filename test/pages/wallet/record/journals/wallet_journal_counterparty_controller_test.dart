@@ -11,6 +11,109 @@ import 'package:openim/pages/wallet/record/journals/wallet_journal_source.dart';
 import 'wallet_journal_entry_test.dart' show journalTestJson;
 
 void main() {
+  for (final scenario in const [
+    (
+      biz: 'packet_exclusive',
+      type: 'packet_freeze',
+      available: '-8',
+      frozen: '8',
+      asset: '0',
+      direction: 'freeze'
+    ),
+    (
+      biz: 'packet_exclusive',
+      type: 'packet_sent',
+      available: '-8',
+      frozen: '0',
+      asset: '-8',
+      direction: 'expense'
+    ),
+    (
+      biz: 'packet_exclusive',
+      type: 'packet_settlement',
+      available: '0',
+      frozen: '-8',
+      asset: '-8',
+      direction: 'expense'
+    ),
+    (
+      biz: 'packet_normal',
+      type: 'packet_received',
+      available: '8',
+      frozen: '0',
+      asset: '8',
+      direction: 'income'
+    ),
+    (
+      biz: 'packet_lucky',
+      type: 'packet_received',
+      available: '8',
+      frozen: '0',
+      asset: '8',
+      direction: 'income'
+    ),
+  ]) {
+    test('${scenario.biz}/${scenario.type} resolves a late public nickname',
+        () async {
+      final entry = WalletJournalEntry.fromJson(journalTestJson()
+        ..addAll({
+          'bizType': scenario.biz,
+          'type': scenario.type,
+          'availableDelta': scenario.available,
+          'frozenDelta': scenario.frozen,
+          'assetDelta': scenario.asset,
+          'direction': scenario.direction,
+          'counterpartyID': 'packet-peer',
+        }));
+      final pending = Completer<Map<String, String>>();
+      final profiles = _CounterpartySource()..respond = (_) => pending.future;
+      final controller =
+          _controller(_JournalSource((_) async => _page([entry])), profiles);
+      await controller.refresh();
+      expect(controller.records.single.counterpartyNickname, isEmpty);
+      expect(profiles.batches, [
+        {'packet-peer'}
+      ]);
+      var notified = false;
+      controller.addListener(() => notified = true);
+      pending.complete({'packet-peer': '  对方真实昵称  '});
+      await _flush();
+      expect(controller.records.single.counterpartyNickname, '对方真实昵称');
+      expect(controller.records.single.journal, same(entry));
+      expect(notified, isTrue);
+    });
+  }
+
+  test('packet with no unique counterparty does not query a profile', () async {
+    final profiles = _CounterpartySource();
+    final controller = _controller(
+        _JournalSource((_) async =>
+            _page([WalletJournalEntry.fromJson(journalTestJson())])),
+        profiles);
+    await controller.refresh();
+    await _flush();
+    expect(profiles.batches, isEmpty);
+    expect(controller.records.single.counterpartyNickname, isEmpty);
+  });
+
+  test('packet profile failure preserves the ledger and retries on refresh',
+      () async {
+    final profiles = _CounterpartySource()
+      ..respond = (_) async => throw StateError('unavailable');
+    final entry = WalletJournalEntry.fromJson(
+        journalTestJson()..['counterpartyID'] = 'packet-peer');
+    final controller =
+        _controller(_JournalSource((_) async => _page([entry])), profiles);
+    await controller.refresh();
+    await _flush();
+    expect(controller.error, isNull);
+    expect(controller.records.single.counterpartyNickname, isEmpty);
+    profiles.respond = (_) async => {'packet-peer': '红包好友'};
+    await controller.refresh();
+    await _flush();
+    expect(controller.records.single.counterpartyNickname, '红包好友');
+  });
+
   test('nickname-only profile retries missing avatar on later pages', () async {
     final journal = _JournalSource((query) async => query.cursor == null
         ? _page([_entry('first', user: 'user-A')],
@@ -256,7 +359,8 @@ void main() {
     expect(controller.error, isNull);
     expect(profiles.nicknameReads, 0);
   });
-  test('nickname reads batch only transfer counterparties and deduplicate IDs',
+  test(
+      'nickname reads batch transfer and packet counterparties and deduplicate IDs',
       () async {
     final journal = _JournalSource((_) async => _page([
           _entry('send-A', user: 'user-A'),
@@ -264,15 +368,16 @@ void main() {
           _entry('group-B', user: 'user-B', bizType: 'group_transfer'),
           _entry('no-counterparty'),
           _entry('adjustment-C', user: 'user-C', bizType: 'admin_adjust'),
-          _entry('packet-C', user: 'user-C', bizType: 'packet_normal'),
+          _entry('packet-D', user: 'user-D', bizType: 'packet_normal'),
         ]));
     final profiles = _CounterpartySource()
-      ..respond = (_) async => {'user-A': '阿秋', 'user-B': '朋友B'};
+      ..respond =
+          (_) async => {'user-A': '阿秋', 'user-B': '朋友B', 'user-D': '红包好友'};
     final controller = _controller(journal, profiles);
     await controller.refresh();
     await _flush();
     expect(profiles.batches, [
-      {'user-A', 'user-B'}
+      {'user-A', 'user-B', 'user-D'}
     ]);
     final names = {
       for (final record in controller.records)
@@ -284,7 +389,7 @@ void main() {
       'group-B': '朋友B',
       'no-counterparty': '',
       'adjustment-C': '',
-      'packet-C': '',
+      'packet-D': '红包好友',
     });
     expect(controller.error, isNull);
   });

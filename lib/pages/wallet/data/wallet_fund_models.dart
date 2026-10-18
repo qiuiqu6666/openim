@@ -201,6 +201,7 @@ class WalletFundOrder {
       'packet_exclusive',
       'packet_normal',
       'packet_lucky',
+      'compensation',
     }.contains(biz)) {
       throw const FormatException('Unsupported wallet order');
     }
