@@ -25,17 +25,17 @@ class WalletDepositHelpSheet extends StatelessWidget {
     final i18n = AppI18n.of(context);
     final labels = WalletCurrencyRuleLabels(i18n);
     final rule = address?.ruleFor(currency);
-    return SafeArea(
-      top: false,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-            maxWidth: WalletDepositTokens.maxWidth,
-            maxHeight: MediaQuery.sizeOf(context).height * .8),
-        child: Material(
-          key: const ValueKey('wallet-deposit-help-sheet'),
-          color: colors.card,
-          borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(AppTokens.rCard)),
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+          maxWidth: WalletDepositTokens.maxWidth,
+          maxHeight: MediaQuery.sizeOf(context).height * .8),
+      child: Material(
+        key: const ValueKey('wallet-deposit-help-sheet'),
+        color: colors.card,
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(AppTokens.rCard)),
+        child: SafeArea(
+          top: false,
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(AppTokens.s6),
             child: Column(
