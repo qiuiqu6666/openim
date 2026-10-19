@@ -4036,6 +4036,114 @@ index 00000000..1ebb9d48
 +	w.SnapshotRevision = hex.EncodeToString(digest[:])
 +	return result
 +}
+diff --git a/internal/conversation_msg/message_window_duplicates_test.go b/internal/conversation_msg/message_window_duplicates_test.go
+new file mode 100644
+index 00000000..f91c1804
+--- /dev/null
++++ b/internal/conversation_msg/message_window_duplicates_test.go
+@@ -0,0 +1,102 @@
++//go:build cgo && !js
++
++package conversation_msg
++
++import (
++	"context"
++	"fmt"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	sdk "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
++)
++
++// Legacy SDKs persisted multiple hidden rows for one server sequence. Reopen
++// that database and exercise the real SQLite -> window path, without cleanup.
++func TestWindowLegacyDuplicatesDoNotConsumeSequenceBudget(t *testing.T) {
++	for _, missing := range []bool{false, true} {
++		t.Run(fmt.Sprintf("missing=%t", missing), func(t *testing.T) {
++			ctx := context.Background()
++			dir := t.TempDir()
++			d, err := db.NewDataBase(ctx, "self", dir, 0)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if err = d.BatchInsertConversationList(ctx, []*model_struct.LocalConversation{{ConversationID: "chat", MaxSeq: 78}}); err != nil {
++				t.Fatal(err)
++			}
++			var rows []*model_struct.LocalChatLog
++			for seq := int64(39); seq <= 78; seq++ {
++				if missing && seq == 60 {
++					continue
++				}
++				row := &model_struct.LocalChatLog{ClientMsgID: fmt.Sprint(seq), Seq: seq, SendTime: 1000 + seq, Status: constant.MsgStatusSendSuccess, ContentType: constant.Text, Content: `{"content":"test"}`, AttachedInfo: "{}"}
++				if seq <= 51 {
++					row.Status = constant.MsgStatusHasDeleted
++					row.Content = ""
++				}
++				rows = append(rows, row)
++			}
++			for n := 0; n < 50; n++ {
++				rows = append(rows, &model_struct.LocalChatLog{ClientMsgID: fmt.Sprintf("legacy-51-%d", n), Seq: 51, SendTime: 1051, Status: constant.MsgStatusHasDeleted})
++			}
++			if err = d.BatchInsertMessageList(ctx, "chat", rows); err != nil {
++				t.Fatal(err)
++			}
++			if err = d.Close(ctx); err != nil {
++				t.Fatal(err)
++			}
++			d, err = db.NewDataBase(ctx, "self", dir, 0)
++			if err != nil {
++				t.Fatal(err)
++			}
++			defer d.Close(ctx)
++			c := &Conversation{db: d}
++			for _, target := range []int64{0, 78, 77} {
++				p, err := c.messageWindow(ctx, sdk.GetAdvancedHistoryMessageListParams{ConversationID: "chat", Count: 40, TargetWatermark: target, LocalSnapshot: true, Window: true})
++				if err != nil {
++					t.Fatal(err)
++				}
++				// target 77 also needs seq 38, which this fixture intentionally lacks.
++				wantReady := !missing && target != 77
++				if p.Window.Publishable != wantReady {
++					t.Fatalf("target=%d unexpected coverage: %+v", target, p.Window)
++				}
++				if wantReady && (len(p.MessageList) != 27 || p.Window.LowerBound != 39 || p.Window.TargetWatermark != 78) {
++					t.Fatalf("lost visible rows: %+v", p)
++				}
++				if missing {
++					found := false
++					for _, gap := range p.Window.Missing {
++						if gap[0] <= 60 && gap[1] >= 60 {
++							found = true
++						}
++					}
++					if !found {
++						t.Fatal("real missing seq 60 was concealed")
++					}
++				}
++				for _, m := range p.MessageList {
++					if m.Seq <= 51 || (target > 0 && m.Seq > target) {
++						t.Fatalf("hidden or future row exposed: %+v", m)
++					}
++				}
++			}
++			stored, err := d.ReadMessageWindow(ctx, "chat", 40, 78)
++			if err != nil {
++				t.Fatal(err)
++			}
++			duplicates := 0
++			for _, row := range stored.Rows {
++				if row.Seq == 51 {
++					duplicates++
++				}
++			}
++			if duplicates != 51 {
++				t.Fatalf("window read mutated or dropped legacy rows: %d", duplicates)
++			}
++		})
++	}
++}
 diff --git a/internal/conversation_msg/message_window_local.go b/internal/conversation_msg/message_window_local.go
 new file mode 100644
 index 00000000..84099edf
@@ -4328,575 +4436,16 @@ diff --git a/internal/conversation_msg/notification.go b/internal/conversation_m
 index 476b2bf1..a1f2206c 100644
 --- a/internal/conversation_msg/notification.go
 +++ b/internal/conversation_msg/notification.go
-@@ -1,522 +1,616 @@
+@@ -1,4 +1,4 @@
 -// Copyright © 2023 OpenIM SDK. All rights reserved.
--//
--// Licensed under the Apache License, Version 2.0 (the "License");
--// you may not use this file except in compliance with the License.
--// You may obtain a copy of the License at
--//
--//     http://www.apache.org/licenses/LICENSE-2.0
--//
--// Unless required by applicable law or agreed to in writing, software
--// distributed under the License is distributed on an "AS IS" BASIS,
--// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--// See the License for the specific language governing permissions and
--// limitations under the License.
--
--package conversation_msg
--
--import (
--	"context"
--	"encoding/json"
--	"fmt"
--	"reflect"
--	"runtime"
--	"sync"
--	"time"
--
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
--	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
--
--	"github.com/openimsdk/protocol/sdkws"
--	"github.com/openimsdk/tools/errs"
--	"github.com/openimsdk/tools/log"
--)
--
--const (
--	syncWait = iota
--	asyncNoWait
--	asyncWait
--)
--
--// InitSyncProgress is initialize Sync when reinstall.
--const InitSyncProgress = 10
--
--func (c *Conversation) Work(c2v common.Cmd2Value) {
--	log.ZDebug(c2v.Ctx, "NotificationCmd start", "caller", c2v.Caller, "cmd", c2v.Cmd, "value", c2v.Value)
--	defer log.ZDebug(c2v.Ctx, "NotificationCmd end", "caller", c2v.Caller, "cmd", c2v.Cmd, "value", c2v.Value)
--	switch c2v.Cmd {
--	case constant.CmdNewMsgCome:
--		c.doMsgNew(c2v)
--	case constant.CmdUpdateConversation:
--		c.doUpdateConversation(c2v)
--	case constant.CmdUpdateMessage:
--		c.doUpdateMessage(c2v)
--	case constant.CmdNotification:
--		c.doNotificationManager(c2v)
--	case constant.CmdSyncData:
--		c.syncData(c2v)
--	case constant.CmdSyncFlag:
--		c.syncFlag(c2v)
--	case constant.CmdMsgSyncInReinstall:
--		c.doMsgSyncByReinstalled(c2v)
--	}
--}
--
--func (c *Conversation) syncFlag(c2v common.Cmd2Value) {
--	ctx := c2v.Ctx
--	syncFlag := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).SyncFlag
--	switch syncFlag {
--	case constant.AppDataSyncStart:
--		log.ZDebug(ctx, "AppDataSyncStart")
--		c.startTime = time.Now()
--		c.ConversationListener().OnSyncServerStart(true)
--		c.ConversationListener().OnSyncServerProgress(1)
--		asyncWaitFunctions := []func(c context.Context) error{
--			c.group.SyncAllJoinedGroupsAndMembers,
--			c.relation.IncrSyncFriends,
--		}
--		runSyncFunctions(ctx, asyncWaitFunctions, asyncWait)
--		c.addInitProgress(InitSyncProgress * 4 / 10)              // add 40% of InitSyncProgress as progress
--		c.ConversationListener().OnSyncServerProgress(c.progress) // notify server current Progress
--
--		syncWaitFunctions := []func(c context.Context) error{
--			c.IncrSyncConversations,
--			c.SyncAllConversationHashReadSeqs,
--		}
--		runSyncFunctions(ctx, syncWaitFunctions, syncWait)
--		log.ZWarn(ctx, "core data sync over", nil, "cost time", time.Since(c.startTime).String())
--		c.addInitProgress(InitSyncProgress * 6 / 10)              // add 60% of InitSyncProgress as progress
--		c.ConversationListener().OnSyncServerProgress(c.progress) // notify server current Progress
--
--		asyncNoWaitFunctions := []func(c context.Context) error{
--			c.user.SyncLoginUserInfoWithoutNotice,
--			c.relation.SyncAllBlackListWithoutNotice,
--		}
--		runSyncFunctions(ctx, asyncNoWaitFunctions, asyncNoWait)
--
--	case constant.AppDataSyncFinish:
--		log.ZDebug(ctx, "AppDataSyncFinish", "time", time.Since(c.startTime).String())
--		c.progress = 100
--		c.ConversationListener().OnSyncServerProgress(c.progress)
--		c.ConversationListener().OnSyncServerFinish(true)
--	case constant.MsgSyncBegin:
--		log.ZDebug(ctx, "MsgSyncBegin")
--		c.ConversationListener().OnSyncServerStart(false)
--		c.syncData(c2v)
--	case constant.MsgSyncFailed:
--		c.ConversationListener().OnSyncServerFailed(false)
--	case constant.MsgSyncEnd:
--		log.ZDebug(ctx, "MsgSyncEnd", "time", time.Since(c.startTime).String())
--		c.ConversationListener().OnSyncServerFinish(false)
--	}
--}
--
--func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) {
--	ctx := c2v.Ctx
--	allMsg := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs
--
--	for conversationID, msgs := range allMsg {
--		log.ZDebug(ctx, "notification handling", "conversationID", conversationID, "msgs", msgs)
--
--		// First, process all the notifications
--		for _, msg := range msgs.Msgs {
--			if msg.ContentType > constant.FriendNotificationBegin && msg.ContentType < constant.FriendNotificationEnd {
--				c.relation.DoNotification(ctx, msg)
--			} else if msg.ContentType > constant.UserNotificationBegin && msg.ContentType < constant.UserNotificationEnd {
--				c.user.DoNotification(ctx, msg)
--			} else if msg.ContentType > constant.GroupNotificationBegin && msg.ContentType < constant.GroupNotificationEnd {
--				c.group.DoNotification(ctx, msg)
--			} else {
--				c.DoNotification(ctx, msg)
--			}
--		}
--
--		// After all notifications are processed, update the sequence number
--		if len(msgs.Msgs) != 0 {
--			lastMsg := msgs.Msgs[len(msgs.Msgs)-1]
--			log.ZDebug(ctx, "SetNotificationSeq", "conversationID", conversationID, "seq", lastMsg.Seq)
--			if lastMsg.Seq != 0 {
--				if err := c.db.SetNotificationSeq(ctx, conversationID, lastMsg.Seq); err != nil {
--					// Log an error if setting the sequence number fails
--					log.ZError(ctx, "SetNotificationSeq err", err, "conversationID", conversationID, "lastMsg", lastMsg)
--				}
--			}
--		}
--	}
--
--}
--
--func (c *Conversation) DoNotification(ctx context.Context, msg *sdkws.MsgData) {
--	if err := c.doNotification(ctx, msg); err != nil {
--		log.ZWarn(ctx, "DoConversationNotification failed", err)
--	}
--}
--
--func (c *Conversation) doNotification(ctx context.Context, msg *sdkws.MsgData) error {
--	switch msg.ContentType {
--	case constant.ConversationChangeNotification:
--		return c.DoConversationChangedNotification(ctx, msg)
--	case constant.ConversationPrivateChatNotification: // 1701
--		return c.DoConversationIsPrivateChangedNotification(ctx, msg)
--	case constant.BusinessNotification:
--		return c.doBusinessNotification(ctx, msg)
--	case constant.RevokeNotification: // 2101
--		return c.doRevokeMsg(ctx, msg)
--	case constant.ClearConversationNotification: // 1703
--		return c.doClearConversations(ctx, msg)
--	case constant.DeleteMsgsNotification:
--		return c.doDeleteMsgs(ctx, msg)
--	case constant.HasReadReceipt: // 2200
--		return c.doReadDrawing(ctx, msg)
--	}
--	return errs.New("unknown tips type", "contentType", msg.ContentType).Wrap()
--}
--
--func (c *Conversation) getConversationLatestMsgClientID(latestMsg string) string {
--	msg := &sdk_struct.MsgStruct{}
--	if err := json.Unmarshal([]byte(latestMsg), msg); err != nil {
--		log.ZError(context.Background(), "getConversationLatestMsgClientID", err, "latestMsg", latestMsg)
--	}
--	return msg.ClientMsgID
--}
--
--func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
--	if c2v.Caller == "" {
--		c2v.Caller = common.GetCaller(2)
--	}
--	ctx := c2v.Ctx
--	node := c2v.Value.(common.UpdateConNode)
--	log.ZInfo(ctx, "doUpdateConversation", "node", node, "cmd", c2v.Cmd, "caller", c2v.Caller)
--	switch node.Action {
--	case constant.AddConOrUpLatMsg:
--		var list []*model_struct.LocalConversation
--		lc := node.Args.(model_struct.LocalConversation)
--		oc, err := c.db.GetConversation(ctx, lc.ConversationID)
--		if err == nil {
--			if lc.LatestMsgSendTime >= oc.LatestMsgSendTime || c.getConversationLatestMsgClientID(lc.LatestMsg) == c.getConversationLatestMsgClientID(oc.LatestMsg) { // The session update of asynchronous messages is subject to the latest sending time
--				err := c.db.UpdateColumnsConversation(ctx, node.ConID, map[string]interface{}{"latest_msg_send_time": lc.LatestMsgSendTime, "latest_msg": lc.LatestMsg})
--				if err != nil {
--					log.ZError(ctx, "updateConversationLatestMsgModel", err, "conversationID", node.ConID)
--				} else {
--					oc.LatestMsgSendTime = lc.LatestMsgSendTime
--					oc.LatestMsg = lc.LatestMsg
--					list = append(list, oc)
--					data := utils.StructToJsonString(list)
--					log.ZInfo(ctx, "OnConversationChanged", "data", data)
--					c.ConversationListener().OnConversationChanged(data)
--				}
--			}
--		} else {
--			log.ZDebug(ctx, "new conversation", "lc", lc)
--			err4 := c.db.InsertConversation(ctx, &lc)
--			if err4 != nil {
--				log.ZWarn(ctx, "insert new conversation err", err4)
--			} else {
--				list = append(list, &lc)
--				c.ConversationListener().OnNewConversation(utils.StructToJsonString(list))
--			}
--		}
--
--	case constant.TotalUnreadMessageChanged:
--		totalUnreadCount, err := c.db.GetTotalUnreadMsgCountDB(ctx)
--		if err != nil {
--			log.ZWarn(ctx, "GetTotalUnreadMsgCountDB err", err)
--		} else {
--			c.ConversationListener().OnTotalUnreadMessageCountChanged(totalUnreadCount)
--		}
--	case constant.UpdateConFaceUrlAndNickName:
--		var lc model_struct.LocalConversation
--		st := node.Args.(common.SourceIDAndSessionType)
--		log.ZInfo(ctx, "UpdateConFaceUrlAndNickName", "st", st)
--		switch st.SessionType {
--		case constant.SingleChatType:
--			lc.UserID = st.SourceID
--			lc.ConversationID = c.getConversationIDBySessionType(st.SourceID, constant.SingleChatType)
--			lc.ConversationType = constant.SingleChatType
--		case constant.ReadGroupChatType:
--			conversationID, conversationType, err := c.getConversationTypeByGroupID(ctx, st.SourceID)
--			if err != nil {
--				return
--			}
--			lc.GroupID = st.SourceID
--			lc.ConversationID = conversationID
--			lc.ConversationType = conversationType
--		case constant.NotificationChatType:
--			lc.UserID = st.SourceID
--			lc.ConversationID = c.getConversationIDBySessionType(st.SourceID, constant.NotificationChatType)
--			lc.ConversationType = constant.NotificationChatType
--		default:
--			log.ZError(ctx, "not support sessionType", nil, "sessionType", st.SessionType)
--			return
--		}
--		lc.ShowName = st.Nickname
--		lc.FaceURL = st.FaceURL
--		err := c.db.UpdateConversation(ctx, &lc)
--		if err != nil {
--			// log.Error("internal", "setConversationFaceUrlAndNickName database err:", err.Error())
--			return
--		}
--		c.doUpdateConversation(common.Cmd2Value{Value: common.UpdateConNode{ConID: lc.ConversationID, Action: constant.ConChange, Args: []string{lc.ConversationID}}})
--
--	case constant.UpdateLatestMessageReadState:
--		conversationID := node.ConID
--		var latestMsg sdk_struct.MsgStruct
--		l, err := c.db.GetConversation(ctx, conversationID)
--		if err != nil {
--			log.ZError(ctx, "getConversationLatestMsgModel err", err, "conversationID", conversationID)
--		} else {
--			err := json.Unmarshal([]byte(l.LatestMsg), &latestMsg)
--			if err != nil {
--				log.ZError(ctx, "latestMsg,Unmarshal err", err)
--			} else {
--				latestMsg.IsRead = true
--				newLatestMessage := utils.StructToJsonString(latestMsg)
--				err = c.db.UpdateColumnsConversation(ctx, node.ConID, map[string]interface{}{"latest_msg_send_time": latestMsg.SendTime, "latest_msg": newLatestMessage})
--				if err != nil {
--					log.ZError(ctx, "updateConversationLatestMsgModel err", err)
--				}
--			}
--		}
--	case constant.UpdateLatestMessageFaceUrlAndNickName:
--		args := node.Args.(common.UpdateMessageInfo)
--		switch args.SessionType {
--		case constant.ReadGroupChatType:
--			conversationID := c.getConversationIDBySessionType(args.GroupID, constant.ReadGroupChatType)
--			lc, err := c.db.GetConversation(ctx, conversationID)
--			if err != nil {
--				log.ZWarn(ctx, "getConversation err", err)
--				return
--			}
--			var latestMsg sdk_struct.MsgStruct
--			err = json.Unmarshal([]byte(lc.LatestMsg), &latestMsg)
--			if err != nil {
--				log.ZError(ctx, "latestMsg,Unmarshal err", err)
--			} else {
--				//If the sender of the latest message in the conversation
--				//happens to be a member of the group whose status has changed,
--				//then update the sender's avatar and nickname for the latest message.
--				if latestMsg.SendID == args.UserID {
--					latestMsg.SenderFaceURL = args.FaceURL
--					latestMsg.SenderNickname = args.Nickname
--					newLatestMessage := utils.StructToJsonString(latestMsg)
--					lc.LatestMsg = newLatestMessage
--					err = c.db.UpdateColumnsConversation(ctx, conversationID, map[string]interface{}{"latest_msg": newLatestMessage})
--					if err != nil {
--						log.ZError(ctx, "updateConversationLatestMsgModel err", err)
--					} else {
--						var cList []*model_struct.LocalConversation
--						cList = append(cList, lc)
--						data := utils.StructToJsonStringDefault(cList)
--						c.ConversationListener().OnConversationChanged(data)
--					}
--
--				}
--			}
--		}
--
--	case constant.ConChange:
--		conversationIDs := node.Args.([]string)
--		conversations, err := c.db.GetMultipleConversationDB(ctx, conversationIDs)
--		if err != nil {
--			log.ZError(ctx, "getMultipleConversationModel err", err)
--		} else {
--			var newCList []*model_struct.LocalConversation
--			for _, v := range conversations {
--				if v.LatestMsgSendTime != 0 {
--					newCList = append(newCList, v)
--				}
--			}
--			data := utils.StructToJsonStringDefault(newCList)
--			log.ZInfo(ctx, "OnConversationChanged", "data", data)
--			c.ConversationListener().OnConversationChanged(data)
--		}
--	case constant.NewCon:
--		cidList := node.Args.([]string)
--		cLists, err := c.db.GetMultipleConversationDB(ctx, cidList)
--		if err != nil {
--			log.ZWarn(ctx, "getMultipleConversationModel err", err)
--		} else {
--			if cLists != nil {
--				log.ZDebug(ctx, "getMultipleConversationModel success", "cLists", cLists)
--				c.ConversationListener().OnNewConversation(utils.StructToJsonString(cLists))
--			}
--		}
--	case constant.ConChangeDirect:
--		cidList := node.Args.(string)
--		log.ZInfo(ctx, "ConversationChanged", "cidList", cidList)
--		c.ConversationListener().OnConversationChanged(cidList)
--
--	case constant.NewConDirect:
--		cidList := node.Args.(string)
--		log.ZDebug(ctx, "NewConversation", "cidList", cidList)
--		c.ConversationListener().OnNewConversation(cidList)
--
--	}
--}
--
--func (c *Conversation) doUpdateMessage(c2v common.Cmd2Value) {
--	node := c2v.Value.(common.UpdateMessageNode)
--	ctx := c2v.Ctx
--	switch node.Action {
--	case constant.UpdateMsgFaceUrlAndNickName:
--		args := node.Args.(common.UpdateMessageInfo)
--		switch args.SessionType {
--		case constant.SingleChatType:
--			if args.UserID == c.loginUserID {
--				conversationIDList, err := c.db.GetAllSingleConversationIDList(ctx)
--				if err != nil {
--					log.ZError(ctx, "GetAllSingleConversationIDList err", err)
--					return
--				} else {
--					log.ZDebug(ctx, "get single conversationID list", "conversationIDList", conversationIDList)
--					for _, conversationID := range conversationIDList {
--						err := c.db.UpdateMsgSenderFaceURLAndSenderNickname(ctx, conversationID, args.UserID, args.FaceURL, args.Nickname)
--						if err != nil {
--							log.ZError(ctx, "UpdateMsgSenderFaceURLAndSenderNickname err", err)
--							continue
--						}
--					}
--
--				}
--			} else {
--				conversationID := c.getConversationIDBySessionType(args.UserID, constant.SingleChatType)
--				err := c.db.UpdateMsgSenderFaceURLAndSenderNickname(ctx, conversationID, args.UserID, args.FaceURL, args.Nickname)
--				if err != nil {
--					log.ZError(ctx, "UpdateMsgSenderFaceURLAndSenderNickname err", err)
--				}
--
--			}
--		case constant.ReadGroupChatType:
--			conversationID := c.getConversationIDBySessionType(args.GroupID, constant.ReadGroupChatType)
--			err := c.db.UpdateMsgSenderFaceURLAndSenderNickname(ctx, conversationID, args.UserID, args.FaceURL, args.Nickname)
--			if err != nil {
--				log.ZError(ctx, "UpdateMsgSenderFaceURLAndSenderNickname err", err)
--			}
--		case constant.NotificationChatType:
--			conversationID := c.getConversationIDBySessionType(args.UserID, constant.NotificationChatType)
--			err := c.db.UpdateMsgSenderFaceURLAndSenderNickname(ctx, conversationID, args.UserID, args.FaceURL, args.Nickname)
--			if err != nil {
--				log.ZError(ctx, "UpdateMsgSenderFaceURLAndSenderNickname err", err)
--			}
--		default:
--			log.ZError(ctx, "not support sessionType", nil, "args", args)
--			return
--		}
--	}
--
--}
--
--func (c *Conversation) syncData(c2v common.Cmd2Value) {
--	c.conversationSyncMutex.Lock()
--	defer c.conversationSyncMutex.Unlock()
--
--	ctx := c2v.Ctx
--	c.startTime = time.Now()
--	//clear SubscriptionStatusMap
--	//c.user.OnlineStatusCache.DeleteAll()
--
--	// Synchronous sync functions
--	syncFuncs := []func(c context.Context) error{
--		c.SyncAllConversationHashReadSeqs,
--	}
--
--	runSyncFunctions(ctx, syncFuncs, syncWait)
--
--	// Asynchronous sync functions
--	asyncFuncs := []func(c context.Context) error{
--		c.user.SyncLoginUserInfo,
--		c.relation.SyncAllBlackList,
--		c.group.SyncAllJoinedGroupsAndMembersWithLock,
--		c.relation.IncrSyncFriendsWithLock,
--		c.IncrSyncConversationsWithLock,
--	}
--
--	runSyncFunctions(ctx, asyncFuncs, asyncNoWait)
--}
--
--func runSyncFunctions(ctx context.Context, funcs []func(c context.Context) error, mode int) {
--	var wg sync.WaitGroup
--
--	for _, fn := range funcs {
--		switch mode {
--		case asyncWait:
--			wg.Add(1)
--			go executeSyncFunction(ctx, fn, &wg)
--		case asyncNoWait:
--			go executeSyncFunction(ctx, fn, nil)
--		case syncWait:
--			executeSyncFunction(ctx, fn, nil)
--		}
--	}
--
--	if mode == asyncWait {
--		wg.Wait()
--	}
--}
--
--func executeSyncFunction(ctx context.Context, fn func(c context.Context) error, wg *sync.WaitGroup) {
--	if wg != nil {
--		defer wg.Done()
--	}
--
--	funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
--	startTime := time.Now()
--	err := fn(ctx)
--	duration := time.Since(startTime)
--	if err != nil {
--		log.ZWarn(ctx, fmt.Sprintf("%s sync error", funcName), err, "duration", duration.String())
--	} else {
--		log.ZDebug(ctx, fmt.Sprintf("%s completed successfully", funcName), "duration", duration.String())
--	}
--}
--
--func (c *Conversation) DoConversationChangedNotification(ctx context.Context, msg *sdkws.MsgData) error {
--	c.conversationSyncMutex.Lock()
--	defer c.conversationSyncMutex.Unlock()
--
--	//var notification sdkws.ConversationChangedNotification
--	tips := &sdkws.ConversationUpdateTips{}
--	if err := utils.UnmarshalNotificationElem(msg.Content, tips); err != nil {
--		log.ZWarn(ctx, "UnmarshalNotificationElem err", err, "msg", msg)
--		return err
--	}
--
--	err := c.IncrSyncConversations(ctx)
--	if err != nil {
--		log.ZWarn(ctx, "IncrSyncConversations err", err)
--		return err
--	}
--	return nil
--}
--
--func (c *Conversation) DoConversationIsPrivateChangedNotification(ctx context.Context, msg *sdkws.MsgData) error {
--	c.conversationSyncMutex.Lock()
--	defer c.conversationSyncMutex.Unlock()
--
--	tips := &sdkws.ConversationSetPrivateTips{}
--	if err := utils.UnmarshalNotificationElem(msg.Content, tips); err != nil {
--		log.ZWarn(ctx, "UnmarshalNotificationElem err", err, "msg", msg)
--		return err
--	}
--
--	err := c.IncrSyncConversations(ctx)
--	if err != nil {
--		log.ZWarn(ctx, "IncrSyncConversations err", err)
--		return err
--	}
--	return nil
--}
--
--func (c *Conversation) doBusinessNotification(ctx context.Context, msg *sdkws.MsgData) error {
--	var n sdk_struct.NotificationElem
--	err := utils.JsonStringToStruct(string(msg.Content), &n)
--	if err != nil {
--		log.ZError(ctx, "unmarshal failed", err, "msg", msg)
--		return err
--
--	}
--	c.businessListener().OnRecvCustomBusinessMessage(n.Detail)
--	return nil
--}
 +// Copyright 漏 2023 OpenIM SDK. All rights reserved.
-+//
-+// Licensed under the Apache License, Version 2.0 (the "License");
-+// you may not use this file except in compliance with the License.
-+// You may obtain a copy of the License at
-+//
-+//     http://www.apache.org/licenses/LICENSE-2.0
-+//
-+// Unless required by applicable law or agreed to in writing, software
-+// distributed under the License is distributed on an "AS IS" BASIS,
-+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+// See the License for the specific language governing permissions and
-+// limitations under the License.
-+
-+package conversation_msg
-+
-+import (
-+	"context"
-+	"encoding/json"
-+	"fmt"
-+	"reflect"
-+	"runtime"
-+	"sync"
-+	"time"
-+
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
-+	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
-+
-+	"github.com/openimsdk/protocol/sdkws"
-+	"github.com/openimsdk/tools/errs"
-+	"github.com/openimsdk/tools/log"
-+)
-+
-+const (
-+	syncWait = iota
-+	asyncNoWait
-+	asyncWait
-+)
-+
-+// InitSyncProgress is initialize Sync when reinstall.
-+const InitSyncProgress = 10
-+
-+func (c *Conversation) Work(c2v common.Cmd2Value) {
+ //
+ // Licensed under the Apache License, Version 2.0 (the "License");
+ // you may not use this file except in compliance with the License.
+@@ -44,40 +44,61 @@ const (
+ const InitSyncProgress = 10
+ 
+ func (c *Conversation) Work(c2v common.Cmd2Value) {
 +	var workErr error
 +	defer func() {
 +		if failure := recover(); failure != nil {
@@ -4917,66 +4466,86 @@ index 476b2bf1..a1f2206c 100644
 +		workErr = context.DeadlineExceeded
 +		return
 +	}
-+	log.ZDebug(c2v.Ctx, "NotificationCmd start", "caller", c2v.Caller, "cmd", c2v.Cmd, "value", c2v.Value)
-+	defer log.ZDebug(c2v.Ctx, "NotificationCmd end", "caller", c2v.Caller, "cmd", c2v.Cmd, "value", c2v.Value)
-+	switch c2v.Cmd {
-+	case constant.CmdNewMsgCome:
+ 	log.ZDebug(c2v.Ctx, "NotificationCmd start", "caller", c2v.Caller, "cmd", c2v.Cmd, "value", c2v.Value)
+ 	defer log.ZDebug(c2v.Ctx, "NotificationCmd end", "caller", c2v.Caller, "cmd", c2v.Cmd, "value", c2v.Value)
+ 	switch c2v.Cmd {
+ 	case constant.CmdNewMsgCome:
+-		c.doMsgNew(c2v)
 +		workErr = c.doMsgNew(c2v)
-+	case constant.CmdUpdateConversation:
-+		c.doUpdateConversation(c2v)
-+	case constant.CmdUpdateMessage:
-+		c.doUpdateMessage(c2v)
-+	case constant.CmdNotification:
+ 	case constant.CmdUpdateConversation:
+ 		c.doUpdateConversation(c2v)
+ 	case constant.CmdUpdateMessage:
+ 		c.doUpdateMessage(c2v)
+ 	case constant.CmdNotification:
+-		c.doNotificationManager(c2v)
 +		workErr = c.doNotificationManager(c2v)
-+	case constant.CmdSyncData:
+ 	case constant.CmdSyncData:
+-		c.syncData(c2v)
 +		workErr = c.syncData(c2v)
-+	case constant.CmdSyncFlag:
+ 	case constant.CmdSyncFlag:
+-		c.syncFlag(c2v)
 +		workErr = c.syncFlag(c2v)
-+	case constant.CmdMsgSyncInReinstall:
+ 	case constant.CmdMsgSyncInReinstall:
+-		c.doMsgSyncByReinstalled(c2v)
 +		workErr = c.doMsgSyncByReinstalled(c2v)
-+	}
-+}
-+
+ 	}
+ }
+ 
+-func (c *Conversation) syncFlag(c2v common.Cmd2Value) {
+-	ctx := c2v.Ctx
 +func (c *Conversation) syncFlag(c2v common.Cmd2Value) error {
 +	ctx, cancel := syncCommandContext(c2v)
 +	defer cancel()
-+	syncFlag := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).SyncFlag
-+	switch syncFlag {
-+	case constant.AppDataSyncStart:
-+		log.ZDebug(ctx, "AppDataSyncStart")
-+		c.startTime = time.Now()
+ 	syncFlag := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).SyncFlag
+ 	switch syncFlag {
+ 	case constant.AppDataSyncStart:
+ 		log.ZDebug(ctx, "AppDataSyncStart")
+ 		c.startTime = time.Now()
 +		c.progress = 0
 +		c.msgOffset = 0
-+		c.ConversationListener().OnSyncServerStart(true)
-+		c.ConversationListener().OnSyncServerProgress(1)
+ 		c.ConversationListener().OnSyncServerStart(true)
+ 		c.ConversationListener().OnSyncServerProgress(1)
+-		asyncWaitFunctions := []func(c context.Context) error{
+-			c.group.SyncAllJoinedGroupsAndMembers,
+-			c.relation.IncrSyncFriends,
+-		}
+-		runSyncFunctions(ctx, asyncWaitFunctions, asyncWait)
 +		// Visibility/settings and read watermarks are the required bootstrap.
 +		// Friends and group-member profiles are refreshed by the serialized
 +		// auxiliary job after messages, without delaying this first window.
-+		c.addInitProgress(InitSyncProgress * 4 / 10)              // add 40% of InitSyncProgress as progress
-+		c.ConversationListener().OnSyncServerProgress(c.progress) // notify server current Progress
-+
-+		syncWaitFunctions := []func(c context.Context) error{
-+			c.IncrSyncConversations,
-+			c.SyncAllConversationHashReadSeqs,
-+		}
+ 		c.addInitProgress(InitSyncProgress * 4 / 10)              // add 40% of InitSyncProgress as progress
+ 		c.ConversationListener().OnSyncServerProgress(c.progress) // notify server current Progress
+ 
+@@ -85,18 +106,17 @@ func (c *Conversation) syncFlag(c2v common.Cmd2Value) {
+ 			c.IncrSyncConversations,
+ 			c.SyncAllConversationHashReadSeqs,
+ 		}
+-		runSyncFunctions(ctx, syncWaitFunctions, syncWait)
 +		if err := runRequiredSyncFunctions(ctx, syncWaitFunctions, false); err != nil {
 +			return err
 +		}
-+		log.ZWarn(ctx, "core data sync over", nil, "cost time", time.Since(c.startTime).String())
-+		c.addInitProgress(InitSyncProgress * 6 / 10)              // add 60% of InitSyncProgress as progress
-+		c.ConversationListener().OnSyncServerProgress(c.progress) // notify server current Progress
-+
-+	case constant.AppDataSyncFinish:
+ 		log.ZWarn(ctx, "core data sync over", nil, "cost time", time.Since(c.startTime).String())
+ 		c.addInitProgress(InitSyncProgress * 6 / 10)              // add 60% of InitSyncProgress as progress
+ 		c.ConversationListener().OnSyncServerProgress(c.progress) // notify server current Progress
+ 
+-		asyncNoWaitFunctions := []func(c context.Context) error{
+-			c.user.SyncLoginUserInfoWithoutNotice,
+-			c.relation.SyncAllBlackListWithoutNotice,
+-		}
+-		runSyncFunctions(ctx, asyncNoWaitFunctions, asyncNoWait)
+-
+ 	case constant.AppDataSyncFinish:
 +		if err := c.reconcileGroupConversationProfiles(ctx); err != nil {
 +			return err
 +		}
-+		log.ZDebug(ctx, "AppDataSyncFinish", "time", time.Since(c.startTime).String())
-+		c.progress = 100
-+		c.ConversationListener().OnSyncServerProgress(c.progress)
-+		c.ConversationListener().OnSyncServerFinish(true)
-+	case constant.MsgSyncBegin:
-+		log.ZDebug(ctx, "MsgSyncBegin")
-+		c.ConversationListener().OnSyncServerStart(false)
+ 		log.ZDebug(ctx, "AppDataSyncFinish", "time", time.Since(c.startTime).String())
+ 		c.progress = 100
+ 		c.ConversationListener().OnSyncServerProgress(c.progress)
+@@ -104,48 +124,80 @@ func (c *Conversation) syncFlag(c2v common.Cmd2Value) {
+ 	case constant.MsgSyncBegin:
+ 		log.ZDebug(ctx, "MsgSyncBegin")
+ 		c.ConversationListener().OnSyncServerStart(false)
+-		c.syncData(c2v)
 +		// Only visibility/settings and read watermarks precede message recovery.
 +		// Profile, friend and member refreshes run after message delivery, so a
 +		// failing unrelated endpoint cannot suppress the newest offline message.
@@ -4984,29 +4553,31 @@ index 476b2bf1..a1f2206c 100644
 +			c.IncrSyncConversationsWithLock,
 +			c.SyncAllConversationHashReadSeqs,
 +		}, false)
-+	case constant.MsgSyncFailed:
-+		c.ConversationListener().OnSyncServerFailed(false)
-+	case constant.MsgSyncEnd:
-+		log.ZDebug(ctx, "MsgSyncEnd", "time", time.Since(c.startTime).String())
-+		c.ConversationListener().OnSyncServerFinish(false)
-+	}
+ 	case constant.MsgSyncFailed:
+ 		c.ConversationListener().OnSyncServerFailed(false)
+ 	case constant.MsgSyncEnd:
+ 		log.ZDebug(ctx, "MsgSyncEnd", "time", time.Since(c.startTime).String())
+ 		c.ConversationListener().OnSyncServerFinish(false)
+ 	}
 +	return nil
-+}
-+
+ }
+ 
+-func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) {
+-	ctx := c2v.Ctx
 +func (c *Conversation) doNotificationManager(c2v common.Cmd2Value) error {
 +	ctx, cancel := syncCommandContext(c2v)
 +	defer cancel()
-+	allMsg := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs
-+
-+	for conversationID, msgs := range allMsg {
+ 	allMsg := c2v.Value.(sdk_struct.CmdNewMsgComeToConversation).Msgs
+ 
+ 	for conversationID, msgs := range allMsg {
 +		started := time.Now()
 +		if len(msgs.Msgs) > 0 {
 +			log.ZInfo(ctx, "notification page processing started", "conversationID", conversationID, "count", len(msgs.Msgs), "firstSeq", msgs.Msgs[0].Seq, "lastSeq", msgs.Msgs[len(msgs.Msgs)-1].Seq)
 +		}
-+		log.ZDebug(ctx, "notification handling", "conversationID", conversationID, "msgs", msgs)
-+
-+		// First, process all the notifications
-+		for _, msg := range msgs.Msgs {
+ 		log.ZDebug(ctx, "notification handling", "conversationID", conversationID, "msgs", msgs)
+ 
+ 		// First, process all the notifications
+ 		for _, msg := range msgs.Msgs {
 +			if err := ctx.Err(); err != nil {
 +				return err
 +			}
@@ -5015,155 +4586,86 @@ index 476b2bf1..a1f2206c 100644
 +			if msg.Status >= constant.MsgStatusHasDeleted && msg.Seq > 0 {
 +				continue
 +			}
-+			if msg.ContentType > constant.FriendNotificationBegin && msg.ContentType < constant.FriendNotificationEnd {
+ 			if msg.ContentType > constant.FriendNotificationBegin && msg.ContentType < constant.FriendNotificationEnd {
+-				c.relation.DoNotification(ctx, msg)
 +				if err := c.relation.DoNotification(ctx, msg); err != nil {
 +					return err
 +				}
-+			} else if msg.ContentType > constant.UserNotificationBegin && msg.ContentType < constant.UserNotificationEnd {
-+				c.user.DoNotification(ctx, msg)
-+			} else if msg.ContentType > constant.GroupNotificationBegin && msg.ContentType < constant.GroupNotificationEnd {
+ 			} else if msg.ContentType > constant.UserNotificationBegin && msg.ContentType < constant.UserNotificationEnd {
+ 				c.user.DoNotification(ctx, msg)
+ 			} else if msg.ContentType > constant.GroupNotificationBegin && msg.ContentType < constant.GroupNotificationEnd {
+-				c.group.DoNotification(ctx, msg)
 +				if err := c.group.DoNotification(ctx, msg); err != nil {
 +					return err
 +				}
-+			} else {
+ 			} else {
+-				c.DoNotification(ctx, msg)
 +				if err := c.doNotification(ctx, msg); err != nil {
 +					log.ZWarn(ctx, "notification page processing failed", err, "conversationID", conversationID, "seq", msg.Seq, "contentType", msg.ContentType, "clientMsgID", msg.ClientMsgID, "contextError", ctx.Err(), "duration", time.Since(started).String())
 +					return err
 +				}
-+			}
-+		}
-+
-+		// After all notifications are processed, update the sequence number
+ 			}
+ 		}
+ 
+ 		// After all notifications are processed, update the sequence number
 +		if err := ctx.Err(); err != nil {
 +			return err
 +		}
-+		if len(msgs.Msgs) != 0 {
-+			lastMsg := msgs.Msgs[len(msgs.Msgs)-1]
-+			log.ZDebug(ctx, "SetNotificationSeq", "conversationID", conversationID, "seq", lastMsg.Seq)
-+			if lastMsg.Seq != 0 {
-+				if err := c.db.SetNotificationSeq(ctx, conversationID, lastMsg.Seq); err != nil {
-+					// Log an error if setting the sequence number fails
+ 		if len(msgs.Msgs) != 0 {
+ 			lastMsg := msgs.Msgs[len(msgs.Msgs)-1]
+ 			log.ZDebug(ctx, "SetNotificationSeq", "conversationID", conversationID, "seq", lastMsg.Seq)
+ 			if lastMsg.Seq != 0 {
+ 				if err := c.db.SetNotificationSeq(ctx, conversationID, lastMsg.Seq); err != nil {
+ 					// Log an error if setting the sequence number fails
+-					log.ZError(ctx, "SetNotificationSeq err", err, "conversationID", conversationID, "lastMsg", lastMsg)
 +					log.ZError(ctx, "SetNotificationSeq err", err, "conversationID", conversationID, "seq", lastMsg.Seq, "contextError", ctx.Err())
 +					return err
-+				}
+ 				}
 +				log.ZInfo(ctx, "notification page persisted", "conversationID", conversationID, "seq", lastMsg.Seq, "count", len(msgs.Msgs), "duration", time.Since(started).String())
-+			}
-+		}
-+	}
+ 			}
+ 		}
+ 	}
+-
 +	return nil
-+}
-+
-+func (c *Conversation) DoNotification(ctx context.Context, msg *sdkws.MsgData) {
-+	if err := c.doNotification(ctx, msg); err != nil {
-+		log.ZWarn(ctx, "DoConversationNotification failed", err)
-+	}
-+}
-+
-+func (c *Conversation) doNotification(ctx context.Context, msg *sdkws.MsgData) error {
-+	switch msg.ContentType {
-+	case constant.ConversationChangeNotification:
-+		return c.DoConversationChangedNotification(ctx, msg)
-+	case constant.ConversationPrivateChatNotification: // 1701
-+		return c.DoConversationIsPrivateChangedNotification(ctx, msg)
-+	case constant.BusinessNotification:
-+		return c.doBusinessNotification(ctx, msg)
-+	case constant.RevokeNotification: // 2101
-+		return c.doRevokeMsg(ctx, msg)
-+	case constant.ClearConversationNotification: // 1703
-+		return c.doClearConversations(ctx, msg)
-+	case constant.DeleteMsgsNotification:
-+		return c.doDeleteMsgs(ctx, msg)
-+	case constant.HasReadReceipt: // 2200
-+		return c.doReadDrawing(ctx, msg)
-+	}
-+	return errs.New("unknown tips type", "contentType", msg.ContentType).Wrap()
-+}
-+
-+func (c *Conversation) getConversationLatestMsgClientID(latestMsg string) string {
-+	msg := &sdk_struct.MsgStruct{}
-+	if err := json.Unmarshal([]byte(latestMsg), msg); err != nil {
-+		log.ZError(context.Background(), "getConversationLatestMsgClientID", err, "latestMsg", latestMsg)
-+	}
-+	return msg.ClientMsgID
-+}
-+
-+func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
-+	if c2v.Caller == "" {
-+		c2v.Caller = common.GetCaller(2)
-+	}
-+	ctx := c2v.Ctx
-+	node := c2v.Value.(common.UpdateConNode)
+ }
+ 
+ func (c *Conversation) DoNotification(ctx context.Context, msg *sdkws.MsgData) {
+@@ -188,7 +240,7 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
+ 	}
+ 	ctx := c2v.Ctx
+ 	node := c2v.Value.(common.UpdateConNode)
+-	log.ZInfo(ctx, "doUpdateConversation", "node", node, "cmd", c2v.Cmd, "caller", c2v.Caller)
 +	log.ZInfo(ctx, "doUpdateConversation", "action", node.Action, "conversationID", node.ConID, "cmd", c2v.Cmd, "caller", c2v.Caller)
-+	switch node.Action {
-+	case constant.AddConOrUpLatMsg:
-+		var list []*model_struct.LocalConversation
-+		lc := node.Args.(model_struct.LocalConversation)
-+		oc, err := c.db.GetConversation(ctx, lc.ConversationID)
-+		if err == nil {
-+			if lc.LatestMsgSendTime >= oc.LatestMsgSendTime || c.getConversationLatestMsgClientID(lc.LatestMsg) == c.getConversationLatestMsgClientID(oc.LatestMsg) { // The session update of asynchronous messages is subject to the latest sending time
-+				err := c.db.UpdateColumnsConversation(ctx, node.ConID, map[string]interface{}{"latest_msg_send_time": lc.LatestMsgSendTime, "latest_msg": lc.LatestMsg})
-+				if err != nil {
-+					log.ZError(ctx, "updateConversationLatestMsgModel", err, "conversationID", node.ConID)
-+				} else {
-+					oc.LatestMsgSendTime = lc.LatestMsgSendTime
-+					oc.LatestMsg = lc.LatestMsg
-+					list = append(list, oc)
-+					data := utils.StructToJsonString(list)
+ 	switch node.Action {
+ 	case constant.AddConOrUpLatMsg:
+ 		var list []*model_struct.LocalConversation
+@@ -204,7 +256,7 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
+ 					oc.LatestMsg = lc.LatestMsg
+ 					list = append(list, oc)
+ 					data := utils.StructToJsonString(list)
+-					log.ZInfo(ctx, "OnConversationChanged", "data", data)
 +					log.ZDebug(ctx, "OnConversationChanged", "data", data)
-+					c.ConversationListener().OnConversationChanged(data)
-+				}
-+			}
-+		} else {
-+			log.ZDebug(ctx, "new conversation", "lc", lc)
-+			err4 := c.db.InsertConversation(ctx, &lc)
-+			if err4 != nil {
-+				log.ZWarn(ctx, "insert new conversation err", err4)
-+			} else {
-+				list = append(list, &lc)
-+				c.ConversationListener().OnNewConversation(utils.StructToJsonString(list))
-+			}
-+		}
-+
-+	case constant.TotalUnreadMessageChanged:
-+		totalUnreadCount, err := c.db.GetTotalUnreadMsgCountDB(ctx)
-+		if err != nil {
-+			log.ZWarn(ctx, "GetTotalUnreadMsgCountDB err", err)
-+		} else {
-+			c.ConversationListener().OnTotalUnreadMessageCountChanged(totalUnreadCount)
-+		}
-+	case constant.UpdateConFaceUrlAndNickName:
-+		var lc model_struct.LocalConversation
-+		st := node.Args.(common.SourceIDAndSessionType)
-+		log.ZInfo(ctx, "UpdateConFaceUrlAndNickName", "st", st)
-+		switch st.SessionType {
-+		case constant.SingleChatType:
-+			lc.UserID = st.SourceID
-+			lc.ConversationID = c.getConversationIDBySessionType(st.SourceID, constant.SingleChatType)
-+			lc.ConversationType = constant.SingleChatType
-+		case constant.ReadGroupChatType:
-+			conversationID, conversationType, err := c.getConversationTypeByGroupID(ctx, st.SourceID)
-+			if err != nil {
-+				return
-+			}
-+			lc.GroupID = st.SourceID
-+			lc.ConversationID = conversationID
-+			lc.ConversationType = conversationType
+ 					c.ConversationListener().OnConversationChanged(data)
+ 				}
+ 			}
+@@ -243,6 +295,12 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
+ 			lc.GroupID = st.SourceID
+ 			lc.ConversationID = conversationID
+ 			lc.ConversationType = conversationType
 +			// Catchup reconciliation may already have committed this profile.
 +			// Its queued group notifications must not rewrite and republish it.
 +			if current, err := c.db.GetConversation(ctx, conversationID); err == nil &&
 +				current.ShowName == st.Nickname && current.FaceURL == st.FaceURL {
 +				return
 +			}
-+		case constant.NotificationChatType:
-+			lc.UserID = st.SourceID
-+			lc.ConversationID = c.getConversationIDBySessionType(st.SourceID, constant.NotificationChatType)
-+			lc.ConversationType = constant.NotificationChatType
-+		default:
-+			log.ZError(ctx, "not support sessionType", nil, "sessionType", st.SessionType)
-+			return
-+		}
-+		lc.ShowName = st.Nickname
-+		lc.FaceURL = st.FaceURL
+ 		case constant.NotificationChatType:
+ 			lc.UserID = st.SourceID
+ 			lc.ConversationID = c.getConversationIDBySessionType(st.SourceID, constant.NotificationChatType)
+@@ -253,7 +311,13 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
+ 		}
+ 		lc.ShowName = st.Nickname
+ 		lc.FaceURL = st.FaceURL
+-		err := c.db.UpdateConversation(ctx, &lc)
 +		var err error
 +		if st.SessionType == constant.ReadGroupChatType {
 +			// Map updates preserve explicit avatar removal (empty string).
@@ -5171,179 +4673,54 @@ index 476b2bf1..a1f2206c 100644
 +		} else {
 +			err = c.db.UpdateConversation(ctx, &lc)
 +		}
-+		if err != nil {
-+			// log.Error("internal", "setConversationFaceUrlAndNickName database err:", err.Error())
-+			return
-+		}
-+		c.doUpdateConversation(common.Cmd2Value{Value: common.UpdateConNode{ConID: lc.ConversationID, Action: constant.ConChange, Args: []string{lc.ConversationID}}})
-+
-+	case constant.UpdateLatestMessageReadState:
-+		conversationID := node.ConID
-+		var latestMsg sdk_struct.MsgStruct
-+		l, err := c.db.GetConversation(ctx, conversationID)
-+		if err != nil {
-+			log.ZError(ctx, "getConversationLatestMsgModel err", err, "conversationID", conversationID)
-+		} else {
-+			err := json.Unmarshal([]byte(l.LatestMsg), &latestMsg)
-+			if err != nil {
-+				log.ZError(ctx, "latestMsg,Unmarshal err", err)
-+			} else {
-+				latestMsg.IsRead = true
-+				newLatestMessage := utils.StructToJsonString(latestMsg)
-+				err = c.db.UpdateColumnsConversation(ctx, node.ConID, map[string]interface{}{"latest_msg_send_time": latestMsg.SendTime, "latest_msg": newLatestMessage})
-+				if err != nil {
-+					log.ZError(ctx, "updateConversationLatestMsgModel err", err)
-+				}
-+			}
-+		}
-+	case constant.UpdateLatestMessageFaceUrlAndNickName:
-+		args := node.Args.(common.UpdateMessageInfo)
-+		switch args.SessionType {
-+		case constant.ReadGroupChatType:
-+			conversationID := c.getConversationIDBySessionType(args.GroupID, constant.ReadGroupChatType)
-+			lc, err := c.db.GetConversation(ctx, conversationID)
-+			if err != nil {
-+				log.ZWarn(ctx, "getConversation err", err)
-+				return
-+			}
-+			var latestMsg sdk_struct.MsgStruct
-+			err = json.Unmarshal([]byte(lc.LatestMsg), &latestMsg)
-+			if err != nil {
-+				log.ZError(ctx, "latestMsg,Unmarshal err", err)
-+			} else {
-+				//If the sender of the latest message in the conversation
-+				//happens to be a member of the group whose status has changed,
-+				//then update the sender's avatar and nickname for the latest message.
-+				if latestMsg.SendID == args.UserID {
-+					latestMsg.SenderFaceURL = args.FaceURL
-+					latestMsg.SenderNickname = args.Nickname
-+					newLatestMessage := utils.StructToJsonString(latestMsg)
-+					lc.LatestMsg = newLatestMessage
-+					err = c.db.UpdateColumnsConversation(ctx, conversationID, map[string]interface{}{"latest_msg": newLatestMessage})
-+					if err != nil {
-+						log.ZError(ctx, "updateConversationLatestMsgModel err", err)
-+					} else {
-+						var cList []*model_struct.LocalConversation
-+						cList = append(cList, lc)
-+						data := utils.StructToJsonStringDefault(cList)
-+						c.ConversationListener().OnConversationChanged(data)
-+					}
-+
-+				}
-+			}
-+		}
-+
-+	case constant.ConChange:
-+		conversationIDs := node.Args.([]string)
-+		conversations, err := c.db.GetMultipleConversationDB(ctx, conversationIDs)
-+		if err != nil {
-+			log.ZError(ctx, "getMultipleConversationModel err", err)
-+		} else {
-+			var newCList []*model_struct.LocalConversation
-+			for _, v := range conversations {
-+				if v.LatestMsgSendTime != 0 {
-+					newCList = append(newCList, v)
-+				}
-+			}
-+			data := utils.StructToJsonStringDefault(newCList)
+ 		if err != nil {
+ 			// log.Error("internal", "setConversationFaceUrlAndNickName database err:", err.Error())
+ 			return
+@@ -329,7 +393,7 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
+ 				}
+ 			}
+ 			data := utils.StructToJsonStringDefault(newCList)
+-			log.ZInfo(ctx, "OnConversationChanged", "data", data)
 +			log.ZDebug(ctx, "OnConversationChanged", "data", data)
-+			c.ConversationListener().OnConversationChanged(data)
-+		}
-+	case constant.NewCon:
-+		cidList := node.Args.([]string)
-+		cLists, err := c.db.GetMultipleConversationDB(ctx, cidList)
-+		if err != nil {
-+			log.ZWarn(ctx, "getMultipleConversationModel err", err)
-+		} else {
-+			if cLists != nil {
-+				log.ZDebug(ctx, "getMultipleConversationModel success", "cLists", cLists)
-+				c.ConversationListener().OnNewConversation(utils.StructToJsonString(cLists))
-+			}
-+		}
-+	case constant.ConChangeDirect:
-+		cidList := node.Args.(string)
-+		log.ZInfo(ctx, "ConversationChanged", "cidList", cidList)
-+		c.ConversationListener().OnConversationChanged(cidList)
-+
-+	case constant.NewConDirect:
-+		cidList := node.Args.(string)
-+		log.ZDebug(ctx, "NewConversation", "cidList", cidList)
-+		c.ConversationListener().OnNewConversation(cidList)
-+
-+	}
-+}
-+
-+func (c *Conversation) doUpdateMessage(c2v common.Cmd2Value) {
-+	node := c2v.Value.(common.UpdateMessageNode)
-+	ctx := c2v.Ctx
-+	switch node.Action {
-+	case constant.UpdateMsgFaceUrlAndNickName:
-+		args := node.Args.(common.UpdateMessageInfo)
-+		switch args.SessionType {
-+		case constant.SingleChatType:
-+			if args.UserID == c.loginUserID {
-+				conversationIDList, err := c.db.GetAllSingleConversationIDList(ctx)
-+				if err != nil {
-+					log.ZError(ctx, "GetAllSingleConversationIDList err", err)
-+					return
-+				} else {
-+					log.ZDebug(ctx, "get single conversationID list", "conversationIDList", conversationIDList)
-+					for _, conversationID := range conversationIDList {
-+						err := c.db.UpdateMsgSenderFaceURLAndSenderNickname(ctx, conversationID, args.UserID, args.FaceURL, args.Nickname)
-+						if err != nil {
-+							log.ZError(ctx, "UpdateMsgSenderFaceURLAndSenderNickname err", err)
-+							continue
-+						}
-+					}
-+
-+				}
-+			} else {
-+				conversationID := c.getConversationIDBySessionType(args.UserID, constant.SingleChatType)
-+				err := c.db.UpdateMsgSenderFaceURLAndSenderNickname(ctx, conversationID, args.UserID, args.FaceURL, args.Nickname)
-+				if err != nil {
-+					log.ZError(ctx, "UpdateMsgSenderFaceURLAndSenderNickname err", err)
-+				}
-+
-+			}
-+		case constant.ReadGroupChatType:
-+			conversationID := c.getConversationIDBySessionType(args.GroupID, constant.ReadGroupChatType)
-+			err := c.db.UpdateMsgSenderFaceURLAndSenderNickname(ctx, conversationID, args.UserID, args.FaceURL, args.Nickname)
-+			if err != nil {
-+				log.ZError(ctx, "UpdateMsgSenderFaceURLAndSenderNickname err", err)
-+			}
-+		case constant.NotificationChatType:
-+			conversationID := c.getConversationIDBySessionType(args.UserID, constant.NotificationChatType)
-+			err := c.db.UpdateMsgSenderFaceURLAndSenderNickname(ctx, conversationID, args.UserID, args.FaceURL, args.Nickname)
-+			if err != nil {
-+				log.ZError(ctx, "UpdateMsgSenderFaceURLAndSenderNickname err", err)
-+			}
-+		default:
-+			log.ZError(ctx, "not support sessionType", nil, "args", args)
-+			return
-+		}
-+	}
-+
-+}
-+
+ 			c.ConversationListener().OnConversationChanged(data)
+ 		}
+ 	case constant.NewCon:
+@@ -408,32 +472,62 @@ func (c *Conversation) doUpdateMessage(c2v common.Cmd2Value) {
+ 
+ }
+ 
+-func (c *Conversation) syncData(c2v common.Cmd2Value) {
+-	c.conversationSyncMutex.Lock()
+-	defer c.conversationSyncMutex.Unlock()
+-
+-	ctx := c2v.Ctx
 +func (c *Conversation) syncData(c2v common.Cmd2Value) error {
 +	ctx, cancel := syncCommandContext(c2v)
 +	defer cancel()
-+	c.startTime = time.Now()
-+	//clear SubscriptionStatusMap
-+	//c.user.OnlineStatusCache.DeleteAll()
-+
-+	// Synchronous sync functions
+ 	c.startTime = time.Now()
+ 	//clear SubscriptionStatusMap
+ 	//c.user.OnlineStatusCache.DeleteAll()
+ 
+ 	// Synchronous sync functions
+-	syncFuncs := []func(c context.Context) error{
+-		c.SyncAllConversationHashReadSeqs,
 +	syncFuncs := []func(c context.Context) error{}
 +	if !common.RecoveryMetadataPrepared(ctx) {
 +		syncFuncs = append(syncFuncs, c.SyncAllConversationHashReadSeqs)
-+	}
-+
+ 	}
+ 
+-	runSyncFunctions(ctx, syncFuncs, syncWait)
 +	if err := runRequiredSyncFunctions(ctx, syncFuncs, false); err != nil {
 +		return err
 +	}
-+
-+	// Asynchronous sync functions
-+	asyncFuncs := []func(c context.Context) error{
+ 
+ 	// Asynchronous sync functions
+ 	asyncFuncs := []func(c context.Context) error{
+-		c.user.SyncLoginUserInfo,
+-		c.relation.SyncAllBlackList,
+-		c.group.SyncAllJoinedGroupsAndMembersWithLock,
+-		c.relation.IncrSyncFriendsWithLock,
+-		c.IncrSyncConversationsWithLock,
 +		metadataStage("login-user", c.user.SyncLoginUserInfo),
 +		metadataStage("blacklist", c.relation.SyncAllBlackList),
 +		metadataStage("groups", c.group.SyncAllJoinedGroupsAndMembersWithLock),
@@ -5351,8 +4728,9 @@ index 476b2bf1..a1f2206c 100644
 +	}
 +	if !common.RecoveryMetadataPrepared(ctx) {
 +		asyncFuncs = append(asyncFuncs, c.IncrSyncConversationsWithLock)
-+	}
-+
+ 	}
+ 
+-	runSyncFunctions(ctx, asyncFuncs, asyncNoWait)
 +	// These jobs share the cancellable attempt and are joined before yielding
 +	// to message updates, including jobs holding conversationSyncMutex.
 +	if err := runRequiredSyncFunctions(ctx, asyncFuncs, true); err != nil {
@@ -5381,92 +4759,18 @@ index 476b2bf1..a1f2206c 100644
 +		}
 +	}
 +	return firstError
-+}
-+
-+func runSyncFunctions(ctx context.Context, funcs []func(c context.Context) error, mode int) {
-+	var wg sync.WaitGroup
-+
-+	for _, fn := range funcs {
-+		switch mode {
-+		case asyncWait:
-+			wg.Add(1)
-+			go executeSyncFunction(ctx, fn, &wg)
-+		case asyncNoWait:
-+			go executeSyncFunction(ctx, fn, nil)
-+		case syncWait:
-+			executeSyncFunction(ctx, fn, nil)
-+		}
-+	}
-+
-+	if mode == asyncWait {
-+		wg.Wait()
-+	}
-+}
-+
-+func executeSyncFunction(ctx context.Context, fn func(c context.Context) error, wg *sync.WaitGroup) {
-+	if wg != nil {
-+		defer wg.Done()
-+	}
-+
-+	funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
-+	startTime := time.Now()
+ }
+ 
+ func runSyncFunctions(ctx context.Context, funcs []func(c context.Context) error, mode int) {
+@@ -463,7 +557,7 @@ func executeSyncFunction(ctx context.Context, fn func(c context.Context) error,
+ 
+ 	funcName := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
+ 	startTime := time.Now()
+-	err := fn(ctx)
 +	err := runSyncFunctionSafely(ctx, fn)
-+	duration := time.Since(startTime)
-+	if err != nil {
-+		log.ZWarn(ctx, fmt.Sprintf("%s sync error", funcName), err, "duration", duration.String())
-+	} else {
-+		log.ZDebug(ctx, fmt.Sprintf("%s completed successfully", funcName), "duration", duration.String())
-+	}
-+}
-+
-+func (c *Conversation) DoConversationChangedNotification(ctx context.Context, msg *sdkws.MsgData) error {
-+	c.conversationSyncMutex.Lock()
-+	defer c.conversationSyncMutex.Unlock()
-+
-+	//var notification sdkws.ConversationChangedNotification
-+	tips := &sdkws.ConversationUpdateTips{}
-+	if err := utils.UnmarshalNotificationElem(msg.Content, tips); err != nil {
-+		log.ZWarn(ctx, "UnmarshalNotificationElem err", err, "msg", msg)
-+		return err
-+	}
-+
-+	err := c.IncrSyncConversations(ctx)
-+	if err != nil {
-+		log.ZWarn(ctx, "IncrSyncConversations err", err)
-+		return err
-+	}
-+	return nil
-+}
-+
-+func (c *Conversation) DoConversationIsPrivateChangedNotification(ctx context.Context, msg *sdkws.MsgData) error {
-+	c.conversationSyncMutex.Lock()
-+	defer c.conversationSyncMutex.Unlock()
-+
-+	tips := &sdkws.ConversationSetPrivateTips{}
-+	if err := utils.UnmarshalNotificationElem(msg.Content, tips); err != nil {
-+		log.ZWarn(ctx, "UnmarshalNotificationElem err", err, "msg", msg)
-+		return err
-+	}
-+
-+	err := c.IncrSyncConversations(ctx)
-+	if err != nil {
-+		log.ZWarn(ctx, "IncrSyncConversations err", err)
-+		return err
-+	}
-+	return nil
-+}
-+
-+func (c *Conversation) doBusinessNotification(ctx context.Context, msg *sdkws.MsgData) error {
-+	var n sdk_struct.NotificationElem
-+	err := utils.JsonStringToStruct(string(msg.Content), &n)
-+	if err != nil {
-+		log.ZError(ctx, "unmarshal failed", err, "msg", msg)
-+		return err
-+
-+	}
-+	c.businessListener().OnRecvCustomBusinessMessage(n.Detail)
-+	return nil
-+}
+ 	duration := time.Since(startTime)
+ 	if err != nil {
+ 		log.ZWarn(ctx, fmt.Sprintf("%s sync error", funcName), err, "duration", duration.String())
 diff --git a/internal/conversation_msg/notification_deleted_test.go b/internal/conversation_msg/notification_deleted_test.go
 new file mode 100644
 index 00000000..84b84b3d
@@ -7516,552 +6820,37 @@ diff --git a/internal/group/group.go b/internal/group/group.go
 index 09a4709f..f62e1b22 100644
 --- a/internal/group/group.go
 +++ b/internal/group/group.go
-@@ -1,271 +1,272 @@
--// Copyright © 2023 OpenIM SDK. All rights reserved.
--//
--// Licensed under the Apache License, Version 2.0 (the "License");
--// you may not use this file except in compliance with the License.
--// You may obtain a copy of the License at
--//
--//     http://www.apache.org/licenses/LICENSE-2.0
--//
--// Unless required by applicable law or agreed to in writing, software
--// distributed under the License is distributed on an "AS IS" BASIS,
--// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--// See the License for the specific language governing permissions and
--// limitations under the License.
--
--package group
--
--import (
--	"context"
+@@ -16,7 +16,6 @@ package group
+ 
+ import (
+ 	"context"
 -	"sync"
--	"time"
--
--	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/api"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/cache"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/datafetcher"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/page"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/sdkerrs"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/syncer"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
--	"github.com/openimsdk/protocol/group"
--	"github.com/openimsdk/protocol/sdkws"
--	"github.com/openimsdk/tools/log"
--	"github.com/openimsdk/tools/utils/datautil"
--)
--
--const (
--	groupSyncLimit              = 1000
--	groupMemberSyncLimit        = 1000
--	NotificationFilterCacheSize = 1024
--	NotificationFilterTimeout   = 10 * time.Second
--)
--
--func NewGroup(loginUserID string, db db_interface.DataBase,
--	conversationCh chan common.Cmd2Value) *Group {
--	g := &Group{
--		loginUserID:    loginUserID,
--		db:             db,
--		conversationCh: conversationCh,
--		filter:         NewNotificationFilter(NotificationFilterCacheSize, NotificationFilterTimeout),
--	}
--	g.initSyncer()
--	g.groupMemberCache = cache.NewCache[string, *model_struct.LocalGroupMember]()
--	g.groupInfoCache = cache.NewCache[string, *model_struct.LocalGroup]()
--	return g
--}
--
--type Group struct {
--	listener           func() open_im_sdk_callback.OnGroupListener
--	loginUserID        string
--	db                 db_interface.DataBase
--	groupSyncer        *syncer.Syncer[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string]
--	groupMemberSyncer  *syncer.Syncer[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string]
--	conversationCh     chan common.Cmd2Value
+ 	"time"
+ 
+ 	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
+@@ -65,7 +64,7 @@ type Group struct {
+ 	groupSyncer        *syncer.Syncer[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string]
+ 	groupMemberSyncer  *syncer.Syncer[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string]
+ 	conversationCh     chan common.Cmd2Value
 -	groupSyncMutex     sync.Mutex
--	listenerForService open_im_sdk_callback.OnListenerForService
--	groupMemberCache   *cache.Cache[string, *model_struct.LocalGroupMember]
--	groupInfoCache     *cache.Cache[string, *model_struct.LocalGroup]
--	filter             *NotificationFilter
--}
--
--func (g *Group) initSyncer() {
--	g.groupSyncer = syncer.New2[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](
--		syncer.WithInsert[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, value *model_struct.LocalGroup) error {
--			if err := g.db.InsertGroup(ctx, value); err != nil {
--				return err
--			}
--			g.groupInfoCache.Store(value.GroupID, value)
--			return nil
--		}),
--		syncer.WithDelete[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, value *model_struct.LocalGroup) error {
--			g.groupInfoCache.Delete(value.GroupID)
--			if err := g.db.DeleteGroupAllMembers(ctx, value.GroupID); err != nil {
--				return err
--			}
--			if err := g.db.DeleteVersionSync(ctx, g.groupAndMemberVersionTableName(), value.GroupID); err != nil {
--				return err
--			}
--			return g.db.DeleteGroup(ctx, value.GroupID)
--		}),
--		syncer.WithUpdate[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, server, local *model_struct.LocalGroup) error {
--			log.ZInfo(ctx, "groupSyncer trigger update function", "groupID", server.GroupID, "server", server, "local", local)
--			if err := g.db.UpdateGroup(ctx, server); err != nil {
--				return err
--			}
--			g.groupInfoCache.Store(server.GroupID, server)
--			return nil
--		}),
--		syncer.WithUUID[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(value *model_struct.LocalGroup) string {
--			return value.GroupID
--		}),
--		syncer.WithNotice[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, state int, server, local *model_struct.LocalGroup) error {
--			switch state {
--			case syncer.Insert:
--				// when a user kicked to the group and invited to the group again, group info maybe updated,
--				// so conversation info need to be updated
--				g.listener().OnJoinedGroupAdded(utils.StructToJsonString(server))
--				_ = common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{
--					Action: constant.UpdateConFaceUrlAndNickName,
--					Args: common.SourceIDAndSessionType{
--						SourceID: server.GroupID, SessionType: constant.ReadGroupChatType,
--						FaceURL: server.FaceURL, Nickname: server.GroupName,
--					},
--				}, g.conversationCh)
--			case syncer.Delete:
--				local.MemberCount = 0
--				g.listener().OnJoinedGroupDeleted(utils.StructToJsonString(local))
--			case syncer.Update:
--				log.ZInfo(ctx, "groupSyncer trigger update", "groupID",
--					server.GroupID, "data", server, "isDismissed", server.Status == constant.GroupStatusDismissed)
--				if server.Status == constant.GroupStatusDismissed {
--					if err := g.db.DeleteGroupAllMembers(ctx, server.GroupID); err != nil {
--						log.ZError(ctx, "delete group all members failed", err)
--					}
--					g.listener().OnGroupDismissed(utils.StructToJsonString(server))
--				} else {
--					g.listener().OnGroupInfoChanged(utils.StructToJsonString(server))
--					if server.GroupName != local.GroupName || local.FaceURL != server.FaceURL {
--						_ = common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{
--							Action: constant.UpdateConFaceUrlAndNickName,
--							Args: common.SourceIDAndSessionType{
--								SourceID: server.GroupID, SessionType: constant.ReadGroupChatType,
--								FaceURL: server.FaceURL, Nickname: server.GroupName,
--							},
--						}, g.conversationCh)
--					}
--				}
--			}
--			return nil
--		}),
--
--		syncer.WithBatchInsert[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, values []*model_struct.LocalGroup) error {
--			if err := g.db.BatchInsertGroup(ctx, values); err != nil {
--				return err
--			}
--			g.groupInfoCache.StoreAll(func(v *model_struct.LocalGroup) string { return v.GroupID }, values)
--			return nil
--		}),
--		syncer.WithDeleteAll[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, _ string) error {
--			g.groupInfoCache.DeleteAll()
--			return g.db.DeleteAllGroup(ctx)
--		}),
--		syncer.WithBatchPageReq[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(entityID string) page.PageReq {
--			return &group.GetJoinedGroupListReq{FromUserID: entityID,
--				Pagination: &sdkws.RequestPagination{ShowNumber: 100}}
--		}),
--		syncer.WithBatchPageRespConvertFunc[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(resp *group.GetJoinedGroupListResp) []*model_struct.LocalGroup {
--			return datautil.Batch(ServerGroupToLocalGroup, resp.Groups)
--		}),
--		syncer.WithReqApiRouter[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](api.GetJoinedGroupList.Route()),
--		syncer.WithFullSyncLimit[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](groupSyncLimit),
--	)
--	g.groupMemberSyncer = syncer.New2[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](
--		syncer.WithInsert[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, value *model_struct.LocalGroupMember) error {
--			return g.db.InsertGroupMember(ctx, value)
--		}),
--		syncer.WithDelete[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, value *model_struct.LocalGroupMember) error {
--			return g.db.DeleteGroupMember(ctx, value.GroupID, value.UserID)
--		}),
--		syncer.WithUpdate[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, server, local *model_struct.LocalGroupMember) error {
--			g.groupMemberCache.Delete(g.buildGroupMemberKey(server.GroupID, server.UserID))
--			return g.db.UpdateGroupMember(ctx, server)
--		}),
--		syncer.WithUUID[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(value *model_struct.LocalGroupMember) [2]string {
--			return [...]string{value.GroupID, value.UserID}
--		}),
--		syncer.WithNotice[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, state int, server, local *model_struct.LocalGroupMember) error {
--			switch state {
--			case syncer.Insert:
--				g.listener().OnGroupMemberAdded(utils.StructToJsonString(server))
--				// When a user is kicked and invited to the group again, group member info will be updated.
--				_ = common.TriggerCmdUpdateMessage(ctx,
--					common.UpdateMessageNode{
--						Action: constant.UpdateMsgFaceUrlAndNickName,
--						Args: common.UpdateMessageInfo{
--							SessionType: constant.ReadGroupChatType, UserID: server.UserID, FaceURL: server.FaceURL,
--							Nickname: server.Nickname, GroupID: server.GroupID,
--						},
--					}, g.conversationCh)
--			case syncer.Delete:
--				g.listener().OnGroupMemberDeleted(utils.StructToJsonString(local))
--			case syncer.Update:
--				g.listener().OnGroupMemberInfoChanged(utils.StructToJsonString(server))
--				if server.Nickname != local.Nickname || server.FaceURL != local.FaceURL {
--					_ = common.TriggerCmdUpdateMessage(ctx,
--						common.UpdateMessageNode{
--							Action: constant.UpdateMsgFaceUrlAndNickName,
--							Args: common.UpdateMessageInfo{
--								SessionType: constant.ReadGroupChatType, UserID: server.UserID, FaceURL: server.FaceURL,
--								Nickname: server.Nickname, GroupID: server.GroupID,
--							},
--						}, g.conversationCh)
--					_ = common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{Action: constant.UpdateLatestMessageFaceUrlAndNickName, Args: common.UpdateMessageInfo{
--						SessionType: constant.ReadGroupChatType, UserID: server.UserID, FaceURL: server.FaceURL,
--						Nickname: server.Nickname, GroupID: server.GroupID,
--					}}, g.conversationCh)
--				}
--			}
--			return nil
--		}),
--		syncer.WithBatchInsert[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, values []*model_struct.LocalGroupMember) error {
--			return g.db.BatchInsertGroupMember(ctx, values)
--		}),
--		syncer.WithDeleteAll[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, groupID string) error {
--			return g.db.DeleteGroupAllMembers(ctx, groupID)
--		}),
--		syncer.WithBatchPageReq[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(entityID string) page.PageReq {
--			return &group.GetGroupMemberListReq{GroupID: entityID, Pagination: &sdkws.RequestPagination{ShowNumber: 100}}
--		}),
--		syncer.WithBatchPageRespConvertFunc[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(resp *group.GetGroupMemberListResp) []*model_struct.LocalGroupMember {
--			return datautil.Batch(ServerGroupMemberToLocalGroupMember, resp.Members)
--		}),
--		syncer.WithReqApiRouter[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](api.GetGroupMemberList.Route()),
--		syncer.WithFullSyncLimit[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](groupMemberSyncLimit),
--	)
--
--}
--
--func (g *Group) SetGroupListener(listener func() open_im_sdk_callback.OnGroupListener) {
--	g.listener = listener
--}
--
--func (g *Group) SetListenerForService(listener open_im_sdk_callback.OnListenerForService) {
--	g.listenerForService = listener
--}
--
--func (g *Group) FetchGroupOrError(ctx context.Context, groupID string) (*model_struct.LocalGroup, error) {
--	dataFetcher := datafetcher.NewDataFetcher(
--		g.db,
--		g.groupTableName(),
--		g.loginUserID,
--		func(localGroup *model_struct.LocalGroup) string {
--			return localGroup.GroupID
--		},
--		func(ctx context.Context, values []*model_struct.LocalGroup) error {
--			return g.db.BatchInsertGroup(ctx, values)
--		},
--		func(ctx context.Context, groupIDs []string) ([]*model_struct.LocalGroup, bool, error) {
--			localGroups, err := g.db.GetGroups(ctx, groupIDs)
--			return localGroups, true, err
--		},
--		func(ctx context.Context, groupIDs []string) ([]*model_struct.LocalGroup, error) {
--			serverGroupInfo, err := g.getGroupsInfoFromServer(ctx, groupIDs)
--			if err != nil {
--				return nil, err
--			}
--			return datautil.Batch(ServerGroupToLocalGroup, serverGroupInfo), nil
--		},
--	)
--	groups, err := dataFetcher.FetchMissingAndCombineLocal(ctx, []string{groupID})
--	if err != nil {
--		return nil, err
--	}
--	if len(groups) == 0 {
--		return nil, sdkerrs.ErrGroupIDNotFound.WrapMsg("sdk and server not this group")
--	}
--	return groups[0], nil
--}
-+// Copyright © 2023 OpenIM SDK. All rights reserved.
-+//
-+// Licensed under the Apache License, Version 2.0 (the "License");
-+// you may not use this file except in compliance with the License.
-+// You may obtain a copy of the License at
-+//
-+//     http://www.apache.org/licenses/LICENSE-2.0
-+//
-+// Unless required by applicable law or agreed to in writing, software
-+// distributed under the License is distributed on an "AS IS" BASIS,
-+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+// See the License for the specific language governing permissions and
-+// limitations under the License.
-+
-+package group
-+
-+import (
-+	"context"
-+	"time"
-+
-+	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/api"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/cache"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/datafetcher"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/page"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/sdkerrs"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/syncer"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
-+	"github.com/openimsdk/protocol/group"
-+	"github.com/openimsdk/protocol/sdkws"
-+	"github.com/openimsdk/tools/log"
-+	"github.com/openimsdk/tools/utils/datautil"
-+)
-+
-+const (
-+	groupSyncLimit              = 1000
-+	groupMemberSyncLimit        = 1000
-+	NotificationFilterCacheSize = 1024
-+	NotificationFilterTimeout   = 10 * time.Second
-+)
-+
-+func NewGroup(loginUserID string, db db_interface.DataBase,
-+	conversationCh chan common.Cmd2Value) *Group {
-+	g := &Group{
-+		loginUserID:    loginUserID,
-+		db:             db,
-+		conversationCh: conversationCh,
-+		filter:         NewNotificationFilter(NotificationFilterCacheSize, NotificationFilterTimeout),
-+	}
-+	g.initSyncer()
-+	g.groupMemberCache = cache.NewCache[string, *model_struct.LocalGroupMember]()
-+	g.groupInfoCache = cache.NewCache[string, *model_struct.LocalGroup]()
-+	return g
-+}
-+
-+type Group struct {
-+	listener           func() open_im_sdk_callback.OnGroupListener
-+	loginUserID        string
-+	db                 db_interface.DataBase
-+	groupSyncer        *syncer.Syncer[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string]
-+	groupMemberSyncer  *syncer.Syncer[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string]
-+	conversationCh     chan common.Cmd2Value
 +	groupSyncMutex     groupSyncGate
-+	listenerForService open_im_sdk_callback.OnListenerForService
-+	groupMemberCache   *cache.Cache[string, *model_struct.LocalGroupMember]
-+	groupInfoCache     *cache.Cache[string, *model_struct.LocalGroup]
-+	filter             *NotificationFilter
-+}
-+
-+func (g *Group) initSyncer() {
-+	g.groupSyncer = syncer.New2[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](
-+		syncer.WithInsert[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, value *model_struct.LocalGroup) error {
-+			if err := g.db.InsertGroup(ctx, value); err != nil {
-+				return err
-+			}
-+			g.groupInfoCache.Store(value.GroupID, value)
-+			return nil
-+		}),
-+		syncer.WithDelete[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, value *model_struct.LocalGroup) error {
-+			g.groupInfoCache.Delete(value.GroupID)
-+			if err := g.db.DeleteGroupAllMembers(ctx, value.GroupID); err != nil {
-+				return err
-+			}
-+			if err := g.db.DeleteVersionSync(ctx, g.groupAndMemberVersionTableName(), value.GroupID); err != nil {
-+				return err
-+			}
-+			return g.db.DeleteGroup(ctx, value.GroupID)
-+		}),
-+		syncer.WithUpdate[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, server, local *model_struct.LocalGroup) error {
-+			log.ZInfo(ctx, "groupSyncer trigger update function", "groupID", server.GroupID, "server", server, "local", local)
-+			if err := g.db.UpdateGroup(ctx, server); err != nil {
-+				return err
-+			}
-+			g.groupInfoCache.Store(server.GroupID, server)
-+			return nil
-+		}),
-+		syncer.WithUUID[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(value *model_struct.LocalGroup) string {
-+			return value.GroupID
-+		}),
-+		syncer.WithNotice[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, state int, server, local *model_struct.LocalGroup) error {
-+			switch state {
-+			case syncer.Insert:
-+				// when a user kicked to the group and invited to the group again, group info maybe updated,
-+				// so conversation info need to be updated
-+				g.listener().OnJoinedGroupAdded(utils.StructToJsonString(server))
-+				_ = common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{
-+					Action: constant.UpdateConFaceUrlAndNickName,
-+					Args: common.SourceIDAndSessionType{
-+						SourceID: server.GroupID, SessionType: constant.ReadGroupChatType,
-+						FaceURL: server.FaceURL, Nickname: server.GroupName,
-+					},
-+				}, g.conversationCh)
-+			case syncer.Delete:
-+				local.MemberCount = 0
-+				g.listener().OnJoinedGroupDeleted(utils.StructToJsonString(local))
-+			case syncer.Update:
-+				log.ZInfo(ctx, "groupSyncer trigger update", "groupID",
-+					server.GroupID, "data", server, "isDismissed", server.Status == constant.GroupStatusDismissed)
-+				if server.Status == constant.GroupStatusDismissed {
-+					if err := g.db.DeleteGroupAllMembers(ctx, server.GroupID); err != nil {
-+						log.ZError(ctx, "delete group all members failed", err)
-+					}
-+					g.listener().OnGroupDismissed(utils.StructToJsonString(server))
-+				} else {
-+					g.listener().OnGroupInfoChanged(utils.StructToJsonString(server))
-+					if server.GroupName != local.GroupName || local.FaceURL != server.FaceURL {
-+						_ = common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{
-+							Action: constant.UpdateConFaceUrlAndNickName,
-+							Args: common.SourceIDAndSessionType{
-+								SourceID: server.GroupID, SessionType: constant.ReadGroupChatType,
-+								FaceURL: server.FaceURL, Nickname: server.GroupName,
-+							},
-+						}, g.conversationCh)
-+					}
-+				}
-+			}
-+			return nil
-+		}),
-+
-+		syncer.WithBatchInsert[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, values []*model_struct.LocalGroup) error {
-+			if err := g.db.BatchInsertGroup(ctx, values); err != nil {
-+				return err
-+			}
-+			g.groupInfoCache.StoreAll(func(v *model_struct.LocalGroup) string { return v.GroupID }, values)
-+			return nil
-+		}),
-+		syncer.WithDeleteAll[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(ctx context.Context, _ string) error {
-+			g.groupInfoCache.DeleteAll()
-+			return g.db.DeleteAllGroup(ctx)
-+		}),
-+		syncer.WithBatchPageReq[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(entityID string) page.PageReq {
-+			return &group.GetJoinedGroupListReq{FromUserID: entityID,
-+				Pagination: &sdkws.RequestPagination{ShowNumber: 100}}
-+		}),
-+		syncer.WithBatchPageRespConvertFunc[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](func(resp *group.GetJoinedGroupListResp) []*model_struct.LocalGroup {
-+			return datautil.Batch(ServerGroupToLocalGroup, resp.Groups)
-+		}),
-+		syncer.WithReqApiRouter[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](api.GetJoinedGroupList.Route()),
-+		syncer.WithFullSyncLimit[*model_struct.LocalGroup, group.GetJoinedGroupListResp, string](groupSyncLimit),
-+	)
-+	g.groupMemberSyncer = syncer.New2[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](
-+		syncer.WithInsert[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, value *model_struct.LocalGroupMember) error {
+ 	listenerForService open_im_sdk_callback.OnListenerForService
+ 	groupMemberCache   *cache.Cache[string, *model_struct.LocalGroupMember]
+ 	groupInfoCache     *cache.Cache[string, *model_struct.LocalGroup]
+@@ -165,9 +164,11 @@ func (g *Group) initSyncer() {
+ 	)
+ 	g.groupMemberSyncer = syncer.New2[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](
+ 		syncer.WithInsert[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, value *model_struct.LocalGroupMember) error {
 +			g.groupMemberCache.Delete(g.buildGroupMemberKey(value.GroupID, value.UserID))
-+			return g.db.InsertGroupMember(ctx, value)
-+		}),
-+		syncer.WithDelete[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, value *model_struct.LocalGroupMember) error {
+ 			return g.db.InsertGroupMember(ctx, value)
+ 		}),
+ 		syncer.WithDelete[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, value *model_struct.LocalGroupMember) error {
 +			g.groupMemberCache.Delete(g.buildGroupMemberKey(value.GroupID, value.UserID))
-+			return g.db.DeleteGroupMember(ctx, value.GroupID, value.UserID)
-+		}),
-+		syncer.WithUpdate[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, server, local *model_struct.LocalGroupMember) error {
-+			g.groupMemberCache.Delete(g.buildGroupMemberKey(server.GroupID, server.UserID))
-+			return g.db.UpdateGroupMember(ctx, server)
-+		}),
-+		syncer.WithUUID[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(value *model_struct.LocalGroupMember) [2]string {
-+			return [...]string{value.GroupID, value.UserID}
-+		}),
-+		syncer.WithNotice[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, state int, server, local *model_struct.LocalGroupMember) error {
-+			switch state {
-+			case syncer.Insert:
-+				g.listener().OnGroupMemberAdded(utils.StructToJsonString(server))
-+				// When a user is kicked and invited to the group again, group member info will be updated.
-+				_ = common.TriggerCmdUpdateMessage(ctx,
-+					common.UpdateMessageNode{
-+						Action: constant.UpdateMsgFaceUrlAndNickName,
-+						Args: common.UpdateMessageInfo{
-+							SessionType: constant.ReadGroupChatType, UserID: server.UserID, FaceURL: server.FaceURL,
-+							Nickname: server.Nickname, GroupID: server.GroupID,
-+						},
-+					}, g.conversationCh)
-+			case syncer.Delete:
-+				g.listener().OnGroupMemberDeleted(utils.StructToJsonString(local))
-+			case syncer.Update:
-+				g.listener().OnGroupMemberInfoChanged(utils.StructToJsonString(server))
-+				if server.Nickname != local.Nickname || server.FaceURL != local.FaceURL {
-+					_ = common.TriggerCmdUpdateMessage(ctx,
-+						common.UpdateMessageNode{
-+							Action: constant.UpdateMsgFaceUrlAndNickName,
-+							Args: common.UpdateMessageInfo{
-+								SessionType: constant.ReadGroupChatType, UserID: server.UserID, FaceURL: server.FaceURL,
-+								Nickname: server.Nickname, GroupID: server.GroupID,
-+							},
-+						}, g.conversationCh)
-+					_ = common.TriggerCmdUpdateConversation(ctx, common.UpdateConNode{Action: constant.UpdateLatestMessageFaceUrlAndNickName, Args: common.UpdateMessageInfo{
-+						SessionType: constant.ReadGroupChatType, UserID: server.UserID, FaceURL: server.FaceURL,
-+						Nickname: server.Nickname, GroupID: server.GroupID,
-+					}}, g.conversationCh)
-+				}
-+			}
-+			return nil
-+		}),
-+		syncer.WithBatchInsert[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, values []*model_struct.LocalGroupMember) error {
-+			return g.db.BatchInsertGroupMember(ctx, values)
-+		}),
-+		syncer.WithDeleteAll[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, groupID string) error {
-+			return g.db.DeleteGroupAllMembers(ctx, groupID)
-+		}),
-+		syncer.WithBatchPageReq[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(entityID string) page.PageReq {
-+			return &group.GetGroupMemberListReq{GroupID: entityID, Pagination: &sdkws.RequestPagination{ShowNumber: 100}}
-+		}),
-+		syncer.WithBatchPageRespConvertFunc[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(resp *group.GetGroupMemberListResp) []*model_struct.LocalGroupMember {
-+			return datautil.Batch(ServerGroupMemberToLocalGroupMember, resp.Members)
-+		}),
-+		syncer.WithReqApiRouter[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](api.GetGroupMemberList.Route()),
-+		syncer.WithFullSyncLimit[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](groupMemberSyncLimit),
-+	)
-+
-+}
-+
-+func (g *Group) SetGroupListener(listener func() open_im_sdk_callback.OnGroupListener) {
-+	g.listener = listener
-+}
-+
-+func (g *Group) SetListenerForService(listener open_im_sdk_callback.OnListenerForService) {
-+	g.listenerForService = listener
-+}
-+
-+func (g *Group) FetchGroupOrError(ctx context.Context, groupID string) (*model_struct.LocalGroup, error) {
-+	dataFetcher := datafetcher.NewDataFetcher(
-+		g.db,
-+		g.groupTableName(),
-+		g.loginUserID,
-+		func(localGroup *model_struct.LocalGroup) string {
-+			return localGroup.GroupID
-+		},
-+		func(ctx context.Context, values []*model_struct.LocalGroup) error {
-+			return g.db.BatchInsertGroup(ctx, values)
-+		},
-+		func(ctx context.Context, groupIDs []string) ([]*model_struct.LocalGroup, bool, error) {
-+			localGroups, err := g.db.GetGroups(ctx, groupIDs)
-+			return localGroups, true, err
-+		},
-+		func(ctx context.Context, groupIDs []string) ([]*model_struct.LocalGroup, error) {
-+			serverGroupInfo, err := g.getGroupsInfoFromServer(ctx, groupIDs)
-+			if err != nil {
-+				return nil, err
-+			}
-+			return datautil.Batch(ServerGroupToLocalGroup, serverGroupInfo), nil
-+		},
-+	)
-+	groups, err := dataFetcher.FetchMissingAndCombineLocal(ctx, []string{groupID})
-+	if err != nil {
-+		return nil, err
-+	}
-+	if len(groups) == 0 {
-+		return nil, sdkerrs.ErrGroupIDNotFound.WrapMsg("sdk and server not this group")
-+	}
-+	return groups[0], nil
-+}
+ 			return g.db.DeleteGroupMember(ctx, value.GroupID, value.UserID)
+ 		}),
+ 		syncer.WithUpdate[*model_struct.LocalGroupMember, group.GetGroupMemberListResp, [2]string](func(ctx context.Context, server, local *model_struct.LocalGroupMember) error {
 diff --git a/internal/group/incremental_sync.go b/internal/group/incremental_sync.go
-index ff893c28..d095993e 100644
+index ff893c28..279875c3 100644
 --- a/internal/group/incremental_sync.go
 +++ b/internal/group/incremental_sync.go
 @@ -2,15 +2,14 @@ package group
@@ -8097,7 +6886,7 @@ index ff893c28..d095993e 100644
  	groupIDs, err := g.IncrSyncJoinGroupAndGetIDs(ctx)
  	if err != nil {
  		return err
-@@ -54,69 +58,88 @@ func (g *Group) IncrSyncJoinGroupMember(ctx context.Context, groupIDs ...string)
+@@ -54,69 +58,52 @@ func (g *Group) IncrSyncJoinGroupMember(ctx context.Context, groupIDs ...string)
  }
  
  func (g *Group) IncrSyncGroupAndMember(ctx context.Context, groupIDs ...string) error {
@@ -8125,13 +6914,7 @@ index ff893c28..d095993e 100644
 -	for {
 -		if len(groupIDSet) == 0 {
 -			return nil
-+	sort.Strings(ids)
-+	ids = common.PendingMetadataItems(ctx, scope, ids)
-+	for start := 0; start < len(ids); start += maxSyncNum {
-+		end := start + maxSyncNum
-+		if end > len(ids) {
-+			end = len(ids)
- 		}
+-		}
 -		for groupID := range groupIDSet {
 -			if len(groups) == cap(groups) {
 -				break
@@ -8139,17 +6922,7 @@ index ff893c28..d095993e 100644
 -			req := group.GetIncrementalGroupMemberReq{
 -				GroupID: groupID,
 -			}
-+		if err := g.syncMemberBatch(ctx, scope, ids[start:end]); err != nil {
-+			return err
-+		}
-+	}
-+	if err := ctx.Err(); err != nil {
-+		return err
-+	}
-+	common.FinishMetadataItems(ctx, scope)
-+	return nil
-+}
- 
+-
 -			lvs, err := g.db.GetVersionSync(ctx, g.groupAndMemberVersionTableName(), groupID)
 -			if err == nil {
 -				req.VersionID = lvs.VersionID
@@ -8158,44 +6931,24 @@ index ff893c28..d095993e 100644
 -				return err
 -			}
 -			groups = append(groups, &req)
-+func (g *Group) syncMemberBatch(ctx context.Context, scope string, ids []string) error {
-+	finish := common.BeginMetadataBatch(ctx)
-+	defer finish()
-+	groups := make([]*group.GetIncrementalGroupMemberReq, 0, len(ids))
-+	for _, id := range ids {
-+		if err := ctx.Err(); err != nil {
-+			return err
++	sort.Strings(ids)
++	ids = common.PendingMetadataItems(ctx, scope, ids)
++	for start := 0; start < len(ids); start += maxSyncNum {
++		end := start + maxSyncNum
++		if end > len(ids) {
++			end = len(ids)
  		}
 -		groupVersion, err := g.getIncrementalGroupMemberBatch(ctx, groups)
 -		if err != nil {
-+		req := &group.GetIncrementalGroupMemberReq{GroupID: id}
-+		lvs, err := g.db.GetVersionSync(ctx, g.groupAndMemberVersionTableName(), id)
-+		if err == nil {
-+			req.VersionID, req.Version = lvs.VersionID, lvs.Version
-+		} else if !errs.ErrRecordNotFound.Is(err) {
++		if err := g.syncMemberBatch(ctx, scope, ids[start:end]); err != nil {
  			return err
  		}
 -		if len(groupVersion) == 0 {
 -			for _, req := range groups {
 -				delete(groupIDSet, req.GroupID)
 -			}
-+		groups = append(groups, req)
-+	}
-+	if err := ctx.Err(); err != nil {
-+		return err
-+	}
-+	responses, err := g.getIncrementalGroupMemberBatch(ctx, groups)
-+	if err != nil {
-+		return err
-+	}
-+	tasks := make([]func() error, 0, len(groups))
-+	for _, req := range groups {
-+		id := req.GroupID
-+		resp, present := responses[id]
-+		if !present {
-+			common.CompleteMetadataItem(ctx, scope, id)
- 			continue
- 		}
+-			continue
+-		}
 -		groups = groups[:0]
 -		for groupID, resp := range groupVersion {
 -			tempResp := resp
@@ -8212,18 +6965,22 @@ index ff893c28..d095993e 100644
 -			delete(groupIDSet, tempGroupID)
 -		}
 -		wg.Wait()
-+		tasks = append(tasks, func() error {
-+			if resp == nil {
-+				return errs.New("nil incremental group response", "groupID", id)
-+			}
-+			if err := g.syncGroupAndMember(ctx, id, resp); err != nil {
-+				return err
-+			}
-+			common.CompleteMetadataItem(ctx, scope, id)
-+			return nil
-+		})
  	}
-+	return runGroupSyncBatch(ctx, tasks)
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	common.FinishMetadataItems(ctx, scope)
++	return nil
++}
++
++func (g *Group) syncMemberBatch(ctx context.Context, scope string, ids []string) error {
++	finish := common.BeginMetadataBatch(ctx)
++	defer finish()
++	groups, err := g.memberVersionRequests(ctx, ids)
++	if err != nil {
++		return err
++	}
++	return g.syncMemberRequests(ctx, scope, groups)
  }
  
  func (g *Group) syncGroupAndMember(ctx context.Context, groupID string, resp *group.GetIncrementalGroupMemberResp) error {
@@ -8233,7 +6990,7 @@ index ff893c28..d095993e 100644
  	groupMemberSyncer := syncer.VersionSynchronizer[*model_struct.LocalGroupMember, *group.GetIncrementalGroupMemberResp]{
  		Ctx:       ctx,
  		DB:        g.db,
-@@ -157,27 +180,13 @@ func (g *Group) syncGroupAndMember(ctx context.Context, groupID string, resp *gr
+@@ -157,27 +144,13 @@ func (g *Group) syncGroupAndMember(ctx context.Context, groupID string, resp *gr
  			if groupInfo == nil {
  				return nil
  			}
@@ -8263,7 +7020,7 @@ index ff893c28..d095993e 100644
  		},
  		FullID: func(ctx context.Context) ([]string, error) {
  			resp, err := g.getFullGroupMemberUserIDs(ctx, &group.GetFullGroupMemberUserIDsReq{
-@@ -270,27 +279,13 @@ func (g *Group) onlineSyncGroupAndMember(ctx context.Context, groupID string, de
+@@ -270,27 +243,13 @@ func (g *Group) onlineSyncGroupAndMember(ctx context.Context, groupID string, de
  			if groupInfo == nil {
  				return nil
  			}
@@ -8293,7 +7050,7 @@ index ff893c28..d095993e 100644
  		},
  		FullID: func(ctx context.Context) ([]string, error) {
  			resp, err := g.getFullGroupMemberUserIDs(ctx, &group.GetFullGroupMemberUserIDsReq{
-@@ -354,7 +349,17 @@ func (g *Group) IncrSyncJoinGroupAndGetIDs(ctx context.Context) ([]string, error
+@@ -354,7 +313,17 @@ func (g *Group) IncrSyncJoinGroupAndGetIDs(ctx context.Context) ([]string, error
  			return g.groupSyncer.Sync(ctx, server, local, nil)
  		},
  		FullSyncer: func(ctx context.Context) error {
@@ -8580,7 +7337,7 @@ index 00000000..c8467ee2
 +}
 diff --git a/internal/group/member_resume_test.go b/internal/group/member_resume_test.go
 new file mode 100644
-index 00000000..f2839ff6
+index 00000000..8a7418ba
 --- /dev/null
 +++ b/internal/group/member_resume_test.go
 @@ -0,0 +1,145 @@
@@ -8624,7 +7381,7 @@ index 00000000..f2839ff6
 +		for _, item := range req.ReqList {
 +			seen[item.GroupID]++
 +		}
-+		// Unchanged groups are intentionally absent from the response.
++		// An entirely empty success confirms every requested group was skipped.
 +		profileResponse(w, map[string]any{"respList": map[string]any{}})
 +	})
 +	base := common.WithMetadataProgress(ctx, &common.MetadataProgress{})
@@ -8670,7 +7427,7 @@ index 00000000..f2839ff6
 +		mu.Lock()
 +		requests = append(requests, ids)
 +		mu.Unlock()
-+		profileResponse(w, map[string]any{"respList": map[string]any{"g": map[string]any{"versionID": "members", "version": 1, "group": map[string]any{"groupID": "g", "groupName": "New"}}}})
++		profileResponse(w, map[string]any{"respList": map[string]any{"unchanged": map[string]any{}, "g": map[string]any{"versionID": "members", "version": 1, "group": map[string]any{"groupID": "g", "groupName": "New"}}}})
 +	})
 +	base := common.WithMetadataProgress(ctx, &common.MetadataProgress{})
 +	d := &groupProfileDB{row: &model_struct.LocalGroup{GroupID: "g"}, failMember: true}
@@ -8704,7 +7461,7 @@ index 00000000..f2839ff6
 +		}
 +		requests = append(requests, ids)
 +		if len(requests) == 1 {
-+			profileResponse(w, map[string]any{"respList": map[string]any{"bad": nil}})
++			profileResponse(w, map[string]any{"respList": map[string]any{"bad": nil, "unchanged": map[string]any{}}})
 +		} else {
 +			profileResponse(w, map[string]any{"respList": map[string]any{}})
 +		}
@@ -8733,503 +7490,20 @@ diff --git a/internal/group/notification.go b/internal/group/notification.go
 index c64cec02..22d99e55 100644
 --- a/internal/group/notification.go
 +++ b/internal/group/notification.go
-@@ -1,247 +1,249 @@
--// Copyright © 2023 OpenIM SDK. All rights reserved.
--//
--// Licensed under the Apache License, Version 2.0 (the "License");
--// you may not use this file except in compliance with the License.
--// You may obtain a copy of the License at
--//
--//     http://www.apache.org/licenses/LICENSE-2.0
--//
--// Unless required by applicable law or agreed to in writing, software
--// distributed under the License is distributed on an "AS IS" BASIS,
--// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--// See the License for the specific language governing permissions and
--// limitations under the License.
--
--package group
--
--import (
--	"context"
--	"fmt"
--
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
--	"github.com/openimsdk/tools/errs"
--	"github.com/openimsdk/tools/utils/datautil"
--
--	"github.com/openimsdk/protocol/sdkws"
--	"github.com/openimsdk/tools/log"
--)
--
--const (
--	groupSortIDUnchanged = 0
--	groupSortIDChanged   = 1
--)
--
+@@ -32,10 +32,12 @@ const (
+ 	groupSortIDChanged   = 1
+ )
+ 
 -func (g *Group) DoNotification(ctx context.Context, msg *sdkws.MsgData) {
--	if err := g.doNotification(ctx, msg); err != nil {
--		log.ZError(ctx, "DoGroupNotification failed", err)
--	}
--}
--
--func (g *Group) doNotification(ctx context.Context, msg *sdkws.MsgData) error {
--	switch msg.ContentType {
--	case constant.GroupApplicationAcceptedNotification: // 1505
--		var detail sdkws.GroupApplicationAcceptedTips
--		if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--			return err
--		}
--		if g.filter.ShouldExecute(detail.Uuid) {
--			g.listener().OnGroupApplicationAccepted(utils.StructToJsonString(
--				ServerGroupRequestToLocalGroupRequestForNotification(detail.GetGroup(), detail.GetRequest())))
--		}
--
--	case constant.GroupApplicationRejectedNotification: // 1506
--		var detail sdkws.GroupApplicationRejectedTips
--		if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--			return err
--		}
--		if g.filter.ShouldExecute(detail.Uuid) {
--			g.listener().OnGroupApplicationRejected(utils.StructToJsonString(
--				ServerGroupRequestToLocalGroupRequestForNotification(detail.GetGroup(), detail.GetRequest())))
--		}
--	case constant.JoinGroupApplicationNotification: // 1503
--		var detail sdkws.JoinGroupApplicationTips
--		if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--			return err
--		}
--		if g.filter.ShouldExecute(detail.Uuid) {
--			g.listener().OnGroupApplicationAdded(utils.StructToJsonString(
--				ServerGroupRequestToLocalGroupRequestForNotification(detail.GetGroup(), detail.GetRequest())))
--		}
--	default:
--		g.groupSyncMutex.Lock()
--		defer g.groupSyncMutex.Unlock()
--		switch msg.ContentType {
--		case constant.GroupCreatedNotification: // 1501
--			var detail sdkws.GroupCreatedTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--
--			if err := g.IncrSyncJoinGroup(ctx); err != nil {
--				return err
--			}
--			return g.IncrSyncGroupAndMember(ctx, detail.Group.GroupID)
--
--		case constant.GroupInfoSetNotification: // 1502
--			var detail sdkws.GroupInfoSetTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
--				nil, nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--
--		case constant.MemberQuitNotification: // 1504
--			var detail sdkws.MemberQuitTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			if detail.QuitUser.UserID == g.loginUserID {
--				return g.IncrSyncJoinGroup(ctx)
--			} else {
--				return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, []*sdkws.GroupMemberFullInfo{detail.QuitUser}, nil,
--					nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--			}
--		case constant.GroupOwnerTransferredNotification: // 1507
--			var detail sdkws.GroupOwnerTransferredTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			if detail.Group == nil {
--				return errs.New(fmt.Sprintf("group is nil, groupID: %s", detail.Group.GroupID)).Wrap()
--			}
--			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
--				[]*sdkws.GroupMemberFullInfo{detail.NewGroupOwner, detail.OldGroupOwnerInfo}, nil,
--				detail.Group, groupSortIDChanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--		case constant.MemberKickedNotification: // 1508
--			var detail sdkws.MemberKickedTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			var self bool
--			for _, info := range detail.KickedUserList {
--				if info.UserID == g.loginUserID {
--					self = true
--					break
--				}
--			}
--			if self {
--				return g.IncrSyncJoinGroup(ctx)
--			} else {
--				return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, detail.KickedUserList, nil,
--					nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--			}
--		case constant.MemberInvitedNotification: // 1509
--			var detail sdkws.MemberInvitedTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			userIDMap := datautil.SliceSetAny(detail.InvitedUserList, func(e *sdkws.GroupMemberFullInfo) string {
--				return e.UserID
--			})
--			//Also invited as a member
--			if _, ok := userIDMap[g.loginUserID]; ok {
--				if err := g.IncrSyncJoinGroup(ctx); err != nil {
--					return err
--				}
--				return g.IncrSyncGroupAndMember(ctx, detail.Group.GroupID)
--			} else {
--				return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
--					detail.InvitedUserList, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--			}
--		case constant.MemberEnterNotification: // 1510
--			var detail sdkws.MemberEnterTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			if detail.EntrantUser.UserID == g.loginUserID {
--				if err := g.IncrSyncJoinGroup(ctx); err != nil {
--					return err
--				}
--				return g.IncrSyncGroupAndMember(ctx, detail.Group.GroupID)
--			} else {
--				return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
--					[]*sdkws.GroupMemberFullInfo{detail.EntrantUser}, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--			}
--		case constant.GroupDismissedNotification: // 1511
--			var detail sdkws.GroupDismissedTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			g.listener().OnGroupDismissed(utils.StructToJsonString(detail.Group))
--
--			return g.IncrSyncJoinGroup(ctx)
--		case constant.GroupMemberMutedNotification: // 1512
--			var detail sdkws.GroupMemberMutedTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
--				[]*sdkws.GroupMemberFullInfo{detail.MutedUser}, nil, nil,
--				groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--		case constant.GroupMemberCancelMutedNotification: // 1513
--			var detail sdkws.GroupMemberCancelMutedTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
--				[]*sdkws.GroupMemberFullInfo{detail.MutedUser}, nil, nil,
--				groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--		case constant.GroupMutedNotification: // 1514
--			var detail sdkws.GroupMutedTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
--				nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--		case constant.GroupCancelMutedNotification: // 1515
--			var detail sdkws.GroupCancelMutedTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
--				nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--		case constant.GroupMemberInfoSetNotification: // 1516
--			var detail sdkws.GroupMemberInfoSetTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
--				[]*sdkws.GroupMemberFullInfo{detail.ChangedUser}, nil, nil,
--				detail.GroupSortVersion, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--		case constant.GroupMemberSetToAdminNotification: // 1517
--			var detail sdkws.GroupMemberInfoSetTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
--				[]*sdkws.GroupMemberFullInfo{detail.ChangedUser}, nil, nil,
--				detail.GroupSortVersion, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--		case constant.GroupMemberSetToOrdinaryUserNotification: // 1518
--			var detail sdkws.GroupMemberInfoSetTips
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
--				[]*sdkws.GroupMemberFullInfo{detail.ChangedUser}, nil, nil,
--				detail.GroupSortVersion, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--		case constant.GroupInfoSetAnnouncementNotification: // 1519
--			var detail sdkws.GroupInfoSetAnnouncementTips //
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
--				nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--		case constant.GroupInfoSetNameNotification: // 1520
--			var detail sdkws.GroupInfoSetNameTips //
--			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
--				return err
--			}
--			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
--				nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
--		default:
--			return errs.New("unknown tips type", "contentType", msg.ContentType).Wrap()
--		}
--	}
--	return nil
--}
-+// Copyright © 2023 OpenIM SDK. All rights reserved.
-+//
-+// Licensed under the Apache License, Version 2.0 (the "License");
-+// you may not use this file except in compliance with the License.
-+// You may obtain a copy of the License at
-+//
-+//     http://www.apache.org/licenses/LICENSE-2.0
-+//
-+// Unless required by applicable law or agreed to in writing, software
-+// distributed under the License is distributed on an "AS IS" BASIS,
-+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+// See the License for the specific language governing permissions and
-+// limitations under the License.
-+
-+package group
-+
-+import (
-+	"context"
-+	"fmt"
-+
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
-+	"github.com/openimsdk/tools/errs"
-+	"github.com/openimsdk/tools/utils/datautil"
-+
-+	"github.com/openimsdk/protocol/sdkws"
-+	"github.com/openimsdk/tools/log"
-+)
-+
-+const (
-+	groupSortIDUnchanged = 0
-+	groupSortIDChanged   = 1
-+)
-+
 +func (g *Group) DoNotification(ctx context.Context, msg *sdkws.MsgData) error {
-+	if err := g.doNotification(ctx, msg); err != nil {
-+		log.ZError(ctx, "DoGroupNotification failed", err)
+ 	if err := g.doNotification(ctx, msg); err != nil {
+ 		log.ZError(ctx, "DoGroupNotification failed", err)
 +		return err
-+	}
+ 	}
 +	return nil
-+}
-+
-+func (g *Group) doNotification(ctx context.Context, msg *sdkws.MsgData) error {
-+	switch msg.ContentType {
-+	case constant.GroupApplicationAcceptedNotification: // 1505
-+		var detail sdkws.GroupApplicationAcceptedTips
-+		if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+			return err
-+		}
-+		if g.filter.ShouldExecute(detail.Uuid) {
-+			g.listener().OnGroupApplicationAccepted(utils.StructToJsonString(
-+				ServerGroupRequestToLocalGroupRequestForNotification(detail.GetGroup(), detail.GetRequest())))
-+		}
-+
-+	case constant.GroupApplicationRejectedNotification: // 1506
-+		var detail sdkws.GroupApplicationRejectedTips
-+		if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+			return err
-+		}
-+		if g.filter.ShouldExecute(detail.Uuid) {
-+			g.listener().OnGroupApplicationRejected(utils.StructToJsonString(
-+				ServerGroupRequestToLocalGroupRequestForNotification(detail.GetGroup(), detail.GetRequest())))
-+		}
-+	case constant.JoinGroupApplicationNotification: // 1503
-+		var detail sdkws.JoinGroupApplicationTips
-+		if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+			return err
-+		}
-+		if g.filter.ShouldExecute(detail.Uuid) {
-+			g.listener().OnGroupApplicationAdded(utils.StructToJsonString(
-+				ServerGroupRequestToLocalGroupRequestForNotification(detail.GetGroup(), detail.GetRequest())))
-+		}
-+	default:
-+		g.groupSyncMutex.Lock()
-+		defer g.groupSyncMutex.Unlock()
-+		switch msg.ContentType {
-+		case constant.GroupCreatedNotification: // 1501
-+			var detail sdkws.GroupCreatedTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+
-+			if err := g.IncrSyncJoinGroup(ctx); err != nil {
-+				return err
-+			}
-+			return g.IncrSyncGroupAndMember(ctx, detail.Group.GroupID)
-+
-+		case constant.GroupInfoSetNotification: // 1502
-+			var detail sdkws.GroupInfoSetTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
-+				nil, nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+
-+		case constant.MemberQuitNotification: // 1504
-+			var detail sdkws.MemberQuitTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			if detail.QuitUser.UserID == g.loginUserID {
-+				return g.IncrSyncJoinGroup(ctx)
-+			} else {
-+				return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, []*sdkws.GroupMemberFullInfo{detail.QuitUser}, nil,
-+					nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+			}
-+		case constant.GroupOwnerTransferredNotification: // 1507
-+			var detail sdkws.GroupOwnerTransferredTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			if detail.Group == nil {
-+				return errs.New(fmt.Sprintf("group is nil, groupID: %s", detail.Group.GroupID)).Wrap()
-+			}
-+			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
-+				[]*sdkws.GroupMemberFullInfo{detail.NewGroupOwner, detail.OldGroupOwnerInfo}, nil,
-+				detail.Group, groupSortIDChanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+		case constant.MemberKickedNotification: // 1508
-+			var detail sdkws.MemberKickedTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			var self bool
-+			for _, info := range detail.KickedUserList {
-+				if info.UserID == g.loginUserID {
-+					self = true
-+					break
-+				}
-+			}
-+			if self {
-+				return g.IncrSyncJoinGroup(ctx)
-+			} else {
-+				return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, detail.KickedUserList, nil,
-+					nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+			}
-+		case constant.MemberInvitedNotification: // 1509
-+			var detail sdkws.MemberInvitedTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			userIDMap := datautil.SliceSetAny(detail.InvitedUserList, func(e *sdkws.GroupMemberFullInfo) string {
-+				return e.UserID
-+			})
-+			//Also invited as a member
-+			if _, ok := userIDMap[g.loginUserID]; ok {
-+				if err := g.IncrSyncJoinGroup(ctx); err != nil {
-+					return err
-+				}
-+				return g.IncrSyncGroupAndMember(ctx, detail.Group.GroupID)
-+			} else {
-+				return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
-+					detail.InvitedUserList, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+			}
-+		case constant.MemberEnterNotification: // 1510
-+			var detail sdkws.MemberEnterTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			if detail.EntrantUser.UserID == g.loginUserID {
-+				if err := g.IncrSyncJoinGroup(ctx); err != nil {
-+					return err
-+				}
-+				return g.IncrSyncGroupAndMember(ctx, detail.Group.GroupID)
-+			} else {
-+				return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
-+					[]*sdkws.GroupMemberFullInfo{detail.EntrantUser}, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+			}
-+		case constant.GroupDismissedNotification: // 1511
-+			var detail sdkws.GroupDismissedTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			g.listener().OnGroupDismissed(utils.StructToJsonString(detail.Group))
-+
-+			return g.IncrSyncJoinGroup(ctx)
-+		case constant.GroupMemberMutedNotification: // 1512
-+			var detail sdkws.GroupMemberMutedTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
-+				[]*sdkws.GroupMemberFullInfo{detail.MutedUser}, nil, nil,
-+				groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+		case constant.GroupMemberCancelMutedNotification: // 1513
-+			var detail sdkws.GroupMemberCancelMutedTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
-+				[]*sdkws.GroupMemberFullInfo{detail.MutedUser}, nil, nil,
-+				groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+		case constant.GroupMutedNotification: // 1514
-+			var detail sdkws.GroupMutedTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
-+				nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+		case constant.GroupCancelMutedNotification: // 1515
-+			var detail sdkws.GroupCancelMutedTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
-+				nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+		case constant.GroupMemberInfoSetNotification: // 1516
-+			var detail sdkws.GroupMemberInfoSetTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
-+				[]*sdkws.GroupMemberFullInfo{detail.ChangedUser}, nil, nil,
-+				detail.GroupSortVersion, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+		case constant.GroupMemberSetToAdminNotification: // 1517
-+			var detail sdkws.GroupMemberInfoSetTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
-+				[]*sdkws.GroupMemberFullInfo{detail.ChangedUser}, nil, nil,
-+				detail.GroupSortVersion, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+		case constant.GroupMemberSetToOrdinaryUserNotification: // 1518
-+			var detail sdkws.GroupMemberInfoSetTips
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil,
-+				[]*sdkws.GroupMemberFullInfo{detail.ChangedUser}, nil, nil,
-+				detail.GroupSortVersion, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+		case constant.GroupInfoSetAnnouncementNotification: // 1519
-+			var detail sdkws.GroupInfoSetAnnouncementTips //
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
-+				nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+		case constant.GroupInfoSetNameNotification: // 1520
-+			var detail sdkws.GroupInfoSetNameTips //
-+			if err := utils.UnmarshalNotificationElem(msg.Content, &detail); err != nil {
-+				return err
-+			}
-+			return g.onlineSyncGroupAndMember(ctx, detail.Group.GroupID, nil, nil,
-+				nil, detail.Group, groupSortIDUnchanged, detail.GroupMemberVersion, detail.GroupMemberVersionID)
-+		default:
-+			return errs.New("unknown tips type", "contentType", msg.ContentType).Wrap()
-+		}
-+	}
-+	return nil
-+}
+ }
+ 
+ func (g *Group) doNotification(ctx context.Context, msg *sdkws.MsgData) error {
 diff --git a/internal/group/profile_network_stress_test.go b/internal/group/profile_network_stress_test.go
 new file mode 100644
 index 00000000..40c0df90
@@ -9826,6 +8100,255 @@ index 00000000..eadef2b3
 +		t.Fatal(err)
 +	}
 +	gate.Unlock()
++}
+diff --git a/internal/group/sync_member_requests.go b/internal/group/sync_member_requests.go
+new file mode 100644
+index 00000000..16c9dea7
+--- /dev/null
++++ b/internal/group/sync_member_requests.go
+@@ -0,0 +1,63 @@
++package group
++
++import (
++	"context"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/protocol/group"
++	"github.com/openimsdk/tools/errs"
++)
++
++// The server stops after its changed-member response budget. A group omitted
++// from a nonempty response may not have been inspected; it is not a checkpoint.
++func (g *Group) syncMemberRequests(ctx context.Context, scope string, requests []*group.GetIncrementalGroupMemberReq) error {
++	for len(requests) > 0 {
++		if err := ctx.Err(); err != nil {
++			return err
++		}
++		responses, err := g.getIncrementalGroupMemberBatch(ctx, requests)
++		if err != nil {
++			return err
++		}
++		// The existing server skips dismissed groups. An entirely empty success
++		// cannot have reached the response budget, so all remaining were checked.
++		if len(responses) == 0 {
++			for _, req := range requests {
++				common.CompleteMetadataItem(ctx, scope, req.GroupID)
++			}
++			return ctx.Err()
++		}
++		pending := make([]*group.GetIncrementalGroupMemberReq, 0, len(requests))
++		tasks := make([]func() error, 0, len(requests))
++		for _, req := range requests {
++			id := req.GroupID
++			resp, present := responses[id]
++			if !present {
++				pending = append(pending, req)
++				continue
++			}
++			if unchangedMemberVersion(req, resp) {
++				common.CompleteMetadataItem(ctx, scope, id)
++				continue
++			}
++			tasks = append(tasks, func() error {
++				if resp == nil {
++					return errs.New("nil incremental group response", "groupID", id)
++				}
++				if err := g.syncGroupAndMember(ctx, id, resp); err != nil {
++					return err
++				}
++				common.CompleteMetadataItem(ctx, scope, id)
++				return nil
++			})
++		}
++		if len(pending) == len(requests) {
++			return errs.New("group batch response made no progress")
++		}
++		if err := runGroupSyncBatch(ctx, tasks); err != nil {
++			return err
++		}
++		requests = pending
++	}
++	return ctx.Err()
++}
+diff --git a/internal/group/sync_probe.go b/internal/group/sync_probe.go
+new file mode 100644
+index 00000000..55201d4e
+--- /dev/null
++++ b/internal/group/sync_probe.go
+@@ -0,0 +1,54 @@
++package group
++
++import (
++	"context"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/protocol/group"
++	"github.com/openimsdk/tools/errs"
++)
++
++// Optional capability keeps the existing database contract and WASM fallback.
++type versionHeaderReader interface {
++	GetVersionSyncHeaders(context.Context, string, []string) (map[string]*model_struct.LocalVersionSync, error)
++}
++
++func (g *Group) memberVersionRequests(ctx context.Context, ids []string) ([]*group.GetIncrementalGroupMemberReq, error) {
++	versions := make(map[string]*model_struct.LocalVersionSync, len(ids))
++	if reader, ok := g.db.(versionHeaderReader); ok {
++		var err error
++		versions, err = reader.GetVersionSyncHeaders(ctx, g.groupAndMemberVersionTableName(), ids)
++		if err != nil {
++			return nil, err
++		}
++	} else {
++		for _, id := range ids {
++			if err := ctx.Err(); err != nil {
++				return nil, err
++			}
++			version, err := g.db.GetVersionSync(ctx, g.groupAndMemberVersionTableName(), id)
++			if err != nil && !errs.ErrRecordNotFound.Is(err) {
++				return nil, err
++			}
++			if err == nil {
++				versions[id] = version
++			}
++		}
++	}
++	requests := make([]*group.GetIncrementalGroupMemberReq, 0, len(ids))
++	for _, id := range ids {
++		request := &group.GetIncrementalGroupMemberReq{GroupID: id}
++		if version := versions[id]; version != nil {
++			request.VersionID, request.Version = version.VersionID, version.Version
++		}
++		requests = append(requests, request)
++	}
++	return requests, ctx.Err()
++}
++
++func unchangedMemberVersion(req *group.GetIncrementalGroupMemberReq, resp *group.GetIncrementalGroupMemberResp) bool {
++	return resp != nil && req.VersionID != "" && req.Version > 0 &&
++		req.VersionID == resp.VersionID && req.Version == resp.Version &&
++		!resp.Full && resp.Group == nil && resp.SortVersion == 0 &&
++		len(resp.Insert) == 0 && len(resp.Update) == 0 && len(resp.Delete) == 0
++}
+diff --git a/internal/group/sync_probe_test.go b/internal/group/sync_probe_test.go
+new file mode 100644
+index 00000000..3db48c09
+--- /dev/null
++++ b/internal/group/sync_probe_test.go
+@@ -0,0 +1,114 @@
++package group
++
++import (
++	"context"
++	"encoding/json"
++	"fmt"
++	"net/http"
++	"sync/atomic"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	pbgroup "github.com/openimsdk/protocol/group"
++	"github.com/openimsdk/protocol/sdkws"
++)
++
++type groupProbeDB struct {
++	db_interface.DataBase
++	fullReads   atomic.Int32
++	headerReads atomic.Int32
++}
++
++func TestMemberVersionFastPathRequiresExactEmptyDelta(t *testing.T) {
++	req := &pbgroup.GetIncrementalGroupMemberReq{VersionID: "v", Version: 7}
++	for name, response := range map[string]*pbgroup.GetIncrementalGroupMemberResp{
++		"nil":         nil,
++		"full":        {VersionID: "v", Version: 7, Full: true},
++		"new-version": {VersionID: "v", Version: 8},
++		"reset":       {VersionID: "new", Version: 7},
++		"profile":     {VersionID: "v", Version: 7, Group: &sdkws.GroupInfo{}},
++		"order":       {VersionID: "v", Version: 7, SortVersion: 1},
++		"insert":      {VersionID: "v", Version: 7, Insert: []*sdkws.GroupMemberFullInfo{{UserID: "a"}}},
++		"update":      {VersionID: "v", Version: 7, Update: []*sdkws.GroupMemberFullInfo{{UserID: "a"}}},
++		"delete":      {VersionID: "v", Version: 7, Delete: []string{"a"}},
++	} {
++		t.Run(name, func(t *testing.T) {
++			if unchangedMemberVersion(req, response) {
++				t.Fatal("required sync was skipped")
++			}
++		})
++	}
++	if unchangedMemberVersion(&pbgroup.GetIncrementalGroupMemberReq{}, &pbgroup.GetIncrementalGroupMemberResp{}) {
++		t.Fatal("uninitialized versions cannot prove unchanged state")
++	}
++}
++
++func (d *groupProbeDB) GetVersionSync(_ context.Context, table, id string) (*model_struct.LocalVersionSync, error) {
++	d.fullReads.Add(1)
++	return &model_struct.LocalVersionSync{Table: table, EntityID: id, VersionID: "current", Version: 7, UIDList: make([]string, 1500)}, nil
++}
++
++func (d *groupProbeDB) GetVersionSyncHeaders(_ context.Context, table string, ids []string) (map[string]*model_struct.LocalVersionSync, error) {
++	d.headerReads.Add(1)
++	result := make(map[string]*model_struct.LocalVersionSync, len(ids))
++	for _, id := range ids {
++		result[id] = &model_struct.LocalVersionSync{Table: table, EntityID: id, VersionID: "current", Version: 7}
++	}
++	return result, nil
++}
++
++func TestUnchangedLargeGroupSweepDoesNotLoadMemberIDLists(t *testing.T) {
++	var requests atomic.Int32
++	ctx := groupProfileServer(t, func(w http.ResponseWriter, r *http.Request) {
++		var req pbgroup.BatchGetIncrementalGroupMemberReq
++		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
++			t.Error(err)
++			return
++		}
++		requests.Add(1)
++		resp := make(map[string]*pbgroup.GetIncrementalGroupMemberResp)
++		for _, item := range req.ReqList {
++			resp[item.GroupID] = &pbgroup.GetIncrementalGroupMemberResp{VersionID: item.VersionID, Version: item.Version}
++		}
++		profileResponse(w, &pbgroup.BatchGetIncrementalGroupMemberResp{RespList: resp})
++	})
++	d := &groupProbeDB{}
++	g := NewGroup("self", d, nil)
++	ids := make([]string, 3116)
++	for i := range ids {
++		ids[i] = fmt.Sprintf("g-%04d", i)
++	}
++	if err := g.IncrSyncGroupAndMember(ctx, ids...); err != nil {
++		t.Fatal(err)
++	}
++	if d.fullReads.Load() != 0 {
++		t.Fatalf("unchanged sweep decoded full member lists %d times", d.fullReads.Load())
++	}
++	if d.headerReads.Load() != requests.Load() || requests.Load() != 156 {
++		t.Fatalf("header reads=%d requests=%d", d.headerReads.Load(), requests.Load())
++	}
++}
++
++func TestMemberBatchRetriesGroupsOmittedByServerResponseBudget(t *testing.T) {
++	var requested []int
++	ctx := groupProfileServer(t, func(w http.ResponseWriter, r *http.Request) {
++		var req pbgroup.BatchGetIncrementalGroupMemberReq
++		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
++			t.Error(err)
++			return
++		}
++		requested = append(requested, len(req.ReqList))
++		first := req.ReqList[0]
++		profileResponse(w, &pbgroup.BatchGetIncrementalGroupMemberResp{RespList: map[string]*pbgroup.GetIncrementalGroupMemberResp{
++			first.GroupID: {VersionID: first.VersionID, Version: first.Version},
++		}})
++	})
++	g := NewGroup("self", &groupProbeDB{}, nil)
++	if err := g.IncrSyncGroupAndMember(ctx, "a", "b", "c"); err != nil {
++		t.Fatal(err)
++	}
++	if len(requested) != 3 || requested[0] != 3 || requested[1] != 2 || requested[2] != 1 {
++		t.Fatalf("server omitted unprocessed groups, requests=%v", requested)
++	}
 +}
 diff --git a/internal/interaction/connection_recovery.go b/internal/interaction/connection_recovery.go
 new file mode 100644
@@ -13150,55 +11673,24 @@ diff --git a/internal/interaction/msg_sync.go b/internal/interaction/msg_sync.go
 index e4a8ef95..a20d83dd 100644
 --- a/internal/interaction/msg_sync.go
 +++ b/internal/interaction/msg_sync.go
-@@ -1,677 +1,785 @@
+@@ -1,4 +1,4 @@
 -// Copyright © 2023 OpenIM SDK. All rights reserved.
--//
--// Licensed under the Apache License, Version 2.0 (the "License");
--// you may not use this file except in compliance with the License.
--// You may obtain a copy of the License at
--//
--//     http://www.apache.org/licenses/LICENSE-2.0
--//
--// Unless required by applicable law or agreed to in writing, software
--// distributed under the License is distributed on an "AS IS" BASIS,
--// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
--// See the License for the specific language governing permissions and
--// limitations under the License.
--
--package interaction
--
--import (
--	"context"
--	"errors"
--	"fmt"
--	"runtime/debug"
--	"strings"
--	"sync"
--	"time"
--
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
--	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
--	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
--	"github.com/openimsdk/protocol/msg"
--	"github.com/openimsdk/tools/errs"
--
--	"github.com/openimsdk/protocol/sdkws"
--	"github.com/openimsdk/tools/log"
--)
--
--const (
--	connectPullNums = 1
--	defaultPullNums = 10
--	SplitPullMsgNum = 100
--
--	pullMsgGoroutineLimit = 10
--)
--
--// MsgSyncer is a central hub for message relay, responsible for sequential message gap pulling,
--// handling network events, and managing app foreground and background events.
--type MsgSyncer struct {
++// Copyright 漏 2023 OpenIM SDK. All rights reserved.
+ //
+ // Licensed under the Apache License, Version 2.0 (the "License");
+ // you may not use this file except in compliance with the License.
+@@ -19,6 +19,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"runtime/debug"
++	"sort"
+ 	"strings"
+ 	"sync"
+ 	"time"
+@@ -46,18 +47,25 @@ const (
+ // MsgSyncer is a central hub for message relay, responsible for sequential message gap pulling,
+ // handling network events, and managing app foreground and background events.
+ type MsgSyncer struct {
 -	loginUserID       string                // login user ID
 -	longConnMgr       *LongConnMgr          // long connection manager
 -	recvCh            chan common.Cmd2Value // channel for receiving push messages and the maximum SEQ number
@@ -13211,37 +11703,32 @@ index e4a8ef95..a20d83dd 100644
 -	reinstalled       bool                  //true if the app was uninstalled and reinstalled
 -	isSyncing         bool                  // indicates whether data is being synced
 -	isSyncingLock     sync.Mutex            // lock for syncing state
--
--}
--
--// NewMsgSyncer creates a new instance of the message synchronizer.
--func NewMsgSyncer(ctx context.Context, conversationCh, recvCh chan common.Cmd2Value,
--	loginUserID string, longConnMgr *LongConnMgr, db db_interface.DataBase, syncTimes int) (*MsgSyncer, error) {
--	m := &MsgSyncer{
--		loginUserID:    loginUserID,
--		longConnMgr:    longConnMgr,
--		recvCh:         recvCh,
--		conversationCh: conversationCh,
--		ctx:            ctx,
--		syncedMaxSeqs:  make(map[string]int64),
--		db:             db,
--		syncTimes:      syncTimes,
--	}
--	if err := m.loadSeq(ctx); err != nil {
--		log.ZError(ctx, "loadSeq err", err)
--		return nil, err
--	}
--	return m, nil
--}
--
--// seq The db reads the data to the memory,set syncedMaxSeqs
--func (m *MsgSyncer) loadSeq(ctx context.Context) error {
--	conversationIDList, err := m.db.GetAllConversationIDList(ctx)
--	if err != nil {
--		log.ZError(ctx, "get conversation id list failed", err)
--		return err
--	}
--
++	loginUserID          string                // login user ID
++	longConnMgr          *LongConnMgr          // long connection manager
++	recvCh               chan common.Cmd2Value // channel for receiving push messages and the maximum SEQ number
++	conversationCh       chan common.Cmd2Value // storage and session triggering
++	syncedMaxSeqs        map[string]int64      // map of the maximum synced SEQ numbers for all group IDs
++	syncedMaxSeqsLock    sync.RWMutex          // syncedMaxSeqs map lock
++	checkpoints          map[string]messageCheckpoint
++	checkpointIDs        map[string]bool
++	recoveryReadSeqReady bool
++	pendingReadReconcile bool
++	initialMetadataReady bool
++	auxMetadataPending   bool
++	auxMetadataProgress *common.MetadataProgress
++	db                   db_interface.DataBase // data store
++	syncTimes            int                   // times of sync
++	ctx                  context.Context       // context
++	reinstalled          bool                  //true if the app was uninstalled and reinstalled
++	isSyncing            bool                  // indicates whether data is being synced
++	isSyncingLock        sync.Mutex            // lock for syncing state
+ 
+ }
+ 
+@@ -89,14 +97,16 @@ func (m *MsgSyncer) loadSeq(ctx context.Context) error {
+ 		return err
+ 	}
+ 
 -	if len(conversationIDList) == 0 {
 -		version, err := m.db.GetAppSDKVersion(ctx)
 -		if err != nil && !errors.Is(err, errs.ErrRecordNotFound) {
@@ -13250,81 +11737,45 @@ index e4a8ef95..a20d83dd 100644
 -		if version == nil || !version.Installed {
 -			m.reinstalled = true
 -		}
--	}
--
--	// TODO With a large number of sessions(10w), this could potentially cause blocking and needs optimization.
--
--	type SyncedSeq struct {
--		ConversationID string
--		MaxSyncedSeq   int64
--		Err            error
--	}
--
--	partSize := 20
--	currency := (len(conversationIDList)-1)/partSize + 1
--	if len(conversationIDList) == 0 {
--		currency = 0
--	}
--	var wg sync.WaitGroup
--	resultMaps := make([]map[string]SyncedSeq, currency)
--
--	for i := 0; i < currency; i++ {
--		wg.Add(1)
--		start := i * partSize
--		end := start + partSize
--		if i == currency-1 {
--			end = len(conversationIDList)
--		}
--
--		resultMaps[i] = make(map[string]SyncedSeq)
--
--		go func(i, start, end int) {
--			defer wg.Done()
--			for _, v := range conversationIDList[start:end] {
--				maxSyncedSeq, err := m.db.CheckConversationNormalMsgSeq(ctx, v)
--				resultMaps[i][v] = SyncedSeq{
--					ConversationID: v,
--					MaxSyncedSeq:   maxSyncedSeq,
--					Err:            err,
--				}
--			}
--		}(i, start, end)
--	}
--
--	wg.Wait()
--
--	// merge map
--	for _, resultMap := range resultMaps {
--		for k, v := range resultMap {
--			if v.Err != nil {
--				log.ZError(ctx, "get group normal seq failed", errs.Wrap(v.Err), "conversationID", k)
--				continue
--			}
--			m.syncedMaxSeqs[k] = v.MaxSyncedSeq
--		}
--	}
--	notificationSeqs, err := m.db.GetNotificationAllSeqs(ctx)
--	if err != nil {
--		log.ZError(ctx, "get notification seq failed", err)
--		return err
--	}
--	for _, notificationSeq := range notificationSeqs {
--		m.syncedMaxSeqs[notificationSeq.ConversationID] = notificationSeq.Seq
--	}
--	log.ZDebug(ctx, "loadSeq", "syncedMaxSeqs", m.syncedMaxSeqs)
++	version, err := m.db.GetAppSDKVersion(ctx)
++	if err != nil && !errors.Is(err, errs.ErrRecordNotFound) {
++		return err
++	}
++	if (version != nil && !version.Installed) || (version == nil && len(conversationIDList) == 0) {
++		m.reinstalled = true
++	}
++	checkpointRows, err := m.readStartupCheckpoints(ctx)
++	if err != nil {
++		return err
+ 	}
+ 
+ 	// TODO With a large number of sessions(10w), this could potentially cause blocking and needs optimization.
+@@ -128,6 +138,12 @@ func (m *MsgSyncer) loadSeq(ctx context.Context) error {
+ 		go func(i, start, end int) {
+ 			defer wg.Done()
+ 			for _, v := range conversationIDList[start:end] {
++				if checkpointRows["conversation:"+v] != nil {
++					// The journal is the coverage authority. MAX(seq) is only a
++					// legacy observation and must not replace this durable state.
++					resultMaps[i][v] = SyncedSeq{ConversationID: v}
++					continue
++				}
+ 				maxSyncedSeq, err := m.db.CheckConversationNormalMsgSeq(ctx, v)
+ 				resultMaps[i][v] = SyncedSeq{
+ 					ConversationID: v,
+@@ -159,7 +175,7 @@ func (m *MsgSyncer) loadSeq(ctx context.Context) error {
+ 		m.syncedMaxSeqs[notificationSeq.ConversationID] = notificationSeq.Seq
+ 	}
+ 	log.ZDebug(ctx, "loadSeq", "syncedMaxSeqs", m.syncedMaxSeqs)
 -	return nil
--}
--
--// DoListener Listen to the message pipe of the message synchronizer
--// and process received and pushed messages
--func (m *MsgSyncer) DoListener(ctx context.Context) {
--	defer func() {
--		if r := recover(); r != nil {
--			err := fmt.Sprintf("panic: %+v\n%s", r, debug.Stack())
--
--			log.ZWarn(ctx, "DoListener panic", nil, "panic info", err)
--		}
--	}()
++	return m.loadMessageCheckpoints(ctx, conversationIDList, checkpointRows)
+ }
+ 
+ // DoListener Listen to the message pipe of the message synchronizer
+@@ -172,15 +188,21 @@ func (m *MsgSyncer) DoListener(ctx context.Context) {
+ 			log.ZWarn(ctx, "DoListener panic", nil, "panic info", err)
+ 		}
+ 	}()
 -	for {
 -		select {
 -		case cmd := <-m.recvCh:
@@ -13332,88 +11783,118 @@ index e4a8ef95..a20d83dd 100644
 -		case <-ctx.Done():
 -			log.ZInfo(m.ctx, "msg syncer done, sdk logout.....")
 -			return
--		}
++	ticker := time.NewTicker(messageSeqReconciliationInterval)
++	defer ticker.Stop()
++	m.listenWithReconciliation(ctx, ticker.C)
++}
++
++func (m *MsgSyncer) handlePushMsgAndEventSafely(cmd common.Cmd2Value) {
++	defer func() {
++		if failure := recover(); failure != nil {
++			m.finishSync()
++			log.ZWarn(cmd.Ctx, "message sync command panic", nil, "panic info",
++				fmt.Sprintf("%v\n%s", failure, debug.Stack()))
++			common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
+ 		}
 -	}
--}
--
--// get seqs need sync interval
--func (m *MsgSyncer) getSeqsNeedSync(syncedMaxSeq, maxSeq int64) []int64 {
--	var seqs []int64
--	for i := syncedMaxSeq + 1; i <= maxSeq; i++ {
--		seqs = append(seqs, i)
--	}
--	return seqs
--}
--
--// recv msg from
--func (m *MsgSyncer) handlePushMsgAndEvent(cmd common.Cmd2Value) {
--	switch cmd.Cmd {
--	case constant.CmdConnSuccesss:
--		log.ZInfo(cmd.Ctx, "recv long conn mgr connected", "cmd", cmd.Cmd, "value", cmd.Value)
--		if m.startSync() {
--			m.doConnected(cmd.Ctx)
--		} else {
--			log.ZWarn(cmd.Ctx, "syncing, ignore connected event", nil, "cmd", cmd.Cmd, "value", cmd.Value)
--		}
--	case constant.CmdWakeUpDataSync:
--		log.ZInfo(cmd.Ctx, "app wake up, start sync msgs", "cmd", cmd.Cmd, "value", cmd.Value)
--		if m.startSync() {
--			m.doWakeupDataSync(cmd.Ctx)
--		} else {
--			log.ZWarn(cmd.Ctx, "syncing, ignore wake up event", nil, "cmd", cmd.Cmd, "value", cmd.Value)
--
--		}
--	case constant.CmdIMMessageSync:
--		log.ZInfo(cmd.Ctx, "manually trigger IM message synchronization", "cmd", cmd.Cmd, "value", cmd.Value)
--		m.doIMMessageSync(cmd.Ctx)
--
--	case constant.CmdPushMsg:
--		m.doPushMsg(cmd.Ctx, cmd.Value.(*sdkws.PushMessages))
--	}
--}
--
++	}()
++	m.handlePushMsgAndEvent(cmd)
+ }
+ 
+ // get seqs need sync interval
+@@ -194,6 +216,14 @@ func (m *MsgSyncer) getSeqsNeedSync(syncedMaxSeq, maxSeq int64) []int64 {
+ 
+ // recv msg from
+ func (m *MsgSyncer) handlePushMsgAndEvent(cmd common.Cmd2Value) {
++	if isBackgroundSyncCommand(cmd) {
++		if cmd.Cmd != constant.CmdConnSuccesss && m.longConnMgr != nil && m.longConnMgr.GetBackground() {
++			return // Durable targets resume on the next foreground/connection event.
++		}
++		ctx, finish := beginSyncDiagnostic(cmd.Ctx, cmd.Cmd, m.reinstalled)
++		cmd.Ctx = ctx
++		defer finish()
++	}
+ 	switch cmd.Cmd {
+ 	case constant.CmdConnSuccesss:
+ 		log.ZInfo(cmd.Ctx, "recv long conn mgr connected", "cmd", cmd.Cmd, "value", cmd.Value)
+@@ -213,13 +243,40 @@ func (m *MsgSyncer) handlePushMsgAndEvent(cmd common.Cmd2Value) {
+ 	case constant.CmdIMMessageSync:
+ 		log.ZInfo(cmd.Ctx, "manually trigger IM message synchronization", "cmd", cmd.Cmd, "value", cmd.Value)
+ 		m.doIMMessageSync(cmd.Ctx)
++	case cmdReconcileMessageSeq:
++		m.doMessageSeqReconciliation(cmd.Ctx)
++	case cmdSyncAuxiliaryMetadata:
++		m.doAuxiliaryMetadataSync(cmd.Ctx)
+ 
+ 	case constant.CmdPushMsg:
+ 		m.doPushMsg(cmd.Ctx, cmd.Value.(*sdkws.PushMessages))
+ 	}
+ }
+ 
 -func (m *MsgSyncer) compareSeqsAndBatchSync(ctx context.Context, maxSeqToSync map[string]int64, pullNums int64) {
--	needSyncSeqMap := make(map[string][2]int64)
--	//when app reinstalled do not pull notifications messages.
--	if m.reinstalled {
--		notificationsSeqMap := make(map[string]int64)
--		messagesSeqMap := make(map[string]int64)
--		for conversationID, seq := range maxSeqToSync {
--			if IsNotification(conversationID) {
--				if seq != 0 { // seq is 0, no need to sync
++func (m *MsgSyncer) compareSeqsAndBatchSync(ctx context.Context, maxSeqToSync map[string]int64, pullNums int64) (result error) {
++	defer func() { recordMessageSyncFailure(ctx, result) }()
++	// Persist targets before any writes, then merge obligations left by an
++	// interrupted attempt even if the newest server observation is stale.
++	targets := make(map[string]int64, len(maxSeqToSync))
++	ids := make([]string, 0, len(maxSeqToSync))
++	for id := range maxSeqToSync {
++		if !IsNotification(id) {
++			ids = append(ids, id)
++		}
++	}
++	if err := m.registerMessageCheckpointIDs(ctx, ids); err != nil {
++		return err
++	}
++	for id, seq := range maxSeqToSync {
++		if err := m.rememberMessageTarget(ctx, id, seq); err != nil {
++			return err
++		}
++		targets[id] = seq
++	}
++	for id, state := range m.checkpoints {
++		targets[id] = max(targets[id], state.Target)
++	}
++	maxSeqToSync = targets
+ 	needSyncSeqMap := make(map[string][2]int64)
+ 	//when app reinstalled do not pull notifications messages.
+ 	if m.reinstalled {
+@@ -228,7 +285,10 @@ func (m *MsgSyncer) compareSeqsAndBatchSync(ctx context.Context, maxSeqToSync ma
+ 		for conversationID, seq := range maxSeqToSync {
+ 			if IsNotification(conversationID) {
+ 				if seq != 0 { // seq is 0, no need to sync
 -					notificationsSeqMap[conversationID] = seq
--				}
--			} else {
--				messagesSeqMap[conversationID] = seq
--			}
--		}
--
--		var notificationSeqs []*model_struct.NotificationSeqs
--
--		for conversationID, seq := range notificationsSeqMap {
--			notificationSeqs = append(notificationSeqs, &model_struct.NotificationSeqs{
--				ConversationID: conversationID,
--				Seq:            seq,
--			})
++					// Match the durable monotonic bootstrap baseline on retry.
++					// Otherwise a stale maximum rewinds the in-memory cursor even
++					// though SQLite correctly retained the newer notification seq.
++					notificationsSeqMap[conversationID] = max(seq, m.syncedMaxSeqs[conversationID])
+ 				}
+ 			} else {
+ 				messagesSeqMap[conversationID] = seq
+@@ -242,15 +302,18 @@ func (m *MsgSyncer) compareSeqsAndBatchSync(ctx context.Context, maxSeqToSync ma
+ 				ConversationID: conversationID,
+ 				Seq:            seq,
+ 			})
 -			m.syncedMaxSeqs[conversationID] = seq
--		}
--
--		if len(notificationSeqs) > 0 {
--			err := m.db.BatchInsertNotificationSeq(ctx, notificationSeqs)
--			if err != nil {
--				log.ZWarn(ctx, "BatchInsertNotificationSeq err", err)
--			}
--		}
--
--		for conversationID, maxSeq := range messagesSeqMap {
--			if syncedMaxSeq, ok := m.syncedMaxSeqs[conversationID]; ok {
--				if maxSeq > syncedMaxSeq {
--					needSyncSeqMap[conversationID] = [2]int64{syncedMaxSeq + 1, maxSeq}
--				}
--			} else {
--				needSyncSeqMap[conversationID] = [2]int64{0, maxSeq}
--			}
--		}
+ 		}
+ 
+ 		if len(notificationSeqs) > 0 {
+ 			err := m.db.BatchInsertNotificationSeq(ctx, notificationSeqs)
+ 			if err != nil {
+ 				log.ZWarn(ctx, "BatchInsertNotificationSeq err", err)
++				return err
+ 			}
+ 		}
++		for conversationID, seq := range notificationsSeqMap {
++			m.syncedMaxSeqs[conversationID] = seq
++		}
+ 
+ 		for conversationID, maxSeq := range messagesSeqMap {
+ 			if syncedMaxSeq, ok := m.syncedMaxSeqs[conversationID]; ok {
+@@ -261,15 +324,13 @@ func (m *MsgSyncer) compareSeqsAndBatchSync(ctx context.Context, maxSeqToSync ma
+ 				needSyncSeqMap[conversationID] = [2]int64{0, maxSeq}
+ 			}
+ 		}
 -		defer func() {
 -			if err := m.db.SetAppSDKVersion(ctx, &model_struct.LocalAppSDKVersion{
 -				Installed: true,
@@ -13423,36 +11904,31 @@ index e4a8ef95..a20d83dd 100644
 -			m.reinstalled = false
 -		}()
 -		_ = m.syncAndTriggerReinstallMsgs(m.ctx, needSyncSeqMap, pullNums)
--	} else {
--		for conversationID, maxSeq := range maxSeqToSync {
--			if syncedMaxSeq, ok := m.syncedMaxSeqs[conversationID]; ok {
--				if maxSeq > syncedMaxSeq {
--					needSyncSeqMap[conversationID] = [2]int64{syncedMaxSeq + 1, maxSeq}
--				}
--			} else {
--				if maxSeq != 0 { // seq is 0, no need to sync
--					needSyncSeqMap[conversationID] = [2]int64{0, maxSeq}
--				}
--			}
--		}
++		if err := m.syncAndTriggerReinstallMsgs(ctx, needSyncSeqMap, pullNums); err != nil {
++			return err
++		}
++		if err := m.db.SetAppSDKVersion(ctx, &model_struct.LocalAppSDKVersion{Installed: true}); err != nil {
++			return err
++		}
++		m.reinstalled = false
+ 	} else {
+ 		for conversationID, maxSeq := range maxSeqToSync {
+ 			if syncedMaxSeq, ok := m.syncedMaxSeqs[conversationID]; ok {
+@@ -282,8 +343,9 @@ func (m *MsgSyncer) compareSeqsAndBatchSync(ctx context.Context, maxSeqToSync ma
+ 				}
+ 			}
+ 		}
 -		_ = m.syncAndTriggerMsgs(m.ctx, needSyncSeqMap, pullNums)
--	}
--}
--
--// startSync checks if the sync is already in progress.
--// If syncing is in progress, it returns false. Otherwise, it starts syncing and returns true.
--func (m *MsgSyncer) startSync() bool {
--	m.isSyncingLock.Lock()
--	defer m.isSyncingLock.Unlock()
--
--	if m.isSyncing {
--		// If already syncing, return false
--		return false
--	}
--
--	// Set syncing to true and start the sync
--	m.isSyncing = true
--
++		return m.syncAndTriggerMsgs(ctx, needSyncSeqMap, pullNums)
+ 	}
++	return nil
+ }
+ 
+ // startSync checks if the sync is already in progress.
+@@ -300,18 +362,33 @@ func (m *MsgSyncer) startSync() bool {
+ 	// Set syncing to true and start the sync
+ 	m.isSyncing = true
+ 
 -	// Create a goroutine that waits for 5 seconds and then sets isSyncing to false
 -	go func() {
 -		time.Sleep(5 * time.Second)
@@ -13461,117 +11937,268 @@ index e4a8ef95..a20d83dd 100644
 -		m.isSyncingLock.Unlock()
 -	}()
 -
--	return true
--}
--
--func (m *MsgSyncer) doPushMsg(ctx context.Context, push *sdkws.PushMessages) {
--	log.ZDebug(ctx, "push msgs", "push", push, "syncedMaxSeqs", m.syncedMaxSeqs)
--	m.pushTriggerAndSync(ctx, push.Msgs, m.triggerConversation)
--	m.pushTriggerAndSync(ctx, push.NotificationMsgs, m.triggerNotification)
--}
--
--func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[string]*sdkws.PullMsgs,
--	triggerFunc func(ctx context.Context, msgs map[string]*sdkws.PullMsgs) error) {
--	if len(pushMessages) == 0 {
--		return
--	}
--
--	needSyncSeqMap := make(map[string][2]int64)
--	res := make(map[string]*sdkws.PullMsgs)
--
--	for conversationID, msgs := range pushMessages {
--		var (
--			lastSeq     int64
--			storageMsgs []*sdkws.MsgData
--		)
--
--		for _, msg := range msgs.Msgs {
--			if msg.Seq == 0 {
--				_ = triggerFunc(ctx, map[string]*sdkws.PullMsgs{
--					conversationID: {Msgs: []*sdkws.MsgData{msg}},
--				})
--				continue
--			}
+ 	return true
+ }
+ 
++func (m *MsgSyncer) finishSync() {
++	m.isSyncingLock.Lock()
++	m.isSyncing = false
++	m.isSyncingLock.Unlock()
++}
++
+ func (m *MsgSyncer) doPushMsg(ctx context.Context, push *sdkws.PushMessages) {
++	if m.reinstalled && !m.initialMetadataReady {
++		// Keep message targets durable, but do not deliver against missing
++		// first-login metadata or acknowledge unseen notification state.
++		for id, batch := range push.Msgs {
++			for _, row := range batch.Msgs {
++				if err := m.rememberMessageTarget(ctx, id, row.Seq); err != nil {
++					log.ZWarn(ctx, "persist initial push target failed", err)
++					return
++				}
++			}
++		}
++		select {
++		case m.recvCh <- common.Cmd2Value{Ctx: m.ctx, Cmd: constant.CmdConnSuccesss}:
++		default: // The next foreground reconciliation retries initialization.
++		}
++		return
++	}
+ 	log.ZDebug(ctx, "push msgs", "push", push, "syncedMaxSeqs", m.syncedMaxSeqs)
+ 	m.pushTriggerAndSync(ctx, push.Msgs, m.triggerConversation)
+ 	m.pushTriggerAndSync(ctx, push.NotificationMsgs, m.triggerNotification)
+@@ -331,6 +408,9 @@ func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[str
+ 			lastSeq     int64
+ 			storageMsgs []*sdkws.MsgData
+ 		)
++		contiguous := true
++		expected := m.syncedMaxSeqs[conversationID] + 1
++		seen := make(map[int64]bool, len(msgs.Msgs))
+ 
+ 		for _, msg := range msgs.Msgs {
+ 			if msg.Seq == 0 {
+@@ -339,20 +419,35 @@ func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[str
+ 				})
+ 				continue
+ 			}
 -			lastSeq = msg.Seq
--			storageMsgs = append(storageMsgs, msg)
--		}
--
--		if len(storageMsgs) == 0 {
--			continue
--		}
--
++			if msg.Seq <= m.syncedMaxSeqs[conversationID] || seen[msg.Seq] {
++				continue
++			}
++			seen[msg.Seq] = true
++			if !IsNotification(conversationID) && m.messageAlreadyCovered(conversationID, msg.Seq) {
++				continue
++			}
++			lastSeq = max(lastSeq, msg.Seq)
++			if msg.Seq != expected {
++				contiguous = false
++			}
++			expected++
+ 			storageMsgs = append(storageMsgs, msg)
+ 		}
+ 
+ 		if len(storageMsgs) == 0 {
+ 			continue
+ 		}
++		if err := m.rememberMessageTarget(ctx, conversationID, lastSeq); err != nil {
++			log.ZError(ctx, "persist push recovery target failed", err)
++			common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
++			return
++		}
+ 
 -		expectedLast := m.syncedMaxSeqs[conversationID] + int64(len(storageMsgs))
 -		if lastSeq == expectedLast {
--			log.ZDebug(ctx, "trigger msgs", "conversationID", conversationID, "msgs", storageMsgs)
--			res[conversationID] = &sdkws.PullMsgs{Msgs: storageMsgs}
++		if contiguous || !IsNotification(conversationID) {
+ 			log.ZDebug(ctx, "trigger msgs", "conversationID", conversationID, "msgs", storageMsgs)
+ 			res[conversationID] = &sdkws.PullMsgs{Msgs: storageMsgs}
 -			m.syncedMaxSeqs[conversationID] = lastSeq
 -		} else if lastSeq > m.syncedMaxSeqs[conversationID] {
--			// must pull message when message type is notification
--			needSyncSeqMap[conversationID] = [2]int64{
--				m.syncedMaxSeqs[conversationID] + 1,
--				lastSeq,
--			}
--		}
--	}
--
--	if len(res) > 0 {
++		}
++		if !contiguous && lastSeq > m.syncedMaxSeqs[conversationID] {
+ 			// must pull message when message type is notification
+ 			needSyncSeqMap[conversationID] = [2]int64{
+ 				m.syncedMaxSeqs[conversationID] + 1,
+@@ -362,56 +457,163 @@ func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[str
+ 	}
+ 
+ 	if len(res) > 0 {
 -		_ = triggerFunc(ctx, res)
--	}
++		if err := triggerFunc(ctx, res); err != nil {
++			log.ZError(ctx, "message commit failed", err)
++			common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
++			return
++		}
++		for conversationID, msgs := range res {
++			var commitErr error
++			if IsNotification(conversationID) {
++				commitErr = m.commitMessageCheckpoint(ctx, conversationID, msgs.Msgs[len(msgs.Msgs)-1].Seq)
++			} else {
++				var covered [][2]int64
++				for _, row := range msgs.Msgs {
++					covered = append(covered, [2]int64{row.Seq, row.Seq})
++				}
++				commitErr = m.commitMessageCoverage(ctx, conversationID, covered)
++			}
++			if err := commitErr; err != nil {
++				log.ZError(ctx, "persist push checkpoint failed", err)
++				common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
++				return
++			}
++		}
++	}
++	for id, r := range needSyncSeqMap {
++		if IsNotification(id) {
++			continue
++		}
++		if len(m.recentMissingRanges(id, r)) == 0 {
++			// Sparse coverage can contain a complete recent window while the
++			// older contiguous cursor stays behind. This push created no new gap.
++			delete(needSyncSeqMap, id)
++		} else {
++			m.pendingReadReconcile = true
++		}
++	}
++	// Contiguous pushes are already committed. An empty recovery pass would
++	// reset the active job's read reconciliation and consume its pending flag.
++	if len(needSyncSeqMap) == 0 {
++		return
++	}
++	if m.recvCh != nil {
++		deferNormal := true
++		for id := range needSyncSeqMap {
++			if IsNotification(id) {
++				deferNormal = false
++			}
++		}
++		if deferNormal {
++			// The journal already contains these targets. Let the interruptible
++			// background scheduler own large gaps rather than blocking live ingress.
++			select {
++			case m.recvCh <- common.Cmd2Value{Ctx: m.ctx, Cmd: constant.CmdIMMessageSync}:
++			default:
++			}
++			return
++		}
++	}
++	if err := m.syncAndTriggerMsgs(ctx, needSyncSeqMap, defaultPullNums); err != nil {
++		log.ZError(ctx, "message gap sync failed", err)
++		common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
+ 	}
 -	m.syncAndTriggerMsgs(ctx, needSyncSeqMap, defaultPullNums)
--}
--
--// Called after successful reconnection to synchronize the latest message
--func (m *MsgSyncer) doConnected(ctx context.Context) {
--	reinstalled := m.reinstalled
--	if reinstalled {
+ }
+ 
+ // Called after successful reconnection to synchronize the latest message
+ func (m *MsgSyncer) doConnected(ctx context.Context) {
++	defer m.finishSync()
+ 	reinstalled := m.reinstalled
+ 	if reinstalled {
 -		common.TriggerCmdSyncFlag(m.ctx, constant.AppDataSyncStart, m.conversationCh)
--	} else {
++		m.initialMetadataReady = false
++		if err := m.db.SetAppSDKVersion(ctx, &model_struct.LocalAppSDKVersion{Installed: false}); err != nil {
++			log.ZWarn(ctx, "initial sync failed", err, "stage", "persist-initialization")
++			m.reportMessageSyncFailure(ctx, err)
++			return
++		}
++		if err := m.triggerSyncStart(ctx, constant.AppDataSyncStart); err != nil {
++			log.ZWarn(ctx, "initial sync failed", err, "stage", "metadata-receipt")
++			m.reportMessageSyncFailure(ctx, err)
++			return
++		}
++		m.initialMetadataReady = true
+ 	} else {
 -		common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncBegin, m.conversationCh)
--	}
--	var resp sdkws.GetMaxSeqResp
++		if err := m.triggerSyncStart(ctx, constant.MsgSyncBegin); err != nil {
++			m.reportMessageSyncFailure(ctx, err)
++			return
++		}
+ 	}
+ 	var resp sdkws.GetMaxSeqResp
 -	if err := m.longConnMgr.SendReqWaitResp(m.ctx, &sdkws.GetMaxSeqReq{UserID: m.loginUserID}, constant.GetNewestSeq, &resp); err != nil {
--		log.ZError(m.ctx, "get max seq error", err)
++	ctx = common.WithPreparedRecoveryMetadata(ctx)
++	if err := m.longConnMgr.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: m.loginUserID}, constant.GetNewestSeq, &resp); err != nil {
+ 		log.ZError(m.ctx, "get max seq error", err)
 -		common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
--		return
--	} else {
--		log.ZDebug(m.ctx, "get max seq success", "resp", resp.MaxSeqs)
--	}
++		m.reportMessageSyncFailure(ctx, err)
+ 		return
+ 	} else {
+ 		log.ZDebug(m.ctx, "get max seq success", "resp", resp.MaxSeqs)
+ 	}
 -	m.compareSeqsAndBatchSync(ctx, resp.MaxSeqs, connectPullNums)
--	if reinstalled {
--		common.TriggerCmdSyncFlag(m.ctx, constant.AppDataSyncFinish, m.conversationCh)
--	} else {
++	if err := m.compareSeqsAndBatchSync(ctx, resp.MaxSeqs, connectPullNums); err != nil {
++		log.ZWarn(ctx, "connected message sync failed", err, "stage", "pull-storage-checkpoint", "initial", reinstalled)
++		m.reportMessageSyncFailure(ctx, err)
++		return
++	}
+ 	if reinstalled {
+ 		common.TriggerCmdSyncFlag(m.ctx, constant.AppDataSyncFinish, m.conversationCh)
++		m.requestAuxiliaryMetadata()
+ 	} else {
 -		common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncEnd, m.conversationCh)
--	}
--}
--
--func (m *MsgSyncer) doWakeupDataSync(ctx context.Context) {
++		m.finishMessageRecovery(ctx)
+ 	}
+ }
+ 
+ func (m *MsgSyncer) doWakeupDataSync(ctx context.Context) {
 -	common.TriggerCmdSyncData(ctx, m.conversationCh)
--	var resp sdkws.GetMaxSeqResp
++	// Terminal flags are queued on the login-session context (m.ctx). The
++	// scheduler cancels ctx on return, before the conversation worker may read
++	// the flag; using ctx there would strand clients in SyncBegin forever.
++	defer m.finishSync()
++	if m.reinstalled {
++		m.doConnected(ctx)
++		return
++	}
++	if err := m.triggerSyncStart(ctx, constant.MsgSyncBegin); err != nil {
++		m.reportMessageSyncFailure(ctx, err)
++		return
++	}
++	ctx = common.WithPreparedRecoveryMetadata(ctx)
+ 	var resp sdkws.GetMaxSeqResp
 -	if err := m.longConnMgr.SendReqWaitResp(m.ctx, &sdkws.GetMaxSeqReq{UserID: m.loginUserID}, constant.GetNewestSeq, &resp); err != nil {
--		log.ZError(m.ctx, "get max seq error", err)
--		return
--	} else {
--		log.ZDebug(m.ctx, "get max seq success", "resp", resp.MaxSeqs)
--	}
++	if err := m.longConnMgr.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: m.loginUserID}, constant.GetNewestSeq, &resp); err != nil {
+ 		log.ZError(m.ctx, "get max seq error", err)
++		m.reportMessageSyncFailure(ctx, err)
+ 		return
+ 	} else {
+ 		log.ZDebug(m.ctx, "get max seq success", "resp", resp.MaxSeqs)
+ 	}
 -	m.compareSeqsAndBatchSync(ctx, resp.MaxSeqs, defaultPullNums)
--}
--
--func (m *MsgSyncer) doIMMessageSync(ctx context.Context) {
--	var resp sdkws.GetMaxSeqResp
++	if err := m.compareSeqsAndBatchSync(ctx, resp.MaxSeqs, defaultPullNums); err != nil {
++		m.reportMessageSyncFailure(ctx, err)
++		return
++	}
++	m.finishMessageRecovery(ctx)
+ }
+ 
+ func (m *MsgSyncer) doIMMessageSync(ctx context.Context) {
++	defer m.queuePendingAuxiliaryMetadata()
++	if m.reinstalled {
++		if m.startSync() {
++			m.doConnected(ctx)
++		}
++		return
++	}
+ 	var resp sdkws.GetMaxSeqResp
 -	if err := m.longConnMgr.SendReqWaitResp(m.ctx, &sdkws.GetMaxSeqReq{UserID: m.loginUserID}, constant.GetNewestSeq, &resp); err != nil {
--		log.ZError(m.ctx, "get max seq error", err)
--		return
--	} else {
--		log.ZDebug(m.ctx, "get max seq success", "resp", resp.MaxSeqs)
--	}
++	if err := m.longConnMgr.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: m.loginUserID}, constant.GetNewestSeq, &resp); err != nil {
++		recordMessageSyncFailure(ctx, err)
+ 		log.ZError(m.ctx, "get max seq error", err)
+ 		return
+ 	} else {
+ 		log.ZDebug(m.ctx, "get max seq success", "resp", resp.MaxSeqs)
+ 	}
 -	m.compareSeqsAndBatchSync(ctx, resp.MaxSeqs, defaultPullNums)
--}
--
--func IsNotification(conversationID string) bool {
--	return strings.HasPrefix(conversationID, "n_")
--}
--
--func (m *MsgSyncer) syncAndTriggerMsgs(ctx context.Context, seqMap map[string][2]int64, syncMsgNum int64) error {
++	if err := m.compareSeqsAndBatchSync(ctx, resp.MaxSeqs, defaultPullNums); err != nil {
++		log.ZWarn(ctx, "IM message synchronization failed", err, "contextError", ctx.Err(), "conversationCount", len(resp.MaxSeqs))
++		m.reportMessageSyncFailure(ctx, err)
++	}
+ }
+ 
+ func IsNotification(conversationID string) bool {
+@@ -419,126 +621,13 @@ func IsNotification(conversationID string) bool {
+ }
+ 
+ func (m *MsgSyncer) syncAndTriggerMsgs(ctx context.Context, seqMap map[string][2]int64, syncMsgNum int64) error {
 -	if len(seqMap) == 0 {
 -		log.ZDebug(ctx, "nothing to sync", "syncMsgNum", syncMsgNum)
 -		return nil
@@ -13633,10 +12260,11 @@ index e4a8ef95..a20d83dd 100644
 -	}
 -
 -	return nil
--}
--
++	return m.syncCompleteMessageRanges(ctx, seqMap, false)
+ }
+ 
 -// Fragment synchronization message, seq refresh after successful trigger
--func (m *MsgSyncer) syncAndTriggerReinstallMsgs(ctx context.Context, seqMap map[string][2]int64, syncMsgNum int64) error {
+ func (m *MsgSyncer) syncAndTriggerReinstallMsgs(ctx context.Context, seqMap map[string][2]int64, syncMsgNum int64) error {
 -	if len(seqMap) > 0 {
 -		log.ZDebug(ctx, "current sync seqMap", "seqMap", seqMap)
 -		var (
@@ -13690,822 +12318,41 @@ index e4a8ef95..a20d83dd 100644
 -	}
 -
 -	return nil
--}
--func (m *MsgSyncer) checkMessagesAndGetLastMessage(ctx context.Context, messages map[string]*sdkws.PullMsgs) {
--	var conversationIDs []string
--
--	for conversationID, message := range messages {
--		allInValid := true
--		for _, data := range message.Msgs {
--			if data.Status < constant.MsgStatusHasDeleted {
--				allInValid = false
--				break
--			}
--		}
--		if allInValid {
--			conversationIDs = append(conversationIDs, conversationID)
--		}
--	}
--	if len(conversationIDs) > 0 {
--		resp, err := m.fetchLatestValidMessages(ctx, conversationIDs)
--		if err != nil {
--			log.ZError(ctx, "fetchLatestValidMessages", err, "conversationIDs", conversationIDs)
--			return
--		}
--		for conversationID, message := range resp.Msgs {
--			messages[conversationID] = &sdkws.PullMsgs{Msgs: []*sdkws.MsgData{message}}
--		}
--	}
--
--}
--
--func (m *MsgSyncer) splitSeqs(split int, seqsNeedSync []int64) (splitSeqs [][]int64) {
--	if len(seqsNeedSync) <= split {
--		splitSeqs = append(splitSeqs, seqsNeedSync)
--		return
--	}
--	for i := 0; i < len(seqsNeedSync); i += split {
--		end := i + split
--		if end > len(seqsNeedSync) {
--			end = len(seqsNeedSync)
--		}
--		splitSeqs = append(splitSeqs, seqsNeedSync[i:end])
--	}
--	return
--}
--
--func (m *MsgSyncer) pullMsgBySeqRange(ctx context.Context, seqMap map[string][2]int64, syncMsgNum int64) (resp *sdkws.PullMessageBySeqsResp, err error) {
--	log.ZDebug(ctx, "pullMsgBySeqRange", "seqMap", seqMap, "syncMsgNum", syncMsgNum)
--
--	req := sdkws.PullMessageBySeqsReq{UserID: m.loginUserID}
--	for conversationID, seqs := range seqMap {
--		req.SeqRanges = append(req.SeqRanges, &sdkws.SeqRange{
--			ConversationID: conversationID,
--			Begin:          seqs[0],
--			End:            seqs[1],
--			Num:            syncMsgNum,
--		})
--	}
--	resp = &sdkws.PullMessageBySeqsResp{}
--	if err := m.longConnMgr.SendReqWaitResp(ctx, &req, constant.PullMsgByRange, resp); err != nil {
--		return nil, err
--	}
--	return resp, nil
--}
--
--func (m *MsgSyncer) fetchLatestValidMessages(ctx context.Context, conversationID []string) (resp *msg.GetLastMessageResp, err error) {
--	log.ZDebug(ctx, "fetchLatestValidMessages", "conversationID", conversationID)
--
--	req := msg.GetLastMessageReq{
--		UserID:          m.loginUserID,
--		ConversationIDs: conversationID,
--	}
--	resp = &msg.GetLastMessageResp{}
--	if err := m.longConnMgr.SendReqWaitResp(ctx, &req, constant.PullConvLastMessage, resp); err != nil {
--		return nil, err
--	}
--	return resp, nil
--}
--
--// synchronizes messages by SEQs.
--func (m *MsgSyncer) syncMsgBySeqs(ctx context.Context, conversationID string, seqsNeedSync []int64) (allMsgs []*sdkws.MsgData, err error) {
--	pullMsgReq := sdkws.PullMessageBySeqsReq{}
--	pullMsgReq.UserID = m.loginUserID
--	split := constant.SplitPullMsgNum
--	seqsList := m.splitSeqs(split, seqsNeedSync)
--	for i := 0; i < len(seqsList); {
--		var pullMsgResp sdkws.PullMessageBySeqsResp
--		err := m.longConnMgr.SendReqWaitResp(ctx, &pullMsgReq, constant.PullMsgByRange, &pullMsgResp)
--		if err != nil {
--			log.ZError(ctx, "syncMsgFromServerSplit err", err, "pullMsgReq", pullMsgReq)
--			continue
--		}
--		i++
--		allMsgs = append(allMsgs, pullMsgResp.Msgs[conversationID].Msgs...)
--	}
--	return allMsgs, nil
--}
--
--// triggers a conversation with a new message.
--func (m *MsgSyncer) triggerConversation(ctx context.Context, msgs map[string]*sdkws.PullMsgs) error {
--	if len(msgs) > 0 {
--		err := common.TriggerCmdNewMsgCome(ctx, sdk_struct.CmdNewMsgComeToConversation{Msgs: msgs}, m.conversationCh)
--		if err != nil {
--			log.ZError(ctx, "triggerCmdNewMsgCome err", err, "msgs", msgs)
--		}
--		log.ZDebug(ctx, "triggerConversation", "msgs", msgs)
--		return err
--	} else {
--		log.ZDebug(ctx, "triggerConversation is nil", "msgs", msgs)
--	}
--	return nil
--}
--
--// triggers a conversation with a new message.
--func (m *MsgSyncer) triggerReinstallConversation(ctx context.Context, msgs map[string]*sdkws.PullMsgs, total int) (err error) {
--	if len(msgs) > 0 {
--		err = common.TriggerCmdMsgSyncInReinstall(ctx, sdk_struct.CmdMsgSyncInReinstall{
--			Msgs:  msgs,
--			Total: total,
--		}, m.conversationCh)
--		if err != nil {
--			log.ZError(ctx, "triggerCmdNewMsgCome err", err, "msgs", msgs)
--		}
--		log.ZDebug(ctx, "triggerConversation", "msgs", msgs)
--		return err
--	} else {
--		log.ZDebug(ctx, "triggerConversation is nil", "msgs", msgs)
--	}
--	return nil
--}
--
--func (m *MsgSyncer) triggerNotification(ctx context.Context, msgs map[string]*sdkws.PullMsgs) error {
--	if len(msgs) > 0 {
--		common.TriggerCmdNotification(ctx, sdk_struct.CmdNewMsgComeToConversation{Msgs: msgs}, m.conversationCh)
--	} else {
--		log.ZDebug(ctx, "triggerNotification is nil", "notifications", msgs)
--	}
--	return nil
--
--}
-+// Copyright 漏 2023 OpenIM SDK. All rights reserved.
-+//
-+// Licensed under the Apache License, Version 2.0 (the "License");
-+// you may not use this file except in compliance with the License.
-+// You may obtain a copy of the License at
-+//
-+//     http://www.apache.org/licenses/LICENSE-2.0
-+//
-+// Unless required by applicable law or agreed to in writing, software
-+// distributed under the License is distributed on an "AS IS" BASIS,
-+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+// See the License for the specific language governing permissions and
-+// limitations under the License.
-+
-+package interaction
-+
-+import (
-+	"context"
-+	"errors"
-+	"fmt"
-+	"runtime/debug"
-+	"sort"
-+	"strings"
-+	"sync"
-+	"time"
-+
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
-+	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
-+	"github.com/openimsdk/protocol/msg"
-+	"github.com/openimsdk/tools/errs"
-+
-+	"github.com/openimsdk/protocol/sdkws"
-+	"github.com/openimsdk/tools/log"
-+)
-+
-+const (
-+	connectPullNums = 1
-+	defaultPullNums = 10
-+	SplitPullMsgNum = 100
-+
-+	pullMsgGoroutineLimit = 10
-+)
-+
-+// MsgSyncer is a central hub for message relay, responsible for sequential message gap pulling,
-+// handling network events, and managing app foreground and background events.
-+type MsgSyncer struct {
-+	loginUserID          string                // login user ID
-+	longConnMgr          *LongConnMgr          // long connection manager
-+	recvCh               chan common.Cmd2Value // channel for receiving push messages and the maximum SEQ number
-+	conversationCh       chan common.Cmd2Value // storage and session triggering
-+	syncedMaxSeqs        map[string]int64      // map of the maximum synced SEQ numbers for all group IDs
-+	syncedMaxSeqsLock    sync.RWMutex          // syncedMaxSeqs map lock
-+	checkpoints          map[string]messageCheckpoint
-+	checkpointIDs        map[string]bool
-+	recoveryReadSeqReady bool
-+	pendingReadReconcile bool
-+	initialMetadataReady bool
-+	auxMetadataPending   bool
-+	auxMetadataProgress *common.MetadataProgress
-+	db                   db_interface.DataBase // data store
-+	syncTimes            int                   // times of sync
-+	ctx                  context.Context       // context
-+	reinstalled          bool                  //true if the app was uninstalled and reinstalled
-+	isSyncing            bool                  // indicates whether data is being synced
-+	isSyncingLock        sync.Mutex            // lock for syncing state
-+
-+}
-+
-+// NewMsgSyncer creates a new instance of the message synchronizer.
-+func NewMsgSyncer(ctx context.Context, conversationCh, recvCh chan common.Cmd2Value,
-+	loginUserID string, longConnMgr *LongConnMgr, db db_interface.DataBase, syncTimes int) (*MsgSyncer, error) {
-+	m := &MsgSyncer{
-+		loginUserID:    loginUserID,
-+		longConnMgr:    longConnMgr,
-+		recvCh:         recvCh,
-+		conversationCh: conversationCh,
-+		ctx:            ctx,
-+		syncedMaxSeqs:  make(map[string]int64),
-+		db:             db,
-+		syncTimes:      syncTimes,
-+	}
-+	if err := m.loadSeq(ctx); err != nil {
-+		log.ZError(ctx, "loadSeq err", err)
-+		return nil, err
-+	}
-+	return m, nil
-+}
-+
-+// seq The db reads the data to the memory,set syncedMaxSeqs
-+func (m *MsgSyncer) loadSeq(ctx context.Context) error {
-+	conversationIDList, err := m.db.GetAllConversationIDList(ctx)
-+	if err != nil {
-+		log.ZError(ctx, "get conversation id list failed", err)
-+		return err
-+	}
-+
-+	version, err := m.db.GetAppSDKVersion(ctx)
-+	if err != nil && !errors.Is(err, errs.ErrRecordNotFound) {
-+		return err
-+	}
-+	if (version != nil && !version.Installed) || (version == nil && len(conversationIDList) == 0) {
-+		m.reinstalled = true
-+	}
-+	checkpointRows, err := m.readStartupCheckpoints(ctx)
-+	if err != nil {
-+		return err
-+	}
-+
-+	// TODO With a large number of sessions(10w), this could potentially cause blocking and needs optimization.
-+
-+	type SyncedSeq struct {
-+		ConversationID string
-+		MaxSyncedSeq   int64
-+		Err            error
-+	}
-+
-+	partSize := 20
-+	currency := (len(conversationIDList)-1)/partSize + 1
-+	if len(conversationIDList) == 0 {
-+		currency = 0
-+	}
-+	var wg sync.WaitGroup
-+	resultMaps := make([]map[string]SyncedSeq, currency)
-+
-+	for i := 0; i < currency; i++ {
-+		wg.Add(1)
-+		start := i * partSize
-+		end := start + partSize
-+		if i == currency-1 {
-+			end = len(conversationIDList)
-+		}
-+
-+		resultMaps[i] = make(map[string]SyncedSeq)
-+
-+		go func(i, start, end int) {
-+			defer wg.Done()
-+			for _, v := range conversationIDList[start:end] {
-+				if checkpointRows["conversation:"+v] != nil {
-+					// The journal is the coverage authority. MAX(seq) is only a
-+					// legacy observation and must not replace this durable state.
-+					resultMaps[i][v] = SyncedSeq{ConversationID: v}
-+					continue
-+				}
-+				maxSyncedSeq, err := m.db.CheckConversationNormalMsgSeq(ctx, v)
-+				resultMaps[i][v] = SyncedSeq{
-+					ConversationID: v,
-+					MaxSyncedSeq:   maxSyncedSeq,
-+					Err:            err,
-+				}
-+			}
-+		}(i, start, end)
-+	}
-+
-+	wg.Wait()
-+
-+	// merge map
-+	for _, resultMap := range resultMaps {
-+		for k, v := range resultMap {
-+			if v.Err != nil {
-+				log.ZError(ctx, "get group normal seq failed", errs.Wrap(v.Err), "conversationID", k)
-+				continue
-+			}
-+			m.syncedMaxSeqs[k] = v.MaxSyncedSeq
-+		}
-+	}
-+	notificationSeqs, err := m.db.GetNotificationAllSeqs(ctx)
-+	if err != nil {
-+		log.ZError(ctx, "get notification seq failed", err)
-+		return err
-+	}
-+	for _, notificationSeq := range notificationSeqs {
-+		m.syncedMaxSeqs[notificationSeq.ConversationID] = notificationSeq.Seq
-+	}
-+	log.ZDebug(ctx, "loadSeq", "syncedMaxSeqs", m.syncedMaxSeqs)
-+	return m.loadMessageCheckpoints(ctx, conversationIDList, checkpointRows)
-+}
-+
-+// DoListener Listen to the message pipe of the message synchronizer
-+// and process received and pushed messages
-+func (m *MsgSyncer) DoListener(ctx context.Context) {
-+	defer func() {
-+		if r := recover(); r != nil {
-+			err := fmt.Sprintf("panic: %+v\n%s", r, debug.Stack())
-+
-+			log.ZWarn(ctx, "DoListener panic", nil, "panic info", err)
-+		}
-+	}()
-+	ticker := time.NewTicker(messageSeqReconciliationInterval)
-+	defer ticker.Stop()
-+	m.listenWithReconciliation(ctx, ticker.C)
-+}
-+
-+func (m *MsgSyncer) handlePushMsgAndEventSafely(cmd common.Cmd2Value) {
-+	defer func() {
-+		if failure := recover(); failure != nil {
-+			m.finishSync()
-+			log.ZWarn(cmd.Ctx, "message sync command panic", nil, "panic info",
-+				fmt.Sprintf("%v\n%s", failure, debug.Stack()))
-+			common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
-+		}
-+	}()
-+	m.handlePushMsgAndEvent(cmd)
-+}
-+
-+// get seqs need sync interval
-+func (m *MsgSyncer) getSeqsNeedSync(syncedMaxSeq, maxSeq int64) []int64 {
-+	var seqs []int64
-+	for i := syncedMaxSeq + 1; i <= maxSeq; i++ {
-+		seqs = append(seqs, i)
-+	}
-+	return seqs
-+}
-+
-+// recv msg from
-+func (m *MsgSyncer) handlePushMsgAndEvent(cmd common.Cmd2Value) {
-+	if isBackgroundSyncCommand(cmd) {
-+		if cmd.Cmd != constant.CmdConnSuccesss && m.longConnMgr != nil && m.longConnMgr.GetBackground() {
-+			return // Durable targets resume on the next foreground/connection event.
-+		}
-+		ctx, finish := beginSyncDiagnostic(cmd.Ctx, cmd.Cmd, m.reinstalled)
-+		cmd.Ctx = ctx
-+		defer finish()
-+	}
-+	switch cmd.Cmd {
-+	case constant.CmdConnSuccesss:
-+		log.ZInfo(cmd.Ctx, "recv long conn mgr connected", "cmd", cmd.Cmd, "value", cmd.Value)
-+		if m.startSync() {
-+			m.doConnected(cmd.Ctx)
-+		} else {
-+			log.ZWarn(cmd.Ctx, "syncing, ignore connected event", nil, "cmd", cmd.Cmd, "value", cmd.Value)
-+		}
-+	case constant.CmdWakeUpDataSync:
-+		log.ZInfo(cmd.Ctx, "app wake up, start sync msgs", "cmd", cmd.Cmd, "value", cmd.Value)
-+		if m.startSync() {
-+			m.doWakeupDataSync(cmd.Ctx)
-+		} else {
-+			log.ZWarn(cmd.Ctx, "syncing, ignore wake up event", nil, "cmd", cmd.Cmd, "value", cmd.Value)
-+
-+		}
-+	case constant.CmdIMMessageSync:
-+		log.ZInfo(cmd.Ctx, "manually trigger IM message synchronization", "cmd", cmd.Cmd, "value", cmd.Value)
-+		m.doIMMessageSync(cmd.Ctx)
-+	case cmdReconcileMessageSeq:
-+		m.doMessageSeqReconciliation(cmd.Ctx)
-+	case cmdSyncAuxiliaryMetadata:
-+		m.doAuxiliaryMetadataSync(cmd.Ctx)
-+
-+	case constant.CmdPushMsg:
-+		m.doPushMsg(cmd.Ctx, cmd.Value.(*sdkws.PushMessages))
-+	}
-+}
-+
-+func (m *MsgSyncer) compareSeqsAndBatchSync(ctx context.Context, maxSeqToSync map[string]int64, pullNums int64) (result error) {
-+	defer func() { recordMessageSyncFailure(ctx, result) }()
-+	// Persist targets before any writes, then merge obligations left by an
-+	// interrupted attempt even if the newest server observation is stale.
-+	targets := make(map[string]int64, len(maxSeqToSync))
-+	ids := make([]string, 0, len(maxSeqToSync))
-+	for id := range maxSeqToSync {
-+		if !IsNotification(id) {
-+			ids = append(ids, id)
-+		}
-+	}
-+	if err := m.registerMessageCheckpointIDs(ctx, ids); err != nil {
-+		return err
-+	}
-+	for id, seq := range maxSeqToSync {
-+		if err := m.rememberMessageTarget(ctx, id, seq); err != nil {
-+			return err
-+		}
-+		targets[id] = seq
-+	}
-+	for id, state := range m.checkpoints {
-+		targets[id] = max(targets[id], state.Target)
-+	}
-+	maxSeqToSync = targets
-+	needSyncSeqMap := make(map[string][2]int64)
-+	//when app reinstalled do not pull notifications messages.
-+	if m.reinstalled {
-+		notificationsSeqMap := make(map[string]int64)
-+		messagesSeqMap := make(map[string]int64)
-+		for conversationID, seq := range maxSeqToSync {
-+			if IsNotification(conversationID) {
-+				if seq != 0 { // seq is 0, no need to sync
-+					// Match the durable monotonic bootstrap baseline on retry.
-+					// Otherwise a stale maximum rewinds the in-memory cursor even
-+					// though SQLite correctly retained the newer notification seq.
-+					notificationsSeqMap[conversationID] = max(seq, m.syncedMaxSeqs[conversationID])
-+				}
-+			} else {
-+				messagesSeqMap[conversationID] = seq
-+			}
-+		}
-+
-+		var notificationSeqs []*model_struct.NotificationSeqs
-+
-+		for conversationID, seq := range notificationsSeqMap {
-+			notificationSeqs = append(notificationSeqs, &model_struct.NotificationSeqs{
-+				ConversationID: conversationID,
-+				Seq:            seq,
-+			})
-+		}
-+
-+		if len(notificationSeqs) > 0 {
-+			err := m.db.BatchInsertNotificationSeq(ctx, notificationSeqs)
-+			if err != nil {
-+				log.ZWarn(ctx, "BatchInsertNotificationSeq err", err)
-+				return err
-+			}
-+		}
-+		for conversationID, seq := range notificationsSeqMap {
-+			m.syncedMaxSeqs[conversationID] = seq
-+		}
-+
-+		for conversationID, maxSeq := range messagesSeqMap {
-+			if syncedMaxSeq, ok := m.syncedMaxSeqs[conversationID]; ok {
-+				if maxSeq > syncedMaxSeq {
-+					needSyncSeqMap[conversationID] = [2]int64{syncedMaxSeq + 1, maxSeq}
-+				}
-+			} else {
-+				needSyncSeqMap[conversationID] = [2]int64{0, maxSeq}
-+			}
-+		}
-+		if err := m.syncAndTriggerReinstallMsgs(ctx, needSyncSeqMap, pullNums); err != nil {
-+			return err
-+		}
-+		if err := m.db.SetAppSDKVersion(ctx, &model_struct.LocalAppSDKVersion{Installed: true}); err != nil {
-+			return err
-+		}
-+		m.reinstalled = false
-+	} else {
-+		for conversationID, maxSeq := range maxSeqToSync {
-+			if syncedMaxSeq, ok := m.syncedMaxSeqs[conversationID]; ok {
-+				if maxSeq > syncedMaxSeq {
-+					needSyncSeqMap[conversationID] = [2]int64{syncedMaxSeq + 1, maxSeq}
-+				}
-+			} else {
-+				if maxSeq != 0 { // seq is 0, no need to sync
-+					needSyncSeqMap[conversationID] = [2]int64{0, maxSeq}
-+				}
-+			}
-+		}
-+		return m.syncAndTriggerMsgs(ctx, needSyncSeqMap, pullNums)
-+	}
-+	return nil
-+}
-+
-+// startSync checks if the sync is already in progress.
-+// If syncing is in progress, it returns false. Otherwise, it starts syncing and returns true.
-+func (m *MsgSyncer) startSync() bool {
-+	m.isSyncingLock.Lock()
-+	defer m.isSyncingLock.Unlock()
-+
-+	if m.isSyncing {
-+		// If already syncing, return false
-+		return false
-+	}
-+
-+	// Set syncing to true and start the sync
-+	m.isSyncing = true
-+
-+	return true
-+}
-+
-+func (m *MsgSyncer) finishSync() {
-+	m.isSyncingLock.Lock()
-+	m.isSyncing = false
-+	m.isSyncingLock.Unlock()
-+}
-+
-+func (m *MsgSyncer) doPushMsg(ctx context.Context, push *sdkws.PushMessages) {
-+	if m.reinstalled && !m.initialMetadataReady {
-+		// Keep message targets durable, but do not deliver against missing
-+		// first-login metadata or acknowledge unseen notification state.
-+		for id, batch := range push.Msgs {
-+			for _, row := range batch.Msgs {
-+				if err := m.rememberMessageTarget(ctx, id, row.Seq); err != nil {
-+					log.ZWarn(ctx, "persist initial push target failed", err)
-+					return
-+				}
-+			}
-+		}
-+		select {
-+		case m.recvCh <- common.Cmd2Value{Ctx: m.ctx, Cmd: constant.CmdConnSuccesss}:
-+		default: // The next foreground reconciliation retries initialization.
-+		}
-+		return
-+	}
-+	log.ZDebug(ctx, "push msgs", "push", push, "syncedMaxSeqs", m.syncedMaxSeqs)
-+	m.pushTriggerAndSync(ctx, push.Msgs, m.triggerConversation)
-+	m.pushTriggerAndSync(ctx, push.NotificationMsgs, m.triggerNotification)
-+}
-+
-+func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[string]*sdkws.PullMsgs,
-+	triggerFunc func(ctx context.Context, msgs map[string]*sdkws.PullMsgs) error) {
-+	if len(pushMessages) == 0 {
-+		return
-+	}
-+
-+	needSyncSeqMap := make(map[string][2]int64)
-+	res := make(map[string]*sdkws.PullMsgs)
-+
-+	for conversationID, msgs := range pushMessages {
-+		var (
-+			lastSeq     int64
-+			storageMsgs []*sdkws.MsgData
-+		)
-+		contiguous := true
-+		expected := m.syncedMaxSeqs[conversationID] + 1
-+		seen := make(map[int64]bool, len(msgs.Msgs))
-+
-+		for _, msg := range msgs.Msgs {
-+			if msg.Seq == 0 {
-+				_ = triggerFunc(ctx, map[string]*sdkws.PullMsgs{
-+					conversationID: {Msgs: []*sdkws.MsgData{msg}},
-+				})
-+				continue
-+			}
-+			if msg.Seq <= m.syncedMaxSeqs[conversationID] || seen[msg.Seq] {
-+				continue
-+			}
-+			seen[msg.Seq] = true
-+			if !IsNotification(conversationID) && m.messageAlreadyCovered(conversationID, msg.Seq) {
-+				continue
-+			}
-+			lastSeq = max(lastSeq, msg.Seq)
-+			if msg.Seq != expected {
-+				contiguous = false
-+			}
-+			expected++
-+			storageMsgs = append(storageMsgs, msg)
-+		}
-+
-+		if len(storageMsgs) == 0 {
-+			continue
-+		}
-+		if err := m.rememberMessageTarget(ctx, conversationID, lastSeq); err != nil {
-+			log.ZError(ctx, "persist push recovery target failed", err)
-+			common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
-+			return
-+		}
-+
-+		if contiguous || !IsNotification(conversationID) {
-+			log.ZDebug(ctx, "trigger msgs", "conversationID", conversationID, "msgs", storageMsgs)
-+			res[conversationID] = &sdkws.PullMsgs{Msgs: storageMsgs}
-+		}
-+		if !contiguous && lastSeq > m.syncedMaxSeqs[conversationID] {
-+			// must pull message when message type is notification
-+			needSyncSeqMap[conversationID] = [2]int64{
-+				m.syncedMaxSeqs[conversationID] + 1,
-+				lastSeq,
-+			}
-+		}
-+	}
-+
-+	if len(res) > 0 {
-+		if err := triggerFunc(ctx, res); err != nil {
-+			log.ZError(ctx, "message commit failed", err)
-+			common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
-+			return
-+		}
-+		for conversationID, msgs := range res {
-+			var commitErr error
-+			if IsNotification(conversationID) {
-+				commitErr = m.commitMessageCheckpoint(ctx, conversationID, msgs.Msgs[len(msgs.Msgs)-1].Seq)
-+			} else {
-+				var covered [][2]int64
-+				for _, row := range msgs.Msgs {
-+					covered = append(covered, [2]int64{row.Seq, row.Seq})
-+				}
-+				commitErr = m.commitMessageCoverage(ctx, conversationID, covered)
-+			}
-+			if err := commitErr; err != nil {
-+				log.ZError(ctx, "persist push checkpoint failed", err)
-+				common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
-+				return
-+			}
-+		}
-+	}
-+	for id, r := range needSyncSeqMap {
-+		if IsNotification(id) {
-+			continue
-+		}
-+		if len(m.recentMissingRanges(id, r)) == 0 {
-+			// Sparse coverage can contain a complete recent window while the
-+			// older contiguous cursor stays behind. This push created no new gap.
-+			delete(needSyncSeqMap, id)
-+		} else {
-+			m.pendingReadReconcile = true
-+		}
-+	}
-+	// Contiguous pushes are already committed. An empty recovery pass would
-+	// reset the active job's read reconciliation and consume its pending flag.
-+	if len(needSyncSeqMap) == 0 {
-+		return
-+	}
-+	if m.recvCh != nil {
-+		deferNormal := true
-+		for id := range needSyncSeqMap {
-+			if IsNotification(id) {
-+				deferNormal = false
-+			}
-+		}
-+		if deferNormal {
-+			// The journal already contains these targets. Let the interruptible
-+			// background scheduler own large gaps rather than blocking live ingress.
-+			select {
-+			case m.recvCh <- common.Cmd2Value{Ctx: m.ctx, Cmd: constant.CmdIMMessageSync}:
-+			default:
-+			}
-+			return
-+		}
-+	}
-+	if err := m.syncAndTriggerMsgs(ctx, needSyncSeqMap, defaultPullNums); err != nil {
-+		log.ZError(ctx, "message gap sync failed", err)
-+		common.TriggerCmdSyncFlag(m.ctx, constant.MsgSyncFailed, m.conversationCh)
-+	}
-+}
-+
-+// Called after successful reconnection to synchronize the latest message
-+func (m *MsgSyncer) doConnected(ctx context.Context) {
-+	defer m.finishSync()
-+	reinstalled := m.reinstalled
-+	if reinstalled {
-+		m.initialMetadataReady = false
-+		if err := m.db.SetAppSDKVersion(ctx, &model_struct.LocalAppSDKVersion{Installed: false}); err != nil {
-+			log.ZWarn(ctx, "initial sync failed", err, "stage", "persist-initialization")
-+			m.reportMessageSyncFailure(ctx, err)
-+			return
-+		}
-+		if err := m.triggerSyncStart(ctx, constant.AppDataSyncStart); err != nil {
-+			log.ZWarn(ctx, "initial sync failed", err, "stage", "metadata-receipt")
-+			m.reportMessageSyncFailure(ctx, err)
-+			return
-+		}
-+		m.initialMetadataReady = true
-+	} else {
-+		if err := m.triggerSyncStart(ctx, constant.MsgSyncBegin); err != nil {
-+			m.reportMessageSyncFailure(ctx, err)
-+			return
-+		}
-+	}
-+	var resp sdkws.GetMaxSeqResp
-+	ctx = common.WithPreparedRecoveryMetadata(ctx)
-+	if err := m.longConnMgr.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: m.loginUserID}, constant.GetNewestSeq, &resp); err != nil {
-+		log.ZError(m.ctx, "get max seq error", err)
-+		m.reportMessageSyncFailure(ctx, err)
-+		return
-+	} else {
-+		log.ZDebug(m.ctx, "get max seq success", "resp", resp.MaxSeqs)
-+	}
-+	if err := m.compareSeqsAndBatchSync(ctx, resp.MaxSeqs, connectPullNums); err != nil {
-+		log.ZWarn(ctx, "connected message sync failed", err, "stage", "pull-storage-checkpoint", "initial", reinstalled)
-+		m.reportMessageSyncFailure(ctx, err)
-+		return
-+	}
-+	if reinstalled {
-+		common.TriggerCmdSyncFlag(m.ctx, constant.AppDataSyncFinish, m.conversationCh)
-+		m.requestAuxiliaryMetadata()
-+	} else {
-+		m.finishMessageRecovery(ctx)
-+	}
-+}
-+
-+func (m *MsgSyncer) doWakeupDataSync(ctx context.Context) {
-+	// Terminal flags are queued on the login-session context (m.ctx). The
-+	// scheduler cancels ctx on return, before the conversation worker may read
-+	// the flag; using ctx there would strand clients in SyncBegin forever.
-+	defer m.finishSync()
-+	if m.reinstalled {
-+		m.doConnected(ctx)
-+		return
-+	}
-+	if err := m.triggerSyncStart(ctx, constant.MsgSyncBegin); err != nil {
-+		m.reportMessageSyncFailure(ctx, err)
-+		return
-+	}
-+	ctx = common.WithPreparedRecoveryMetadata(ctx)
-+	var resp sdkws.GetMaxSeqResp
-+	if err := m.longConnMgr.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: m.loginUserID}, constant.GetNewestSeq, &resp); err != nil {
-+		log.ZError(m.ctx, "get max seq error", err)
-+		m.reportMessageSyncFailure(ctx, err)
-+		return
-+	} else {
-+		log.ZDebug(m.ctx, "get max seq success", "resp", resp.MaxSeqs)
-+	}
-+	if err := m.compareSeqsAndBatchSync(ctx, resp.MaxSeqs, defaultPullNums); err != nil {
-+		m.reportMessageSyncFailure(ctx, err)
-+		return
-+	}
-+	m.finishMessageRecovery(ctx)
-+}
-+
-+func (m *MsgSyncer) doIMMessageSync(ctx context.Context) {
-+	defer m.queuePendingAuxiliaryMetadata()
-+	if m.reinstalled {
-+		if m.startSync() {
-+			m.doConnected(ctx)
-+		}
-+		return
-+	}
-+	var resp sdkws.GetMaxSeqResp
-+	if err := m.longConnMgr.SendReqWaitResp(ctx, &sdkws.GetMaxSeqReq{UserID: m.loginUserID}, constant.GetNewestSeq, &resp); err != nil {
-+		recordMessageSyncFailure(ctx, err)
-+		log.ZError(m.ctx, "get max seq error", err)
-+		return
-+	} else {
-+		log.ZDebug(m.ctx, "get max seq success", "resp", resp.MaxSeqs)
-+	}
-+	if err := m.compareSeqsAndBatchSync(ctx, resp.MaxSeqs, defaultPullNums); err != nil {
-+		log.ZWarn(ctx, "IM message synchronization failed", err, "contextError", ctx.Err(), "conversationCount", len(resp.MaxSeqs))
-+		m.reportMessageSyncFailure(ctx, err)
-+	}
-+}
-+
-+func IsNotification(conversationID string) bool {
-+	return strings.HasPrefix(conversationID, "n_")
-+}
-+
-+func (m *MsgSyncer) syncAndTriggerMsgs(ctx context.Context, seqMap map[string][2]int64, syncMsgNum int64) error {
-+	return m.syncCompleteMessageRanges(ctx, seqMap, false)
-+}
-+
-+func (m *MsgSyncer) syncAndTriggerReinstallMsgs(ctx context.Context, seqMap map[string][2]int64, syncMsgNum int64) error {
 +	return m.syncCompleteMessageRanges(ctx, seqMap, true)
-+}
+ }
+-func (m *MsgSyncer) checkMessagesAndGetLastMessage(ctx context.Context, messages map[string]*sdkws.PullMsgs) {
 +func (m *MsgSyncer) checkMessagesAndGetLastMessage(ctx context.Context, messages map[string]*sdkws.PullMsgs) error {
-+	var conversationIDs []string
-+
-+	for conversationID, message := range messages {
-+		allInValid := true
-+		for _, data := range message.Msgs {
-+			if data.Status < constant.MsgStatusHasDeleted {
-+				allInValid = false
-+				break
-+			}
-+		}
-+		if allInValid {
-+			conversationIDs = append(conversationIDs, conversationID)
-+		}
-+	}
-+	if len(conversationIDs) > 0 {
-+		resp, err := m.fetchLatestValidMessages(ctx, conversationIDs)
-+		if err != nil {
-+			log.ZError(ctx, "fetchLatestValidMessages", err, "conversationIDs", conversationIDs)
+ 	var conversationIDs []string
+ 
+ 	for conversationID, message := range messages {
+@@ -557,13 +646,13 @@ func (m *MsgSyncer) checkMessagesAndGetLastMessage(ctx context.Context, messages
+ 		resp, err := m.fetchLatestValidMessages(ctx, conversationIDs)
+ 		if err != nil {
+ 			log.ZError(ctx, "fetchLatestValidMessages", err, "conversationIDs", conversationIDs)
+-			return
 +			return err
-+		}
-+		for conversationID, message := range resp.Msgs {
-+			messages[conversationID] = &sdkws.PullMsgs{Msgs: []*sdkws.MsgData{message}}
-+		}
-+	}
+ 		}
+ 		for conversationID, message := range resp.Msgs {
+ 			messages[conversationID] = &sdkws.PullMsgs{Msgs: []*sdkws.MsgData{message}}
+ 		}
+ 	}
+-
 +	return nil
-+}
-+
-+func (m *MsgSyncer) splitSeqs(split int, seqsNeedSync []int64) (splitSeqs [][]int64) {
-+	if len(seqsNeedSync) <= split {
-+		splitSeqs = append(splitSeqs, seqsNeedSync)
-+		return
-+	}
-+	for i := 0; i < len(seqsNeedSync); i += split {
-+		end := i + split
-+		if end > len(seqsNeedSync) {
-+			end = len(seqsNeedSync)
-+		}
-+		splitSeqs = append(splitSeqs, seqsNeedSync[i:end])
-+	}
-+	return
-+}
-+
+ }
+ 
+ func (m *MsgSyncer) splitSeqs(split int, seqsNeedSync []int64) (splitSeqs [][]int64) {
+@@ -581,16 +670,29 @@ func (m *MsgSyncer) splitSeqs(split int, seqsNeedSync []int64) (splitSeqs [][]in
+ 	return
+ }
+ 
+-func (m *MsgSyncer) pullMsgBySeqRange(ctx context.Context, seqMap map[string][2]int64, syncMsgNum int64) (resp *sdkws.PullMessageBySeqsResp, err error) {
 +func (m *MsgSyncer) pullMsgBySeqRange(ctx context.Context, seqMap map[string][2]int64, syncMsgNum int64, order ...sdkws.PullOrder) (resp *sdkws.PullMessageBySeqsResp, err error) {
 +	started := time.Now()
 +	defer func() { m.diagnoseSyncPull(ctx, seqMap, resp, time.Since(started), err) }()
-+	log.ZDebug(ctx, "pullMsgBySeqRange", "seqMap", seqMap, "syncMsgNum", syncMsgNum)
-+
-+	req := sdkws.PullMessageBySeqsReq{UserID: m.loginUserID}
+ 	log.ZDebug(ctx, "pullMsgBySeqRange", "seqMap", seqMap, "syncMsgNum", syncMsgNum)
+ 
+ 	req := sdkws.PullMessageBySeqsReq{UserID: m.loginUserID}
+-	for conversationID, seqs := range seqMap {
 +	// The caller supplies one complete bounded page. Never silently crop it.
 +	if len(order) > 0 {
 +		req.Order = order[0]
@@ -14518,101 +12365,64 @@ index e4a8ef95..a20d83dd 100644
 +	m.prioritizeConversations(ids, recoveryPriorities(ctx))
 +	for _, conversationID := range ids {
 +		seqs := seqMap[conversationID]
-+		req.SeqRanges = append(req.SeqRanges, &sdkws.SeqRange{
-+			ConversationID: conversationID,
-+			Begin:          seqs[0],
-+			End:            seqs[1],
+ 		req.SeqRanges = append(req.SeqRanges, &sdkws.SeqRange{
+ 			ConversationID: conversationID,
+ 			Begin:          seqs[0],
+ 			End:            seqs[1],
+-			Num:            syncMsgNum,
 +			Num:            min(syncMsgNum, seqs[1]-max(1, seqs[0])+1),
-+		})
-+	}
-+	resp = &sdkws.PullMessageBySeqsResp{}
-+	if err := m.longConnMgr.SendReqWaitResp(ctx, &req, constant.PullMsgByRange, resp); err != nil {
-+		return nil, err
-+	}
-+	return resp, nil
-+}
-+
-+func (m *MsgSyncer) fetchLatestValidMessages(ctx context.Context, conversationID []string) (resp *msg.GetLastMessageResp, err error) {
-+	log.ZDebug(ctx, "fetchLatestValidMessages", "conversationID", conversationID)
-+
-+	req := msg.GetLastMessageReq{
-+		UserID:          m.loginUserID,
-+		ConversationIDs: conversationID,
-+	}
-+	resp = &msg.GetLastMessageResp{}
-+	if err := m.longConnMgr.SendReqWaitResp(ctx, &req, constant.PullConvLastMessage, resp); err != nil {
-+		return nil, err
-+	}
-+	return resp, nil
-+}
-+
-+// synchronizes messages by SEQs.
-+func (m *MsgSyncer) syncMsgBySeqs(ctx context.Context, conversationID string, seqsNeedSync []int64) (allMsgs []*sdkws.MsgData, err error) {
-+	pullMsgReq := sdkws.PullMessageBySeqsReq{}
-+	pullMsgReq.UserID = m.loginUserID
-+	split := constant.SplitPullMsgNum
-+	seqsList := m.splitSeqs(split, seqsNeedSync)
-+	for i := 0; i < len(seqsList); {
-+		var pullMsgResp sdkws.PullMessageBySeqsResp
-+		err := m.longConnMgr.SendReqWaitResp(ctx, &pullMsgReq, constant.PullMsgByRange, &pullMsgResp)
-+		if err != nil {
+ 		})
+ 	}
+ 	resp = &sdkws.PullMessageBySeqsResp{}
+@@ -624,7 +726,7 @@ func (m *MsgSyncer) syncMsgBySeqs(ctx context.Context, conversationID string, se
+ 		var pullMsgResp sdkws.PullMessageBySeqsResp
+ 		err := m.longConnMgr.SendReqWaitResp(ctx, &pullMsgReq, constant.PullMsgByRange, &pullMsgResp)
+ 		if err != nil {
+-			log.ZError(ctx, "syncMsgFromServerSplit err", err, "pullMsgReq", pullMsgReq)
 +			log.ZError(ctx, "syncMsgFromServerSplit err", err, "pullMsgReq", &pullMsgReq)
-+			continue
-+		}
-+		i++
-+		allMsgs = append(allMsgs, pullMsgResp.Msgs[conversationID].Msgs...)
-+	}
-+	return allMsgs, nil
-+}
-+
-+// triggers a conversation with a new message.
-+func (m *MsgSyncer) triggerConversation(ctx context.Context, msgs map[string]*sdkws.PullMsgs) error {
-+	if len(msgs) > 0 {
+ 			continue
+ 		}
+ 		i++
+@@ -636,7 +738,10 @@ func (m *MsgSyncer) syncMsgBySeqs(ctx context.Context, conversationID string, se
+ // triggers a conversation with a new message.
+ func (m *MsgSyncer) triggerConversation(ctx context.Context, msgs map[string]*sdkws.PullMsgs) error {
+ 	if len(msgs) > 0 {
+-		err := common.TriggerCmdNewMsgCome(ctx, sdk_struct.CmdNewMsgComeToConversation{Msgs: msgs}, m.conversationCh)
 +		err := common.SendCmdWithReceipt(ctx, common.Cmd2Value{
 +			Cmd:   constant.CmdNewMsgCome,
 +			Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: msgs, Recovery: true},
 +		}, m.conversationCh)
-+		if err != nil {
-+			log.ZError(ctx, "triggerCmdNewMsgCome err", err, "msgs", msgs)
-+		}
-+		log.ZDebug(ctx, "triggerConversation", "msgs", msgs)
-+		return err
-+	} else {
-+		log.ZDebug(ctx, "triggerConversation is nil", "msgs", msgs)
-+	}
-+	return nil
-+}
-+
-+// triggers a conversation with a new message.
+ 		if err != nil {
+ 			log.ZError(ctx, "triggerCmdNewMsgCome err", err, "msgs", msgs)
+ 		}
+@@ -649,11 +754,11 @@ func (m *MsgSyncer) triggerConversation(ctx context.Context, msgs map[string]*sd
+ }
+ 
+ // triggers a conversation with a new message.
+-func (m *MsgSyncer) triggerReinstallConversation(ctx context.Context, msgs map[string]*sdkws.PullMsgs, total int) (err error) {
 +func (m *MsgSyncer) triggerReinstallConversation(ctx context.Context, msgs map[string]*sdkws.PullMsgs, total int, notifyConversations ...bool) (err error) {
-+	if len(msgs) > 0 {
+ 	if len(msgs) > 0 {
+-		err = common.TriggerCmdMsgSyncInReinstall(ctx, sdk_struct.CmdMsgSyncInReinstall{
+-			Msgs:  msgs,
+-			Total: total,
 +		err = common.SendCmdWithReceipt(ctx, common.Cmd2Value{
 +			Cmd:   constant.CmdMsgSyncInReinstall,
 +			Value: sdk_struct.CmdMsgSyncInReinstall{Msgs: msgs, Total: total, NotifyConversations: len(notifyConversations) > 0 && notifyConversations[0]},
-+		}, m.conversationCh)
-+		if err != nil {
-+			log.ZError(ctx, "triggerCmdNewMsgCome err", err, "msgs", msgs)
-+		}
-+		log.ZDebug(ctx, "triggerConversation", "msgs", msgs)
-+		return err
-+	} else {
-+		log.ZDebug(ctx, "triggerConversation is nil", "msgs", msgs)
-+	}
-+	return nil
-+}
-+
-+func (m *MsgSyncer) triggerNotification(ctx context.Context, msgs map[string]*sdkws.PullMsgs) error {
-+	if len(msgs) > 0 {
+ 		}, m.conversationCh)
+ 		if err != nil {
+ 			log.ZError(ctx, "triggerCmdNewMsgCome err", err, "msgs", msgs)
+@@ -668,7 +773,10 @@ func (m *MsgSyncer) triggerReinstallConversation(ctx context.Context, msgs map[s
+ 
+ func (m *MsgSyncer) triggerNotification(ctx context.Context, msgs map[string]*sdkws.PullMsgs) error {
+ 	if len(msgs) > 0 {
+-		common.TriggerCmdNotification(ctx, sdk_struct.CmdNewMsgComeToConversation{Msgs: msgs}, m.conversationCh)
 +		return common.SendCmdWithReceipt(ctx, common.Cmd2Value{
 +			Cmd:   constant.CmdNotification,
 +			Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: msgs},
 +		}, m.conversationCh)
-+	} else {
-+		log.ZDebug(ctx, "triggerNotification is nil", "notifications", msgs)
-+	}
-+	return nil
-+
-+}
+ 	} else {
+ 		log.ZDebug(ctx, "triggerNotification is nil", "notifications", msgs)
+ 	}
 diff --git a/internal/interaction/msg_sync_auxiliary_test.go b/internal/interaction/msg_sync_auxiliary_test.go
 new file mode 100644
 index 00000000..9aaa4789
@@ -23386,6 +21196,153 @@ index 00000000..ef3bc17c
 +		Order("seq ASC").Limit(200).Find(&rows).Error
 +	return
 +}
+diff --git a/pkg/db/version_sync_headers.go b/pkg/db/version_sync_headers.go
+new file mode 100644
+index 00000000..eceb48e7
+--- /dev/null
++++ b/pkg/db/version_sync_headers.go
+@@ -0,0 +1,39 @@
++//go:build !js
++
++package db
++
++import (
++	"context"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/tools/errs"
++)
++
++// GetVersionSyncHeaders deliberately excludes id_list. Probing unchanged groups
++// must not deserialize every member ID in every joined group. These partial rows
++// are read-only and must never be passed to SetVersionSync.
++func (d *DataBase) GetVersionSyncHeaders(ctx context.Context, table string, ids []string) (map[string]*model_struct.LocalVersionSync, error) {
++	result := make(map[string]*model_struct.LocalVersionSync, len(ids))
++	if err := ctx.Err(); err != nil {
++		return nil, err
++	}
++	if len(ids) == 0 {
++		return result, nil
++	}
++	d.mRWMutex.RLock()
++	defer d.mRWMutex.RUnlock()
++	// Stay below SQLite's parameter limit even when called outside group sync.
++	for start := 0; start < len(ids); start += 200 {
++		end := min(start+200, len(ids))
++		var rows []*model_struct.LocalVersionSync
++		err := d.conn.WithContext(ctx).Select("table_name", "entity_id", "version_id", "version").
++			Where("table_name = ? AND entity_id IN ?", table, ids[start:end]).Find(&rows).Error
++		if err != nil {
++			return nil, errs.Wrap(err)
++		}
++		for _, row := range rows {
++			result[row.EntityID] = row
++		}
++	}
++	return result, nil
++}
+diff --git a/pkg/db/version_sync_headers_test.go b/pkg/db/version_sync_headers_test.go
+new file mode 100644
+index 00000000..afcfb8e7
+--- /dev/null
++++ b/pkg/db/version_sync_headers_test.go
+@@ -0,0 +1,96 @@
++package db
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"reflect"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++)
++
++func TestVersionHeadersPreserveMemberIDsAndScope(t *testing.T) {
++	d, ctx := versionSyncTestDB(t)
++	want := &model_struct.LocalVersionSync{Table: "members", EntityID: "g", VersionID: "v", Version: 9, UIDList: []string{"a", "b"}}
++	if err := d.SetVersionSync(ctx, want); err != nil {
++		t.Fatal(err)
++	}
++	if err := d.SetVersionSync(ctx, &model_struct.LocalVersionSync{Table: "other", EntityID: "g", Version: 77}); err != nil {
++		t.Fatal(err)
++	}
++	rows, err := d.GetVersionSyncHeaders(ctx, "members", []string{"g", "missing"})
++	if err != nil || len(rows) != 1 || rows["g"].Version != 9 || rows["g"].VersionID != "v" || len(rows["g"].UIDList) != 0 {
++		t.Fatalf("headers=%+v error=%v", rows, err)
++	}
++	full, err := d.GetVersionSync(ctx, "members", "g")
++	if err != nil || !reflect.DeepEqual(full, want) {
++		t.Fatalf("probe changed stored row: %+v %v", full, err)
++	}
++	if err := d.conn.Model(&model_struct.LocalVersionSync{}).Where("table_name = ?", "members").Update("id_list", "invalid-json").Error; err != nil {
++		t.Fatal(err)
++	}
++	if _, err := d.GetVersionSyncHeaders(ctx, "members", []string{"g"}); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := d.GetVersionSync(ctx, "members", "g"); err == nil {
++		t.Fatal("full read should retain malformed payload error")
++	}
++	cancelled, cancel := context.WithCancel(ctx)
++	cancel()
++	if _, err := d.GetVersionSyncHeaders(cancelled, "members", []string{"g"}); !errors.Is(err, context.Canceled) {
++		t.Fatal(err)
++	}
++	if err := d.Close(ctx); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := d.GetVersionSyncHeaders(ctx, "members", []string{"g"}); err == nil {
++		t.Fatal("closed database must not report successful empty probe")
++	}
++}
++
++func BenchmarkGroupVersionProbe(b *testing.B) {
++	benchmarkGroupVersionProbe(b, 1500)
++}
++
++func BenchmarkSmallGroupVersionProbe(b *testing.B) {
++	benchmarkGroupVersionProbe(b, 18)
++}
++
++func benchmarkGroupVersionProbe(b *testing.B, memberCount int) {
++	ctx := context.Background()
++	d, err := NewDataBase(ctx, "probe-benchmark", b.TempDir(), 0)
++	if err != nil {
++		b.Fatal(err)
++	}
++	b.Cleanup(func() { _ = d.Close(ctx) })
++	ids := make([]string, 20)
++	members := make([]string, memberCount)
++	for i := range members {
++		members[i] = fmt.Sprintf("im_%032d", i)
++	}
++	for i := range ids {
++		ids[i] = fmt.Sprintf("g-%d", i)
++		if err := d.SetVersionSync(ctx, &model_struct.LocalVersionSync{Table: "members", EntityID: ids[i], VersionID: "v", Version: 7, UIDList: members}); err != nil {
++			b.Fatal(err)
++		}
++	}
++	b.Run("full-rows", func(b *testing.B) {
++		b.ReportAllocs()
++		for i := 0; i < b.N; i++ {
++			for _, id := range ids {
++				if _, err := d.GetVersionSync(ctx, "members", id); err != nil {
++					b.Fatal(err)
++				}
++			}
++		}
++	})
++	b.Run("headers", func(b *testing.B) {
++		b.ReportAllocs()
++		for i := 0; i < b.N; i++ {
++			if _, err := d.GetVersionSyncHeaders(ctx, "members", ids); err != nil {
++				b.Fatal(err)
++			}
++		}
++	})
++}
 diff --git a/pkg/db/version_sync_test.go b/pkg/db/version_sync_test.go
 index b4ac54d4..e3f3a0b0 100644
 --- a/pkg/db/version_sync_test.go
@@ -23984,110 +21941,3 @@ index a588ee0f..8c27b2cb 100644
  }
  
  type BasicInfo struct {
-diff --git a/internal/conversation_msg/message_window_duplicates_test.go b/internal/conversation_msg/message_window_duplicates_test.go
-new file mode 100644
---- /dev/null
-+++ b/internal/conversation_msg/message_window_duplicates_test.go
-@@ -0,0 +1,102 @@
-+//go:build cgo && !js
-+
-+package conversation_msg
-+
-+import (
-+	"context"
-+	"fmt"
-+	"testing"
-+
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db"
-+	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
-+	sdk "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
-+)
-+
-+// Legacy SDKs persisted multiple hidden rows for one server sequence. Reopen
-+// that database and exercise the real SQLite -> window path, without cleanup.
-+func TestWindowLegacyDuplicatesDoNotConsumeSequenceBudget(t *testing.T) {
-+	for _, missing := range []bool{false, true} {
-+		t.Run(fmt.Sprintf("missing=%t", missing), func(t *testing.T) {
-+			ctx := context.Background()
-+			dir := t.TempDir()
-+			d, err := db.NewDataBase(ctx, "self", dir, 0)
-+			if err != nil {
-+				t.Fatal(err)
-+			}
-+			if err = d.BatchInsertConversationList(ctx, []*model_struct.LocalConversation{{ConversationID: "chat", MaxSeq: 78}}); err != nil {
-+				t.Fatal(err)
-+			}
-+			var rows []*model_struct.LocalChatLog
-+			for seq := int64(39); seq <= 78; seq++ {
-+				if missing && seq == 60 {
-+					continue
-+				}
-+				row := &model_struct.LocalChatLog{ClientMsgID: fmt.Sprint(seq), Seq: seq, SendTime: 1000 + seq, Status: constant.MsgStatusSendSuccess, ContentType: constant.Text, Content: `{"content":"test"}`, AttachedInfo: "{}"}
-+				if seq <= 51 {
-+					row.Status = constant.MsgStatusHasDeleted
-+					row.Content = ""
-+				}
-+				rows = append(rows, row)
-+			}
-+			for n := 0; n < 50; n++ {
-+				rows = append(rows, &model_struct.LocalChatLog{ClientMsgID: fmt.Sprintf("legacy-51-%d", n), Seq: 51, SendTime: 1051, Status: constant.MsgStatusHasDeleted})
-+			}
-+			if err = d.BatchInsertMessageList(ctx, "chat", rows); err != nil {
-+				t.Fatal(err)
-+			}
-+			if err = d.Close(ctx); err != nil {
-+				t.Fatal(err)
-+			}
-+			d, err = db.NewDataBase(ctx, "self", dir, 0)
-+			if err != nil {
-+				t.Fatal(err)
-+			}
-+			defer d.Close(ctx)
-+			c := &Conversation{db: d}
-+			for _, target := range []int64{0, 78, 77} {
-+				p, err := c.messageWindow(ctx, sdk.GetAdvancedHistoryMessageListParams{ConversationID: "chat", Count: 40, TargetWatermark: target, LocalSnapshot: true, Window: true})
-+				if err != nil {
-+					t.Fatal(err)
-+				}
-+				// target 77 also needs seq 38, which this fixture intentionally lacks.
-+				wantReady := !missing && target != 77
-+				if p.Window.Publishable != wantReady {
-+					t.Fatalf("target=%d unexpected coverage: %+v", target, p.Window)
-+				}
-+				if wantReady && (len(p.MessageList) != 27 || p.Window.LowerBound != 39 || p.Window.TargetWatermark != 78) {
-+					t.Fatalf("lost visible rows: %+v", p)
-+				}
-+				if missing {
-+					found := false
-+					for _, gap := range p.Window.Missing {
-+						if gap[0] <= 60 && gap[1] >= 60 {
-+							found = true
-+						}
-+					}
-+					if !found {
-+						t.Fatal("real missing seq 60 was concealed")
-+					}
-+				}
-+				for _, m := range p.MessageList {
-+					if m.Seq <= 51 || (target > 0 && m.Seq > target) {
-+						t.Fatalf("hidden or future row exposed: %+v", m)
-+					}
-+				}
-+			}
-+			stored, err := d.ReadMessageWindow(ctx, "chat", 40, 78)
-+			if err != nil {
-+				t.Fatal(err)
-+			}
-+			duplicates := 0
-+			for _, row := range stored.Rows {
-+				if row.Seq == 51 {
-+					duplicates++
-+				}
-+			}
-+			if duplicates != 51 {
-+				t.Fatalf("window read mutated or dropped legacy rows: %d", duplicates)
-+			}
-+		})
-+	}
-+}

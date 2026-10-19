@@ -12,7 +12,19 @@ class ChatLatestMessageRecovery {
     required this.isRemoved,
     required this.refresh,
     required this.canRefresh,
-  });
+    Duration Function()? elapsed,
+    this.diagnostic,
+  }) : _elapsed = elapsed ?? _monotonicClock();
+
+  static Duration Function() _monotonicClock() {
+    final clock = Stopwatch()..start();
+    return () => clock.elapsed;
+  }
+
+  static const minimumRefreshInterval = Duration(seconds: 1);
+  final Duration Function() _elapsed;
+  final void Function(Map<String, Object?>)? diagnostic;
+  Duration? _nextRefreshAt;
 
   final bool Function() isClosed;
   final Message? Function() latestMessage;
@@ -48,9 +60,13 @@ class ChatLatestMessageRecovery {
     }
     if (_refreshing || _timer != null || !_missing || !canRefresh()) return;
     if (_attempts >= 3) return;
-    final delay = _attempts == 0
+    var delay = _attempts == 0
         ? const Duration(milliseconds: 100)
         : Duration(seconds: _attempts == 1 ? 1 : 3);
+    // A new latest ID resets its retry count, not the conversation's budget.
+    // Use monotonic elapsed time so wall-clock corrections cannot bypass it.
+    final remaining = (_nextRefreshAt ?? Duration.zero) - _elapsed();
+    if (remaining > delay) delay = remaining;
     _timer = Timer(delay, () {
       _timer = null;
       if (_missing && canRefresh()) unawaited(_reconcile());
@@ -62,10 +78,17 @@ class ChatLatestMessageRecovery {
     final revision = _revision;
     _refreshing = true;
     ++_attempts;
+    final started = _elapsed();
+    _nextRefreshAt = started + minimumRefreshInterval;
+    _record('latest_recovery_start', {'attempt': _attempts});
     var applied = false;
     try {
       applied = await refresh();
     } finally {
+      _record('latest_recovery_end', {
+        'applied': applied,
+        'elapsedMs': (_elapsed() - started).inMilliseconds,
+      });
       // A newer persisted snapshot can arrive while the loader is coalescing
       // requests. It needs a fresh read after that older request completes.
       if (revision == _revision) {
@@ -74,6 +97,14 @@ class ChatLatestMessageRecovery {
           conversationChanged();
         }
       }
+    }
+  }
+
+  void _record(String phase, Map<String, Object?> values) {
+    try {
+      diagnostic?.call({'phase': phase, 'source': 'latest_message', ...values});
+    } catch (_) {
+      // Optional diagnostics must never interrupt message recovery.
     }
   }
 

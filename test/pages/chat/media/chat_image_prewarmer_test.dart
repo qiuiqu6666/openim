@@ -1,4 +1,4 @@
-import 'dart:ui' as ui;
+import 'dart:async';
 import 'package:flutter/painting.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,24 +16,16 @@ Message picture(int index) => Message()
     snapshotPicture: PictureInfo(url: 'https://images.test/$index/thumb'),
   );
 
-class ControlledStream extends ImageStreamCompleter {
-  void complete() {
-    final recorder = ui.PictureRecorder();
-    Canvas(recorder).drawColor(const Color(0xff000000), BlendMode.src);
-    final picture = recorder.endRecording();
-    setImage(ImageInfo(image: picture.toImageSync(2, 2)));
-    picture.dispose();
-  }
-}
-
 class ControlledImage extends ViewerImageProvider {
   ControlledImage(super.url);
-  final stream = ControlledStream();
+  final stream = Completer<void>();
   bool cancelled = false;
+  @override
+  Future<void> prefetchEncoded() => stream.future;
   @override
   ImageStreamCompleter loadImage(
           ViewerImageProvider key, ImageDecoderCallback decode) =>
-      stream;
+      throw StateError('Speculative work must not decode pixels');
   @override
   void cancel() {
     cancelled = true;

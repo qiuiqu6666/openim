@@ -139,6 +139,34 @@ void main() {
     Get.reset();
   });
 
+  testWidgets('feed activity follows route coverage, tab visibility and dispose',
+      (tester) async {
+    _configureView(tester);
+    final logic = Get.put<ConversationLogic>(_ConversationLogic())
+        as _ConversationLogic;
+    await tester.pumpWidget(_host(dark: false));
+    await tester.pumpAndSettle();
+    expect(logic.activeFeedViews.length, 1);
+    final context = tester.element(find.byType(ConversationPage));
+    final navigator = Navigator.of(context);
+    navigator.push(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('covered'))));
+    await tester.pumpAndSettle();
+    expect(logic.activeFeedViews, isEmpty);
+    navigator.pop();
+    await tester.pumpAndSettle();
+    expect(logic.activeFeedViews.length, 1);
+    await tester.pumpWidget(_host(dark: false, liveUpdatesActive: false));
+    await tester.pumpAndSettle();
+    expect(logic.activeFeedViews, isEmpty);
+    await tester.pumpWidget(_host(dark: false));
+    await tester.pumpAndSettle();
+    expect(logic.activeFeedViews.length, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    expect(logic.activeFeedViews, isEmpty);
+  });
+
   for (final dark in [false, true]) {
     testWidgets('actual header matches reference decoration and states ($dark)',
         (tester) async {

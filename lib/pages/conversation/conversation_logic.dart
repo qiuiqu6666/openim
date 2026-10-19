@@ -110,6 +110,10 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     publish: onChanged,
     delay: () => const Duration(milliseconds: 80),
   );
+  void setFeedViewActive(Object owner, bool active) =>
+      _updates.setViewActive(owner, active);
+
+  void removeFeedView(Object owner) => _updates.removeView(owner);
   late final _unreadSync = ConversationUnreadSync(
     isActive: () => _sessionActive,
     isReading: () => _readingList,
@@ -268,6 +272,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _updates.setForeground(state == AppLifecycleState.resumed);
     if (_sessionActive && state == AppLifecycleState.resumed) {
       refreshOrganizer(userInitiated: false, source: 'resume');
       groupFeatures.refreshKnownGroups();

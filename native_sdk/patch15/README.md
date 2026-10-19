@@ -1,5 +1,14 @@
 # Core SDK 移动端同步
 
+## recovery.42-group-version-probe：超多群账户的版本检查与部分响应
+
+针对3116群账户复现：即使群成员无变化，原实现每轮仍读取完整成员ID列表6232次。现在每20群批量只读版本字段，精确无变化响应跳过成员处理；有成员、群资料或排序变化仍走完整同步。每批20群与4并发上限保持不变。服务端达到500条变化响应预算后遗漏的未处理群会继续请求，不再错误标记完成。
+
+规范源码和移动端共享源码通过CGO回归、race检查；共享源码使用Go1.24.0验证。服务端只读核查、隔离测试和基准详情见[验证记录](verification/recovery.42-group-version-probe.json)。小群SQLite版本探测基准约7.5倍加速，大群约123倍；这是单个查询环节的Linux基准，不是iPhone整体耗电或降温数据。
+
+Android recovery.42 四 ABI AAR 已重建并接入本地 Maven，版本、源码回执、ELF 16 KB LOAD 段对齐和 Gradle `verifyOpenIMCore` 校验通过。交付目录为 `release-artifacts/sdk/3.8.3-patch15-recovery.42-group-version-probe`，详见[Android 构建验证](verification/recovery.42-group-version-probe-android.json)。本轮未构建 APK，手机安装包尚未更新；iOS Framework/App 仍未重建。Mac执行 `bash native_sdk/patch15/build-ios.sh` 后重建App并保留原数据安装，再对比聊天页CPU、Energy与温度。尚不能保证所有发热来源均已消除。
+
+
 ## recovery.41-history-window：旧重复占位记录导致聊天窗口加载失败
 
 消息窗口先选取限定数量的不同服务器序号，再读取这些序号对应的本地行，避免旧 SDK 留下的重复占位记录挤占查询名额。读取不删除或重写已有记录，消息缺口、固定水位、删除和撤回检查继续生效。Android 与 iOS 都使用 `manifest.json` 指定的 `core-source`，不是旧的 `ios-core-source` 快照。

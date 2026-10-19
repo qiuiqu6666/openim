@@ -107,6 +107,8 @@ class ChatLogic extends SuperController {
     retry: () => _runHistoryRecovery(retry: true),
   );
   late final _latestMessageRecovery = ChatLatestMessageRecovery(
+    diagnostic: (event) =>
+        ChatHistoryDiagnostics.record(conversationInfo.conversationID, event),
     isClosed: () => _sessionInactive,
     latestMessage: () => conversationInfo.latestMsg,
     containsMessage: _timeline.containsMessage,

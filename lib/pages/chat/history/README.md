@@ -1,5 +1,7 @@
 # 聊天消息窗口与历史
 
+2026-10-19：最新消息补偿继续保留单目标最多三次、可见性检查和串行合并；不同最新消息目标共享至少 1 秒的自动查询起始间隔，清空/取消不清除这个频率预算。计时使用单调时钟，不影响主动翻页。`latest_recovery_start/end` 诊断记录来源、次数、耗时和是否应用，不记录消息正文。回归见 `chat_latest_message_recovery_test.dart` 及前台/交叠恢复集成测试。
+
 ## 后台刷新与翻页加载
 
 `historyLoading` 继续表示真实读取占用，用于互斥、恢复与已读协调；`historyPagingLoading` 仅控制列表加载行。已加载窗口的后台 `refresh()` 不插入历史加载行，首屏、显式翻页及日期定位仍展示加载。不能根据 `hasMore=false` 禁止后台刷新，因为历史结束后仍可能收到新消息。回归见 `chat_background_refresh_loading_test.dart`。

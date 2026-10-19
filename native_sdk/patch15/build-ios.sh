@@ -30,8 +30,8 @@ cd "$work/source"
 CGO_ENABLED=0 "$go_bin" test ./pkg/common ./pkg/network ./internal/interaction ./internal/conversation_msg ./internal/relation -count=1 -timeout=120s
 CGO_ENABLED=0 "$go_bin" test ./internal/third/file -run '^(TestUploadDeadline|TestUploadHash)' -count=1 -timeout=30s
 # CGO=0 skips SQLite transaction/restart tests; run these on the Mac host too.
-CGO_ENABLED=1 "$go_bin" test ./internal/interaction ./internal/conversation_msg -count=1 -timeout=120s
-CGO_ENABLED=1 "$go_bin" test ./pkg/db -run '^(TestMessageSyncBatch|TestInitialNotificationBootstrap)' -count=1 -timeout=120s
+CGO_ENABLED=1 "$go_bin" test ./internal/group ./internal/interaction ./internal/conversation_msg -count=1 -timeout=120s
+CGO_ENABLED=1 "$go_bin" test ./pkg/db -run '^(TestMessageSyncBatch|TestInitialNotificationBootstrap|TestVersionHeaders)' -count=1 -timeout=120s
 # Do not run gomobile init, which can replace the pinned gobind with @latest.
 go_path="$("$go_bin" env GOPATH)"
 mkdir -p "${go_path%%:*}/pkg/gomobile"

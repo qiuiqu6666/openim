@@ -501,6 +501,10 @@ void main() {
         expect(paintedIDs.last, isNot(contains('viewed-tall')));
       }
       expect(nativeReads, isEmpty);
+      // Inactive feed metadata is batched for up to one second. No read may
+      // be sent while waiting for that projection to catch up.
+      await tester.pump(const Duration(seconds: 1));
+      expect(nativeReads, isEmpty);
       expect(getTarget().unreadCount, 1);
       Get.routing.current = '/chat';
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);

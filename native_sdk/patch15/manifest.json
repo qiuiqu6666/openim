@@ -2,28 +2,28 @@
   "upstream": "https://github.com/openimsdk/openim-sdk-core",
   "tag": "v3.8.3-patch.15",
   "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-  "sdk_version": "v3.8.3-patch.15+recovery.41-history-window",
+  "sdk_version": "v3.8.3-patch.15+recovery.42-group-version-probe",
   "go_version": "1.24.0",
   "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
   "patch": "0001-background-message-recovery.patch",
-  "patch_sha256": "f2bba4f734ba207117095476e8bd0da20ff28ecff98d0e7b29622ed6a34a89cf",
+  "patch_sha256": "7761c94145e173c1b960e7d8345799ca353023c83e3c79d79cf2c194e8aa95e5",
   "source_directory": "core-source",
   "source_manifest": "core-source-manifest.json",
-  "source_sha256": "b9ddc633d3711c326bbee0dfd5d49e64bb31c0d1518b503596082ec0c5428f07",
+  "source_sha256": "cbd22ba59ac8f5c29327a38eb81880039926cae33017d38750aa216040564ad0",
   "created": "2026-10-19",
-  "previous_release": "history/recovery.40-metadata-fairness.json",
+  "previous_release": "history/recovery.41-history-window.json",
   "native_binary_integrated": false,
   "checks": {
-    "core": "Go 1.24 CGO full pkg/db and internal/conversation_msg tests passed in canonical and shared source, including legacy duplicate database restart, deletion/revocation, local call and true-gap coverage regressions.",
-    "source_lock": "469 files verified byte-for-byte; 15 tooling tests passed; cumulative patch replay matches 463 source files after line-ending normalization, with 6 declared overlays.",
-    "android": "Four-ABI AAR built; signed ARM64 release APK 3.0.1+2044 built and exact native library parity verified.",
-    "ios_framework": "not rebuilt; macOS required",
-    "device_runtime": "not run"
+    "core": "CGO regression passed for seven SDK packages; race checks passed. Shared source passed Go 1.24.0 CGO regression and targeted race tests.",
+    "source_lock": "474 files verified; cumulative patch replay matched 468 source files after newline normalization plus six declared overlays; 15 source-lock tooling tests passed.",
+    "android": "Four-ABI recovery.42 AAR built; version, locked source receipt, ELF 16 KiB LOAD alignment and Gradle verifyOpenIMCore passed. APK not rebuilt.",
+    "ios_framework": "Not rebuilt; macOS with Xcode required.",
+    "device_runtime": "Not run; iPhone energy and temperature validation still required."
   },
   "android": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.41-history-window",
-    "sdk_version": "v3.8.3-patch.15+recovery.41-history-window",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.42-group-version-probe",
+    "sdk_version": "v3.8.3-patch.15+recovery.42-group-version-probe",
     "abis": [
       "armeabi-v7a",
       "arm64-v8a",
@@ -32,17 +32,17 @@
     ],
     "recovery_patch_included": true,
     "build_script": "build-android.ps1",
-    "apk_native_parity_verified": true,
-    "runtime_validation": "not run for recovery.41",
+    "apk_native_parity_verified": false,
+    "runtime_validation": "not run for recovery.42",
     "native_binary_integrated": true,
     "aar_built": true,
     "sdk_artifact_verified": true,
-    "previous_verification_evidence": "verification/recovery.40-metadata-fairness-android.json",
-    "verification_evidence": "verification/recovery.41-history-window-android.json"
+    "previous_verification_evidence": "verification/recovery.41-history-window-android.json",
+    "verification_evidence": "verification/recovery.42-group-version-probe-android.json"
   },
   "ios": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "version": "v3.8.3-patch.15+recovery.41-history-window",
+    "version": "v3.8.3-patch.15+recovery.42-group-version-probe",
     "framework_prepared": false,
     "recovery_patch_included": true,
     "build_script": "build-ios.sh",
@@ -52,21 +52,21 @@
     "app_validation_scope": "same locked Core source as Android; previous binary is rejected",
     "native_binary_integrated": false,
     "source_consistency_verified": true,
-    "source_files": 469
+    "source_files": 474
   },
   "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
   "build_overlays": [
     "go.mod and go.sum: pinned gomobile dependency closure",
-    "version/version: recovery.41-history-window runtime identity",
+    "version/version: recovery.42-group-version-probe runtime identity",
     "internal/third/file/upload.go, upload_lock.go and upload_deadline_test.go: retain existing frontend upload deadline and cancellation protections"
   ],
-  "verification_evidence": "verification/recovery.41-history-window.json",
+  "verification_evidence": "verification/recovery.42-group-version-probe.json",
   "local_changes": {
     "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-    "description": "Count distinct server sequences before reading window rows; legacy duplicate tombstones cannot displace required sequences. Preserve stored rows and existing missing-message checks."
+    "description": "Batch-read version headers without member ID lists; skip exact unchanged responses; resume groups omitted by server response budgets without false completion."
   },
   "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
   "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
   "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json",
-  "core_revision": "09ed4707f1ec8a79551a880265dc397a1f73c4fc"
+  "core_revision": "e605b35e8d8fee707006ba47bc9c513b45d7bf95"
 }

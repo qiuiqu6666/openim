@@ -79,6 +79,33 @@ class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
 
   Future<ui.Codec> _load(ImageDecoderCallback decode,
       StreamController<ImageChunkEvent> chunks) async {
+    final bytes = await _loadBytes(chunks);
+    _check();
+    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    if (_cancelled) {
+      buffer.dispose();
+      _check();
+    }
+    return decode(buffer, getTargetSize: (width, height) {
+      final ratio = math.min(1.0, math.sqrt(maxPixels / (width * height)));
+      return ui.TargetImageSize(
+          width: math.max(1, (width * ratio).round()),
+          height: math.max(1, (height * ratio).round()));
+    });
+  }
+
+  /// Speculative loading needs encoded files only. Cache hits avoid even reading
+  /// the file into memory; pixels are decoded by the eventual visible viewer.
+  Future<void> prefetchEncoded() async {
+    _check();
+    final cached = await isCached();
+    _check();
+    if (cached) return;
+    await _loadBytes(null);
+  }
+
+  Future<Uint8List> _loadBytes(
+      StreamController<ImageChunkEvent>? chunks) async {
     final cache = _cache ?? DefaultCacheManager();
     Uint8List? bytes;
     try {
@@ -117,7 +144,7 @@ class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
         bytes = await consolidateHttpClientResponseBytes(response,
             onBytesReceived: (received, total) {
           if (!_cancelled) {
-            chunks.add(ImageChunkEvent(
+            chunks?.add(ImageChunkEvent(
                 cumulativeBytesLoaded: received, expectedTotalBytes: total));
           }
         }).timeout(const Duration(seconds: 45));
@@ -141,16 +168,6 @@ class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
       }
     }
     _check();
-    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-    if (_cancelled) {
-      buffer.dispose();
-      _check();
-    }
-    return decode(buffer, getTargetSize: (width, height) {
-      final ratio = math.min(1.0, math.sqrt(maxPixels / (width * height)));
-      return ui.TargetImageSize(
-          width: math.max(1, (width * ratio).round()),
-          height: math.max(1, (height * ratio).round()));
-    });
+    return bytes;
   }
 }

@@ -93,47 +93,11 @@ func (g *Group) IncrSyncGroupAndMember(ctx context.Context, groupIDs ...string) 
 func (g *Group) syncMemberBatch(ctx context.Context, scope string, ids []string) error {
 	finish := common.BeginMetadataBatch(ctx)
 	defer finish()
-	groups := make([]*group.GetIncrementalGroupMemberReq, 0, len(ids))
-	for _, id := range ids {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		req := &group.GetIncrementalGroupMemberReq{GroupID: id}
-		lvs, err := g.db.GetVersionSync(ctx, g.groupAndMemberVersionTableName(), id)
-		if err == nil {
-			req.VersionID, req.Version = lvs.VersionID, lvs.Version
-		} else if !errs.ErrRecordNotFound.Is(err) {
-			return err
-		}
-		groups = append(groups, req)
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	responses, err := g.getIncrementalGroupMemberBatch(ctx, groups)
+	groups, err := g.memberVersionRequests(ctx, ids)
 	if err != nil {
 		return err
 	}
-	tasks := make([]func() error, 0, len(groups))
-	for _, req := range groups {
-		id := req.GroupID
-		resp, present := responses[id]
-		if !present {
-			common.CompleteMetadataItem(ctx, scope, id)
-			continue
-		}
-		tasks = append(tasks, func() error {
-			if resp == nil {
-				return errs.New("nil incremental group response", "groupID", id)
-			}
-			if err := g.syncGroupAndMember(ctx, id, resp); err != nil {
-				return err
-			}
-			common.CompleteMetadataItem(ctx, scope, id)
-			return nil
-		})
-	}
-	return runGroupSyncBatch(ctx, tasks)
+	return g.syncMemberRequests(ctx, scope, groups)
 }
 
 func (g *Group) syncGroupAndMember(ctx context.Context, groupID string, resp *group.GetIncrementalGroupMemberResp) error {
