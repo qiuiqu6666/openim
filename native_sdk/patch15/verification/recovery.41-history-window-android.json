@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-19",
+  "sdk_version": "v3.8.3-patch.15+recovery.41-history-window",
+  "source_sha256": "b9ddc633d3711c326bbee0dfd5d49e64bb31c0d1518b503596082ec0c5428f07",
+  "aar_sha256": "6b433a3c34a6c9bc2347017f8c7d6ba7fe188fb0d68456dc3219dc79cfcf0acf",
+  "apk": "E:\\openim\\openim-flutter-demo\\release-artifacts\\99chat-3.0.1-2044-recovery41-arm64-release.apk",
+  "apk_sha256": "3bca196025b16b90bd2697deb6af109762edf0293adbfc44eeb0de16a3624dd1",
+  "apk_core_sha256": "6c54f7159f8213d233d4c1200d8ba12c940c0ab1cb51e4211f14a2fbe8aa5965",
+  "app_version": "3.0.1+2044",
+  "package_name": "chat.chat99.chatpro",
+  "apk_abis": [
+    "arm64-v8a"
+  ],
+  "signature": "apksigner verify passed, v2; same certificate as release 2043",
+  "certificate_sha256": "d3639980e1d8746b7ceea04eef046dcb4a9e6f9d411198a9fe9404cdb3e1f86f",
+  "checks": {
+    "core_build_tests": "passed",
+    "aar": "four ABI version checks and locked source receipt passed",
+    "apk_native_parity": "exact match after NDK llvm-strip --strip-unneeded",
+    "device_runtime": "not run",
+    "ios": "not rebuilt"
+  },
+  "logs": [
+    "E:/openim/outputs/recovery41-android-core-build.log",
+    "E:/openim/outputs/recovery41-apk-build.log",
+    "E:/openim/outputs/recovery41-apk-signature.log"
+  ]
+}

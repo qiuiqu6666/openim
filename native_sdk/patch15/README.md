@@ -1,5 +1,21 @@
 # Core SDK 移动端同步
 
+## recovery.41-history-window：旧重复占位记录导致聊天窗口加载失败
+
+消息窗口先选取限定数量的不同服务器序号，再读取这些序号对应的本地行，避免旧 SDK 留下的重复占位记录挤占查询名额。读取不删除或重写已有记录，消息缺口、固定水位、删除和撤回检查继续生效。Android 与 iOS 都使用 `manifest.json` 指定的 `core-source`，不是旧的 `ios-core-source` 快照。
+
+真实 SQLite 关闭重开回归在旧实现上失败，修复后通过：50 条重复占位不再遮挡 27 条正常消息；真实缺失序号仍不可发布，隐藏和超出水位的消息不显示。规范源码与共享源码的 `pkg/db`、`internal/conversation_msg` 全量测试通过；15 项构建工具测试通过。详见 [验证记录](verification/recovery.41-history-window.json)。
+
+Android 四 ABI AAR 与 ARM64 签名发布 APK `3.0.1+2044` 已重建，签名通过且 APK 原生库与新 AAR 经 NDK 裁剪后的内容完全一致，见 [Android 构建验证](verification/recovery.41-history-window-android.json)。未做真机验证。iOS Framework/App 尚未重建；Mac 使用 Go 1.24.0 执行 `bash native_sdk/patch15/build-ios.sh` 后再构建并安装 App。不要清除原设备数据，保留旧数据库验证升级效果。此缺陷已复现，但原始日志不足以确认它就是该设备的唯一根因。
+
+## recovery.40-metadata-fairness：群成员同步进度与繁忙消息
+
+Android 已集成 core 提交 `09ed4707`：群成员增量请求每批最多 20 个群，按稳定顺序去重；同一次待完成恢复保留逐群成功进度，取消或写入失败不记为完成。消息和会话调度共享最多 1 秒的小批次完成窗口，后续批次不能续期，退出登录仍立即取消。单批持续超时仍可能被取消；进度保留不跨进程重启。
+
+保留前端原有上传超时与取消保护，作为源码锁中声明的构建覆盖。468 个文件锁定，累计补丁还原匹配 462 个文件及 6 个声明覆盖；15 项构建工具测试、集成源码七模块回归及上传期限/哈希测试通过。四 ABI AAR 已重建，ARM64 release APK `3.0.1+2043` 已签名；APK 内 core 与 AAR 经 NDK 去符号后的库完全一致。详见 [Android 验证记录](verification/recovery.40-metadata-fairness-android.json)。
+
+未进行真机温度、功耗和消息场景验证；iOS Framework 未重建。
+
 ## recovery.39-group-offline.1：离线群资料恢复
 
 成员全量同步先获取完整分页，再按差异写入，保留新增、修改、移除成员的回调并清除对应旧缓存；分页失败保留原目录，写入失败不推进同步版本。超过 1000 人的全量响应不再截断。群设置页拒绝晚于新事件返回的旧群资料和自身成员资料，成员预览合并查询期间的增删改事件、去重并保持 20 条上限。聊天页同步后的群资料查询失败最多重试两次，退出、换号和新事件使旧重试失效。

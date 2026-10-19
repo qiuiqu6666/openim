@@ -5,6 +5,7 @@ build/
 /.codex-previews/
 /artifacts/
 /*.apk
+/release-artifacts/*.apk
 *.log
 *.class
 android/.gradle/

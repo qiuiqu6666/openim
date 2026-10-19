@@ -8,10 +8,13 @@ class AppBadgeCoordinator {
     required Future<bool> Function() isSystemSupported,
     required Future<void> Function(int) updateSystem,
     required void Function(Object) onError,
+    DateTime Function()? now,
   }) {
     _remote = _BadgeWriter(
       write: (count, _) => updateRemote(count),
       onError: onError,
+      minimumInterval: const Duration(seconds: 1),
+      now: now,
     );
     _system = _BadgeWriter(
       write: (count, isCurrent) async {
@@ -19,6 +22,7 @@ class AppBadgeCoordinator {
         if (isCurrent() && _systemSupported!) await updateSystem(count);
       },
       onError: onError,
+      now: now,
     );
   }
 
@@ -64,8 +68,16 @@ class AppBadgeCoordinator {
 }
 
 class _BadgeWriter {
-  _BadgeWriter({required this.write, required this.onError});
+  _BadgeWriter({
+    required this.write,
+    required this.onError,
+    this.minimumInterval = Duration.zero,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
 
+  final Duration minimumInterval;
+  final DateTime Function() _now;
+  DateTime? _nextWriteAt;
   final Future<void> Function(int, bool Function()) write;
   final void Function(Object) onError;
   int? _desired;
@@ -95,6 +107,7 @@ class _BadgeWriter {
     _desired = null;
     _lastWritten = null;
     _retryAfter = null;
+    _nextWriteAt = null;
     _scheduled?.cancel();
     _scheduled = null;
     // An already submitted native request still owns its slot until completion.
@@ -110,8 +123,14 @@ class _BadgeWriter {
         _running ||
         _scheduled != null ||
         _desired == null ||
-        _desired == _lastWritten) return;
-    final delay = _retryAfter?.difference(DateTime.now()) ?? Duration.zero;
+        _desired == _lastWritten) {
+      return;
+    }
+    var delay = _retryAfter?.difference(_now()) ?? Duration.zero;
+    final rateDelay = _nextWriteAt?.difference(_now()) ?? Duration.zero;
+    if (rateDelay > delay) delay = rateDelay;
+    // Keep this deadline fixed during a burst: sustained arrivals must not
+    // postpone the trailing latest value indefinitely.
     _scheduled = Timer(delay.isNegative ? Duration.zero : delay, () {
       _scheduled = null;
       unawaited(_flush());
@@ -125,6 +144,7 @@ class _BadgeWriter {
     bool isCurrent() =>
         !_closed && generation == _generation && count == _desired;
     _running = true;
+    _nextWriteAt = _now().add(minimumInterval);
     // A -> B -> A while B is in flight must restore A after B completes,
     // even though A was the last value confirmed before this request.
     _lastWritten = null;
@@ -139,7 +159,7 @@ class _BadgeWriter {
       failed = true;
       if (!_closed && generation == _generation) {
         _lastWritten = null;
-        _retryAfter = DateTime.now().add(const Duration(seconds: 5));
+        _retryAfter = _now().add(const Duration(seconds: 5));
         onError(error);
       }
     } finally {

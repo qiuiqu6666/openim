@@ -230,6 +230,42 @@ void main() {
     await directory.delete(recursive: true);
   });
 
+  test('default album send compresses images without a quality dialog', () async {
+    media.close();
+    var compressionCalls = 0;
+    final compressed =
+        await File('${directory.path}/compressed.jpg').writeAsBytes([4, 5]);
+    media = ChatMediaController(
+      conversationID: () => 'chat',
+      isClosed: () => false,
+      sendingMuted: () => false,
+      isInvalidGroup: () => false,
+      voiceBusy: () => false,
+      sendMessage: (message, {addToUI = true, resetInput = true}) async {
+        sends.add(message.clientMsgID!);
+      },
+      stageMessage: staged.add,
+      previewVoice: (_, __) async {},
+      closeToolbox: () => toolboxClosed++,
+      pickAssets: () async => [_Asset('standard', Future.value(photo))],
+      compressImage: (_) async {
+        compressionCalls++;
+        return compressed;
+      },
+      onPreparationFailed: () => failures++,
+    );
+
+    // No navigator or quality override: sending must proceed directly.
+    await media.onTapAlbum();
+
+    expect(compressionCalls, 1);
+    expect(failures, 0);
+    expect(sends, hasLength(1));
+    expect(staged, hasLength(1));
+    expect(await File(paths.single).readAsBytes(), [4, 5]);
+    expect(media.pickingAttachment, isFalse);
+  });
+
   for (final failure in ['error', 'null', 'original', 'timeout']) {
     test(
         'HEIF conversion $failure never sends undecodable source and advances batch',

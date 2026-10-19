@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-19",
+  "sdk_version": "v3.8.3-patch.15+recovery.40-metadata-fairness",
+  "core_revision": "09ed4707f1ec8a79551a880265dc397a1f73c4fc",
+  "source_sha256": "eed8e98f420a40d3bee91eafbd6f220fb4c594ab1e98ca5f449d1acb4a25ff93",
+  "aar_sha256": "4564f24c782ddc03c3884fb54e1c5c678071c8ea2f234e6e11c55914f1b8cc17",
+  "apk": "E:\\openim\\openim-flutter-demo\\release-artifacts\\99chat-3.0.1-2043-recovery40-arm64-release.apk",
+  "apk_sha256": "a77ef99a2296cf09f0c8745a495c3ac2d5a97b825d4e3687d92005ee640a0082",
+  "apk_core_sha256": "4ff88624bca2d223fbbee0bb039d57c1449239065ec757a18de980725bd9950a",
+  "app_version": "3.0.1+2043",
+  "build_mode": "release",
+  "apk_abis": [
+    "arm64-v8a"
+  ],
+  "checks": {
+    "core_build_tests": "passed: common, network, syncer, group, interaction, conversation_msg, relation, upload deadline/hash",
+    "source_lock": "15 tests passed; 468 files locked; 462 replay files plus 6 declared overlays",
+    "android_artifact": "four ABIs verified; new recovery symbols and version found in all four",
+    "apk_build": "release arm64 passed",
+    "apk_native_parity": "exact match after NDK 28.2 llvm-strip --strip-unneeded on rebuilt AAR library",
+    "signature": "apksigner verify passed; APK Signature Scheme v2",
+    "device_runtime": "not run",
+    "ios": "not rebuilt; requires macOS"
+  },
+  "logs": [
+    "E:/openim/outputs/recovery40-android-core-build.log",
+    "E:/openim/outputs/recovery40-apk-build.log",
+    "E:/openim/outputs/recovery40-apk-signature.log"
+  ],
+  "package_name": "chat.chat99.chatpro",
+  "version_code": 2043,
+  "certificate_sha256": "d3639980e1d8746b7ceea04eef046dcb4a9e6f9d411198a9fe9404cdb3e1f86f"
+}

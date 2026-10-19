@@ -16,7 +16,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 3.0.1+2032
+version: 3.0.1+2043
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -141,6 +141,8 @@ dependency_overrides:
     path: local_plugin/flutter_openim_sdk
   video_player_android:
     path: local_plugin/video_player_android
+  video_player_avfoundation:
+    path: local_plugin/video_player_avfoundation
   # Apply real connection/header/body timeouts; upstream 5.0.1 discards timeout.
   extended_image_library:
     path: local_plugin/extended_image_library

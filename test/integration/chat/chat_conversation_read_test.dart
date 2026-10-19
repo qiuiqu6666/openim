@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import 'package:openim/core/controller/app_controller.dart';
 import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
+import 'package:openim/pages/chat/receipts/chat_read_receipts.dart';
 import 'package:openim/pages/chat/history/chat_history_prefetcher.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/pages/conversation/updates/conversation_latest_sync.dart';
@@ -306,7 +307,7 @@ void main() {
     // A repeated viewport notification may still be waiting for the ordinary
     // single-chat read batch. Let its clock expire while the native ACK stays
     // pending, and verify it joins the existing read rather than sending twice.
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(ChatReadReceipts.viewportReadInterval);
     expect(nativeReads, hasLength(1));
   });
 
@@ -382,7 +383,7 @@ void main() {
     await receive(tester, latest, unread: 1);
     expect(paintedIDs.last, contains(latest.clientMsgID));
     expect(nativeReads, hasLength(1),
-        reason: 'The second painted target is waiting for the 250ms batch');
+        reason: 'The second painted target is waiting for the read batch');
 
     Get.routing.current = '/conversations';
     chat.onDelete();
@@ -521,7 +522,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(nativeReads, hasLength(1));
       acknowledgements.single.complete();
-      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pump(ChatReadReceipts.viewportReadInterval);
       await tester.pumpAndSettle();
       expect(getTarget().unreadCount, 0);
       expect(find.text('unread-source:7'), findsOneWidget);

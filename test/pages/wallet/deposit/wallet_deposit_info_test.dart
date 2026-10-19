@@ -1,10 +1,42 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openim/pages/wallet/data/wallet_fund_api.dart';
 
 import 'support/wallet_deposit_test_support.dart';
 
 void main() {
+  for (final brightness in Brightness.values) {
+    testWidgets(
+        'iOS TRX help reaches screen bottom with home inset $brightness',
+        (tester) async {
+      tester.view.padding = const FakeViewPadding(bottom: 34);
+      tester.view.viewPadding = const FakeViewPadding(bottom: 34);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+      await pumpWalletDeposit(tester,
+          api: WalletTestFundApi(),
+          currency: FundCurrency.trx,
+          locale: const Locale('zh', 'TW'),
+          brightness: brightness);
+      await tester.tap(depositKey('wallet-deposit-help'));
+      await tester.pumpAndSettle();
+
+      final sheet = depositKey('wallet-deposit-help-sheet');
+      expect(tester.getRect(sheet).bottom, 844);
+      final scroll = find.descendant(
+          of: sheet, matching: find.byType(SingleChildScrollView));
+      expect(tester.getRect(scroll).bottom, 844 - 34);
+      expect(tester.takeException(), isNull);
+      await tester
+          .tap(find.descendant(of: sheet, matching: find.byTooltip('關閉')));
+      await tester.pumpAndSettle();
+      expect(sheet, findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+  }
+
   testWidgets(
       'card hides contract information and its address still copies directly',
       (tester) async {
