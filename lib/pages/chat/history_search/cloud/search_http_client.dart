@@ -23,11 +23,13 @@ class SearchHttpClient {
   SearchHttpClient(
       {KeywordSearchPost? post,
       KeywordSearchSession? Function()? session,
-      bool? paced})
+      bool? paced,
+      this.reuseConnections = false})
       : _post = post,
         _paced = paced ?? post == null,
         _session = session ?? currentSession;
   final bool _paced;
+  final bool reuseConnections;
   final KeywordSearchPost? _post;
   final KeywordSearchSession? Function() _session;
   KeywordSearchSession? _owner;
@@ -44,10 +46,11 @@ class SearchHttpClient {
   bool get sessionCurrent => _owner == null || _owner == _session();
 
   Future<Map<String, dynamic>> request(String path, Map<String, dynamic> body,
-      {bool Function()? isCurrent}) async {
+      {bool Function()? isCurrent, CancelToken? cancelToken}) async {
     final session = _session();
     _owner ??= session;
     void check() {
+      if (cancelToken?.isCancelled == true) throw cancelToken!.cancelError!;
       if (session == null ||
           session != _owner ||
           _session() != session ||
@@ -59,13 +62,21 @@ class SearchHttpClient {
     check();
     Future<Map<String, dynamic>> run() async {
       check();
-      final response = await (_post ?? _defaultPost)(
+      final pending = (_post ??
+              (url, body, options) => _defaultPost(
+                  url, body, options, cancelToken, reuseConnections))(
           '${session!.server.replaceFirst(RegExp(r'/+$'), '')}$path',
           body,
           Options(contentType: Headers.jsonContentType, headers: {
             'token': session.token,
             'operationID': const Uuid().v4(),
           }));
+      final response = await (cancelToken == null
+          ? pending
+          : Future.any<dynamic>([
+              pending,
+              cancelToken.whenCancel.then<dynamic>((error) => throw error),
+            ]));
       check();
       if (response is! Map || response['errCode'] is! int) {
         throw const FormatException('Invalid search response');
@@ -104,19 +115,25 @@ class SearchHttpClient {
     return result;
   }
 
-  static Future<dynamic> _defaultPost(
-      String url, Map<String, dynamic> body, Options options) async {
-    final client = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 5),
-        sendTimeout: const Duration(seconds: 5),
-        receiveTimeout: const Duration(seconds: 6),
-        followRedirects: false,
-        validateStatus: (code) => code != null && code < 600));
+  // Keep credentials request-scoped; only sockets are reused, never responses.
+  static final Dio _sharedTransport = _createTransport();
+
+  static Dio _createTransport() => Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 5),
+      sendTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 6),
+      followRedirects: false,
+      validateStatus: (code) => code != null && code < 600));
+
+  static Future<dynamic> _defaultPost(String url, Map<String, dynamic> body,
+      Options options, CancelToken? cancelToken, bool reuseConnections) async {
+    final client = reuseConnections ? _sharedTransport : _createTransport();
     try {
-      return (await client.post<dynamic>(url, data: body, options: options))
+      return (await client.post<dynamic>(url,
+              data: body, options: options, cancelToken: cancelToken))
           .data;
     } finally {
-      client.close(force: true);
+      if (!reuseConnections) client.close(force: true);
     }
   }
 }

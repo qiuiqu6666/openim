@@ -10,7 +10,7 @@ public class BaseCallback: NSObject, Open_im_sdk_callbackBaseProtocol {
     }
     
     public func onError(_ errCode: Int32, errMsg: String?) {
-        print("BaseResult: " + errMsg!)
+        DiagnosticLog.write("BaseResult code=\(errCode): " + (errMsg ?? ""))
         safeMainAsync { self.result(FlutterError(code: "\(errCode)", message: errMsg, details: nil)) }
     }
     

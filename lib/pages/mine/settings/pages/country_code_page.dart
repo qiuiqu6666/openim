@@ -2,6 +2,7 @@ import 'package:country_picker/country_picker.dart';
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter/material.dart';
+import 'package:lpinyin/lpinyin.dart';
 import 'package:openim_common/openim_common.dart';
 import '../widgets/settings_widgets.dart';
 
@@ -14,9 +15,24 @@ class CountryCodePage extends StatefulWidget {
 
 class _CountryCodePageState extends State<CountryCodePage> {
   final _countries = CountryService().getAll();
+  final _sortNames = <String, String>{};
   String _query = '';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Resolve once per locale/dependency change, not on each search keystroke.
+    for (final country in _countries) {
+      _sortNames[country.countryCode] = PinyinHelper.getPinyinE(
+        _name(country).replaceFirst('Å', 'A'),
+        separator: '',
+        format: PinyinFormat.WITHOUT_TONE,
+      ).toUpperCase();
+    }
+  }
+
   String _letter(Country country) {
-    final name = country.name.replaceFirst('Å', 'A').toUpperCase();
+    final name = _sortNames[country.countryCode]!;
     return RegExp('[A-Z]').firstMatch(name)?.group(0) ?? 'A';
   }
 
@@ -38,7 +54,7 @@ class _CountryCodePageState extends State<CountryCodePage> {
             ('+${country.phoneCode}').contains(query))
         .toList()
       ..sort((a, b) => _letter(a).compareTo(_letter(b)) == 0
-          ? a.name.compareTo(b.name)
+          ? _sortNames[a.countryCode]!.compareTo(_sortNames[b.countryCode]!)
           : _letter(a).compareTo(_letter(b)));
     final rows = countries
         .map((country) => _CountryRow(country, _letter(country)))

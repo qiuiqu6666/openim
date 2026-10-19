@@ -9,13 +9,23 @@ Map<String, String> livePlaybackHeaders(
         ? const {'X-99Chat-Local-Live-Playback': '1'}
         : const {};
 
-/// Android's native player supports HTTP FLV. Keep other platforms on the
-/// backend order until their player supports the same format.
+/// Android uses native FLV; iOS uses the live-only media_kit FLV adapter.
+/// Browsers and other desktop platforms retain the backend order.
 List<Uri> livePlaybackSources(LivePlayInfo info,
-    {TargetPlatform? platform, bool? web}) {
+    {TargetPlatform? platform,
+    bool? web,
+    bool preferHls = const bool.fromEnvironment('LIVE_COMPARE_HLS')}) {
   final sources = info.supportedSources;
+  if (preferHls) {
+    bool hls(Uri uri) => uri.path.toLowerCase().endsWith('.m3u8');
+    return List.unmodifiable([
+      ...sources.where(hls),
+      ...sources.where((uri) => !hls(uri)),
+    ]);
+  }
   if ((web ?? kIsWeb) ||
-      (platform ?? defaultTargetPlatform) != TargetPlatform.android) {
+      !const {TargetPlatform.android, TargetPlatform.iOS}
+          .contains(platform ?? defaultTargetPlatform)) {
     return sources;
   }
   bool isFlv(Uri uri) => uri.path.toLowerCase().endsWith('.flv');

@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-19",
+  "sdk_version": "v3.8.3-patch.15+recovery.42-group-version-probe",
+  "source_sha256": "cbd22ba59ac8f5c29327a38eb81880039926cae33017d38750aa216040564ad0",
+  "patch_sha256": "7761c94145e173c1b960e7d8345799ca353023c83e3c79d79cf2c194e8aa95e5",
+  "server": "124.156.151.7",
+  "server_actions": "Read-only account/group probes, log correlation, binary hash verification and isolated source tests. No business data edits, deployment or production restart.",
+  "findings": {
+    "joined_groups": 3116,
+    "member_entries": 59382,
+    "median_group_members": 18,
+    "largest_group_members": 2032,
+    "groups_at_least_1000_members": 3,
+    "old_unchanged_sweep_full_version_reads": 6232,
+    "new_unchanged_sweep_full_version_reads": 0,
+    "new_header_batches": 156,
+    "server_response_budget": 500,
+    "partial_response_omission_regression": "Old implementation requested [3] and incorrectly completed omitted groups; fixed implementation requests [3,2,1]."
+  },
+  "benchmarks": {
+    "environment": "Linux amd64 server, Go 1.24.0, SQLite, synthetic 20-group batch. Not an iPhone thermal measurement.",
+    "18_members_per_group": {
+      "old_ns": 685105,
+      "new_ns": 91482,
+      "old_bytes": 156892,
+      "new_bytes": 15172
+    },
+    "1500_members_per_group": {
+      "old_ns": 11060004,
+      "new_ns": 89889,
+      "old_bytes": 3889419,
+      "new_bytes": 15173
+    }
+  },
+  "tests": {
+    "baseline_large_sweep": "failed as expected before fix: 6232 full reads",
+    "baseline_partial_response": "failed as expected before fix: omitted groups not requested",
+    "canonical_cgo": "7 packages passed",
+    "canonical_race": "5 packages passed",
+    "shared_go_1_24_cgo": "7 packages passed",
+    "shared_go_1_24_race": "targeted group and database tests passed",
+    "server": "group, incrversion and API targeted tests passed from isolated source copy",
+    "source_lock_tooling": "15 passed",
+    "cumulative_patch": "468 files verified with newline normalization; six declared overlays"
+  },
+  "limitations": [
+    "iOS Framework and app not rebuilt: macOS/Xcode unavailable in this session.",
+    "Android artifact not rebuilt.",
+    "No iPhone CPU/energy/temperature/frame trace; no claim of measured cooling or guaranteed nonrecurrence.",
+    "History query peaks are not attributed to a specific UI trigger by existing logs.",
+    "Source fixes do not update already installed clients."
+  ]
+}

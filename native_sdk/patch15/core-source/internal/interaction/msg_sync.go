@@ -59,7 +59,8 @@ type MsgSyncer struct {
 	pendingReadReconcile bool
 	initialMetadataReady bool
 	auxMetadataPending   bool
-	auxMetadataProgress *common.MetadataProgress
+	auxMetadataProgress  *common.MetadataProgress
+	auxProfilesOnly      bool
 	db                   db_interface.DataBase // data store
 	syncTimes            int                   // times of sync
 	ctx                  context.Context       // context
@@ -246,6 +247,13 @@ func (m *MsgSyncer) handlePushMsgAndEvent(cmd common.Cmd2Value) {
 	case cmdReconcileMessageSeq:
 		m.doMessageSeqReconciliation(cmd.Ctx)
 	case cmdSyncAuxiliaryMetadata:
+		if _, ok := cmd.Value.(common.ProfileQueueWake); ok {
+			if !m.auxMetadataPending {
+				m.auxMetadataProgress = &common.MetadataProgress{}
+				m.auxProfilesOnly = true
+			}
+			m.auxMetadataPending = true
+		}
 		m.doAuxiliaryMetadataSync(cmd.Ctx)
 
 	case constant.CmdPushMsg:

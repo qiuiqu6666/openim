@@ -4,12 +4,55 @@ import 'dart:ui' as ui;
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim_common/src/widgets/media_browser/viewer_image_provider.dart';
+import 'package:openim_common/src/utils/media/shared_image_disk_cache.dart';
 import '../../support/performance/viewer_test_cache.dart';
 
 class _RealHttp extends HttpOverrides {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('encoded prefetch stores bytes without a codec and reuses disk cache',
+      () async {
+    final temp = await Directory.systemTemp.createTemp('encoded-prefetch-test');
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    var requests = 0;
+    server.listen((request) async {
+      requests++;
+      // Deliberately not an image: any attempted pixel decoding would fail.
+      request.response.add([1, 2, 3]);
+      await request.response.close();
+    });
+    final url = 'http://127.0.0.1:${server.port}/preview';
+    final shared = SharedImageDiskCache(temporaryDirectory: () async => temp);
+    ViewerImageProvider image() => ViewerImageProvider(url,
+        cache: ViewerTestCache(),
+        sharedCache: shared,
+        createClient: () => _RealHttp().createHttpClient(null));
+    try {
+      final first = image();
+      await first.prefetchEncoded();
+      expect(await shared.read(url), [1, 2, 3]);
+      expect(PaintingBinding.instance.imageCache.containsKey(first), isFalse);
+      await image().prefetchEncoded();
+      expect(requests, 1);
+      final cancelled = image()..cancel();
+      await expectLater(cancelled.prefetchEncoded(), throwsStateError);
+    } finally {
+      await server.close(force: true);
+      await temp.delete(recursive: true);
+    }
+  });
+
+  test('encoded cache-only miss never starts a download', () async {
+    var clients = 0;
+    final image = ViewerImageProvider('https://images.test/encoded-miss',
+        cacheOnly: true, cache: ViewerTestCache(), createClient: () {
+      clients++;
+      return HttpClient();
+    });
+    await expectLater(image.prefetchEncoded(), throwsStateError);
+    expect(clients, 0);
+  });
   test('cache-only thumbnail miss never opens a network client', () async {
     var clients = 0;
     final image = ViewerImageProvider('https://images.test/cache-only-miss',

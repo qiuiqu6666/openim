@@ -33,6 +33,7 @@ func (m *MsgSyncer) requestAuxiliaryMetadata() {
 	if !m.auxMetadataPending {
 		m.auxMetadataProgress = &common.MetadataProgress{}
 	}
+	m.auxProfilesOnly = false
 	m.auxMetadataPending = true
 	m.queuePendingAuxiliaryMetadata()
 }
@@ -53,7 +54,12 @@ func (m *MsgSyncer) doAuxiliaryMetadataSync(ctx context.Context) {
 	}
 	ctx = common.WithMetadataProgress(ctx, m.auxMetadataProgress)
 	before := m.auxMetadataProgress.Checkpoints()
-	err := m.syncMetadataAfterMessages(ctx)
+	var err error
+	if m.auxProfilesOnly {
+		err = common.SendSyncCmdWithReceipt(ctx, common.Cmd2Value{Cmd: common.CmdSyncMissingProfiles}, m.conversationCh)
+	} else {
+		err = m.syncMetadataAfterMessages(ctx)
+	}
 	if owner, ok := ctx.Value(messagePageContextKey{}).(*messagePageCoordinator); ok {
 		owner.committed.Add(m.auxMetadataProgress.Checkpoints() - before)
 	}

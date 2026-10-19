@@ -23,11 +23,13 @@ import '../utils/http/transport_error_messages.dart';
 class IMViews {
   IMViews._();
 
-  static Future showToast(String msg, {Duration? duration}) {
+  static Future showToast(String msg,
+      {Duration? duration, bool centered = false}) {
     if (msg.trim().isNotEmpty) {
       return EasyLoading.showToast(
         TransportErrorMessages.toastText(msg),
         duration: duration,
+        toastPosition: centered ? EasyLoadingToastPosition.center : null,
         maskType: EasyLoadingMaskType.none,
         dismissOnTap: false,
       );

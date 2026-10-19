@@ -86,6 +86,11 @@ public final class GeneratedPluginRegistrant {
       Log.e(TAG, "Error registering plugin flutter_media_store, com.example.flutter_media_store.FlutterMediaStorePlugin", e);
     }
     try {
+      flutterEngine.getPlugins().add(new net.jonhanson.flutter_native_splash.FlutterNativeSplashPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin flutter_native_splash, net.jonhanson.flutter_native_splash.FlutterNativeSplashPlugin", e);
+    }
+    try {
       flutterEngine.getPlugins().add(new io.openim.live.alert.flutter_openim_live_alert.FlutterOpenimLiveAlertPlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin flutter_openim_live_alert, io.openim.live.alert.flutter_openim_live_alert.FlutterOpenimLiveAlertPlugin", e);
@@ -134,6 +139,11 @@ public final class GeneratedPluginRegistrant {
       flutterEngine.getPlugins().add(new io.flutter.plugins.imagepicker.ImagePickerPlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin image_picker_android, io.flutter.plugins.imagepicker.ImagePickerPlugin", e);
+    }
+    try {
+      flutterEngine.getPlugins().add(new dev.flutter.plugins.integration_test.IntegrationTestPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin integration_test, dev.flutter.plugins.integration_test.IntegrationTestPlugin", e);
     }
     try {
       flutterEngine.getPlugins().add(new com.ryanheise.just_audio.JustAudioPlugin());

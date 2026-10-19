@@ -1,0 +1,73 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.44-diagnostic-logging",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "5fd6823ffe86892a2efd0a8d3806f0352c63be124a596e33e30ea661acab7509",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "459f43e20509ccb810dd354bf94f42cfa301c97186442ad0432b4a6023890558",
+  "created": "2026-10-19",
+  "previous_release": "history/recovery.43-sync-throughput.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "core": "Locked-source Go package regressions passed; race tests passed for logpolicy, common, cache, user and SDK entry points.",
+    "android": "Four-ABI AAR built and verified; APK/device validation pending",
+    "ios_framework": "macOS required",
+    "patch_roundtrip": "changed files verified",
+    "flutter": "6 diagnostic tests passed; targeted analyzer clean; native source lock 15 tests passed"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.44-diagnostic-logging",
+    "sdk_version": "v3.8.3-patch.15+recovery.44-diagnostic-logging",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": false,
+    "runtime_validation": "pending",
+    "native_binary_integrated": true,
+    "aar_built": true,
+    "sdk_artifact_verified": true,
+    "previous_verification_evidence": "verification/recovery.41-history-window-android.json",
+    "verification_evidence": "verification/recovery.44-diagnostic-logging-android.json",
+    "aar_sha256": "da1d8bceea38eec9edeea1ab3a090442455119a3f47c3e8289d1a1ce67367a75"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.44-diagnostic-logging",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "macOS rebuild required",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "user will rebuild on macOS",
+    "app_validation_scope": "shared locked recovery.44 source; framework not rebuilt",
+    "native_binary_integrated": false,
+    "source_consistency_verified": true,
+    "source_files": 494
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned gomobile dependency closure",
+    "version/version: recovery.44-diagnostic-logging runtime identity",
+    "internal/third/file/upload.go, upload_lock.go and upload_deadline_test.go: retain existing frontend upload deadline and cancellation protections"
+  ],
+  "verification_evidence": "verification/recovery.44-diagnostic-logging-android.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Bounded metadata diagnostics, compact routine logs, invalid profile update guard and deduplicated user cache lookups; settings controls and native bridges."
+  },
+  "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
+  "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
+  "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json",
+  "core_revision": "fadbf51eebda1971a939d7f8511b82bc3ccf4dff"
+}

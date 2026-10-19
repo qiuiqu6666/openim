@@ -1,7 +1,14 @@
 # Global text search
 
 Production global text search uses `/msg/search_messages_global` with the current
-ordinary user's imToken. It no longer enumerates conversations or hydrates SDK
+ordinary user's imToken and `groupByConversation: true`. Only this global-search
+entry opts into conversation pagination; callers omitting the flag retain message
+pagination. Each result is the latest authorized match for a distinct conversation,
+and opening it starts the existing conversation-scoped keyword results page.
+The server fills up to the requested number of conversations within its bounded
+scan/time budget. A signed, scope-bound cursor tracks emitted conversations;
+`hasMore` remains authoritative, and a scope change requires restarting the search.
+It no longer enumerates conversations or hydrates SDK
 history. Contact/group/conversation-name results retain their existing sources.
 The result list keeps server order, shows each matching summary as plain text,
 and opens the real chat at the validated HTTP context anchor.

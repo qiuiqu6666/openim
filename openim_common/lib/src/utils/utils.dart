@@ -795,6 +795,13 @@ class IMUtils {
           content = '[${StrRes.carte}]${message.cardElem?.nickname ?? ''}';
           break;
         case MessageType.custom:
+          if (message.customElem?.description == 'assistantTurn') {
+            final turn = jsonDecode(message.customElem?.data ?? '');
+            if (turn is Map && turn['version'] == 1 && turn['text'] is String) {
+              content = '[${StrRes.picture}] ${turn['text']}';
+              break;
+            }
+          }
           final fund = FundMessageData.tryParse(message.customElem?.data);
           if (fund != null) {
             content = fund.isPacket

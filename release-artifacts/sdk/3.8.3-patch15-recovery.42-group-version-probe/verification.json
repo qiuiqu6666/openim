@@ -1,0 +1,14 @@
+{
+  "platform": "android",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.42-group-version-probe",
+  "source_sha256": "cbd22ba59ac8f5c29327a38eb81880039926cae33017d38750aa216040564ad0",
+  "patch_sha256": "7761c94145e173c1b960e7d8345799ca353023c83e3c79d79cf2c194e8aa95e5",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "core_tests": "passed",
+  "device_runtime": "not tested",
+  "binaries_sha256": {
+    "core-sdk-3.8.3-patch15-recovery.42-group-version-probe.aar": "8ef67a20ed01b6ebfc4af39fe6c6d748169ba2cea7dc4961172359ff6ca8d11c"
+  }
+}

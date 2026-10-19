@@ -15,6 +15,7 @@ import '../../../services/fund/diagnostics/wallet_load_log.dart';
 import '../../group_features/data/group_feature_runtime.dart';
 import 'settings_service.dart';
 import 'verification_code_result.dart';
+import 'feedback/upload_failure_report.dart';
 
 /// Profile and account security use the current Chat service.
 class OpenIMProfileService extends StubSettingsService {
@@ -199,13 +200,19 @@ class OpenIMProfileService extends StubSettingsService {
   @override
   Future<void> uploadFeedbackLogs(
       String feedbackID, String clientRequestID) async {
-    await OpenIM.iMManager.uploadLogs(
-        line: 10000,
-        ex: jsonEncode({
-          'biz': 'feedback',
-          'feedbackID': feedbackID,
-          'clientRequestID': clientRequestID
-        }));
+    final operationID = 'feedback-log-${const Uuid().v4()}';
+    try {
+      await OpenIM.iMManager.uploadLogs(
+          operationID: operationID,
+          line: 10000,
+          ex: jsonEncode({
+            'biz': 'feedback',
+            'feedbackID': feedbackID,
+            'clientRequestID': clientRequestID
+          }));
+    } catch (error) {
+      throw UploadFailureReport(error, operationID);
+    }
   }
 
   Future<dynamic> _security(String path,

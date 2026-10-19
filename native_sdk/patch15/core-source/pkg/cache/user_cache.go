@@ -41,13 +41,21 @@ func (m *UserCache[K, V]) BatchFetch(ctx context.Context, keys []K) (map[K]V, er
 		res       = make(map[K]V)
 		queryKeys []K
 	)
+	seen := make(map[K]struct{}, len(keys))
 
 	for _, key := range keys {
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
 		if data, ok := m.Load(key); ok {
 			res[key] = data
 		} else {
 			queryKeys = append(queryKeys, key)
 		}
+	}
+	if len(queryKeys) == 0 {
+		return res, nil
 	}
 
 	writeData, err := m.batchFetch(ctx, queryKeys)

@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
 class Logger {
+  static final _diagnosticBrand = RegExp(r'open[-_]?im', caseSensitive: false);
+
   /// Release keeps native OpenIM diagnostics, without application debug output.
   static void configureOutput() {
     if (kReleaseMode) {
@@ -56,7 +58,8 @@ class Logger {
     final logger = Logger();
 
     log(
-      '$time ${logger._header} [Console]: $text, ${keyAndValues != null ? ', $keyAndValues' : ''}, isError [${isError || errorMsg != null}]',
+      '$time ${logger._header} [Console]: $text, ${keyAndValues != null ? ', $keyAndValues' : ''}, isError [${isError || errorMsg != null}]'
+          .replaceAll(_diagnosticBrand, 'chat'),
     );
     if (!onlyConsole && logger.sdkIsInited) {
       unawaited(_writeNative(

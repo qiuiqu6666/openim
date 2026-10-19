@@ -44,6 +44,7 @@ void main() {
         ['later', 'same-first', 'same-second']);
     expect(fixture.inputResets, 0);
     expect(fixture.toasts, isEmpty);
+    expect(fixture.successes, 1);
     expect(fixture.reviewRequests, 0);
   });
 
@@ -240,6 +241,7 @@ void main() {
     expect(fixture.sends.single.target.userID, 'first');
     expect(fixture.originals, ['one']);
     expect(fixture.toasts, ['chatSelectionForwardUncertain']);
+    expect(fixture.successes, 0);
     expect(fixture.reviewRequests, 1);
   });
 

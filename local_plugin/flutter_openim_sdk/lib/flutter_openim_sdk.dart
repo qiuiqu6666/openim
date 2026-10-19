@@ -42,3 +42,5 @@ export 'src/models/set_group_member_info.dart';
 export 'src/models/update_req.dart';
 export 'src/openim.dart';
 export 'src/utils.dart';
+
+export 'src/diagnostics/diagnostic_logging_manager.dart';

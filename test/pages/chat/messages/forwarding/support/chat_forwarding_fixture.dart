@@ -88,6 +88,7 @@ class ForwardingFixture {
               : await onMerge!();
         },
         showToast: toasts.add,
+        showSuccess: () => successes++,
         onForwardNeedsReview: () => reviewRequests++);
   }
 
@@ -97,6 +98,7 @@ class ForwardingFixture {
   final sends = <({Message message, FavoriteTarget target})>[];
   final merges = <({List<String> ids, String title, List<String> summary})>[];
   final toasts = <String>[];
+  int successes = 0;
   late final ChatDeliveryController delivery;
   late final ChatForwardingController controller;
   String account = 'self';

@@ -11,6 +11,8 @@ import '../../../chat/stickers/personal_sticker_panel.dart';
 import '../../../chat/stickers/personal_sticker_store.dart';
 import '../../../mine/settings/widgets/settings_widgets.dart';
 import '../../attachments/ai_assistant_attachments.dart';
+import '../../attachments/ai_image_turn_sender.dart';
+import '../../history/ai_openim_message_text.dart';
 import '../../localization/ai_assistant_composer_hint.dart';
 import '../../localization/ai_assistant_i18n.dart';
 import '../../streaming/diagnostics/assistant_stream_log.dart';
@@ -71,17 +73,22 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
   }
 
   Future<void> _perform(Future<void> Function() action,
-      {bool preserveInput = false}) async {
+      {bool preserveInput = false, bool restoreOnError = true}) async {
     if (!_canAct) return;
     final input = _logic.inputCtrl.value;
     setState(() => _busy = true);
     try {
       await action();
-    } catch (_) {
+    } catch (error) {
       if (_current) {
-        _restoreInput(input);
-        IMViews.showToast(
-            _text('操作失败，请重试', 'Could not complete. Try again.', '操作失敗，請重試'));
+        if (restoreOnError) _restoreInput(input);
+        IMViews.showToast(error is AiImageTurnUnsupported
+            ? error.generateImage
+                ? _text('当前服务暂不支持参考图生成，请稍后重试',
+                    'Reference image generation is not available on this server yet.')
+                : _text('当前服务暂不支持图文一起提问，请稍后重试',
+                    'Combined image questions are not available on this server yet.')
+            : _text('操作失败，请重试', 'Could not complete. Try again.', '操作失敗，請重試'));
       }
     } finally {
       if (preserveInput) _restoreInput(input);
@@ -198,6 +205,56 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
   Future<void> _send() async {
     if (!_canAct) return;
     final input = _logic.inputCtrl.value;
+    if (_assistant &&
+        _tool == 'image' &&
+        _files.isNotEmpty &&
+        input.text.trim().isEmpty) {
+      IMViews.showToast(_text('请描述希望参考图片生成或修改的内容',
+          'Describe what to generate or change using the reference image.'));
+      return;
+    }
+    if (_assistant &&
+        input.text.trim().isNotEmpty &&
+        _files.any((file) => file.kind == AiAssistantFileKind.image)) {
+      if (_cards.isNotEmpty ||
+          _files.any((file) => file.kind != AiAssistantFileKind.image)) {
+        IMViews.showToast(_text('图片暂不能与文件或名片一起提交，请分开提问',
+            'Please submit images separately from documents or contact cards.'));
+        return;
+      }
+      if (input.text.runes.length > 8000) {
+        IMViews.showToast(_text('图文提问最多输入 8000 字',
+            'Use up to 8,000 characters for an image question.'));
+        return;
+      }
+      await _perform(() async {
+        final files = List<AiAssistantFileRef>.of(_files);
+        final quote = _logic.quotedMessage.value;
+        final question = quote == null
+            ? input.text
+            : '${_text('引用消息', 'Quoted message')}:\n${aiOpenimMessageText(quote)}\n\n${input.text}';
+        final message = await AiImageTurnSender(
+          isCurrent: () => _current,
+          preparePicture: _logic.prepareAssistantPicture,
+        ).prepare(question, files, generateImage: _tool == 'image');
+        final waiting = _logic.assistantStreams.beginReply();
+        try {
+          await _sendPrepared(message, onRecorded: () {
+            setState(() => _files.removeWhere(files.contains));
+            _logic.inputCtrl.clear();
+            if (identical(_logic.quotedMessage.value, quote)) {
+              _logic.clearReply();
+            }
+          });
+        } catch (_) {
+          _logic.assistantStreams.cancelReply(waiting);
+          rethrow;
+        } finally {
+          if (!_current) _logic.assistantStreams.cancelReply(waiting);
+        }
+      }, restoreOnError: false);
+      return;
+    }
     if (_tool != 'image' &&
         input.text.trim().isEmpty &&
         _cards.isEmpty &&

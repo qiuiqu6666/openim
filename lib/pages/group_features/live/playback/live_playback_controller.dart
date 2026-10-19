@@ -4,6 +4,8 @@ import 'package:video_player/video_player.dart';
 import '../models/live_models.dart';
 import 'live_credential_renewal.dart';
 import 'live_source_policy.dart';
+import 'live_playback_diagnostics.dart';
+import 'live_video_factory.dart';
 export 'live_credential_renewal.dart'
     show LiveCredentialScheduler, LiveScheduledTask;
 
@@ -17,9 +19,7 @@ class LivePlaybackController extends ChangeNotifier {
       LiveVideoFactory? factory,
       DateTime Function()? now,
       LiveCredentialScheduler? schedule})
-      : _factory = factory ??
-            ((source) => VideoPlayerController.networkUrl(source,
-                httpHeaders: livePlaybackHeaders())) {
+      : _factory = factory ?? createLiveVideo {
     _renewal = LiveCredentialRenewal(
         isActive: () => current && _canDisplay && !paused,
         expiresAt: () => info.expiresAt,
@@ -31,6 +31,7 @@ class LivePlaybackController extends ChangeNotifier {
   LivePlayInfo info;
   final bool Function() sessionCurrent;
   final LiveVideoFactory _factory;
+  final _diagnostics = LivePlaybackDiagnostics();
   final _closed = StreamController<void>.broadcast();
   VideoPlayerController? player;
   (bool, double, String?)? _playerPresentation;
@@ -138,15 +139,16 @@ class LivePlaybackController extends ChangeNotifier {
     _renewal.refresh();
     error = null;
     notifyListeners();
-    final candidate = _factory(sources[_source]);
-    player = candidate;
-    candidate.addListener(_changed);
     _startup = Timer(const Duration(seconds: 12), () {
       if (current && generation == _generation && !ready) {
         _failed(StateError('直播连接较慢，请重试'));
       }
     });
     try {
+      _diagnostics.opened(sources[_source]);
+      final candidate = _factory(sources[_source]);
+      player = candidate;
+      candidate.addListener(_changed);
       await candidate.initialize();
       if (!current || generation != _generation) return;
       await _applyMute(candidate, generation);
@@ -164,6 +166,7 @@ class LivePlaybackController extends ChangeNotifier {
     if (!current || player == null) return;
     if (_expiredCredentials) return;
     final value = player!.value;
+    if (_canDisplay && !paused) _diagnostics.event('sample', value);
     final presentation =
         (value.isInitialized, value.aspectRatio, value.errorDescription);
     final presentationChanged = presentation != _playerPresentation;
@@ -180,6 +183,7 @@ class LivePlaybackController extends ChangeNotifier {
       loading = false;
       error = null;
       _startup?.cancel();
+      _diagnostics.event('first_progress', value);
     }
     // The live surface uses initialization/aspect/error and our first-progress
     // readiness state, not every position/buffered-range update.
@@ -187,6 +191,7 @@ class LivePlaybackController extends ChangeNotifier {
   }
 
   void _failed(Object failure) {
+    _diagnostics.event('failure');
     _startup?.cancel();
     loading = false;
     error = failure;
@@ -265,6 +270,7 @@ class LivePlaybackController extends ChangeNotifier {
 
   Future<void> suspend() async {
     if (!current) return;
+    _diagnostics.event('suspend');
     final wasPaused = paused;
     paused = true;
     ++_generation;
@@ -322,6 +328,7 @@ class LivePlaybackController extends ChangeNotifier {
   @override
   void dispose() {
     if (disposed) return;
+    _diagnostics.event('dispose');
     disposed = true;
     _closed.add(null);
     unawaited(_closed.close());

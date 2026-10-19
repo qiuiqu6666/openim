@@ -9,6 +9,8 @@ import 'package:flutter_openim_sdk/src/logger.dart';
 
 class IMManager {
   MethodChannel _channel;
+  late final DiagnosticLoggingManager diagnosticLoggingManager =
+      DiagnosticLoggingManager(_channel);
   late ConversationManager conversationManager;
   late FriendshipManager friendshipManager;
   late MessageManager messageManager;

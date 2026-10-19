@@ -143,16 +143,18 @@ class Config {
   static int get logLevel {
     final saved = DataSp.getServerConfig()?['logLevel'];
     final parsed = int.tryParse(saved?.toString() ?? '');
-    final fallback = kDebugMode ? 5 : 4;
+    const verbose = bool.fromEnvironment('OPENIM_VERBOSE_LOGS');
+    final fallback = kDebugMode && verbose ? 5 : 4;
     final level =
         parsed != null && parsed >= 0 && parsed <= 6 ? parsed : fallback;
     // OpenIM core 3.8.3: 3=Warn, 4=Info, 5=Debug, 6=DebugWithSQL.
     // Keep Info diagnostics in production, but disable Debug/SQL output even
     // when a previous installation persisted a verbose setting.
-    return !kDebugMode && level > 4 ? 4 : level;
+    return (!kDebugMode || !verbose) && level > 4 ? 4 : level;
   }
 
   static String get callingUrl => appAuthUrl;
 
-  static bool get logStandardOutput => kDebugMode;
+  static bool get logStandardOutput =>
+      kDebugMode && const bool.fromEnvironment('OPENIM_VERBOSE_LOGS');
 }

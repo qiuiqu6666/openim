@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
@@ -11,6 +13,7 @@ class AssistantStreamSnapshot {
     required this.ended,
     this.waiting = false,
     this.rowID,
+    this.timedOut = false,
   });
 
   final String streamID;
@@ -18,12 +21,18 @@ class AssistantStreamSnapshot {
   final bool ended;
   final bool waiting;
   final String? rowID;
+  final bool timedOut;
   String get presentationID => rowID ?? streamID;
 }
 
 /// One route owns the deltas and completed IDs; dispose clears both.
 /// Caller verifies sender, recipient and current account before accepting data.
 class AssistantStreamState extends ChangeNotifier {
+  AssistantStreamState({this.replyTimeout = const Duration(minutes: 2)});
+
+  final Duration replyTimeout;
+  final _deadlines = <String, Timer>{};
+  final _expired = <String>{};
   final _streams = <String, _StreamBuffer>{};
   final _finalizedIDs = <String>{};
   _ReplyWait? _replyWait;
@@ -34,9 +43,43 @@ class AssistantStreamState extends ChangeNotifier {
 
   /// Map insertion order preserves the first arrival order of concurrent turns.
   List<AssistantStreamSnapshot> get snapshots => List.unmodifiable([
-        ..._streams.values.map((stream) => stream.snapshot),
-        if (_replyWait case final wait?) wait.snapshot,
+        ..._streams.values.map((stream) => _withStatus(stream.snapshot)),
+        if (_replyWait case final wait?) _withStatus(wait.snapshot),
       ]);
+
+  AssistantStreamSnapshot _withStatus(AssistantStreamSnapshot value) =>
+      AssistantStreamSnapshot(
+        streamID: value.streamID,
+        text: value.text,
+        ended: value.ended,
+        waiting: value.waiting,
+        rowID: value.rowID,
+        timedOut: _expired.contains(value.streamID),
+      );
+
+  void _touch(String id) {
+    _deadlines.remove(id)?.cancel();
+    _expired.remove(id);
+    _deadlines[id] = Timer(replyTimeout, () {
+      _deadlines.remove(id);
+      if (_disposed) return;
+      _expired.add(id);
+      notifyListeners();
+    });
+  }
+
+  @override
+  void notifyListeners() {
+    final active = {
+      ..._streams.keys,
+      if (_replyWait != null) _replyWait!.snapshot.streamID
+    };
+    for (final id in _deadlines.keys.toList()) {
+      if (!active.contains(id)) _deadlines.remove(id)?.cancel();
+    }
+    _expired.removeWhere((id) => !active.contains(id));
+    super.notifyListeners();
+  }
 
   /// Sending again shares the visible placeholder, but owns a separate failure.
   int? beginReply() {
@@ -45,7 +88,9 @@ class AssistantStreamState extends ChangeNotifier {
     final fresh = _replyWait == null;
     final wait = _replyWait ??= _ReplyWait(token);
     wait.tokens.add(token);
-    if (fresh) notifyListeners();
+    final expired = _expired.contains(wait.snapshot.streamID);
+    _touch(wait.snapshot.streamID);
+    if (fresh || expired) notifyListeners();
     return token;
   }
 
@@ -111,6 +156,7 @@ class AssistantStreamState extends ChangeNotifier {
     }
     final changed = stream.accept(chunk);
     if (!changed && existing != null) return null;
+    _touch(chunk.streamID);
     notifyListeners();
     return stream.snapshot;
   }
@@ -143,6 +189,11 @@ class AssistantStreamState extends ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    for (final timer in _deadlines.values) {
+      timer.cancel();
+    }
+    _deadlines.clear();
+    _expired.clear();
     _streams.clear();
     _finalizedIDs.clear();
     _replyWait = null;

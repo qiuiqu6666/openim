@@ -350,12 +350,16 @@ void main() {
     calls.last.complete([message('first', 2)]);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
+    expect(calls, hasLength(2));
+    await tester.pump(const Duration(seconds: 1));
     expect(calls, hasLength(3));
     im.conversationChanged([conversation(latest: message('third', 4))]);
     await tester.pump(const Duration(milliseconds: 200));
     calls.last.complete([message('first', 2), message('second', 3)]);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
+    expect(calls, hasLength(3));
+    await tester.pump(const Duration(seconds: 1));
     expect(calls, hasLength(4));
     calls.last.complete([message('second', 3), message('third', 4)]);
     await tester.pump();

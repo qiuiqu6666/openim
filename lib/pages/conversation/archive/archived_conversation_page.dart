@@ -54,6 +54,12 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
     unawaited(_refresh(userInitiated: false));
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _logic.setFeedViewActive(this, ModalRoute.isCurrentOf(context) ?? true);
+  }
+
   Future<void> _refresh({bool userInitiated = true}) async {
     await _logic.refreshOrganizer(
         userInitiated: userInitiated,
@@ -357,6 +363,7 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
 
   @override
   void dispose() {
+    _logic.removeFeedView(this);
     _folders.dispose();
     _editor.dispose();
     _scrollController.dispose();

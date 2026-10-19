@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
@@ -39,6 +40,7 @@ class ChatApp extends StatelessWidget {
           builder: builder,
           translations: TranslationService(),
           localizationsDelegates: const [
+            CountryLocalizations.delegate,
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,

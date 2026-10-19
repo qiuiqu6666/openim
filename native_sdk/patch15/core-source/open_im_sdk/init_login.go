@@ -54,7 +54,7 @@ func InitSDK(listener open_im_sdk_callback.OnConnListener, operationID string, c
 	if configArgs.PlatformID == 0 {
 		return false
 	}
-	if err := log.InitLoggerFromConfig("open-im-sdk-core", "", configArgs.SystemType, pbConstant.PlatformID2Name[int(configArgs.PlatformID)], int(configArgs.LogLevel), configArgs.IsLogStandardOutput, false, configArgs.LogFilePath, rotateCount, rotationTime, version.Version, true); err != nil {
+	if err := log.InitLoggerFromConfig("chat-sdk-core", "", configArgs.SystemType, pbConstant.PlatformID2Name[int(configArgs.PlatformID)], int(configArgs.LogLevel), configArgs.IsLogStandardOutput, false, configArgs.LogFilePath, rotateCount, rotationTime, version.Version, true); err != nil {
 		fmt.Println(operationID, "log init failed ", err.Error())
 	}
 	fmt.Println("init log success")

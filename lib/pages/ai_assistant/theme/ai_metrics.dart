@@ -2,10 +2,13 @@
 class AiMetrics {
   const AiMetrics._();
   static const double bubbleWidthRatio = .72;
+  static const double composerMaxHeightRatio = .65;
   static const double emptyArtWidthRatio = .62;
   static const double emptyArtMinWidth = 180;
   static const double emptyArtMaxWidth = 280;
   static const double imageAspectRatio = 16 / 10;
+  static const double imageTurnWidth = 240;
+  static const double imageTurnSingleAspectRatio = 4 / 5;
   static const double textLineHeight = 1.45;
   static const double userTextLineHeight = 1.4;
   static const double inputLineHeight = 1.5;

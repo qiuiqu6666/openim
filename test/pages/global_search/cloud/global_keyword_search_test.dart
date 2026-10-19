@@ -50,10 +50,12 @@ GlobalKeywordSearchApi api(
             post: (url, body, options) {
               expect(url, 'https://im.example/msg/search_messages_global');
               expect(options.headers!['token'], 'im-token');
+              expect(body['groupByConversation'], isTrue);
               expect(
                   body.keys,
                   unorderedEquals([
                     'keyword',
+                    'groupByConversation',
                     'cursor',
                     'limit',
                     'startTime',
@@ -86,6 +88,9 @@ void main() {
     expect(requests[1]['cursor'], 'one');
     await logic.loadMoreCloud();
     expect(logic.cloudHits.length, 3);
+    expect(logic.cloudConversationHits.map((hit) => hit.conversationID),
+        ['sg_a', 'si_b']);
+    expect(logic.cloudConversationHits.first.seq, 5);
     expect(requests[2]['cursor'], 'two');
     expect(logic.cloudHasMore.value, isFalse);
     expect(source.messageCalls, 0);
@@ -117,6 +122,55 @@ void main() {
     expect(cursors.last, '');
     logic.onClose();
   });
+  test('new query cancels old work and late response cannot replace results',
+      () async {
+    final old = Completer<dynamic>();
+    final started = Completer<void>();
+    final logic = GlobalSearchLogic(
+      source: LocalSource(),
+      keywordApi: api((body) {
+        if (body['keyword'] == '旧词') {
+          started.complete();
+          return old.future;
+        }
+        return Future.value(response([item('new', 2)]));
+      }),
+    )..onInit();
+    logic.searchCtrl.text = '旧词';
+    final first = logic.search();
+    await started.future;
+    logic.searchCtrl.text = '新词';
+    await logic.search();
+    await first.timeout(const Duration(seconds: 1));
+    expect(old.isCompleted, isFalse);
+    expect(logic.cloudHits.single.conversationID, 'new');
+    expect(logic.pendingSections, isEmpty);
+    expect(logic.failures, isEmpty);
+    old.complete(response([item('old', 1)]));
+    await Future<void>.delayed(Duration.zero);
+    expect(logic.cloudHits.single.conversationID, 'new');
+    logic.onClose();
+  });
+
+  test('closing page cancels pending cloud work without publishing an error',
+      () async {
+    final old = Completer<dynamic>();
+    final started = Completer<void>();
+    final logic = GlobalSearchLogic(
+        source: LocalSource(),
+        keywordApi: api((_) {
+          started.complete();
+          return old.future;
+        }));
+    logic.searchCtrl.text = '会议';
+    final search = logic.search();
+    await started.future;
+    logic.onClose();
+    await search.timeout(const Duration(seconds: 1));
+    expect(logic.failures, isEmpty);
+    old.complete(response([]));
+  });
+
   test('clearing query invalidates pending global response', () async {
     final pending = Completer<dynamic>();
     final logic = GlobalSearchLogic(

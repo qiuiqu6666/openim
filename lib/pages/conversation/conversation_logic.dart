@@ -37,6 +37,7 @@ import 'legacy_cleanup/legacy_service_conversation_cleanup.dart';
 import 'group_identity/legacy_group_conversation_projection.dart';
 import 'summary/conversation_latest_message_text.dart';
 import 'summary/conversation_incremental_order.dart';
+import 'summary/pinned_group_order.dart';
 import 'summary/conversation_feed_snapshot.dart';
 import 'settings/conversation_settings_projection.dart';
 import 'unread/conversation_unread_count.dart';
@@ -53,8 +54,14 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final folders = <ChatFolder>[].obs;
   final states = <String, ChatConversationState>{}.obs;
   ConversationFeedSnapshotCache? _feedCache;
+  late final _pinOrderKey = 'pinned_group_order_v1_${Config.imApiUrl}_$_accountID';
+  late final _pinnedGroupOrder = PinnedGroupOrder(
+    SpUtil().getStringList(_pinOrderKey) ?? [],
+    save: (ids) { SpUtil().putStringList(_pinOrderKey, ids); },
+  );
   ConversationFeedSnapshot get feedSnapshot =>
-      (_feedCache ??= ConversationFeedSnapshotCache(list, states)).read();
+      (_feedCache ??= ConversationFeedSnapshotCache(list, states,
+          order: _pinnedGroupOrder.apply)).read();
   final organizerLoading = false.obs;
   final organizerError = RxnString();
   int _organizerSyncAt = 0;
@@ -110,6 +117,10 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     publish: onChanged,
     delay: () => const Duration(milliseconds: 80),
   );
+  void setFeedViewActive(Object owner, bool active) =>
+      _updates.setViewActive(owner, active);
+
+  void removeFeedView(Object owner) => _updates.removeView(owner);
   late final _unreadSync = ConversationUnreadSync(
     isActive: () => _sessionActive,
     isReading: () => _readingList,
@@ -268,6 +279,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _updates.setForeground(state == AppLifecycleState.resumed);
     if (_sessionActive && state == AppLifecycleState.resumed) {
       refreshOrganizer(userInitiated: false, source: 'resume');
       groupFeatures.refreshKnownGroups();
@@ -577,7 +589,9 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       ++_structureRevision;
       _updates.flush();
       _latestSync.conversationsChanged([info.conversationID]);
+      _pinnedGroupOrder.apply(list);
       info.isPinned = pinned;
+      _pinnedGroupOrder.apply([info]);
       if (_readingList) {
         _settingsDuringRead.pinned(info.conversationID, pinned);
       }

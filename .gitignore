@@ -38,4 +38,5 @@ ios/Flutter/Flutter.podspec
 
 # Reproducible native Core artifacts; see native_sdk/patch15/README.md.
 /native_sdk/patch15/artifacts/
+/release-artifacts/sdk/**/*.aar
 /local_plugin/flutter_openim_sdk/ios/Frameworks/

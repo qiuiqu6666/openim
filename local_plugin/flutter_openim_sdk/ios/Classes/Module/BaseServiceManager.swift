@@ -16,7 +16,7 @@ open class BaseServiceManager {
     public func handleMethod(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let method: String = call.method
         guard let handler = methodHandlers[method] else {
-            print("Handle MethodName Error: \(typeName(self))'s method: [\(method)] not found")
+            DiagnosticLog.write("Handle MethodName Error: \(typeName(self))'s method: [\(method)] not found")
             return
         }
         handler(call, result)

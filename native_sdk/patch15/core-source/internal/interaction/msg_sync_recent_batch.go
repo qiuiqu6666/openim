@@ -9,11 +9,11 @@ import (
 	"github.com/openimsdk/protocol/sdkws"
 )
 
-// Retain the existing 100-message response budget. Small gaps share a request;
-// large gaps remain bounded, and notification state is always replayed alone.
+// Each conversation retains its 100-message page. Up to eight such pages
+// share one transport round trip; notification state is always replayed alone.
 func (m *MsgSyncer) nextRecoveryBatch(ids []string, pending map[string][][2]int64) map[string][2]int64 {
 	batch := make(map[string][2]int64)
-	remaining := int64(SplitPullMsgNum)
+	remaining := int64(SplitPullMsgNum * 8)
 	for _, id := range ids {
 		pages := pending[id]
 		if len(pages) == 0 {
@@ -31,7 +31,7 @@ func (m *MsgSyncer) nextRecoveryBatch(ids []string, pending map[string][][2]int6
 		if IsNotification(id) && len(batch) > 0 {
 			continue
 		}
-		r[1] = min(r[1], r[0]+remaining-1)
+		r[1] = min(r[1], r[0]+min(remaining, int64(SplitPullMsgNum))-1)
 		batch[id] = r
 		remaining -= r[1] - r[0] + 1
 		if IsNotification(id) || remaining == 0 || len(batch) == 8 {
@@ -106,6 +106,23 @@ func (m *MsgSyncer) recoverRecentMessagePages(ctx context.Context, ids []string,
 		if err := ctx.Err(); err != nil {
 			return append(failures, err)
 		}
+		// Resolve incomplete conversations together using the same authenticated
+		// directional proof. Empty packets alone still cannot advance coverage.
+		boundaryRanges := make(map[string][2]int64)
+		boundaryFailures := make(map[string]error)
+		for id, r := range batch {
+			var incomplete *incompleteMessageRange
+			if errors.As(failed[id], &incomplete) && !IsNotification(id) && !refreshed[id] {
+				pages := pending[id]
+				boundaryRanges[id] = [2]int64{r[0], pages[len(pages)-1][1]}
+			}
+		}
+		if len(boundaryRanges) > 0 {
+			m.resolveVisibilityBatch(ctx, boundaryRanges, boundaryFailures)
+		}
+		if err := ctx.Err(); err != nil {
+			return append(failures, err)
+		}
 		for id, r := range batch {
 			if err := failed[id]; err != nil {
 				var incomplete *incompleteMessageRange
@@ -113,7 +130,7 @@ func (m *MsgSyncer) recoverRecentMessagePages(ctx context.Context, ids []string,
 					refreshed[id] = true
 					pages := pending[id]
 					remaining := [2]int64{r[0], pages[len(pages)-1][1]}
-					visible, boundaryErr := m.refreshVisibleMessageRange(ctx, id, remaining)
+					visible, boundaryErr := boundaryRanges[id], boundaryFailures[id]
 					if boundaryErr == nil && visible != remaining {
 						if visible[0] > r[0] {
 							if commitErr := m.commitMessageCheckpoint(ctx, id, min(r[1], visible[0]-1)); commitErr != nil {

@@ -38,7 +38,7 @@ func TestMemberBatchesResumeAfterCancelledRequest(t *testing.T) {
 		for _, item := range req.ReqList {
 			seen[item.GroupID]++
 		}
-		// Unchanged groups are intentionally absent from the response.
+		// An entirely empty success confirms every requested group was skipped.
 		profileResponse(w, map[string]any{"respList": map[string]any{}})
 	})
 	base := common.WithMetadataProgress(ctx, &common.MetadataProgress{})
@@ -84,7 +84,7 @@ func TestMemberStorageFailureIsRetriedWithoutRefetchingCompletedGroup(t *testing
 		mu.Lock()
 		requests = append(requests, ids)
 		mu.Unlock()
-		profileResponse(w, map[string]any{"respList": map[string]any{"g": map[string]any{"versionID": "members", "version": 1, "group": map[string]any{"groupID": "g", "groupName": "New"}}}})
+		profileResponse(w, map[string]any{"respList": map[string]any{"unchanged": map[string]any{}, "g": map[string]any{"versionID": "members", "version": 1, "group": map[string]any{"groupID": "g", "groupName": "New"}}}})
 	})
 	base := common.WithMetadataProgress(ctx, &common.MetadataProgress{})
 	d := &groupProfileDB{row: &model_struct.LocalGroup{GroupID: "g"}, failMember: true}
@@ -118,7 +118,7 @@ func TestMemberBatchFailureRetainsSuccessfulSiblings(t *testing.T) {
 		}
 		requests = append(requests, ids)
 		if len(requests) == 1 {
-			profileResponse(w, map[string]any{"respList": map[string]any{"bad": nil}})
+			profileResponse(w, map[string]any{"respList": map[string]any{"bad": nil, "unchanged": map[string]any{}}})
 		} else {
 			profileResponse(w, map[string]any{"respList": map[string]any{}})
 		}

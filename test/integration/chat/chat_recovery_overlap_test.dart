@@ -225,6 +225,8 @@ void main() {
     logic.clearAllMessage();
     f.announce('after-clear', 3);
     await tester.pump(const Duration(milliseconds: 100));
+    expect(f.calls, hasLength(2), reason: 'Clear must not bypass the read budget');
+    await tester.pump(const Duration(seconds: 1));
     expect(f.calls, hasLength(3));
     f.calls.last.complete([recoveryMessage('after-clear', 3)]);
     await tester.pump();

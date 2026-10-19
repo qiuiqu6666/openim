@@ -24,6 +24,8 @@ public class IMMananger: BaseServiceManager {
         self["updateFcmToken"] = updateFcmToken
         self["setAppBackgroundStatus"] = setAppBackgroundStatus
         self["networkStatusChanged"] = networkStatusChanged
+        self["setDiagnosticLogging"] = setDiagnosticLogging
+        self["getDiagnosticLoggingSeconds"] = getDiagnosticLoggingSeconds
     }
     
     fileprivate func addObservers() {
@@ -56,7 +58,7 @@ public class IMMananger: BaseServiceManager {
             do {
                 try reachability.startNotifier()
             } catch (let e) {
-                print("reachability: \(e)")
+                DiagnosticLog.write("reachability: \(e)")
             }
             
         }

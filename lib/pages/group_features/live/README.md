@@ -1,6 +1,10 @@
 # 群直播
 
-`playback/live_playback_controller.dart` 只在初始化、比例、错误和首次有效进度变化时转发播放器通知，纯 position/buffered 更新不重建整个边看边聊表面。静音、暂停、可见性和凭证状态仍由各自流程通知，原生 VideoPlayer 自身的渲染监听保持不变。本次未构建或运行测试，首播/全屏/换源/凭证过期仍待真机验证。
+`playback/live_playback_controller.dart` 只在初始化、比例、错误和首次有效进度变化时转发播放器通知，纯 position/buffered 更新不重建整个边看边聊表面。静音、暂停、可见性和凭证状态仍由各自流程通知。
+
+安卓和 iOS 群直播均优先使用后端提供的 HTTP FLV，失败或首播超时后按有限列表回退 HLS。iOS FLV 通过 `live_video_factory.dart` 选择项目已经依赖的 media_kit 引擎，由 `live_flv_video_controller.dart` 适配现有共享播放所有权；HLS 保留 AVFoundation 及直播专用缓冲配置。`live_video_surface.dart` 只替换视频画面输出，复用现有静音、全屏、错误和投屏控件，不注册全局播放器替代实现，不影响普通聊天视频。FLV 打开时不自动播放且先静音，所有权控制器确认当前会话后才应用音量并播放。后台和路由覆盖仍由现有控制器暂停；退出时取消引擎订阅并释放原生资源。
+
+`live_ios_flv_test.dart` 覆盖选用引擎、静音、失败/超时回退、初始化取消及全屏复用；这些是可注入引擎测试，不能代替 iPhone 原生解码、AirPlay、音频路由和长时间延迟实测。iOS 构建和真机验收需要 macOS/Xcode；不能将 Dart 测试通过等同于 iOS 已安装生效。若 FLV 无法启动，可回退原生 HLS；HLS 对照包可用 `LIVE_COMPARE_HLS=true` 构建。
 
 入口为 `GroupLiveFeatureHost`（聊天正文前普通 Column）和
 `GroupLiveModule.openManage/openWatch`。页面及图片来自本地 reference-99chat 的真实

@@ -1,0 +1,3 @@
+8ef67a20ed01b6ebfc4af39fe6c6d748169ba2cea7dc4961172359ff6ca8d11c  core-sdk-3.8.3-patch15-recovery.42-group-version-probe.aar
+e8ce163ab80de72a5a559020e562e5b9d605ec3d0b5e42b88965236543e1ded1  core-sdk-3.8.3-patch15-recovery.42-group-version-probe.pom
+9d3880aa79ba592b381691d02f63e2aface3644243c08687fe7c68df662b68e7  verification.json

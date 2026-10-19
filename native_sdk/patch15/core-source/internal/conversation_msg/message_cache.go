@@ -3,10 +3,12 @@ package conversation_msg
 import (
 	"context"
 	"errors"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
 	"github.com/openimsdk/tools/errs"
 	"github.com/openimsdk/tools/log"
 	"gorm.io/gorm"
+	"time"
 )
 
 func isLocalRecordMissing(err error) bool {
@@ -14,6 +16,8 @@ func isLocalRecordMissing(err error) bool {
 }
 
 func (c *Conversation) maintainMessageCache(ctx context.Context, id string, ids []string) {
+	started := time.Now()
+	defer func() { common.RecordSyncMetric(ctx, "cache_maintenance", 1, time.Since(started)) }()
 	if store, ok := c.db.(interface {
 		MaintainMessageCache(context.Context, string, []string) error
 	}); ok {

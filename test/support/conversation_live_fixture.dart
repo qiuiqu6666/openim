@@ -10,6 +10,11 @@ import 'package:openim/pages/group_features/data/group_feature_store.dart';
 /// Presentation tests have no logged-in business session. Real list status
 /// networking is covered by the live-list integration fixtures separately.
 mixin ConversationLiveFixture on GetxController {
+  final activeFeedViews = <Object>{};
+  void setFeedViewActive(Object owner, bool active) {
+    active ? activeFeedViews.add(owner) : activeFeedViews.remove(owner);
+  }
+  void removeFeedView(Object owner) => activeFeedViews.remove(owner);
   final imStatus = IMSdkStatus.connectionSucceeded.obs;
   RxList<ConversationInfo> get list;
   bool isArchived(ConversationInfo info);

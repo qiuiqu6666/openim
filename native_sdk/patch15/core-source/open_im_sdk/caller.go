@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/logpolicy"
 	"reflect"
 	"runtime"
 	"runtime/debug"
@@ -106,19 +107,19 @@ func call_(operationID string, fn any, args ...any) (res any, err error) {
 			p := fmt.Sprintf("panic: %+v\n%s", r, debug.Stack())
 			err = fmt.Errorf("call panic: %+v", p)
 		} else {
-			elapsed := time.Since(start).String()
+			elapsed := time.Since(start)
 			if err == nil {
-				if !diagnosticLog {
-					log.ZInfo(ctx, "fn call success", "function name", funcName, "cost time", elapsed)
+				if !diagnosticLog && logpolicy.LogSuccess(elapsed) {
+					log.ZInfo(ctx, "fn call success", "function name", funcName, "cost time", elapsed.String())
 				}
 			} else {
-				log.ZError(ctx, "fn call error", err, "function name", funcName, "cost time", elapsed)
+				log.ZError(ctx, "fn call error", err, "function name", funcName, "cost time", elapsed.String())
 			}
 
 		}
 	}(t)
 
-	if !diagnosticLog {
+	if !diagnosticLog && logpolicy.Enabled() {
 		log.ZInfo(ctx, "func call req", "function name", funcName, "argumentCount", len(args))
 	}
 	fnv := reflect.ValueOf(fn)
@@ -272,16 +273,20 @@ func syncCall(operationID string, fn any, args ...any) (res string) {
 		if r := recover(); r != nil {
 			fmt.Printf("panic: %+v\n%s", r, debug.Stack())
 		} else {
-			elapsed := time.Since(start).String()
+			elapsed := time.Since(start)
 			if err == nil {
-				log.ZInfo(ctx, "fn call success", "function name", funcName, "cost time", elapsed)
+				if logpolicy.LogSuccess(elapsed) {
+					log.ZInfo(ctx, "fn call success", "function name", funcName, "cost time", elapsed.String())
+				}
 			} else {
-				log.ZError(ctx, "fn call error", err, "function name", funcName, "cost time", elapsed)
+				log.ZError(ctx, "fn call error", err, "function name", funcName, "cost time", elapsed.String())
 			}
 
 		}
 	}(t)
-	log.ZInfo(ctx, "func call req", "function name", funcName, "argumentCount", len(args))
+	if logpolicy.Enabled() {
+		log.ZInfo(ctx, "func call req", "function name", funcName, "argumentCount", len(args))
+	}
 	ins = append(ins, reflect.ValueOf(ctx))
 	for i := 0; i < len(args); i++ {
 		tag := fnt.In(i + 1)

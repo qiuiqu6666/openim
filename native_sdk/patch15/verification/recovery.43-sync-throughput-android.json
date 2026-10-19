@@ -1,0 +1,193 @@
+{
+  "date": "2026-10-19",
+  "sdk_version": "v3.8.3-patch.15+recovery.43-sync-throughput",
+  "source_sha256": "4b94a40f9cb6447b1dd856904b2bc7fb4914cc729000d279114d4b748533b7e6",
+  "target_seconds": 60,
+  "target_met": false,
+  "measurement_definition": "SDK OnSyncServerStart to OnSyncServerFinish; existing latest-100 automatic message window, older history on demand; optional full metadata sweep excluded. No synchronization scope reduction.",
+  "device": "O7HEYXKFUKCYNJNV",
+  "account_conversations": 3797,
+  "group_conversations": 3184,
+  "historical_baseline_seconds": 544,
+  "historical_baseline_comparable": false,
+  "clean_baseline42": "Interrupted before finish after about 20 minutes; first observer-contaminated run excluded.",
+  "debug_cold_ms": 202845,
+  "profile_cold_ms": 206540,
+  "warm_ms": 4323,
+  "intermediate_wal_cold_ms": 325344,
+  "resume": {
+    "before_checkpoints": 3774,
+    "after_checkpoints": 3774,
+    "before_nonempty_coverage": 2206,
+    "coverage_regressions": 0,
+    "uncovered_latest_windows": 0,
+    "latest_window_size_unchanged": 100
+  },
+  "resources_approximate": {
+    "optimized43_wal": {
+      "sync_ms": 325344,
+      "sampled_cpu_one_core_percent": 83.1,
+      "sampled_peak_rss_mb": 933.1,
+      "sampled_last_disk_write_mb": 2643.3,
+      "sampled_log_mb": 11.88,
+      "sample_interval_s": 10,
+      "sampled_duration_s": 319.2
+    },
+    "optimized43_batch": {
+      "sync_ms": 202845,
+      "sampled_cpu_one_core_percent": 91.4,
+      "sampled_peak_rss_mb": 930.3,
+      "sampled_last_disk_write_mb": 2229.1,
+      "sampled_log_mb": 10.26,
+      "sample_interval_s": 10,
+      "sampled_duration_s": 195.7
+    },
+    "optimized43_profile": {
+      "sync_ms": 206540,
+      "sampled_cpu_one_core_percent": 78.4,
+      "sampled_peak_rss_mb": 656.5,
+      "sampled_last_disk_write_mb": 2050.2,
+      "sampled_log_mb": 9.79,
+      "sample_interval_s": 10,
+      "sampled_duration_s": 195.7
+    }
+  },
+  "profile_attempt_metrics": {
+    "wallMs": 206531.248243,
+    "counts": {
+      "cache_maintenance": 6815,
+      "db_batch_write": 3426,
+      "messages_fetched": 137724,
+      "profile_candidates": 416,
+      "profile_deduplicated": 161,
+      "range_fetch": 508,
+      "range_incomplete_boundary_claim_requires_confirmation": 345,
+      "range_incomplete_empty_unconfirmed": 19,
+      "range_incomplete_unconfirmed_gap": 344,
+      "sync_page_queue_wait": 8498
+    },
+    "taskTotalMs": {
+      "cache_maintenance": 36396.61092400012,
+      "db_batch_write": 29913.777750999947,
+      "range_fetch": 59801.93840499991,
+      "sync_page_queue_wait": 16222.67160099996
+    },
+    "samplePercentilesMs": {
+      "cache_maintenance": {
+        "p50": 5.489154,
+        "p95": 21.125616,
+        "p99": 29.955615,
+        "sampleCount": 4096
+      },
+      "db_batch_write": {
+        "p50": 1.883153,
+        "p95": 9.926769,
+        "p99": 147.926462,
+        "sampleCount": 3426
+      },
+      "range_fetch": {
+        "p50": 95.958769,
+        "p95": 277.918692,
+        "p99": 372.693154,
+        "sampleCount": 508
+      },
+      "sync_page_queue_wait": {
+        "p50": 0.001615,
+        "p95": 26.117923,
+        "p99": 98.04777,
+        "sampleCount": 4096
+      }
+    },
+    "final": true,
+    "cancelled": false
+  },
+  "native_parity": {
+    "matches_after_android_strip": true,
+    "expected_sha256": "8b1a653487a60d5cf099a62cf0d76e0afea34db38d87084cea375e88b6985109",
+    "apk_sha256": "8b1a653487a60d5cf099a62cf0d76e0afea34db38d87084cea375e88b6985109",
+    "recovery43": true
+  },
+  "installed_parity": {
+    "installed_apk_sha256": "a8c960eb383e656821740b66dac95eba5e9c653ea33d413857d1e9d1cf9c31d3",
+    "expected_apk_sha256": "a8c960eb383e656821740b66dac95eba5e9c653ea33d413857d1e9d1cf9c31d3",
+    "matches": true,
+    "data_directory": "app_flutter (original; benchmark redirect removed)"
+  },
+  "patch_replay": {
+    "matched_files": 481,
+    "line_ending_only_differences": 35,
+    "declared_overlays": [
+      "go.mod",
+      "go.sum",
+      "internal/third/file/upload.go",
+      "internal/third/file/upload_deadline_test.go",
+      "internal/third/file/upload_lock.go",
+      "version/version"
+    ],
+    "mismatches": []
+  },
+  "owned_go_files": [
+    "internal/conversation_msg/conversation_msg.go",
+    "internal/conversation_msg/message_cache.go",
+    "internal/conversation_msg/message_check.go",
+    "internal/conversation_msg/message_sync_batch.go",
+    "internal/conversation_msg/notification.go",
+    "internal/group/cache.go",
+    "internal/interaction/msg_sync.go",
+    "internal/interaction/msg_sync_diagnostics.go",
+    "internal/interaction/msg_sync_latest_test.go",
+    "internal/interaction/msg_sync_metadata.go",
+    "internal/interaction/msg_sync_page.go",
+    "internal/interaction/msg_sync_recent_batch.go",
+    "pkg/db/chat_log_model.go",
+    "pkg/db/db_init.go",
+    "pkg/db/message_sync_batch.go",
+    "internal/conversation_msg/profile_queue.go",
+    "internal/conversation_msg/profile_queue_test.go",
+    "internal/conversation_msg/sync_profile_latency_test.go",
+    "internal/group/message_profile.go",
+    "internal/interaction/msg_sync_boundary_batch_test.go",
+    "internal/interaction/msg_sync_diagnostic_reason_test.go",
+    "internal/interaction/msg_sync_profile_queue_test.go",
+    "internal/interaction/msg_sync_transport_batch_test.go",
+    "pkg/common/profile_queue.go",
+    "pkg/common/sync_metrics.go",
+    "pkg/common/sync_metrics_test.go",
+    "pkg/db/sync_durability_test.go",
+    "pkg/db/sync_schema_test.go"
+  ],
+  "other_source_work": "Concurrent internal/third upload/log edits left untouched in canonical checkout and excluded from this release; prior locked upload overlays retained.",
+  "validation": {
+    "database_integrity": "ok",
+    "duplicate_visible_sequences": 0,
+    "latest_required_windows_uncovered": 0,
+    "rapid_navigation_cycles": 3,
+    "network_offline_seconds": 8,
+    "process_restart_during_sync": true,
+    "background_foreground_during_sync": true,
+    "real_time_callback_count_profile": 495,
+    "real_time_latency_measured": false,
+    "flutter_selected_tests": 260,
+    "native_core_tests": "passed",
+    "sqlite_and_sync_targeted_race": "passed",
+    "foreground_probe_timing_test": "One failure under concurrent build load; isolated three-repeat race rerun passed.",
+    "ios": "not built; macOS required",
+    "original_directory_after_upgrade": {
+      "integrity": "ok",
+      "conversations": 3797,
+      "group_conversations": 3184,
+      "duplicate_visible_sequences": 0,
+      "checkpoints": 3774
+    }
+  },
+  "remaining": [
+    "60-second cold synchronization target not reached",
+    "First screen/history painted timestamps not measured; new-conversation callback was null, not a paint metric",
+    "No cross-login versioned boundary cache: authoritative generation unavailable",
+    "No newly exposed configurable concurrency API",
+    "Physical revoke/delete/group-permission mutation cases not exercised; unit fixtures cover relevant preservation",
+    "Precise real-time delivery latency and older-gap UI scenario not measured",
+    "Optional full directory metadata completion not measured"
+  ],
+  "artifact_build_mode": "Profile/AOT validation build; benchmark redirect and callback instrumentation removed; original app_flutter directory restored"
+}

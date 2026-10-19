@@ -195,13 +195,25 @@ class _ConversationPageState extends State<ConversationPage> {
           onDelete: () => _editActions.delete(context, conversations));
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateFeedActivity();
+  }
+
+  void _updateFeedActivity() => logic.setFeedViewActive(
+      this,
+      widget.liveUpdatesActive && (ModalRoute.isCurrentOf(context) ?? true));
+
+  @override
   void didUpdateWidget(covariant ConversationPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _updateFeedActivity();
     _compensationActive.value = widget.liveUpdatesActive;
   }
 
   @override
   void dispose() {
+    logic.removeFeedView(this);
     final publish = widget.onEditActionBarChanged;
     if (_publishedEditBar && publish != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => publish(null));

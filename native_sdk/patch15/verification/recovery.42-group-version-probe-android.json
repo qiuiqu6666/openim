@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-19",
+  "sdk_version": "v3.8.3-patch.15+recovery.42-group-version-probe",
+  "source_sha256": "cbd22ba59ac8f5c29327a38eb81880039926cae33017d38750aa216040564ad0",
+  "aar_sha256": "8ef67a20ed01b6ebfc4af39fe6c6d748169ba2cea7dc4961172359ff6ca8d11c",
+  "aar_bytes": 31872850,
+  "abis": {
+    "armeabi-v7a": {
+      "bytes": 21111288,
+      "sha256": "ac42bbf0738fc4e6adfd817db4020a4c883653f4b2ffd3ca28b8051189142b80",
+      "load_alignments": [
+        "0x4000",
+        "0x4000",
+        "0x4000",
+        "0x4000"
+      ]
+    },
+    "arm64-v8a": {
+      "bytes": 22129264,
+      "sha256": "833f7f1a1ac84107cf3a23a491fee0312c6efb1ff9cae6ea36733a8921fbb5be",
+      "load_alignments": [
+        "0x4000",
+        "0x4000",
+        "0x4000",
+        "0x4000"
+      ]
+    },
+    "x86": {
+      "bytes": 21392272,
+      "sha256": "cc75f4f6dd7697f58975924cc9f91b420b97b595ad4e539497a117833ed1fe46",
+      "load_alignments": [
+        "0x4000",
+        "0x4000",
+        "0x4000",
+        "0x4000"
+      ]
+    },
+    "x86_64": {
+      "bytes": 23147744,
+      "sha256": "6812d38232f5395113ad26899b100ef05f586621f507c5f808daaa9ed5b8ad87",
+      "load_alignments": [
+        "0x4000",
+        "0x4000",
+        "0x4000",
+        "0x4000"
+      ]
+    }
+  },
+  "checks": {
+    "build_tests": "passed",
+    "source_receipt": "passed",
+    "elf_load_alignment": "all LOAD segments >= 16 KiB",
+    "gradle_integration": ":flutter_openim_sdk:verifyOpenIMCore --offline passed",
+    "apk": "not built",
+    "device_runtime": "not tested",
+    "ios": "not rebuilt"
+  },
+  "logs": [
+    "E:/openim/outputs/recovery42-android-core-build.log",
+    "E:/openim/outputs/recovery42-gradle-sdk-verify.log"
+  ],
+  "toolchain": {
+    "go": "1.24.0",
+    "ndk": "28.2.13676358",
+    "android_api": 21
+  }
+}

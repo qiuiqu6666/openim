@@ -43,6 +43,8 @@ const (
 var SearchContentType = []int{constant.Text, constant.AtText, constant.File}
 
 type Conversation struct {
+	sessionContext context.Context
+	profileQueue   profileQueue
 	*interaction.LongConnMgr
 	conversationSyncer          *syncer.Syncer[*model_struct.LocalConversation, pbConversation.GetOwnerConversationResp, string]
 	db                          db_interface.DataBase
@@ -106,7 +108,7 @@ func NewConversation(ctx context.Context, longConnMgr *interaction.LongConnMgr, 
 	recvCh, msgSyncerCh chan common.Cmd2Value, relation *relation.Relation, group *group.Group, user *user.User,
 	file *file.File) *Conversation {
 	info := ccontext.Info(ctx)
-	n := &Conversation{db: db,
+	n := &Conversation{db: db, sessionContext: ctx,
 		LongConnMgr:                 longConnMgr,
 		conversationEventQueue:      recvCh,
 		msgSyncerCh:                 msgSyncerCh,
@@ -686,8 +688,8 @@ func (c *Conversation) doMsgNew(c2v common.Cmd2Value) error {
 		}
 		c.maintainMessageCache(ctx, id, ids)
 	}
-	for _, v := range exceptionMsg {
-		log.ZWarn(ctx, "exceptionMsg show: ", nil, "msg", *v)
+	if len(exceptionMsg) > 0 {
+		common.RecordSyncMetric(ctx, "exception_messages", int64(len(exceptionMsg)), 0)
 	}
 
 	log.ZDebug(ctx, "doMsgNew done", "duration", time.Since(b).String(), "conversations", len(allMsg), "incomingMsgs", totalIncomingMsgs, "newMessages", len(newMessages))
@@ -811,19 +813,23 @@ func (c *Conversation) doMsgSyncByReinstalled(c2v common.Cmd2Value) error {
 	// log.ZDebug(ctx, "progress is", "msgLen", msgLen, "msgOffset", c.msgOffset, "total", total, "now progress is", (c.msgOffset*(100-InitSyncProgress))/total + InitSyncProgress)
 	if c2v.Value.(sdk_struct.CmdMsgSyncInReinstall).NotifyConversations {
 		ids := make([]string, 0, len(insertMsg))
-		for id := range insertMsg { ids = append(ids, id) }
+		for id := range insertMsg {
+			ids = append(ids, id)
+		}
 		// Replay the committed snapshot too: the preceding attempt may have
 		// saved its rows but failed before notifying the application.
 		if len(ids) > 0 {
-			if err := c.notifySyncedConversations(ctx, ids); err != nil { return err }
+			if err := c.notifySyncedConversations(ctx, ids); err != nil {
+				return err
+			}
 		}
 	}
 	if total > 0 {
 		c.ConversationListener().OnSyncServerProgress(min(99, (c.msgOffset*(100-InitSyncProgress))/total+InitSyncProgress))
 	}
 	//Exception message storage
-	for _, v := range exceptionMsg {
-		log.ZWarn(ctx, "exceptionMsg show: ", nil, "msg", *v)
+	if len(exceptionMsg) > 0 {
+		common.RecordSyncMetric(ctx, "exception_messages", int64(len(exceptionMsg)), 0)
 	}
 	return nil
 }

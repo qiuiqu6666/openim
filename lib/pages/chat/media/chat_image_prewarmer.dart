@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/painting.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:openim_common/media_preloading.dart';
@@ -19,8 +18,6 @@ class ChatImagePrewarmer {
   List<String> _urls = [];
   Timer? _idle;
   ViewerImageProvider? _image;
-  ImageStream? _stream;
-  ImageStreamListener? _listener;
   bool _active = true, _scrolling = false, _disposed = false;
 
   static List<String> candidates(List<Message> messages, List<String> visible) {
@@ -104,39 +101,24 @@ class ChatImagePrewarmer {
     if (pending.isEmpty) return;
     final url = pending.first;
     final image = _image = _createImage?.call(url) ??
-        ViewerImageProvider(url,
-            maxPixels: 1600 * 1600, cacheOnly: _thumbnails.contains(url));
-    final stream = _stream = image.resolve(ImageConfiguration.empty);
-    late final ImageStreamListener listener;
+        ViewerImageProvider(url, cacheOnly: _thumbnails.contains(url));
     void finish() {
-      // Image listeners can fire synchronously for a cache hit.
-      scheduleMicrotask(() {
-        if (!identical(_image, image)) return;
-        stream.removeListener(listener);
-        image.evict();
-        _image = null;
-        _stream = null;
-        _listener = null;
-        _done.add(url);
-        if (_done.length > 128) _done.remove(_done.first);
-        _next();
-      });
+      if (!identical(_image, image)) return;
+      _image = null;
+      _done.add(url);
+      if (_done.length > 128) _done.remove(_done.first);
+      _next();
     }
 
-    listener = _listener = ImageStreamListener((info, _) {
-      info.dispose();
-      finish();
-    }, onError: (_, __) => finish());
-    stream.addListener(listener);
+    unawaited(image
+        .prefetchEncoded()
+        .then((_) => finish(), onError: (Object _, StackTrace __) => finish()));
   }
 
   void _cancel() {
     _idle?.cancel();
-    if (_listener != null) _stream?.removeListener(_listener!);
     _image?.cancel();
     _image = null;
-    _stream = null;
-    _listener = null;
   }
 
   void dispose() {

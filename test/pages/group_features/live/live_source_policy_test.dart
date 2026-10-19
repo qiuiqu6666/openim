@@ -14,6 +14,13 @@ const info = LivePlayInfo(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('comparison build selects HLS without losing FLV fallback', () {
+    expect(
+        livePlaybackSources(info,
+                platform: TargetPlatform.android, web: false, preferHls: true)
+            .map((uri) => uri.toString()),
+        [info.playURL, info.flvURL]);
+  });
   test('only native iOS live playback opts into the local buffer policy', () {
     expect(livePlaybackHeaders(platform: TargetPlatform.iOS, web: false),
         {'X-99Chat-Local-Live-Playback': '1'});
@@ -30,11 +37,18 @@ void main() {
             .map((uri) => uri.toString()),
         [info.flvURL, info.playURL]);
   });
-  test('iOS and browser retain backend order', () {
+  test('iOS prefers signed FLV and retains HLS fallback', () {
+    expect(
+        livePlaybackSources(info, platform: TargetPlatform.iOS, web: false)
+            .map((uri) => uri.toString()),
+        [info.flvURL, info.playURL]);
+  });
+  test('desktop and browser retain backend order', () {
     for (final platform in TargetPlatform.values) {
       expect(livePlaybackSources(info, platform: platform, web: true),
           info.supportedSources);
-      if (platform != TargetPlatform.android) {
+      if (platform != TargetPlatform.android &&
+          platform != TargetPlatform.iOS) {
         expect(livePlaybackSources(info, platform: platform, web: false),
             info.supportedSources);
       }

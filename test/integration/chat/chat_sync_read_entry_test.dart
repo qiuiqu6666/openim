@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/core/im_callback.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
+import 'package:openim/pages/chat/receipts/chat_read_receipts.dart';
 import 'package:openim/pages/chat/messages/widgets/chat_message_list.dart';
 import 'package:openim_common/src/widgets/chat/chat_list_viewport.dart';
 
@@ -102,7 +103,7 @@ void main() {
     await tester.pump();
     fixture.announce('initial', 1);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(ChatReadReceipts.viewportReadInterval);
     await tester.pumpAndSettle();
     expect(reads(fixture), 2,
         reason: 'A duplicate status must not lose the still-painted viewport');
@@ -157,8 +158,8 @@ void main() {
     await tester.pumpWidget(_stationaryList(logic));
     await tester.pumpAndSettle();
     expect(reads(fixture), 1);
-    // Drain the existing 250ms viewport coalescing window first.
-    await tester.pump(const Duration(milliseconds: 250));
+    // Drain the configured viewport coalescing window first.
+    await tester.pump(ChatReadReceipts.viewportReadInterval);
     await tester.pumpAndSettle();
     final failedAttempts = reads(fixture);
     await tester.pump(const Duration(seconds: 2));

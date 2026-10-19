@@ -10,6 +10,6 @@ class ForwardDialogTokens {
   static const recipientHeight = 168.0;
   static const recipientCellWidth = 72.0;
   static const thumbnailCacheSize = 264;
-  static const send = AppTokens.biometricGreen;
+  static const send = AppTokens.accent;
   static const videoScrim = Color(0x99000000);
 }

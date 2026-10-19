@@ -69,7 +69,7 @@ class AiQuickChipBar extends StatelessWidget {
     ];
     return SizedBox(
       height: math.max(
-        AiMetrics.dimension56,
+        AiMetrics.dimension56 + AiMetrics.space4,
         MediaQuery.textScalerOf(context).scale(AiMetrics.font13) *
                 AiMetrics.inputLineHeight +
             AiMetrics.space28,
@@ -97,46 +97,50 @@ class AiQuickChipBar extends StatelessWidget {
             child: InkWell(
               onTap: enabled ? () => onSelected(chip.id) : null,
               borderRadius: BorderRadius.circular(AiMetrics.radius20),
-              child: Container(
-                constraints:
-                    const BoxConstraints(minHeight: AiMetrics.dimension44),
-                padding: EdgeInsets.only(
-                  left: AiMetrics.space12,
-                  right: selected ? AiMetrics.space6 : AiMetrics.space12,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AiMetrics.radius20),
-                  border: Border.all(color: border),
-                ),
-                child: Row(
-                  children: [
-                    Icon(chip.icon, size: AiMetrics.dimension16, color: fg),
-                    const SizedBox(width: AiMetrics.dimension6),
-                    Text(
-                      chip.label,
-                      style: TextStyle(
-                        color: fg,
-                        fontSize: AiMetrics.font13,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.w400,
-                      ),
-                    ),
-                    if (selected) ...[
-                      const SizedBox(width: AiMetrics.dimension2),
-                      InkWell(
-                        onTap: enabled ? () => onSelected(chip.id) : null,
-                        customBorder: const CircleBorder(),
-                        child: Padding(
-                          padding: const EdgeInsets.all(AiMetrics.space4),
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: AiMetrics.dimension14,
-                            color: fg,
-                          ),
+              child: Semantics(
+                button: true,
+                selected: selected,
+                hint: selected
+                    ? i18n.t(
+                        zhHans: '再次点击取消',
+                        zhHant: '再次點擊取消',
+                        en: 'Tap again to deselect')
+                    : null,
+                child: Container(
+                  constraints:
+                      const BoxConstraints(minHeight: AiMetrics.dimension48),
+                  padding: EdgeInsets.only(
+                    left: AiMetrics.space12,
+                    right: selected ? AiMetrics.space6 : AiMetrics.space12,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AiMetrics.radius20),
+                    border: Border.all(color: border),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(chip.icon, size: AiMetrics.dimension16, color: fg),
+                      const SizedBox(width: AiMetrics.dimension6),
+                      Text(
+                        chip.label,
+                        style: TextStyle(
+                          color: fg,
+                          fontSize: AiMetrics.font13,
+                          fontWeight:
+                              selected ? FontWeight.w600 : FontWeight.w400,
                         ),
                       ),
+                      if (selected) ...[
+                        const SizedBox(width: AiMetrics.dimension6),
+                        ExcludeSemantics(
+                            child: Icon(
+                          Icons.close_rounded,
+                          size: AiMetrics.dimension14,
+                          color: fg,
+                        )),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),

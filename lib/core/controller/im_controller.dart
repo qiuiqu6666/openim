@@ -502,7 +502,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       unawaited(refreshMyFullInfo());
       _queryAtAllTag();
     } catch (e, s) {
-      Logger.print('OpenIM login failed');
+      Logger.print('Chat login failed');
       if (generation != null && _sessionQueue.isCurrent(generation)) {
         await _handleLoginRepeatError(e,
             account: userID, imToken: token, credentialToken: credentialToken);

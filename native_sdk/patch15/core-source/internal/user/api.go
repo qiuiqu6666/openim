@@ -107,14 +107,20 @@ func (u *User) GetUsersInfo(ctx context.Context, userIDs []string) ([]*sdk_struc
 	})
 
 	for _, userInfo := range res {
-
-		// update single conversation
+		// Friend profiles are maintained by relation sync (including remarks).
+		// Avoid a conversation query that cannot result in an update.
+		if _, ok := friendMap[userInfo.UserID]; ok {
+			continue
+		}
 
 		conversation, err := u.GetConversationByUserID(ctx, userInfo.UserID)
 		if err != nil {
 			log.ZWarn(ctx, "GetConversationByUserID failed", err, "userInfo", usersInfo)
 		} else {
-			if _, ok := friendMap[userInfo.UserID]; ok {
+			// Find returns an empty record without an error when no chat exists.
+			// Profile lookup must not enqueue invalid updates for those users.
+			if conversation == nil || conversation.ConversationID == "" ||
+				(conversation.ConversationType != constant.SingleChatType && conversation.ConversationType != constant.NotificationChatType) {
 				continue
 			}
 			log.ZDebug(ctx, "GetConversationByUserID", "conversation", conversation)

@@ -1,0 +1,41 @@
+{
+  "apk_sha256": "7c8b0efabddbe027b6770c3d0f30ece72fe1156b2ff1fff72ea6646763467ced",
+  "aar_sha256": "9ff4eec2fe59e1dadb264b3e77b5e45360b418848a72511d9f8a8e2ff1be62b8",
+  "apk_native_sha256": "0d064359119f6baa086de6c64078730e4eabb6e7ad0c04b9af24be711be97d0c",
+  "aar_native_sha256": "1ac375bb85a2591160dbc056a8a221bcaf59cd86a8ce752aea11906b897c80c4",
+  "native_parity": true,
+  "parity_mode": "NDK strip-unneeded",
+  "apk_abis": [
+    "arm64-v8a"
+  ],
+  "sdk_version": "v3.8.3-patch.15+recovery.45-branded-diagnostics",
+  "source_sha256": "2d7535387981074778d306a6ad37cca78b8792cc527aad56c5470ec89f8347b6",
+  "device": {
+    "serial": "O7HEYXKFUKCYNJNV",
+    "model": "2506BPN68G",
+    "package": "chat.chat99.chatpro",
+    "version_name": "3.0.1",
+    "version_code": 2044
+  },
+  "checks": {
+    "go_native_regressions": "passed",
+    "go_branding_and_log_paths": "passed on locked source",
+    "flutter_diagnostic_tests": 7,
+    "source_lock_tests": 15,
+    "dart_analyzer": "no issues",
+    "patch_roundtrip": "passed, normalized line endings",
+    "device_default_compact": true,
+    "device_enable": true,
+    "device_leave_reopen_enabled": true,
+    "device_manual_disable": true,
+    "device_restart_resets_enabled_window": true,
+    "automatic_expiry": "unit tests passed; full 10-minute device countdown not waited"
+  },
+  "log_audit": {
+    "pid": 4244,
+    "owned_records": 116,
+    "old_branding_matches": 0,
+    "scope": "ChatCore, ChatSDK, GoLog, Go, flutter tags; system activity/package metadata excluded"
+  },
+  "ios": "source/bridge updated; framework and IPA not built (macOS required)"
+}

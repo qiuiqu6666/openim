@@ -155,7 +155,7 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
     if (_openingMessage || !mounted || !_sameSession || message.hasExpired) {
       return;
     }
-    _openingMessage = true;
+    setState(() => _openingMessage = true);
     FocusScope.of(context).unfocus();
     try {
       await _messageNavigation.open(context,
@@ -163,7 +163,7 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
           message: message,
           isEntryCurrent: () => mounted && _sameSession);
     } finally {
-      _openingMessage = false;
+      if (mounted) setState(() => _openingMessage = false);
     }
   }
 
@@ -198,7 +198,8 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
         message: message,
         sources: gallery.sources,
         initialIndex: gallery.initialIndex,
-        onAutoPlay: (index) => index == gallery.initialIndex && gallery.sources[index].isVideo,
+        onAutoPlay: (index) =>
+            index == gallery.initialIndex && gallery.sources[index].isVideo,
         onlySave: true,
       );
     } catch (_) {
@@ -279,6 +280,13 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
                 Navigator.of(context).maybePop();
               },
             ),
+            if (_openingMessage)
+              LinearProgressIndicator(
+                key: const ValueKey('chat-history-progress'),
+                color: AppTokens.accent,
+                backgroundColor: ChatComposerTokens.divider(dark: dark),
+                semanticsLabel: 'chatHistoryLoading'.tr,
+              ),
             Expanded(
               child: AnimatedBuilder(
                 animation: _controller,
@@ -393,8 +401,10 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
                 child: AnimatedBuilder(
               animation: _controller,
               builder: (context, _) => Column(children: [
-                if (_controller.loading)
+                if (_controller.loading || _openingMessage)
                   LinearProgressIndicator(
+                    key: const ValueKey('chat-history-progress'),
+                    semanticsLabel: 'chatHistoryLoading'.tr,
                     color: _usesListSurface ? AppTokens.accent : null,
                     backgroundColor: _usesListSurface
                         ? ChatComposerTokens.divider(dark: dark)
