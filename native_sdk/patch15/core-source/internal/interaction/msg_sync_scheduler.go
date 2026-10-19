@@ -61,6 +61,7 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 	var active *common.Cmd2Value
 	var done chan struct{}
 	var cancel context.CancelFunc
+	var activeCtx context.Context
 	var queued []common.Cmd2Value
 	protected := false
 	const liveBurst = 32
@@ -164,6 +165,10 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 			pageOwner = &messagePageCoordinator{turns: make(chan chan struct{})}
 			pageTurns = pageOwner.turns
 			attempt.Ctx, cancel = context.WithValue(attemptCtx, messagePageContextKey{}, pageOwner), attemptCancel
+			if original.Cmd == cmdSyncAuxiliaryMetadata {
+				attempt.Ctx = common.WithMetadataTurn(attempt.Ctx)
+			}
+			activeCtx = attempt.Ctx
 			liveHandled = 0
 			done = make(chan struct{})
 			go func(finished chan struct{}) {
@@ -192,6 +197,10 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 			reserveProgress = false
 			stop()
 		case <-preempt:
+			if delay := common.MetadataPreemptionDelay(activeCtx); delay > 0 {
+				preemption.Reset(delay)
+				continue
+			}
 			// A stalled first attempt may yield once. Its retry owns a bounded
 			// page until completion, so busy chats cannot cancel it forever.
 			if active != nil {

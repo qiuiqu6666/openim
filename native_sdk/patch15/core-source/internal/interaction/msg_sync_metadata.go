@@ -30,6 +30,9 @@ func (m *MsgSyncer) requestAuxiliaryMetadata() {
 	if m.recvCh == nil {
 		return
 	}
+	if !m.auxMetadataPending {
+		m.auxMetadataProgress = &common.MetadataProgress{}
+	}
 	m.auxMetadataPending = true
 	m.queuePendingAuxiliaryMetadata()
 }
@@ -48,7 +51,13 @@ func (m *MsgSyncer) doAuxiliaryMetadataSync(ctx context.Context) {
 	if !m.auxMetadataPending {
 		return
 	}
-	if err := m.syncMetadataAfterMessages(ctx); err != nil {
+	ctx = common.WithMetadataProgress(ctx, m.auxMetadataProgress)
+	before := m.auxMetadataProgress.Checkpoints()
+	err := m.syncMetadataAfterMessages(ctx)
+	if owner, ok := ctx.Value(messagePageContextKey{}).(*messagePageCoordinator); ok {
+		owner.committed.Add(m.auxMetadataProgress.Checkpoints() - before)
+	}
+	if err != nil {
 		// Retry on the same serialized scheduler. Auxiliary profile failures
 		// never turn already committed messages into a failed network recovery.
 		recordMessageSyncFailure(ctx, err)
@@ -56,6 +65,7 @@ func (m *MsgSyncer) doAuxiliaryMetadataSync(ctx context.Context) {
 		return
 	}
 	m.auxMetadataPending = false
+	m.auxMetadataProgress = nil
 }
 
 // Keep metadata failures visible and retryable, but only after offline messages

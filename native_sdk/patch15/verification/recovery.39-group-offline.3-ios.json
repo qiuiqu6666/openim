@@ -1,0 +1,33 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.39-group-offline.3",
+  "sdk_core_commit": "09ed4707f1ec8a79551a880265dc397a1f73c4fc",
+  "source_sha256": "b421aaa360cd8e5f91b4fc7356d23e5afe7420eaa110ba1c109eaa18c0d0ead4",
+  "framework_receipt": {
+    "platform": "ios",
+    "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "sdk_version": "v3.8.3-patch.15+recovery.39-group-offline.3",
+    "source_sha256": "b421aaa360cd8e5f91b4fc7356d23e5afe7420eaa110ba1c109eaa18c0d0ead4",
+    "patch_sha256": "9ff1cae3925826c6c836702204e2448ec91eafe56a63cfdaa714ee5a1b9cb72e",
+    "go_version": "1.24.0",
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "core_tests": "passed",
+    "device_runtime": "not tested",
+    "binaries_sha256": {
+      "ios-arm64_x86_64-simulator/OpenIMCore.framework/OpenIMCore": "52e82dd27e1a11e5c904203025e07414014c2ffa3db97747edcb44ab24517bfe",
+      "ios-arm64/OpenIMCore.framework/OpenIMCore": "b5712a801798545a9250357082e5fbc2359875d59e113d45abb770a2e80f0950"
+    }
+  },
+  "app_build_number": "2032",
+  "app_binary_sha256": "7c4f88d542f9174a5ef1d878ec61a336b05d459a9b16d735e68e9ab49431d2ad",
+  "verified_at": "2026-10-19T05:31:07.147295+00:00",
+  "tests": {
+    "source_lock": 15,
+    "core_and_sqlite": "passed",
+    "group_and_syncer": "passed",
+    "race_group_common_relation_interaction": "passed"
+  },
+  "patch_replay": "passed; 3 declared build overlays; existing CRLF test differs only in line endings",
+  "ios_release_no_codesign": "passed",
+  "device_runtime": "not tested",
+  "android": "not rebuilt"
+}

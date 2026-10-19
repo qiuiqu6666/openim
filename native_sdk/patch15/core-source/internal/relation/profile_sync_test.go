@@ -23,9 +23,10 @@ import (
 
 type friendProfileDB struct {
 	db_interface.DataBase
-	rows     map[string]model_struct.LocalFriend
-	writeErr error
-	updates  int
+	rows        map[string]model_struct.LocalFriend
+	writeErr    error
+	updates     int
+	afterUpdate func()
 }
 
 func (d *friendProfileDB) GetVersionSync(context.Context, string, string) (*model_struct.LocalVersionSync, error) {
@@ -54,6 +55,9 @@ func (d *friendProfileDB) UpdateFriend(_ context.Context, row *model_struct.Loca
 	}
 	d.rows[row.FriendUserID] = *row
 	d.updates++
+	if d.afterUpdate != nil {
+		d.afterUpdate()
+	}
 	return nil
 }
 

@@ -20912,3 +20912,1544 @@ new file mode 100644
 +	}
 +	gate.Unlock()
 +}
+
+diff --git ab/internal/conversation_msg/heat_recovery_sqlite_test.go bb/internal/conversation_msg/heat_recovery_sqlite_test.go
+new file mode 100644
+index 00000000..96f6b444
+--- /dev/null
++++ bb/internal/conversation_msg/heat_recovery_sqlite_test.go
+@@ -0,0 +1,153 @@
++//go:build cgo && !js
++
++package conversation_msg
++
++import (
++	"context"
++	"errors"
++	"net/http"
++	"net/http/httptest"
++	"sync/atomic"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/internal/user"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/ccontext"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++	"github.com/openimsdk/protocol/sdkws"
++)
++
++// Reproduce the logged cold group receipt, then exercise the existing profile
++// sync that becomes reachable after the notification page can finish.
++func TestHeatRecoveryColdReceiptThenProfileSyncSQLite(t *testing.T) {
++	var requests atomic.Int32
++	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		requests.Add(1)
++		_, _ = w.Write([]byte(`{"errCode":0,"data":{"usersInfo":[{"userID":"self","nickname":"restored","faceURL":"restored face"}]}}`))
++	}))
++	defer srv.Close()
++	ctx := ccontext.WithInfo(context.WithValue(context.Background(), "operationID", "heat-recovery"), &ccontext.GlobalConfig{UserID: "self", IMConfig: sdk_struct.IMConfig{ApiAddr: srv.URL}})
++	store, err := db.NewDataBase(ctx, "self", t.TempDir(), 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { _ = store.Close(context.Background()) })
++	const groupID = "sg_@lg_cold_heat"
++	for _, conv := range []*model_struct.LocalConversation{
++		{ConversationID: groupID, ConversationType: constant.ReadGroupChatType, UnreadCount: 4},
++		{ConversationID: "chat", ConversationType: constant.SingleChatType, UnreadCount: 2},
++	} {
++		if err := store.InsertConversation(ctx, conv); err != nil {
++			t.Fatal(err)
++		}
++	}
++	c, _, _ := watermarkFixture()
++	c.db = store
++	c.user = user.NewUser(store, "self", c.GetCh())
++	tips := &sdkws.MarkAsReadTips{ConversationID: groupID, MarkAsReadUserID: "peer", Seqs: []int64{310412, 310411, 310410, 310409}}
++	msg := &sdkws.MsgData{Seq: 1631, ContentType: constant.HasReadReceipt, SendTime: 1234, Content: []byte(utils.StructToJsonString(sdk_struct.NotificationElem{Detail: utils.StructToJsonString(tips)}))}
++	cmd := common.Cmd2Value{Ctx: ctx, Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: map[string]*sdkws.PullMsgs{"n_heat": {Msgs: []*sdkws.MsgData{msg}}}}}
++	if err := c.doNotificationManager(cmd); err != nil {
++		t.Fatal(err)
++	}
++	seqs, err := store.GetNotificationAllSeqs(ctx)
++	if err != nil || len(seqs) != 1 || seqs[0].Seq != 1631 {
++		t.Fatalf("cold receipt did not advance: %v %v", seqs, err)
++	}
++	if err := c.user.SyncLoginUserInfo(ctx); err != nil {
++		t.Fatal(err)
++	}
++	profile, err := store.GetLoginUser(ctx, "self")
++	if err != nil || profile.Nickname != "restored" {
++		t.Fatalf("profile not persisted: %+v %v", profile, err)
++	}
++	for i := 0; i < 100; i++ {
++		row := &model_struct.LocalChatLog{SendID: "self", SenderNickname: "wire", Seq: 9, IsRead: true}
++		c.faceURLAndNicknameHandle(ctx, []*model_struct.LocalChatLog{row}, nil, "chat")
++		if row.SenderNickname != "restored" || !row.IsRead || row.Seq != 9 {
++			t.Fatalf("recovered metadata changed message state: %+v", row)
++		}
++	}
++	if requests.Load() != 1 {
++		t.Fatalf("message path fetched profile repeatedly: %d", requests.Load())
++	}
++	conv, err := store.GetConversation(ctx, groupID)
++	if err != nil || conv.UnreadCount != 4 {
++		t.Fatalf("peer group receipt changed own unread: %+v %v", conv, err)
++	}
++}
++
++type heatReceiptFailureDB struct {
++	*db.DataBase
++	fail bool
++}
++
++func (d *heatReceiptFailureDB) GetMessagesBySeqs(ctx context.Context, id string, seqs []int64) ([]*model_struct.LocalChatLog, error) {
++	if d.fail {
++		return nil, errors.New("injected disk read failure")
++	}
++	return d.DataBase.GetMessagesBySeqs(ctx, id, seqs)
++}
++
++func TestHeatRecoveryReceiptFailureKeepsCheckpointAndReadStateSQLite(t *testing.T) {
++	ctx := context.Background()
++	store, err := db.NewDataBase(ctx, "self", t.TempDir(), 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	t.Cleanup(func() { _ = store.Close(ctx) })
++	if err := store.InsertConversation(ctx, &model_struct.LocalConversation{ConversationID: "chat", ConversationType: constant.SingleChatType, UnreadCount: 2}); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.BatchInsertMessageList(ctx, "chat", []*model_struct.LocalChatLog{
++		{ClientMsgID: "own", SendID: "self", Seq: 4, SendTime: 4, AttachedInfo: "{}"},
++		{ClientMsgID: "later", SendID: "self", Seq: 5, SendTime: 5, AttachedInfo: "{}"},
++	}); err != nil {
++		t.Fatal(err)
++	}
++	if err := store.SetNotificationSeq(ctx, "n_chat", 56); err != nil {
++		t.Fatal(err)
++	}
++	wrapper := &heatReceiptFailureDB{DataBase: store, fail: true}
++	c, _, listener := watermarkFixture()
++	c.db = wrapper
++	tips := &sdkws.MarkAsReadTips{ConversationID: "chat", MarkAsReadUserID: "peer", Seqs: []int64{4, 500}}
++	msg := &sdkws.MsgData{Seq: 57, ContentType: constant.HasReadReceipt, SendTime: 1234, Content: []byte(utils.StructToJsonString(sdk_struct.NotificationElem{Detail: utils.StructToJsonString(tips)}))}
++	cmd := common.Cmd2Value{Ctx: ctx, Value: sdk_struct.CmdNewMsgComeToConversation{Msgs: map[string]*sdkws.PullMsgs{"n_chat": {Msgs: []*sdkws.MsgData{msg}}}}}
++	if err := c.doNotificationManager(cmd); err == nil {
++		t.Fatal("storage failure was swallowed")
++	}
++	seqs, err := store.GetNotificationAllSeqs(ctx)
++	if err != nil || len(seqs) != 1 || seqs[0].Seq != 56 || len(listener.receipts) != 0 {
++		t.Fatalf("failed page acknowledged: %v %v", seqs, err)
++	}
++	wrapper.fail = false
++	for i := 0; i < 2; i++ {
++		if err := c.doNotificationManager(cmd); err != nil {
++			t.Fatal(err)
++		}
++	}
++	seqs, err = store.GetNotificationAllSeqs(ctx)
++	if err != nil || seqs[0].Seq != 57 {
++		t.Fatalf("retry failed to commit: %v %v", seqs, err)
++	}
++	own, err := store.GetMessageBySeq(ctx, "chat", 4)
++	if err != nil || !own.IsRead {
++		t.Fatalf("receipt lost: %+v %v", own, err)
++	}
++	later, err := store.GetMessageBySeq(ctx, "chat", 5)
++	if err != nil || later.IsRead {
++		t.Fatalf("unrelated message marked read: %+v %v", later, err)
++	}
++	conv, err := store.GetConversation(ctx, "chat")
++	if err != nil || conv.UnreadCount != 2 || conv.LatestMsg != "" {
++		t.Fatalf("receipt changed unread/empty preview: %+v %v", conv, err)
++	}
++	if len(listener.receipts) != 2 {
++		t.Fatalf("missing receipt callbacks: %v", listener.receipts)
++	}
++}
+diff --git aa/internal/conversation_msg/message_check.go bb/internal/conversation_msg/message_check.go
+index 6288548c..3c002f02 100644
+--- aa/internal/conversation_msg/message_check.go
++++ bb/internal/conversation_msg/message_check.go
+@@ -12,6 +12,7 @@ import (
+ 	sdk "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
+ 	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
+ 	"github.com/openimsdk/protocol/msg"
++	"github.com/openimsdk/tools/errs"
+ 	"github.com/openimsdk/tools/utils/datautil"
+ 
+ 	"github.com/openimsdk/tools/log"
+@@ -841,13 +842,22 @@ func (c *Conversation) faceURLAndNicknameHandle(ctx context.Context, self, other
+ 	if err != nil {
+ 		return append(self, others...)
+ 	}
+-	userInfo, err := c.db.GetLoginUser(ctx, c.loginUserID)
+-	if err != nil {
+-		log.ZError(ctx, "GetLoginUser failed", err)
+-		return append(self, others...)
+-	}
+ 	switch lc.ConversationType {
+ 	case constant.SingleChatType:
++		var userInfo *model_struct.LocalUser
++		if len(self) > 0 {
++			userInfo, err = c.db.GetLoginUser(ctx, c.loginUserID)
++			if err != nil {
++				// Profile sync runs after message recovery. A missing optional
++				// profile must retain the wire metadata, not log a stack for every
++				// message or suppress the peer's conversation profile. Do not fetch
++				// over the network on this message-storage path.
++				if !errs.ErrRecordNotFound.Is(errs.Unwrap(err)) {
++					log.ZError(ctx, "GetLoginUser failed", err)
++				}
++				userInfo = nil
++			}
++		}
+ 		c.singleHandle(ctx, self, others, lc, userInfo)
+ 	case constant.ReadGroupChatType:
+ 		c.groupHandle(ctx, self, others, lc)
+diff --git ab/internal/conversation_msg/message_profile_missing_test.go bb/internal/conversation_msg/message_profile_missing_test.go
+new file mode 100644
+index 00000000..67badf85
+--- /dev/null
++++ bb/internal/conversation_msg/message_profile_missing_test.go
+@@ -0,0 +1,71 @@
++package conversation_msg
++
++import (
++	"context"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/internal/group"
++	"github.com/openimsdk/openim-sdk-core/v3/internal/user"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/tools/errs"
++)
++
++type missingProfileDB struct {
++	db_interface.DataBase
++	conversation model_struct.LocalConversation
++	profile      *model_struct.LocalUser
++	lookups      int
++}
++
++func (d *missingProfileDB) GetConversation(context.Context, string) (*model_struct.LocalConversation, error) {
++	return &d.conversation, nil
++}
++
++func (d *missingProfileDB) GetLoginUser(context.Context, string) (*model_struct.LocalUser, error) {
++	d.lookups++
++	if d.profile == nil {
++		return nil, errs.ErrRecordNotFound.Wrap()
++	}
++	return d.profile, nil
++}
++
++func TestMessageProfileMissingDoesNotSuppressPeerOrGroupProfiles(t *testing.T) {
++	for _, session := range []int32{constant.SingleChatType, constant.ReadGroupChatType} {
++		t.Run(map[int32]string{constant.SingleChatType: "single", constant.ReadGroupChatType: "group"}[session], func(t *testing.T) {
++			d := &missingProfileDB{conversation: model_struct.LocalConversation{ConversationID: "chat", ConversationType: session, ShowName: "peer name", FaceURL: "peer face"}}
++			u := user.NewUser(d, "self", nil)
++			u.UserCache().BatchAddSpecialUser(map[string]*model_struct.LocalUser{"peer": {UserID: "peer", Nickname: "peer name", FaceURL: "peer face"}})
++			c := &Conversation{db: d, loginUserID: "self", user: u, group: group.NewGroup("self", d, nil)}
++			for i := 0; i < 100; i++ {
++				row := &model_struct.LocalChatLog{ClientMsgID: "message", SendID: "peer", SenderNickname: "wire name", Seq: 12, IsRead: true}
++				got := c.faceURLAndNicknameHandle(context.Background(), nil, []*model_struct.LocalChatLog{row}, "chat")
++				if len(got) != 1 || got[0] != row || row.SenderNickname != "peer name" || row.SenderFaceURL != "peer face" || !row.IsRead || row.Seq != 12 {
++					t.Fatalf("message/profile changed incorrectly: %+v", row)
++				}
++			}
++			if d.lookups != 0 {
++				t.Fatalf("peer/group messages performed %d unnecessary self-profile lookups", d.lookups)
++			}
++		})
++	}
++}
++
++func TestMessageProfileMissingPreservesSelfAndUsesRecoveredProfile(t *testing.T) {
++	d := &missingProfileDB{conversation: model_struct.LocalConversation{ConversationID: "chat", ConversationType: constant.SingleChatType, ShowName: "peer name"}}
++	c := &Conversation{db: d, loginUserID: "self"}
++	self := &model_struct.LocalChatLog{SendID: "self", SenderNickname: "wire self", SenderFaceURL: "wire face", Seq: 7, IsRead: true}
++	peer := &model_struct.LocalChatLog{SendID: "peer", SenderNickname: "wire peer", Seq: 8}
++	for i := 0; i < 100; i++ {
++		got := c.faceURLAndNicknameHandle(context.Background(), []*model_struct.LocalChatLog{self}, []*model_struct.LocalChatLog{peer}, "chat")
++		if len(got) != 2 || self.SenderNickname != "wire self" || self.SenderFaceURL != "wire face" || peer.SenderNickname != "peer name" || !self.IsRead || peer.IsRead {
++			t.Fatalf("missing profile corrupted message metadata: self=%+v peer=%+v", self, peer)
++		}
++	}
++	d.profile = &model_struct.LocalUser{UserID: "self", Nickname: "recovered", FaceURL: "recovered face"}
++	c.faceURLAndNicknameHandle(context.Background(), []*model_struct.LocalChatLog{self}, nil, "chat")
++	if self.SenderNickname != "recovered" || self.SenderFaceURL != "recovered face" || self.Seq != 7 || !self.IsRead {
++		t.Fatalf("recovered profile not applied safely: %+v", self)
++	}
++}
+diff --git ab/internal/conversation_msg/metadata_progress.go bb/internal/conversation_msg/metadata_progress.go
+new file mode 100644
+index 00000000..66a79d38
+--- /dev/null
++++ bb/internal/conversation_msg/metadata_progress.go
+@@ -0,0 +1,11 @@
++package conversation_msg
++
++import (
++	"context"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++)
++
++func metadataStage(name string, run func(context.Context) error) func(context.Context) error {
++	return func(ctx context.Context) error { return common.RunMetadataStage(ctx, name, run) }
++}
+diff --git aa/internal/conversation_msg/notification.go bb/internal/conversation_msg/notification.go
+index b7e2a2b2..a1f2206c 100644
+--- aa/internal/conversation_msg/notification.go
++++ bb/internal/conversation_msg/notification.go
+@@ -491,10 +491,10 @@ func (c *Conversation) syncData(c2v common.Cmd2Value) error {
+ 
+ 	// Asynchronous sync functions
+ 	asyncFuncs := []func(c context.Context) error{
+-		c.user.SyncLoginUserInfo,
+-		c.relation.SyncAllBlackList,
+-		c.group.SyncAllJoinedGroupsAndMembersWithLock,
+-		c.relation.SyncFriendsWithProfilesWithLock,
++		metadataStage("login-user", c.user.SyncLoginUserInfo),
++		metadataStage("blacklist", c.relation.SyncAllBlackList),
++		metadataStage("groups", c.group.SyncAllJoinedGroupsAndMembersWithLock),
++		metadataStage("friends", c.relation.SyncFriendsWithProfilesWithLock),
+ 	}
+ 	if !common.RecoveryMetadataPrepared(ctx) {
+ 		asyncFuncs = append(asyncFuncs, c.IncrSyncConversationsWithLock)
+diff --git aa/internal/group/incremental_sync.go bb/internal/group/incremental_sync.go
+index 9ba561d8..d095993e 100644
+--- aa/internal/group/incremental_sync.go
++++ bb/internal/group/incremental_sync.go
+@@ -2,10 +2,11 @@ package group
+ 
+ import (
+ 	"context"
++	"sort"
+ 
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
+ 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
+ 	"github.com/openimsdk/openim-sdk-core/v3/pkg/syncer"
+-	constantpb "github.com/openimsdk/protocol/constant"
+ 	"github.com/openimsdk/protocol/group"
+ 	"github.com/openimsdk/protocol/sdkws"
+ 	"github.com/openimsdk/tools/errs"
+@@ -63,73 +64,76 @@ func (g *Group) IncrSyncGroupAndMember(ctx context.Context, groupIDs ...string)
+ 	if len(groupIDs) == 0 {
+ 		return nil
+ 	}
+-	const maxSyncNum = constantpb.MaxSyncPullNumber
++	const maxSyncNum = 20
++	const scope = "group-members"
++	// Stable ordering prevents a cancelled prefix from being randomly retried.
+ 	groupIDSet := datautil.SliceSet(groupIDs)
+-	var groups []*group.GetIncrementalGroupMemberReq
+-	if len(groupIDs) > maxSyncNum {
+-		groups = make([]*group.GetIncrementalGroupMemberReq, 0, maxSyncNum)
+-	} else {
+-		groups = make([]*group.GetIncrementalGroupMemberReq, 0, len(groupIDs))
++	ids := make([]string, 0, len(groupIDSet))
++	for id := range groupIDSet {
++		ids = append(ids, id)
+ 	}
+-	for {
+-		if err := ctx.Err(); err != nil {
+-			return err
++	sort.Strings(ids)
++	ids = common.PendingMetadataItems(ctx, scope, ids)
++	for start := 0; start < len(ids); start += maxSyncNum {
++		end := start + maxSyncNum
++		if end > len(ids) {
++			end = len(ids)
+ 		}
+-		if len(groupIDSet) == 0 {
+-			return nil
++		if err := g.syncMemberBatch(ctx, scope, ids[start:end]); err != nil {
++			return err
+ 		}
+-		for groupID := range groupIDSet {
+-			if err := ctx.Err(); err != nil {
+-				return err
+-			}
+-			if len(groups) == cap(groups) {
+-				break
+-			}
+-			req := group.GetIncrementalGroupMemberReq{
+-				GroupID: groupID,
+-			}
++	}
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	common.FinishMetadataItems(ctx, scope)
++	return nil
++}
+ 
+-			lvs, err := g.db.GetVersionSync(ctx, g.groupAndMemberVersionTableName(), groupID)
+-			if err == nil {
+-				req.VersionID = lvs.VersionID
+-				req.Version = lvs.Version
+-			} else if !errs.ErrRecordNotFound.Is(err) {
+-				return err
+-			}
+-			groups = append(groups, &req)
+-		}
++func (g *Group) syncMemberBatch(ctx context.Context, scope string, ids []string) error {
++	finish := common.BeginMetadataBatch(ctx)
++	defer finish()
++	groups := make([]*group.GetIncrementalGroupMemberReq, 0, len(ids))
++	for _, id := range ids {
+ 		if err := ctx.Err(); err != nil {
+ 			return err
+ 		}
+-		groupVersion, err := g.getIncrementalGroupMemberBatch(ctx, groups)
+-		if err != nil {
++		req := &group.GetIncrementalGroupMemberReq{GroupID: id}
++		lvs, err := g.db.GetVersionSync(ctx, g.groupAndMemberVersionTableName(), id)
++		if err == nil {
++			req.VersionID, req.Version = lvs.VersionID, lvs.Version
++		} else if !errs.ErrRecordNotFound.Is(err) {
+ 			return err
+ 		}
+-		// Unchanged groups may be omitted by the batch endpoint. Retire the
+-		// requested batch together and reset it even when the response is empty.
+-		tasks := make([]func() error, 0, len(groups))
+-		for _, req := range groups {
+-			if err := ctx.Err(); err != nil {
+-				return err
++		groups = append(groups, req)
++	}
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	responses, err := g.getIncrementalGroupMemberBatch(ctx, groups)
++	if err != nil {
++		return err
++	}
++	tasks := make([]func() error, 0, len(groups))
++	for _, req := range groups {
++		id := req.GroupID
++		resp, present := responses[id]
++		if !present {
++			common.CompleteMetadataItem(ctx, scope, id)
++			continue
++		}
++		tasks = append(tasks, func() error {
++			if resp == nil {
++				return errs.New("nil incremental group response", "groupID", id)
+ 			}
+-			id := req.GroupID
+-			delete(groupIDSet, id)
+-			resp, present := groupVersion[id]
+-			if !present {
+-				continue
++			if err := g.syncGroupAndMember(ctx, id, resp); err != nil {
++				return err
+ 			}
+-			tasks = append(tasks, func() error {
+-				if resp == nil {
+-					return errs.New("nil incremental group response", "groupID", id)
+-				}
+-				return g.syncGroupAndMember(ctx, id, resp)
+-			})
+-		}
+-		groups = groups[:0]
+-		if err := runGroupSyncBatch(ctx, tasks); err != nil {
+-			return err
+-		}
++			common.CompleteMetadataItem(ctx, scope, id)
++			return nil
++		})
+ 	}
++	return runGroupSyncBatch(ctx, tasks)
+ }
+ 
+ func (g *Group) syncGroupAndMember(ctx context.Context, groupID string, resp *group.GetIncrementalGroupMemberResp) error {
+diff --git ab/internal/group/member_resume_test.go bb/internal/group/member_resume_test.go
+new file mode 100644
+index 00000000..f2839ff6
+--- /dev/null
++++ bb/internal/group/member_resume_test.go
+@@ -0,0 +1,145 @@
++package group
++
++import (
++	"context"
++	"encoding/json"
++	"fmt"
++	"net/http"
++	"sync"
++	"testing"
++
++	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	protocol "github.com/openimsdk/protocol/group"
++)
++
++func TestMemberBatchesResumeAfterCancelledRequest(t *testing.T) {
++	var mu sync.Mutex
++	requests := 0
++	seen := make(map[string]int)
++	var cancel context.CancelFunc
++	ctx := groupProfileServer(t, func(w http.ResponseWriter, r *http.Request) {
++		var req protocol.BatchGetIncrementalGroupMemberReq
++		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
++			t.Error(err)
++			return
++		}
++		mu.Lock()
++		defer mu.Unlock()
++		requests++
++		if len(req.ReqList) > 20 {
++			t.Errorf("oversized batch: %d", len(req.ReqList))
++		}
++		if requests == 2 {
++			cancel()
++			return
++		}
++		for _, item := range req.ReqList {
++			seen[item.GroupID]++
++		}
++		// Unchanged groups are intentionally absent from the response.
++		profileResponse(w, map[string]any{"respList": map[string]any{}})
++	})
++	base := common.WithMetadataProgress(ctx, &common.MetadataProgress{})
++	first, stop := context.WithCancel(base)
++	cancel = stop
++	defer stop()
++	ids := make([]string, 65)
++	for i := range ids {
++		ids[i] = fmt.Sprintf("g%03d", i)
++	}
++	g := NewGroup("self", &groupProfileDB{}, make(chan common.Cmd2Value, 1))
++	if err := g.IncrSyncGroupAndMember(first, ids...); err == nil {
++		t.Fatal("cancelled request reported success")
++	}
++	if err := g.IncrSyncGroupAndMember(base, ids...); err != nil {
++		t.Fatal(err)
++	}
++	mu.Lock()
++	defer mu.Unlock()
++	if requests != 5 || len(seen) != len(ids) {
++		t.Fatalf("requests=%d completed=%d", requests, len(seen))
++	}
++	for id, count := range seen {
++		if count != 1 {
++			t.Errorf("completed group %s fetched %d times", id, count)
++		}
++	}
++}
++
++func TestMemberStorageFailureIsRetriedWithoutRefetchingCompletedGroup(t *testing.T) {
++	var mu sync.Mutex
++	var requests [][]string
++	ctx := groupProfileServer(t, func(w http.ResponseWriter, r *http.Request) {
++		var req protocol.BatchGetIncrementalGroupMemberReq
++		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
++			t.Error(err)
++			return
++		}
++		ids := make([]string, 0, len(req.ReqList))
++		for _, item := range req.ReqList {
++			ids = append(ids, item.GroupID)
++		}
++		mu.Lock()
++		requests = append(requests, ids)
++		mu.Unlock()
++		profileResponse(w, map[string]any{"respList": map[string]any{"g": map[string]any{"versionID": "members", "version": 1, "group": map[string]any{"groupID": "g", "groupName": "New"}}}})
++	})
++	base := common.WithMetadataProgress(ctx, &common.MetadataProgress{})
++	d := &groupProfileDB{row: &model_struct.LocalGroup{GroupID: "g"}, failMember: true}
++	g := NewGroup("self", d, make(chan common.Cmd2Value, 4))
++	g.SetGroupListener(func() open_im_sdk_callback.OnGroupListener { return &groupProfileListener{} })
++	if err := g.IncrSyncGroupAndMember(base, "g", "unchanged"); err == nil || d.saved != 0 {
++		t.Fatal("failed storage checkpointed")
++	}
++	d.failMember = false
++	if err := g.IncrSyncGroupAndMember(base, "g", "unchanged"); err != nil || d.saved != 1 {
++		t.Fatalf("retry failed: %v versions=%d", err, d.saved)
++	}
++	mu.Lock()
++	defer mu.Unlock()
++	if len(requests) != 2 || len(requests[1]) != 1 || requests[1][0] != "g" {
++		t.Fatalf("wrong retry: %v", requests)
++	}
++}
++
++func TestMemberBatchFailureRetainsSuccessfulSiblings(t *testing.T) {
++	var requests [][]string
++	ctx := groupProfileServer(t, func(w http.ResponseWriter, r *http.Request) {
++		var req protocol.BatchGetIncrementalGroupMemberReq
++		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
++			t.Error(err)
++			return
++		}
++		ids := make([]string, 0, len(req.ReqList))
++		for _, item := range req.ReqList {
++			ids = append(ids, item.GroupID)
++		}
++		requests = append(requests, ids)
++		if len(requests) == 1 {
++			profileResponse(w, map[string]any{"respList": map[string]any{"bad": nil}})
++		} else {
++			profileResponse(w, map[string]any{"respList": map[string]any{}})
++		}
++	})
++	base := common.WithMetadataProgress(ctx, &common.MetadataProgress{})
++	g := NewGroup("self", &groupProfileDB{}, make(chan common.Cmd2Value, 1))
++	ids := []string{"unchanged", "bad", "unchanged"}
++	if err := g.IncrSyncGroupAndMember(base, ids...); err == nil {
++		t.Fatal("nil response acknowledged")
++	}
++	if err := g.IncrSyncGroupAndMember(base, ids...); err != nil {
++		t.Fatal(err)
++	}
++	if len(requests) != 2 || len(requests[0]) != 2 || len(requests[1]) != 1 || requests[1][0] != "bad" {
++		t.Fatalf("retry did not retain sibling: %v", requests)
++	}
++	// A completed sweep must allow a later refresh to observe new changes.
++	if err := g.IncrSyncGroupAndMember(base, ids...); err != nil {
++		t.Fatal(err)
++	}
++	if len(requests[2]) != 2 {
++		t.Fatal("completed sweep suppressed new refresh")
++	}
++}
+diff --git aa/internal/interaction/msg_sync.go bb/internal/interaction/msg_sync.go
+index 3bd3755b..a20d83dd 100644
+--- aa/internal/interaction/msg_sync.go
++++ bb/internal/interaction/msg_sync.go
+@@ -59,6 +59,7 @@ type MsgSyncer struct {
+ 	pendingReadReconcile bool
+ 	initialMetadataReady bool
+ 	auxMetadataPending   bool
++	auxMetadataProgress *common.MetadataProgress
+ 	db                   db_interface.DataBase // data store
+ 	syncTimes            int                   // times of sync
+ 	ctx                  context.Context       // context
+diff --git aa/internal/interaction/msg_sync_metadata.go bb/internal/interaction/msg_sync_metadata.go
+index 47c6bb8d..e943b4f0 100644
+--- aa/internal/interaction/msg_sync_metadata.go
++++ bb/internal/interaction/msg_sync_metadata.go
+@@ -30,6 +30,9 @@ func (m *MsgSyncer) requestAuxiliaryMetadata() {
+ 	if m.recvCh == nil {
+ 		return
+ 	}
++	if !m.auxMetadataPending {
++		m.auxMetadataProgress = &common.MetadataProgress{}
++	}
+ 	m.auxMetadataPending = true
+ 	m.queuePendingAuxiliaryMetadata()
+ }
+@@ -48,7 +51,13 @@ func (m *MsgSyncer) doAuxiliaryMetadataSync(ctx context.Context) {
+ 	if !m.auxMetadataPending {
+ 		return
+ 	}
+-	if err := m.syncMetadataAfterMessages(ctx); err != nil {
++	ctx = common.WithMetadataProgress(ctx, m.auxMetadataProgress)
++	before := m.auxMetadataProgress.Checkpoints()
++	err := m.syncMetadataAfterMessages(ctx)
++	if owner, ok := ctx.Value(messagePageContextKey{}).(*messagePageCoordinator); ok {
++		owner.committed.Add(m.auxMetadataProgress.Checkpoints() - before)
++	}
++	if err != nil {
+ 		// Retry on the same serialized scheduler. Auxiliary profile failures
+ 		// never turn already committed messages into a failed network recovery.
+ 		recordMessageSyncFailure(ctx, err)
+@@ -56,6 +65,7 @@ func (m *MsgSyncer) doAuxiliaryMetadataSync(ctx context.Context) {
+ 		return
+ 	}
+ 	m.auxMetadataPending = false
++	m.auxMetadataProgress = nil
+ }
+ 
+ // Keep metadata failures visible and retryable, but only after offline messages
+diff --git ab/internal/interaction/msg_sync_metadata_fairness_test.go bb/internal/interaction/msg_sync_metadata_fairness_test.go
+new file mode 100644
+index 00000000..5354b05b
+--- /dev/null
++++ bb/internal/interaction/msg_sync_metadata_fairness_test.go
+@@ -0,0 +1,202 @@
++package interaction
++
++import (
++	"context"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++)
++
++type metadataFairWorker struct {
++	queue     chan common.Cmd2Value
++	started   chan struct{}
++	completed chan struct{}
++	updates   atomic.Int32
++}
++
++func (w *metadataFairWorker) GetCh() chan common.Cmd2Value { return w.queue }
++func (w *metadataFairWorker) InterruptibleCommand(c common.Cmd2Value) bool {
++	return c.Cmd == constant.CmdSyncData
++}
++func (w *metadataFairWorker) Work(c common.Cmd2Value) {
++	if c.Cmd != constant.CmdSyncData {
++		w.updates.Add(1)
++		return
++	}
++	finish := common.BeginMetadataBatch(c.Ctx)
++	defer finish()
++	w.started <- struct{}{}
++	select {
++	case <-time.After(250 * time.Millisecond):
++		w.completed <- struct{}{}
++		c.Receipt <- nil
++	case <-c.Ctx.Done():
++		c.Receipt <- c.Ctx.Err()
++	}
++}
++
++func TestMetadataSweepMakesProgressAcrossBusyRetries(t *testing.T) {
++	ctx, cancel := context.WithCancel(recoveryContext(t))
++	input := make(chan common.Cmd2Value, 128)
++	m := &MsgSyncer{ctx: ctx, recvCh: input, conversationCh: make(chan common.Cmd2Value)}
++	var committed atomic.Int32
++	var attempts atomic.Int32
++	var live atomic.Int32
++	finished := make(chan struct{}, 1)
++	ids := []string{"0", "1", "2", "3", "4", "5", "6", "7"}
++	receiptWorker(t, m.conversationCh, func(c common.Cmd2Value) error {
++		for _, id := range common.PendingMetadataItems(c.Ctx, "test-groups", ids) {
++			finish := common.BeginMetadataBatch(c.Ctx)
++			select {
++			case <-c.Ctx.Done():
++				finish()
++				return c.Ctx.Err()
++			case <-time.After(180 * time.Millisecond):
++				common.CompleteMetadataItem(c.Ctx, "test-groups", id)
++				committed.Add(1)
++				finish()
++			}
++		}
++		finished <- struct{}{}
++		return nil
++	})
++	done := make(chan struct{})
++	go func() {
++		defer close(done)
++		runMessageSyncLoop(ctx, input, func(c common.Cmd2Value) {
++			if c.Cmd == cmdSyncAuxiliaryMetadata {
++				attempts.Add(1)
++				m.doAuxiliaryMetadataSync(c.Ctx)
++			} else {
++				live.Add(1)
++			}
++		})
++	}()
++	producerDone := make(chan struct{})
++	go func() {
++		defer close(producerDone)
++		ticker := time.NewTicker(5 * time.Millisecond)
++		defer ticker.Stop()
++		for {
++			select {
++			case <-ctx.Done():
++				return
++			case <-ticker.C:
++				select {
++				case input <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdPushMsg}:
++				case <-ctx.Done():
++					return
++				}
++			}
++		}
++	}()
++	defer func() { cancel(); <-producerDone; <-done }()
++	m.requestAuxiliaryMetadata()
++	select {
++	case <-finished:
++	case <-time.After(6 * time.Second):
++		t.Fatalf("sweep starved: committed=%d attempts=%d", committed.Load(), attempts.Load())
++	}
++	if committed.Load() != 8 || attempts.Load() < 2 || live.Load() == 0 {
++		t.Fatalf("committed=%d attempts=%d live=%d", committed.Load(), attempts.Load(), live.Load())
++	}
++}
++
++func TestBoundedMetadataCompletesUnderBothBusySchedulers(t *testing.T) {
++	ctx, cancel := context.WithCancel(recoveryContext(t))
++	input := make(chan common.Cmd2Value, 100)
++	w := &metadataFairWorker{queue: make(chan common.Cmd2Value, 100), started: make(chan struct{}, 10), completed: make(chan struct{}, 10)}
++	listenerDone, schedulerDone := make(chan struct{}), make(chan struct{})
++	go func() { defer close(listenerDone); common.DoListener(ctx, w) }()
++	var live atomic.Int32
++	go func() {
++		defer close(schedulerDone)
++		runMessageSyncLoop(ctx, input, func(c common.Cmd2Value) {
++			if c.Cmd == cmdSyncAuxiliaryMetadata {
++				_ = common.SendSyncCmdWithReceipt(c.Ctx, common.Cmd2Value{Cmd: constant.CmdSyncData}, w.queue)
++			} else {
++				live.Add(1)
++			}
++		})
++	}()
++	defer func() { cancel(); <-schedulerDone; <-listenerDone }()
++	input <- common.Cmd2Value{Ctx: ctx, Cmd: cmdSyncAuxiliaryMetadata}
++	select {
++	case <-w.started:
++	case <-time.After(time.Second):
++		t.Fatal("metadata not started")
++	}
++	// Keep both queues busy beyond the old 100ms cancellation threshold.
++	for i := 0; i < 30; i++ {
++		input <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdPushMsg}
++		w.queue <- common.Cmd2Value{Ctx: ctx, Cmd: "external-update"}
++	}
++	select {
++	case <-w.completed:
++	case <-time.After(900 * time.Millisecond):
++		t.Fatal("busy ingress starved bounded metadata")
++	}
++	deadline := time.Now().Add(time.Second)
++	for live.Load() != 30 || w.updates.Load() != 30 {
++		if time.Now().After(deadline) {
++			t.Fatalf("updates lost: live=%d conversation=%d", live.Load(), w.updates.Load())
++		}
++		time.Sleep(time.Millisecond)
++	}
++}
++
++func TestBoundedMetadataCannotRenewAllowanceOrBlockLogout(t *testing.T) {
++	for _, logout := range []bool{false, true} {
++		t.Run(map[bool]string{false: "live-deadline", true: "logout"}[logout], func(t *testing.T) {
++			ctx, cancel := context.WithCancel(recoveryContext(t))
++			input := make(chan common.Cmd2Value, 10)
++			started, live, done := make(chan struct{}, 10), make(chan struct{}, 10), make(chan struct{})
++			go func() {
++				defer close(done)
++				runMessageSyncLoop(ctx, input, func(c common.Cmd2Value) {
++					if c.Cmd != cmdSyncAuxiliaryMetadata {
++						live <- struct{}{}
++						return
++					}
++					finish := common.BeginMetadataBatch(c.Ctx)
++					defer finish()
++					started <- struct{}{}
++					for {
++						select {
++						case <-c.Ctx.Done():
++							return
++						case <-time.After(20 * time.Millisecond):
++							f := common.BeginMetadataBatch(c.Ctx)
++							f()
++						}
++					}
++				})
++			}()
++			defer func() { cancel(); <-done }()
++			input <- common.Cmd2Value{Ctx: ctx, Cmd: cmdSyncAuxiliaryMetadata}
++			select {
++			case <-started:
++			case <-time.After(time.Second):
++				t.Fatal("not started")
++			}
++			if logout {
++				cancel()
++				select {
++				case <-done:
++				case <-time.After(300 * time.Millisecond):
++					t.Fatal("logout waited for batch")
++				}
++				return
++			}
++			input <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdPushMsg}
++			select {
++			case <-live:
++			case <-time.After(1500 * time.Millisecond):
++				t.Fatal("batch renewal starved live message")
++			}
++		})
++	}
++}
+diff --git ab/internal/interaction/msg_sync_metadata_retry_test.go bb/internal/interaction/msg_sync_metadata_retry_test.go
+new file mode 100644
+index 00000000..c2ebf958
+--- /dev/null
++++ bb/internal/interaction/msg_sync_metadata_retry_test.go
+@@ -0,0 +1,150 @@
++package interaction
++
++import (
++	"context"
++	"errors"
++	"testing"
++	"time"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
++)
++
++func TestMetadataCooldownDoesNotDelayMessageRecovery(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	input := make(chan common.Cmd2Value, 100)
++	auxiliary, messages, done := make(chan struct{}, 10), make(chan struct{}, 10), make(chan struct{})
++	go func() {
++		defer close(done)
++		runMessageSyncLoop(ctx, input, func(cmd common.Cmd2Value) {
++			if cmd.Cmd == cmdSyncAuxiliaryMetadata {
++				recordMessageSyncFailure(cmd.Ctx, errors.New("profile unavailable"))
++				auxiliary <- struct{}{}
++			} else {
++				messages <- struct{}{}
++			}
++		})
++	}()
++	defer func() { cancel(); <-done }()
++	input <- common.Cmd2Value{Ctx: ctx, Cmd: cmdSyncAuxiliaryMetadata}
++	<-auxiliary
++	for i := 0; i < 30; i++ {
++		input <- common.Cmd2Value{Ctx: ctx, Cmd: cmdSyncAuxiliaryMetadata}
++	}
++	input <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdIMMessageSync}
++	select {
++	case <-messages:
++	case <-time.After(500 * time.Millisecond):
++		t.Fatal("metadata cooldown blocked message recovery")
++	}
++	select {
++	case <-auxiliary:
++		t.Fatal("signals bypassed metadata cooldown")
++	case <-time.After(100 * time.Millisecond):
++	}
++	select {
++	case <-auxiliary:
++	case <-time.After(2 * time.Second):
++		t.Fatal("metadata retry lost")
++	}
++}
++
++func TestMetadataAlwaysYieldsWithoutReservingSlowRetry(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	input := make(chan common.Cmd2Value, 10)
++	auxiliary, live, done := make(chan struct{}, 10), make(chan struct{}, 10), make(chan struct{})
++	go func() {
++		defer close(done)
++		runMessageSyncLoop(ctx, input, func(cmd common.Cmd2Value) {
++			if cmd.Cmd == cmdSyncAuxiliaryMetadata {
++				auxiliary <- struct{}{}
++				<-cmd.Ctx.Done()
++			} else {
++				live <- struct{}{}
++			}
++		})
++	}()
++	defer func() { cancel(); <-done }()
++	input <- common.Cmd2Value{Ctx: ctx, Cmd: cmdSyncAuxiliaryMetadata}
++	for attempt := 0; attempt < 2; attempt++ {
++		select {
++		case <-auxiliary:
++		case <-time.After(2 * time.Second):
++			t.Fatal("metadata did not resume")
++		}
++		input <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdPushMsg}
++		select {
++		case <-live:
++		case <-time.After(300 * time.Millisecond):
++			t.Fatal("metadata retry blocked live push")
++		}
++	}
++	select {
++	case <-auxiliary:
++		t.Fatal("cancel/retry hot loop")
++	case <-time.After(100 * time.Millisecond):
++	}
++}
++
++func TestMessageRecoveryPreemptsActiveMetadataAndRetainsObligation(t *testing.T) {
++	ctx, cancel := context.WithCancel(context.Background())
++	input := make(chan common.Cmd2Value, 10)
++	auxiliary, message, done := make(chan struct{}, 10), make(chan struct{}, 1), make(chan struct{})
++	go func() {
++		defer close(done)
++		runMessageSyncLoop(ctx, input, func(cmd common.Cmd2Value) {
++			if cmd.Cmd == cmdSyncAuxiliaryMetadata {
++				auxiliary <- struct{}{}
++				<-cmd.Ctx.Done()
++			} else {
++				message <- struct{}{}
++			}
++		})
++	}()
++	defer func() { cancel(); <-done }()
++	input <- common.Cmd2Value{Ctx: ctx, Cmd: cmdSyncAuxiliaryMetadata}
++	<-auxiliary
++	input <- common.Cmd2Value{Ctx: ctx, Cmd: constant.CmdIMMessageSync}
++	select {
++	case <-message:
++	case <-time.After(300 * time.Millisecond):
++		t.Fatal("message sync lost or blocked")
++	}
++	select {
++	case <-auxiliary:
++	case <-time.After(2 * time.Second):
++		t.Fatal("preempted metadata lost")
++	}
++}
++
++func TestAuxiliaryProgressSurvivesRetryButNotNewObligation(t *testing.T) {
++	ctx := recoveryContext(t)
++	m := &MsgSyncer{ctx: ctx, recvCh: make(chan common.Cmd2Value, 10), conversationCh: make(chan common.Cmd2Value)}
++	userCalls, friendCalls := 0, 0
++	fail := true
++	receiptWorker(t, m.conversationCh, func(cmd common.Cmd2Value) error {
++		if err := common.RunMetadataStage(cmd.Ctx, "user", func(context.Context) error { userCalls++; return nil }); err != nil {
++			return err
++		}
++		return common.RunMetadataStage(cmd.Ctx, "friends", func(context.Context) error {
++			friendCalls++
++			if fail {
++				return errors.New("offline")
++			}
++			return nil
++		})
++	})
++	m.requestAuxiliaryMetadata()
++	m.doAuxiliaryMetadataSync(ctx)
++	m.requestAuxiliaryMetadata() // Duplicate recovery must not erase checkpoints.
++	fail = false
++	m.doAuxiliaryMetadataSync(ctx)
++	if userCalls != 1 || friendCalls != 2 || m.auxMetadataPending {
++		t.Fatalf("user=%d friends=%d pending=%v", userCalls, friendCalls, m.auxMetadataPending)
++	}
++	m.requestAuxiliaryMetadata()
++	m.doAuxiliaryMetadataSync(ctx)
++	if userCalls != 2 || friendCalls != 3 {
++		t.Fatal("new obligation reused old completion")
++	}
++}
+diff --git aa/internal/interaction/msg_sync_scheduler.go bb/internal/interaction/msg_sync_scheduler.go
+index e7cefd13..a4cb62a7 100644
+--- aa/internal/interaction/msg_sync_scheduler.go
++++ bb/internal/interaction/msg_sync_scheduler.go
+@@ -61,6 +61,7 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
+ 	var active *common.Cmd2Value
+ 	var done chan struct{}
+ 	var cancel context.CancelFunc
++	var activeCtx context.Context
+ 	var queued []common.Cmd2Value
+ 	protected := false
+ 	const liveBurst = 32
+@@ -164,6 +165,10 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
+ 			pageOwner = &messagePageCoordinator{turns: make(chan chan struct{})}
+ 			pageTurns = pageOwner.turns
+ 			attempt.Ctx, cancel = context.WithValue(attemptCtx, messagePageContextKey{}, pageOwner), attemptCancel
++			if original.Cmd == cmdSyncAuxiliaryMetadata {
++				attempt.Ctx = common.WithMetadataTurn(attempt.Ctx)
++			}
++			activeCtx = attempt.Ctx
+ 			liveHandled = 0
+ 			done = make(chan struct{})
+ 			go func(finished chan struct{}) {
+@@ -192,6 +197,10 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
+ 			reserveProgress = false
+ 			stop()
+ 		case <-preempt:
++			if delay := common.MetadataPreemptionDelay(activeCtx); delay > 0 {
++				preemption.Reset(delay)
++				continue
++			}
+ 			// A stalled first attempt may yield once. Its retry owns a bounded
+ 			// page until completion, so busy chats cannot cancel it forever.
+ 			if active != nil {
+diff --git ab/internal/relation/profile_resume_test.go bb/internal/relation/profile_resume_test.go
+new file mode 100644
+index 00000000..1153384a
+--- /dev/null
++++ bb/internal/relation/profile_resume_test.go
+@@ -0,0 +1,67 @@
++package relation
++
++import (
++	"context"
++	"testing"
++	"time"
++)
++
++func TestFriendProfileResumeDoesNotRefetchCommittedBatches(t *testing.T) {
++	r, d, _, base, calls, _ := friendProfileFixture(t, 205)
++	ctx, cancel := context.WithCancel(base)
++	defer cancel()
++	// Cancel immediately after the last commit of the first batch. The completed
++	// batch must stay completed even when the next request observes cancellation.
++	d.afterUpdate = func() {
++		if d.updates == 100 {
++			cancel()
++		}
++	}
++	if err := r.SyncFriendsWithProfilesWithLock(ctx); err == nil {
++		t.Fatal("cancellation hidden")
++	}
++	if *calls != 1 || len(r.friendProfilePending) != 105 {
++		t.Fatalf("calls=%d pending=%d", *calls, len(r.friendProfilePending))
++	}
++	d.afterUpdate = nil
++	if err := r.SyncFriendsWithProfilesWithLock(base); err != nil {
++		t.Fatal(err)
++	}
++	if *calls != 3 || d.updates != 205 {
++		t.Fatalf("replayed completed batch: calls=%d writes=%d", *calls, d.updates)
++	}
++	if r.friendProfilePending != nil {
++		t.Fatal("completed pass retained snapshot")
++	}
++	r.friendProfilesSyncedAt = time.Now().Add(-2 * time.Minute)
++	if err := r.SyncFriendsWithProfilesWithLock(base); err != nil {
++		t.Fatal(err)
++	}
++	if *calls != 6 {
++		t.Fatal("new pass incorrectly skipped old batches")
++	}
++}
++
++func TestFriendProfileResumeRechecksDeletedMembership(t *testing.T) {
++	r, d, _, base, _, _ := friendProfileFixture(t, 205)
++	ctx, cancel := context.WithCancel(base)
++	defer cancel()
++	d.afterUpdate = func() {
++		if d.updates == 100 {
++			cancel()
++		}
++	}
++	_ = r.SyncFriendsWithProfilesWithLock(ctx)
++	deleted := r.friendProfilePending[0]
++	delete(d.rows, deleted)
++	d.afterUpdate = nil
++	if err := r.SyncFriendsWithProfilesWithLock(base); err != nil {
++		t.Fatal(err)
++	}
++	if _, exists := d.rows[deleted]; exists {
++		t.Fatal("resurrected deleted friend")
++	}
++	if d.updates != 204 {
++		t.Fatalf("writes=%d", d.updates)
++	}
++}
+diff --git aa/internal/relation/profile_sync.go bb/internal/relation/profile_sync.go
+index f367278a..9afb3df1 100644
+--- aa/internal/relation/profile_sync.go
++++ bb/internal/relation/profile_sync.go
+@@ -3,8 +3,10 @@ package relation
+ import (
+ 	"context"
+ 	"fmt"
++	"sort"
+ 	"time"
+ 
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
+ 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
+ )
+ 
+@@ -22,23 +24,33 @@ func (r *Relation) SyncFriendsWithProfilesWithLock(ctx context.Context) error {
+ 	if time.Since(r.friendProfilesSyncedAt) < time.Minute {
+ 		return nil
+ 	}
+-	friends, err := r.db.GetAllFriendList(ctx)
+-	if err != nil {
+-		return err
+-	}
+-	for start := 0; start < len(friends); start += friendProfileBatchSize {
+-		end := min(start+friendProfileBatchSize, len(friends))
+-		ids := make([]string, 0, end-start)
+-		for _, friend := range friends[start:end] {
+-			ids = append(ids, friend.FriendUserID)
++	// A successful batch is a checkpoint, not a reason to restart the pass.
++	// Keep the ID snapshot across preemption; refreshFriendProfiles rechecks
++	// membership so a deleted friend is never restored from this snapshot.
++	if r.friendProfilePending == nil {
++		friends, err := r.db.GetAllFriendList(ctx)
++		if err != nil {
++			return err
++		}
++		r.friendProfilePending = make([]string, 0, len(friends))
++		for _, friend := range friends {
++			r.friendProfilePending = append(r.friendProfilePending, friend.FriendUserID)
+ 		}
+-		if err := r.refreshFriendProfiles(ctx, ids); err != nil {
++		sort.Strings(r.friendProfilePending)
++	}
++	for len(r.friendProfilePending) > 0 {
++		end := min(friendProfileBatchSize, len(r.friendProfilePending))
++		if err := r.refreshFriendProfiles(ctx, r.friendProfilePending[:end]); err != nil {
+ 			return err
+ 		}
++		common.RecordMetadataCheckpoint(ctx)
++		clear(r.friendProfilePending[:end])
++		r.friendProfilePending = r.friendProfilePending[end:]
+ 	}
+ 	if err := ctx.Err(); err != nil {
+ 		return err
+ 	}
++	r.friendProfilePending = nil
+ 	r.friendProfilesSyncedAt = time.Now()
+ 	return nil
+ }
+diff --git aa/internal/relation/profile_sync_test.go bb/internal/relation/profile_sync_test.go
+index f48f17bc..bae56e5f 100644
+--- aa/internal/relation/profile_sync_test.go
++++ bb/internal/relation/profile_sync_test.go
+@@ -23,9 +23,10 @@ import (
+ 
+ type friendProfileDB struct {
+ 	db_interface.DataBase
+-	rows     map[string]model_struct.LocalFriend
+-	writeErr error
+-	updates  int
++	rows        map[string]model_struct.LocalFriend
++	writeErr    error
++	updates     int
++	afterUpdate func()
+ }
+ 
+ func (d *friendProfileDB) GetVersionSync(context.Context, string, string) (*model_struct.LocalVersionSync, error) {
+@@ -54,6 +55,9 @@ func (d *friendProfileDB) UpdateFriend(_ context.Context, row *model_struct.Loca
+ 	}
+ 	d.rows[row.FriendUserID] = *row
+ 	d.updates++
++	if d.afterUpdate != nil {
++		d.afterUpdate()
++	}
+ 	return nil
+ }
+ 
+diff --git aa/internal/relation/relation.go bb/internal/relation/relation.go
+index ac4303ae..dd52f4f9 100644
+--- aa/internal/relation/relation.go
++++ bb/internal/relation/relation.go
+@@ -42,6 +42,7 @@ type Relation struct {
+ 	listenerForService     open_im_sdk_callback.OnListenerForService
+ 	relationSyncMutex      sync.Mutex
+ 	friendProfilesSyncedAt time.Time
++	friendProfilePending   []string
+ }
+ 
+ func (r *Relation) initSyncer() {
+diff --git aa/pkg/common/cmd_interruptible.go bb/pkg/common/cmd_interruptible.go
+index 072d7878..0d8b311e 100644
+--- aa/pkg/common/cmd_interruptible.go
++++ bb/pkg/common/cmd_interruptible.go
+@@ -14,6 +14,7 @@ type syncNotificationOwner struct{ marker bool }
+ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptible func(Cmd2Value) bool) {
+ 	var done chan struct{}
+ 	var cancel context.CancelFunc
++	var activeCtx context.Context
+ 	owner := &syncNotificationOwner{}
+ 	var pending []Cmd2Value
+ 	protected := false
+@@ -65,6 +66,10 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
+ 			case <-ctx.Done():
+ 				return
+ 			case <-graceDone:
++				if delay := MetadataPreemptionDelay(activeCtx); delay > 0 {
++					grace.Reset(delay)
++					continue
++				}
+ 				stop()
+ 				continue
+ 			case <-done:
+@@ -110,6 +115,7 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
+ 		}
+ 		attemptCtx, attemptCancel := context.WithCancel(context.WithValue(cmd.Ctx, syncNotificationOwnerKey{}, owner))
+ 		cmd.Ctx, cancel = attemptCtx, attemptCancel
++		activeCtx = attemptCtx
+ 		done = make(chan struct{})
+ 		go func(command Cmd2Value, finished chan struct{}) {
+ 			defer close(finished)
+diff --git ab/pkg/common/metadata_progress.go bb/pkg/common/metadata_progress.go
+new file mode 100644
+index 00000000..a062f364
+--- /dev/null
++++ bb/pkg/common/metadata_progress.go
+@@ -0,0 +1,119 @@
++package common
++
++import (
++	"context"
++	"sync"
++	"sync/atomic"
++	"time"
++)
++
++type metadataProgressKey struct{}
++
++// MetadataProgress belongs to one pending auxiliary recovery obligation. It
++// survives attempts, never a new recovery or login. The owner joins all stages
++// before retrying; the mutex protects independent parallel stage completions.
++type MetadataProgress struct {
++	mu          sync.Mutex
++	completed   map[string]time.Time
++	items       map[string]map[string]bool
++	checkpoints atomic.Int64
++}
++
++// PendingMetadataItems retains per-entity progress until a whole sweep succeeds.
++// Unlike stage freshness, a long sweep must not expire its completed prefix.
++func PendingMetadataItems(ctx context.Context, scope string, ids []string) []string {
++	p, _ := ctx.Value(metadataProgressKey{}).(*MetadataProgress)
++	if p == nil {
++		return ids
++	}
++	p.mu.Lock()
++	defer p.mu.Unlock()
++	pending := make([]string, 0, len(ids))
++	for _, id := range ids {
++		if !p.items[scope][id] {
++			pending = append(pending, id)
++		}
++	}
++	return pending
++}
++
++// CompleteMetadataItem is called only after all entity writes succeed, or a
++// successful endpoint response confirms the entity is unchanged.
++func CompleteMetadataItem(ctx context.Context, scope, id string) {
++	if ctx.Err() != nil {
++		return
++	}
++	p, _ := ctx.Value(metadataProgressKey{}).(*MetadataProgress)
++	if p == nil {
++		return
++	}
++	p.mu.Lock()
++	defer p.mu.Unlock()
++	if p.items == nil {
++		p.items = make(map[string]map[string]bool)
++	}
++	if p.items[scope] == nil {
++		p.items[scope] = make(map[string]bool)
++	}
++	if !p.items[scope][id] {
++		p.items[scope][id] = true
++		p.checkpoints.Add(1)
++	}
++}
++
++func FinishMetadataItems(ctx context.Context, scope string) {
++	if p, _ := ctx.Value(metadataProgressKey{}).(*MetadataProgress); p != nil {
++		p.mu.Lock()
++		delete(p.items, scope)
++		p.mu.Unlock()
++	}
++}
++
++func WithMetadataProgress(ctx context.Context, progress *MetadataProgress) context.Context {
++	return context.WithValue(ctx, metadataProgressKey{}, progress)
++}
++
++func RunMetadataStage(ctx context.Context, name string, run func(context.Context) error) error {
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	progress, _ := ctx.Value(metadataProgressKey{}).(*MetadataProgress)
++	if progress == nil {
++		return run(ctx)
++	}
++	progress.mu.Lock()
++	completedAt := progress.completed[name]
++	progress.mu.Unlock()
++	// A long-lived failing stage must not freeze the other profiles forever.
++	if !completedAt.IsZero() && time.Since(completedAt) < time.Minute {
++		return nil
++	}
++	if err := run(ctx); err != nil {
++		return err
++	}
++	if err := ctx.Err(); err != nil {
++		return err
++	}
++	progress.mu.Lock()
++	if progress.completed == nil {
++		progress.completed = make(map[string]time.Time)
++	}
++	progress.completed[name] = time.Now()
++	progress.checkpoints.Add(1)
++	progress.mu.Unlock()
++	return nil
++}
++
++// RecordMetadataCheckpoint counts committed batches, not requests or bytes.
++func RecordMetadataCheckpoint(ctx context.Context) {
++	if progress, _ := ctx.Value(metadataProgressKey{}).(*MetadataProgress); progress != nil {
++		progress.checkpoints.Add(1)
++	}
++}
++
++func (p *MetadataProgress) Checkpoints() int64 {
++	if p == nil {
++		return 0
++	}
++	return p.checkpoints.Load()
++}
+diff --git ab/pkg/common/metadata_progress_test.go bb/pkg/common/metadata_progress_test.go
+new file mode 100644
+index 00000000..30ea09b0
+--- /dev/null
++++ bb/pkg/common/metadata_progress_test.go
+@@ -0,0 +1,89 @@
++package common
++
++import (
++	"context"
++	"errors"
++	"testing"
++	"time"
++)
++
++func TestMetadataProgressRetainsOnlySuccessfulStagesAcrossAttempts(t *testing.T) {
++	progress := &MetadataProgress{}
++	base := WithMetadataProgress(context.Background(), progress)
++	first, cancel := context.WithCancel(base)
++	completed, failed := 0, 0
++	good := func(context.Context) error { completed++; return nil }
++	bad := func(context.Context) error { failed++; return errors.New("network failure") }
++	if err := RunMetadataStage(first, "user", good); err != nil {
++		t.Fatal(err)
++	}
++	if err := RunMetadataStage(first, "friends", bad); err == nil {
++		t.Fatal("lost failure")
++	}
++	cancel()
++	if err := RunMetadataStage(first, "user", good); !errors.Is(err, context.Canceled) {
++		t.Fatal(err)
++	}
++	if err := RunMetadataStage(base, "user", good); err != nil {
++		t.Fatal(err)
++	}
++	_ = RunMetadataStage(base, "friends", bad)
++	if completed != 1 || failed != 2 {
++		t.Fatalf("completed=%d failed=%d", completed, failed)
++	}
++	// New obligation/session never inherits a previous completion.
++	fresh := WithMetadataProgress(context.Background(), &MetadataProgress{})
++	_ = RunMetadataStage(fresh, "user", good)
++	if completed != 2 {
++		t.Fatal("completion leaked to new recovery")
++	}
++}
++
++func TestMetadataStageCancelledBeforeReturnIsNotCheckpointed(t *testing.T) {
++	progress := &MetadataProgress{}
++	base := WithMetadataProgress(context.Background(), progress)
++	ctx, cancel := context.WithCancel(base)
++	if err := RunMetadataStage(ctx, "friends", func(context.Context) error { cancel(); return nil }); !errors.Is(err, context.Canceled) {
++		t.Fatal(err)
++	}
++	called := false
++	_ = RunMetadataStage(base, "friends", func(context.Context) error { called = true; return nil })
++	if !called {
++		t.Fatal("cancelled stage acknowledged")
++	}
++}
++
++func TestLongMetadataOutageDoesNotFreezeSuccessfulProfiles(t *testing.T) {
++	progress := &MetadataProgress{completed: map[string]time.Time{"user": time.Now().Add(-2 * time.Minute)}}
++	ctx := WithMetadataProgress(context.Background(), progress)
++	called := 0
++	for i := 0; i < 2; i++ {
++		if err := RunMetadataStage(ctx, "user", func(context.Context) error { called++; return nil }); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if called != 1 {
++		t.Fatalf("stale stage not refreshed once: %d", called)
++	}
++}
++
++func TestMetadataItemsKeepProgressAcrossCancelledAttempts(t *testing.T) {
++	p := &MetadataProgress{}
++	base := WithMetadataProgress(context.Background(), p)
++	CompleteMetadataItem(base, "groups", "committed")
++	CompleteMetadataItem(base, "groups", "committed")
++	ctx, cancel := context.WithCancel(base)
++	cancel()
++	CompleteMetadataItem(ctx, "groups", "cancelled")
++	pending := PendingMetadataItems(base, "groups", []string{"committed", "cancelled", "new"})
++	if len(pending) != 2 || pending[0] != "cancelled" || p.Checkpoints() != 1 {
++		t.Fatalf("pending=%v checkpoints=%d", pending, p.Checkpoints())
++	}
++	if len(PendingMetadataItems(WithMetadataProgress(context.Background(), &MetadataProgress{}), "groups", []string{"committed"})) != 1 {
++		t.Fatal("progress leaked to new obligation")
++	}
++	FinishMetadataItems(base, "groups")
++	if len(PendingMetadataItems(base, "groups", []string{"committed"})) != 1 {
++		t.Fatal("refresh skipped old entity")
++	}
++}
+diff --git ab/pkg/common/metadata_turn.go bb/pkg/common/metadata_turn.go
+new file mode 100644
+index 00000000..5cfede78
+--- /dev/null
++++ bb/pkg/common/metadata_turn.go
+@@ -0,0 +1,53 @@
++package common
++
++import (
++	"context"
++	"sync/atomic"
++	"time"
++)
++
++type metadataTurnKey struct{}
++type metadataTurn struct {
++	deadline atomic.Int64
++	active   atomic.Int64
++}
++
++// One shared allowance per attempt, across both message and conversation
++// schedulers. Further batches cannot renew it and starve live messages.
++const metadataTurnBudget = time.Second
++
++func WithMetadataTurn(ctx context.Context) context.Context {
++	return context.WithValue(ctx, metadataTurnKey{}, &metadataTurn{})
++}
++
++// Only bounded group batches opt in; unrelated or hung metadata still uses the
++// normal 100ms grace. Parent cancellation/logout always bypasses this allowance.
++func BeginMetadataBatch(ctx context.Context) func() {
++	t, _ := ctx.Value(metadataTurnKey{}).(*metadataTurn)
++	if t == nil {
++		return func() {}
++	}
++	t.deadline.CompareAndSwap(0, time.Now().Add(metadataTurnBudget).UnixNano())
++	t.active.Add(1)
++	return func() { t.active.Add(-1) }
++}
++
++func MetadataPreemptionDelay(ctx context.Context) time.Duration {
++	if ctx == nil || ctx.Err() != nil {
++		return 0
++	}
++	t, _ := ctx.Value(metadataTurnKey{}).(*metadataTurn)
++	if t == nil || t.active.Load() == 0 {
++		return 0
++	}
++	remaining := time.Until(time.Unix(0, t.deadline.Load()))
++	// Recheck at short intervals so completed work yields promptly. The absolute
++	// deadline cannot be extended by a new batch or by the other scheduler.
++	if remaining > 10*time.Millisecond {
++		return 10 * time.Millisecond
++	}
++	if remaining < 0 {
++		return 0
++	}
++	return remaining
++}

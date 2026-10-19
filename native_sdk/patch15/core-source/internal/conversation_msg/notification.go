@@ -491,10 +491,10 @@ func (c *Conversation) syncData(c2v common.Cmd2Value) error {
 
 	// Asynchronous sync functions
 	asyncFuncs := []func(c context.Context) error{
-		c.user.SyncLoginUserInfo,
-		c.relation.SyncAllBlackList,
-		c.group.SyncAllJoinedGroupsAndMembersWithLock,
-		c.relation.SyncFriendsWithProfilesWithLock,
+		metadataStage("login-user", c.user.SyncLoginUserInfo),
+		metadataStage("blacklist", c.relation.SyncAllBlackList),
+		metadataStage("groups", c.group.SyncAllJoinedGroupsAndMembersWithLock),
+		metadataStage("friends", c.relation.SyncFriendsWithProfilesWithLock),
 	}
 	if !common.RecoveryMetadataPrepared(ctx) {
 		asyncFuncs = append(asyncFuncs, c.IncrSyncConversationsWithLock)
