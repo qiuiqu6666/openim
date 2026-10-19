@@ -31,14 +31,28 @@ func (c *Third) addFileToZip(zipWriter *zip.Writer, filename string) error {
 	return err
 }
 
-func zipFiles(zipPath string, files []string) error {
+func zipFiles(zipPath string, files []string) (err error) {
 	zipFile, err := os.Create(zipPath)
 	if err != nil {
 		return err
 	}
-	defer zipFile.Close()
-	zipWriter := zip.NewWriter(zipFile)
-	defer zipWriter.Close()
+	defer func() {
+		if closeErr := zipFile.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+	return writeLogArchive(zipFile, files)
+}
+
+func writeLogArchive(output io.Writer, files []string) (err error) {
+	zipWriter := zip.NewWriter(output)
+	defer func() {
+		// The directory/footer is written by Close, after Flush. A disk-full
+		// error here must not turn into an apparently successful corrupt ZIP.
+		if closeErr := zipWriter.Close(); err == nil {
+			err = closeErr
+		}
+	}()
 	addFileToZip := func(fp string) error {
 		file, err := os.Open(fp)
 		if err != nil {

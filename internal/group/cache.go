@@ -2,6 +2,8 @@ package group
 
 import (
 	"context"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
+	"time"
 
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/datafetcher"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
@@ -100,7 +102,9 @@ func (g *Group) GetGroupMembersInfo(ctx context.Context, groupID string, userIDs
 			if len(userIDs) == 0 {
 				return nil, nil
 			}
+			started := time.Now()
 			queryData, err := g.getDesignatedGroupMembers(ctx, groupID, userIDs)
+			common.RecordSyncMetric(ctx, "profile_http_requests", 1, time.Since(started))
 			if err != nil {
 				return nil, err
 			}

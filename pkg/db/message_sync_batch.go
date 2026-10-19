@@ -15,16 +15,17 @@ import (
 // back together. The syncer journal is committed afterwards, so a crash between
 // this transaction and its receipt safely replays the same page.
 func (d *DataBase) CommitMessageSyncBatch(ctx context.Context, updates, inserts map[string][]*model_struct.LocalChatLog, changed, added []*model_struct.LocalConversation) error {
+	ids := make([]string, 0, len(inserts)+len(updates))
 	for id := range inserts {
-		if err := d.initChatLog(ctx, id); err != nil {
-			return err
-		}
+		ids = append(ids, id)
 	}
 	for id := range updates {
-		if err := d.initChatLog(ctx, id); err != nil {
-			return err
-		}
+		ids = append(ids, id)
 	}
+	if err := d.initChatLogs(ctx, ids); err != nil {
+		return err
+	}
+
 	d.mRWMutex.Lock()
 	defer d.mRWMutex.Unlock()
 	return d.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

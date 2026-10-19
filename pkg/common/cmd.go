@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/logpolicy"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -54,7 +55,9 @@ func sendCmd(ch chan<- Cmd2Value, value Cmd2Value, timeout time.Duration) error 
 	case <-cancelled:
 		return value.Ctx.Err()
 	case ch <- value:
-		log.ZInfo(value.Ctx, "sendCmd chan success", "caller", value.Caller, "cmd", value.Cmd)
+		if logpolicy.Enabled() {
+			log.ZInfo(value.Ctx, "sendCmd chan success", "caller", value.Caller, "cmd", value.Cmd)
+		}
 		return nil
 	case <-timer.C:
 		log.ZError(value.Ctx, "sendCmd chan timeout", ErrTimeout, "caller", value.Caller, "cmd", value.Cmd)

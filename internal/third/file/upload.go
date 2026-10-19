@@ -104,6 +104,12 @@ func (f *File) unlockHash(hash string) {
 }
 
 func (f *File) UploadFile(ctx context.Context, req *UploadFileReq, cb UploadFileCallback) (*UploadFileResp, error) {
+	return retryUpload(ctx, []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second}, func() (*UploadFileResp, error) {
+		return f.uploadFileOnce(ctx, req, cb)
+	})
+}
+
+func (f *File) uploadFileOnce(ctx context.Context, req *UploadFileReq, cb UploadFileCallback) (*UploadFileResp, error) {
 	if cb == nil {
 		cb = emptyUploadCallback{}
 	}
@@ -512,22 +518,21 @@ func (f *File) doPut(ctx context.Context, client *http.Client, url *url.URL, hea
 		req.Header[key] = header[key]
 	}
 	req.ContentLength = size
-	log.ZDebug(ctx, "do put req", "url", rawURL, "contentLength", size, "header", req.Header)
+	log.ZDebug(ctx, "do put req", "host", url.Host, "contentLength", size)
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return uploadTransportError(err)
 	}
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-	log.ZDebug(ctx, "do put resp status", "url", rawURL, "status", resp.Status, "contentLength", resp.ContentLength, "header", resp.Header)
-	body, err := io.ReadAll(resp.Body)
+	log.ZDebug(ctx, "do put resp status", "host", url.Host, "status", resp.StatusCode)
+	_, err = io.Copy(io.Discard, io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
 		return err
 	}
-	log.ZDebug(ctx, "do put resp body", "url", rawURL, "body", string(body))
-	if resp.StatusCode/200 != 1 {
-		return fmt.Errorf("PUT %s failed, status code %d, body %s", rawURL, resp.StatusCode, string(body))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return &uploadHTTPError{status: resp.StatusCode}
 	}
 	return nil
 }

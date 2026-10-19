@@ -1,7 +1,6 @@
 package third
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -23,11 +22,9 @@ import (
 	"github.com/openimsdk/tools/log"
 )
 
-const (
-	buffer = 10 * 1024 * 1024
-)
-
 func (c *Third) uploadLogs(ctx context.Context, line int, ex string, progress Progress) (err error) {
+	stage := "prepare"
+	defer func() { err = logUploadStageError(stage, err) }()
 	if c.logUploadLock.TryLock() {
 		defer c.logUploadLock.Unlock()
 	} else {
@@ -37,6 +34,7 @@ func (c *Third) uploadLogs(ctx context.Context, line int, ex string, progress Pr
 		return errs.New("line is illegal").Wrap()
 	}
 
+	stage = "collect"
 	logFilePath := c.LogFilePath
 	entrys, err := os.ReadDir(logFilePath)
 	if err != nil {
@@ -66,6 +64,7 @@ func (c *Third) uploadLogs(ctx context.Context, line int, ex string, progress Pr
 				f, err := os.OpenFile(files[len(files)-1], os.O_WRONLY|os.O_TRUNC, 0644)
 				if err != nil {
 					log.ZError(ctx, "remove file failed", err, "file name", f)
+					return
 				}
 				_ = f.Close()
 			}
@@ -101,6 +100,7 @@ func (c *Third) uploadLogs(ctx context.Context, line int, ex string, progress Pr
 		}()
 	}
 
+	stage = "archive"
 	zippath := filepath.Join(logFilePath, fmt.Sprintf("%d_%d.zip", time.Now().UnixMilli(), rand.Uint32()))
 	defer os.Remove(zippath)
 	if err := zipFiles(zippath, files); err != nil {
@@ -108,6 +108,7 @@ func (c *Third) uploadLogs(ctx context.Context, line int, ex string, progress Pr
 	}
 	reqUpload := &file.UploadFileReq{Filepath: zippath, Name: fmt.Sprintf("sdk_log_%s_%s_%s_%s_%s",
 		c.loginUserID, c.systemType, constant.PlatformID2Name[int(c.platformID)], version.Version, filepath.Base(zippath)), Cause: "sdklog", ContentType: "application/zip"}
+	stage = "transfer"
 	resp, err := c.fileUploader.UploadFile(ctx, reqUpload, &progressConvert{ctx: ctx, p: progress})
 	if err != nil {
 		return err
@@ -120,18 +121,19 @@ func (c *Third) uploadLogs(ctx context.Context, line int, ex string, progress Pr
 		FileURLs:     []*third.FileURL{{Filename: zippath, URL: resp.URL}},
 		Ex:           ex,
 	}
+	stage = "register"
 	return api.UploadLogs.Execute(ctx, reqLog)
 }
 
 func checkLogPath(logPath string) bool {
-	if len(logPath) < len("open-im-sdk-core.yyyy-mm-dd") {
+	if len(logPath) < len("chat-sdk-core.yyyy-mm-dd") {
 		return false
 	}
 	logTime := logPath[len(logPath)-len(".yyyy-mm-dd"):]
 	if _, err := time.Parse(".2006-01-02", logTime); err != nil {
 		return false
 	}
-	if !strings.HasPrefix(logPath, "open-im-sdk-core.") {
+	if !strings.HasPrefix(logPath, "chat-sdk-core.") && !strings.HasPrefix(logPath, "open-im-sdk-core.") {
 		return false
 	}
 
@@ -152,41 +154,6 @@ func (c *Third) fileCopy(src, dst string) error {
 	defer dstFile.Close()
 	_, err = io.Copy(dstFile, srcFile)
 	return err
-}
-
-func readLastNLines(filename string, n int) ([]string, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	lines := make([]string, n)
-	count := 0
-
-	scanner := bufio.NewScanner(f)
-	buf := make([]byte, buffer)
-	scanner.Buffer(buf, buffer)
-
-	for scanner.Scan() {
-		lines[count%n] = scanner.Text()
-		count++
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	start := count - n
-	if start < 0 {
-		start = 0
-	}
-	result := make([]string, 0, n)
-	for i := start; i < count; i++ {
-		result = append(result, lines[i%n])
-	}
-
-	return result, nil
 }
 
 func (c *Third) printLog(ctx context.Context, logLevel int, file string, line int, msg, err string, keysAndValues []any) {
