@@ -2,10 +2,11 @@ package group
 
 import (
 	"context"
+	"sort"
 
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/syncer"
-	constantpb "github.com/openimsdk/protocol/constant"
 	"github.com/openimsdk/protocol/group"
 	"github.com/openimsdk/protocol/sdkws"
 	"github.com/openimsdk/tools/errs"
@@ -63,73 +64,76 @@ func (g *Group) IncrSyncGroupAndMember(ctx context.Context, groupIDs ...string) 
 	if len(groupIDs) == 0 {
 		return nil
 	}
-	const maxSyncNum = constantpb.MaxSyncPullNumber
+	const maxSyncNum = 20
+	const scope = "group-members"
+	// Stable ordering prevents a cancelled prefix from being randomly retried.
 	groupIDSet := datautil.SliceSet(groupIDs)
-	var groups []*group.GetIncrementalGroupMemberReq
-	if len(groupIDs) > maxSyncNum {
-		groups = make([]*group.GetIncrementalGroupMemberReq, 0, maxSyncNum)
-	} else {
-		groups = make([]*group.GetIncrementalGroupMemberReq, 0, len(groupIDs))
+	ids := make([]string, 0, len(groupIDSet))
+	for id := range groupIDSet {
+		ids = append(ids, id)
 	}
-	for {
-		if err := ctx.Err(); err != nil {
+	sort.Strings(ids)
+	ids = common.PendingMetadataItems(ctx, scope, ids)
+	for start := 0; start < len(ids); start += maxSyncNum {
+		end := start + maxSyncNum
+		if end > len(ids) {
+			end = len(ids)
+		}
+		if err := g.syncMemberBatch(ctx, scope, ids[start:end]); err != nil {
 			return err
 		}
-		if len(groupIDSet) == 0 {
-			return nil
-		}
-		for groupID := range groupIDSet {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			if len(groups) == cap(groups) {
-				break
-			}
-			req := group.GetIncrementalGroupMemberReq{
-				GroupID: groupID,
-			}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	common.FinishMetadataItems(ctx, scope)
+	return nil
+}
 
-			lvs, err := g.db.GetVersionSync(ctx, g.groupAndMemberVersionTableName(), groupID)
-			if err == nil {
-				req.VersionID = lvs.VersionID
-				req.Version = lvs.Version
-			} else if !errs.ErrRecordNotFound.Is(err) {
-				return err
-			}
-			groups = append(groups, &req)
-		}
+func (g *Group) syncMemberBatch(ctx context.Context, scope string, ids []string) error {
+	finish := common.BeginMetadataBatch(ctx)
+	defer finish()
+	groups := make([]*group.GetIncrementalGroupMemberReq, 0, len(ids))
+	for _, id := range ids {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		groupVersion, err := g.getIncrementalGroupMemberBatch(ctx, groups)
-		if err != nil {
+		req := &group.GetIncrementalGroupMemberReq{GroupID: id}
+		lvs, err := g.db.GetVersionSync(ctx, g.groupAndMemberVersionTableName(), id)
+		if err == nil {
+			req.VersionID, req.Version = lvs.VersionID, lvs.Version
+		} else if !errs.ErrRecordNotFound.Is(err) {
 			return err
 		}
-		// Unchanged groups may be omitted by the batch endpoint. Retire the
-		// requested batch together and reset it even when the response is empty.
-		tasks := make([]func() error, 0, len(groups))
-		for _, req := range groups {
-			if err := ctx.Err(); err != nil {
+		groups = append(groups, req)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	responses, err := g.getIncrementalGroupMemberBatch(ctx, groups)
+	if err != nil {
+		return err
+	}
+	tasks := make([]func() error, 0, len(groups))
+	for _, req := range groups {
+		id := req.GroupID
+		resp, present := responses[id]
+		if !present {
+			common.CompleteMetadataItem(ctx, scope, id)
+			continue
+		}
+		tasks = append(tasks, func() error {
+			if resp == nil {
+				return errs.New("nil incremental group response", "groupID", id)
+			}
+			if err := g.syncGroupAndMember(ctx, id, resp); err != nil {
 				return err
 			}
-			id := req.GroupID
-			delete(groupIDSet, id)
-			resp, present := groupVersion[id]
-			if !present {
-				continue
-			}
-			tasks = append(tasks, func() error {
-				if resp == nil {
-					return errs.New("nil incremental group response", "groupID", id)
-				}
-				return g.syncGroupAndMember(ctx, id, resp)
-			})
-		}
-		groups = groups[:0]
-		if err := runGroupSyncBatch(ctx, tasks); err != nil {
-			return err
-		}
+			common.CompleteMetadataItem(ctx, scope, id)
+			return nil
+		})
 	}
+	return runGroupSyncBatch(ctx, tasks)
 }
 
 func (g *Group) syncGroupAndMember(ctx context.Context, groupID string, resp *group.GetIncrementalGroupMemberResp) error {

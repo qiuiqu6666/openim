@@ -15,7 +15,58 @@ type metadataProgressKey struct{}
 type MetadataProgress struct {
 	mu          sync.Mutex
 	completed   map[string]time.Time
+	items       map[string]map[string]bool
 	checkpoints atomic.Int64
+}
+
+// PendingMetadataItems retains per-entity progress until a whole sweep succeeds.
+// Unlike stage freshness, a long sweep must not expire its completed prefix.
+func PendingMetadataItems(ctx context.Context, scope string, ids []string) []string {
+	p, _ := ctx.Value(metadataProgressKey{}).(*MetadataProgress)
+	if p == nil {
+		return ids
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	pending := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if !p.items[scope][id] {
+			pending = append(pending, id)
+		}
+	}
+	return pending
+}
+
+// CompleteMetadataItem is called only after all entity writes succeed, or a
+// successful endpoint response confirms the entity is unchanged.
+func CompleteMetadataItem(ctx context.Context, scope, id string) {
+	if ctx.Err() != nil {
+		return
+	}
+	p, _ := ctx.Value(metadataProgressKey{}).(*MetadataProgress)
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.items == nil {
+		p.items = make(map[string]map[string]bool)
+	}
+	if p.items[scope] == nil {
+		p.items[scope] = make(map[string]bool)
+	}
+	if !p.items[scope][id] {
+		p.items[scope][id] = true
+		p.checkpoints.Add(1)
+	}
+}
+
+func FinishMetadataItems(ctx context.Context, scope string) {
+	if p, _ := ctx.Value(metadataProgressKey{}).(*MetadataProgress); p != nil {
+		p.mu.Lock()
+		delete(p.items, scope)
+		p.mu.Unlock()
+	}
 }
 
 func WithMetadataProgress(ctx context.Context, progress *MetadataProgress) context.Context {

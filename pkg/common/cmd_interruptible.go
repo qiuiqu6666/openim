@@ -14,6 +14,7 @@ type syncNotificationOwner struct{ marker bool }
 func runInterruptibleListener(ctx context.Context, worker goroutine, interruptible func(Cmd2Value) bool) {
 	var done chan struct{}
 	var cancel context.CancelFunc
+	var activeCtx context.Context
 	owner := &syncNotificationOwner{}
 	var pending []Cmd2Value
 	protected := false
@@ -65,6 +66,10 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
 			case <-ctx.Done():
 				return
 			case <-graceDone:
+				if delay := MetadataPreemptionDelay(activeCtx); delay > 0 {
+					grace.Reset(delay)
+					continue
+				}
 				stop()
 				continue
 			case <-done:
@@ -110,6 +115,7 @@ func runInterruptibleListener(ctx context.Context, worker goroutine, interruptib
 		}
 		attemptCtx, attemptCancel := context.WithCancel(context.WithValue(cmd.Ctx, syncNotificationOwnerKey{}, owner))
 		cmd.Ctx, cancel = attemptCtx, attemptCancel
+		activeCtx = attemptCtx
 		done = make(chan struct{})
 		go func(command Cmd2Value, finished chan struct{}) {
 			defer close(finished)

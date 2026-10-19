@@ -66,3 +66,24 @@ func TestLongMetadataOutageDoesNotFreezeSuccessfulProfiles(t *testing.T) {
 		t.Fatalf("stale stage not refreshed once: %d", called)
 	}
 }
+
+func TestMetadataItemsKeepProgressAcrossCancelledAttempts(t *testing.T) {
+	p := &MetadataProgress{}
+	base := WithMetadataProgress(context.Background(), p)
+	CompleteMetadataItem(base, "groups", "committed")
+	CompleteMetadataItem(base, "groups", "committed")
+	ctx, cancel := context.WithCancel(base)
+	cancel()
+	CompleteMetadataItem(ctx, "groups", "cancelled")
+	pending := PendingMetadataItems(base, "groups", []string{"committed", "cancelled", "new"})
+	if len(pending) != 2 || pending[0] != "cancelled" || p.Checkpoints() != 1 {
+		t.Fatalf("pending=%v checkpoints=%d", pending, p.Checkpoints())
+	}
+	if len(PendingMetadataItems(WithMetadataProgress(context.Background(), &MetadataProgress{}), "groups", []string{"committed"})) != 1 {
+		t.Fatal("progress leaked to new obligation")
+	}
+	FinishMetadataItems(base, "groups")
+	if len(PendingMetadataItems(base, "groups", []string{"committed"})) != 1 {
+		t.Fatal("refresh skipped old entity")
+	}
+}
