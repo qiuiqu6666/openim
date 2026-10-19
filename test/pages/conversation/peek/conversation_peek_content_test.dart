@@ -206,6 +206,30 @@ void main() {
     await _close(tester, loader);
   });
 
+  testWidgets('short preview waits for a manual history drag', (tester) async {
+    final history = _History();
+    final conversation = _conversation();
+    final loader = history.loader(conversation);
+    addTearDown(loader.dispose);
+    await _mount(tester,
+        ConversationPeekContent(loader: loader, conversation: conversation));
+    final initial = loader.loadInitial();
+    history.reads.single.complete([_message('latest', 2)]);
+    await initial;
+    await tester.pumpAndSettle();
+    expect(history.reads, hasLength(1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(history.reads, hasLength(1));
+    await tester.drag(_historyView, const Offset(0, 100));
+    await tester.pump();
+    expect(history.reads, hasLength(2));
+    history.reads.last.complete([_message('older', 1)], isEnd: true);
+    await tester.pumpAndSettle();
+    expect(_row('older'), findsOneWidget);
+    expect(history.reads, hasLength(2));
+    await _close(tester, loader);
+  });
+
   for (final dark in [false, true]) {
     testWidgets('loading, failure retry and successful empty history ($dark)',
         (tester) async {
@@ -266,7 +290,7 @@ void main() {
   });
 
   testWidgets(
-      'a short latest page automatically loads older history without reading it',
+      'a short latest page loads older history on drag without reading it',
       (tester) async {
     final history = _History();
     final conversation = _conversation();
@@ -279,14 +303,20 @@ void main() {
     history.reads.single.complete([latest]);
     expect(await initial, isTrue);
 
-    // No gesture or explicit paging call: the undersized viewport starts the
-    // next read after laying out the latest page.
-    await tester.pump();
+    // An undersized viewport waits for the user to request older history.
+    await tester.pumpAndSettle();
     final controller = tester.widget<ListView>(_historyView).controller!;
     expect(controller.position.maxScrollExtent, 0);
+    expect(history.reads, hasLength(1));
+    await tester.drag(_historyView, const Offset(0, 100));
+    await tester.pump();
     expect(
         history.reads.map((read) => read.cursor), [null, 'latest-short-page']);
     expect(loader.loadingOlder, isTrue);
+    // Settle the user's scroll activity while the request remains pending.
+    for (var frame = 0; frame < 30; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
     final latestRect = tester.getRect(_row('latest-short-page'));
     final older = loader.loadOlder();
     final olderMessages = [
@@ -346,7 +376,8 @@ void main() {
     expect(tester.getRect(_row('latest-29')), latestRect);
 
     final controller = tester.widget<ListView>(_historyView).controller!;
-    controller.jumpTo(controller.position.maxScrollExtent);
+    controller.jumpTo(controller.position.maxScrollExtent - 100);
+    await tester.drag(_historyView, const Offset(0, 200));
     await tester.pump();
     expect(history.reads, hasLength(4));
     expect(history.reads.last.cursor, 'older--10');

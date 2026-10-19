@@ -710,9 +710,12 @@ void main() {
           im.memberInfoChangedSubject.add(GroupMembersInfo(
               groupID: _group, userID: _peer, roleLevel: target));
           await tester.pump();
-          final blocked = protected && viewer == GroupRoleLevel.member;
+          final blocked = protected &&
+              viewer == GroupRoleLevel.member &&
+              target == GroupRoleLevel.member;
           expect(logic.showFriendAddEntry, !blocked);
           expect(logic.notAllowAddGroupMemberFriend.value, blocked);
+          expect(logic.showStrangerBlacklistAction, isFalse);
           logic.addFriend();
           await tester.pumpAndSettle();
           if (blocked) {
@@ -731,7 +734,7 @@ void main() {
     }
   }
 
-  testWidgets('target role changes cannot bypass active group protection',
+  testWidgets('target downgrade restores active group protection',
       (tester) async {
     await open(tester);
     logic.userInfo.update((user) => user?.allowAddFriend = 1);
@@ -742,7 +745,8 @@ void main() {
     im.memberInfoChangedSubject.add(GroupMembersInfo(
         groupID: _group, userID: _peer, roleLevel: GroupRoleLevel.admin));
     await tester.pump();
-    expect(logic.showFriendAddEntry, isFalse);
+    expect(logic.showFriendAddEntry, isTrue);
+    expect(logic.showStrangerBlacklistAction, isFalse);
     im.memberInfoChangedSubject.add(GroupMembersInfo(
         groupID: _group, userID: _peer, roleLevel: GroupRoleLevel.member));
     await tester.pump();
@@ -801,6 +805,7 @@ void main() {
       await tester.pump();
       final blocked = viewer == GroupRoleLevel.member;
       expect(logic.notAllowAddGroupMemberFriend.value, blocked);
+      expect(logic.showStrangerBlacklistAction, isFalse);
       expect(logic.showFriendAddEntry, !blocked);
       logic.addFriend();
       await tester.pumpAndSettle();

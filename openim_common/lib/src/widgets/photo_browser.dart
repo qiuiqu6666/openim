@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'media_browser/media_page_gesture.dart';
+import 'media_browser/media_reading_viewport.dart';
 import 'media_browser/gallery_image_precache.dart';
 import 'media_browser/progressive_media_image.dart';
 import 'media_browser/on_demand_video.dart';
@@ -47,10 +48,13 @@ class MediaBrowser extends StatefulWidget {
     this.onDelete,
     this.onViewInChat,
     this.imageProviderFactory,
+    this.autoLoadOriginal = true,
   });
   final ViewerImageProvider Function(String url, int maxPixels)?
       imageProviderFactory;
   final int initialIndex;
+  /// Upgrade only the current full-screen page; neighboring warmups stay small.
+  final bool autoLoadOriginal;
   final List<MediaSource> sources;
   final bool muted;
   final bool showGallery;
@@ -79,17 +83,54 @@ class _MediaBrowserState extends State<MediaBrowser> {
   int currentIndex = 0;
   bool _showControls = true;
   final _requestedOriginals = Expando<bool>();
+  final _originalCacheChecks = <String>{};
+  final _cachedOriginals = <String>{};
+
+  void _checkOriginalCache(MediaSource source) {
+    final url = source.url;
+    if (url == null || url.isEmpty || !_originalCacheChecks.add(url)) return;
+    unawaited(ViewerImageProvider(url).isCached().then((cached) {
+      if (!mounted || !cached) return;
+      _cachedOriginals.add(url);
+      _pageTick.value++;
+      _notifyChrome();
+    }));
+  }
 
   bool _offersOriginal(MediaSource source) =>
+      !widget.autoLoadOriginal &&
       !source.isVideo &&
       !source.loading &&
       source.bytes == null &&
-      source.file == null &&
       _requestedOriginals[source] != true &&
+      !_cachedOriginals.contains(source.url) &&
       (source.deferOriginal ||
           (source.previewUrl != null &&
               source.previewUrl!.isNotEmpty &&
               source.previewUrl != (source.url ?? source.thumbnail)));
+
+  Widget _originalAction(MediaSource source) {
+    if (!_offersOriginal(source)) return const SizedBox.shrink();
+    Widget action() => MediaPreviewActionButton(
+          label: 'mediaViewOriginal'.tr,
+          onPressed: () {
+            _requestedOriginals[source] = true;
+            _pageTick.value++;
+            _notifyChrome();
+          },
+        );
+    final file = source.file;
+    if (file == null) return action();
+    // Share the asynchronous probe with the image renderer so the toolbar
+    // agrees with its local-file / network fallback decision.
+    return FutureBuilder<bool>(
+      key: ValueKey(file.path),
+      future: _localFiles.exists(file),
+      builder: (_, snapshot) => snapshot.data == false
+          ? action()
+          : const SizedBox.shrink(),
+    );
+  }
 
   bool _showGrid = false;
   final _chromeTick = ValueNotifier(0);
@@ -442,7 +483,10 @@ class _MediaBrowserState extends State<MediaBrowser> {
                                       tag: s.tag ?? s.thumbnail,
                                       slideType: SlideType.onlyImage,
                                       slidePagekey: slidePagekey,
-                                      child: _buildFullImage(s, index),
+                                      child: widget.closeOnly
+                                          ? _buildFullImage(s, index)
+                                          : MediaReadingViewport(
+                                              child: _buildFullImage(s, index)),
                                     );
                             }),
                   ),
@@ -486,7 +530,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
               bottom: false,
               minimum: const EdgeInsets.symmetric(horizontal: 12),
               child: SizedBox(
-                height: 72,
+                height: MediaReadingViewport.toolbarExtent,
                 child: Row(children: [
                   Transform.translate(
                     offset: Offset(0, (TitleBar.chatToolbarHeight - 72) / 2),
@@ -578,7 +622,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
               top: false,
               minimum: const EdgeInsets.symmetric(horizontal: 12),
               child: SizedBox(
-                height: 72,
+                height: MediaReadingViewport.toolbarExtent,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   spacing: NavigationGlassTokens.gap,
@@ -586,16 +630,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
                     Expanded(
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: _offersOriginal(source)
-                            ? MediaPreviewActionButton(
-                                label: 'mediaViewOriginal'.tr,
-                                onPressed: () {
-                                  _requestedOriginals[source] = true;
-                                  _pageTick.value++;
-                                  _notifyChrome();
-                                },
-                              )
-                            : const SizedBox.shrink(),
+                        child: _originalAction(source),
                       ),
                     ),
                     if (widget.onForward != null)
@@ -634,6 +669,10 @@ class _MediaBrowserState extends State<MediaBrowser> {
   Widget _buildNetworkImage(MediaSource s, int index) {
     Widget render(String url) => ProgressiveMediaImage(
           image: _image(url),
+          showDownloadProgress: url == s.url &&
+              ((widget.autoLoadOriginal && index == currentIndex) ||
+                  _requestedOriginals[s] == true ||
+                  _cachedOriginals.contains(s.url)),
           previews: [
             if (s.previewUrl != null &&
                 s.previewUrl!.isNotEmpty &&
@@ -649,13 +688,19 @@ class _MediaBrowserState extends State<MediaBrowser> {
           retryBuilder: _mediaRetry,
         );
     final original = s.url ?? s.thumbnail;
+    if (widget.autoLoadOriginal && index == currentIndex) {
+      return render(original);
+    }
     final preview = s.previewUrl;
     final hasPreview =
         preview != null && preview.isNotEmpty && preview != original;
     if (!hasPreview && !s.deferOriginal) {
       return render(original);
     }
-    if (_requestedOriginals[s] == true) return render(original);
+    _checkOriginalCache(s);
+    if (_requestedOriginals[s] == true || _cachedOriginals.contains(original)) {
+      return render(original);
+    }
     return hasPreview
         ? render(preview)
         : Center(

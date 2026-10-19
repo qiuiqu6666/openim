@@ -192,16 +192,19 @@ void main() {
         ));
     await tester.pumpAndSettle();
     expect(calls, 1);
-    controller.jumpTo(controller.position.maxScrollExtent);
+    controller.jumpTo(controller.position.maxScrollExtent - 100);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 200));
     await tester.pump();
     controller.jumpTo(controller.position.maxScrollExtent - 1);
-    controller.jumpTo(controller.position.maxScrollExtent);
+    controller.jumpTo(controller.position.maxScrollExtent - 100);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 200));
     await tester.pump();
     expect(calls, 2);
     more.complete(false);
     await tester.pumpAndSettle();
     controller.jumpTo(controller.position.maxScrollExtent - 1);
-    controller.jumpTo(controller.position.maxScrollExtent);
+    controller.jumpTo(controller.position.maxScrollExtent - 100);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 200));
     await tester.pumpAndSettle();
     expect(calls, 2);
     expect(tester.takeException(), isNull);
@@ -227,10 +230,12 @@ void main() {
           itemBuilder: (_, index) =>
               SizedBox(height: 60, child: Text('message $index')),
         ));
-    controller.jumpTo(controller.position.maxScrollExtent);
+    controller.jumpTo(controller.position.maxScrollExtent - 100);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 200));
     await tester.pumpAndSettle();
     controller.jumpTo(controller.position.maxScrollExtent - 1);
-    controller.jumpTo(controller.position.maxScrollExtent);
+    controller.jumpTo(controller.position.maxScrollExtent - 100);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 200));
     await tester.pumpAndSettle();
     expect(calls, 1);
     expect(find.byType(TextButton), findsOneWidget);

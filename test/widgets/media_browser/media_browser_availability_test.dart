@@ -10,6 +10,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:openim_common/src/widgets/media_browser/local_media_availability.dart';
 import 'package:openim_common/src/widgets/media_browser/media_grid_thumbnail.dart';
+import 'package:openim_common/media_preloading.dart';
 
 import '../../support/performance/render_test_fakes.dart';
 
@@ -42,9 +43,62 @@ class _RecordedAvailability extends LocalMediaAvailability {
   }
 }
 
+class _PendingStream extends ImageStreamCompleter {}
+
+class _PendingImage extends ViewerImageProvider {
+  _PendingImage(super.url);
+  @override
+  ImageStreamCompleter loadImage(
+          ViewerImageProvider key, ImageDecoderCallback decode) =>
+      _PendingStream();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   tearDown(Get.reset);
+
+  for (final available in [false, true]) {
+    testWidgets('original action checks local file availability: $available',
+        (tester) async {
+      final result = Completer<bool>();
+      final file = _File('original-$available.png', result.future);
+      final requests = <String>[];
+      await tester.pumpWidget(renderTestHost(MediaBrowser(
+        autoLoadOriginal: false,
+        initialIndex: 0,
+        sources: [
+          MediaSource(
+              file: file,
+              url: 'https://images.test/original',
+              previewUrl: 'https://images.test/preview',
+              thumbnail: 'https://images.test/thumb',
+              deferOriginal: true)
+        ],
+        imageProviderFactory: (url, _) {
+          requests.add(url);
+          return _PendingImage(url);
+        },
+      )));
+      expect(file.checks, 1);
+      result.complete(available);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+          find.byType(TextButton), available ? findsNothing : findsOneWidget);
+      if (!available) {
+        expect(requests, contains('https://images.test/preview'));
+        expect(requests, isNot(contains('https://images.test/original')));
+        await tester.tap(find.byType(TextButton));
+        await tester.pump();
+        expect(requests, contains('https://images.test/original'));
+        expect(find.byType(TextButton), findsNothing);
+      }
+      expect(file.checks, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   test('availability deduplicates one path and handles asynchronous failure',
       () async {
@@ -146,6 +200,7 @@ void main() {
       (tester) async {
     final file = _File('download.png', Future.value(false));
     await tester.pumpWidget(renderTestHost(MediaBrowser(
+      autoLoadOriginal: false,
       initialIndex: 0,
       sources: [MediaSource(file: file, thumbnail: '', loading: true)],
     )));
@@ -154,6 +209,7 @@ void main() {
         reason: "loading source does not start a file probe");
     file.available = Future.value(true);
     await tester.pumpWidget(renderTestHost(MediaBrowser(
+      autoLoadOriginal: false,
       initialIndex: 0,
       sources: [MediaSource(file: file, thumbnail: '')],
     )));
@@ -170,6 +226,7 @@ void main() {
     final request = Completer<bool>();
     final file = _File('late.png', request.future);
     await tester.pumpWidget(renderTestHost(MediaBrowser(
+        autoLoadOriginal: false,
         initialIndex: 0,
         sources: [MediaSource(file: file, thumbnail: '', tag: 'late')])));
     await tester.pumpWidget(const SizedBox.shrink());
@@ -182,6 +239,7 @@ void main() {
       (tester) async {
     final pages = <int>[];
     await tester.pumpWidget(renderTestHost(MediaBrowser(
+      autoLoadOriginal: false,
       initialIndex: 0,
       sources: [
         MediaSource(bytes: renderTestPng(), thumbnail: '', tag: 'first'),

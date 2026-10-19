@@ -37,6 +37,7 @@ class FundSendPage extends StatefulWidget {
     this.recipientFaceURL,
     this.initialPacketBiz,
     this.api,
+    this.onPaid,
     this.settingsService,
     this.pendingStore,
     this.paymentPreferences,
@@ -64,6 +65,8 @@ class FundSendPage extends StatefulWidget {
   /// userID/recipientName/recipientFaceURL as its initial recipient.
   final FundPacketBiz? initialPacketBiz;
   final FundApi? api;
+  /// Publishes a confirmed order to the originating chat before navigation.
+  final ValueChanged<FundOrder>? onPaid;
   final SettingsService? settingsService;
   final FundPendingStore? pendingStore;
   final FundPaymentPreferences? paymentPreferences;
@@ -675,6 +678,7 @@ class _FundSendPageState extends State<FundSendPage>
         ModalRoute.of(context)?.isCurrent != true) {
       return;
     }
+    widget.onPaid?.call(order);
     // Release the fund form's keyboard before the chat route becomes active.
     FocusScope.of(context).unfocus();
     unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.hide'));
@@ -812,6 +816,9 @@ class _FundSendPageState extends State<FundSendPage>
             return true;
           },
           onPay: (pin) => _pay(draft.request, pin),
+          onSuccess: (order) {
+            if (mounted && _sameAccount) widget.onPaid?.call(order);
+          },
           errorMessage: _paymentError,
         ),
       );

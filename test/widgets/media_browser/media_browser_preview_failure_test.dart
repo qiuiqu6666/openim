@@ -30,6 +30,52 @@ class _ControlledImage extends ViewerImageProvider {
 }
 
 void main() {
+  testWidgets('full-screen automatically upgrades thumbnail to original',
+      (tester) async {
+    final requests = <String, _ControlledImage>{};
+    await tester.pumpWidget(renderTestHost(MediaBrowser(
+      initialIndex: 0,
+      sources: [
+        MediaSource(
+            url: 'https://images.test/original',
+            previewUrl: 'https://images.test/clear',
+            thumbnail: 'https://images.test/thumb',
+            deferOriginal: true)
+      ],
+      imageProviderFactory: (url, _) =>
+          requests.putIfAbsent(url, () => _ControlledImage(url)),
+    )));
+    await tester.pump();
+    expect(requests.keys, contains('https://images.test/original'));
+    expect(find.byType(TextButton), findsNothing);
+    ui.Image pixels(int size) {
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawColor(Colors.blue, BlendMode.src);
+      final picture = recorder.endRecording();
+      final image = picture.toImageSync(size, size);
+      picture.dispose();
+      return image;
+    }
+
+    Finder displayed(int size) => find.byWidgetPredicate(
+        (widget) => widget is ExtendedRawImage && widget.image?.width == size);
+    requests['https://images.test/thumb']!.stream.complete(pixels(20));
+    await tester.pump();
+    expect(displayed(20), findsOneWidget);
+    requests['https://images.test/clear']!.stream.complete(pixels(100));
+    await tester.pump();
+    expect(displayed(100), findsOneWidget);
+    requests['https://images.test/original']!.fail();
+    await tester.pump();
+    expect(displayed(100), findsOneWidget);
+    requests['https://images.test/original']!.stream.complete(pixels(200));
+    await tester.pump();
+    expect(displayed(200), findsOneWidget);
+    expect(find.byType(TextButton), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   for (final succeeds in [true, false]) {
     testWidgets('cached thumbnail survives until clear preview: $succeeds',
         (tester) async {
@@ -44,6 +90,7 @@ void main() {
       }
 
       await tester.pumpWidget(renderTestHost(MediaBrowser(
+        autoLoadOriginal: false,
         initialIndex: 0,
         sources: [
           MediaSource(
@@ -91,6 +138,7 @@ void main() {
       final requests = <_ControlledImage>[];
       await tester.pumpWidget(renderTestHost(
         MediaBrowser(
+          autoLoadOriginal: false,
           initialIndex: 0,
           sources: List.generate(
             2,

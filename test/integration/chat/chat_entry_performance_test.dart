@@ -131,7 +131,8 @@ void main() {
           'messageList': localSnapshot.map((m) => m.toJson()).toList()
         });
       }
-      if (call.method == 'getAdvancedHistoryMessageList') {
+      if (call.method == 'getAdvancedHistoryMessageList' ||
+          call.method == 'getAdvancedHistoryMessageListReverse') {
         final history =
             EntryHistoryCall(Map<String, dynamic>.from(call.arguments as Map));
         calls.add(history);
@@ -1088,9 +1089,11 @@ void main() {
     logic.onDelete();
   });
 
-  testWidgets('real chat list preserves painted boundary after SDK refresh',
+  testWidgets('real chat list preserves the reading boundary after SDK refresh',
       (tester) async {
     final logic = await mountHistoryChat(tester, commonList: true);
+    await scrollAway(tester, logic);
+    final offset = logic.scrollController.offset;
     im.imSdkStatus(IMSdkStatus.syncEnded);
     await tester.idle();
     calls.last.complete([
@@ -1101,12 +1104,10 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(logic.messageList.last.clientMsgID, 'history-29');
-    expect(logic.scrollController.offset,
-        logic.scrollController.position.minScrollExtent);
+    expect(logic.scrollController.offset, offset);
     expect(logic.newMessages.unseenCount.value, 0);
     expect(logic.newMessages.awayFromLatest.value, isTrue);
     expect(logic.hasDeferredLatest, isTrue);
-    expectMessageInsideChatList(tester, 'history-29');
     logic.onDelete();
   });
 

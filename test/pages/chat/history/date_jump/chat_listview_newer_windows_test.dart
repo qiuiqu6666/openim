@@ -21,7 +21,7 @@ Future<void> _reachNewerEdge(
     WidgetTester tester, ScrollController scroll) async {
   scroll.jumpTo(scroll.position.minScrollExtent + 200);
   await tester.pumpAndSettle();
-  scroll.jumpTo(scroll.position.minScrollExtent);
+  await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
   await tester.pumpAndSettle();
 }
 

@@ -33,6 +33,7 @@ import 'calling/chat_call_controller.dart';
 import 'appearance/chat_appearance_controller.dart';
 import 'favorites/chat_favorites_controller.dart';
 import 'fund/chat_fund_controller.dart';
+import 'fund/confirmed_fund_cards.dart';
 import 'fund/fund_card_recipient.dart';
 import 'group_setup/group_member_list/group_member_list_logic.dart';
 import 'group/chat_group_controller.dart';
@@ -312,6 +313,8 @@ class ChatLogic extends SuperController {
     closeToolbox: closeToolbox,
   );
   late final _funds = ChatFundController(
+    messages: messageList,
+    onPaidCardReady: () => scrollBottom(),
     isClosed: () => _sessionInactive,
     canSend: () => !sendingMuted && !isInvalidGroup,
     userID: () => isSingleChat ? userID : null,
@@ -1382,6 +1385,14 @@ class ChatLogic extends SuperController {
       _funds.setVisible(message, visible);
   Future<void> onTapRedPacket() => _funds.openSend(isRedPacket: true);
   Future<void> onTapTransfer() => _funds.openSend(isRedPacket: false);
+  List<ConfirmedFundCard> get confirmedFundCards => _sessionInactive
+      ? const []
+      : _funds.confirmedCards.cards.values.toList().reversed.map((card) {
+          return ConfirmedFundCard(card.order, _funds.displayData(card.data),
+              card.anchorMessageID);
+        }).toList();
+  Future<void> openConfirmedFundCard(FundMessageData data) =>
+      _funds.openDetail(data);
 
   void parseClickEvent(Message msg) async {
     Logger.print(
@@ -1711,11 +1722,9 @@ class ChatLogic extends SuperController {
 
   Future<bool> onScrollToTopLoad() => _sessionInactive
       ? Future.value(false)
-      : hasDeferredLatest
-          ? Future.value(true)
-          : _dateWindow.seeking.value || _dateWindow.returning.value
-              ? Future.value(historyNewerHasMore.value)
-              : _timeline.loadNewer();
+      : _dateWindow.seeking.value || _dateWindow.returning.value
+          ? Future.value(historyNewerHasMore.value)
+          : _timeline.loadNewer();
 
   void retryHistory() {
     if (_sessionInactive) return;

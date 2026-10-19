@@ -40,8 +40,37 @@ void main() {
   });
 
   for (final dark in [false, true]) {
+    for (final manager in ['viewer', 'target', 'neither']) {
+      testWidgets('group $manager manager shows add without block (dark=$dark)',
+          (tester) async {
+        final fixture = ProfilePanelFixture(group: true, friend: false);
+        fixture.iHaveAdminOrOwnerPermission.value = manager == 'viewer';
+        fixture.targetGroupManager.value = manager == 'target';
+        final moments = profileMomentsRepository();
+        addTearDown(moments.dispose);
+        await mountProfilePanel(tester,
+            fixture: fixture, moments: moments, dark: dark);
+        expect(find.text(StrRes.addFriend), findsOneWidget);
+        expect(find.text('profileAddBlacklist'.tr), findsNothing);
+        await _tap(tester, find.text(StrRes.addFriend));
+        expect(fixture.actions, contains('add'));
+        expect(fixture.blacklistRequests, isEmpty);
+        fixture.notAllowAddGroupMemberFriend.value = true;
+        await tester.pumpAndSettle();
+        expect(find.text(StrRes.addFriend), findsNothing);
+        expect(find.text('profileAddBlacklist'.tr), findsNothing);
+        fixture.userInfo.update((user) => user?.isBlacklist = true);
+        await tester.pumpAndSettle();
+        expect(find.text('profileRemoveBlacklist'.tr), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  for (final dark in [false, true]) {
     for (final friend in [false, true]) {
-      testWidgets('group join metadata requires viewer management permission '
+      testWidgets(
+          'group join metadata requires viewer management permission '
           '(dark=$dark, friend=$friend)', (tester) async {
         final fixture = ProfilePanelFixture(group: true, friend: friend);
         fixture.joinGroupTime.value = 1700000000;

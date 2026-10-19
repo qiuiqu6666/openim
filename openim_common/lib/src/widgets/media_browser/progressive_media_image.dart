@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 
 import 'adaptive_media_image.dart';
 import 'media_image_loading.dart';
+import 'original_image_progress.dart';
 
 /// Lower-resolution sources remain visible until the requested image is ready.
 /// Failure of a warmup is independent of failure of the requested image.
@@ -12,11 +13,13 @@ class ProgressiveMediaImage extends StatelessWidget {
     required this.image,
     required this.previews,
     required this.retryBuilder,
+    this.showDownloadProgress = false,
   });
 
   final ImageProvider image;
   final List<ImageProvider> previews;
   final Widget Function(VoidCallback retry) retryBuilder;
+  final bool showDownloadProgress;
 
   Widget _preview(int index, bool failed) {
     if (index >= previews.length) {
@@ -41,7 +44,10 @@ class ProgressiveMediaImage extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               // Keep the same preview subtree when loading becomes failed.
-              _preview(0, failed),
+              _preview(0, failed || showDownloadProgress),
+              if (!failed && showDownloadProgress)
+                Center(
+                    child: OriginalImageProgress(event: state.loadingProgress)),
               if (failed)
                 Align(
                   alignment: Alignment.center,

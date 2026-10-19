@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../mine/settings/widgets/settings_widgets.dart';
 import 'content/customer_service_content.dart';
@@ -188,7 +187,7 @@ class _CustomerServicePageState extends State<CustomerServicePage>
       return;
     }
     try {
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!await openInAppBrowser(uri, context: context)) {
         throw StateError('Unable to open the website');
       }
     } catch (_) {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -14,6 +15,7 @@ import '../../utils/media/shared_image_disk_cache.dart';
 class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
   ViewerImageProvider(String url,
       {this.maxPixels = 16 * 1024 * 1024,
+      this.cacheOnly = false,
       HttpClient Function()? createClient,
       BaseCacheManager? cache,
       SharedImageDiskCache? sharedCache})
@@ -27,6 +29,7 @@ class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
 
   final String url;
   final int maxPixels;
+  final bool cacheOnly;
   HttpClient? _client;
   HttpClientRequest? _request;
   bool _cancelled = false;
@@ -43,16 +46,39 @@ class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
     if (_cancelled) throw StateError('Image viewer request cancelled');
   }
 
+  /// Checks encoded originals without starting a download or decoding pixels.
+  Future<bool> isCached() async {
+    try {
+      if (await _sharedCache.contains(url)) return true;
+    } catch (_) {}
+    try {
+      final entry =
+          await (_cache ?? DefaultCacheManager()).getFileFromCache(url);
+      return entry != null &&
+          await entry.file.exists() &&
+          await entry.file.length() > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   Future<ViewerImageProvider> obtainKey(ImageConfiguration configuration) =>
       SynchronousFuture(this);
 
   @override
   ImageStreamCompleter loadImage(
-          ViewerImageProvider key, ImageDecoderCallback decode) =>
-      MultiFrameImageStreamCompleter(codec: _load(decode), scale: 1);
+      ViewerImageProvider key, ImageDecoderCallback decode) {
+    final chunks = StreamController<ImageChunkEvent>();
+    return MultiFrameImageStreamCompleter(
+      codec: _load(decode, chunks).whenComplete(chunks.close),
+      chunkEvents: chunks.stream,
+      scale: 1,
+    );
+  }
 
-  Future<ui.Codec> _load(ImageDecoderCallback decode) async {
+  Future<ui.Codec> _load(ImageDecoderCallback decode,
+      StreamController<ImageChunkEvent> chunks) async {
     final cache = _cache ?? DefaultCacheManager();
     Uint8List? bytes;
     try {
@@ -76,6 +102,7 @@ class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
     }
     if (bytes == null) {
       _check();
+      if (cacheOnly) throw StateError('Image not yet cached');
       final client = _client = _createClient()
         ..connectionTimeout = const Duration(seconds: 15);
       try {
@@ -87,8 +114,13 @@ class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
         if (response.statusCode != HttpStatus.ok) {
           throw HttpException('Image HTTP ${response.statusCode}');
         }
-        bytes = await consolidateHttpClientResponseBytes(response)
-            .timeout(const Duration(seconds: 45));
+        bytes = await consolidateHttpClientResponseBytes(response,
+            onBytesReceived: (received, total) {
+          if (!_cancelled) {
+            chunks.add(ImageChunkEvent(
+                cumulativeBytesLoaded: received, expectedTotalBytes: total));
+          }
+        }).timeout(const Duration(seconds: 45));
         _check();
       } finally {
         client.close(force: true);

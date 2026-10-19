@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../chat_logic.dart';
+import '../../fund/confirmed_fund_card_row.dart';
+import '../../media/chat_image_prewarmer.dart';
 import '../../navigation/chat_entry_route_timing.dart';
 import '../../navigation/chat_message_focus_tokens.dart';
 import '../selection/message_selection_drag_region.dart';
@@ -12,7 +14,7 @@ import '../arrival/chat_message_arrival_animations.dart';
 import 'chat_message_tile.dart';
 import '../chat_message_index.dart';
 import '../../scrolling/chat_latest_scroll_tokens.dart';
-import '../loading/chat_entry_skeleton.dart';
+import '../loading/chat_entry_loading_hint.dart';
 import '../loading/chat_initial_window_transition.dart';
 
 /// Shared SDK timeline: route-specific presentation keeps pagination, receipts,
@@ -36,7 +38,8 @@ class ChatMessageList extends StatefulWidget {
 }
 
 class _ChatMessageListState extends State<ChatMessageList>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
+  ChatImagePrewarmer _imagePrewarmer = ChatImagePrewarmer();
   ChatLogic get logic => widget.logic;
   late ChatMessageArrivalAnimations _arrivals;
   final _messageIndex = ChatMessageIndex();
@@ -52,6 +55,7 @@ class _ChatMessageListState extends State<ChatMessageList>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _attach();
   }
 
@@ -67,6 +71,8 @@ class _ChatMessageListState extends State<ChatMessageList>
   void didUpdateWidget(covariant ChatMessageList oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.logic != logic) {
+      _imagePrewarmer.dispose();
+      _imagePrewarmer = ChatImagePrewarmer();
       _hasPaintedMessages = false;
       oldWidget.logic.messageArrivals.removeListener(_arrivalChanged);
       _arrivals.dispose();
@@ -77,15 +83,31 @@ class _ChatMessageListState extends State<ChatMessageList>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _imagePrewarmer.dispose();
     _indexWorker?.dispose();
     logic.messageArrivals.removeListener(_arrivalChanged);
     _arrivals.dispose();
     super.dispose();
   }
 
+  void _updateImageWarmupActivity() {
+    _imagePrewarmer.setActive(logic.isMessageNavigationCurrent &&
+        ModalRoute.of(context)?.isCurrent != false &&
+        (WidgetsBinding.instance.lifecycleState == null ||
+            WidgetsBinding.instance.lifecycleState ==
+                AppLifecycleState.resumed));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (mounted) _updateImageWarmupActivity();
+  }
+
   @override
   Widget build(BuildContext context) {
     logic.bindMessageRoute(ModalRoute.of(context));
+    _updateImageWarmupActivity();
     final motionEnabled = !MediaQuery.disableAnimationsOf(context) &&
         TickerMode.valuesOf(context).enabled &&
         ModalRoute.of(context)?.isCurrent != false;
@@ -96,7 +118,23 @@ class _ChatMessageListState extends State<ChatMessageList>
           // their geometry stay unchanged. Rebuild the real viewport so it reports
           // a fresh painted observation after a sync/connection barrier changes.
           logic.syncStatus.value;
-          final latestRows = widget.latestRows;
+          final latestRows = [
+            ...widget.latestRows,
+            if (!logic.viewingHistory.value && !logic.hasDeferredLatest)
+              for (final card in logic.confirmedFundCards)
+                ChatTransientRow(
+                  id: card.id,
+                  anchorMessageID: card.anchorMessageID,
+                  child: ConfirmedFundCardRow(
+                    card: card,
+                    isGroup: logic.isGroupChat,
+                    recipient: logic.fundCardRecipient(card.data),
+                    packetCount: logic.fundPacketCount(card.data),
+                    claimedByMe: logic.fundMessageClaimedByMe(card.data),
+                    onTap: () => logic.openConfirmedFundCard(card.data),
+                  ),
+                ),
+          ];
           final sdkCount =
               logic.initialWindowReady.value ? logic.messageList.length : 0;
           final focusedID = logic.focusedMessageID.value;
@@ -131,18 +169,13 @@ class _ChatMessageListState extends State<ChatMessageList>
                   for (var index = 0; index < count; index++)
                     if (messageIDs[index].isNotEmpty) messageIDs[index]: index,
                 };
-          final skeletonLoading = !logic.initialWindowReady.value &&
+          final initialLoading = !logic.initialWindowReady.value &&
               logic.historyError.value == null &&
               !logic.historyScanLimited.value;
-          final latest = logic.conversationInfo.latestMsg;
           return ChatInitialWindowTransition(
             key: _entryTransitionKey,
-            loading: skeletonLoading,
-            skeleton: ChatEntrySkeleton(
-                isGroup: !logic.isSingleChat,
-                latestOutgoing: latest?.sendID == OpenIM.iMManager.userID,
-                latestIsMedia: latest?.isPictureType == true ||
-                    latest?.isVideoType == true),
+            loading: initialLoading,
+            loadingIndicator: const ChatEntryLoadingHint(),
             onRevealed: logic.messagePositionController.refreshViewport,
             observePaint: () => logic.entryTrace?.listInteractive != true,
             onContentPainted: logic.entryTrace == null
@@ -162,7 +195,16 @@ class _ChatMessageListState extends State<ChatMessageList>
                     ? Duration.zero
                     : ChatLatestScrollTokens.windowFadeDuration,
                 child: NotificationListener<ScrollNotification>(
-                  onNotification: logic.onChatScrollNotification,
+                  onNotification: (notification) {
+                    if (notification.depth == 0) {
+                      if (notification is ScrollStartNotification) {
+                        _imagePrewarmer.setScrolling(true);
+                      } else if (notification is ScrollEndNotification) {
+                        _imagePrewarmer.setScrolling(false);
+                      }
+                    }
+                    return logic.onChatScrollNotification(notification);
+                  },
                   child: MessageSelectionDragRegion(
                     controller: logic.messageSelection,
                     scrollController: logic.scrollController,
@@ -179,20 +221,18 @@ class _ChatMessageListState extends State<ChatMessageList>
                           logic.onChatViewportChanged(
                               ids.where(persistedIDs.contains).toList(),
                               distance);
+                          _imagePrewarmer.update(logic.messageList, ids);
                         }
                       },
                       controller: logic.scrollController,
                       positionController: logic.messagePositionController,
                       onScrollToBottomLoad: logic.onScrollToBottomLoad,
-                      enabledScrollTopLoad: logic.historyNewerHasMore.value &&
-                          !logic.hasDeferredLatest,
+                      enabledScrollTopLoad: logic.historyNewerHasMore.value,
                       newerHasMore: logic.historyNewerHasMore.value,
                       pagingWindow: logic.historyWindowRevision.value,
                       onScrollToTopLoad: logic.onScrollToTopLoad,
                       onScrollToTop: logic.onScrollToTop,
                       loadOnInit: false,
-                      fillViewport: !logic.viewingHistory.value &&
-                          !logic.hasDeferredLatest,
                       followLatest: !logic.viewingHistory.value &&
                           !logic.hasDeferredLatest,
                       initialLoading: logic.initialHistoryLoading.value,

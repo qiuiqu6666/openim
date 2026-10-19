@@ -161,3 +161,4 @@ export 'src/widgets/chat/menu/chat_message_menu_icon.dart';
 export 'src/widgets/hold_to_record_button.dart';
 
 export 'src/widgets/forward/forward_preview_data.dart';
+export 'src/widgets/in_app_browser/in_app_browser.dart';

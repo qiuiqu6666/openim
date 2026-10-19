@@ -10,6 +10,7 @@ import 'package:openim_common/openim_common.dart';
 /// The common variant passes immutable ID snapshots like the production view.
 Widget buildChatEntryList(ChatLogic logic,
     {bool commonList = false,
+    bool newerPaging = false,
     bool showInput = false,
     double Function(Message)? rowHeight,
     void Function(List<String>, double)? observeViewport}) {
@@ -35,6 +36,13 @@ Widget buildChatEntryList(ChatLogic logic,
                 controller: logic.scrollController,
                 loadOnInit: false,
                 hasMore: false,
+                enabledScrollTopLoad:
+                    newerPaging && logic.historyNewerHasMore.value,
+                newerHasMore: logic.historyNewerHasMore.value,
+                onScrollToTopLoad: logic.onScrollToTopLoad,
+                pagingWindow: logic.historyWindowRevision.value,
+                followLatest:
+                    !logic.viewingHistory.value && !logic.hasDeferredLatest,
                 itemCount: rows.length,
                 messageIDs: ids,
                 onViewportChanged: (ids, distance) {

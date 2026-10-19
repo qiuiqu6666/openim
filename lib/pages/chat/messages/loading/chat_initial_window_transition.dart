@@ -1,21 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'chat_entry_loading_tokens.dart';
 import 'chat_entry_paint_observer.dart';
 
-/// Keeps the same real timeline mounted while a passive skeleton crossfades.
+/// Keeps the real timeline mounted and reveals it immediately when ready.
 /// No message keys, scroll position, or list geometry are animated/replaced.
 class ChatInitialWindowTransition extends StatefulWidget {
   const ChatInitialWindowTransition(
       {super.key,
       required this.loading,
-      required this.skeleton,
+      required this.loadingIndicator,
       required this.child,
       this.onContentPainted,
       this.observePaint,
       this.onRevealed});
   final bool loading;
-  final Widget skeleton;
+  final Widget loadingIndicator;
   final Widget child;
   final VoidCallback? onRevealed;
   final void Function(bool interactive)? onContentPainted;
@@ -27,48 +29,24 @@ class ChatInitialWindowTransition extends StatefulWidget {
 }
 
 class ChatInitialWindowTransitionState
-    extends State<ChatInitialWindowTransition>
-    with SingleTickerProviderStateMixin {
-  late final _reveal = AnimationController(
-      vsync: this,
-      duration: ChatEntryLoadingTokens.revealDuration,
-      value: widget.loading ? 0 : 1)
-    ..addStatusListener(_statusChanged);
-  late final _contentOpacity =
-      _reveal.drive(CurveTween(curve: ChatEntryLoadingTokens.revealCurve));
-  late final _skeletonOpacity =
-      _contentOpacity.drive(Tween(begin: 1.0, end: 0.0));
-  late bool _showSkeleton = widget.loading;
-  bool _reducedMotion = false;
+    extends State<ChatInitialWindowTransition> {
+  Timer? _loadingTimer;
+  bool _showLoading = false;
   int _revision = 0;
-  Duration? _loadingStartedAt;
+
+  bool get canReportContent => !widget.loading;
 
   @override
   void initState() {
     super.initState();
-    if (widget.loading) {
-      _loadingStartedAt = WidgetsBinding.instance.currentFrameTimeStamp;
-    }
+    if (widget.loading) _scheduleLoading();
   }
 
-  bool get canReportContent => !widget.loading && _reveal.isCompleted;
-
-  void _statusChanged(AnimationStatus status) {
-    if (status != AnimationStatus.completed || widget.loading || !mounted) {
-      return;
-    }
-    if (_showSkeleton) setState(() => _showSkeleton = false);
-    widget.onRevealed?.call();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _reducedMotion = MediaQuery.disableAnimationsOf(context);
-    if (_reducedMotion) {
-      _reveal.value = widget.loading ? 0 : 1;
-      _showSkeleton = widget.loading;
-    }
+  void _scheduleLoading() {
+    _loadingTimer?.cancel();
+    _loadingTimer = Timer(ChatEntryLoadingTokens.loadingHintDelay, () {
+      if (mounted && widget.loading) setState(() => _showLoading = true);
+    });
   }
 
   @override
@@ -76,36 +54,23 @@ class ChatInitialWindowTransitionState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.loading == widget.loading) return;
     final revision = ++_revision;
+    _loadingTimer?.cancel();
+    _showLoading = false;
     if (widget.loading) {
-      _showSkeleton = true;
-      _loadingStartedAt = WidgetsBinding.instance.currentFrameTimeStamp;
+      _scheduleLoading();
     } else {
-      final waited = WidgetsBinding.instance.currentFrameTimeStamp -
-          (_loadingStartedAt ?? Duration.zero);
-      // A local proof arriving a frame after mounting should not incur the
-      // same reveal delay as a visibly sustained remote loading state.
-      _reveal.duration = waited <= ChatEntryLoadingTokens.briefLoadThreshold
-          ? ChatEntryLoadingTokens.briefRevealDuration
-          : ChatEntryLoadingTokens.revealDuration;
-      _loadingStartedAt = null;
+      // Refresh viewport receipts after actual layout, without delaying paint.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && revision == _revision && !widget.loading) {
+          widget.onRevealed?.call();
+        }
+      });
     }
-    // Let the real viewport lay out and settle its initial latest edge before
-    // revealing it. Retry/closure invalidates this callback, without a timer.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || revision != _revision) return;
-      if (_reducedMotion) {
-        _reveal.value = widget.loading ? 0 : 1;
-      } else if (widget.loading) {
-        _reveal.reverse();
-      } else {
-        _reveal.forward();
-      }
-    });
   }
 
   @override
   void dispose() {
-    _reveal.dispose();
+    _loadingTimer?.cancel();
     super.dispose();
   }
 
@@ -114,10 +79,10 @@ class ChatInitialWindowTransitionState
     final route = ModalRoute.of(context);
     final navigator = Navigator.of(context);
     final animation = Listenable.merge(
-        [_reveal, route?.animation, navigator.userGestureInProgressNotifier]);
+        [route?.animation, navigator.userGestureInProgressNotifier]);
     return Stack(fit: StackFit.expand, children: [
-      FadeTransition(
-          opacity: _contentOpacity,
+      Opacity(
+          opacity: widget.loading ? 0 : 1,
           child: IgnorePointer(
               ignoring: !canReportContent,
               child: ExcludeSemantics(
@@ -132,9 +97,8 @@ class ChatInitialWindowTransitionState
                                 WidgetsBinding.instance.lifecycleState;
                             if (!mounted ||
                                 widget.loading ||
-                                _reveal.value <= 0 ||
-                                (!_reducedMotion &&
-                                    route?.animation?.value == 0) ||
+                                (route?.animation?.value == 0 &&
+                                    !MediaQuery.disableAnimationsOf(context)) ||
                                 route?.isCurrent == false ||
                                 (lifecycle != null &&
                                     lifecycle != AppLifecycleState.resumed)) {
@@ -146,13 +110,8 @@ class ChatInitialWindowTransitionState
                                 !navigator.userGestureInProgress);
                           },
                           child: widget.child)))),
-      if (_showSkeleton)
-        Positioned.fill(
-            child: IgnorePointer(
-                child: FadeTransition(
-                    opacity: _skeletonOpacity,
-                    child: ExcludeSemantics(
-                        excluding: !widget.loading, child: widget.skeleton)))),
+      if (_showLoading && widget.loading)
+        Positioned.fill(child: IgnorePointer(child: widget.loadingIndicator)),
     ]);
   }
 }

@@ -44,27 +44,29 @@ class UnreadCountView extends StatelessWidget {
     return Visibility(
       visible: count > 0,
       child: Container(
-        alignment: Alignment.center,
+        alignment: pill ? null : Alignment.center,
         margin: margin,
         padding: pill
-            ? EdgeInsets.symmetric(horizontal: 6.w)
+            ? EdgeInsets.symmetric(horizontal: 4.w)
             : _compact
             ? const EdgeInsets.symmetric(horizontal: 3)
             : count > 99
                 ? EdgeInsets.symmetric(horizontal: 4.w)
                 : null,
         constraints: BoxConstraints(
-            maxHeight: size, minWidth: pill ? size * 1.4 : size),
+            minHeight: pill ? size : 0, maxHeight: size, minWidth: size),
         decoration: _decoration,
-        child: _text,
+        child: pill
+            ? Align(widthFactor: 1, heightFactor: 1, child: _text)
+            : _text,
       ),
     );
   }
 
   Text get _text => Text(
         '${count > 99 ? '99+' : count}',
-        maxLines: _compact ? 1 : null,
-        softWrap: !_compact,
+        maxLines: _compact || pill ? 1 : null,
+        softWrap: !(_compact || pill),
         style: TextStyle(
           fontSize: _compact ? fontSize : fontSize.sp,
           color: foregroundColor ?? AppTokens.onAccent,

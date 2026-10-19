@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../in_app_browser/in_app_browser.dart';
 
 import '../../../../res/app_tokens.dart';
 import '../chat_location_picker_labels.dart';
@@ -88,10 +88,9 @@ class _ChatLocationAmapConsentState extends State<ChatLocationAmapConsent> {
 
   Future<void> _openPrivacy() async {
     try {
-      final opened = await launchUrl(
-        Uri.parse('https://lbs.amap.com/pages/privacy/'),
-        mode: LaunchMode.externalApplication,
-      );
+      final opened = await openInAppBrowser(
+          Uri.parse('https://lbs.amap.com/pages/privacy/'),
+          context: context);
       if (!opened && mounted) setState(() => _failed = true);
     } catch (_) {
       if (mounted) setState(() => _failed = true);

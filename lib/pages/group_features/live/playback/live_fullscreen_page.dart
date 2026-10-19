@@ -1,3 +1,4 @@
+import 'live_surface_visibility.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -27,8 +28,7 @@ class _LiveFullscreenPageState extends State<LiveFullscreenPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    widget.state.setSurfaceVisible(
-        _surface, ModalRoute.of(context)?.isCurrent != false);
+    widget.state.setSurfaceVisible(_surface, liveSurfaceIsVisible(context));
   }
 
   @override

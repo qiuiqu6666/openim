@@ -1,3 +1,4 @@
+import '../playback/live_surface_visibility.dart';
 import 'package:openim/routes/swipe_back/app_swipe_back_tokens.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -106,8 +107,7 @@ class _GroupLiveWatchSurfaceState extends State<GroupLiveWatchSurface>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _state.setSurfaceVisible(
-        _inlineSurface, ModalRoute.of(context)?.isCurrent != false);
+    _state.setSurfaceVisible(_inlineSurface, liveSurfaceIsVisible(context));
   }
 
   @override
@@ -130,8 +130,7 @@ class _GroupLiveWatchSurfaceState extends State<GroupLiveWatchSurface>
       _state.removeListener(_changed);
       _state.dispose();
       _init();
-      _state.setSurfaceVisible(
-          _inlineSurface, ModalRoute.of(context)?.isCurrent != false);
+      _state.setSurfaceVisible(_inlineSurface, liveSurfaceIsVisible(context));
     } else if ((widget.session.status != oldWidget.session.status ||
             widget.session.version != oldWidget.session.version) &&
         (widget.session.status != _state.session.status ||

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:openim_common/openim_common.dart';
 
 import '../widgets/wallet_tip.dart';
 import 'wallet_i18n.dart';
@@ -14,7 +14,7 @@ Future<void> openWalletTronTransaction(
       host: 'tronscan.org',
       pathSegments: ['transaction', hash, 'overview']);
   try {
-    if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    if (await openInAppBrowser(uri, context: context)) return;
   } catch (_) {
     // Use the same feedback for an unavailable browser or a launcher failure.
   }

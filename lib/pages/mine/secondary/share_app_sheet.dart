@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../routes/app_navigator.dart';
 import '../../../services/chat_message_sender.dart';
@@ -106,10 +105,7 @@ class _ShareAppSheetState extends State<ShareAppSheet> {
   Future<void> _openWebsite(BuildContext context) async {
     if (!_ensureConfigured(context)) return;
     try {
-      final ok = await launchUrl(
-        Uri.parse(_website),
-        mode: LaunchMode.externalApplication,
-      );
+      final ok = await openInAppBrowser(Uri.parse(_website), context: context);
       if (!ok && context.mounted) {
         _toast(settingsText(context, zh: '无法打开', en: 'Unable to open'));
       }

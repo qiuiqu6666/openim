@@ -15,6 +15,25 @@ void main() {
   setUp(ChatHistoryCache.clear);
   tearDown(ChatHistoryCache.clear);
 
+  test('visible warming only reads local history and uses a 40-row window',
+      () async {
+    final reads = <(String, int)>[];
+    final prefetcher = ChatHistoryPrefetcher(
+        accountID: () => 'me',
+        token: () => 'token',
+        epoch: () => 0,
+        fetch: (_, __) =>
+            throw StateError('speculation must not reach network'),
+        fetchLocalWindow: (id, count) async {
+          reads.add((id, count));
+          return page('local');
+        });
+    await prefetcher.warmLocal(conversation());
+    await prefetcher.warmLocal(conversation(private: true));
+    expect(reads, [('chat', 40)]);
+    prefetcher.clear();
+  });
+
   test('local warming starts before remote work and never blocks navigation',
       () async {
     final local = Completer<AdvancedMessage>();

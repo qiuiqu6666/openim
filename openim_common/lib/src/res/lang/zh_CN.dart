@@ -381,7 +381,7 @@ const Map<String, String> zh_CN = {
   "location": "位置",
   "file": "文件",
   "carte": "名片",
-  "emoji": "自定义表情",
+  "emoji": "表情",
   "chatRecord": "聊天记录",
   "revokeMsg": "撤回了一条消息",
   "aRevokeBMsg": "%s 撤回了 %s 的消息",

@@ -23,6 +23,11 @@ class SharedImageDiskCache {
     return bytes.isEmpty ? null : bytes;
   }
 
+  Future<bool> contains(String url) async {
+    final file = await _file(url);
+    return await file.exists() && await file.length() > 0;
+  }
+
   Future<void> write(String url, Uint8List bytes,
       {required bool Function() isCurrent}) async {
     if (bytes.isEmpty || !isCurrent()) return;

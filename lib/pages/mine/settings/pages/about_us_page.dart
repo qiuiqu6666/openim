@@ -85,7 +85,7 @@ class _AboutUsPageState extends State<AboutUsPage> {
       return;
     }
     try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final ok = await openInAppBrowser(uri, context: context);
       if (!ok && mounted) {
         showSettingsMessage(
           context,

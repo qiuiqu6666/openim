@@ -19,7 +19,6 @@ void main() {
             messageIDs: ids,
             itemCount: ids.length,
             loadOnInit: false,
-            fillViewport: false,
             followLatest: false,
             hasMore: false,
             enabledScrollTopLoad: true,

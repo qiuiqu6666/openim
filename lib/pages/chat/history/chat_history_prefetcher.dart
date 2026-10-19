@@ -89,19 +89,8 @@ class ChatHistoryPrefetcher {
         conversation.isPrivateChat == true) {
       return;
     }
-    // Warm the SDK's own attested cache. The page joins its pending read or
-    // consumes its completed copy; Flutter retains no second local snapshot.
-    if (fetchLocalWindow != null && !_localReads.isFull) {
-      mark?.call('local_window_start');
-      unawaited(_localReads.run(
-          (key, count), () => fetchLocalWindow!(key.$4, count),
-          timeout: _readTimeout,
-          isCurrent: () =>
-              key.$1 == accountID() &&
-              key.$2 == token() &&
-              key.$3 == epoch()).then<void>(
-          (_) => mark?.call('local_window_finished'),
-          onError: (Object _) => mark?.call('local_window_failed')));
+    if (!_localReads.isFull) {
+      unawaited(warmLocal(conversation, count: count, mark: mark));
     }
     if (_preparedKey(key, count) != null || _reads.isFull) return;
     while (_requests.length >= 12) {
@@ -119,6 +108,32 @@ class ChatHistoryPrefetcher {
         request.expiry.cancel();
       }
     }));
+  }
+
+  /// List speculation reads SQLite only; it never starts remote history work.
+  Future<void> warmLocal(ConversationInfo conversation,
+      {int count = 40, void Function(String)? mark}) async {
+    final key = _key(conversation.conversationID);
+    if (fetchLocalWindow == null ||
+        key.$1.isEmpty ||
+        key.$4.isEmpty ||
+        conversation.isPrivateChat == true) {
+      return;
+    }
+    mark?.call('local_window_start');
+    try {
+      await _localReads.run(
+          (key, count), () => fetchLocalWindow!(key.$4, count),
+          timeout: _readTimeout,
+          isCurrent: () =>
+              key.$1 == accountID() &&
+              key.$2 == token() &&
+              key.$3 == epoch() &&
+              key.$5 == _conversationRevision(key.$1, key.$4));
+      mark?.call('local_window_finished');
+    } catch (_) {
+      mark?.call('local_window_failed');
+    }
   }
 
   Future<AdvancedMessage> readLatest(ConversationInfo conversation,

@@ -3,6 +3,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
 import 'media_page_gesture.dart';
+import 'media_reading_viewport.dart';
+import 'reading_gesture_details.dart';
 
 /// Keep a reading drag on its initial axis, including ExtendedImage's direct
 /// image-to-gallery handoff (which bypasses the gallery's drag recognizer).
@@ -19,9 +21,33 @@ class _ReadingImageGestureState extends ExtendedImageGestureState {
   bool _canDismiss = false;
   bool _dismiss = false;
   bool _multiplePointers = false;
+  bool _extendEdges = false;
+  EdgeInsets _readingInsets = EdgeInsets.zero;
+
+  @override
+  set gestureDetails(GestureDetails? value) {
+    super.gestureDetails = value == null
+        ? null
+        : ReadingGestureDetails(value, _readingInsets, _extendEdges);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _readingInsets = MediaReadingInsets.of(context);
+    gestureDetails = super.gestureDetails;
+  }
+
+  @override
+  void didUpdateWidget(covariant ExtendedImageGesture oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    gestureDetails = super.gestureDetails;
+  }
 
   @override
   void handleScaleStart(ScaleStartDetails details) {
+    _extendEdges = true;
+    gestureDetails = super.gestureDetails;
     super.handleScaleStart(details);
     _start = details.focalPoint;
     _axis = null;
@@ -30,7 +56,8 @@ class _ReadingImageGestureState extends ExtendedImageGestureState {
     final base = imageGestureConfig!.initialScale;
     _canDismiss = base > 1 &&
         (gestureDetails?.totalScale ?? base) <= base * 1.01 &&
-        gestureDetails?.boundary.top == true;
+        (gestureDetails?.destinationRect?.top ?? 0) >=
+            _readingInsets.top - 0.01;
   }
 
   @override

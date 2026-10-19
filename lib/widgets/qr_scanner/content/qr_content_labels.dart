@@ -18,11 +18,11 @@ extension QrContentLabels on QrScannerLabels {
             ko: 'QR 내용'),
       };
   String get openBrowser => t(
-      zhHans: '打开浏览器',
-      zhHant: '開啟瀏覽器',
-      en: 'Open in browser',
-      ja: 'ブラウザで開く',
-      ko: '브라우저에서 열기');
+      zhHans: '在应用内打开',
+      zhHant: '在應用程式內開啟',
+      en: 'Open in app',
+      ja: 'アプリ内で開く',
+      ko: '앱 내에서 열기');
   String get copyRaw => t(
       zhHans: '复制原文',
       zhHant: '複製原文',

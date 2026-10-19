@@ -12,7 +12,7 @@ export 'fund_models.dart';
 
 class FundApiException implements Exception {
   const FundApiException(this.code, this.message,
-      {this.isUncertain = false, this.orderID});
+      {this.isUncertain = false, this.orderID, this.retryAfterSeconds});
   final int code;
   final String message;
 
@@ -22,6 +22,7 @@ class FundApiException implements Exception {
   /// A real service ID returned with an incomplete wallet write response.
   /// Recovery can query this ID; it never authorizes resubmitting the write.
   final String? orderID;
+  final int? retryAfterSeconds;
 
   @override
   String toString() => 'FundApiException($code, $message)';
@@ -357,6 +358,8 @@ class FundApi {
       trace?.response(response);
     } on DioException catch (error) {
       trace?.error(error);
+      final rejection = _riskRejection(error.response);
+      if (rejection != null) throw rejection;
       final status = error.response?.statusCode;
       if (walletContract && status == 401) {
         throw const FundApiException(401, '登录状态已失效，请重新登录');
@@ -370,6 +373,8 @@ class FundApi {
     } finally {
       trace?.finish('end');
     }
+    final rejection = _riskRejection(response);
+    if (rejection != null) throw rejection;
     if (walletContract && response.statusCode == 401) {
       throw const FundApiException(401, '登录状态已失效，请重新登录');
     }
@@ -399,6 +404,24 @@ class FundApi {
           isUncertain: mutation);
     }
     return Map<String, dynamic>.from(responseData);
+  }
+
+  // Only the service's explicit pre-execution rejection is definitive.
+  // A proxy 429 or an unreadable response cannot disprove a committed write.
+  FundApiException? _riskRejection(Response<dynamic>? response) {
+    final body = response?.data;
+    if (response?.statusCode != 429 ||
+        body is! Map ||
+        body['errCode'] != 20201) {
+      return null;
+    }
+    final data = body['data'];
+    final value = data is Map ? data['retryAfter'] : null;
+    final seconds = value is int && value > 0
+        ? value
+        : int.tryParse(response!.headers.value('retry-after') ?? '');
+    return FundApiException(20201, 'Payment restricted',
+        retryAfterSeconds: seconds != null && seconds > 0 ? seconds : null);
   }
 
   void _validateWrite(String clientOrderID, String payPassword) {
@@ -442,6 +465,11 @@ String fundErrorMessage(Object error, {bool? chinese}) {
       return zh
           ? '结果尚未确认，请保留当前页面并重试确认，请勿重复发起付款'
           : 'The result is not confirmed. Keep this page and retry confirmation; do not create another payment.';
+    }
+    if (error.code == 20201) {
+      return zh
+          ? '当前交易暂受限制，请稍后重试'
+          : 'This transaction is temporarily restricted. Please try again later.';
     }
     final messages = <int, (String, String)>{
       -2: ('登录状态已失效，请重新登录', 'Please sign in again.'),

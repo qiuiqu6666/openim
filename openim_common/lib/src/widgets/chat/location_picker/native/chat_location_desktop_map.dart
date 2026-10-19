@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../in_app_browser/in_app_browser.dart';
 
 import '../chat_location_picker_tokens.dart';
 import 'chat_location_native_map_options.dart';
@@ -87,9 +87,9 @@ class _ChatLocationDesktopMapState extends State<ChatLocationDesktopMap> {
               alignment: AttributionAlignment.bottomLeft,
               attributions: [
                 TextSourceAttribution('OpenStreetMap contributors',
-                    onTap: () => unawaited(launchUrl(
+                    onTap: () => unawaited(openInAppBrowser(
                         Uri.parse('https://www.openstreetmap.org/copyright'),
-                        mode: LaunchMode.externalApplication)))
+                        context: context)))
               ]),
         ]);
   }

@@ -58,6 +58,10 @@ class ProfilePanelFixture extends GetxController
   final activeGroupContext = true.obs;
   @override
   bool get hasActiveGroupMemberContext => activeGroupContext.value;
+  final targetGroupManager = false.obs;
+  @override
+  bool get showStrangerBlacklistAction =>
+      userInfo.value.isBlacklist || !group;
   final friendAddEntry = true.obs;
   @override
   bool get hasFriendAddEntry => friendAddEntry.value;

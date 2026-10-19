@@ -30,6 +30,7 @@ void main() {
       const original = 'https://image.test/original?signature=keep';
       const preview = 'https://image.test/preview';
       await tester.pumpWidget(renderTestHost(MediaBrowser(
+        autoLoadOriginal: false,
         initialIndex: 0,
         showGallery: true,
         onSave: (_) {},

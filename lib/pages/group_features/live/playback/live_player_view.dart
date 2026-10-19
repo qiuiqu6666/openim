@@ -1,3 +1,4 @@
+import 'live_surface_visibility.dart';
 import 'package:openim/routes/swipe_back/app_swipe_back_tokens.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -57,7 +58,7 @@ class _LivePlayerViewState extends State<LivePlayerView>
   }
 
   void _syncVisibility() {
-    final visible = ModalRoute.of(context)?.isCurrent != false;
+    final visible = liveSurfaceIsVisible(context);
     final controller = widget.controller;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !identical(controller, widget.controller)) return;
@@ -112,7 +113,7 @@ class _LivePlayerViewState extends State<LivePlayerView>
     unawaited(controller.setSurfaceVisible(_fullscreenHandoff, true,
         owner: renewalOwner));
     final route = MaterialPageRoute<void>(
-      settings: const RouteSettings(name: AppSwipeBackTokens.mediaRouteName),
+        settings: const RouteSettings(name: AppSwipeBackTokens.mediaRouteName),
         builder: (routeContext) => Scaffold(
             backgroundColor: LiveStyle.screen,
             body: SafeArea(

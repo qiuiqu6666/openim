@@ -13,7 +13,7 @@
 | `receipts/` | `chat_read_receipts.dart`、`conversation_read_coordinator.dart` | 真实视口会话阅读、私密消息逐条回执、消息身份与未读快照请求合并、SDK 成功确认桥接、回执刷新计时器 |
 | `composer/` | `chat_composer_controller.dart` | 输入与焦点资源、串行草稿、引用、@成员、定向成员、格式化编辑；`mention_id.dart` 为共用的提及 ID 解析 |
 | `messages/` | `chat_delivery_controller.dart`、`chat_message_actions.dart` | 发送状态、失败提示、撤回删除策略；`selection/` 为当前聊天多选、长按滑选与操作栏，`forwarding/` 为单条/批量/合并转发及名片，`presentation/` 为消息显示策略，`widgets/` 为消息行渲染 |
-| `messages/loading/` | `chat_entry_skeleton.dart`、`chat_initial_window_transition.dart` | 首屏灰化骨架与短交叉淡入；沿用真实气泡圆角、头像和时间布局，保持真实列表实例与滚动位置；减少动态效果时静态替换；过渡完成后再提交真实可见消息回执 |
+| `messages/loading/` | `chat_entry_loading_hint.dart`、`chat_initial_window_transition.dart` | 首屏真实消息就绪直接显示；无消息超过 200ms 才显示轻量文字提示；不使用骨架和消息淡入，保持真实列表实例、滚动位置与实际视口回执 |
 | `media/` | `chat_media_controller.dart`、`chat_picture_gallery.dart` | 相册、相机、文件、位置、音频文件选择和临时附件准备；音频转文字预览交给语音模块 |
 | `voice/` | `chat_voice_controller.dart` | 录音、播放、转文字、预览、本地扩展字段串行写入和任务取消；服务与转写状态在本目录维护 |
 | `stickers/` | `chat_sticker_controller.dart`、`personal_sticker_store.dart` | 表情上传、收藏重试、个人表情存储/管理、图片与视频表情发送及展示 |
@@ -72,3 +72,5 @@
 目录拆分的检查结果见 [拆分验证记录](../../../docs/chat-module-refactor-validation.md)；后续异步状态与性能修复见 [根因修复验证记录](../../../docs/root-cause-fixes-validation.md)，测试统计以各轮记录为准。
 
 主控制器约 850 行，其中包括页面协调、依赖注入和已有公开接口代理；保留它用于 GetX、路由和调用方兼容。新消息计数已归入独立 `scrolling/`，主入口仅连接 SDK、视口回调与生命周期；后续新增职责必须继续放入功能控制器。现有群设置页面等超过 500 行的文件已具有独立目录，后续在变更对应功能时继续拆分其页面部件，避免机械搬动无关范围。
+
+红包与转账返回：FundSendPage 在支付成功提示期间通过 onPaid 发布已确认订单。fund/confirmed_fund_cards.dart 暂存仅用于展示的卡片，messages/widgets/chat_message_list.dart 复用临时展示行；正式 SDK 消息按本人发送者、订单号、业务、币种和金额匹配后接替，不写 SDK、不触发发送/已读/多选。会话关闭清理临时卡片与监听；账号、服务器及会话变化拒绝迟到结果。卡片外观复用 ChatItemContainer 与 FundMessageCard。

@@ -1,4 +1,5 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'package:openim_common/openim_common.dart';
 
 import '../../../core/controller/im_controller.dart';
 import 'identity/group_member_identity_source.dart';
@@ -36,6 +37,7 @@ class ChatGroupQueries {
     required this.selfMember,
     required this.ownerAndAdmin,
     this.members,
+    this.profiles,
     this.verifyMembership,
   });
 
@@ -56,6 +58,16 @@ class ChatGroupQueries {
       // the server. Do not confirm a stale nickname as the current identity.
       members: (id, users) =>
           identities.members(groupID: id, userIDList: users),
+      profiles: (users) async => (await Apis.getUserFullInfo(
+                  userIDList: users,
+                  showNumber: users.length,
+                  showErrorToast: false) ??
+              [])
+          .map((user) => GroupMembersInfo(
+              userID: user.userID,
+              nickname: user.nickname,
+              faceURL: user.faceURL))
+          .toList(),
     );
   }
 
@@ -68,4 +80,5 @@ class ChatGroupQueries {
       selfMember;
   final Future<List<GroupMembersInfo>> Function(String groupID) ownerAndAdmin;
   final Future<List<GroupMembersInfo>> Function(String, List<String>)? members;
+  final Future<List<GroupMembersInfo>> Function(List<String>)? profiles;
 }

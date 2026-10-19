@@ -51,3 +51,5 @@
 聊天媒体节流：`MediaSource.previewUrl` 是完整预览，`url` 保留原文件；`deferOriginal` 禁止缺预览时自动加载原图。`on_demand_image.dart` 在显式操作后才构建原图，`on_demand_video.dart` 在播放前不构建播放器。图库预热只用缩略图，图格失败仅回退预览；分享/保存仍使用原文件并保持明确用户触发。两种按需组件复用 Material 控件、主题与 SafeArea，无新动画。
 
 原图入口接入底部操作栏左侧，与右侧操作垂直居中对齐，统一跟随工具栏显示和隐藏。浏览器按媒体来源保存显式原图请求状态，切页不串用；点击后才刷新当前图片。`media_preview_action_button.dart` 统一返回、保存等图标按钮与查看原图文字按钮的玻璃底色、按压反馈和至少 48px 点击区域；原图仍只在点击后加载。
+
+原图查看：MediaBrowser 首次打开只检查原文件磁盘缓存，不触发下载；已有完整缓存时自动显示原图。显式查看原图时，ViewerImageProvider 通过 ImageChunkEvent 上报真实字节进度，OriginalImageProgress 在预览图上显示扇形进度；未知总长度只显示下载标记。下载完成保留现有磁盘缓存，清理缓存后恢复手动查看入口。回归测试见 test/widgets/media_browser/original_image_progress_test.dart 和 viewer_image_provider_test.dart。

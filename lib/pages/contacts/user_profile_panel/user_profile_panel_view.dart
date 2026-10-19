@@ -395,25 +395,27 @@ class UserProfilePanelPage extends StatelessWidget {
                   textStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onPrimary),
                   onTap: logic.addFriend),
-              const SizedBox(height: ProfileTokens.gap),
+              if (logic.showStrangerBlacklistAction)
+                const SizedBox(height: ProfileTokens.gap),
             ],
-            Button(
-                text: (logic.userInfo.value.isBlacklist
-                        ? 'profileRemoveBlacklist'
-                        : 'profileAddBlacklist')
-                    .tr,
-                enabled: !logic.updatingBlacklist.value,
-                height: ProfileTokens.buttonHeight,
-                radius: ProfileTokens.radius,
-                enabledColor: UserProfileTokens.background(context),
-                disabledColor: UserProfileTokens.background(context),
-                border: Border.all(color: AppTokens.accent),
-                textStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: logic.updatingBlacklist.value
-                        ? UserProfileTokens.muted(context)
-                        : AppTokens.accent),
-                onTap: () =>
-                    logic.setBlacklist(!logic.userInfo.value.isBlacklist)),
+            if (logic.showStrangerBlacklistAction)
+              Button(
+                  text: (logic.userInfo.value.isBlacklist
+                          ? 'profileRemoveBlacklist'
+                          : 'profileAddBlacklist')
+                      .tr,
+                  enabled: !logic.updatingBlacklist.value,
+                  height: ProfileTokens.buttonHeight,
+                  radius: ProfileTokens.radius,
+                  enabledColor: UserProfileTokens.background(context),
+                  disabledColor: UserProfileTokens.background(context),
+                  border: Border.all(color: AppTokens.accent),
+                  textStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: logic.updatingBlacklist.value
+                          ? UserProfileTokens.muted(context)
+                          : AppTokens.accent),
+                  onTap: () =>
+                      logic.setBlacklist(!logic.userInfo.value.isBlacklist)),
           ]),
         ),
       );

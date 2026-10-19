@@ -74,6 +74,7 @@ class ChatGroupController {
   final ownerAndAdmin = <GroupMembersInfo>[];
   final memberUpdateInfoMap = <String, GroupMembersInfo>{};
   late final _senderAvatars = GroupSenderAvatars(
+    lookupProfiles: _queries.profiles,
     isCurrent: () => _matches(groupID()) && isInGroup.value,
     lookup: _queries.members == null
         ? null

@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-19",
+  "sdk_version": "v3.8.3-patch.15+recovery.39-group-offline.2",
+  "source_sha256": "27e2f591aa3b2b4d79735dcbaf007f308d741d4cd68139a8e78ccbe2664d495a",
+  "aar_sha256": "e1ee291ba3869acb720e36f5e39e2cff24a3a40fa338db35ef0771ea1991eee2",
+  "apk": "E:\\openim\\openim-flutter-demo\\release-artifacts\\99chat-real-messages-recovery39.2-arm64-debug.apk",
+  "apk_sha256": "90406d51374e543171011bcbc7f283df8c567517d0e32df04a2180c31f1aa16e",
+  "apk_core_sha256": "5fc231606fa753a980e3b9f1ece79a254688ef5c66e97bb3054ede8f70bc6c31",
+  "checks": {
+    "core_build_tests": "passed: common, network, interaction, conversation_msg, relation, upload deadline/hash",
+    "source_lock_tests": "15 passed",
+    "android_artifact": "four ABIs verified",
+    "apk_build": "debug arm64 passed",
+    "apk_native_parity": "exact match after NDK 28.2 llvm-strip --strip-unneeded on rebuilt AAR library",
+    "device_runtime": "not run",
+    "ios": "not rebuilt; requires macOS"
+  },
+  "logs": [
+    "E:/openim/chat-real-entry-sdk-build.log",
+    "E:/openim/chat-real-entry-sdk-lock-tests.log",
+    "E:/openim/chat-real-entry-build.log"
+  ]
+}

@@ -11,6 +11,7 @@ import '../../fund/fund_detail_page.dart';
 import '../../fund/fund_send_page.dart';
 import 'fund_card_state_cache.dart';
 import 'fund_card_recipient.dart';
+import 'confirmed_fund_cards.dart';
 
 typedef ChatFundSendPageOpener = Future<FundOrder?> Function({
   required bool isRedPacket,
@@ -33,6 +34,8 @@ class ChatFundController {
     required this.recipientName,
     required this.recipientFaceURL,
     required this.closeToolbox,
+    RxList<Message>? messages,
+    this.onPaidCardReady,
     String Function()? currentUserID,
     String? Function()? certificateID,
     String Function()? serverURL,
@@ -47,14 +50,16 @@ class ChatFundController {
         _certificateID = certificateID ?? (() => DataSp.userID),
         _serverURL = serverURL ?? (() => Config.appAuthUrl),
         _getOrder = getOrder ?? FundApi().getOrder,
-        _openSend = openSend ?? _openSendPage,
-        _openExclusiveSend = openExclusiveSend ?? _openExclusiveSendPage,
+        _openSend = openSend,
+        _openExclusiveSend = openExclusiveSend,
         _openDetail = openDetail ?? _openDetailPage,
         _usesDefaultDetail = openDetail == null,
         _now = now ?? DateTime.now,
         _resolveRecipient = resolveRecipient ?? FundCardRecipient.resolve,
         _stateCache = stateCache ?? FundCardStateCache.shared {
     _stateEpoch = _stateCache.epoch;
+    confirmedCards =
+        ConfirmedFundCards(messages: messages, currentUserID: _currentUserID);
   }
 
   final bool Function() isClosed;
@@ -64,12 +69,14 @@ class ChatFundController {
   final String? Function() recipientName;
   final String? Function() recipientFaceURL;
   final VoidCallback closeToolbox;
+  final VoidCallback? onPaidCardReady;
+  late final ConfirmedFundCards confirmedCards;
   final String Function() _currentUserID;
   final String? Function() _certificateID;
   final String Function() _serverURL;
   final Future<FundOrder> Function(String) _getOrder;
-  final ChatFundSendPageOpener _openSend;
-  final ChatFundSendPageOpener _openExclusiveSend;
+  final ChatFundSendPageOpener? _openSend;
+  final ChatFundSendPageOpener? _openExclusiveSend;
   final Future<FundOrder?> Function(FundMessageData) _openDetail;
   final bool _usesDefaultDetail;
   final DateTime Function() _now;
@@ -98,6 +105,10 @@ class ChatFundController {
     if (message.contentType != MessageType.custom) return null;
     final data = FundMessageData.tryParse(message.customElem?.data);
     if (data == null) return null;
+    return displayData(data);
+  }
+
+  FundMessageData displayData(FundMessageData data) {
     final verified = _verifiedState(data);
     return verified != null
         ? data.copyWith(
@@ -321,7 +332,72 @@ class ChatFundController {
     try {
       final openPage =
           exclusiveRecipient == null ? _openSend : _openExclusiveSend;
-      final order = await openPage(
+      void acceptOrder(FundOrder? order) {
+        if (order == null ||
+            ownerID != _currentUserID() ||
+            certificateID != _certificateID() ||
+            certificateID != ownerID ||
+            serverURL != _serverURL() ||
+            _stateEpoch != _stateCache.epoch ||
+            _closed ||
+            chatUserID != userID() ||
+            targetGroupID != groupID() ||
+            order.isPacket != isRedPacket ||
+            order.scene != (isGroup ? FundScene.group : FundScene.single) ||
+            (!isGroup &&
+                (order.biz == 'group_transfer' ||
+                    order.biz == 'packet_lucky')) ||
+            (order.senderID.isNotEmpty && order.senderID != ownerID) ||
+            order.recvID == ownerID ||
+            (exclusiveRecipient != null &&
+                (order.biz != FundPacketBiz.exclusive.code ||
+                    order.recvID != targetUserID ||
+                    order.groupID != targetGroupID)) ||
+            (isGroup
+                ? order.groupID.isNotEmpty && order.groupID != targetGroupID
+                : targetUserID == null ||
+                    targetUserID.isEmpty ||
+                    order.groupID.isNotEmpty ||
+                    (order.recvID.isNotEmpty &&
+                        order.recvID != targetUserID))) {
+          return;
+        }
+        // The API-confirmed order can arrive before its server-created IM card.
+        // Render the confirmed order separately; never create or rewrite an IM message.
+        final reference = FundMessageData.tryParse(jsonEncode({
+          'orderID': order.orderID,
+          'biz': order.biz,
+          'currency': order.currency.code,
+          'amount': order.amount.decimal,
+          'status': order.status,
+          'remark': order.remark,
+        }));
+        if (reference != null) {
+          _applyOrder(reference, order,
+              ownerID: ownerID,
+              certificateID: certificateID,
+              serverURL: serverURL);
+          if (confirmedCards.add(order, reference)) onPaidCardReady?.call();
+        }
+      }
+
+      final order = await (openPage ??
+          (
+                  {required bool isRedPacket,
+                  String? userID,
+                  String? groupID,
+                  String? recipientName,
+                  String? recipientFaceURL}) =>
+              _openSendPage(
+                isRedPacket: isRedPacket,
+                userID: userID,
+                groupID: groupID,
+                recipientName: recipientName,
+                recipientFaceURL: recipientFaceURL,
+                initialPacketBiz:
+                    exclusiveRecipient == null ? null : FundPacketBiz.exclusive,
+                onPaid: acceptOrder,
+              ))(
         isRedPacket: isRedPacket,
         userID: targetUserID,
         groupID: targetGroupID,
@@ -334,44 +410,7 @@ class ChatFundController {
             ? recipientFaceURL()
             : exclusiveRecipient.faceURL,
       );
-      if (order == null ||
-          _closed ||
-          chatUserID != userID() ||
-          targetGroupID != groupID() ||
-          order.isPacket != isRedPacket ||
-          order.scene != (isGroup ? FundScene.group : FundScene.single) ||
-          (!isGroup &&
-              (order.biz == 'group_transfer' || order.biz == 'packet_lucky')) ||
-          (order.senderID.isNotEmpty && order.senderID != ownerID) ||
-          order.recvID == ownerID ||
-          (exclusiveRecipient != null &&
-              (order.biz != FundPacketBiz.exclusive.code ||
-                  order.recvID != targetUserID ||
-                  order.groupID != targetGroupID)) ||
-          (isGroup
-              ? order.groupID.isNotEmpty && order.groupID != targetGroupID
-              : targetUserID == null ||
-                  targetUserID.isEmpty ||
-                  order.groupID.isNotEmpty ||
-                  (order.recvID.isNotEmpty && order.recvID != targetUserID))) {
-        return;
-      }
-      // The API-confirmed order can arrive before its server-created IM card.
-      // Cache its verified identity; do not create or rewrite an IM message.
-      final reference = FundMessageData.tryParse(jsonEncode({
-        'orderID': order.orderID,
-        'biz': order.biz,
-        'currency': order.currency.code,
-        'amount': order.amount.decimal,
-        'status': order.status,
-        'remark': order.remark,
-      }));
-      if (reference != null) {
-        _applyOrder(reference, order,
-            ownerID: ownerID,
-            certificateID: certificateID,
-            serverURL: serverURL);
-      }
+      acceptOrder(order);
     } finally {
       _openingPage = false;
     }
@@ -445,6 +484,7 @@ class ChatFundController {
 
   void close() {
     _disposed = true;
+    confirmedCards.close();
     _visibleMessages.clear();
     _refreshTimes.clear();
     _generations.clear();
@@ -459,6 +499,7 @@ class ChatFundController {
     String? recipientName,
     String? recipientFaceURL,
     FundPacketBiz? initialPacketBiz,
+    ValueChanged<FundOrder>? onPaid,
   }) async {
     return Get.to<FundOrder>(() => FundSendPage(
           isRedPacket: isRedPacket,
@@ -467,24 +508,9 @@ class ChatFundController {
           recipientName: recipientName,
           recipientFaceURL: recipientFaceURL,
           initialPacketBiz: initialPacketBiz,
+          onPaid: onPaid,
         ));
   }
-
-  static Future<FundOrder?> _openExclusiveSendPage({
-    required bool isRedPacket,
-    String? userID,
-    String? groupID,
-    String? recipientName,
-    String? recipientFaceURL,
-  }) =>
-      _openSendPage(
-        isRedPacket: isRedPacket,
-        userID: userID,
-        groupID: groupID,
-        recipientName: recipientName,
-        recipientFaceURL: recipientFaceURL,
-        initialPacketBiz: FundPacketBiz.exclusive,
-      );
 
   static Future<FundOrder?> _openDetailPage(FundMessageData message,
       {FundDetailMessageSender? messageSender}) async {

@@ -1,3 +1,4 @@
+import 'package:openim/pages/group_features/live/playback/live_player_view.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -183,6 +184,57 @@ void main() {
     Get.reset();
   });
 
+  for (final fullscreen in [false, true]) {
+    for (final sheet in [false, true]) {
+      testWidgets(
+          'popup preserves live player: fullscreen=$fullscreen sheet=$sheet',
+          (tester) async {
+        final fixture = _WatchFixture(initialStatus: LiveStatus.live);
+        await _mount(tester, fixture);
+        if (fullscreen) await _enterFullscreen(tester);
+        final video = fixture.videos.single;
+        final reads = fixture.credentialReads;
+        final pageContext =
+            tester.element(find.byType(LivePlayerView).hitTestable().first);
+        final popup = sheet
+            ? showModalBottomSheet<void>(
+                context: pageContext,
+                builder: (_) =>
+                    const SizedBox(height: 200, child: Text('tip overlay')))
+            : showDialog<void>(
+                context: pageContext,
+                builder: (_) =>
+                    const AlertDialog(content: Text('result overlay')));
+        await _frames(tester);
+        expect(video.pauses, 0);
+        expect(fixture.videos, hasLength(1));
+        fixture.navigator.currentState!.pop();
+        await popup;
+        await _frames(tester);
+        expect(fixture.videos.single, same(video));
+        expect(video.pauses, 0);
+        expect(fixture.credentialReads, reads);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('an opaque page still suspends live playback', (tester) async {
+    final fixture = _WatchFixture(initialStatus: LiveStatus.live);
+    await _mount(tester, fixture);
+    final video = fixture.videos.single;
+    unawaited(fixture.navigator.currentState!.push(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('another page')))));
+    await _frames(tester);
+    await tester.pump(const Duration(milliseconds: 600));
+    await _frames(tester);
+    expect(video.pauses, 1);
+    fixture.navigator.currentState!.pop();
+    await _frames(tester);
+    expect(fixture.videos.length, 2);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final dark in [false, true]) {
     testWidgets(
         'waiting controls fullscreen, mute and system casting work in ${dark ? 'dark' : 'light'} theme',
@@ -337,6 +389,8 @@ void main() {
     await _enterFullscreen(tester);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await _frames(tester);
+    await tester.pump(const Duration(milliseconds: 600));
+    await _frames(tester);
     first.complete(liveDTO(status: 'LIVE', version: 2));
     await _frames(tester);
     expect(fixture.credentialReads, 0);
@@ -386,6 +440,8 @@ void main() {
         MaterialPageRoute<void>(
             builder: (_) =>
                 const Scaffold(body: Center(child: Text('覆盖等待全屏'))))));
+    await _frames(tester);
+    await tester.pump(const Duration(milliseconds: 600));
     await _frames(tester);
     first.complete(liveDTO(status: 'LIVE', version: 2));
     await _frames(tester);

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:intl/intl.dart';
 import 'package:openim_common/openim_common.dart';
@@ -40,7 +41,7 @@ class _ConversationPeekContentState extends State<ConversationPeekContent> {
     });
   }
 
-  void _onScroll() {
+  void _onScroll({bool userOverscroll = false}) {
     final loader = widget.loader;
     if (!_scroll.hasClients ||
         !loader.loaded ||
@@ -49,7 +50,9 @@ class _ConversationPeekContentState extends State<ConversationPeekContent> {
         !loader.hasMoreOlder) {
       return;
     }
-    if (_scroll.position.extentAfter < _olderThreshold) {
+    if ((userOverscroll ||
+            _scroll.position.userScrollDirection == ScrollDirection.reverse) &&
+        _scroll.position.extentAfter < _olderThreshold) {
       unawaited(loader.loadOlder());
     }
   }
@@ -119,48 +122,47 @@ class _ConversationPeekContentState extends State<ConversationPeekContent> {
             ]));
           }
           final items = _items(messages);
-          // A short latest page cannot generate a scroll event. Fill only an
-          // undersized non-empty window so older history remains reachable.
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted &&
-                _scroll.hasClients &&
-                _scroll.position.maxScrollExtent == 0 &&
-                loader.loaded &&
-                !loader.loadingOlder &&
-                loader.hasMoreOlder &&
-                loader.olderError == null &&
-                loader.isCurrent) {
-              unawaited(loader.loadOlder());
-            }
-          });
           return Stack(children: [
-            ListView.builder(
-              key: const ValueKey('conversation-peek-history'),
-              controller: _scroll,
-              reverse: true,
-              physics: Theme.of(context).platform == TargetPlatform.iOS
-                  ? const BouncingScrollPhysics()
-                  : const ClampingScrollPhysics(),
-              padding: _padding,
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-                final item = items[items.length - index - 1];
-                if (item case final Message message) {
-                  return ConversationPeekMessage(
-                    key: ValueKey(
-                        'conversation-peek-message-${message.clientMsgID}'),
-                    message: message,
-                    isGroupChat: widget.conversation.isGroupChat,
-                    peerName: widget.conversation.showName ?? '',
-                  );
+            NotificationListener<OverscrollNotification>(
+              key: const ValueKey('conversation-peek-scroll'),
+              onNotification: (notification) {
+                if (notification.depth == 0 &&
+                    notification.dragDetails != null &&
+                    notification.overscroll > 0) {
+                  _onScroll(userOverscroll: true);
                 }
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(formatChatMessageTime(context, item as int),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: secondary)),
-                );
+                return false;
               },
+              child: ListView.builder(
+                key: const ValueKey('conversation-peek-history'),
+                controller: _scroll,
+                reverse: true,
+                physics: Theme.of(context).platform == TargetPlatform.iOS
+                    ? const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics())
+                    : const ClampingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics()),
+                padding: _padding,
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[items.length - index - 1];
+                  if (item case final Message message) {
+                    return ConversationPeekMessage(
+                      key: ValueKey(
+                          'conversation-peek-message-${message.clientMsgID}'),
+                      message: message,
+                      isGroupChat: widget.conversation.isGroupChat,
+                      peerName: widget.conversation.showName ?? '',
+                    );
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(formatChatMessageTime(context, item as int),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: secondary)),
+                  );
+                },
+              ),
             ),
             if (loader.loadingOlder)
               const Positioned(

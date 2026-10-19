@@ -1,7 +1,6 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../routes/app_navigator.dart';
 import '../../contacts/group_profile_panel/group_profile_panel_logic.dart';
 import '../composer/mention_id.dart';
@@ -104,8 +103,10 @@ class ChatMessageNavigation {
   Future<void> clickLinkText(String url, Object? type) async {
     if (isClosed) return;
     final uri = Uri.tryParse(url);
-    if (uri != null && await canLaunchUrl(uri) && !isClosed) {
-      await launchUrl(uri);
+    if (uri != null && !isClosed) {
+      if (!await openInAppBrowser(uri)) {
+        IMViews.showToast('此链接不支持在应用内打开');
+      }
     }
   }
 

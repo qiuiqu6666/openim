@@ -9,6 +9,7 @@ import 'package:openim_common/openim_common.dart';
 class _PagingFixture {
   final scroll = ScrollController();
   List<String> ids = List.generate(30, (index) => 'message-$index');
+  ScrollPhysics? physics;
   bool withIDs = true;
   bool enabledNewer = true;
   bool? olderHasMore;
@@ -16,7 +17,6 @@ class _PagingFixture {
   Object? pagingWindow;
   bool historyLoading = false;
   bool initialLoading = false;
-  bool fillViewport = false;
   String? historyError;
   int olderCalls = 0;
   int newerCalls = 0;
@@ -28,10 +28,10 @@ class _PagingFixture {
         update = setState;
         return ChatListView(
           controller: scroll,
+          physics: physics,
           itemCount: ids.length,
           messageIDs: withIDs ? ids : null,
           loadOnInit: false,
-          fillViewport: fillViewport,
           hasMore: olderHasMore,
           newerHasMore: newerHasMore,
           pagingWindow: pagingWindow,
@@ -89,14 +89,14 @@ class _PagingFixture {
   Future<void> reachNewer(WidgetTester tester) async {
     scroll.jumpTo(scroll.position.minScrollExtent + 100);
     await tester.pump();
-    scroll.jumpTo(scroll.position.minScrollExtent);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -200));
     await tester.pump();
   }
 
   Future<void> reachOlder(WidgetTester tester) async {
     scroll.jumpTo(scroll.position.maxScrollExtent - 100);
     await tester.pump();
-    scroll.jumpTo(scroll.position.maxScrollExtent);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 200));
     await tester.pump();
   }
 }
@@ -105,75 +105,92 @@ void main() {
   tearDown(Get.reset);
 
   for (final brightness in Brightness.values) {
-    testWidgets('short latest page fills without a drag in ${brightness.name}',
+    testWidgets(
+        'short latest page loads only after a drag in ${brightness.name}',
         (tester) async {
       final f = _PagingFixture()
         ..ids = ['latest']
-        ..fillViewport = true
         ..enabledNewer = false
         ..olderHasMore = true;
       f.readOlder = () async {
-        f.update(() => f.ids.addAll(
-            List.generate(3, (i) => 'older-${f.olderCalls}-$i')));
+        f.update(() => f.ids.add('older-${f.olderCalls}'));
         return true;
       };
       await f.mount(tester, brightness: brightness);
-      expect(f.olderCalls, 2);
-      expect(f.scroll.position.maxScrollExtent,
-          greaterThan(f.scroll.position.minScrollExtent));
-      expect(f.scroll.offset, closeTo(f.scroll.position.minScrollExtent, 0.5));
-      expect(find.text('older-1-0'), findsOneWidget);
+      expect(f.olderCalls, 0);
+      f.update(() {});
+      await tester.pumpAndSettle();
+      expect(f.olderCalls, 0);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, 100));
+      await tester.pumpAndSettle();
+      expect(f.olderCalls, 1);
+      expect(find.text('older-1'), findsOneWidget);
+      // The result is still short, but must not start another page by itself.
+      await tester.pump(const Duration(seconds: 1));
+      expect(f.olderCalls, 1);
       expect(tester.takeException(), isNull);
     });
   }
 
-  testWidgets('viewport fill stops when a page makes no progress', (tester) async {
-    final f = _PagingFixture()
-      ..ids = ['latest']
-      ..fillViewport = true
-      ..enabledNewer = false;
-    f.readOlder = () async => true;
-    await f.mount(tester);
-    expect(f.olderCalls, 1);
-    f.update(() {});
-    await tester.pumpAndSettle();
-    expect(f.olderCalls, 1);
-  });
-
-  testWidgets('viewport fill waits for initial history and stops at its end',
+  testWidgets('a bouncing short list pages only in the dragged direction',
       (tester) async {
     final f = _PagingFixture()
       ..ids = ['latest']
-      ..fillViewport = true
-      ..enabledNewer = false
-      ..initialLoading = true;
+      ..physics = const BouncingScrollPhysics();
+    f.readNewer = () async {
+      f.update(() => f.newerHasMore = false);
+      return false;
+    };
     await f.mount(tester);
     expect(f.olderCalls, 0);
-    f.update(() => f.initialLoading = false);
+    expect(f.newerCalls, 0);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -100));
+    await tester.pumpAndSettle();
+    expect(f.newerCalls, 1);
+    expect(f.olderCalls, 0);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 100));
     await tester.pumpAndSettle();
     expect(f.olderCalls, 1);
-    f.update(() => f.ids.add('another'));
-    await tester.pumpAndSettle();
-    expect(f.olderCalls, 1);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('viewport fill leaves a date window at its selected anchor',
+  testWidgets('finishing initial loading and adding a message do not page',
       (tester) async {
     final f = _PagingFixture()
-      ..ids = ['selected']
-      ..fillViewport = true;
+      ..ids = ['latest']
+      ..enabledNewer = false
+      ..olderHasMore = true
+      ..initialLoading = true;
     await f.mount(tester);
+    f.update(() => f.initialLoading = false);
+    await tester.pumpAndSettle();
+    f.update(() => f.ids.insert(0, 'new-live-message'));
+    await tester.pumpAndSettle();
     expect(f.olderCalls, 0);
     expect(f.newerCalls, 0);
   });
 
-  testWidgets('viewport fill failure waits for explicit retry', (tester) async {
+  testWidgets('programmatic edge navigation does not page', (tester) async {
+    final f = _PagingFixture();
+    await f.mount(tester);
+    f.scroll.jumpTo(f.scroll.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    f.scroll.jumpTo(f.scroll.position.minScrollExtent);
+    await tester.pumpAndSettle();
+    expect(f.olderCalls, 0);
+    expect(f.newerCalls, 0);
+  });
+
+  testWidgets('manual history failure waits for explicit retry',
+      (tester) async {
     final f = _PagingFixture()
       ..ids = ['latest']
-      ..fillViewport = true
       ..enabledNewer = false;
     f.readOlder = () async => throw StateError('offline');
     await f.mount(tester);
+    expect(f.olderCalls, 0);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 100));
+    await tester.pumpAndSettle();
     expect(f.olderCalls, 1);
     expect(find.byType(TextButton), findsOneWidget);
     f.update(() {});

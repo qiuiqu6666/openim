@@ -1,10 +1,38 @@
 import 'dart:async';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
-import 'package:flutter_openim_sdk/src/window/message_window_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'message_window_ingress_test.dart' show window;
 
 void main() {
+  test(
+      'production cache keeps eight recent conversations and supports invalidation',
+      () async {
+    final cache = MessageWindowCache.shared;
+    cache.invalidate();
+    addTearDown(cache.invalidate);
+    expect(cache.limit, 8);
+    expect(cache.lifetime, const Duration(seconds: 30));
+    Future<void> warm(String id) async {
+      await cache.read(
+          'self',
+          id,
+          40,
+          () async => AdvancedMessage(
+              window: window(40, id: id),
+              messageList: [Message(clientMsgID: id, seq: 40)]));
+    }
+
+    for (var i = 0; i < 8; i++) {
+      await warm('$i');
+    }
+    expect(cache.peek('self', '0', 40), isNotNull);
+    await warm('8');
+    expect(cache.peek('self', '0', 40), isNotNull);
+    expect(cache.peek('self', '1', 40), isNull);
+    cache.invalidate();
+    expect(cache.peek('self', '0', 40), isNull);
+  });
+
   test(
       'navigation and page share pending native IO but receive isolated copies',
       () async {

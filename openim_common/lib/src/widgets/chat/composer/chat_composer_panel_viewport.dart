@@ -6,7 +6,7 @@ import '../toolbox/chat_toolbox_tokens.dart';
 
 /// The Scaffold already reserves [keyboardHeight]. Reveal only the remaining
 /// accessory area so the composer follows max(keyboard, panel), not their sum.
-class ChatComposerPanelViewport extends StatelessWidget {
+class ChatComposerPanelViewport extends StatefulWidget {
   const ChatComposerPanelViewport({
     super.key,
     required this.visible,
@@ -27,26 +27,78 @@ class ChatComposerPanelViewport extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
-        // Animate the panel's own target only. Native keyboard frames are
-        // subtracted during layout, never fed through a second animation.
-        tween: Tween(end: visible ? panelHeight : collapsedHeight),
-        duration: animate && !MediaQuery.disableAnimationsOf(context)
-            ? ChatToolboxTokens.panelAnimationDuration
-            : Duration.zero,
-        curve: Curves.easeOutCubic,
-        child: child,
-        builder: (context, extent, child) {
-          final height = math.max(0.0, extent - keyboardHeight);
+  State<ChatComposerPanelViewport> createState() =>
+      _ChatComposerPanelViewportState();
+}
+
+class _ChatComposerPanelViewportState extends State<ChatComposerPanelViewport>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animation = AnimationController(
+    vsync: this,
+    duration: ChatToolboxTokens.panelAnimationDuration,
+    value: 1,
+  );
+  late double _begin = _target;
+  late double _end = _target;
+  bool _motionEnabled = false;
+
+  double get _target =>
+      widget.visible ? widget.panelHeight : widget.collapsedHeight;
+  double get _extent =>
+      _begin +
+      (_end - _begin) * Curves.easeOutCubic.transform(_animation.value);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _motionEnabled = !MediaQuery.disableAnimationsOf(context) &&
+        TickerMode.valuesOf(context).enabled &&
+        ModalRoute.of(context)?.isCurrent != false;
+    _syncTarget();
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatComposerPanelViewport oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTarget();
+  }
+
+  void _syncTarget() {
+    final target = _target;
+    if (!widget.animate || !_motionEnabled) {
+      // A covered route must settle now: muted tickers otherwise retain the
+      // old panel height and move the message viewport when the user returns.
+      _begin = _end = target;
+      _animation.value = 1;
+    } else if (_end != target) {
+      _begin = _extent;
+      _end = target;
+      _animation.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _animation.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _animation,
+        child: widget.child,
+        builder: (context, child) {
+          // Native keyboard frames are subtracted directly, never animated twice.
+          final height = math.max(0.0, _extent - widget.keyboardHeight);
           return SizedBox(
-            key: viewportKey,
+            key: widget.viewportKey,
             height: height,
             child: ClipRect(
-              child: visible && height > 0
+              child: widget.visible && height > 0
                   ? OverflowBox(
                       alignment: Alignment.topCenter,
-                      minHeight: panelHeight,
-                      maxHeight: panelHeight,
+                      minHeight: widget.panelHeight,
+                      maxHeight: widget.panelHeight,
                       child: child,
                     )
                   : const SizedBox.shrink(),

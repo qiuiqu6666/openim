@@ -878,6 +878,7 @@ void main() {
       h.group = wasGroup;
       h.receiver = 'friend';
       h.chatGroup = 'group';
+      expect(h.controller.confirmedCards.cards, isEmpty);
       expect(h.controller.messageData(fundMessage())!.status, 'open');
       expect(h.controller.messageData(fundMessage())!.remark, '');
       h.controller.close();

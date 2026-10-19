@@ -266,6 +266,7 @@ Widget _host(_Api api,
         _Settings? settings,
         FundPendingStore? store,
         FundPaymentPreferences? preferences,
+        ValueChanged<FundOrder>? onPaid,
         ValueChanged<FundOrder?>? onReturned}) =>
     MaterialApp(
       key: UniqueKey(),
@@ -296,6 +297,7 @@ Widget _host(_Api api,
                               recipientName: '小明',
                               currentUserID: currentUserID,
                               api: api,
+                              onPaid: onPaid,
                               settingsService: settings ?? _Settings(),
                               paymentPreferences: preferences,
                               pendingStore: store ??
@@ -316,6 +318,7 @@ Future<void> _open(WidgetTester tester, _Api api,
     _Settings? settings,
     FundPendingStore? store,
     FundPaymentPreferences? preferences,
+    ValueChanged<FundOrder>? onPaid,
     ValueChanged<FundOrder?>? onReturned}) async {
   await tester.pumpWidget(_host(api,
       dark: dark,
@@ -327,6 +330,7 @@ Future<void> _open(WidgetTester tester, _Api api,
       settings: settings,
       store: store,
       preferences: preferences,
+      onPaid: onPaid,
       onReturned: onReturned));
   await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
@@ -375,6 +379,29 @@ Future<void> _changePaymentCurrency(
 }
 
 void main() {
+  for (final packet in [true, false]) {
+    testWidgets('confirmed card is published before returning, packet=$packet',
+        (tester) async {
+      final paid = <FundOrder>[];
+      final returned = <FundOrder?>[];
+      await _open(tester, _Api(),
+          packet: packet, onPaid: paid.add, onReturned: returned.add);
+      await tester.enterText(find.byKey(const ValueKey('fund-amount')), '1');
+      await _requestPin(tester);
+      expect(paid, isEmpty);
+      await tester.enterText(
+          find.byKey(const ValueKey('fund-pay-password')), '123456');
+      await tester.pump();
+      expect(find.byKey(const ValueKey('pay-state-success')), findsOneWidget);
+      expect(paid, isNotEmpty);
+      expect(returned, isEmpty);
+      await _finishAttempt(tester);
+      expect(returned.single!.orderID, paid.first.orderID);
+      expect(paid.map((order) => order.orderID).toSet(),
+          {returned.single!.orderID});
+    });
+  }
+
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() => EasyLoading.dismiss(animation: false));
 

@@ -610,6 +610,64 @@ void main() {
           contains('15 分钟'));
     });
 
+    for (final rejected in [true, false]) {
+      test('risk 429 shows restriction message (Dio rejection: $rejected)',
+          () async {
+        client.interceptors.clear();
+        client.interceptors
+            .add(InterceptorsWrapper(onRequest: (request, handler) {
+          final reply = Response<dynamic>(
+              requestOptions: request,
+              statusCode: 429,
+              data: {
+                'errCode': 20201,
+                'errMsg': '操作过于频繁，请稍后再试',
+                'data': {'retryAfter': 3563}
+              });
+          if (rejected) {
+            handler.reject(DioException(
+                requestOptions: request,
+                response: reply,
+                type: DioExceptionType.badResponse));
+          } else {
+            handler.resolve(reply);
+          }
+        }));
+        await expectLater(
+            api.claimPacket('order-1'),
+            throwsA(isA<FundApiException>()
+                .having((e) => e.isUncertain, 'uncertain', false)
+                .having((e) => e.retryAfterSeconds, 'wait seconds', 3563)
+                .having((e) => fundErrorMessage(e, chinese: true), 'message',
+                    '当前交易暂受限制，请稍后重试')));
+      });
+    }
+
+    test('proxy 429 does not incorrectly declare a payment rejected', () async {
+      client.interceptors.clear();
+      client.interceptors
+          .add(InterceptorsWrapper(onRequest: (request, handler) {
+        handler.reject(DioException(
+            requestOptions: request,
+            response: Response(
+                requestOptions: request,
+                statusCode: 429,
+                data: '<html>Too many requests</html>'),
+            type: DioExceptionType.badResponse));
+      }));
+      await expectLater(
+          api.claimPacket('order-1'),
+          throwsA(isA<FundApiException>()
+              .having((e) => e.isUncertain, 'uncertain', true)));
+      expect(fundErrorMessage(const FundApiException(20201, ''), chinese: true),
+          '当前交易暂受限制，请稍后重试');
+      expect(
+          fundErrorMessage(
+              const FundApiException(20201, '', retryAfterSeconds: 1),
+              chinese: false),
+          'This transaction is temporarily restricted. Please try again later.');
+    });
+
     test('timeout or malformed successful writes preserve uncertain outcome',
         () async {
       response = {'errCode': 0, 'data': {}};

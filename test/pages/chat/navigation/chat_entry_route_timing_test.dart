@@ -33,7 +33,7 @@ void main() {
                 child: Scaffold(
                     body: ChatInitialWindowTransition(
                         loading: false,
-                        skeleton: const Text('gray'),
+                        loadingIndicator: const Text('gray'),
                         observePaint: () => !trace.listInteractive,
                         onContentPainted: (ready) => trace.painted(
                             publishable: true,
@@ -103,7 +103,7 @@ void main() {
                       valueListenable: loading,
                       builder: (_, waiting, __) => ChatInitialWindowTransition(
                           loading: waiting,
-                          skeleton: const Text('gray'),
+                          loadingIndicator: const Text('gray'),
                           onContentPainted: (ready) => trace.painted(
                               publishable: !waiting,
                               hasVisibleMessages: true,
@@ -123,7 +123,8 @@ void main() {
       await tester.pumpAndSettle();
       if (!reduceMotion) {
         expect(trace.listInteractive, isFalse,
-            reason: 'The navigator blocks message touches during a back gesture');
+            reason:
+                'The navigator blocks message touches during a back gesture');
         nav.currentState!.didStopUserGesture();
         await tester.pump();
       }

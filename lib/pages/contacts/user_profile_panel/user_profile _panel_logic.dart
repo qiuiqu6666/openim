@@ -49,7 +49,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
   GroupProfileAccountState? _groupAccountState;
   int? _groupLookMemberInfo;
   int? _viewerRole;
-  int? _targetRole;
+  final _targetRole = RxnInt();
   int? _viewerAppManagerLevel;
   int _groupPermissionEpoch = 0;
   int _groupInfoRead = 0;
@@ -286,9 +286,9 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
         }
       }
       if (value.userID == userInfo.value.userID) {
-        final roleChanged = _targetRole != value.roleLevel;
+        final roleChanged = _targetRole.value != value.roleLevel;
         if (roleChanged) _groupPermissionEpoch++;
-        _targetRole = value.roleLevel;
+        _targetRole.value = value.roleLevel;
         hasAdminPermission.value = value.roleLevel == GroupRoleLevel.admin;
         _syncGroupPrivacy();
         if (roleChanged) {
@@ -600,10 +600,11 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
     final exempt = iHaveAdminOrOwnerPermission.value;
     notAllowLookGroupMemberProfiles.value =
         !exempt && groupInfo?.lookMemberInfo == 1;
-    // Managers retain the group friend-add entry; submission still validates
-    // their current group role through the existing manage-source flow.
+    // Either side being a manager keeps the group friend-add entry.
+    // Submission still validates roles and preferences through the existing API.
     notAllowAddGroupMemberFriend.value = isGroupMemberPage &&
         !canManageGroupFriendAdd &&
+        !isTargetGroupManager &&
         (groupInfo?.lookMemberInfo != 0 ||
             _groupFriendProtection?.ready.value != true ||
             _groupFriendProtection?.protect.value != false);
@@ -664,7 +665,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
       final other =
           list.firstWhereOrNull((e) => e.userID == userInfo.value.userID);
       groupMembersInfo = other;
-      _targetRole = other?.roleLevel;
+      _targetRole.value = other?.roleLevel;
       groupUserNickname.value = other?.nickname ?? '';
       joinGroupTime.value = other?.joinTime ?? 0;
 
@@ -851,6 +852,14 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
       (_viewerRole == null &&
           _groupFriendProtection?.ready.value == true &&
           _groupFriendProtection?.canManage.value == true);
+
+  bool get isTargetGroupManager =>
+      isGroupMemberPage &&
+      (_targetRole.value == GroupRoleLevel.owner ||
+          _targetRole.value == GroupRoleLevel.admin);
+
+  bool get showStrangerBlacklistAction =>
+      userInfo.value.isBlacklist || !isGroupMemberPage;
 
   FriendAddSource get friendAddRequestSource =>
       addSource == FriendAddSource.group && canManageGroupFriendAdd

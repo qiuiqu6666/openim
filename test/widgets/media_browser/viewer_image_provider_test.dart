@@ -10,6 +10,26 @@ class _RealHttp extends HttpOverrides {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('cache-only thumbnail miss never opens a network client', () async {
+    var clients = 0;
+    final image = ViewerImageProvider('https://images.test/cache-only-miss',
+        cacheOnly: true, cache: ViewerTestCache(), createClient: () {
+      clients++;
+      return HttpClient();
+    });
+    final error = Completer<Object>();
+    final stream = image.resolve(ImageConfiguration.empty);
+    final listener = ImageStreamListener((info, _) {
+      info.dispose();
+      fail('missing cache unexpectedly decoded');
+    }, onError: (Object value, StackTrace? stack) => error.complete(value));
+    stream.addListener(listener);
+    expect(await error.future.timeout(const Duration(seconds: 5)),
+        isA<StateError>());
+    expect(clients, 0);
+    stream.removeListener(listener);
+    image.cancel();
+  });
   test('cancels owned in-flight original and does not persist partial bytes',
       () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -38,9 +58,11 @@ void main() {
   test('decode budget preserves aspect ratio without upscaling', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
-      request.response.add(
+      final bytes =
           await File('openim_common/assets/images/ic_archive_99chat.png')
-              .readAsBytes());
+              .readAsBytes();
+      request.response.contentLength = bytes.length;
+      request.response.add(bytes);
       await request.response.close();
     });
     final image = ViewerImageProvider('http://127.0.0.1:${server.port}/image',
@@ -48,6 +70,7 @@ void main() {
         cache: ViewerTestCache(),
         createClient: () => _RealHttp().createHttpClient(null));
     final done = Completer<void>();
+    final chunks = <ImageChunkEvent>[];
     final completer = image.loadImage(image, (buffer, {getTargetSize}) async {
       final size = getTargetSize!(4000, 16000);
       expect(size.width, 500);
@@ -61,10 +84,13 @@ void main() {
       info.dispose();
       done.complete();
     },
+        onChunk: chunks.add,
         onError: (Object error, StackTrace? stack) =>
             done.completeError(error, stack));
     completer.addListener(listener);
     await done.future.timeout(const Duration(seconds: 5));
+    expect(chunks, isNotEmpty);
+    expect(chunks.last.cumulativeBytesLoaded, chunks.last.expectedTotalBytes);
     completer.removeListener(listener);
     image.cancel();
     await server.close(force: true);

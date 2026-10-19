@@ -1,3 +1,4 @@
+import 'package:openim_common/src/widgets/media_browser/media_reading_viewport.dart';
 import '../../support/performance/viewer_test_cache.dart';
 import 'package:openim_common/src/widgets/media_browser/viewer_image_provider.dart';
 import 'dart:io';
@@ -43,6 +44,14 @@ ExtendedImageGestureState _gesture(WidgetTester tester) =>
     tester.state<ExtendedImageGestureState>(find
         .byWidgetPredicate((widget) => widget is ExtendedImageGesture)
         .first);
+
+double _readingTop(WidgetTester tester) =>
+    find.byType(MediaReadingInsets).evaluate().isEmpty
+        ? 0
+        : tester
+            .widget<MediaReadingInsets>(find.byType(MediaReadingInsets).first)
+            .insets
+            .top;
 
 void _phone(WidgetTester tester) {
   tester.view.physicalSize = const Size(375, 812);
@@ -357,7 +366,7 @@ void main() {
         const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
     rect = _gesture(tester).gestureDetails!.destinationRect!;
-    expect(rect.top, lessThan(-200));
+    expect((rect.top - _readingTop(tester)), lessThan(-200));
     final scale = _gesture(tester).gestureDetails!.totalScale!;
     final left = await tester.startGesture(const Offset(120, 400), pointer: 1);
     final right = await tester.startGesture(const Offset(250, 400), pointer: 2);
@@ -392,7 +401,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(MediaBrowser), findsOneWidget);
     expect(
-        _gesture(tester).gestureDetails!.destinationRect!.top, lessThan(-200));
+        (_gesture(tester).gestureDetails!.destinationRect!.top -
+            _readingTop(tester)),
+        lessThan(-200));
     expect(pages, isEmpty);
     await tester.timedDragFrom(const Offset(300, 400), const Offset(-500, 0),
         const Duration(milliseconds: 400));
@@ -431,7 +442,9 @@ void main() {
     expect(pages, isEmpty);
     expect(find.text('1/2'), findsOneWidget);
     expect(
-        _gesture(tester).gestureDetails!.destinationRect!.top, lessThan(-80));
+        (_gesture(tester).gestureDetails!.destinationRect!.top -
+            _readingTop(tester)),
+        lessThan(-80));
     // The lock belongs only to that gesture: a new horizontal swipe still works.
     await tester.timedDragFrom(const Offset(300, 400), const Offset(-500, 0),
         const Duration(milliseconds: 400));
@@ -459,7 +472,9 @@ void main() {
         const Duration(milliseconds: 800));
     await tester.pumpAndSettle();
     expect(
-        _gesture(tester).gestureDetails!.destinationRect!.top, lessThan(-100));
+        (_gesture(tester).gestureDetails!.destinationRect!.top -
+            _readingTop(tester)),
+        lessThan(-100));
     await tester.timedDragFrom(const Offset(180, 250), const Offset(0, 400),
         const Duration(milliseconds: 800));
     await tester.pumpAndSettle();
@@ -467,7 +482,9 @@ void main() {
         reason:
             'A drag starting inside the image scrolls, even if it reaches top');
     expect(
-        _gesture(tester).gestureDetails!.destinationRect!.top, closeTo(0, .01));
+        (_gesture(tester).gestureDetails!.destinationRect!.top -
+            _readingTop(tester)),
+        closeTo(0, .01));
     // A cancelled pull does not leave the dismissal or direction lock stuck.
     await tester.timedDragFrom(const Offset(180, 250), const Offset(0, 70),
         const Duration(milliseconds: 500));
@@ -579,18 +596,24 @@ void main() {
     var rect = _gesture(tester).gestureDetails!.destinationRect!;
     // A short flick should advance through a readable screen of a long image,
     // without changing its scale or dismissing the preview.
-    expect(-rect.top, greaterThan(812));
-    expect(-rect.top, lessThan(1624));
+    expect(-(rect.top - _readingTop(tester)), greaterThan(812));
+    expect(-(rect.top - _readingTop(tester)), lessThan(1624));
     expect(rect.width, closeTo(375, 0.01));
     await flick(down: true);
-    expect(_gesture(tester).gestureDetails!.destinationRect!.top,
+    await tester.timedDragFrom(const Offset(180, 250), const Offset(0, 120),
+        const Duration(milliseconds: 800));
+    await tester.pumpAndSettle();
+    expect(
+        (_gesture(tester).gestureDetails!.destinationRect!.top -
+            _readingTop(tester)),
         closeTo(0, 0.01));
 
     for (var i = 0; i < 8; i++) {
       await flick();
     }
     rect = _gesture(tester).gestureDetails!.destinationRect!;
-    expect(rect.bottom, closeTo(812, 0.01));
+    expect(
+        rect.bottom, closeTo(812 - MediaReadingViewport.toolbarExtent, 0.01));
     expect(rect.width, closeTo(375, 0.01));
     expect(find.byType(MediaBrowser), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -607,19 +630,22 @@ void main() {
     await _settle(tester);
     await tester.timedDragFrom(const Offset(180, 500), const Offset(0, -160),
         const Duration(milliseconds: 1000));
-    final beforeRelease = _gesture(tester).gestureDetails!.destinationRect!.top;
+    final beforeRelease =
+        (_gesture(tester).gestureDetails!.destinationRect!.top -
+            _readingTop(tester));
     await tester.pumpAndSettle();
     var rect = _gesture(tester).gestureDetails!.destinationRect!;
     expect(-rect.top, inInclusiveRange(120, 180));
-    expect(rect.top, closeTo(beforeRelease, 1));
+    expect((rect.top - _readingTop(tester)), closeTo(beforeRelease, 1));
 
     await tester.flingFrom(const Offset(180, 560), const Offset(0, -250), 1800);
     await tester.pump(const Duration(milliseconds: 50));
     final hold = await tester.startGesture(const Offset(180, 400));
-    final stoppedAt = _gesture(tester).gestureDetails!.destinationRect!.top;
+    final stoppedAt = (_gesture(tester).gestureDetails!.destinationRect!.top -
+        _readingTop(tester));
     await tester.pump(const Duration(milliseconds: 300));
     rect = _gesture(tester).gestureDetails!.destinationRect!;
-    expect(rect.top, closeTo(stoppedAt, 0.01));
+    expect((rect.top - _readingTop(tester)), closeTo(stoppedAt, 0.01));
     expect(rect.width, closeTo(375, 0.01));
     await hold.cancel();
     await tester.pumpAndSettle();

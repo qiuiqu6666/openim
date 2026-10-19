@@ -16,7 +16,7 @@
   "checks": {
     "core": "Locked-source group, interaction, conversation_msg, common and syncer tests passed; converter compiled (no tests). Cancellation/preemption regressions passed 10 repetitions. Race detector not run.",
     "source_lock": "15 tooling tests passed; 458 locked files verified; cumulative patch replay matches 455 files with 3 declared overlays.",
-    "android": "Not rebuilt for this source revision.",
+    "android": "Four-ABI AAR rebuilt and verified; arm64 debug APK built; Core matches rebuilt AAR after NDK symbol stripping. See verification/recovery.39-group-offline.2-android.json.",
     "ios_framework": "Not rebuilt; macOS required.",
     "device_runtime": "Not run; CPU/thermal/frame-time improvement not measured."
   },
@@ -32,11 +32,12 @@
     ],
     "recovery_patch_included": true,
     "build_script": "build-android.ps1",
-    "apk_native_parity_verified": false,
+    "apk_native_parity_verified": true,
     "runtime_validation": "not run for this release",
-    "native_binary_integrated": false,
-    "aar_built": false,
-    "sdk_artifact_verified": false
+    "native_binary_integrated": true,
+    "aar_built": true,
+    "sdk_artifact_verified": true,
+    "verification_evidence": "verification/recovery.39-group-offline.2-android.json"
   },
   "ios": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",

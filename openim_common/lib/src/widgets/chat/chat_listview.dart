@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -260,7 +261,6 @@ class ChatListView extends StatefulWidget {
     this.newerHasMore,
     this.pagingWindow,
     this.loadOnInit = true,
-    this.fillViewport = false,
     this.followLatest = true,
     this.findChildIndexCallback,
     this.messageIDs,
@@ -295,9 +295,6 @@ class ChatListView extends StatefulWidget {
   // rather than when another page or live message extends the current list.
   final Object? pagingWindow;
   final bool loadOnInit;
-  /// Continue a short latest page until it fills the viewport or history ends.
-  /// Date/search windows leave this off to preserve their selected anchor.
-  final bool fillViewport;
   final bool followLatest;
   final int? Function(Key)? findChildIndexCallback;
   final List<String>? messageIDs;
@@ -319,48 +316,14 @@ class _ChatListViewState extends State<ChatListView> {
   bool _topFailed = false;
   bool _emptyViewportScheduled = false;
   int _pagingGeneration = 0;
-  bool _fillScheduled = false;
-  (int, String?)? _lastFillBoundary;
-
-  void _scheduleViewportFill() {
-    if (!widget.fillViewport || _fillScheduled) return;
-    _fillScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fillScheduled = false;
-      if (!mounted ||
-          !widget.fillViewport ||
-          _pagingBusy ||
-          !_hasMore ||
-          _hasHistoryError ||
-          widget.historyScanLimited ||
-          widget.enabledScrollTopLoad ||
-          widget.onScrollToBottomLoad == null ||
-          (widget.itemCount ?? 0) == 0 ||
-          ModalRoute.of(context)?.isCurrent == false) {
-        return;
-      }
-      final controller = widget.controller;
-      if (controller == null || !controller.hasClients) return;
-      final position = controller.position;
-      if (!position.hasContentDimensions ||
-          position.viewportDimension <= 0 ||
-          position.isScrollingNotifier.value ||
-          position.maxScrollExtent - position.minScrollExtent > 1) {
-        return;
-      }
-      final boundary = (widget.itemCount!, widget.messageIDs?.lastOrNull);
-      // A successful but unchanged page must not create a request loop.
-      if (_lastFillBoundary == boundary) return;
-      _lastFillBoundary = boundary;
-      _onScrollToBottomLoadMore();
-    });
-  }
-
   static const _historyStatusKey = ValueKey('chat-history-status');
   bool get _hasMore => widget.hasMore ?? _scrollToBottomLoadMore;
   bool get _hasNewer => widget.newerHasMore ?? _scrollToTopLoadMore;
   bool get _hasHistoryError => _bottomFailed || widget.historyError != null;
-  bool get _historyLoading => _loadingBottom || widget.historyLoading;
+  // A local snapshot can paint while the first authoritative read is pending.
+  // That read is entry loading, not an older-history page above visible rows.
+  bool get _historyLoading =>
+      _loadingBottom || (widget.historyLoading && !widget.initialLoading);
   bool get _pagingBusy =>
       _loadingBottom ||
       _loadingTop ||
@@ -389,9 +352,14 @@ class _ChatListViewState extends State<ChatListView> {
 
   void _scrollListener() {
     if (widget.controller?.hasClients != true) return;
-    if (_isBottom) {
+    final position = widget.controller!.position;
+    // Layout corrections and programmatic navigation must not request history.
+    // Direction disambiguates the two edges when a short list bounces.
+    if (position.userScrollDirection == ScrollDirection.idle) return;
+    if (_isBottom && position.userScrollDirection == ScrollDirection.reverse) {
       _onScrollToBottomLoadMore();
-    } else if (_isTop) {
+    } else if (_isTop &&
+        position.userScrollDirection == ScrollDirection.forward) {
       _onScrollToTopLoadMore();
     }
   }
@@ -416,7 +384,8 @@ class _ChatListViewState extends State<ChatListView> {
     final load = widget.onScrollToBottomLoad;
     if (load == null ||
         _pagingBusy ||
-        !retry && (!_hasMore || _hasHistoryError || widget.historyScanLimited)) {
+        !retry &&
+            (!_hasMore || _hasHistoryError || widget.historyScanLimited)) {
       return;
     }
     final generation = _pagingGeneration;
@@ -447,7 +416,11 @@ class _ChatListViewState extends State<ChatListView> {
     if (!widget.enabledScrollTopLoad ||
         load == null ||
         _pagingBusy ||
-        !retry && (!_hasNewer || _topFailed || widget.historyError != null || widget.historyScanLimited)) {
+        !retry &&
+            (!_hasNewer ||
+                _topFailed ||
+                widget.historyError != null ||
+                widget.historyScanLimited)) {
       return;
     }
     final generation = _pagingGeneration;
@@ -480,7 +453,6 @@ class _ChatListViewState extends State<ChatListView> {
       // A seek supersedes old SDK requests. Their eventual completions must
       // neither hold this window busy nor release its new paging owner.
       _pagingGeneration++;
-      _lastFillBoundary = null;
       _loadingBottom = false;
       _loadingTop = false;
       _bottomFailed = false;
@@ -550,7 +522,6 @@ class _ChatListViewState extends State<ChatListView> {
 
   @override
   Widget build(BuildContext context) {
-    _scheduleViewportFill();
     if ((widget.itemCount ?? 0) == 0 &&
         !_emptyViewportScheduled &&
         widget.onViewportChanged != null) {
@@ -585,7 +556,11 @@ class _ChatListViewState extends State<ChatListView> {
                     controller: widget.controller,
                     physics: physics,
                     itemCount: widget.itemCount! +
-                        (_historyLoading || _hasHistoryError || widget.historyScanLimited ? 1 : 0),
+                        (_historyLoading ||
+                                _hasHistoryError ||
+                                widget.historyScanLimited
+                            ? 1
+                            : 0),
                     padding: EdgeInsets.only(top: 10.h),
                     findChildIndexCallback: (key) => key == _historyStatusKey
                         ? widget.itemCount
@@ -599,7 +574,11 @@ class _ChatListViewState extends State<ChatListView> {
                       shrinkWrap: true,
                       physics: physics,
                       itemCount: widget.itemCount! +
-                          (_historyLoading || _hasHistoryError || widget.historyScanLimited ? 1 : 0),
+                          (_historyLoading ||
+                                  _hasHistoryError ||
+                                  widget.historyScanLimited
+                              ? 1
+                              : 0),
                       padding: EdgeInsets.only(top: 10.h),
                       controller: widget.controller,
                       findChildIndexCallback: (key) => key == _historyStatusKey
@@ -616,8 +595,11 @@ class _ChatListViewState extends State<ChatListView> {
     if (index == widget.itemCount) {
       return KeyedSubtree(
         key: _historyStatusKey,
-        child: _historyLoading ? loadMoreView
-            : _hasHistoryError ? _failure(_retryHistory) : _continueHistory(),
+        child: _historyLoading
+            ? loadMoreView
+            : _hasHistoryError
+                ? _failure(_retryHistory)
+                : _continueHistory(),
       );
     }
     final child = widget.itemBuilder(context, index);

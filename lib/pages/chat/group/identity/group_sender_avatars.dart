@@ -5,9 +5,11 @@ import 'group_notice_identity.dart';
 
 /// Current group identity per sender, independent of message snapshots.
 class GroupSenderAvatars {
-  GroupSenderAvatars({required this.isCurrent, required this.lookup});
+  GroupSenderAvatars(
+      {required this.isCurrent, required this.lookup, this.lookupProfiles});
   final bool Function() isCurrent;
   final Future<List<GroupMembersInfo>> Function(List<String>)? lookup;
+  final Future<List<GroupMembersInfo>> Function(List<String>)? lookupProfiles;
   final _faces = <String, String>{}.obs;
   final _confirmedFaces = <String>{};
   final _names = <String, String>{}.obs;
@@ -38,7 +40,9 @@ class GroupSenderAvatars {
         id == null ||
         id.isEmpty ||
         nickname == null ||
-        nickname.isEmpty) return;
+        nickname.isEmpty) {
+      return;
+    }
     _nameVersions[id] = (_nameVersions[id] ?? 0) + 1;
     _confirmedNames.add(id);
     _names[id] = nickname;
@@ -65,10 +69,15 @@ class GroupSenderAvatars {
   void sync(Iterable<Message> messages) {
     if (_closed || !isCurrent()) return;
     for (final message in messages) {
+      final time = message.sendTime ?? message.createTime ?? 0;
       final detail = groupNoticeDetail(message);
       if (detail != null) {
         for (final member in groupNoticeMembers(detail)) {
           final memberID = member['userID'];
+          final name = member['nickname'];
+          if (memberID is String && memberID.isNotEmpty && name is String) {
+            _rememberName(memberID, name, time);
+          }
           if (memberID is String &&
               memberID.isNotEmpty &&
               _requested.add(memberID)) {
@@ -78,19 +87,8 @@ class GroupSenderAvatars {
       }
       final id = message.sendID, face = message.senderFaceUrl;
       if (id == null || id.isEmpty) continue;
-      final time = message.sendTime ?? message.createTime ?? 0;
       final name = message.senderNickname;
-      final previousName = _latestNames[id];
-      if (name != null &&
-          name.isNotEmpty &&
-          (previousName == null || time > previousName.$1)) {
-        _latestNames[id] = (time, name);
-        if (!_confirmedNames.contains(id)) _names[id] = name;
-        if (previousName != null && previousName.$2 != name) {
-          _nameVersions[id] = (_nameVersions[id] ?? 0) + 1;
-          _pending.add(id);
-        }
-      }
+      if (name != null) _rememberName(id, name, time);
       final previous = _latest[id];
       if (face != null && (previous == null || time > previous.$1)) {
         _latest[id] = (time, face);
@@ -108,6 +106,17 @@ class GroupSenderAvatars {
     _scheduleLoad();
   }
 
+  void _rememberName(String id, String name, int time) {
+    final previous = _latestNames[id];
+    if (name.isEmpty || (previous != null && time <= previous.$1)) return;
+    _latestNames[id] = (time, name);
+    if (!_confirmedNames.contains(id)) _names[id] = name;
+    if (previous != null && previous.$2 != name) {
+      _nameVersions[id] = (_nameVersions[id] ?? 0) + 1;
+      _pending.add(id);
+    }
+  }
+
   void _scheduleLoad() {
     if (!_scheduled && _pending.isNotEmpty && lookup != null) {
       _scheduled = true;
@@ -123,7 +132,18 @@ class GroupSenderAvatars {
         final versions = {for (final id in ids) id: _versions[id] ?? 0};
         final nameVersions = {for (final id in ids) id: _nameVersions[id] ?? 0};
         try {
-          final members = await lookup!(ids);
+          final members = [...await lookup!(ids)];
+          if (_closed || !isCurrent()) return;
+          final found = members.map((member) => member.userID).toSet();
+          final missing = ids.where((id) => !found.contains(id)).toList();
+          if (missing.isNotEmpty && lookupProfiles != null) {
+            try {
+              members.addAll((await lookupProfiles!(missing))
+                  .where((member) => missing.contains(member.userID)));
+            } catch (_) {
+              // Keep the newest snapshot while the profile is unavailable.
+            }
+          }
           if (_closed || !isCurrent()) return;
           for (final member in members) {
             final id = member.userID;

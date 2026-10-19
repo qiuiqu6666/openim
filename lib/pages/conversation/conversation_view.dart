@@ -11,6 +11,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'conversation_logic.dart';
+import 'prefetch/conversation_history_prefetch.dart';
 import 'summary/conversation_row_indices.dart';
 import '../../core/im_callback.dart';
 import '../../core/controller/im_controller.dart';
@@ -266,21 +267,24 @@ class _ConversationPageState extends State<ConversationPage> {
           userID: OpenIM.iMManager.userID,
           sessionCurrent: () => logic.isSessionActive,
           active: widget.liveUpdatesActive,
-          child: InlineGlobalSearchSurface(
-            entryKey: const ValueKey('conversation-search-entry'),
-            onSearchModeChanged: widget.onSearchModeChanged,
-            onWillOpen: () {
-              if (_editor.busy) return false;
-              _closeOpenItems();
-              if (_editor.editing) _editor.toggleEditing();
-              return true;
-            },
-            feedBuilder: (searchPlaceholder) => ListenableBuilder(
-              listenable: Listenable.merge(
-                  [FriendDisplayPreferences.changes, _editor, _folders]),
-              builder: (context, _) => _build(context, searchPlaceholder),
-            ),
-          ));
+          child: ConversationHistoryPrefetch(
+              active: widget.liveUpdatesActive,
+              sessionCurrent: () => logic.isSessionActive,
+              child: InlineGlobalSearchSurface(
+                entryKey: const ValueKey('conversation-search-entry'),
+                onSearchModeChanged: widget.onSearchModeChanged,
+                onWillOpen: () {
+                  if (_editor.busy) return false;
+                  _closeOpenItems();
+                  if (_editor.editing) _editor.toggleEditing();
+                  return true;
+                },
+                feedBuilder: (searchPlaceholder) => ListenableBuilder(
+                  listenable: Listenable.merge(
+                      [FriendDisplayPreferences.changes, _editor, _folders]),
+                  builder: (context, _) => _build(context, searchPlaceholder),
+                ),
+              )));
 
   Widget _build(BuildContext context, Widget searchPlaceholder) {
     return Obx(() {
@@ -434,10 +438,14 @@ class _ConversationPageState extends State<ConversationPage> {
                                   }
                                   index--;
                                 }
-                                return _buildItemView(
-                                    context, conversations[index],
-                                    showDivider:
-                                        index < conversations.length - 1);
+                                return ConversationHistoryPrefetchItem(
+                                    key: ValueKey(
+                                        'slide-scope-${conversations[index].conversationID}'),
+                                    conversation: conversations[index],
+                                    child: _buildItemView(
+                                        context, conversations[index],
+                                        showDivider:
+                                            index < conversations.length - 1));
                               },
                               itemCount: conversations.length +
                                   (_folders.selectedFolderID == null &&

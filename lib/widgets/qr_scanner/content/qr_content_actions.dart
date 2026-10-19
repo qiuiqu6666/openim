@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:openim_common/openim_common.dart';
 
 class QrContentActions {
   const QrContentActions();
@@ -13,7 +13,7 @@ class QrContentActions {
         uri.userInfo.isNotEmpty) {
       return Future.value(false);
     }
-    return launchUrl(uri, mode: LaunchMode.externalApplication);
+    return openInAppBrowser(uri);
   }
 
   Future<void> exportContact(String vcard, Rect origin) async {

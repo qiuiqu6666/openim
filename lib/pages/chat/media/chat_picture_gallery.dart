@@ -86,7 +86,7 @@ class ChatPictureGallery {
       }
       sources.add(MediaSource(
         url: url,
-        previewUrl: video ? null : _previewUrl(picture, url),
+        previewUrl: video ? null : previewUrl(picture, url),
         deferOriginal: !video,
         thumbnail: video
             ? message.videoElem?.snapshotUrl ?? ''
@@ -129,7 +129,7 @@ class ChatPictureGallery {
     return null;
   }
 
-  static String? _previewUrl(PictureElem? picture, String? original) {
+  static String? previewUrl(PictureElem? picture, String? original) {
     final big = _firstUrl([picture?.bigPicture?.url]);
     if (big != null && big != original) return big;
     if (original != null) {

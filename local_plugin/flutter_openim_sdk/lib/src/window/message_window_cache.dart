@@ -3,7 +3,8 @@ import '../models/message.dart';
 /// Small process-local copies of native proofs. SQLite remains authoritative.
 /// Invalidation fences in-flight reads, including logout/login to the same user.
 class MessageWindowCache {
-  static final shared = MessageWindowCache();
+  static final shared =
+      MessageWindowCache(limit: 8, lifetime: const Duration(seconds: 30));
   MessageWindowCache(
       {this.limit = 12,
       this.lifetime = const Duration(seconds: 2),
