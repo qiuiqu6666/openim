@@ -2,13 +2,13 @@ import 'live_surface_visibility.dart';
 import 'package:openim/routes/swipe_back/app_swipe_back_tokens.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
 import 'package:openim_common/openim_common.dart';
 import '../casting/live_cast_button.dart';
 import '../models/live_errors.dart';
 import '../widgets/live_style.dart';
 import '../widgets/live_watching_bottom_bar.dart';
 import 'live_playback_controller.dart';
+import 'live_video_surface.dart';
 
 class LivePlayerView extends StatefulWidget {
   const LivePlayerView(
@@ -189,7 +189,7 @@ class _LivePlayerViewState extends State<LivePlayerView>
                 Center(
                     child: AspectRatio(
                         aspectRatio: player.value.aspectRatio,
-                        child: VideoPlayer(player))),
+                        child: LiveVideoSurface(player: player))),
               if (!state.current)
                 const Center(
                     child: Text('直播会话已失效',
