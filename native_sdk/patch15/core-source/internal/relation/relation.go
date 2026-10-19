@@ -42,6 +42,7 @@ type Relation struct {
 	listenerForService     open_im_sdk_callback.OnListenerForService
 	relationSyncMutex      sync.Mutex
 	friendProfilesSyncedAt time.Time
+	friendProfilePending   []string
 }
 
 func (r *Relation) initSyncer() {

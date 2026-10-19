@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -12,6 +13,7 @@ import 'package:openim/pages/conversation/conversation_organizer.dart';
 import 'package:openim/pages/home/home_logic.dart';
 import 'package:openim/pages/home/home_view.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 import '../../support/conversation_live_fixture.dart';
 
@@ -25,6 +27,10 @@ class _Home extends GetxController implements HomeLogic {
 }
 
 class _IM extends GetxController implements IMController {
+  @override
+  final connectionVerified = ValueNotifier<bool>(true);
+  @override
+  final connectionChecking = ValueNotifier<bool>(false);
   @override
   IMSdkStatus get currentConnectionStatus => IMSdkStatus.connectionSucceeded;
   @override
@@ -85,7 +91,8 @@ class _Conversations extends GetxController
   @override
   void createGroup() {}
   @override
-  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {}
+  Future<void> refreshOrganizer(
+      {bool userInitiated = true, String source = 'manual'}) async {}
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 
@@ -116,13 +123,28 @@ ConversationInfo _row(String id,
 
 Future<void> _mountHome(WidgetTester tester, _Conversations conversations,
     {required bool dark}) async {
+  const sdk = MethodChannel('flutter_openim_sdk');
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(sdk, (call) async {
+    if (call.method == 'getAdvancedHistoryMessageList' ||
+        call.method == 'getLocalMessageWindow') {
+      return '{"messageList":[],"isEnd":true}';
+    }
+    throw StateError('Unexpected SDK call: ${call.method}');
+  });
   Get.testMode = true;
+  final visibilityInterval =
+      VisibilityDetectorController.instance.updateInterval;
+  VisibilityDetectorController.instance.updateInterval = Duration.zero;
   OpenIM.iMManager.userID = 'viewer';
   Styles.isDark = dark;
   tester.view.physicalSize = const Size(375, 812);
   tester.view.devicePixelRatio = 1;
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox.shrink());
+    VisibilityDetectorController.instance.updateInterval = visibilityInterval;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(sdk, null);
     Styles.isDark = false;
     Get.reset();
     tester.view.resetPhysicalSize();

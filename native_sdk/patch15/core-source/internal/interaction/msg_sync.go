@@ -59,6 +59,7 @@ type MsgSyncer struct {
 	pendingReadReconcile bool
 	initialMetadataReady bool
 	auxMetadataPending   bool
+	auxMetadataProgress *common.MetadataProgress
 	db                   db_interface.DataBase // data store
 	syncTimes            int                   // times of sync
 	ctx                  context.Context       // context

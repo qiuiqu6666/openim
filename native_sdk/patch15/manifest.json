@@ -2,28 +2,28 @@
   "upstream": "https://github.com/openimsdk/openim-sdk-core",
   "tag": "v3.8.3-patch.15",
   "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-  "sdk_version": "v3.8.3-patch.15+recovery.39-group-offline.2",
+  "sdk_version": "v3.8.3-patch.15+recovery.41-history-window",
   "go_version": "1.24.0",
   "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
   "patch": "0001-background-message-recovery.patch",
-  "patch_sha256": "22ea7bf83b8a8461ce51a7bfed4acfb8e7bbbcd79f15a15c48f839691c8edc0b",
+  "patch_sha256": "f2bba4f734ba207117095476e8bd0da20ff28ecff98d0e7b29622ed6a34a89cf",
   "source_directory": "core-source",
   "source_manifest": "core-source-manifest.json",
-  "source_sha256": "27e2f591aa3b2b4d79735dcbaf007f308d741d4cd68139a8e78ccbe2664d495a",
-  "created": "2026-10-18",
-  "previous_release": "history/recovery.39-group-offline.1.json",
+  "source_sha256": "b9ddc633d3711c326bbee0dfd5d49e64bb31c0d1518b503596082ec0c5428f07",
+  "created": "2026-10-19",
+  "previous_release": "history/recovery.40-metadata-fairness.json",
   "native_binary_integrated": false,
   "checks": {
-    "core": "Locked-source group, interaction, conversation_msg, common and syncer tests passed; converter compiled (no tests). Cancellation/preemption regressions passed 10 repetitions. Race detector not run.",
-    "source_lock": "15 tooling tests passed; 458 locked files verified; cumulative patch replay matches 455 files with 3 declared overlays.",
-    "android": "Four-ABI AAR rebuilt and verified; arm64 debug APK built; Core matches rebuilt AAR after NDK symbol stripping. See verification/recovery.39-group-offline.2-android.json.",
-    "ios_framework": "Not rebuilt; macOS required.",
-    "device_runtime": "Not run; CPU/thermal/frame-time improvement not measured."
+    "core": "Go 1.24 CGO full pkg/db and internal/conversation_msg tests passed in canonical and shared source, including legacy duplicate database restart, deletion/revocation, local call and true-gap coverage regressions.",
+    "source_lock": "469 files verified byte-for-byte; 15 tooling tests passed; cumulative patch replay matches 463 source files after line-ending normalization, with 6 declared overlays.",
+    "android": "Four-ABI AAR built; signed ARM64 release APK 3.0.1+2044 built and exact native library parity verified.",
+    "ios_framework": "not rebuilt; macOS required",
+    "device_runtime": "not run"
   },
   "android": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.39-group-offline.2",
-    "sdk_version": "v3.8.3-patch.15+recovery.39-group-offline.2",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.41-history-window",
+    "sdk_version": "v3.8.3-patch.15+recovery.41-history-window",
     "abis": [
       "armeabi-v7a",
       "arm64-v8a",
@@ -33,15 +33,16 @@
     "recovery_patch_included": true,
     "build_script": "build-android.ps1",
     "apk_native_parity_verified": true,
-    "runtime_validation": "not run for this release",
+    "runtime_validation": "not run for recovery.41",
     "native_binary_integrated": true,
     "aar_built": true,
     "sdk_artifact_verified": true,
-    "verification_evidence": "verification/recovery.39-group-offline.2-android.json"
+    "previous_verification_evidence": "verification/recovery.40-metadata-fairness-android.json",
+    "verification_evidence": "verification/recovery.41-history-window-android.json"
   },
   "ios": {
     "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
-    "version": "v3.8.3-patch.15+recovery.39-group-offline.2",
+    "version": "v3.8.3-patch.15+recovery.41-history-window",
     "framework_prepared": false,
     "recovery_patch_included": true,
     "build_script": "build-ios.sh",
@@ -51,19 +52,21 @@
     "app_validation_scope": "same locked Core source as Android; previous binary is rejected",
     "native_binary_integrated": false,
     "source_consistency_verified": true,
-    "source_files": 458
+    "source_files": 469
   },
   "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
   "build_overlays": [
-    "go.mod and go.sum: pinned existing gomobile dependency closure",
-    "version/version: unique recovery.39-group-offline.2 runtime identity"
+    "go.mod and go.sum: pinned gomobile dependency closure",
+    "version/version: recovery.41-history-window runtime identity",
+    "internal/third/file/upload.go, upload_lock.go and upload_deadline_test.go: retain existing frontend upload deadline and cancellation protections"
   ],
-  "verification_evidence": "verification/recovery.39-cancellation.json",
+  "verification_evidence": "verification/recovery.41-history-window.json",
   "local_changes": {
     "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
-    "description": "Bound group work to four workers, stop dispatch and version processing on cancellation, join workers, preserve serialized recovery and metadata retry cooldown, allow short tasks to finish before preemption, skip optional blank AttachedInfo."
+    "description": "Count distinct server sequences before reading window rows; legacy duplicate tombstones cannot displace required sequences. Preserve stored rows and existing missing-message checks."
   },
   "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
   "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
-  "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json"
+  "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json",
+  "core_revision": "09ed4707f1ec8a79551a880265dc397a1f73c4fc"
 }

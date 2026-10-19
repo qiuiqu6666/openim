@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-19",
+  "sdk_version": "v3.8.3-patch.15+recovery.41-history-window",
+  "source_sha256": "b9ddc633d3711c326bbee0dfd5d49e64bb31c0d1518b503596082ec0c5428f07",
+  "patch_sha256": "f2bba4f734ba207117095476e8bd0da20ff28ecff98d0e7b29622ed6a34a89cf",
+  "scope": "Distinct sequence budget for atomic SQLite message windows; no production data or frontend behavior changes.",
+  "reproduction": {
+    "test": "TestWindowLegacyDuplicatesDoNotConsumeSequenceBudget",
+    "before": "fails: complete sequence range 39-78 reported missing 39-50 after legacy duplicate rows consume LIMIT 40",
+    "after": "passes: 27 visible messages; tombstones stay hidden; true missing seq 60 and fixed target boundary remain enforced; old rows preserved across reopen"
+  },
+  "validation": {
+    "canonical_core": "Go 1.24 CGO: full pkg/db and internal/conversation_msg passed",
+    "shared_core": "Go 1.24 CGO: full pkg/db and internal/conversation_msg passed",
+    "build_tool_tests": 15,
+    "source_lock_files": 469,
+    "patch_replay": "463 content matches after CRLF/LF normalization; 6 declared build overlays"
+  },
+  "android_binary": "not rebuilt",
+  "ios_binary": "not rebuilt; macOS required",
+  "device_validation": "not run; original device root cause still requires window diagnostics or local database confirmation",
+  "production_changes": false
+}

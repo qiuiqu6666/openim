@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:video_player/video_player.dart';
 import '../models/live_models.dart';
 import 'live_credential_renewal.dart';
+import 'live_source_policy.dart';
 export 'live_credential_renewal.dart'
     show LiveCredentialScheduler, LiveScheduledTask;
 
@@ -16,7 +17,9 @@ class LivePlaybackController extends ChangeNotifier {
       LiveVideoFactory? factory,
       DateTime Function()? now,
       LiveCredentialScheduler? schedule})
-      : _factory = factory ?? VideoPlayerController.networkUrl {
+      : _factory = factory ??
+            ((source) => VideoPlayerController.networkUrl(source,
+                httpHeaders: livePlaybackHeaders())) {
     _renewal = LiveCredentialRenewal(
         isActive: () => current && _canDisplay && !paused,
         expiresAt: () => info.expiresAt,
@@ -116,9 +119,12 @@ class LivePlaybackController extends ChangeNotifier {
     player = null;
     _playerPresentation = null;
     old?.removeListener(_changed);
+    // Error listeners can initiate fallback while the old player is notifying.
+    // Leave that stack before disposing its ChangeNotifier.
+    if (old != null) await Future<void>.value();
     await old?.dispose();
     if (!current || !_canDisplay || generation != _generation) return;
-    final sources = info.supportedSources;
+    final sources = livePlaybackSources(info);
     if (nextSource && _source + 1 < sources.length) _source++;
     if (sources.isEmpty) {
       error = StateError('未配置可播放的 HTTP FLV/HLS 直播地址');
@@ -184,7 +190,7 @@ class LivePlaybackController extends ChangeNotifier {
     _startup?.cancel();
     loading = false;
     error = failure;
-    if (_source + 1 < info.supportedSources.length) {
+    if (_source + 1 < livePlaybackSources(info).length) {
       // Try the finite list of backend-provided HTTP fallbacks, without new HTTP
       // credential requests or simultaneous native players.
       unawaited(open(nextSource: true));

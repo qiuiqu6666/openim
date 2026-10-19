@@ -161,7 +161,7 @@ class ChatReadReceipts {
 
   Timer? _viewportReadTimer;
   DateTime? _lastViewportRead;
-  static const viewportReadInterval = Duration(milliseconds: 250);
+  static const viewportReadInterval = Duration(seconds: 1);
 
   void invalidateViewport() {
     _diagnose('viewport_invalidated');

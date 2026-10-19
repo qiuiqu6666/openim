@@ -6,13 +6,6 @@ import 'package:video_compress/video_compress.dart';
 
 enum ChatVideoQuality { standard, original }
 
-Future<bool?> chooseChatMediaOriginal() => Get.bottomSheet<bool>(
-      BottomSheetView(useThemeColors: true, items: [
-        SheetItem(label: 'chatMediaStandard'.tr, result: false),
-        SheetItem(label: 'chatMediaOriginal'.tr, result: true),
-      ]),
-    );
-
 Future<ChatVideoQuality?> chooseChatVideoQuality() =>
     Get.bottomSheet<ChatVideoQuality>(
       BottomSheetView(useThemeColors: true, items: [

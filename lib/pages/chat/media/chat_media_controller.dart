@@ -55,7 +55,7 @@ class ChatMediaController {
         _pickAssets = pickAssets,
         _pickCamera = pickCamera,
         _compressImage = compressImage ?? _compressChatImage,
-        _chooseOriginal = chooseOriginal ?? chooseChatMediaOriginal,
+        _chooseOriginal = chooseOriginal ?? (() async => false),
         _onPreparationFailed =
             onPreparationFailed ?? (() => IMViews.showToast(StrRes.sendFailed));
 

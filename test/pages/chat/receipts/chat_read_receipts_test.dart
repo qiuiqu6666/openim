@@ -85,6 +85,61 @@ void main() {
         .setMockMethodCallHandler(sdkChannel, null);
   });
 
+  testWidgets(
+      'busy viewport sends latest at most once per second and drains tail',
+      (tester) async {
+    for (var i = 0; i < 31; i++) {
+      if (i > 0) {
+        now = now.add(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final message = _received('arrival-$i', i + 1);
+      messages.add(message);
+      unawaited(receipts.markVisibleMessages([message.clientMsgID!]));
+      await tester.pump();
+      for (final call in calls) {
+        if (!call.result.isCompleted) call.result.complete();
+      }
+      await tester.pump();
+      expect(calls.length, lessThanOrEqualTo(1 + i ~/ 10));
+    }
+    expect(calls, hasLength(4),
+        reason: 'continuous arrivals must not starve reads');
+    now = now.add(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(calls, hasLength(5));
+    expect(projections.last.messageID, 'arrival-30');
+    calls.last.result.complete();
+    await tester.pump();
+    expect(messages.last.isRead, isTrue);
+    receipts.close();
+  });
+
+  for (final boundary in ['background', 'close', 'account switch']) {
+    testWidgets('throttled viewport read is discarded on $boundary',
+        (tester) async {
+      messages.add(_received('first', 1));
+      unawaited(receipts.markVisibleMessages(['first']));
+      await tester.pump();
+      calls.single.result.complete();
+      await tester.pump();
+      messages.add(_received('later', 2));
+      await receipts.markVisibleMessages(['later']);
+      if (boundary == 'background') {
+        active = false;
+      } else if (boundary == 'close') {
+        receipts.close();
+      } else {
+        OpenIM.iMManager.userID = 'other';
+      }
+      now = now.add(const Duration(seconds: 2));
+      await tester.pump(const Duration(seconds: 2));
+      expect(calls, hasLength(1));
+      expect(messages.last.isRead, isFalse);
+      receipts.close();
+    });
+  }
+
   test('visible messages share one conversation read request', () async {
     final first = _received('first', 1);
     final second = _received('second', 2);

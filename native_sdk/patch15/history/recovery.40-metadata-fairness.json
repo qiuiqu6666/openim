@@ -1,0 +1,71 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.40-metadata-fairness",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "c16289fc6fc12535d3d41fed92f838ea021b45ec015280f4e773a021e907fde1",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "eed8e98f420a40d3bee91eafbd6f220fb4c594ab1e98ca5f449d1acb4a25ff93",
+  "created": "2026-10-19",
+  "previous_release": "history/recovery.39-group-offline.2.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "core": "Passed staged-source common, network, syncer, group, interaction, conversation_msg, relation and upload deadline/hash tests. Canonical core 09ed4707 also passed Linux race/SQLite validation.",
+    "source_lock": "15 tooling tests passed; 468 files locked; cumulative patch replay matches 462 files with 6 declared overlays.",
+    "android": "Four-ABI AAR rebuilt and verified; signed ARM64 release APK 3.0.1+2043 built; APK core matches rebuilt AAR after NDK 28.2 stripping.",
+    "ios_framework": "not rebuilt",
+    "device_runtime": "not run"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.40-metadata-fairness",
+    "sdk_version": "v3.8.3-patch.15+recovery.40-metadata-fairness",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "not run for this release",
+    "native_binary_integrated": true,
+    "aar_built": true,
+    "sdk_artifact_verified": true,
+    "verification_evidence": "verification/recovery.40-metadata-fairness-android.json"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.40-metadata-fairness",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "not run; macOS rebuild required",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "user will rebuild on macOS",
+    "app_validation_scope": "same locked Core source as Android; previous binary is rejected",
+    "native_binary_integrated": false,
+    "source_consistency_verified": true,
+    "source_files": 468
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned gomobile dependency closure",
+    "version/version: recovery.40-metadata-fairness runtime identity",
+    "internal/third/file/upload.go, upload_lock.go and upload_deadline_test.go: retain existing frontend upload deadline and cancellation protections"
+  ],
+  "verification_evidence": "verification/recovery.40-metadata-fairness-android.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "20-group batches, per-group progress retained across cancellation, shared bounded metadata turn under busy message traffic; preserve frontend upload protections."
+  },
+  "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
+  "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
+  "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json",
+  "core_revision": "09ed4707f1ec8a79551a880265dc397a1f73c4fc"
+}

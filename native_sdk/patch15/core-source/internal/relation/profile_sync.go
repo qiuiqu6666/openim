@@ -3,8 +3,10 @@ package relation
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
 )
 
@@ -22,23 +24,33 @@ func (r *Relation) SyncFriendsWithProfilesWithLock(ctx context.Context) error {
 	if time.Since(r.friendProfilesSyncedAt) < time.Minute {
 		return nil
 	}
-	friends, err := r.db.GetAllFriendList(ctx)
-	if err != nil {
-		return err
-	}
-	for start := 0; start < len(friends); start += friendProfileBatchSize {
-		end := min(start+friendProfileBatchSize, len(friends))
-		ids := make([]string, 0, end-start)
-		for _, friend := range friends[start:end] {
-			ids = append(ids, friend.FriendUserID)
-		}
-		if err := r.refreshFriendProfiles(ctx, ids); err != nil {
+	// A successful batch is a checkpoint, not a reason to restart the pass.
+	// Keep the ID snapshot across preemption; refreshFriendProfiles rechecks
+	// membership so a deleted friend is never restored from this snapshot.
+	if r.friendProfilePending == nil {
+		friends, err := r.db.GetAllFriendList(ctx)
+		if err != nil {
 			return err
 		}
+		r.friendProfilePending = make([]string, 0, len(friends))
+		for _, friend := range friends {
+			r.friendProfilePending = append(r.friendProfilePending, friend.FriendUserID)
+		}
+		sort.Strings(r.friendProfilePending)
+	}
+	for len(r.friendProfilePending) > 0 {
+		end := min(friendProfileBatchSize, len(r.friendProfilePending))
+		if err := r.refreshFriendProfiles(ctx, r.friendProfilePending[:end]); err != nil {
+			return err
+		}
+		common.RecordMetadataCheckpoint(ctx)
+		clear(r.friendProfilePending[:end])
+		r.friendProfilePending = r.friendProfilePending[end:]
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	r.friendProfilePending = nil
 	r.friendProfilesSyncedAt = time.Now()
 	return nil
 }

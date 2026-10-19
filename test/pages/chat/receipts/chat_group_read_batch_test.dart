@@ -42,7 +42,7 @@ void main() {
         now = now.add(const Duration(milliseconds: 50));
         await tester.pump(const Duration(milliseconds: 50));
       }
-      expect(reads, inInclusiveRange(240, 241));
+      expect(reads, inInclusiveRange(60, 61));
       final before = reads;
       rows.value = [
         Message(

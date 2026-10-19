@@ -12,6 +12,7 @@ import (
 	sdk "github.com/openimsdk/openim-sdk-core/v3/pkg/sdk_params_callback"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/utils"
 	"github.com/openimsdk/protocol/msg"
+	"github.com/openimsdk/tools/errs"
 	"github.com/openimsdk/tools/utils/datautil"
 
 	"github.com/openimsdk/tools/log"
@@ -841,13 +842,22 @@ func (c *Conversation) faceURLAndNicknameHandle(ctx context.Context, self, other
 	if err != nil {
 		return append(self, others...)
 	}
-	userInfo, err := c.db.GetLoginUser(ctx, c.loginUserID)
-	if err != nil {
-		log.ZError(ctx, "GetLoginUser failed", err)
-		return append(self, others...)
-	}
 	switch lc.ConversationType {
 	case constant.SingleChatType:
+		var userInfo *model_struct.LocalUser
+		if len(self) > 0 {
+			userInfo, err = c.db.GetLoginUser(ctx, c.loginUserID)
+			if err != nil {
+				// Profile sync runs after message recovery. A missing optional
+				// profile must retain the wire metadata, not log a stack for every
+				// message or suppress the peer's conversation profile. Do not fetch
+				// over the network on this message-storage path.
+				if !errs.ErrRecordNotFound.Is(errs.Unwrap(err)) {
+					log.ZError(ctx, "GetLoginUser failed", err)
+				}
+				userInfo = nil
+			}
+		}
 		c.singleHandle(ctx, self, others, lc, userInfo)
 	case constant.ReadGroupChatType:
 		c.groupHandle(ctx, self, others, lc)
