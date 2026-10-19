@@ -24,11 +24,18 @@ func (d *DataBase) ReadMessageWindow(ctx context.Context, id string, count int, 
 		if !tx.Migrator().HasTable(table) {
 			return nil
 		}
-		q := tx.Table(table).Where("seq > 0")
+		// Count server sequences, not physical rows: old SDKs may have left
+		// multiple tombstones for one seq. A row LIMIT would displace other
+		// sequences and make a complete window appear permanently incomplete.
+		q := tx.Table(table).Select("seq").Where("seq > 0")
 		if target > 0 {
 			q = q.Where("seq <= ?", target)
 		}
-		if err := q.Order("seq DESC").Limit(min(max(count, 1), 300)).Find(&result.Rows).Error; err != nil {
+		seqs := q.Group("seq").Order("seq DESC").Limit(min(max(count, 1), 300))
+		// Keep the stored rows and their deletion/revocation state unchanged.
+		// The window builder still checks every required seq; sparse ranges
+		// must not become publishable merely because this query returns rows.
+		if err := tx.Table(table).Where("seq IN (?)", seqs).Order("seq DESC").Find(&result.Rows).Error; err != nil {
 			return err
 		}
 		// Local call records have no server sequence. Read them in the same
