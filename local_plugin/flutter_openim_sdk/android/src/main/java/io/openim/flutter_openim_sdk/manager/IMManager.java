@@ -13,7 +13,7 @@ import open_im_sdk.Open_im_sdk;
 public class IMManager extends BaseManager {
 
     public void initSDK(MethodCall methodCall, MethodChannel.Result result) {
-        android.util.Log.i("OpenIMCore", "Native Core version: " + Open_im_sdk.getSdkVersion());
+        android.util.Log.i("ChatCore", "Native Core version: " + Open_im_sdk.getSdkVersion());
         boolean initialized = io.openim.flutter_openim_sdk.runtime.NativeIMRuntime.get().initialize(
                 value(methodCall, "operationID"),
                 jsonValue(methodCall));
@@ -86,6 +86,20 @@ public class IMManager extends BaseManager {
                 value(methodCall, "err"),
                 value(methodCall, "keyAndValue")
         );
+    }
+
+    public void setDiagnosticLogging(MethodCall call, MethodChannel.Result result) {
+        Number seconds = call.argument("seconds");
+        if (seconds == null) {
+            result.error("invalid_arguments", "seconds is required", null);
+            return;
+        }
+        CommonUtil.runMainThreadReturn(result,
+                Open_im_sdk.setDiagnosticLogging(Math.max(0, Math.min(900, seconds.longValue()))));
+    }
+
+    public void getDiagnosticLoggingSeconds(MethodCall call, MethodChannel.Result result) {
+        CommonUtil.runMainThreadReturn(result, Open_im_sdk.getDiagnosticLoggingSeconds());
     }
 
     public void setAppBackgroundStatus(MethodCall methodCall, MethodChannel.Result result) {

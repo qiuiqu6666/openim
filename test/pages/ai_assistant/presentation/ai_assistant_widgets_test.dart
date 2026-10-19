@@ -388,7 +388,8 @@ void main() {
     expect(find.image(MemoryImage(replacement)), findsOneWidget);
     expect(find.image(MemoryImage(aiTestImage)), findsNothing);
     expect(tester.getSize(find.image(MemoryImage(replacement))).height,
-        greaterThan(firstHeight));
+        firstHeight,
+        reason: 'The image frame keeps its fixed aspect ratio.');
     expect(tester.takeException(), isNull);
   });
 

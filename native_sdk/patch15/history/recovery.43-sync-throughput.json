@@ -1,0 +1,72 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.43-sync-throughput",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "65a9a73a5eea4755d73d10fc5f94b900deb75fe67c12d1fba59001d2360fcfd4",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "4b94a40f9cb6447b1dd856904b2bc7fb4914cc729000d279114d4b748533b7e6",
+  "created": "2026-10-19",
+  "previous_release": "history/recovery.42-group-version-probe.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "core": "Core package regressions and targeted SQLite/sync race tests passed; see evidence for timing-test rerun.",
+    "source_lock": "487 files verified; patch replay 481 matching normalized files plus six declared overlays.",
+    "android": "Four-ABI AAR built; installed arm64 APK/native parity verified.",
+    "ios_framework": "not rebuilt; macOS required",
+    "device_runtime": "Cold debug 202.845s, profile 206.540s; warm 4.323s; interruption coverage passed; 60s target NOT achieved."
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.43-sync-throughput",
+    "sdk_version": "v3.8.3-patch.15+recovery.43-sync-throughput",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "Physical device tested; 60-second cold target NOT achieved.",
+    "native_binary_integrated": true,
+    "aar_built": true,
+    "sdk_artifact_verified": true,
+    "previous_verification_evidence": "verification/recovery.41-history-window-android.json",
+    "verification_evidence": "verification/recovery.43-sync-throughput-android.json"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.43-sync-throughput",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "not rebuilt; macOS required",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "user will rebuild on macOS",
+    "app_validation_scope": "same locked Core source as Android; previous binary is rejected",
+    "native_binary_integrated": false,
+    "source_consistency_verified": true,
+    "source_files": 487
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned gomobile dependency closure",
+    "version/version: recovery.43-sync-throughput runtime identity",
+    "internal/third/file/upload.go, upload_lock.go and upload_deadline_test.go: retain existing frontend upload deadline and cancellation protections"
+  ],
+  "verification_evidence": "verification/recovery.43-sync-throughput-android.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Optional sender profile queue; batched range proofs and eight independent history pages per transport; WAL FULL durability; atomic schema batches; quiet logs and aggregate metrics. Cold target 60s not achieved."
+  },
+  "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
+  "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
+  "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json",
+  "core_revision": "fadbf51eebda1971a939d7f8511b82bc3ccf4dff"
+}

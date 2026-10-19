@@ -40,7 +40,7 @@ public class SwiftFlutterOpenimSdkPlugin: NSObject, FlutterPlugin {
         case "userManager":
             userManger.handleMethod(call: call, result: result)
         default:
-            print("Handle ManagerName Error: \(managerName) not found")
+            DiagnosticLog.write("Handle ManagerName Error: \(managerName) not found")
         }
     }
 }

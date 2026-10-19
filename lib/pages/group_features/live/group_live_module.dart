@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import '../models/group_feature_context.dart';
 import 'data/live_api.dart';
+import 'data/live_avatar_cache.dart';
 import 'models/live_models.dart';
 import 'pages/live_entry_page.dart';
 import 'pages/live_room_page.dart';
@@ -48,6 +49,7 @@ class _GroupLiveFeatureHostState extends State<GroupLiveFeatureHost>
   LiveSession? _session;
   String _face = '';
   String _avatarScope = '';
+  bool _avatarLoading = false;
   bool _watching = false, _loading = false;
   bool _refreshQueued = false;
   int _request = 0, _scope = 0;
@@ -136,27 +138,47 @@ class _GroupLiveFeatureHostState extends State<GroupLiveFeatureHost>
       previous.scheduledStartAt == next.scheduledStartAt;
 
   Future<void> _resolveAvatar(LiveSession session) async {
-    if (session.anchorID.isEmpty || !current) return;
+    if (!current) return;
+    if (session.anchorID.isEmpty) {
+      _avatarScope = '';
+      _face = '';
+      _avatarLoading = false;
+      return;
+    }
     final scopeVersion = _scope;
     final scope =
         '${widget.featureContext.currentUserID}|${widget.featureContext.groupID}|${session.anchorID}';
     if (_avatarScope == scope) return;
     _avatarScope = scope;
-    _face = '';
+    final runtime = widget.featureContext.api;
+    _face = LiveAvatarCache.read(runtime, scope);
+    _avatarLoading = true;
     try {
       final list = await OpenIM.iMManager.groupManager.getGroupMembersInfo(
           groupID: widget.featureContext.groupID,
           userIDList: [session.anchorID]);
       if (current &&
           scopeVersion == _scope &&
-          _session?.id == session.id &&
           _session?.anchorID == session.anchorID &&
           list.isNotEmpty) {
         if (_avatarScope == scope) {
-          setState(() => _face = list.first.faceURL ?? '');
+          final face = list.first.faceURL ?? '';
+          LiveAvatarCache.write(runtime, scope, face);
+          setState(() => _face = face);
         }
       }
-    } catch (_) {/* Existing AvatarView renders its SDK-style fallback. */}
+    } catch (_) {
+      // Keep a known avatar on transient SDK failures; allow a later retry.
+      if (current && scopeVersion == _scope && _avatarScope == scope) {
+        _avatarScope = '';
+      }
+    } finally {
+      if (current &&
+          scopeVersion == _scope &&
+          _session?.anchorID == session.anchorID) {
+        setState(() => _avatarLoading = false);
+      }
+    }
   }
 
   Future<void> _refresh() async {
@@ -296,6 +318,7 @@ class _GroupLiveFeatureHostState extends State<GroupLiveFeatureHost>
       else
         GroupLiveBanner(
             session: _session!,
+            avatarLoading: _avatarLoading,
             anchorFaceURL: _face,
             onWatch: () => setState(() => _watching = true)),
     ]);

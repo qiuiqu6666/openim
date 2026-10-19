@@ -135,7 +135,7 @@ void main() {
     fixture.im.recvNewMessage(aiOpenimTyping('typing-yes'));
     await tester.pump();
     expect(logic.peerTyping.value, isTrue);
-    expect(textContaining('正在输入'), findsWidgets);
+    expect(textContaining('思考中'), findsWidgets);
     expect(logic.messageList, isEmpty);
 
     fixture.im.recvNewMessage(aiOpenimText('reply', '这次没有答上来，请再发一次。'));

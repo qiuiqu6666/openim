@@ -2,6 +2,12 @@ package interaction
 
 import (
 	"context"
+	"errors"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/logpolicy"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/sdkerrs"
+	"github.com/openimsdk/tools/errs"
+	"net"
 	"sync/atomic"
 	"time"
 
@@ -21,10 +27,14 @@ type syncDiagnostic struct {
 var syncDiagnosticSequence atomic.Uint64
 
 func beginSyncDiagnostic(ctx context.Context, command string, initial bool) (context.Context, func()) {
+	ctx = common.WithSyncMetrics(ctx)
 	d := &syncDiagnostic{id: syncDiagnosticSequence.Add(1), started: time.Now()}
 	ctx = context.WithValue(ctx, syncDiagnosticKey{}, d)
-	log.ZInfo(ctx, "sync_diag attempt_start", "attempt", d.id, "command", command, "initial", initial)
+	if logpolicy.Enabled() || initial {
+		log.ZInfo(ctx, "sync_diag attempt_start", "attempt", d.id, "command", command, "initial", initial)
+	}
 	return ctx, func() {
+		common.FlushSyncMetrics(ctx, true)
 		log.ZInfo(ctx, "sync_diag attempt_end", "attempt", d.id, "elapsed", time.Since(d.started).String(),
 			"pulls", d.pulls, "coverageMismatches", d.mismatches, "samples", d.samples, "cancelled", ctx.Err() != nil)
 	}
@@ -70,6 +80,19 @@ func (m *MsgSyncer) diagnoseSyncPull(ctx context.Context, ranges map[string][2]i
 		return
 	}
 	d.pulls++
+	common.RecordSyncMetric(ctx, "range_fetch", 1, elapsed)
+	if pullErr != nil {
+		common.RecordSyncMetric(ctx, "range_request_failure_"+syncRangeFailureReason(nil, pullErr), 1, 0)
+	}
+	if resp != nil {
+		var n int64
+		for _, p := range resp.Msgs {
+			if p != nil {
+				n += int64(len(p.Msgs))
+			}
+		}
+		common.RecordSyncMetric(ctx, "messages_fetched", n, 0)
+	}
 	missing, incomplete := 0, 0
 	for id, requested := range ranges {
 		var packet *sdkws.PullMsgs
@@ -87,6 +110,8 @@ func (m *MsgSyncer) diagnoseSyncPull(ctx context.Context, ranges map[string][2]i
 			continue
 		}
 		incomplete++
+		reason := syncRangeFailureReason(packet, pullErr)
+		common.RecordSyncMetric(ctx, "range_incomplete_"+reason, 1, 0)
 		d.mismatches++
 		if d.samples >= 12 {
 			continue
@@ -107,4 +132,40 @@ func (m *MsgSyncer) diagnoseSyncPull(ctx context.Context, ranges map[string][2]i
 		log.ZInfo(ctx, "sync_diag pull_summary", "attempt", d.id, "pull", d.pulls, "requestedConversations", len(ranges),
 			"missingPackets", missing, "incompletePackets", incomplete, "elapsed", elapsed.String(), "transportFailed", pullErr != nil)
 	}
+}
+
+// Server visibility proofs do not identify whether a boundary came from cleanup
+// or permissions. Keep that cause unknown instead of inventing a legal hole.
+func syncRangeFailureReason(packet *sdkws.PullMsgs, err error) string {
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return "cancelled"
+		}
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, sdkerrs.ErrCtxDeadline) {
+			return "network_timeout"
+		}
+		if coded, ok := errs.Unwrap(err).(errs.CodeError); ok && coded.Code() == errs.NoPermissionError {
+			return "permission_denied"
+		}
+		var network net.Error
+		if errors.As(err, &network) {
+			return "network_failure"
+		}
+		return "request_failure_unclassified"
+	}
+	if packet == nil {
+		return "missing_packet"
+	}
+	if packet.IsEnd {
+		return "boundary_claim_requires_confirmation"
+	}
+	if len(packet.Msgs) == 0 {
+		return "empty_unconfirmed"
+	}
+	for _, row := range packet.Msgs {
+		if row == nil {
+			return "malformed_packet"
+		}
+	}
+	return "unconfirmed_gap"
 }

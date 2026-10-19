@@ -124,14 +124,14 @@ func (c *Third) uploadLogs(ctx context.Context, line int, ex string, progress Pr
 }
 
 func checkLogPath(logPath string) bool {
-	if len(logPath) < len("open-im-sdk-core.yyyy-mm-dd") {
+	if len(logPath) < len("chat-sdk-core.yyyy-mm-dd") {
 		return false
 	}
 	logTime := logPath[len(logPath)-len(".yyyy-mm-dd"):]
 	if _, err := time.Parse(".2006-01-02", logTime); err != nil {
 		return false
 	}
-	if !strings.HasPrefix(logPath, "open-im-sdk-core.") {
+	if !strings.HasPrefix(logPath, "chat-sdk-core.") && !strings.HasPrefix(logPath, "open-im-sdk-core.") {
 		return false
 	}
 

@@ -71,6 +71,11 @@ class ChatPage extends StatelessWidget {
               child: ListenableBuilder(
                 listenable: logic.groupFeatures,
                 builder: (context, _) => Obx(() {
+                  final contactName = logic.isSingleChat &&
+                          Get.isRegistered<ContactsLogic>()
+                      ? Get.find<ContactsLogic>()
+                          .friendDisplayNameFor(logic.userID)
+                      : null;
                   final cachedPresence = logic.isSingleChat &&
                           Get.isRegistered<ContactsLogic>()
                       ? Get.find<ContactsLogic>().presence.users[logic.userID]
@@ -83,7 +88,7 @@ class ChatPage extends StatelessWidget {
                       : null;
                   return TitleBar.chat(
                     toolbarHeight: headerHeight,
-                    title: logic.nickname.value,
+                    title: contactName ?? logic.nickname.value,
                     titleColor: logic.isGroupChat
                         ? groupNameColor(context,
                             logic.groupFeatures.gameType(logic.groupID!))

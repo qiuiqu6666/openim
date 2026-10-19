@@ -950,7 +950,12 @@ class ChatLogic extends SuperController {
     }
     if (!_sessionInactive && _isAssistantReply(message)) {
       AssistantStreamLog.finalReply(message);
-      assistantStreams.receivedReply(message);
+      if (!_timeline.containsMessage(message.clientMsgID) &&
+          !_removedMessageIDs.contains(message.clientMsgID)) {
+        assistantStreams.receivedReply(message);
+      } else {
+        assistantStreams.markFinalMessage(message);
+      }
     }
     if (!_sessionInactive && isSingleChat && message.sendID == userID) {
       if (message.contentType == MessageType.typing) {
@@ -1281,6 +1286,7 @@ class ChatLogic extends SuperController {
       _forwarding.forwardMessage(message);
   Future sendPicture({required String path, bool sendNow = true}) =>
       _media.sendPicture(path: path, sendNow: sendNow);
+  Future<Message?> prepareAssistantPicture(String path) => _media.preparePicture(path);
   Future<void> sendForwardRemarkMsg(String content,
           {String? userId, String? groupId}) =>
       _forwarding.sendForwardRemarkMsg(content,

@@ -81,6 +81,9 @@ func TestAllConversationPreviewsPrecedeRecentHistory(t *testing.T) {
 					}
 				} else {
 					historyRequests++
+					if len(pull.SeqRanges) > 8 {
+						t.Error("unbounded history transport batch")
+					}
 					if len(visible) != len(targets) {
 						t.Errorf("history started with only %d/%d visible conversations", len(visible), len(targets))
 					}
@@ -101,7 +104,7 @@ func TestAllConversationPreviewsPrecedeRecentHistory(t *testing.T) {
 			if err := m.compareSeqsAndBatchSync(ctx, targets, 1); err != nil {
 				t.Fatal(err)
 			}
-			wantHistory := (len(targets)*(recentMessageWindow-1) + SplitPullMsgNum - 1) / SplitPullMsgNum
+			wantHistory := (len(targets) + 7) / 8
 			if previewRequests != 3 || historyRequests != wantHistory {
 				t.Fatalf("preview/history requests: %d/%d", previewRequests, historyRequests)
 			}

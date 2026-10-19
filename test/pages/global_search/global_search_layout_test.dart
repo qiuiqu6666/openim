@@ -11,8 +11,10 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/global_search/global_search_logic.dart';
+import 'package:openim/pages/chat/history_search/chat_history_search_page.dart';
+import 'package:openim/pages/global_search/cloud/global_keyword_search_api.dart';
+import 'package:openim/pages/chat/history_search/cloud/search_http_client.dart';
 import 'package:openim/pages/global_search/global_search_view.dart';
-import 'package:openim/pages/global_search/loading/global_search_skeleton.dart';
 import 'package:openim/pages/official_account/widgets/official_account_name_label.dart';
 import 'package:openim/pages/group_features/identity/group_name_label.dart';
 import 'package:openim_common/openim_common.dart';
@@ -103,13 +105,15 @@ Finder _row(String title) => find.byWidgetPredicate((widget) =>
         widget.title is GroupNameLabel &&
             (widget.title! as GroupNameLabel).name == title));
 Future<GlobalSearchLogic> _mount(WidgetTester tester, _Source source,
-    {bool dark = false,
+    {GlobalKeywordSearchApi? keywordApi,
+    bool dark = false,
     Size size = const Size(375, 812),
     double scale = 1,
     GlobalKey? boundary}) async {
   Get.testMode = true;
   Styles.isDark = dark;
-  final logic = Get.put(GlobalSearchLogic(source: source));
+  final logic =
+      Get.put(GlobalSearchLogic(source: source, keywordApi: keywordApi));
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -295,6 +299,65 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('cloud history groups conversations and opens scoped results',
+      (tester) async {
+    final source = _Source()
+      ..friendResults = []
+      ..groupResults = []
+      ..conversationResults = [];
+    source.previews.assignAll([
+      ConversationInfo(
+          conversationID: 'sg_a',
+          groupID: 'a',
+          conversationType: ConversationType.superGroup,
+          showName: '匹配群聊'),
+      ConversationInfo(
+          conversationID: 'si_b',
+          userID: 'b',
+          conversationType: ConversationType.single,
+          showName: '匹配单聊'),
+    ]);
+    final keywordApi = GlobalKeywordSearchApi(
+        client: SearchHttpClient(
+      session: () =>
+          (user: 'self', token: 'im', server: 'https://example.test'),
+      post: (_, __, ___) async => {
+        'errCode': 0,
+        'data': {
+          'items': [
+            for (final entry in [('sg_a', 3), ('sg_a', 2), ('si_b', 1)])
+              {
+                'conversationID': entry.$1,
+                'seq': entry.$2,
+                'clientMsgID': 'm${entry.$2}',
+                'sendID': 'sender',
+                'sendTime': 1000,
+                'contentType': 101,
+                'summary': '匹配内容'
+              }
+          ],
+          'nextCursor': '',
+          'hasMore': false,
+        }
+      },
+    ));
+    await _mount(tester, source, keywordApi: keywordApi);
+    await _search(tester, query: '会议');
+    expect(find.text('匹配群聊'), findsOneWidget);
+    expect(find.text('匹配单聊'), findsOneWidget);
+    expect(find.text('匹配内容'), findsNWidgets(2));
+    OpenIM.iMManager.userID = 'self';
+    OpenIM.iMManager.token = null;
+    await tester.tap(find.text('匹配群聊'));
+    await tester.pumpAndSettle();
+    final page = tester
+        .widget<ChatHistorySearchPage>(find.byType(ChatHistorySearchPage));
+    expect(page.conversationID, 'sg_a');
+    expect(page.initialQuery, '会议');
+    expect(page.isGroup, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final dark in [false, true]) {
     testWidgets('empty result titles stay centered as previews appear: $dark',
         (tester) async {
@@ -419,6 +482,54 @@ void main() {
         findsOneWidget);
   });
 
+  for (final dark in [false, true]) {
+    testWidgets(
+        'fast results visible at 350ms while history takes 5s dark=$dark',
+        (tester) async {
+      final pending = Completer<dynamic>();
+      final keywordApi = GlobalKeywordSearchApi(
+          client: SearchHttpClient(
+        session: () =>
+            (user: 'self', token: 'im', server: 'https://example.test'),
+        post: (_, __, ___) => pending.future,
+      ));
+      final logic = await _mount(tester, _Source(),
+          keywordApi: keywordApi, dark: dark, scale: 1.5);
+      await tester.enterText(find.byType(TextField), '会议');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(_row('冬'), findsOneWidget);
+      expect(_row('有草稿的群会话'), findsOneWidget);
+      expect(logic.pendingSections, contains(4));
+      expect(
+          find.byKey(const ValueKey('global-search-progress')), findsOneWidget);
+      final pendingHeaderSize = tester.getSize(_header);
+      expect(_section(4), findsNothing);
+      expect(find.text('chatHistoryLoading'.tr), findsNothing);
+      expect(logic.pendingSections, isNot(contains(1)));
+      await tester.pump(const Duration(milliseconds: 4650));
+      pending.complete({
+        'errCode': 0,
+        'data': {'items': [], 'nextCursor': '', 'hasMore': false}
+      });
+      await tester.pumpAndSettle();
+      expect(logic.pendingSections, isEmpty);
+      expect(
+          find.byKey(const ValueKey('global-search-progress')), findsNothing);
+      expect(tester.getSize(_header), pendingHeaderSize);
+      logic.cloudLoading.value = true;
+      await tester.pump();
+      expect(
+          find.byKey(const ValueKey('global-search-progress')), findsOneWidget);
+      expect(_row('冬'), findsOneWidget);
+      logic.cloudLoading.value = false;
+      await tester.pump();
+      expect(
+          find.byKey(const ValueKey('global-search-progress')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('loading slot stays stable and clear returns to empty search',
       (tester) async {
     final source = _Source()..pendingFriends = Completer<List<FriendInfo>>();
@@ -428,22 +539,27 @@ void main() {
         find.byKey(const ValueKey('chat-history-search-clear')), findsNothing);
     await tester.enterText(find.byType(TextField), '1');
     await tester.pump();
-    expect(find.byType(GlobalSearchSkeleton), findsOneWidget);
-    expect(find.byType(ShaderMask), findsOneWidget);
+    expect(find.byKey(const ValueKey('global-search-loading-1')), findsNothing);
+
     expect(find.byType(ListTile), findsNothing);
+    for (var id = 1; id <= 4; id++) {
+      expect(_section(id), findsNothing);
+    }
+    expect(find.text('chatHistoryLoading'.tr), findsNothing);
     await tester.pump(const Duration(milliseconds: 350));
     expect(logic.loading.value, isTrue);
     expect(tester.getSize(_header).height, greaterThan(before.height));
     source.pendingFriends!
         .complete([FriendInfo(userID: 'friend', nickname: '冬')]);
     await tester.pumpAndSettle();
-    expect(find.byType(GlobalSearchSkeleton), findsNothing);
+    expect(find.byKey(const ValueKey('global-search-loading-1')), findsNothing);
     expect(tester.getSize(_header).height, greaterThan(before.height));
     await tester.tap(find.byKey(const ValueKey('chat-history-search-clear')));
     await tester.pumpAndSettle();
     expect(tester.getSize(_header), before);
     expect(logic.query.value, isEmpty);
     expect(logic.loading.value, isFalse);
+    expect(find.byKey(const ValueKey('global-search-progress')), findsNothing);
     expect(find.byType(ListTile), findsNothing);
     expect(
         find.byKey(const ValueKey('chat-history-search-clear')), findsNothing);

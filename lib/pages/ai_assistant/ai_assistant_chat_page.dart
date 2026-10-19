@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../chat/chat_logic.dart';
+import '../chat/history_search/chat_history_search_page.dart';
 import '../chat/messages/selection/message_selection_action_bar.dart';
 import '../chat/messages/selection/message_selection_toolbar.dart';
 import 'history/ai_openim_message_text.dart';
@@ -124,12 +125,15 @@ class _AiAssistantChatPageState extends State<AiAssistantChatPage> {
                         final matches = _matches;
                         return AiAssistantHeader(
                           dark: dark,
+                          searchLabel:
+                              _text('查找已加载消息', 'Find in loaded messages'),
                           userID: _logic.userID,
                           ex: _logic.conversationInfo.ex,
                           title: _logic.userID == 'assistant'
                               ? _text('AI助理', 'AI Assistant')
                               : _logic.nickname.value,
-                          subtitle: _logic.assistantStreams.snapshots.isNotEmpty
+                          subtitle: _logic.assistantStreams.snapshots
+                                  .any((reply) => !reply.timedOut)
                               ? _text('正在回复…', 'Replying…')
                               : _logic.peerTyping.value
                                   ? _text('思考中…', 'Thinking…')
@@ -164,44 +168,72 @@ class _AiAssistantChatPageState extends State<AiAssistantChatPage> {
                   Positioned.fill(
                       child:
                           IgnorePointer(child: AiCanvasBackdrop(dark: dark))),
-                  Column(
-                    children: [
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            AiAssistantStreamingList(
-                              logic: _logic,
-                              query: _searching ? _search.text : '',
-                              emptyView: AiEmptyChatArt(
-                                  dark: dark,
-                                  assistantName: _text('AI助理', 'AI Assistant'),
-                                  i18n: AiAssistantI18n.of(context),
-                                  onStart: () =>
-                                      _logic.focusNode.requestFocus()),
-                            ),
-                            Obx(() =>
-                                _logic.newMessages.unseenCount.value > 0 ||
-                                        _logic.newMessages.awayFromLatest.value
-                                    ? Positioned(
-                                        right: AiMetrics.space16,
-                                        bottom: AiMetrics.space16,
-                                        child: NewMessageIndicator(
-                                            newMessageCount: _logic
-                                                .newMessages.unseenCount.value,
-                                            onTap: _logic.scrollBottom))
-                                    : const SizedBox.shrink()),
-                          ],
-                        ),
-                      ),
-                      if (_logic.messageSelection.active)
-                        MessageSelectionActionBar(
-                            controller: _logic.messageSelection),
-                      Offstage(
-                        offstage: _logic.messageSelection.active,
-                        child: AiOpenIMComposer(logic: _logic),
-                      ),
-                    ],
-                  ),
+                  LayoutBuilder(
+                      builder: (context, constraints) => Column(
+                            children: [
+                              if (_searching)
+                                TextButton.icon(
+                                  icon: const Icon(Icons.manage_search_rounded),
+                                  label: Text(_text(
+                                      '搜索全部聊天记录', 'Search all chat history')),
+                                  onPressed: () {
+                                    _searchFocus.unfocus();
+                                    Get.to(() => ChatHistorySearchPage(
+                                          conversationID: _logic
+                                              .conversationInfo.conversationID,
+                                          initialQuery: _search.text.trim(),
+                                        ));
+                                  },
+                                ),
+                              Expanded(
+                                child: Stack(
+                                  children: [
+                                    AiAssistantStreamingList(
+                                      logic: _logic,
+                                      query: _searching ? _search.text : '',
+                                      emptyView: AiEmptyChatArt(
+                                          dark: dark,
+                                          assistantName:
+                                              _text('AI助理', 'AI Assistant'),
+                                          i18n: AiAssistantI18n.of(context),
+                                          onStart: () =>
+                                              _logic.focusNode.requestFocus()),
+                                    ),
+                                    Obx(() =>
+                                        _logic.newMessages.unseenCount.value >
+                                                    0 ||
+                                                _logic.newMessages
+                                                    .awayFromLatest.value
+                                            ? Positioned(
+                                                right: AiMetrics.space16,
+                                                bottom: AiMetrics.space16,
+                                                child: NewMessageIndicator(
+                                                    newMessageCount: _logic
+                                                        .newMessages
+                                                        .unseenCount
+                                                        .value,
+                                                    onTap: _logic.scrollBottom))
+                                            : const SizedBox.shrink()),
+                                  ],
+                                ),
+                              ),
+                              if (_logic.messageSelection.active)
+                                MessageSelectionActionBar(
+                                    controller: _logic.messageSelection),
+                              Offstage(
+                                offstage: _logic.messageSelection.active,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                      maxHeight: constraints.maxHeight *
+                                          AiMetrics.composerMaxHeightRatio),
+                                  child: SingleChildScrollView(
+                                    reverse: true,
+                                    child: AiOpenIMComposer(logic: _logic),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )),
                 ],
               ),
             ),

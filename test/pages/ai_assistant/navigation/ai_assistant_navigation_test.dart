@@ -186,6 +186,9 @@ void main() {
     final navigation =
         AppNavigator.startChat(conversationInfo: _conversation('peer'));
     await tester.pump();
+    final readsBeforeLogout = calls
+        .where((call) => call.method == 'getAdvancedHistoryMessageList')
+        .length;
     await identity('new-account', 'new-im-token');
     profiles.complete(jsonEncode([
       {'userID': 'peer', 'ex': '{"accountType":"official"}'}
@@ -196,6 +199,6 @@ void main() {
     expect(GetTags.chat, isNull);
     expect(
         calls.where((call) => call.method == 'getAdvancedHistoryMessageList'),
-        isEmpty);
+        hasLength(readsBeforeLogout));
   });
 }

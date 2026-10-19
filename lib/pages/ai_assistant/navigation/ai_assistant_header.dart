@@ -23,6 +23,7 @@ class AiAssistantHeader extends StatelessWidget implements PreferredSizeWidget {
       this.userID,
       this.ex,
       this.subtitle,
+      this.searchLabel,
       this.toolbarHeight = kToolbarHeight});
   final bool dark, searching;
   final TextEditingController searchController;
@@ -36,6 +37,7 @@ class AiAssistantHeader extends StatelessWidget implements PreferredSizeWidget {
   final String? userID;
   final String? ex;
   final String? subtitle;
+  final String? searchLabel;
   @override
   Size get preferredSize =>
       Size.fromHeight(toolbarHeight + AiMetrics.headerDividerHeight);
@@ -83,10 +85,11 @@ class AiAssistantHeader extends StatelessWidget implements PreferredSizeWidget {
                       color: AiPalette.primary(dark),
                       fontSize: AiMetrics.font14),
                   decoration: InputDecoration(
-                    hintText: i18n.t(
-                        zhHans: '搜索此对话',
-                        zhHant: '搜尋此對話',
-                        en: 'Search this chat'),
+                    hintText: searchLabel ??
+                        i18n.t(
+                            zhHans: '搜索此对话',
+                            zhHant: '搜尋此對話',
+                            en: 'Search this chat'),
                     hintStyle: TextStyle(
                         color: AiPalette.secondary(dark),
                         fontSize: AiMetrics.font14),
@@ -159,7 +162,8 @@ class AiAssistantHeader extends StatelessWidget implements PreferredSizeWidget {
         ],
         if (!searching) ...[
           IconButton(
-              tooltip: i18n.t(zhHans: '搜索此对话', en: 'Search this chat'),
+              tooltip: searchLabel ??
+                  i18n.t(zhHans: '搜索此对话', en: 'Search this chat'),
               onPressed: onSearch,
               icon: Icon(Icons.search_rounded, color: AiPalette.primary(dark))),
           if (onOverflow != null)

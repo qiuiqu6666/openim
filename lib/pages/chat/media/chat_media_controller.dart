@@ -160,6 +160,10 @@ class ChatMediaController {
     }
   }
 
+  /// Prepare an image without posting it; composite messages upload all parts
+  /// before submitting their single SDK envelope.
+  Future<Message?> preparePicture(String path) => _preparePicture(path);
+
   Future<Message?> _preparePicture(String path,
       {bool Function()? cancelled,
       ChatMediaTrace? trace,

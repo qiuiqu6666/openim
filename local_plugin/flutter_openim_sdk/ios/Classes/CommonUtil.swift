@@ -11,7 +11,7 @@ public class CommonUtil {
             res["errCode"] = errCode
             res["errMsg"] = errMsg
             #if DEBUG
-            print("native call flutter { method: \(method) type: \(type) }")
+            DiagnosticLog.write("native call flutter { method: \(method) type: \(type) }")
             #endif
             channel.invokeMethod(method, arguments: res)
         }

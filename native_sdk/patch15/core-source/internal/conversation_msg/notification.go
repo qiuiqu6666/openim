@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/logpolicy"
 	"reflect"
 	"runtime"
 	"sync"
@@ -75,6 +76,8 @@ func (c *Conversation) Work(c2v common.Cmd2Value) {
 		c.doUpdateMessage(c2v)
 	case constant.CmdNotification:
 		workErr = c.doNotificationManager(c2v)
+	case common.CmdSyncMissingProfiles:
+		workErr = c.flushMissingProfiles(c2v.Ctx)
 	case constant.CmdSyncData:
 		workErr = c.syncData(c2v)
 	case constant.CmdSyncFlag:
@@ -240,7 +243,9 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
 	}
 	ctx := c2v.Ctx
 	node := c2v.Value.(common.UpdateConNode)
-	log.ZInfo(ctx, "doUpdateConversation", "action", node.Action, "conversationID", node.ConID, "cmd", c2v.Cmd, "caller", c2v.Caller)
+	if logpolicy.Enabled() {
+		log.ZInfo(ctx, "doUpdateConversation", "action", node.Action, "conversationID", node.ConID, "cmd", c2v.Cmd, "caller", c2v.Caller)
+	}
 	switch node.Action {
 	case constant.AddConOrUpLatMsg:
 		var list []*model_struct.LocalConversation
@@ -281,7 +286,9 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
 	case constant.UpdateConFaceUrlAndNickName:
 		var lc model_struct.LocalConversation
 		st := node.Args.(common.SourceIDAndSessionType)
-		log.ZInfo(ctx, "UpdateConFaceUrlAndNickName", "st", st)
+		if logpolicy.Enabled() {
+			log.ZInfo(ctx, "UpdateConFaceUrlAndNickName", "sessionType", st.SessionType)
+		}
 		switch st.SessionType {
 		case constant.SingleChatType:
 			lc.UserID = st.SourceID
@@ -409,7 +416,9 @@ func (c *Conversation) doUpdateConversation(c2v common.Cmd2Value) {
 		}
 	case constant.ConChangeDirect:
 		cidList := node.Args.(string)
-		log.ZInfo(ctx, "ConversationChanged", "cidList", cidList)
+		if logpolicy.Enabled() {
+			log.ZInfo(ctx, "ConversationChanged", "cidList", cidList)
+		}
 		c.ConversationListener().OnConversationChanged(cidList)
 
 	case constant.NewConDirect:
@@ -505,7 +514,10 @@ func (c *Conversation) syncData(c2v common.Cmd2Value) error {
 	if err := runRequiredSyncFunctions(ctx, asyncFuncs, true); err != nil {
 		return err
 	}
-	return c.reconcileGroupConversationProfiles(ctx)
+	if err := c.reconcileGroupConversationProfiles(ctx); err != nil {
+		return err
+	}
+	return c.flushMissingProfiles(ctx)
 }
 
 func runRequiredSyncFunctions(ctx context.Context, funcs []func(context.Context) error, parallel bool) error {

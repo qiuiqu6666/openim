@@ -138,7 +138,10 @@ func (d *DataBase) initDB(ctx context.Context, logLevel int) error {
 	var (
 		db *gorm.DB
 	)
-	db, err = gorm.Open(sqlite.Open(dbFileName), &gorm.Config{Logger: log.NewSqlLogger(zLogLevel, false, time.Millisecond*200)})
+	// Configure every pooled connection, including replacements. FULL preserves
+	// durable commit receipts; WAL avoids rewriting the rollback journal for
+	// every message/checkpoint while allowing readers to keep their snapshots.
+	db, err = gorm.Open(sqlite.Open(dbFileName+"?_journal_mode=WAL&_synchronous=FULL&_busy_timeout=5000"), &gorm.Config{Logger: log.NewSqlLogger(zLogLevel, false, time.Millisecond*200)})
 	if err != nil {
 		return errs.WrapMsg(err, "open db failed "+dbFileName)
 	}

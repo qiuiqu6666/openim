@@ -80,6 +80,14 @@ class GlobalSearchLogic extends GetxController {
       _globalApi != null &&
       (query.value.runes.length < 2 || query.value.runes.length > 64);
   final cloudHits = <CloudKeywordMessage>[].obs;
+
+  /// Server pages are newest first. Keep one preview per conversation across
+  /// pages; the scoped search page loads the complete matching history.
+  List<CloudKeywordMessage> get cloudConversationHits {
+    final seen = <String>{};
+    return cloudHits.where((hit) => seen.add(hit.conversationID)).toList();
+  }
+
   String _globalCursor = '';
   final searchError = Rxn<int>();
   final GlobalHistoryCloudSearch Function()? _cloudFactory;
@@ -97,6 +105,7 @@ class GlobalSearchLogic extends GetxController {
   final fileSearchResultItems = <SearchResultItems>[].obs;
   final failures = <int>{}.obs;
   final loading = false.obs;
+  final pendingSections = <int>{}.obs;
   final query = ''.obs;
   final index = 1.obs;
   Timer? _debounce;
@@ -139,12 +148,15 @@ class GlobalSearchLogic extends GetxController {
     query.value = value;
     clearList();
     loading.value = value.isNotEmpty;
+    if (value.isNotEmpty) pendingSections.addAll([1, 2, 3, 4]);
     if (value.isNotEmpty) {
       _debounce = Timer(const Duration(milliseconds: 300), search);
     }
   }
 
   void clearList() {
+    _globalApi?.cancelPending();
+    pendingSections.clear();
     cloudHits.clear();
     _globalCursor = '';
     searchError.value = null;
@@ -168,6 +180,7 @@ class GlobalSearchLogic extends GetxController {
     clearList();
     loading.value = key.isNotEmpty;
     if (key.isEmpty) return;
+    pendingSections.addAll([1, 2, 3, 4]);
     if (_cloudFactory != null) {
       _searchAccount = OpenIM.iMManager.userID;
       _searchToken = OpenIM.iMManager.token;
@@ -185,6 +198,8 @@ class GlobalSearchLogic extends GetxController {
         if (applicable()) output.assignAll(results);
       } catch (_) {
         if (applicable()) failures.add(id);
+      } finally {
+        if (active()) pendingSections.remove(id);
       }
     }
 
@@ -195,7 +210,9 @@ class GlobalSearchLogic extends GetxController {
       if (_globalApi == null)
         section(4, () => source.messages(key, false), textSearchResultItems)
       else
-        _loadGlobal(),
+        _loadGlobal().whenComplete(() {
+          if (active()) pendingSections.remove(4);
+        }),
     ]);
     if (active()) loading.value = false;
     if (active() && _globalApi == null) await loadMoreCloud();
@@ -292,6 +309,7 @@ class GlobalSearchLogic extends GetxController {
   @override
   void onClose() {
     _closed = true;
+    _globalApi?.cancelPending();
     _conversationTimer?.cancel();
     _latestConversations = null;
     ++_generation;

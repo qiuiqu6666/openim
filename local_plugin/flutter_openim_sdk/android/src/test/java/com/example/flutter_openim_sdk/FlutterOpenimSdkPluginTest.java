@@ -77,6 +77,6 @@ public class FlutterOpenimSdkPluginTest {
     plugin.parse(new MethodCall("missingMethod",
         Collections.singletonMap("ManagerName", "missingManager")), result);
     verify(result).error("native_dispatch_error",
-        "OpenIM native method dispatch failed: missingMethod", null);
+        "Chat native method dispatch failed: missingMethod", null);
   }
 }

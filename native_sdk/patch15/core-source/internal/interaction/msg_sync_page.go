@@ -2,7 +2,9 @@ package interaction
 
 import (
 	"context"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
 	"sync/atomic"
+	"time"
 )
 
 type messagePageContextKey struct{}
@@ -35,6 +37,8 @@ func yieldMessageSyncPage(ctx context.Context) error {
 	if !ok {
 		return ctx.Err()
 	}
+	started := time.Now()
+	defer func() { common.RecordSyncMetric(ctx, "sync_page_queue_wait", 1, time.Since(started)) }()
 	resume := make(chan struct{})
 	select {
 	case owner.turns <- resume:

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/openimsdk/openim-sdk-core/v3/pkg/logpolicy"
 	"io"
 	"runtime"
 	"runtime/debug"
@@ -489,7 +490,9 @@ func (c *LongConnMgr) heartbeat(ctx context.Context) {
 			log.ZInfo(ctx, "heartbeat done sdk logout.....")
 			return
 		case <-ticker.C:
-			log.ZInfo(ctx, "sendPingMessage", "goroutine ID:", getGoroutineID())
+			if logpolicy.Enabled() {
+				log.ZInfo(ctx, "sendPingMessage", "goroutine ID:", getGoroutineID())
+			}
 			c.sendPingMessage(ctx)
 		}
 	}
@@ -660,7 +663,9 @@ func (c *LongConnMgr) writeBinaryMsg(req GeneralWsReq) error {
 func (c *LongConnMgr) writeSubInfo(subscribeUserID, unsubscribeUserID []string, lock bool) error {
 	opID := utils.OperationIDGenerator()
 	sCtx := ccontext.WithOperationID(c.ctx, opID)
-	log.ZInfo(sCtx, "writeSubInfo start", "goroutine ID:", getGoroutineID())
+	if logpolicy.Enabled() {
+		log.ZInfo(sCtx, "writeSubInfo start", "goroutine ID:", getGoroutineID())
+	}
 	subReq := sdkws.SubUserOnlineStatus{
 		SubscribeUserID:   subscribeUserID,
 		UnsubscribeUserID: unsubscribeUserID,
@@ -740,8 +745,12 @@ func (c *LongConnMgr) handleMessage(message []byte) error {
 		return sdkerrs.ErrMsgDecodeBinaryWs
 	}
 	ctx := context.WithValue(c.ctx, "operationID", wsResp.OperationID)
-	log.ZInfo(ctx, "recv msg", "errCode", wsResp.ErrCode, "errMsg", wsResp.ErrMsg,
-		"reqIdentifier", wsResp.ReqIdentifier)
+	if wsResp.ErrCode != 0 {
+		log.ZWarn(ctx, "recv msg error", nil, "errCode", wsResp.ErrCode, "errMsg", wsResp.ErrMsg, "reqIdentifier", wsResp.ReqIdentifier)
+	} else if logpolicy.Enabled() {
+		log.ZInfo(ctx, "recv msg", "errCode", wsResp.ErrCode, "errMsg", wsResp.ErrMsg,
+			"reqIdentifier", wsResp.ReqIdentifier)
+	}
 	switch wsResp.ReqIdentifier {
 	case constant.PushMsg:
 		if err = c.doPushMsg(ctx, wsResp); err != nil {

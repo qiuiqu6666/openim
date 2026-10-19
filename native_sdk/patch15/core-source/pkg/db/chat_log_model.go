@@ -37,11 +37,27 @@ import (
 )
 
 func (d *DataBase) initChatLog(ctx context.Context, conversationID string) error {
+	return d.initChatLogs(ctx, []string{conversationID})
+}
+
+// Publish table-cache entries only after the entire schema transaction commits.
+// A failed index creation must leave neither a partial table nor a cached success.
+func (d *DataBase) initChatLogs(ctx context.Context, ids []string) error {
 	d.mRWMutex.Lock()
 	defer d.mRWMutex.Unlock()
-	tableName := utils.GetTableName(conversationID)
-	if !d.tableChecker.HasTable(tableName) {
-		createTableSQL := fmt.Sprintf(`
+	missing := make(map[string]string)
+	for _, id := range ids {
+		table := utils.GetTableName(id)
+		if !d.tableChecker.HasTable(table) {
+			missing[id] = table
+		}
+	}
+	if len(missing) == 0 {
+		return ctx.Err()
+	}
+	if err := d.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for conversationID, tableName := range missing {
+			createTableSQL := fmt.Sprintf(`
             CREATE TABLE "%s" (
                 client_msg_id CHAR(64),
                 server_msg_id CHAR(64),
@@ -68,18 +84,24 @@ func (d *DataBase) initChatLog(ctx context.Context, conversationID string) error
                 PRIMARY KEY (client_msg_id)
             );`, tableName)
 
-		if result := d.conn.Exec(createTableSQL); result.Error != nil {
-			return errs.WrapMsg(result.Error, "Create table failed", "table", tableName)
+			if result := tx.Exec(createTableSQL); result.Error != nil {
+				return errs.WrapMsg(result.Error, "Create table failed", "table", tableName)
+			}
+			result := tx.Exec(fmt.Sprintf("CREATE INDEX `%s` ON `%s` (seq)", "index_seq_"+conversationID, tableName))
+			if result.Error != nil {
+				return errs.WrapMsg(result.Error, "Create index_seq failed", "table", tableName, "index", "index_seq_"+conversationID)
+			}
+			result = tx.Exec(fmt.Sprintf("CREATE INDEX `%s` ON `%s` (send_time)", "index_send_time_"+conversationID, tableName))
+			if result.Error != nil {
+				return errs.WrapMsg(result.Error, "Create index_send_time failed", "table", tableName, "index", "index_send_time_"+conversationID)
+			}
 		}
-		result := d.conn.Exec(fmt.Sprintf("CREATE INDEX `%s` ON `%s` (seq)", "index_seq_"+conversationID, tableName))
-		if result.Error != nil {
-			return errs.WrapMsg(result.Error, "Create index_seq failed", "table", tableName, "index", "index_seq_"+conversationID)
-		}
-		result = d.conn.Exec(fmt.Sprintf("CREATE INDEX `%s` ON `%s` (send_time)", "index_send_time_"+conversationID, tableName))
-		if result.Error != nil {
-			return errs.WrapMsg(result.Error, "Create index_send_time failed", "table", tableName, "index", "index_send_time_"+conversationID)
-		}
-		d.tableChecker.UpdateTable(tableName)
+		return nil
+	}); err != nil {
+		return err
+	}
+	for _, table := range missing {
+		d.tableChecker.UpdateTable(table)
 	}
 	return nil
 }

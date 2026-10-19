@@ -5,6 +5,7 @@ import '../../../../routes/app_navigator.dart';
 import '../../../../services/favorite_send_coordinator.dart';
 import '../../../contacts/select_contacts/select_contacts_logic.dart';
 import '../chat_delivery_controller.dart';
+import 'forward_success_feedback.dart';
 
 typedef ForwardContactPicker = Future<dynamic> Function(String description);
 typedef ContactCardPicker = Future<dynamic> Function({
@@ -39,6 +40,7 @@ class ChatForwardingController {
     ForwardMessageBuilder? createForward,
     MergedMessageBuilder? createMerger,
     void Function(String)? showToast,
+    void Function()? showSuccess,
     this.onForwardNeedsReview,
   })  : _delivery = delivery,
         _messages = messages,
@@ -72,7 +74,8 @@ class ChatForwardingController {
                     messageList: messageList,
                     title: title,
                     summaryList: summaryList)),
-        _showToast = showToast ?? ((text) => IMViews.showToast(text));
+        _showToast = showToast ?? ((text) => IMViews.showToast(text)),
+        _showSuccess = showSuccess ?? ForwardSuccessFeedback.show;
 
   final ChatDeliveryController _delivery;
   final List<Message> Function() _messages;
@@ -84,6 +87,7 @@ class ChatForwardingController {
   final ForwardMessageBuilder _createForward;
   final MergedMessageBuilder _createMerger;
   final void Function(String) _showToast;
+  final void Function() _showSuccess;
   final bool Function(Message) canForward;
   final void Function() closeToolbox;
   final void Function()? onForwardNeedsReview;
@@ -288,6 +292,7 @@ class ChatForwardingController {
           }
         }
       }
+      _showSuccess();
       return true;
     } catch (error) {
       return fail(hint: error.toString());

@@ -51,28 +51,48 @@ class AiAssistantStreamTile extends StatelessWidget {
               showReadStatus: false,
               showStatus: false,
               leftAvatar: const AiAssistantAvatar(size: AiMetrics.dimension44),
-              child: reply.waiting
-                  ? Semantics(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (reply.timedOut)
+                    Semantics(
                       liveRegion: true,
-                      child: AiThinkingCard(
-                        dark: dark,
-                        i18n: i18n,
-                        label: i18n.t(
-                          zhHans: '正在回复…',
-                          zhHant: '正在回覆…',
-                          en: 'Replying…',
-                          ja: '返信中…',
-                          ko: '답변 중…',
-                        ),
-                      ),
-                    )
-                  : AiAssistantMarkdown(
-                      dark: dark,
-                      text: reply.text,
-                      query: query,
-                      fileCache: const {},
-                      onNeedFile: (_) {},
+                      child: Text(
+                          i18n.t(
+                            zhHans: '回复等待较久，你可以继续提问。收到回复后会自动更新。',
+                            zhHant: '回覆等候較久，你可以繼續提問。收到回覆後會自動更新。',
+                            en: 'The reply is taking longer than expected. You can keep chatting; any reply will appear when it arrives.',
+                          ),
+                          style: TextStyle(
+                              color: AiPalette.secondary(dark),
+                              fontSize: AiMetrics.font13)),
                     ),
+                  if (!reply.timedOut || reply.text.isNotEmpty)
+                    reply.waiting
+                        ? Semantics(
+                            liveRegion: true,
+                            child: AiThinkingCard(
+                              dark: dark,
+                              i18n: i18n,
+                              label: i18n.t(
+                                zhHans: '正在回复…',
+                                zhHant: '正在回覆…',
+                                en: 'Replying…',
+                                ja: '返信中…',
+                                ko: '답변 중…',
+                              ),
+                            ),
+                          )
+                        : AiAssistantMarkdown(
+                            dark: dark,
+                            text: reply.text,
+                            query: query,
+                            fileCache: const {},
+                            onNeedFile: (_) {},
+                          ),
+                ],
+              ),
             ),
           );
         },

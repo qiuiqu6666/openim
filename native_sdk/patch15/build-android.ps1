@@ -41,8 +41,10 @@ try {
         Invoke-Checked $goCommand @('install',"golang.org/x/mobile/cmd/gomobile@$mobile")
         Invoke-Checked $goCommand @('install',"golang.org/x/mobile/cmd/gobind@$mobile")
         $env:CGO_ENABLED = '0'
-        Invoke-Checked $goCommand @('test','./pkg/common','./pkg/network','./pkg/syncer','./internal/group','./internal/interaction','./internal/conversation_msg','./internal/relation','-count=1','-timeout=120s')
+        Invoke-Checked $goCommand @('test','./pkg/logpolicy','./pkg/cache','./internal/user','./open_im_sdk','./pkg/common','./pkg/network','./pkg/syncer','./internal/group','./internal/interaction','./internal/conversation_msg','./internal/relation','-count=1','-timeout=120s')
         Invoke-Checked $goCommand @('test','./internal/third/file','-run','^(TestUploadDeadline|TestUploadHash)','-count=1','-timeout=30s')
+        Invoke-Checked $goCommand @('test','github.com/openimsdk/tools/log','-run','TestDiagnosticBranding','-count=1')
+        Invoke-Checked $goCommand @('test','./internal/third','-run','TestBrandedLogPaths','-count=1')
         $env:CGO_ENABLED = '1'
         # gomobile init installs gobind@latest. Only its cache directory is needed.
         $goPath = & $goCommand env GOPATH

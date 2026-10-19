@@ -54,7 +54,7 @@ public class CommonUtil {
             if (null != errMsg) {
                 res.put("errMsg", errMsg);
             }
-            Log.i("F-OpenIMSDK(native call flutter)", "thread: " + threadName + " { method:" + method + ",  type:" + type + " }");
+            io.openim.flutter_openim_sdk.util.DiagnosticLog.detail("ChatSDK(native call flutter)", "thread: " + threadName + " { method:" + method + ",  type:" + type + " }");
             io.openim.flutter_openim_sdk.runtime.NativeIMRuntime.get().emit(method, res, generation);
         });
     }

@@ -6,7 +6,7 @@ import '../unread/conversation_unread_count.dart';
 
 /// Share one projection between the two feeds and their navigation badges.
 class ConversationFeedSnapshotCache {
-  ConversationFeedSnapshotCache(this.rows, this.states) {
+  ConversationFeedSnapshotCache(this.rows, this.states, {this.order}) {
     _workers = [
       ever(rows, (_) => _dirty = true),
       ever(states, (_) => _dirty = true),
@@ -14,6 +14,7 @@ class ConversationFeedSnapshotCache {
   }
   final RxList<ConversationInfo> rows;
   final RxMap<String, ChatConversationState> states;
+  final List<ConversationInfo> Function(Iterable<ConversationInfo>)? order;
   late final List<Worker> _workers;
   bool _dirty = true;
   ConversationFeedSnapshot? _snapshot;
@@ -23,7 +24,7 @@ class ConversationFeedSnapshotCache {
     rows.length;
     states.length;
     if (_dirty || _snapshot == null) {
-      _snapshot = ConversationFeedSnapshot(rows, states);
+      _snapshot = ConversationFeedSnapshot(order?.call(rows) ?? rows, states);
       _dirty = false;
     }
     return _snapshot!;

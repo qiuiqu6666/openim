@@ -1,3 +1,4 @@
+import 'diagnostics/diagnostic_logging_page.dart';
 import 'widgets/platform_update.dart';
 import 'dart:io';
 import 'update/android/android_update_runtime.dart';
@@ -231,6 +232,12 @@ class _SettingsHomePageState extends State<SettingsHomePage> {
                   FeedbackPage(service: widget.service),
                 ),
               ),
+            SettingsCell(
+              title: settingsText(context, zh: '日志诊断', en: 'Log Diagnostics'),
+              onTap: () => openSettingsPage(
+                  context, const DiagnosticLoggingPage(),
+                  activityPage: 'log_diagnostics'),
+            ),
             SettingsCell(
               title: settingsText(context, zh: '当前版本', en: 'Version'),
               value: _displayVersion.isEmpty

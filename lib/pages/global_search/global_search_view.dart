@@ -9,13 +9,11 @@ import '../conversation/summary/conversation_latest_message_text.dart';
 import '../chat/chat_setup/chat_history_search_page.dart';
 import 'global_search_logic.dart';
 import '../chat/history_search/cloud/chat_keyword_search_api.dart';
-import '../chat/history_search/navigation/chat_history_message_navigation.dart';
 import '../chat/history_search/context/search_context_strings.dart';
 import '../chat/history_search/chat_history_search_strings.dart';
 import 'widgets/global_search_conversation_subtitle.dart';
 import 'widgets/global_search_contact_account.dart';
 import 'widgets/global_search_result_tokens.dart';
-import 'loading/global_search_skeleton.dart';
 import '../official_account/widgets/official_account_name_label.dart';
 import '../group_features/identity/group_name_label.dart';
 
@@ -31,7 +29,6 @@ class GlobalSearchPage extends StatelessWidget {
   final VoidCallback? onCancel;
   final Widget? searchBar;
   final bool autofocus;
-  late final _messageNavigation = ChatHistoryMessageNavigation();
   List<String> get tabs => [
         StrRes.globalSearchContacts,
         StrRes.groupChat,
@@ -49,9 +46,6 @@ class GlobalSearchPage extends StatelessWidget {
                 child: Column(children: [
               _searchHeader(context),
               Expanded(child: Obx(() {
-                if (logic.query.value.isNotEmpty && logic.loading.value) {
-                  return const GlobalSearchSkeleton();
-                }
                 final groupMessages = <String, ConversationInfo>{
                   for (final item in logic.source.currentConversations)
                     if (item.isGroupChat && item.groupID != null)
@@ -166,22 +160,21 @@ class GlobalSearchPage extends StatelessWidget {
                                     : null))
                         .toList());
                 section(4, [
-                  ...logic.cloudHits
-                      .map((message) => _cloudMessage(context, message)),
+                  ...logic.cloudConversationHits.map(_cloudConversation),
                   ...logic.textSearchResultItems
                       .map((item) => _messages(item, false))
                 ]);
                 if (logic.query.value.isNotEmpty &&
                     !logic.failures.contains(4) &&
-                    (logic.cloudLoading.value || logic.cloudHasMore.value)) {
+                    (!logic.cloudLoading.value &&
+                        !logic.pendingSections.contains(4) &&
+                        logic.cloudHasMore.value)) {
                   rows.add(Padding(
                     padding: const EdgeInsets.all(AppTokens.s4),
-                    child: logic.cloudLoading.value
-                        ? const Center(child: CircularProgressIndicator())
-                        : TextButton(
-                            key: const ValueKey('global-history-cloud-more'),
-                            onPressed: logic.loadMoreCloud,
-                            child: Text('chatSearchMore'.tr)),
+                    child: TextButton(
+                        key: const ValueKey('global-history-cloud-more'),
+                        onPressed: logic.loadMoreCloud,
+                        child: Text('chatSearchMore'.tr)),
                   ));
                 }
                 if (logic.query.value.isNotEmpty &&
@@ -243,9 +236,24 @@ class GlobalSearchPage extends StatelessWidget {
               },
             ),
         const SizedBox(height: AppTokens.s2),
-        Obx(() => logic.query.value.isEmpty
-            ? const SizedBox.shrink()
-            : _divider(context)),
+        Obx(() {
+          if (logic.query.value.isEmpty) return const SizedBox.shrink();
+          final busy = logic.loading.value ||
+              logic.cloudLoading.value ||
+              logic.pendingSections.isNotEmpty;
+          return SizedBox(
+            height: AppTokens.s2,
+            child: busy
+                ? LinearProgressIndicator(
+                    key: const ValueKey('global-search-progress'),
+                    color: AppTokens.accent,
+                    backgroundColor: AppTokens.border(
+                        dark: Theme.of(context).brightness == Brightness.dark),
+                    semanticsLabel: 'profileCommonGroupsLoading'.tr,
+                  )
+                : Center(child: _divider(context)),
+          );
+        }),
       ]),
     );
   }
@@ -411,7 +419,7 @@ class GlobalSearchPage extends StatelessWidget {
     }, sentAt: message?.sendTime);
   }
 
-  Widget _cloudMessage(BuildContext context, CloudKeywordMessage message) {
+  Widget _cloudConversation(CloudKeywordMessage message) {
     final matches = logic.source.currentConversations
         .where((c) => c.conversationID == message.conversationID);
     final conversation = matches.isEmpty ? null : matches.first;
@@ -420,10 +428,11 @@ class GlobalSearchPage extends StatelessWidget {
         message.summary,
         conversation?.faceURL,
         conversation?.isGroupChat ?? message.conversationID.startsWith('sg_'),
-        () => _messageNavigation.open(context,
+        () => Get.to(() => ChatHistorySearchPage(
             conversationID: message.conversationID,
-            message: message,
-            isEntryCurrent: () => logic.cloudHits.contains(message)),
+            isGroup: conversation?.isGroupChat ??
+                message.conversationID.startsWith('sg_'),
+            initialQuery: logic.query.value)),
         sentAt: message.sendTime);
   }
 }

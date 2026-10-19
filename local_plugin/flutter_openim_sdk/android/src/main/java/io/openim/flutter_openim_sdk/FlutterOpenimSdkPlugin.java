@@ -113,11 +113,11 @@ public class FlutterOpenimSdkPlugin implements FlutterPlugin, MethodCallHandler,
             String managerName = call.argument("ManagerName");
             Field field = FlutterOpenimSdkPlugin.class.getDeclaredField(managerName);
             Method method = field.get(new Object()).getClass().getDeclaredMethod(call.method, MethodCall.class, Result.class);
-            Log.i("F-OpenIMSDK(flutter call native)", "{ class:" + managerName + ",  method:" + method.getName() + " }");
+            io.openim.flutter_openim_sdk.util.DiagnosticLog.detail("ChatSDK(flutter call native)", "{ class:" + managerName + ",  method:" + method.getName() + " }");
             method.invoke(field.get(new Object()), call, result);
         } catch (Exception e) {
-            e.printStackTrace();
-            result.error("native_dispatch_error", "OpenIM native method dispatch failed: " + call.method, null);
+            io.openim.flutter_openim_sdk.util.DiagnosticLog.error(android.util.Log.getStackTraceString(e));
+            result.error("native_dispatch_error", "Chat native method dispatch failed: " + call.method, null);
         }
     }
 }

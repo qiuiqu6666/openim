@@ -1,11 +1,13 @@
 import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
 import '../settings_service.dart';
 import '../feedback/feedback_submission.dart';
+import '../feedback/upload_failure_report.dart';
 import '../feedback/widgets/feedback_attachment_preview.dart';
 import '../widgets/settings_widgets.dart';
 import '../../../customer_service/customer_service.dart';
@@ -43,6 +45,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
   int? _submittedFingerprint;
   String? _feedbackID;
   bool _logFailed = false;
+  String? _logFailureReport;
   bool _uploadingLogs = false;
   Future<void> _uploadLogs() async {
     if (_uploadingLogs || _feedbackID == null || _clientRequestID == null) {
@@ -51,10 +54,18 @@ class _FeedbackPageState extends State<FeedbackPage> {
     setState(() => _uploadingLogs = true);
     try {
       await widget.service.uploadFeedbackLogs(_feedbackID!, _clientRequestID!);
-      if (mounted) setState(() => _logFailed = false);
-    } catch (_) {
       if (mounted) {
-        setState(() => _logFailed = true);
+        setState(() {
+          _logFailed = false;
+          _logFailureReport = null;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _logFailed = true;
+          _logFailureReport = error is UploadFailureReport ? error.text : null;
+        });
         showSettingsMessage(
             context,
             settingsText(context,
@@ -233,6 +244,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
                     .pop(widget.submission != null ? true : null),
                 isComplaint: widget.submission != null,
                 logFailed: _logFailed,
+                logFailureReport: _logFailureReport,
                 uploadingLogs: _uploadingLogs,
                 retryLogs: _uploadLogs,
               )
@@ -1176,10 +1188,12 @@ class _FeedbackSuccessView extends StatelessWidget {
       {super.key,
       required this.onDone,
       this.logFailed = false,
+      this.logFailureReport,
       this.isComplaint = false,
       this.uploadingLogs = false,
       required this.retryLogs});
   final bool logFailed;
+  final String? logFailureReport;
   final bool isComplaint;
   final bool uploadingLogs;
   final VoidCallback retryLogs;
@@ -1256,6 +1270,26 @@ class _FeedbackSuccessView extends StatelessWidget {
                             height: 1.6,
                           ),
                         ),
+                        if (logFailed && logFailureReport != null)
+                          TextButton.icon(
+                            style: TextButton.styleFrom(
+                                minimumSize: const Size(48, 48)),
+                            onPressed: () async {
+                              await Clipboard.setData(
+                                  ClipboardData(text: logFailureReport!));
+                              if (context.mounted) {
+                                showSettingsMessage(
+                                    context,
+                                    settingsText(context,
+                                        zh: '错误信息已复制，可粘贴给客服',
+                                        en: 'Error details copied. You can share them with support.'));
+                              }
+                            },
+                            icon: const Icon(Icons.copy_rounded),
+                            label: Text(settingsText(context,
+                                zh: '复制上传错误信息',
+                                en: 'Copy upload error details')),
+                          ),
                         if (logFailed)
                           TextButton.icon(
                               onPressed: uploadingLogs ? null : retryLogs,

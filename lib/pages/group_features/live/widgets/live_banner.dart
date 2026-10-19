@@ -8,10 +8,12 @@ class GroupLiveBanner extends StatelessWidget {
       {super.key,
       required this.session,
       required this.onWatch,
-      this.anchorFaceURL = ''});
+      this.anchorFaceURL = '',
+      this.avatarLoading = false});
   final LiveSession session;
   final VoidCallback onWatch;
   final String anchorFaceURL;
+  final bool avatarLoading;
   @override
   Widget build(BuildContext context) => Material(
       color: LiveStyle.dark(context)
@@ -95,11 +97,15 @@ class GroupLiveBanner extends StatelessWidget {
                                                 color: const Color(0xFFFFD6E4),
                                                 width: 1.5)),
                                         child: ClipOval(
-                                            child: AvatarView(
-                                                width: 37,
-                                                height: 37,
-                                                url: anchorFaceURL,
-                                                text: session.anchorID))),
+                                            child: avatarLoading &&
+                                                    anchorFaceURL.isEmpty
+                                                ? const SizedBox.expand()
+                                                : AvatarView(
+                                                    showLoadingAvatar: false,
+                                                    width: 37,
+                                                    height: 37,
+                                                    url: anchorFaceURL,
+                                                    text: session.anchorID))),
                                     Positioned(
                                         right: 0,
                                         bottom: 2,

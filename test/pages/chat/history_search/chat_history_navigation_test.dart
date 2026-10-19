@@ -21,6 +21,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _NavigationProbe extends ChatHistoryMessageNavigation {
   final calls = <({String conversationID, Message message})>[];
+  Completer<bool>? pending;
 
   @override
   Future<bool> open(BuildContext context,
@@ -29,7 +30,7 @@ class _NavigationProbe extends ChatHistoryMessageNavigation {
       required bool Function() isEntryCurrent}) async {
     expect(isEntryCurrent(), isTrue);
     calls.add((conversationID: conversationID, message: message));
-    return true;
+    return pending == null ? true : await pending!.future;
   }
 }
 
@@ -589,6 +590,52 @@ void main() {
       await disposePage(tester);
     });
   }
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+        '${brightness.name}: tapping result shows progress on next frame',
+        (tester) async {
+      source.messages = [_textMessage()];
+      messageNavigation.pending = Completer<bool>();
+      await mount(tester, brightness: brightness, initialQuery: 'matching');
+      final row =
+          find.byKey(const ValueKey('chat-history-result-matching-message'));
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await tester.tap(row);
+      await tester.pump();
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(
+          tester
+              .widget<LinearProgressIndicator>(
+                  find.byType(LinearProgressIndicator))
+              .semanticsLabel,
+          'chatHistoryLoading'.tr);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.tap(row);
+      expect(messageNavigation.calls, hasLength(1));
+      messageNavigation.pending!.complete(false);
+      await tester.pumpAndSettle();
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      expect(messageNavigation.calls, hasLength(2));
+      await disposePage(tester);
+    });
+  }
+
+  testWidgets('pending message navigation can finish after page disposal',
+      (tester) async {
+    source.messages = [_textMessage()];
+    messageNavigation.pending = Completer<bool>();
+    await mount(tester, initialQuery: 'matching');
+    await tester.tap(
+        find.byKey(const ValueKey('chat-history-result-matching-message')));
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    messageNavigation.pending!.complete(false);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('keyword result requests its original message in the same chat',
       (tester) async {

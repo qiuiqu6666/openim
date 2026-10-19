@@ -6,11 +6,17 @@ import 'package:openim_common/openim_common.dart';
 
 import '../../localization/ai_assistant_i18n.dart';
 import '../../theme/ai_palette.dart';
+import '../../protocol/ai_image_turn.dart';
+import 'ai_image_turn_message.dart';
 
 /// Shared, passive presentation of assistant tool messages.
 CustomTypeInfo? buildAiOpenIMCustomMessage(
     BuildContext context, Message message) {
   final custom = message.customElem;
+  if (custom?.description == AiImageTurn.description) {
+    final turn = AiImageTurn.parse(custom?.data);
+    return turn == null ? null : CustomTypeInfo(AiImageTurnMessage(turn: turn));
+  }
   if (custom == null || !['image', 'groupCard'].contains(custom.description)) {
     return null;
   }
