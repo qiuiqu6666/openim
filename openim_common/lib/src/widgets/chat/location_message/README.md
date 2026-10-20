@@ -43,7 +43,7 @@ lighting, translucent tint), initializes the existing renderer and uses bounded
 implicit press scaling. High contrast and reduced motion retain the existing
 accessible fallback. Map thumbnails and the picker retain their original pin.
 
-Directions offer installed Apple/Google/AMap/Baidu apps and a browser fallback.
+Directions show installed Apple/Google/AMap/Baidu apps with their branded icons in a dismissible glass bottom sheet. A browser fallback appears when no supported map app is detected.
 The destination and shared URL always use the message's WGS84 coordinate; AMap
 receives `dev=1`, Baidu receives `coord_type=wgs84`. The public platform interface
 is awaited because map_launcher 4.4.2's convenience wrapper drops launch errors.
