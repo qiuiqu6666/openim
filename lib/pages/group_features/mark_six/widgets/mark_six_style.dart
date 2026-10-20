@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat lottery_theme.dart / agent_rebate_summary_card.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'package:flutter/material.dart';
@@ -88,7 +89,7 @@ class MarkSixEmpty extends StatelessWidget {
                 style: TextStyle(color: MarkSixStyle.of(context).secondary)),
             if (onRetry != null) ...[
               SizedBox(height: compact ? 8 : 16),
-              FilledButton(onPressed: onRetry, child: const Text('重试')),
+              FilledButton(onPressed: onRetry, child: Text(AppCopy.text('重试'))),
             ],
           ])));
 }

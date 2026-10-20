@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:io';
 import 'package:extended_image/extended_image.dart';
 
@@ -38,7 +39,7 @@ class MediaGridThumbnail extends StatelessWidget {
                       size: 28),
                   if (failed) ...[
                     const SizedBox(height: 6),
-                    Text(zh ? '缩略图不可用' : 'Preview unavailable',
+                    Text(zh ? AppCopy.text('缩略图不可用') : 'Preview unavailable',
                         style: TextStyle(
                             color: AppTokens.textSecondary(dark: dark),
                             fontSize: 11)),

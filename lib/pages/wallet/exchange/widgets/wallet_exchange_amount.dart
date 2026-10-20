@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/wallet_fund_api.dart';
@@ -81,12 +82,12 @@ class _WalletExchangeAmountState extends State<WalletExchangeAmount> {
         final isZero = !RegExp('[1-9]').hasMatch(number);
         return Semantics(
           key: const ValueKey('wallet-swap-amount'),
-          label: '转出数量',
+          label: AppCopy.text('转出数量'),
           value: '$number ${widget.currency.displayName}',
           readOnly: widget.locked,
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('兑换数量',
+            Text(AppCopy.text('兑换数量'),
                 style:
                     theme.textTheme.bodySmall?.copyWith(color: colors.subText)),
             const SizedBox(height: AppTokens.s3),
@@ -142,7 +143,7 @@ class _WalletExchangeAmountState extends State<WalletExchangeAmount> {
                     ?.copyWith(fontWeight: FontWeight.w600, color: accent)),
             if (_showScrollHint) ...[
               const SizedBox(height: AppTokens.s2),
-              Text('左右滑动查看完整数量',
+              Text(AppCopy.text('左右滑动查看完整数量'),
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: colors.subText)),
             ],

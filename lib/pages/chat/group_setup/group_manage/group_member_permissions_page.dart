@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 import '../../../../core/controller/im_controller.dart';
@@ -306,7 +307,7 @@ class _GroupMemberPermissionsPageState
                 (widget.owner ||
                     (mutedList && member.roleLevel == GroupRoleLevel.member)))
               IconButton(
-                tooltip: mutedList ? '解除禁言' : '移除管理员',
+                tooltip: mutedList ? '解除禁言' : AppCopy.text('移除管理员'),
                 onPressed: busy == null
                     ? () => change(member, mutedList ? 0 : -1)
                     : null,
@@ -322,22 +323,27 @@ class _GroupMemberPermissionsPageState
         if (!mutedList)
           card(StrRes.groupOwner,
               [for (final member in owners) memberRow(member)]),
-        card('${mutedList ? '禁言成员' : '管理员'} (${admins.length})', [
-          if (widget.owner || mutedList)
-            InkWell(
-              onTap: busy == null ? addMember : null,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: Row(children: [
-                  Icon(Icons.add_circle_outline, color: Styles.c_0089FF),
-                  const SizedBox(width: 12),
-                  Text(mutedList ? '添加禁言成员' : '添加管理员',
-                      style: Styles.ts_0089FF_17sp),
-                ]),
-              ),
-            ),
-          for (final member in admins) memberRow(member, removable: true),
-        ]),
+        card(
+            '${mutedList ? AppCopy.text('禁言成员') : AppCopy.text('管理员')} (${admins.length})',
+            [
+              if (widget.owner || mutedList)
+                InkWell(
+                  onTap: busy == null ? addMember : null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Row(children: [
+                      Icon(Icons.add_circle_outline, color: Styles.c_0089FF),
+                      const SizedBox(width: 12),
+                      Text(
+                          mutedList
+                              ? AppCopy.text('添加禁言成员')
+                              : AppCopy.text('添加管理员'),
+                          style: Styles.ts_0089FF_17sp),
+                    ]),
+                  ),
+                ),
+              for (final member in admins) memberRow(member, removable: true),
+            ]),
         if (failed)
           TextButton(onPressed: load, child: Text('chatSearchRetry'.tr)),
       ],
@@ -372,7 +378,7 @@ class _GroupMemberPermissionsPageState
                       : mode == MemberPermissionMode.addMuted
                           ? 'sdkMute'
                           : mode == MemberPermissionMode.admins
-                              ? '设置管理员'
+                              ? AppCopy.text('设置管理员')
                               : 'sdkMutedList')
                   .tr,
               style: Styles.ts_0C1C33_17sp_semibold),
@@ -383,8 +389,9 @@ class _GroupMemberPermissionsPageState
                     _batchSubmitting || _selected.isEmpty || !widget.owner
                         ? null
                         : _submitAdmins,
-                child:
-                    Text(_batchSubmitting ? '设置中…' : '确定（${_selected.length}）'),
+                child: Text(_batchSubmitting
+                    ? AppCopy.text('设置中…')
+                    : AppCopy.format('确定（{#0}）', [_selected.length])),
               ),
           ],
         ),

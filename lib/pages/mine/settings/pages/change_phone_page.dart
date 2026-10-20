@@ -271,6 +271,7 @@ class _ChangePhonePageState extends State<ChangePhonePage>
               ),
               if (!smsExempt)
                 _CodeCell(
+                  key: const ValueKey('bind-phone-code'),
                   label:
                       settingsText(context, zh: '验证码', en: 'Verification Code'),
                   hint: settingsText(context,
@@ -343,6 +344,7 @@ class _ChangePhonePageState extends State<ChangePhonePage>
                   showArrow: false,
                 ),
                 _CodeCell(
+                  key: const ValueKey('change-phone-old-code'),
                   label: settingsText(context, zh: '旧号验证码', en: 'Current Code'),
                   hint: settingsText(context,
                       zh: '请输入验证码', en: 'Enter verification code'),
@@ -406,6 +408,7 @@ class _ChangePhonePageState extends State<ChangePhonePage>
                 ),
                 if (!smsExempt)
                   _CodeCell(
+                    key: const ValueKey('change-phone-new-code'),
                     label: settingsText(context,
                         zh: '新号验证码', en: 'New Number Code'),
                     hint: settingsText(context,
@@ -481,6 +484,7 @@ class _ChangePhonePageState extends State<ChangePhonePage>
 
 class _CodeCell extends StatelessWidget {
   const _CodeCell({
+    super.key,
     required this.label,
     required this.hint,
     required this.buttonText,
@@ -527,6 +531,7 @@ class _CodeCell extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: controller,
+                autofillHints: const [AutofillHints.oneTimeCode],
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,

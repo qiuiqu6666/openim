@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/core/user_activity/activity_sdk.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -42,27 +43,9 @@ class FriendSetupLogic extends GetxController {
     }
   }
 
-  void addBlacklist() async {
-    var confirm =
-        await Get.dialog(CustomDialog(title: StrRes.areYouSureAddBlacklist));
-    if (confirm == true) {
-      await OpenIM.iMManager.friendshipManager.addBlacklist(
-        userID: userProfilesLogic.userInfo.value.userID!,
-      );
-      userProfilesLogic.userInfo.update((val) {
-        val?.isBlacklist = true;
-      });
-    }
-  }
+  Future<void> addBlacklist() => userProfilesLogic.setBlacklist(true);
 
-  void removeBlacklist() async {
-    await OpenIM.iMManager.friendshipManager.removeBlacklist(
-      userID: userProfilesLogic.userInfo.value.userID!,
-    );
-    userProfilesLogic.userInfo.update((val) {
-      val?.isBlacklist = false;
-    });
-  }
+  Future<void> removeBlacklist() => userProfilesLogic.setBlacklist(false);
 
   Future<void> deleteFromFriendList() async {
     if (!_active || _deleting) return;
@@ -77,11 +60,6 @@ class FriendSetupLogic extends GetxController {
       if (confirm != true || !_active) return;
       await LoadingView.singleton.wrap(asyncFunction: () async {
         if (!_active) return;
-        final conversation = conversationLogic.list.firstWhereOrNull(
-                (info) => info.isSingleChat && info.userID == peer) ??
-            await OpenIM.iMManager.conversationManager.getOneConversation(
-                sourceID: peer, sessionType: ConversationType.single);
-        if (!_active) return;
         if (!_friendDeleted) {
           await observeUserActivity(
               'friend_delete',
@@ -91,17 +69,7 @@ class FriendSetupLogic extends GetxController {
           _friendDeleted = true;
           userProfilesLogic.userInfo.update((val) => val?.isFriendship = false);
         }
-        await conversationLogic.deleteConversation(conversation,
-            propagateError: true);
-        if (!_active) return;
-        if (Get.isRegistered<ChatLogic>(tag: GetTags.chat)) {
-          final chat = Get.find<ChatLogic>(tag: GetTags.chat);
-          if (!chat.isClosed &&
-              chat.conversationInfo.conversationID ==
-                  conversation.conversationID) {
-            chat.clearAllMessage();
-          }
-        }
+        await conversationLogic.hidePeerConversation(peer);
       });
       if (!_active) return;
       if (userProfilesLogic.offAllWhenDelFriend == true) {
@@ -113,11 +81,11 @@ class FriendSetupLogic extends GetxController {
       if (_active) {
         IMViews.showToast(_friendDeleted
             ? (Get.locale?.languageCode == 'en'
-                ? 'Friend deleted. Could not clear chat history. Please retry.'
-                : '好友已删除，聊天记录清理失败，请重试。')
+                ? 'Friend deleted. Could not remove the conversation. Please retry.'
+                : AppCopy.text('好友已删除，会话移除失败，请重试。'))
             : (Get.locale?.languageCode == 'en'
                 ? 'Could not delete friend. Please retry.'
-                : '删除好友失败，请重试。'));
+                : AppCopy.text('删除好友失败，请重试。')));
       }
     } finally {
       _deleting = false;
@@ -143,6 +111,7 @@ class FriendSetupLogic extends GetxController {
     if (null != result) {
       final customEx = result['customEx'];
       final checkedList = result['checkedList'];
+      var sentCount = 0;
       for (var info in checkedList) {
         if (!sendSession.current) return;
         final userID = IMUtils.convertCheckedToUserID(info);
@@ -177,10 +146,19 @@ class FriendSetupLogic extends GetxController {
             faceURL: userProfilesLogic.userInfo.value.faceURL,
           );
           if (!sendSession.current) return;
-          await ChatMessageSender().sendRaw(card, target);
+          final sent = await ChatMessageSender().sendRaw(card, target);
+          if (!sendSession.current ||
+              sent.status != MessageStatus.succeeded ||
+              sent.clientMsgID != card.clientMsgID) {
+            return;
+          }
+          sentCount++;
         } on MessageSendSessionChanged {
           return;
         }
+      }
+      if (sentCount > 0 && sendSession.current) {
+        IMViews.showToast(StrRes.sendSuccessfully, centered: true);
       }
     }
   }

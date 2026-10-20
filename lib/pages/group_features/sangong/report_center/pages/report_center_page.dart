@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim_common/openim_common.dart'
     show normalizePublicAccountSearch;
 import '../../services/account_identity/sangong_account_identity_resolver.dart';
@@ -161,13 +162,13 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
               initialSessionId: _sessionId))));
   void _openLedger(Map<String, dynamic> row) =>
       unawaited(SangongReportDetailPage.open(context,
-          title: '${reportUser(row)} · 账变',
+          title: AppCopy.format('{#0} · 账变', [reportUser(row)]),
           resource: 'ledger',
           listKey: 'entries',
           query: {..._batchQuery, 'imUserId': row['imUserId']}));
   void _openTeam(Map<String, dynamic> row) =>
       unawaited(SangongReportDetailPage.open(context,
-          title: '${reportUser(row)} · 团队',
+          title: AppCopy.format('{#0} · 团队', [reportUser(row)]),
           resource: 'team',
           listKey: 'members',
           query: {..._batchQuery, 'imUserId': row['imUserId']}));
@@ -178,9 +179,9 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
       return _summary.busy
           ? const Center(child: CircularProgressIndicator())
           : ListTile(
-              title: Text(_summary.error ?? '暂无报表'),
-              trailing:
-                  TextButton(onPressed: _refresh, child: const Text('重试')));
+              title: Text(AppCopy.text(_summary.error ?? '暂无报表')),
+              trailing: TextButton(
+                  onPressed: _refresh, child: Text(AppCopy.text('重试'))));
     }
     final s = data['summary'] as Map;
     final state = data['state'] is Map ? data['state'] as Map : const {};
@@ -189,7 +190,8 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
         state['settings'] is Map ? state['settings'] as Map : const {};
     return Column(children: [
       ReportBalanceCard(s['currentBalance'], users: s['userCount']),
-      const ReportSection('所选批次 · 经营结果', description: '仅统计有效结算，已冲正牌局不计入。'),
+      ReportSection(AppCopy.text('所选批次 · 经营结果'),
+          description: AppCopy.text('仅统计有效结算，已冲正牌局不计入。')),
       ReportMetrics({
         '已结算下注': s['totalBets'],
         '庄家净额': reportSigned(s['bankerNet']),
@@ -207,14 +209,15 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
         '当前团队负责人': s['teamCount'],
         '账变记录': s['ledgerCount'],
       }),
-      const ReportSection('现在正在进行',
-          icon: Icons.schedule_outlined, description: '当前局实时数据，不随历史批次切换。'),
+      ReportSection(AppCopy.text('现在正在进行'),
+          icon: Icons.schedule_outlined,
+          description: AppCopy.text('当前局实时数据，不随历史批次切换。')),
       ReportMetrics({
         '运行状态': reportPhase(state['status']),
         '当前有效下注': placed['grandTotal'],
       }),
       ExpansionTile(
-        title: const Text('查看当前游戏规则'),
+        title: Text(AppCopy.text('查看当前游戏规则')),
         children: [
           ReportMetrics({
             '门数': rules['doorCount'],
@@ -226,14 +229,15 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
           })
         ],
       ),
-      const ReportSection('积分为什么变化',
+      ReportSection(AppCopy.text('积分为什么变化'),
           icon: Icons.receipt_long_outlined,
-          description: '所选批次的账变合计。正数为增加，负数为减少。'),
+          description: AppCopy.text('所选批次的账变合计。正数为增加，负数为减少。')),
       ...(data['ledgerTypes'] as List? ?? []).whereType<Map>().map((row) =>
           ReportCard(
               child: ListTile(
                   title: Text(ledgerLabel(row['type'])),
-                  subtitle: Text('${row['count']} 笔 · 点击查看记录'),
+                  subtitle:
+                      Text(AppCopy.format('{#0} 笔 · 点击查看记录', [row['count']])),
                   trailing: Text(reportSigned(row['amount']),
                       style: Theme.of(context).textTheme.titleMedium),
                   onTap: () => unawaited(SangongReportDetailPage.open(context,
@@ -242,7 +246,7 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
                       listKey: 'entries',
                       query: {..._batchQuery, 'type': row['type']}))))),
       if ((data['ledgerTypes'] as List? ?? []).isEmpty)
-        const ReportNotice('所选批次暂无账变记录。'),
+        ReportNotice(AppCopy.text('所选批次暂无账变记录。')),
       if (_summary.error != null) ReportNotice(_summary.error!),
       const SizedBox(height: 20),
     ]);
@@ -262,20 +266,23 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
             style: Theme.of(context).textTheme.bodySmall),
         Text(
             team
-                ? '直属下级 ${reportValue(row['childrenCount'])} 人'
-                : '当前积分 ${reportValue(row['balance'])}',
+                ? AppCopy.format(
+                    '直属下级 {#0} 人', [reportValue(row['childrenCount'])])
+                : AppCopy.format('当前积分 {#0}', [reportValue(row['balance'])]),
             style: Theme.of(context).textTheme.titleSmall),
         Text(
             team
-                ? '点击展开负责人信息，或查看团队明细'
-                : '本批次游戏变动 ${reportSigned(row['profitLoss'])}',
+                ? AppCopy.text('点击展开负责人信息，或查看团队明细')
+                : AppCopy.format(
+                    '本批次游戏变动 {#0}', [reportSigned(row['profitLoss'])]),
             style: Theme.of(context).textTheme.bodySmall),
       ]),
       children: [
         Padding(
             padding: const EdgeInsets.all(12),
             child: SangongPublicAccount(userID: '${row['imUserId'] ?? ''}')),
-        const ReportNotice('当前积分为实时余额；批次最后积分为该批次最后一次账变后的余额。游戏变动包含下注扣款、退款及结算。'),
+        ReportNotice(
+            AppCopy.text('当前积分为实时余额；批次最后积分为该批次最后一次账变后的余额。游戏变动包含下注扣款、退款及结算。')),
         ReportMetrics({
           '批次最后积分': row['closingBalance'],
           '闲家流水': row['playerTurnover'],
@@ -289,12 +296,15 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
         }),
         Wrap(children: [
           TextButton(
-              onPressed: () => _openUser(row), child: const Text('用户详情')),
+              onPressed: () => _openUser(row),
+              child: Text(AppCopy.text('用户详情'))),
           TextButton(
-              onPressed: () => _openLedger(row), child: const Text('查看全部账变')),
+              onPressed: () => _openLedger(row),
+              child: Text(AppCopy.text('查看全部账变'))),
           TextButton(
               onPressed: () => _openTeam(row),
-              child: Text(team ? '查看团队明细' : '查看下级团队')),
+              child:
+                  Text(team ? AppCopy.text('查看团队明细') : AppCopy.text('查看下级团队'))),
         ])
       ],
     ));
@@ -305,7 +315,7 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
     if (list == null) {
       return _summary.error == null
           ? const Center(child: CircularProgressIndicator())
-          : Text(_summary.error!);
+          : Text(AppCopy.text(_summary.error!));
     }
     return Column(children: [
       if (_tab == 1 || _tab == 2)
@@ -314,12 +324,12 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
             child: TextField(
                 controller: _search,
                 decoration: InputDecoration(
-                    hintText: '输入昵称或完整公开账号',
+                    hintText: AppCopy.text('输入昵称或完整公开账号'),
                     prefixIcon: const Icon(Icons.person_search_outlined),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
                     suffixIcon: IconButton(
-                        tooltip: '搜索',
+                        tooltip: AppCopy.text('搜索'),
                         icon: const Icon(Icons.search),
                         onPressed: list.busy || _searching
                             ? null
@@ -338,10 +348,10 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
             padding: const EdgeInsets.all(16),
             child: DropdownButtonFormField<String>(
                 initialValue: _type,
-                decoration: const InputDecoration(labelText: '账变类型'),
+                decoration: InputDecoration(labelText: AppCopy.text('账变类型')),
                 items: ledgerKinds.entries
-                    .map((e) =>
-                        DropdownMenuItem(value: e.key, child: Text(e.value)))
+                    .map((e) => DropdownMenuItem(
+                        value: e.key, child: Text(AppCopy.text(e.value))))
                     .toList(),
                 onChanged: list.busy
                     ? null
@@ -352,7 +362,8 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
                           _makeList();
                         });
                       })),
-      if (_tab == 2) const ReportNotice('每张卡片是一位团队负责人。进入团队明细可查看下级成员及团队汇总。'),
+      if (_tab == 2)
+        ReportNotice(AppCopy.text('每张卡片是一位团队负责人。进入团队明细可查看下级成员及团队汇总。')),
       ...list.rows.map((row) {
         if (_tab == 1 || _tab == 2) return _userTile(row, team: _tab == 2);
         if (_tab == 3) return ReportLedgerTile(row);
@@ -360,11 +371,14 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
             child: ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.casino_outlined)),
                 title: Text('第${row['periodNo']}期'),
-                subtitle: Text(
-                    '${reportPhase(row['status'])} · 庄门 ${row['bankerDoor'] ?? '—'}\n${reportTime(row['settledAt'] ?? row['betWindowOpenAt'])}'),
+                subtitle: Text(AppCopy.format('{#0} · 庄门 {#1}\n{#2}', [
+                  reportPhase(row['status']),
+                  row['bankerDoor'] ?? '—',
+                  reportTime(row['settledAt'] ?? row['betWindowOpenAt'])
+                ])),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => unawaited(SangongReportDetailPage.open(context,
-                    title: '第${row['periodNo']}期明细',
+                    title: AppCopy.format('第{#0}期明细', [row['periodNo']]),
                     resource: 'management-round',
                     query: {'roundId': row['id']}))));
       }),
@@ -380,33 +394,34 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
             appBar: AppBar(
                 centerTitle: true,
                 leading: const AppBackButton(),
-                title: const Text('报表中心'),
+                title: Text(AppCopy.text('报表中心')),
                 actions: [
                   IconButton(
-                      tooltip: '刷新报表',
+                      tooltip: AppCopy.text('刷新报表'),
                       onPressed: _summary.busy ? null : _refresh,
                       icon: const Icon(Icons.refresh))
                 ]),
             body: !_summary.current
-                ? const Center(child: Text('当前群或管理权限已变化，请重新进入'))
+                ? Center(child: Text(AppCopy.text('当前群或管理权限已变化，请重新进入')))
                 : Column(children: [
                     Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('${_summary.data['hallName'] ?? '当前厅'}',
+                              Text(
+                                  '${_summary.data['hallName'] ?? AppCopy.text('当前厅')}',
                                   style:
                                       Theme.of(context).textTheme.titleMedium),
                               Text(
                                   _runtime.featureContext.groupName.isEmpty
-                                      ? '当前游戏群'
+                                      ? AppCopy.text('当前游戏群')
                                       : _runtime.featureContext.groupName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.bodySmall),
                               const SizedBox(height: 8),
-                              Text('查看范围',
+                              Text(AppCopy.text('查看范围'),
                                   style: Theme.of(context).textTheme.bodySmall),
                               DropdownButton<int>(
                                   isExpanded: true,
@@ -421,8 +436,9 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis))),
                                     if (_sessions.cursor > 0)
-                                      const DropdownMenuItem(
-                                          value: -1, child: Text('加载更早批次…'))
+                                      DropdownMenuItem(
+                                          value: -1,
+                                          child: Text(AppCopy.text('加载更早批次…')))
                                   ],
                                   onChanged: _summary.busy
                                       ? null
@@ -439,8 +455,9 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
                               if (_sessions.error != null)
                                 TextButton(
                                     onPressed: () => _sessions.load(),
-                                    child: Text(
-                                        '批次列表加载失败，点击重试：${_sessions.error}')),
+                                    child: Text(AppCopy.format(
+                                        '批次列表加载失败，点击重试：{#0}',
+                                        [_sessions.error]))),
                               Text(
                                   _summary.data['session'] is Map
                                       ? '批次 ${(_summary.data['session'] as Map)['batchNo']} · 更新 ${reportTime(_summary.data['asOf'])}'
@@ -456,11 +473,11 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 4),
                                     child: ChoiceChip(
-                                        label: Text(const [
-                                          '总览',
-                                          '用户',
-                                          '团队',
-                                          '账变',
+                                        label: Text([
+                                          AppCopy.text('总览'),
+                                          AppCopy.text('用户'),
+                                          AppCopy.text('团队'),
+                                          AppCopy.text('账变'),
                                           '牌局'
                                         ][index]),
                                         selected: _tab == index,
@@ -471,12 +488,12 @@ class _SangongReportCenterPageState extends State<SangongReportCenterPage> {
                         child: Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                                const [
-                                  '先看全群经营结果，再按需查询明细',
-                                  '点击用户展开积分、流水和上下分',
-                                  '查负责人、下级成员和团队汇总',
-                                  '逐笔核对积分增减，展开查看操作信息',
-                                  '点击牌局查看开奖和每位用户结算',
+                                [
+                                  AppCopy.text('先看全群经营结果，再按需查询明细'),
+                                  AppCopy.text('点击用户展开积分、流水和上下分'),
+                                  AppCopy.text('查负责人、下级成员和团队汇总'),
+                                  AppCopy.text('逐笔核对积分增减，展开查看操作信息'),
+                                  AppCopy.text('点击牌局查看开奖和每位用户结算'),
                                 ][_tab],
                                 style: Theme.of(context).textTheme.bodySmall))),
                     Expanded(

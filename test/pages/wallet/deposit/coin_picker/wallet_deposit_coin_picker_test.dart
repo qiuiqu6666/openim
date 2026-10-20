@@ -22,8 +22,8 @@ void main() {
       ),
     );
     await pumpWalletDepositCoins(tester, api: api);
-    expect(coinRow('TRX'), findsOneWidget);
-    expect(find.text('TRX'), findsOneWidget);
+    expect(coinRow('TRX'), findsNothing);
+    expect(find.text('TRX'), findsNothing);
     expect(coinKey('wallet-deposit-coin-all-TRX'), findsNothing);
     expect(coinRow('USDT'), findsNothing);
     expect(coinKey('wallet-deposit-coin-index-T'), findsNothing);
@@ -40,7 +40,7 @@ void main() {
     final api = WalletTestFundApi(address: depositAddressFixture(ready: false));
     await pumpWalletDepositCoins(tester, api: api);
     expect(coinRow('USDT'), findsOneWidget);
-    expect(coinRow('TRX'), findsOneWidget);
+    expect(coinRow('TRX'), findsNothing);
     expect(find.text(testDepositAddress), findsNothing);
     expect(coinKey('wallet-deposit-qr'), findsNothing);
     api.address = depositAddressFixture();
@@ -65,7 +65,7 @@ void main() {
       expect(coinKey('wallet-deposit-coin-index-T'), findsNothing);
     }
     await searchCoins(tester, ' tRoN ');
-    expect(coinRow('TRX', searching: true), findsOneWidget);
+    expect(coinRow('TRX', searching: true), findsNothing);
     expect(coinRow('USDT', searching: true), findsNothing);
     await searchCoins(tester, 'unsupported coin');
     expect(coinKey('wallet-deposit-coin-empty'), findsOneWidget);
@@ -79,7 +79,7 @@ void main() {
     expect(field.controller!.text, isEmpty);
     expect(field.focusNode!.hasFocus, isFalse);
     expect(coinRow('USDT'), findsOneWidget);
-    expect(coinRow('TRX'), findsOneWidget);
+    expect(coinRow('TRX'), findsNothing);
     expect(api.addressCalls, 1);
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -110,7 +110,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  for (final code in ['USDT', 'TRX']) {
+  for (final code in ['USDT']) {
     testWidgets(
         'select $code fetches an authenticated address and retains search on back',
         (tester) async {
@@ -170,11 +170,11 @@ void main() {
       status: 'ready',
       network: 'TRON',
       address: testDepositAddress,
-      currencies: const [FundCurrency.usdt],
+      currencies: const [FundCurrency.trx],
       confirmations: 19,
       usdtContract: testUsdtContract,
     );
-    await tester.tap(coinRow('TRX'));
+    await tester.tap(coinRow('USDT'));
     await tester.pumpAndSettle();
     expect(find.byType(WalletReceiveScreen), findsOneWidget);
     expect(find.text('该币种暂不支持充值，请返回重新选择'), findsOneWidget);
@@ -187,7 +187,7 @@ void main() {
       expect(coinKey(key), findsNothing);
     }
     expect(
-        tester.widget<Text>(coinKey('wallet-deposit-title-coin')).data, 'TRX');
+        tester.widget<Text>(coinKey('wallet-deposit-title-coin')).data, 'USDT');
     expect(api.addressCalls, 2);
     await tester.pumpWidget(const SizedBox.shrink());
   });

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import '../models/compensation_detail.dart';
 import 'compensation_tokens.dart';
@@ -15,7 +16,7 @@ class CompensationPoster extends StatelessWidget {
         child: Semantics(
           button: true,
           enabled: onTap != null,
-          label: '${detail.title}，查看活动详情',
+          label: AppCopy.format('{#0}，查看活动详情', [detail.title]),
           onTap: onTap,
           excludeSemantics: true,
           child: Material(

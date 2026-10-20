@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -121,7 +122,9 @@ class RegisterBgView extends StatelessWidget {
                                       const Spacer(),
                                       if (step != null && !centeredHeader)
                                         Text(
-                                            authText('步骤 $step / $totalSteps',
+                                            authText(
+                                                AppCopy.format('步骤 {#0} / {#1}',
+                                                    [step, totalSteps]),
                                                 'Step $step of $totalSteps'),
                                             style: AuthTokens.body(context)),
                                     ]),
@@ -186,7 +189,9 @@ class RegisterBgView extends StatelessWidget {
                                     if (centeredHeader && step != null) ...[
                                       const SizedBox(height: AppTokens.s4),
                                       Text(
-                                        authText('步骤 $step / $totalSteps',
+                                        authText(
+                                            AppCopy.format('步骤 {#0} / {#1}',
+                                                [step, totalSteps]),
                                             'Step $step of $totalSteps'),
                                         key: const ValueKey('auth-step'),
                                         textAlign: TextAlign.center,

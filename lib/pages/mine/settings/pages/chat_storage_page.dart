@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -543,7 +544,9 @@ class _ChatStoragePageState extends State<ChatStoragePage> {
                                           Expanded(
                                               child: Text(
                                                   settingsText(context,
-                                                      zh: '${items.length} 个项目',
+                                                      zh: AppCopy.format(
+                                                          '{#0} 个项目',
+                                                          [items.length]),
                                                       en:
                                                           '${items.length} items'),
                                                   style: TextStyle(

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -31,7 +32,7 @@ class MomentsPrivacyFriendListPage extends StatelessWidget {
     return kind == MomentsPrivacyListKind.blockedViewer
         ? settingsText(
             context,
-            zh: '不让他(她)看我的朋友圈 ($count)',
+            zh: AppCopy.format('不让他(她)看我的朋友圈 ({#0})', [count]),
             en: 'Hide My Posts From Others ($count)',
           )
         : settingsText(

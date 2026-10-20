@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Layout adapted from 99chat test_page.dart result table.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'package:flutter/material.dart';
@@ -13,10 +14,22 @@ class MarkSixHistoryTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = MarkSixStyle.of(context);
     final rows = draws.where((draw) => draw.drawn).take(100).toList();
-    if (rows.isEmpty) return const MarkSixEmpty(message: '暂无开奖记录');
+    if (rows.isEmpty) return MarkSixEmpty(message: AppCopy.text('暂无开奖记录'));
     return Column(children: [
-      _row(context,
-          const ['时间', '期号', '特', '单双', '大小', '头', '尾', '合', '五行', '波色'],
+      _row(
+          context,
+          [
+            AppCopy.text('时间'),
+            AppCopy.text('期号'),
+            '特',
+            AppCopy.text('单双'),
+            '大小',
+            AppCopy.text('头'),
+            '尾',
+            '合',
+            '五行',
+            '波色'
+          ],
           header: true),
       for (final draw in rows)
         _row(

@@ -91,8 +91,9 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
     // Capture the page's account before a user can switch sessions.
     _userID = OpenIM.iMManager.userID;
     _token = OpenIM.iMManager.token;
-    _messageNavigation =
-        widget.messageNavigation ?? ChatHistoryMessageNavigation();
+    _messageNavigation = widget.messageNavigation ??
+        ChatHistoryMessageNavigation(
+            preserveEntryRoute: widget.sender != null || widget.date != null);
     if (!_isKeyword || graphemeTrim(_input.text).isNotEmpty) _search();
   }
 
@@ -161,6 +162,7 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
       await _messageNavigation.open(context,
           conversationID: widget.conversationID,
           message: message,
+          preserveEntryRoute: widget.sender != null || widget.date != null,
           isEntryCurrent: () => mounted && _sameSession);
     } finally {
       if (mounted) setState(() => _openingMessage = false);
@@ -256,6 +258,7 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
         controller: _controller,
         pageKey: ValueKey('chat-history-results-${widget.category!.name}'),
         title: title,
+        openingMessage: _openingMessage,
         onMessage: _openContext,
         onRefresh: _search,
       );

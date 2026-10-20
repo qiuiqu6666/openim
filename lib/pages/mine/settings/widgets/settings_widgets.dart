@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:openim_common/localization.dart';
 import '../security_feedback.dart';
 import '../../../../widgets/empty_state/illustrated_empty_state.dart';
 
@@ -12,7 +13,9 @@ String settingsText(
   required String zh,
   required String en,
 }) =>
-    Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
+    Localizations.localeOf(context).languageCode == 'zh'
+        ? AppCopy.text(zh, locale: Localizations.localeOf(context))
+        : en;
 
 bool settingsIsDark(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark;
@@ -640,7 +643,8 @@ class SettingsPrimaryButton extends StatelessWidget {
               excludeSemantics: loading,
               label: loading
                   ? settingsText(context,
-                      zh: '$text，处理中', en: '$text, in progress')
+                      zh: AppCopy.format('{#0}，处理中', [text]),
+                      en: '$text, in progress')
                   : null,
               child: Stack(alignment: Alignment.center, children: [
                 Padding(
@@ -660,7 +664,7 @@ class SettingsPrimaryButton extends StatelessWidget {
                       dimension: AppTokens.s6,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: settingsTextColor(context),
+                        color: AppTokens.accent,
                       ),
                     ),
                   ),
@@ -724,7 +728,7 @@ Future<void> showUnavailableSettingsAction(
     context,
     settingsText(
       context,
-      zh: '$feature 暂未开放',
+      zh: AppCopy.format('{#0} 暂未开放', [feature]),
       en: '$feature is not available yet',
     ),
   );
@@ -804,7 +808,7 @@ class SettingsDestructiveButton extends StatelessWidget {
                 width: AppTokens.chevronSize,
                 height: AppTokens.chevronSize,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Theme.of(context).colorScheme.error))
+                    strokeWidth: 2, color: AppTokens.accent))
           else
             const Icon(Icons.delete_outline_rounded,
                 size: AppTokens.chevronSize),

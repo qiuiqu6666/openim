@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:openim_common/localization.dart';
 
 String contextText(BuildContext context, String key) {
   final zh = Localizations.localeOf(context).languageCode == 'zh';
@@ -22,7 +23,8 @@ String contextText(BuildContext context, String key) {
     'auth': ['登录状态已失效，请重新登录', 'Your session expired. Sign in again.'],
     'failed': ['暂时无法加载，请稍后重试', 'Unable to load. Please retry.'],
   };
-  return (words[key] ?? words['failed']!)[zh ? 0 : 1];
+  return AppCopy.text((words[key] ?? words['failed']!)[zh ? 0 : 1],
+      locale: Localizations.localeOf(context));
 }
 
 String searchErrorText(BuildContext context, int? code) => contextText(

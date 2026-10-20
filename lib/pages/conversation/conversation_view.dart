@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../fund/compensation/entry/compensation_home_entry.dart';
 import '../login/desktop_authorization/widgets/desktop_login_banner.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
@@ -200,8 +201,7 @@ class _ConversationPageState extends State<ConversationPage> {
     _updateFeedActivity();
   }
 
-  void _updateFeedActivity() => logic.setFeedViewActive(
-      this,
+  void _updateFeedActivity() => logic.setFeedViewActive(this,
       widget.liveUpdatesActive && (ModalRoute.isCurrentOf(context) ?? true));
 
   @override
@@ -350,7 +350,7 @@ class _ConversationPageState extends State<ConversationPage> {
               title: widget.groupChats
                   ? StrRes.groupChat
                   : (Localizations.localeOf(context).languageCode == 'zh'
-                      ? '消息'
+                      ? AppCopy.text('消息')
                       : 'Messages'),
               connection: _headerConnection(logic.imStatus.value),
               connectionVerified: Get.isRegistered<IMController>()
@@ -521,7 +521,7 @@ class _ConversationPageState extends State<ConversationPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('归档',
+                    Text(AppCopy.text('归档'),
                         style: TextStyle(
                             fontSize: 16,
                             height: ConversationFeedStyle.lineHeight,
@@ -596,7 +596,9 @@ class _ConversationPageState extends State<ConversationPage> {
                     folderID: logic.folderID(info),
                     archived: !logic.isArchived(info)),
                 color: logic.isArchived(info) ? _muteAction : _orangeAction,
-                label: logic.isArchived(info) ? '取消归档' : '归档',
+                label: logic.isArchived(info)
+                    ? AppCopy.text('取消归档')
+                    : AppCopy.text('归档'),
               ),
               _swipeAction(
                 onPressed: (_) => _folders.selectedFolderID != null
@@ -605,7 +607,9 @@ class _ConversationPageState extends State<ConversationPage> {
                 color: _folders.selectedFolderID != null
                     ? const Color(0xFF8E8E93)
                     : _folderAction,
-                label: _folders.selectedFolderID != null ? '移出分组' : '分组',
+                label: _folders.selectedFolderID != null
+                    ? AppCopy.text('移出分组')
+                    : AppCopy.text('分组'),
               ),
             ],
           ),

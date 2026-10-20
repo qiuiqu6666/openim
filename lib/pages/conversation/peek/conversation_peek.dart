@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -104,7 +105,7 @@ Future<void> showConversationPeek({
   } catch (error) {
     if (context.mounted && isActive()) {
       IMViews.showToast(Localizations.localeOf(context).languageCode == 'zh'
-          ? '操作失败，请重试'
+          ? AppCopy.text('操作失败，请重试')
           : 'Unable to complete this action. Please retry.');
     }
   }

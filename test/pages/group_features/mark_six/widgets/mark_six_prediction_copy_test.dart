@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
+import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:openim/pages/group_features/mark_six/widgets/mark_six_prediction_copy.dart';
 
@@ -69,6 +70,39 @@ void main() {
                 values: [],
                 child: Text('—')))));
     expect(find.byType(InkWell), findsNothing);
+  });
+  testWidgets('traditional copy feedback preserves betting command',
+      (tester) async {
+    final previousLocale = Get.locale;
+    Get.locale = const Locale('zh', 'TW');
+    addTearDown(() => Get.locale = previousLocale);
+    String? copied;
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String;
+      }
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null));
+    await tester.pumpWidget(MaterialApp(
+      builder: EasyLoading.init(),
+      home: Scaffold(
+        body: MarkSixPredictionCopy(
+          attribute: 'head',
+          label: '頭數',
+          values: const ['4', '2', '3'],
+          child: const Text('4 2 3'),
+        ),
+      ),
+    ));
+    await tester.tap(find.byType(InkWell));
+    await tester.pumpAndSettle();
+    expect(copied, '4头2头3头');
+    expect(find.text('頭數預測已複製'), findsOneWidget);
+    await EasyLoading.dismiss(animation: false);
+    await tester.pumpAndSettle();
   });
   testWidgets('clipboard failure shows retry feedback', (tester) async {
     tester.binding.defaultBinaryMessenger

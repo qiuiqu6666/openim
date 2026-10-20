@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
@@ -69,7 +70,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
       if (mounted) setState(() => _qrInvite = code);
     } catch (error) {
       if (mounted && !isSilentFriendRisk(error)) {
-        setState(() => _inviteError = '二维码邀请暂不可用，点击重试');
+        setState(() => _inviteError = AppCopy.text('二维码邀请暂不可用，点击重试'));
       }
     } finally {
       if (mounted) setState(() => _loadingInvite = false);
@@ -88,7 +89,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
             friendAddErrorMessage(error,
                     chinese:
                         Localizations.localeOf(context).languageCode == 'zh') ??
-                '邀请暂不可用，请稍后重试');
+                AppCopy.text('邀请暂不可用，请稍后重试'));
       return false;
     }
   }
@@ -114,7 +115,11 @@ class _QrProfilePageState extends State<QrProfilePage> {
 
   String get _shareText => settingsText(
         context,
-        zh: '你好，我是$_displayName\n邀请你在 99Chat 添加我为好友，随时聊聊、分享日常。\n我的好友邀请：${_linkInvite == null ? '' : _inviteUrl(_linkInvite!, 'link')}',
+        zh: AppCopy.format(
+            '你好，我是{#0}\n邀请你在 99Chat 添加我为好友，随时聊聊、分享日常。\n我的好友邀请：{#1}', [
+          _displayName,
+          _linkInvite == null ? '' : _inviteUrl(_linkInvite!, 'link')
+        ]),
         en: 'Hi, I’m $_displayName! Add me on 99Chat to stay in touch.\n${_linkInvite == null ? '' : _inviteUrl(_linkInvite!, 'link')}',
       );
 
@@ -252,7 +257,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
       context,
       settingsText(
         context,
-        zh: '邀请链接已复制，请在$label中粘贴发送',
+        zh: AppCopy.format('邀请链接已复制，请在{#0}中粘贴发送', [label]),
         en: 'Invitation copied. Paste it into $label.',
       ),
     );
@@ -353,7 +358,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
                         onPressed: _loadingInvite ? null : _loadInvite,
                         child: Text(_inviteError ??
                             (_loadingInvite
-                                ? '正在生成邀请二维码'
+                                ? AppCopy.text('正在生成邀请二维码')
                                 : settingsText(context,
                                     zh: '点击生成邀请二维码',
                                     en: 'Tap to create an invitation QR code'))))))
@@ -459,7 +464,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '99号ID: $_displayId',
+                                  AppCopy.format('99号ID: {#0}', [_displayId]),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(

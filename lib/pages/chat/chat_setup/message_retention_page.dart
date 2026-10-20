@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -72,8 +73,8 @@ class _MessageRetentionPageState extends State<MessageRetentionPage> {
       }
     } catch (_) {
       if (_current) {
-        setState(() => _loadError = _label(
-            '设置暂时无法获取，请重试。', 'Could not load settings. Please try again.'));
+        setState(() => _loadError = _label(AppCopy.text('设置暂时无法获取，请重试。'),
+            'Could not load settings. Please try again.'));
       }
     } finally {
       if (_current) {
@@ -112,8 +113,8 @@ class _MessageRetentionPageState extends State<MessageRetentionPage> {
     } catch (_) {
       if (_current) {
         setState(() {
-          _saveError = _label(
-              '设置未能更新，请重试。', 'Could not update settings. Please try again.');
+          _saveError = _label(AppCopy.text('设置未能更新，请重试。'),
+              'Could not update settings. Please try again.');
           _failedChange = (burn: burn, retain: retain);
         });
       }
@@ -139,7 +140,7 @@ class _MessageRetentionPageState extends State<MessageRetentionPage> {
         actions: values.entries
             .map((entry) => SettingsAction<int>(entry.value, entry.key,
                 subtitle: entry.key == current
-                    ? _label('当前设置', 'Current setting')
+                    ? _label(AppCopy.text('当前设置'), 'Current setting')
                     : null,
                 selected: entry.key == current))
             .toList());
@@ -187,7 +188,7 @@ class _MessageRetentionPageState extends State<MessageRetentionPage> {
           if (retry != null)
             SettingsCell(
                 key: retryKey,
-                title: _label('重试', 'Retry'),
+                title: _label(AppCopy.text('重试'), 'Retry'),
                 icon: Icons.refresh_rounded,
                 showArrow: false,
                 showDivider: false,
@@ -200,11 +201,13 @@ class _MessageRetentionPageState extends State<MessageRetentionPage> {
   Widget build(BuildContext context) =>
       SettingsScaffold(title: 'sdkRetention'.tr, children: [
         if (_loading)
-          _feedback(_label('正在获取设置…', 'Loading settings…'), progress: true),
+          _feedback(_label(AppCopy.text('正在获取设置…'), 'Loading settings…'),
+              progress: true),
         if (_loadError != null)
           _feedback(_loadError!,
               retryKey: const ValueKey('retention-load-retry'), retry: _load),
-        if (_busy) _feedback(_label('正在保存…', 'Saving…'), progress: true),
+        if (_busy)
+          _feedback(_label(AppCopy.text('正在保存…'), 'Saving…'), progress: true),
         if (_saveError != null)
           _feedback(_saveError!,
               retryKey: const ValueKey('retention-save-retry'), retry: () {
@@ -218,7 +221,7 @@ class _MessageRetentionPageState extends State<MessageRetentionPage> {
               rowKey: const ValueKey('retention-burn-row'),
               title: 'sdkBurn'.tr,
               value: _value(_burn, _burnValues),
-              description: _label('消息已读后开始计时，到期自动删除。',
+              description: _label(AppCopy.text('消息已读后开始计时，到期自动删除。'),
                   'The timer starts once a message is read. It is deleted when the time is up.'),
               icon: Icons.timer_outlined,
               enabled: _enabled,
@@ -227,7 +230,7 @@ class _MessageRetentionPageState extends State<MessageRetentionPage> {
             rowKey: const ValueKey('retention-delete-row'),
             title: 'sdkAutoDelete'.tr,
             value: _value(_retain, _retainValues),
-            description: _label('超过保留时长的消息会自动删除。',
+            description: _label(AppCopy.text('超过保留时长的消息会自动删除。'),
                 'Messages older than the selected period are deleted automatically.'),
             icon: Icons.auto_delete_outlined,
             enabled: _enabled,

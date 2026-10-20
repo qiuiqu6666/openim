@@ -25,6 +25,7 @@ void main() {
       final calls = <String>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'getBlacklist') return '[]';
         calls.add(call.method);
         await reply.future;
         return null;

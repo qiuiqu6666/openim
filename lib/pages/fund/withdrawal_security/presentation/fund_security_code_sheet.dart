@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -109,7 +110,7 @@ class _FundSecurityCodeSheetState extends State<FundSecurityCodeSheet> {
         _challenge = result;
         _resendAt =
             widget.now().add(Duration(seconds: result.retryAfterSeconds));
-        if (_expired) _error = '验证码已过期，请重新获取';
+        if (_expired) _error = AppCopy.text('验证码已过期，请重新获取');
       });
     } catch (error) {
       if (!_active) return;
@@ -151,14 +152,14 @@ class _FundSecurityCodeSheetState extends State<FundSecurityCodeSheet> {
     final colors = FundPageColors.of(context);
     final phone = _challenge?.phoneMasked ?? widget.phoneMasked;
     final inset = MediaQuery.viewInsetsOf(context).bottom;
-    final error = _error ?? (_expired ? '验证码已过期，请重新获取' : null);
+    final error = _error ?? (_expired ? AppCopy.text('验证码已过期，请重新获取') : null);
     final sendLabel = _sending
-        ? '发送中'
+        ? AppCopy.text('发送中')
         : _remaining > 0
-            ? '${_remaining}s 后重发'
+            ? AppCopy.format('{#0}s 后重发', [_remaining])
             : _challenge == null
-                ? '获取验证码'
-                : '重新发送';
+                ? AppCopy.text('获取验证码')
+                : AppCopy.text('重新发送');
     return SafeArea(
       key: const ValueKey('fund-security-sheet'),
       top: false,
@@ -174,14 +175,14 @@ class _FundSecurityCodeSheetState extends State<FundSecurityCodeSheet> {
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Row(children: [
                     Expanded(
-                        child: Text('短信验证',
+                        child: Text(AppCopy.text('短信验证'),
                             style: TextStyle(
                                 color: colors.text,
                                 fontSize: FundSecurityTokens.titleFont,
                                 fontWeight: FontWeight.w600))),
                     IconButton(
                         key: const ValueKey('fund-security-cancel'),
-                        tooltip: '取消本次验证',
+                        tooltip: AppCopy.text('取消本次验证'),
                         onPressed: _finish,
                         color: colors.subText,
                         icon: const Icon(Icons.close_rounded)),
@@ -189,7 +190,8 @@ class _FundSecurityCodeSheetState extends State<FundSecurityCodeSheet> {
                   const SizedBox(height: AppTokens.s4),
                   Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('验证码发送至 $phone，仅用于本次交易',
+                      child: Text(
+                          AppCopy.format('验证码发送至 {#0}，仅用于本次交易', [phone]),
                           style: TextStyle(
                               color: colors.text,
                               fontSize: FundSecurityTokens.bodyFont))),
@@ -211,7 +213,7 @@ class _FundSecurityCodeSheetState extends State<FundSecurityCodeSheet> {
                         letterSpacing: FundSecurityTokens.codeLetterSpacing),
                     cursorColor: colors.inputCursor,
                     decoration: InputDecoration(
-                        hintText: '输入6位短信验证码',
+                        hintText: AppCopy.text('输入6位短信验证码'),
                         hintStyle: TextStyle(
                             color: colors.inputHint,
                             fontSize: FundSecurityTokens.bodyFont,
@@ -260,7 +262,7 @@ class _FundSecurityCodeSheetState extends State<FundSecurityCodeSheet> {
                               disabledForegroundColor: colors.subText,
                               minimumSize: const Size.fromHeight(
                                   FundSecurityTokens.targetMinSize)),
-                          child: const Text('继续支付'))),
+                          child: Text(AppCopy.text('继续支付')))),
                 ]),
               ),
             ),

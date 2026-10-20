@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/core/user_activity/activity_sdk.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -37,7 +38,7 @@ class SendVerificationApplicationLogic extends GetxController {
       ? null
       : Get.locale?.languageCode == 'en'
           ? 'Add this person using their chat ID, QR code, or contact card.'
-          : '请通过对方的聊天号、二维码或好友名片添加。';
+          : AppCopy.text('请通过对方的聊天号、二维码或好友名片添加。');
 
   @override
   void onInit() {

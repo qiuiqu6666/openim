@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart' show AppTokens;
@@ -30,16 +31,16 @@ class SangongProfileLedgerUnavailable extends StatelessWidget {
           Text(
             error ??
                 (loading
-                    ? '正在准备当前群的三公权限，请稍后重试'
+                    ? AppCopy.text('正在准备当前群的三公权限，请稍后重试')
                     : groups.length > 1 && selectedGroupID == null
-                        ? '请选择游戏群以查看流水'
-                        : '当前群尚未确认三公运营绑定，请重试'),
+                        ? AppCopy.text('请选择游戏群以查看流水')
+                        : AppCopy.text('当前群尚未确认三公运营绑定，请重试')),
             textAlign: TextAlign.center,
             style: TextStyle(color: AppTokens.textSecondary(dark: dark)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, retry),
-            child: const Text('重试'),
+            child: Text(AppCopy.text('重试')),
           ),
           if (groups.length > 1)
             for (final group in groups)

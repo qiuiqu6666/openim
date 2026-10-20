@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart'
     show AppTokens, ChatComposerTokens;
@@ -26,7 +27,7 @@ class _ChatBuiltinStickerPanelState extends State<ChatBuiltinStickerPanel> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('发送失败，请重试')));
+            .showSnackBar(SnackBar(content: Text(AppCopy.text('发送失败，请重试'))));
       }
     } finally {
       if (mounted) setState(() => _sendingID = null);
@@ -57,7 +58,7 @@ class _ChatBuiltinStickerPanelState extends State<ChatBuiltinStickerPanel> {
             key: ValueKey('builtin-sticker-${sticker.id}'),
             button: true,
             enabled: enabled,
-            label: '发送${sticker.label}',
+            label: AppCopy.format('发送{#0}', [AppCopy.text(sticker.label)]),
             onTap: send,
             excludeSemantics: true,
             child: Material(

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 
@@ -212,9 +213,10 @@ class _AiCardPickerState extends State<_AiCardPicker>
       Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
 
   String get _title => switch (widget.kind) {
-        AiCardPickerKind.friend => _text('选择朋友', 'Select Friend'),
-        AiCardPickerKind.group => _text('选择群聊', 'Select Group'),
-        AiCardPickerKind.conversation => _text('选择会话', 'Select Chat'),
+        AiCardPickerKind.friend => _text(AppCopy.text('选择朋友'), 'Select Friend'),
+        AiCardPickerKind.group => _text(AppCopy.text('选择群聊'), 'Select Group'),
+        AiCardPickerKind.conversation =>
+          _text(AppCopy.text('选择会话'), 'Select Chat'),
       };
 
   @override
@@ -280,14 +282,18 @@ class _AiCardPickerState extends State<_AiCardPicker>
                 color: text, fontSize: AiAssistantPickerTokens.rowTextSize),
             hintStyle: TextStyle(
                 color: subText, fontSize: AiAssistantPickerTokens.rowTextSize),
-            hintText: _text('搜索', 'Search'),
+            hintText: _text(AppCopy.text('搜索'), 'Search'),
             onChanged: (value) => setState(() => _query = value),
             onCleared: () => setState(() => _query = ''),
           ),
           if (widget.kind == AiCardPickerKind.conversation && _current) ...[
-            _category(Icons.person_outline_rounded,
-                _text('选择朋友', 'Select Friend'), AiCardPickerKind.friend),
-            _category(Icons.group_outlined, _text('选择群聊', 'Select Group'),
+            _category(
+                Icons.person_outline_rounded,
+                _text(AppCopy.text('选择朋友'), 'Select Friend'),
+                AiCardPickerKind.friend),
+            _category(
+                Icons.group_outlined,
+                _text(AppCopy.text('选择群聊'), 'Select Group'),
                 AiCardPickerKind.group),
             Align(
               alignment: Alignment.centerLeft,
@@ -304,7 +310,8 @@ class _AiCardPickerState extends State<_AiCardPicker>
           Expanded(
             child: !_current
                 ? _status(
-                    _text('账户已切换，请重新打开', 'Account changed. Please reopen.'),
+                    _text(AppCopy.text('账户已切换，请重新打开'),
+                        'Account changed. Please reopen.'),
                     subText)
                 : _loading && items.isEmpty
                     ? const Center(child: CircularProgressIndicator())
@@ -314,15 +321,17 @@ class _AiCardPickerState extends State<_AiCardPicker>
                               onPressed: widget.kind == AiCardPickerKind.group
                                   ? _loadGroups
                                   : _cacheChanged,
-                              child: Text(_text('列表加载失败，点击重试',
+                              child: Text(_text(AppCopy.text('列表加载失败，点击重试'),
                                   'Could not load the list. Retry')),
                             ),
                           )
                         : items.isEmpty
                             ? _status(
                                 query.isEmpty
-                                    ? _text('暂无可选择的记录', 'Nothing to select')
-                                    : _text('未找到相关结果', 'No matching results'),
+                                    ? _text(AppCopy.text('暂无可选择的记录'),
+                                        'Nothing to select')
+                                    : _text(AppCopy.text('未找到相关结果'),
+                                        'No matching results'),
                                 subText)
                             : ListView.separated(
                                 keyboardDismissBehavior:

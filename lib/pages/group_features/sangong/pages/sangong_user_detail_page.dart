@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../agents/user_group/sangong_user_agent_group_entry.dart';
 import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
@@ -89,7 +90,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
       }
     } catch (_) {
       if (_current && generation == _profileGeneration) {
-        setState(() => _profileError = '资料加载失败，点击重试');
+        setState(() => _profileError = AppCopy.text('资料加载失败，点击重试'));
       }
     }
   }
@@ -105,7 +106,8 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
         });
       }
     } catch (_) {
-      if (_current) setState(() => _sessionsError = '批次加载失败，点击重试');
+      if (_current)
+        setState(() => _sessionsError = AppCopy.text('批次加载失败，点击重试'));
     }
   }
 
@@ -246,27 +248,28 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
           builder: (_, __) => _current
               ? child
               : CupertinoAlertDialog(
-                  title: const Text('游戏信息已变化'),
-                  content: const Text('当前游戏权限已变化，请重新进入'),
+                  title: Text(AppCopy.text('游戏信息已变化')),
+                  content: Text(AppCopy.text('当前游戏权限已变化，请重新进入')),
                   actions: [
                       CupertinoDialogAction(
                           onPressed: () => Navigator.of(dialogContext).pop(),
-                          child: const Text('关闭')),
+                          child: Text(AppCopy.text('关闭'))),
                     ]));
 
   Future<void> _openMaxNegativeDialog(int balance) async {
     if (_savingMaxNegative || !_current) return;
     final userId = _numericUserId();
     if (userId == null) {
-      _toast('缺少用户编号，无法设置');
+      _toast(AppCopy.text('缺少用户编号，无法设置'));
       return;
     }
     final current = _savedMaxNegative();
     final amountText = await AppDialog.prompt(
       context: context,
-      title: '设置可负额度',
-      message: '当前可划转约 ${balance + current}（余额 + 可负额度）\n0 表示关闭负分',
-      placeholder: '请输入可负额度',
+      title: AppCopy.text('设置可负额度'),
+      message: AppCopy.format(
+          '当前可划转约 {#0}（余额 + 可负额度）\n0 表示关闭负分', [balance + current]),
+      placeholder: AppCopy.text('请输入可负额度'),
       initialValue: '$current',
       cancelText: '取消',
       confirmText: '下一步',
@@ -280,15 +283,16 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
     }
     final value = int.tryParse(amountText.trim());
     if (value == null || value < 0) {
-      _toast('须为大于等于 0 的整数');
+      _toast(AppCopy.text('须为大于等于 0 的整数'));
       return;
     }
     final confirmed = await AppDialog.confirm(
       context: context,
-      title: '确认设置',
-      message: '确认将可负额度设为 $value 吗？\n设置后可划转约 ${balance + value}',
+      title: AppCopy.text('确认设置'),
+      message: AppCopy.format(
+          '确认将可负额度设为 {#0} 吗？\n设置后可划转约 {#1}', [value, balance + value]),
       cancelText: '取消',
-      confirmText: '确认保存',
+      confirmText: AppCopy.text('确认保存'),
       dialogWrapper: _wrapCurrentDialog,
     );
     if (!confirmed || !_current) {
@@ -320,7 +324,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
           };
         }
       });
-      _toast('已保存');
+      _toast(AppCopy.text('已保存'));
       _loadProfile();
     } catch (error) {
       if (_current) {
@@ -342,10 +346,10 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('可负额度 $maxNegative',
+                Text(AppCopy.format('可负额度 {#0}', [maxNegative]),
                     style: TextStyle(fontSize: 13, color: muted)),
                 const SizedBox(height: 2),
-                Text('可划转 约 $transfer',
+                Text(AppCopy.format('可划转 约 {#0}', [transfer]),
                     style: TextStyle(fontSize: 12, color: muted)),
               ],
             ),
@@ -354,7 +358,9 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
             onPressed: _savingMaxNegative
                 ? null
                 : () => _openMaxNegativeDialog(balance),
-            child: Text(_savingMaxNegative ? '核实保存结果…' : '设置额度'),
+            child: Text(_savingMaxNegative
+                ? AppCopy.text('核实保存结果…')
+                : AppCopy.text('设置额度')),
           ),
         ],
       ),
@@ -388,7 +394,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
               appBar: AppBar(
                   centerTitle: true,
                   leading: const AppBackButton(),
-                  title: const Text('用户详情'),
+                  title: Text(AppCopy.text('用户详情')),
                   actions: [
                     IconButton(
                         onPressed: _busy
@@ -441,7 +447,8 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                         if (_profileError != null)
                                           IconButton(
                                               onPressed: _loadProfile,
-                                              tooltip: '资料加载失败，点击重试',
+                                              tooltip:
+                                                  AppCopy.text('资料加载失败，点击重试'),
                                               icon: Icon(Icons.refresh,
                                                   color: colors.error,
                                                   size: 20)),
@@ -457,7 +464,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                                         CrossAxisAlignment
                                                             .start,
                                                     children: [
-                                                  Text('当前积分',
+                                                  Text(AppCopy.text('当前积分'),
                                                       style: TextStyle(
                                                           fontSize: 12,
                                                           color: muted)),
@@ -476,7 +483,12 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                                         CrossAxisAlignment.end,
                                                     children: [
                                                   Text(
-                                                      '每万返水 ${profile['rebatePer10000'] ?? widget.user.rebatePer10000}',
+                                                      AppCopy.format(
+                                                          '每万返水 {#0}', [
+                                                        profile['rebatePer10000'] ??
+                                                            widget.user
+                                                                .rebatePer10000
+                                                      ]),
                                                       style: TextStyle(
                                                           fontSize: 12,
                                                           color: muted)),
@@ -485,8 +497,10 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                                       parent is! Map)
                                                     Text(
                                                         _profileError != null
-                                                            ? '上级：暂未获取'
-                                                            : '上级：未设置',
+                                                            ? AppCopy.text(
+                                                                '上级：暂未获取')
+                                                            : AppCopy.text(
+                                                                '上级：未设置'),
                                                         style: TextStyle(
                                                             fontSize: 12,
                                                             color: muted))
@@ -494,7 +508,8 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                                     SangongPublicAccount(
                                                         userID:
                                                             '${parent['imUserId'] ?? ''}',
-                                                        prefix: '上级账号：',
+                                                        prefix: AppCopy.text(
+                                                            '上级账号：'),
                                                         style: TextStyle(
                                                             fontSize: 12,
                                                             color: muted)),
@@ -549,16 +564,17 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                                 colors.primaryContainer,
                                             selectedForegroundColor:
                                                 colors.onPrimaryContainer),
-                                        segments: const [
+                                        segments: [
                                           ButtonSegment(
                                               value: false,
-                                              label: Text('经营日汇总'),
+                                              label:
+                                                  Text(AppCopy.text('经营日汇总')),
                                               icon: Icon(
                                                   Icons.calendar_today_outlined,
                                                   size: 16)),
                                           ButtonSegment(
                                               value: true,
-                                              label: Text('开机批次'),
+                                              label: Text(AppCopy.text('开机批次')),
                                               icon: Icon(Icons.layers_outlined,
                                                   size: 16))
                                         ],
@@ -584,8 +600,9 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                           icon: const Icon(Icons.chevron_left)),
                                       TextButton(
                                           onPressed: _pickDate,
-                                          child: Text(
-                                              '${sangongReportDate(_date)} · 上海时间开机日')),
+                                          child: Text(AppCopy.format(
+                                              '{#0} · 上海时间开机日',
+                                              [sangongReportDate(_date)]))),
                                       IconButton(
                                           onPressed: sangongReportDate(_date) ==
                                                   today
@@ -623,9 +640,10 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                               isExpanded: true,
                                               value: _sessionId ?? -1,
                                               items: [
-                                                const DropdownMenuItem(
+                                                DropdownMenuItem(
                                                     value: -1,
-                                                    child: Text('当前／最近一次开机')),
+                                                    child: Text(AppCopy.text(
+                                                        '当前／最近一次开机'))),
                                                 for (final session in _sessions)
                                                   if (int.tryParse(
                                                           '${session['id']}') !=
@@ -674,8 +692,8 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                                                 child: Column(
                                                                     children: [
                                                                       Text(
-                                                                          metric
-                                                                              .key,
+                                                                          AppCopy.text(metric
+                                                                              .key),
                                                                           style: Theme.of(context)
                                                                               .textTheme
                                                                               .bodySmall),
@@ -688,20 +706,21 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                                                     ]))),
                                                     ]))),
                                 if (_summary.isEmpty)
-                                  const Text('该统计范围内无用户汇总记录，按 0 显示',
+                                  Text(AppCopy.text('该统计范围内无用户汇总记录，按 0 显示'),
                                       style: TextStyle(fontSize: 12)),
                                 Padding(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 16, vertical: 6),
                                     child: Row(children: [
                                       Expanded(
-                                          child: Text('本人汇总 · 最近明细',
+                                          child: Text(
+                                              AppCopy.text('本人汇总 · 最近明细'),
                                               style: TextStyle(
                                                   fontSize: 11, color: muted))),
                                       Tooltip(
                                           triggerMode: TooltipTriggerMode.tap,
-                                          message:
-                                              '盈亏包含下注扣款、退款、派彩和庄方结算，不含上下分及返水。',
+                                          message: AppCopy.text(
+                                              '盈亏包含下注扣款、退款、派彩和庄方结算，不含上下分及返水。'),
                                           child: Padding(
                                               padding: const EdgeInsets.all(6),
                                               child: Icon(Icons.info_outline,
@@ -741,7 +760,7 @@ class _SangongUserDetailPageState extends State<SangongUserDetailPage> {
                                       Text(_error!),
                                       TextButton(
                                           onPressed: _load,
-                                          child: const Text('重试')),
+                                          child: Text(AppCopy.text('重试'))),
                                     ]))
                               : TabBarView(children: [
                                   SangongAccountFlowList(

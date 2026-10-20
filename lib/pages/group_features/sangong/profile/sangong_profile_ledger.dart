@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart' show AppTokens;
 import '../sangong_scope.dart';
@@ -70,7 +71,7 @@ class _SangongProfileLedgerState extends State<SangongProfileLedger> {
                       _request = request;
                     });
                   },
-                  child: const Text('重试')),
+                  child: Text(AppCopy.text('重试'))),
           ]),
         ),
       ),
@@ -84,17 +85,17 @@ class _SangongProfileLedgerState extends State<SangongProfileLedger> {
           future: _request,
           builder: (context, result) {
             if (result.connectionState != ConnectionState.done) {
-              return _status('正在加载游戏流水…', loading: true);
+              return _status(AppCopy.text('正在加载游戏流水…'), loading: true);
             }
             if (result.hasError) {
-              return _status('游戏流水加载失败',
+              return _status(AppCopy.text('游戏流水加载失败'),
                   detail: DioErrorMessage.forApp(result.error!));
             }
             if (result.data == null) {
-              return _status('暂未找到该用户的游戏账户');
+              return _status(AppCopy.text('暂未找到该用户的游戏账户'));
             }
             if (result.data!.imUserId != widget.userID) {
-              return _status('用户资料暂时无法确认，请重试');
+              return _status(AppCopy.text('用户资料暂时无法确认，请重试'));
             }
             return SangongUserDetailPage(user: result.data!);
           }));

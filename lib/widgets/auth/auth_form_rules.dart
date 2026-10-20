@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'auth_copy.dart';
+import 'auth_password_rules.dart';
 
 abstract final class AuthFormRules {
   static String? phone(String? value, String areaCode) {
@@ -26,9 +27,10 @@ abstract final class AuthFormRules {
 
   static String? password(String? value) =>
       loginPassword(value) ??
-      (IMUtils.isValidPassword(value ?? '')
+      (AuthPasswordRules.valid(value ?? '')
           ? null
-          : StrRes.wrongPasswordFormat);
+          : authText('登录密码为8–24个字母及数字组合',
+              'Use 8–24 characters with both letters and numbers only'));
 
   static String? confirmPassword(String? value, String password) {
     if ((value?.trim() ?? '').isEmpty) {

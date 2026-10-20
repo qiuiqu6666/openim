@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'auth_reference_feedback.dart';
 import 'auth_reference_tokens.dart';
+import 'auth_minimal_layout.dart';
 
 /// Shared focus/error chrome for single and compound authentication fields.
 class AuthFieldFrame extends StatelessWidget {
@@ -55,7 +56,8 @@ class AuthFieldFrame extends StatelessWidget {
               : null,
           borderRadius: BorderRadius.circular(AuthReferenceTokens.rLg),
         ),
-        foregroundDecoration: !showBorder
+        foregroundDecoration: !showBorder ||
+                (AuthMinimalLayout.of(context) && !focused && !invalid)
             ? null
             : BoxDecoration(
                 border: Border.all(color: border, width: 1.5),

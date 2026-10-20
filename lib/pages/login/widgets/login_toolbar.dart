@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../routes/app_navigator.dart';
 import '../../../widgets/auth/auth_copy.dart';
+import '../../../widgets/auth/auth_reference_controls.dart';
 import '../../../widgets/auth/auth_reference_tokens.dart';
 import '../../customer_service/customer_service.dart';
 import '../../mine/settings/pages/node_switch_page.dart';
@@ -12,8 +13,12 @@ import '../../mine/settings/settings_service.dart';
 /// Public entry points remain available before an account is signed in.
 class LoginToolbar extends StatelessWidget {
   const LoginToolbar(
-      {super.key, this.customerServiceOnly = false, this.onHero = true});
+      {super.key,
+      this.customerServiceOnly = false,
+      this.onHero = true,
+      this.showSupport = true});
   final bool customerServiceOnly;
+  final bool showSupport;
 
   /// Blue entry heroes keep white actions; plain forms use theme foregrounds.
   final bool onHero;
@@ -39,13 +44,14 @@ class LoginToolbar extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _ToolbarAction(
-              actionKey: const ValueKey('login-customer-service'),
-              icon: Icons.headset_mic_outlined,
-              onHero: onHero,
-              label: authText('在线客服', 'Customer service'),
-              onPressed: () => showCustomerServiceSheet(context, guest: true),
-            ),
+            if (showSupport)
+              _ToolbarAction(
+                actionKey: const ValueKey('login-customer-service'),
+                icon: Icons.headset_mic_outlined,
+                onHero: onHero,
+                label: authText('在线客服', 'Customer service'),
+                onPressed: () => showCustomerServiceSheet(context, guest: true),
+              ),
             if (!customerServiceOnly) ...[
               const SizedBox(width: AuthReferenceTokens.toolbarGap),
               _ToolbarAction(
@@ -109,4 +115,23 @@ class _ToolbarAction extends StatelessWidget {
         ),
         icon: Icon(icon),
       );
+}
+
+/// Support and installed version remain reachable without signing in.
+class AuthEntryFooter extends StatelessWidget {
+  const AuthEntryFooter({super.key, this.version = '3.8.3'});
+  final String version;
+  @override
+  Widget build(BuildContext context) => Column(children: [
+        TextButton.icon(
+            key: const ValueKey('login-customer-service'),
+            onPressed: () => showCustomerServiceSheet(context, guest: true),
+            icon: const Icon(Icons.headset_mic_outlined),
+            label: Text(authText('联系客服', 'Contact support')),
+            style: TextButton.styleFrom(
+                foregroundColor: AuthReferenceTokens.brand500,
+                iconColor: AuthReferenceTokens.brand500,
+                minimumSize: const Size(48, 48))),
+        AuthVersionFooter(version: version),
+      ]);
 }

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Layout and art adapted from 99chat lottery_dashboard.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'mark_six_clock_row.dart';
@@ -65,14 +66,14 @@ class MarkSixLatestCard extends StatelessWidget {
     final c = controller;
     final style = MarkSixStyle.of(context);
     if (!c.current) {
-      return MarkSixEmpty(message: '登录状态已变更', compact: preview);
+      return MarkSixEmpty(message: AppCopy.text('登录状态已变更'), compact: preview);
     }
     if (!c.ready && c.loading) {
       return Center(child: LoadingView.indicator());
     }
     if (!c.ready) {
       return MarkSixEmpty(
-          message: c.error ?? '暂无开奖数据',
+          message: c.error ?? AppCopy.text('暂无开奖数据'),
           compact: preview,
           onRetry: () => c.refresh(force: true));
     }
@@ -137,8 +138,8 @@ class MarkSixLatestCard extends StatelessWidget {
                           child: const Icon(Icons.bolt_rounded,
                               color: AppTokens.onAccent, size: 19)),
                       const SizedBox(width: 8),
-                      const Expanded(
-                          child: Text('最新开奖',
+                      Expanded(
+                          child: Text(AppCopy.text('最新开奖'),
                               style: TextStyle(
                                   fontSize: 15, fontWeight: FontWeight.w800))),
                       Text('第 ${c.currentRound?.issue ?? '—'} 期',
@@ -153,7 +154,7 @@ class MarkSixLatestCard extends StatelessWidget {
                     if (latest == null)
                       Padding(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          child: Text('暂无已开奖记录',
+                          child: Text(AppCopy.text('暂无已开奖记录'),
                               style: TextStyle(color: style.secondary)))
                     else
                       Row(children: [
@@ -166,7 +167,9 @@ class MarkSixLatestCard extends StatelessWidget {
                             child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                              Text('特码 ${latest.number} · ${latest.zodiac}',
+                              Text(
+                                  AppCopy.format('特码 {#0} · {#1}',
+                                      [latest.number, latest.zodiac]),
                                   style: TextStyle(
                                       fontSize: preview ? 16 : 17,
                                       fontWeight: FontWeight.w800)),
@@ -175,7 +178,8 @@ class MarkSixLatestCard extends StatelessWidget {
                                 for (final value in [
                                   latest.value('parity'),
                                   latest.value('size'),
-                                  '${latest.value('head')}头',
+                                  AppCopy.format(
+                                      '{#0}头', [latest.value('head')]),
                                   '${latest.value('tail')}尾',
                                   '合${latest.value('sumParity')}',
                                   latest.value('fiveElement'),

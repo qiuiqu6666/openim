@@ -1,3 +1,4 @@
+import 'package:openim_common/media_localization.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -110,6 +111,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
       final assets = await AssetPicker.pickAssets(
         context,
         pickerConfig: AssetPickerConfig(
+          textDelegate: AppMediaCopy.assets,
           maxAssets: remain,
           requestType: RequestType.image,
           sortPathsByModifiedDate: true,

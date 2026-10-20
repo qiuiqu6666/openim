@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'services/authorization/sangong_access_policy.dart';
 import 'services/authorization/sangong_route_revalidation.dart';
@@ -362,7 +363,8 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
         await _openManage(context);
         return false;
       }
-      final reason = runtime.manageUnavailableReason ?? '当前群暂不可进行三公运营';
+      final reason =
+          runtime.manageUnavailableReason ?? AppCopy.text('当前群暂不可进行三公运营');
       _logManageUnavailable(runtime, reason);
       ToastUtils.toast(reason, context: context);
     } catch (failure) {
@@ -461,7 +463,7 @@ class _SangongFeatureHostState extends State<SangongFeatureHost> {
                     TextButton(
                         key: const ValueKey('sangong-host-retry'),
                         onPressed: _retry,
-                        child: const Text('重试'))
+                        child: Text(AppCopy.text('重试')))
                   ])));
         }
         final setupOnly = _runtime.requiresGroupTenantCheck &&
@@ -694,8 +696,10 @@ class _SangongModulePageState extends State<_SangongModulePage> {
         throw StateError('群业务权限已变化，请重试');
       }
       if (!widget.agent && !widget.runtime.canManage) {
-        _logManageUnavailable(widget.runtime,
-            widget.runtime.manageUnavailableReason ?? '当前群暂不可进行三公运营');
+        _logManageUnavailable(
+            widget.runtime,
+            widget.runtime.manageUnavailableReason ??
+                AppCopy.text('当前群暂不可进行三公运营'));
       }
       setState(() {
         _routeRevalidation = widget.agent
@@ -744,7 +748,8 @@ class _SangongModulePageState extends State<_SangongModulePage> {
                   const Center(child: CircularProgressIndicator())
                 else ...[
                   Text(_error!, textAlign: TextAlign.center),
-                  SettingsPrimaryButton(text: '重试', onPressed: _load)
+                  SettingsPrimaryButton(
+                      text: AppCopy.text('重试'), onPressed: _load)
                 ]
               ]);
         }

@@ -39,6 +39,7 @@ typedef ChatHistoryStartChat = Future<void> Function(
 class ChatHistoryMessageNavigation {
   ChatHistoryMessageNavigation({
     this.contextApi,
+    this.preserveEntryRoute = false,
     Future<Message?> Function(String conversationID, String clientMsgID)?
         findMessage,
     Future<ConversationInfo?> Function(String conversationID)? findConversation,
@@ -57,6 +58,9 @@ class ChatHistoryMessageNavigation {
 
   final Future<Message?> Function(String, String) _findMessage;
   final SearchContextApi? contextApi;
+
+  /// Keep member/date results in the stack so back restores their list state.
+  final bool preserveEntryRoute;
   final Future<ConversationInfo?> Function(String) _findConversation;
   final ChatHistoryActiveChat? Function(String) _currentChat;
   final ChatHistoryStartChat _startChat;
@@ -72,6 +76,7 @@ class ChatHistoryMessageNavigation {
     required String conversationID,
     required Message message,
     required bool Function() isEntryCurrent,
+    bool? preserveEntryRoute,
   }) async {
     if (_opening || !context.mounted || !_sameSession || !isEntryCurrent()) {
       return false;
@@ -128,7 +133,8 @@ class ChatHistoryMessageNavigation {
 
       final chat = _currentChat(conversationID);
       final route = chat?.route;
-      if (chat != null &&
+      if (!(preserveEntryRoute ?? this.preserveEntryRoute) &&
+          chat != null &&
           chat.conversationID == conversationID &&
           chat.isCurrent() &&
           route?.isActive == true &&

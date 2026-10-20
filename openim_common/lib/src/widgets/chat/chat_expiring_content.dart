@@ -93,11 +93,11 @@ class _ChatExpiringContentState extends State<ChatExpiringContent>
       final expired = Text('sdkExpired'.tr, style: Styles.ts_8E9AB0_13sp);
       return widget.builder?.call(context, expired, null) ?? expired;
     }
-    final notice =
-        '${'sdkBurnCountdown'.tr}${seconds == null ? '' : ' · $seconds ${'sdkSeconds'.tr}'}';
+    final notice = seconds == null ? null : '$seconds ${'sdkSeconds'.tr}';
     if (widget.builder != null) {
       return widget.builder!(context, widget.child, notice);
     }
+    if (notice == null) return widget.child;
     return Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

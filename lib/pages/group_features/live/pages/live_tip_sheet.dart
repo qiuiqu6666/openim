@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -125,7 +126,7 @@ class _LiveTipFormState extends State<_LiveTipForm>
         _isLive = _isLive &&
             summary.sessionID == widget.session.id &&
             summary.isActive;
-        if (!_isLive) _error = StateError('当前场次未在直播中，暂不能打赏');
+        if (!_isLive) _error = StateError(AppCopy.text('当前场次未在直播中，暂不能打赏'));
       });
     });
     _store = widget.pendingStore ??
@@ -139,9 +140,8 @@ class _LiveTipFormState extends State<_LiveTipForm>
     final anchorID = widget.session.anchorID;
     if (!sessionCurrent || anchorID.isEmpty) return '主播';
     try {
-      final users = await OpenIM.iMManager.userManager
-          .getUsersInfo(userIDList: [anchorID])
-          .timeout(const Duration(seconds: 5));
+      final users = await OpenIM.iMManager.userManager.getUsersInfo(
+          userIDList: [anchorID]).timeout(const Duration(seconds: 5));
       if (!sessionCurrent) return '主播';
       for (final user in users) {
         if (user.userID != anchorID) continue;
@@ -155,12 +155,12 @@ class _LiveTipFormState extends State<_LiveTipForm>
   }
 
   void _syncCurrencies() {
-    _currencies = LiveTipCurrency.fromCapabilities(
-            featureContext.capabilities.live.raw)
-        .where((value) =>
-            (value.code == 'USDT' && value.decimals == 6) ||
-            (value.code == 'BI99' && value.decimals == 2))
-        .toList(growable: false);
+    _currencies =
+        LiveTipCurrency.fromCapabilities(featureContext.capabilities.live.raw)
+            .where((value) =>
+                (value.code == 'USDT' && value.decimals == 6) ||
+                (value.code == 'BI99' && value.decimals == 2))
+            .toList(growable: false);
     final selected =
         _currencies.where((value) => value.code == _currency?.code);
     _currency = selected.firstOrNull ?? _currencies.firstOrNull;
@@ -169,7 +169,8 @@ class _LiveTipFormState extends State<_LiveTipForm>
   void _permissionsChanged() {
     if (!mounted) return;
     _syncCurrencies();
-    if (!canTip && !_loading) _error = StateError('当前场次或打赏权限已变化，请稍后重试');
+    if (!canTip && !_loading)
+      _error = StateError(AppCopy.text('当前场次或打赏权限已变化，请稍后重试'));
     setState(() {});
   }
 
@@ -227,10 +228,10 @@ class _LiveTipFormState extends State<_LiveTipForm>
     if (!current) return false;
     final configure = await showAppConfirm(context,
         barrierDismissible: true,
-        title: '请先设置支付密码',
-        message: '设置支付密码后即可打赏主播。',
+        title: AppCopy.text('请先设置支付密码'),
+        message: AppCopy.text('设置支付密码后即可打赏主播。'),
         cancelText: '取消',
-        confirmText: '去设置');
+        confirmText: AppCopy.text('去设置'));
     if (!mounted) return false;
     if (configure != true || !current) return false;
     await Navigator.of(context).push(AppMaterialPageRoute<void>(
@@ -284,7 +285,7 @@ class _LiveTipFormState extends State<_LiveTipForm>
       final result = await showPasswordPaymentSheet<Map<String, dynamic>>(
           context: context,
           builder: (_) => PasswordPaymentSheet<Map<String, dynamic>>(
-              title: '确认打赏',
+              title: AppCopy.text('确认打赏'),
               summary: Column(mainAxisSize: MainAxisSize.min, children: [
                 Text('${draft['amountText']} ${_currency!.label}',
                     style: const TextStyle(
@@ -293,7 +294,8 @@ class _LiveTipFormState extends State<_LiveTipForm>
                 FutureBuilder<String>(
                     future: _anchorNickname,
                     builder: (_, snapshot) => Text(
-                        '打赏给 ${sessionCurrent ? snapshot.data ?? '主播' : '主播'}',
+                        AppCopy.format('打赏给 {#0}',
+                            [sessionCurrent ? snapshot.data ?? '主播' : '主播']),
                         textAlign: TextAlign.center)),
                 if ('${draft['memo']}'.isNotEmpty) Text('${draft['memo']}')
               ]),

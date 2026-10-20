@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -171,7 +172,8 @@ class _StorageCompletePage extends StatelessWidget {
             const SizedBox(height: AppTokens.s4),
             Text(
               settingsText(context,
-                  zh: '已释放 ${storageFormatBytes(bytes)} 存储空间',
+                  zh: AppCopy.format(
+                      '已释放 {#0} 存储空间', [storageFormatBytes(bytes)]),
                   en: 'Freed ${storageFormatBytes(bytes)} of storage'),
               style: TextStyle(color: AppTokens.textSecondary(dark: dark)),
             ),

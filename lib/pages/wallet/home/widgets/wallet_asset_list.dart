@@ -1,3 +1,4 @@
+import 'package:openim/services/fund_currency_visibility/fund_currency_visibility.dart';
 import 'dart:math' as math;
 import 'wallet_asset_value_sort.dart';
 
@@ -36,16 +37,22 @@ class _WalletAssetListState extends State<WalletAssetList> {
   Widget build(BuildContext context) {
     final source =
         context.select<WalletController, List<CoinDto>>((c) => c.coins);
+    // Presentation-only: keep the legacy balance contract and account totals.
+    final displayCoins = source
+        .where((coin) =>
+            isFundCurrencyCodeVisible(coin.code) &&
+            !(coin.code.trim().isEmpty && coin.type == CoinType.trx))
+        .toList(growable: false);
     final showBal = context.select<WalletController, bool>((c) => c.showBal);
     final loading = context.select<WalletController, bool>((c) => c.loading);
     // A stable partition preserves the backend order within either group.
     final ordered = <CoinDto>[
-      ...source.where((c) => c.platformCoin),
-      ...source.where((c) => !c.platformCoin),
+      ...displayCoins.where((c) => c.platformCoin),
+      ...displayCoins.where((c) => !c.platformCoin),
     ];
     final visible = _descending == null
         ? ordered
-        : sortWalletAssetsByValue(source, descending: _descending!);
+        : sortWalletAssetsByValue(displayCoins, descending: _descending!);
     final cs = WalletPageColors.of(context);
     final i18n = AppI18n.of(context);
     // Controller.loading is true only until the first successful snapshot.

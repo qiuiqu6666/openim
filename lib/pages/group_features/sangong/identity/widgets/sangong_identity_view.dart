@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -113,7 +114,7 @@ class SangongPublicAccount extends StatelessWidget {
   Widget build(BuildContext context) => SangongIdentityView(
       userID: userID,
       builder: (identity) => Text(
-          '$prefix${identity?.account.isNotEmpty == true ? identity!.account : '未获取'}',
+          '$prefix${identity?.account.isNotEmpty == true ? identity!.account : AppCopy.text('未获取')}',
           style: style));
 }
 

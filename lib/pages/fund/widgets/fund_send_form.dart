@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from qiuiqu6666/99chat, revision d7c3c65 (Apache-2.0).
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -84,9 +85,12 @@ class FundSendForm extends StatelessWidget {
           color: color ?? FundPageColors.of(context).text,
           fontWeight: weight ?? FontWeight.w500);
   String _bizLabel(BuildContext context, FundPacketBiz biz) => switch (biz) {
-        FundPacketBiz.normal => _text(context, '普通红包', 'Regular packet'),
-        FundPacketBiz.lucky => _text(context, '拼手气红包', 'Lucky packet'),
-        FundPacketBiz.exclusive => _text(context, '专属红包', 'Exclusive packet'),
+        FundPacketBiz.normal =>
+          _text(context, AppCopy.text('普通红包'), 'Regular packet'),
+        FundPacketBiz.lucky =>
+          _text(context, AppCopy.text('拼手气红包'), 'Lucky packet'),
+        FundPacketBiz.exclusive =>
+          _text(context, AppCopy.text('专属红包'), 'Exclusive packet'),
       };
   Widget _amountField(BuildContext context, {bool transfer = false}) {
     final cs = FundPageColors.of(context);
@@ -96,8 +100,8 @@ class FundSendForm extends StatelessWidget {
         : FundWalletTokens.fieldInputFont;
     return Semantics(
         label: isMultiple && biz == FundPacketBiz.normal
-            ? _text(context, '单个金额', 'Amount per packet')
-            : _text(context, '金额', 'Amount'),
+            ? _text(context, AppCopy.text('单个金额'), 'Amount per packet')
+            : _text(context, AppCopy.text('金额'), 'Amount'),
         child: TextFormField(
             key: const ValueKey('fund-amount'),
             controller: amount,
@@ -134,7 +138,7 @@ class FundSendForm extends StatelessWidget {
   ) {
     final cs = FundPageColors.of(context);
     return Semantics(
-        label: _text(context, '红包个数', 'Packet count'),
+        label: _text(context, AppCopy.text('红包个数'), 'Packet count'),
         child: TextFormField(
             key: const ValueKey('fund-count'),
             controller: count,
@@ -149,11 +153,12 @@ class FundSendForm extends StatelessWidget {
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                hintText: _text(context, '填写红包个数', 'Number of packets'),
+                hintText:
+                    _text(context, AppCopy.text('填写红包个数'), 'Number of packets'),
                 hintStyle: _walletStyle(
                     context, FundWalletTokens.fieldInputFont,
                     color: cs.inputHint, weight: FontWeight.w400),
-                suffixText: _text(context, '个', 'packets'),
+                suffixText: _text(context, AppCopy.text('个'), 'packets'),
                 suffixStyle: _walletStyle(
                     context, FundWalletTokens.fieldLabelFont,
                     weight: FontWeight.w600),
@@ -161,7 +166,7 @@ class FundSendForm extends StatelessWidget {
             validator: (value) {
               final count = int.tryParse(value ?? '');
               return count == null || count <= 0 || count > 2147483647
-                  ? _text(context, '请输入有效的正整数',
+                  ? _text(context, AppCopy.text('请输入有效的正整数'),
                       'Enter a valid positive packet count')
                   : null;
             },
@@ -194,8 +199,8 @@ class FundSendForm extends StatelessWidget {
           context,
           Text(
               isMultiple && biz == FundPacketBiz.normal
-                  ? _text(context, '单个金额', 'Amount per packet')
-                  : _text(context, '总金额', 'Total amount'),
+                  ? _text(context, AppCopy.text('单个金额'), 'Amount per packet')
+                  : _text(context, AppCopy.text('总金额'), 'Total amount'),
               style: _walletStyle(context, FundWalletTokens.fieldLabelFont,
                   weight: FontWeight.w600)),
           _amountField(
@@ -224,7 +229,7 @@ class FundSendForm extends StatelessWidget {
                             color: FundWalletTokens.packetIconCoin,
                             shape: BoxShape.circle)))),
             const SizedBox(width: 10),
-            Text(_text(context, '红包个数', 'Number of packets'),
+            Text(_text(context, AppCopy.text('红包个数'), 'Number of packets'),
                 style: _walletStyle(context, FundWalletTokens.fieldLabelFont,
                     weight: FontWeight.w600)),
           ]),
@@ -240,7 +245,7 @@ class FundSendForm extends StatelessWidget {
         borderRadius: BorderRadius.circular(FundWalletTokens.fieldRadius),
         child: _inputBox(
             context,
-            Text(_text(context, '发给谁', 'Send to'),
+            Text(_text(context, AppCopy.text('发给谁'), 'Send to'),
                 style: _walletStyle(context, FundWalletTokens.fieldLabelFont,
                     weight: FontWeight.w600)),
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
@@ -258,7 +263,8 @@ class FundSendForm extends StatelessWidget {
               Flexible(
                   child: Text(
                       recipientName ??
-                          _text(context, '请选择接收人', 'Select recipient'),
+                          _text(context, AppCopy.text('请选择接收人'),
+                              'Select recipient'),
                       textAlign: TextAlign.right,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -297,8 +303,9 @@ class FundSendForm extends StatelessWidget {
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
             hintText: transfer
-                ? _text(context, '添加转账说明', 'Add a note')
-                : _text(context, '恭喜发财，大吉大利', 'Best wishes and good fortune.'),
+                ? _text(context, AppCopy.text('添加转账说明'), 'Add a note')
+                : _text(context, AppCopy.text('恭喜发财，大吉大利'),
+                    'Best wishes and good fortune.'),
             hintStyle: _walletStyle(
                 context, transfer ? 14.5 : FundWalletTokens.fieldLabelFont,
                 color: cs.inputHint, weight: FontWeight.w400),
@@ -345,7 +352,7 @@ class FundSendForm extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                    Text(_text(context, '我的钱包', 'My Wallet'),
+                    Text(_text(context, AppCopy.text('我的钱包'), 'My Wallet'),
                         style: _walletStyle(
                             context, FundWalletTokens.payTitleFont)),
                     const SizedBox(height: 6),
@@ -355,7 +362,7 @@ class FundSendForm extends StatelessWidget {
                             context, FundWalletTokens.payBalanceFont,
                             weight: FontWeight.w800)),
                   ])),
-              Text(_text(context, '更换', 'Change'),
+              Text(_text(context, AppCopy.text('更换'), 'Change'),
                   style: _walletStyle(context, 12,
                       color: cs.subText, weight: FontWeight.w400)),
               const SizedBox(width: 2),
@@ -424,9 +431,13 @@ class FundSendForm extends StatelessWidget {
                               color: AppTokens.onAccent))
                       : Text(
                           hasPending
-                              ? _text(
-                                  context, '重试原交易', 'Retry original payment')
-                              : _text(context, transfer ? '确认' : '塞钱进红包',
+                              ? _text(context, AppCopy.text('重试原交易'),
+                                  'Retry original payment')
+                              : _text(
+                                  context,
+                                  transfer
+                                      ? AppCopy.text('确认')
+                                      : AppCopy.text('塞钱进红包'),
                                   transfer ? 'Confirm' : 'Send Red Packet'),
                           style: _walletStyle(context,
                               transfer ? 18 : FundWalletTokens.packetButtonFont,
@@ -443,9 +454,9 @@ class FundSendForm extends StatelessWidget {
           {double font = FundWalletTokens.noticeFont}) =>
       Text(
           isMultiple
-              ? _text(context, '未领取的红包，将于24小时后发起退款',
+              ? _text(context, AppCopy.text('未领取的红包，将于24小时后发起退款'),
                   'Unclaimed red packets will be refunded after 24 hours.')
-              : _text(context, '发送成功后直接到账，无需领取。',
+              : _text(context, AppCopy.text('发送成功后直接到账，无需领取。'),
                   'Funds are delivered directly after sending.'),
           textAlign: TextAlign.center,
           style: _walletStyle(context, font,
@@ -468,12 +479,12 @@ class FundSendForm extends StatelessWidget {
       if (error != null && !hasBalances)
         TextButton(
             onPressed: isSubmitting ? null : onReload,
-            child: Text(_text(context, '重新加载', 'Reload'))),
+            child: Text(_text(context, AppCopy.text('重新加载'), 'Reload'))),
       if (!passwordSet && !isLoading)
         TextButton(
             onPressed: isSubmitting ? null : onSetPassword,
-            child: Text(_text(
-                context, '设置六位支付密码', 'Set a six-digit payment password'))),
+            child: Text(_text(context, AppCopy.text('设置六位支付密码'),
+                'Set a six-digit payment password'))),
     ]);
   }
 
@@ -664,8 +675,10 @@ class FundSendForm extends StatelessWidget {
                     centerTitle: true,
                     title: Text(
                         isGroup
-                            ? _text(context, '发送红包', 'Send Red Packet')
-                            : _text(context, '普通红包', 'Regular Red Packet'),
+                            ? _text(context, AppCopy.text('发送红包'),
+                                'Send Red Packet')
+                            : _text(context, AppCopy.text('普通红包'),
+                                'Regular Red Packet'),
                         style:
                             _walletStyle(context, 17, weight: FontWeight.w600)))
                 : null,

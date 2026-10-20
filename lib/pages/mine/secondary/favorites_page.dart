@@ -1,3 +1,5 @@
+import 'package:openim_common/media_localization.dart';
+import 'package:openim_common/localization.dart';
 import '../../favorites/media/favorite_item_thumbnail.dart';
 import '../../favorites/navigation/favorites_app_bar.dart';
 import '../../chat/favorites/widgets/favorite_picker_filters.dart';
@@ -97,6 +99,7 @@ class _FavoritesPageState extends State<_FavoritesDraftPage> {
       final assets = await AssetPicker.pickAssets(
         context,
         pickerConfig: AssetPickerConfig(
+          textDelegate: AppMediaCopy.assets,
           maxAssets: 1,
           requestType: type == FavoriteDraftType.video
               ? RequestType.video
@@ -177,7 +180,7 @@ class _FavoritesPageState extends State<_FavoritesDraftPage> {
       message: count > 1
           ? settingsText(
               context,
-              zh: '确定删除选中的 $count 条收藏吗？删除后无法恢复。',
+              zh: AppCopy.format('确定删除选中的 {#0} 条收藏吗？删除后无法恢复。', [count]),
               en: 'Delete $count selected favorites? This cannot be undone.',
             )
           : settingsText(
@@ -258,9 +261,9 @@ class _FavoritesPageState extends State<_FavoritesDraftPage> {
       if (_filter != null && item.type != _filter) return false;
       if (query.isEmpty) return true;
       final typeLabel = switch (item.type) {
-        FavoriteDraftType.note => _isZh ? '文字 笔记' : 'text note',
-        FavoriteDraftType.image => _isZh ? '图片' : 'image',
-        FavoriteDraftType.video => _isZh ? '视频' : 'video',
+        FavoriteDraftType.note => _isZh ? AppCopy.text('文字 笔记') : 'text note',
+        FavoriteDraftType.image => _isZh ? AppCopy.text('图片') : 'image',
+        FavoriteDraftType.video => _isZh ? AppCopy.text('视频') : 'video',
       };
       return '${item.text} $typeLabel'.toLowerCase().contains(query);
     }).toList();
@@ -623,7 +626,8 @@ class _FavoritesPageState extends State<_FavoritesDraftPage> {
                                 ? settingsText(context, zh: '删除', en: 'Delete')
                                 : settingsText(
                                     context,
-                                    zh: '删除(${_selectedIds.length})',
+                                    zh: AppCopy.format(
+                                        '删除({#0})', [_selectedIds.length]),
                                     en: 'Delete (${_selectedIds.length})',
                                   ),
                           ),
@@ -876,10 +880,12 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
     final action = await showSettingsActionSheet<String>(context,
         title: item.title,
         actions: [
-          SettingsAction(_text('查看详情', 'View details'), 'detail'),
+          SettingsAction(_text(AppCopy.text('查看详情'), 'View details'), 'detail'),
           if (widget.onSendToConversation != null && canSendFavoriteP0(item))
-            SettingsAction(_text('发送到对话', 'Send to a chat'), 'send'),
-          SettingsAction(_text('删除', 'Delete'), 'delete', destructive: true),
+            SettingsAction(
+                _text(AppCopy.text('发送到对话'), 'Send to a chat'), 'send'),
+          SettingsAction(_text(AppCopy.text('删除'), 'Delete'), 'delete',
+              destructive: true),
         ]);
     if (!mounted || action == null || !_current) return;
     if (action == 'detail') {
@@ -899,13 +905,15 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
           showSettingsMessage(
               context,
               result.status == FavoriteSendStatus.success
-                  ? _text('已发送', 'Sent')
+                  ? _text(AppCopy.text('已发送'), 'Sent')
                   : result.errorMessage ??
-                      _text('发送未完成，请重试', 'Could not send. Please retry.'));
+                      _text(AppCopy.text('发送未完成，请重试'),
+                          'Could not send. Please retry.'));
         }
       } catch (error) {
         if (mounted && _current) {
-          showSettingsError(context, error, _text('发送失败', 'Could not send'));
+          showSettingsError(
+              context, error, _text(AppCopy.text('发送失败'), 'Could not send'));
         }
       } finally {
         if (mounted) setState(() => _busy = false);
@@ -918,8 +926,10 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
   Future<void> _deleteItems(List<FavoriteItem> items) async {
     if (_busy || items.isEmpty || !_current) return;
     if (items.length > 100) {
-      showSettingsMessage(context,
-          _text('每次最多删除 100 条收藏', 'Delete up to 100 favorites at a time.'));
+      showSettingsMessage(
+          context,
+          _text(AppCopy.text('每次最多删除 100 条收藏'),
+              'Delete up to 100 favorites at a time.'));
       return;
     }
     setState(() => _busy = true);
@@ -953,10 +963,11 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
       if (!mounted || !_current) return;
       setState(() => _confirmingDelete = true);
       final confirmed = await showSettingsConfirm(context,
-          title: _text('删除收藏', 'Delete favorites'),
-          message: _text('确定删除这 ${items.length} 条收藏吗？已发送的聊天消息会保留。',
+          title: _text(AppCopy.text('删除收藏'), 'Delete favorites'),
+          message: _text(
+              AppCopy.format('确定删除这 {#0} 条收藏吗？已发送的聊天消息会保留。', [items.length]),
               'Delete ${items.length} favorites? Messages already sent will be kept.'),
-          confirmText: _text('删除', 'Delete'),
+          confirmText: _text(AppCopy.text('删除'), 'Delete'),
           destructive: true);
       if (!mounted || !confirmed || !_current) return;
       setState(() => _confirmingDelete = false);
@@ -1026,7 +1037,7 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
       showSettingsMessage(
           context,
           failureMessage ??
-              _text('${failed.length} 条内容已更新或删除失败，请检查后重试',
+              _text(AppCopy.format('{#0} 条内容已更新或删除失败，请检查后重试', [failed.length]),
                   '${failed.length} items could not be deleted. Please retry.'));
     }
   }
@@ -1042,7 +1053,7 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
     if (items.any((item) => !canSendFavoriteP0(item))) {
       showSettingsMessage(
           context,
-          _text('请选择已保存且支持发送的收藏',
+          _text(AppCopy.text('请选择已保存且支持发送的收藏'),
               'Select saved favorites that support sending.'));
       return;
     }
@@ -1063,7 +1074,7 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
             _selectedItems.clear();
             _editing = false;
             _batchMessage = result.errorMessage ??
-                _text('收藏内容已更新，请重新选择收藏与发送目标',
+                _text(AppCopy.text('收藏内容已更新，请重新选择收藏与发送目标'),
                     'Favorites have changed. Select favorites and a destination again.');
           });
         }
@@ -1075,19 +1086,22 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
           _selectedItems.clear();
           _editing = false;
         });
-        showSettingsMessage(context, _text('已发送', 'Sent'));
+        showSettingsMessage(context, _text(AppCopy.text('已发送'), 'Sent'));
       } else {
         setState(() => _batchMessage = result.status ==
                 FavoriteSendStatus.unknown
-            ? _text('发送状态待确认，请查看目标对话。保留选择以继续此批次。',
+            ? _text(AppCopy.text('发送状态待确认，请查看目标对话。保留选择以继续此批次。'),
                 'Sending status is unconfirmed. Check the destination chat. Keep the selection to continue this batch.')
-            : '${result.errorMessage ?? _text('发送未完成', 'Sending incomplete')}\n${_text('已完成 ${result.sentCount}/${result.totalCount} 项发送。再次点击发送继续未完成部分。', 'Completed ${result.sentCount}/${result.totalCount} sends. Tap send again to continue the remaining sends.')}');
+            : '${result.errorMessage ?? _text(AppCopy.text('发送未完成'), 'Sending incomplete')}\n${_text(AppCopy.format('已完成 {#0}/{#1} 项发送。再次点击发送继续未完成部分。', [
+                      result.sentCount,
+                      result.totalCount
+                    ]), 'Completed ${result.sentCount}/${result.totalCount} sends. Tap send again to continue the remaining sends.')}');
       }
     } catch (error) {
       if (mounted && _current) {
         setState(() => _batchMessage = error is FavoriteApiException
             ? error.message
-            : _text('发送失败，请重试', 'Could not send. Please retry.'));
+            : _text(AppCopy.text('发送失败，请重试'), 'Could not send. Please retry.'));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -1120,7 +1134,8 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
       if (mounted && _current) {
         setState(() => _batchMessage = error is FavoriteApiException
             ? error.message
-            : _text('取消失败，请重试', 'Could not cancel. Please retry.'));
+            : _text(
+                AppCopy.text('取消失败，请重试'), 'Could not cancel. Please retry.'));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -1138,14 +1153,20 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
     _FavoriteCreateAction? action;
     try {
       action = await showSettingsActionSheet<_FavoriteCreateAction>(context,
-          title: _text('添加收藏', 'Add favorite'),
+          title: _text(AppCopy.text('添加收藏'), 'Add favorite'),
           actions: [
-            SettingsAction(_text('笔记', 'Note'), _FavoriteCreateAction.note),
-            SettingsAction(_text('图片', 'Image'), _FavoriteCreateAction.image),
-            SettingsAction(_text('视频', 'Video'), _FavoriteCreateAction.video),
-            SettingsAction(_text('音频', 'Audio'), _FavoriteCreateAction.audio),
-            SettingsAction(_text('文件', 'File'), _FavoriteCreateAction.file),
-            SettingsAction(_text('链接', 'Link'), _FavoriteCreateAction.link),
+            SettingsAction(
+                _text(AppCopy.text('笔记'), 'Note'), _FavoriteCreateAction.note),
+            SettingsAction(_text(AppCopy.text('图片'), 'Image'),
+                _FavoriteCreateAction.image),
+            SettingsAction(_text(AppCopy.text('视频'), 'Video'),
+                _FavoriteCreateAction.video),
+            SettingsAction(_text(AppCopy.text('音频'), 'Audio'),
+                _FavoriteCreateAction.audio),
+            SettingsAction(
+                _text(AppCopy.text('文件'), 'File'), _FavoriteCreateAction.file),
+            SettingsAction(
+                _text(AppCopy.text('链接'), 'Link'), _FavoriteCreateAction.link),
           ]);
     } finally {
       _choosingCreateAction = false;
@@ -1166,8 +1187,8 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
       await showDialog<void>(
           context: context,
           builder: (_) => _FavoriteValueDialog(
-              title: _text('添加链接', 'Add link'),
-              label: _text('网页地址', 'Web address'),
+              title: _text(AppCopy.text('添加链接'), 'Add link'),
+              label: _text(AppCopy.text('网页地址'), 'Web address'),
               hint: 'https://',
               onSave: (value) async {
                 if (!_current) throw StateError('登录状态已改变');
@@ -1189,6 +1210,7 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
       if (kind == FavoriteKind.image || kind == FavoriteKind.video) {
         final assets = await AssetPicker.pickAssets(context,
             pickerConfig: AssetPickerConfig(
+                textDelegate: AppMediaCopy.assets,
                 maxAssets: 1,
                 requestType: kind == FavoriteKind.video
                     ? RequestType.video
@@ -1232,13 +1254,13 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
             context,
             item.isReady
                 ? _text('已收藏', 'Saved')
-                : _text(
-                    '正在保存，完成后即可发送', 'Saving. You can send when it is ready.'));
+                : _text(AppCopy.text('正在保存，完成后即可发送'),
+                    'Saving. You can send when it is ready.'));
       }
     } catch (error) {
       if (mounted && _current) {
-        showSettingsError(
-            context, error, _text('收藏失败，请重试', 'Could not save. Please retry.'));
+        showSettingsError(context, error,
+            _text(AppCopy.text('收藏失败，请重试'), 'Could not save. Please retry.'));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -1253,7 +1275,8 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
       appBar: favoritesAppBar(
         context,
         title: _text('收藏', 'Favorites'),
-        actionLabel: _editing ? _text('完成', 'Done') : _text('编辑', 'Edit'),
+        actionLabel:
+            _editing ? _text('完成', 'Done') : _text(AppCopy.text('编辑'), 'Edit'),
         onAction: _busy || !_current
             ? null
             : () => setState(() {
@@ -1268,7 +1291,7 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
         child: _invalid
             ? SettingsEmptyState(
                 icon: Icons.lock_outline,
-                title: _text('登录状态已改变，请重新打开收藏',
+                title: _text(AppCopy.text('登录状态已改变，请重新打开收藏'),
                     'Your account changed. Reopen favorites.'))
             : Column(children: [
                 FavoriteRecoveryBanner(repository: widget.repository),
@@ -1282,7 +1305,11 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
                               Padding(
                                   padding: const EdgeInsets.all(AppTokens.s3),
                                   child: Text(_text(
-                                      '正在上传原件 ${(widget.repository.uploadProgress! * 100).round()}%',
+                                      AppCopy.format('正在上传原件 {#0}%', [
+                                        (widget.repository.uploadProgress! *
+                                                100)
+                                            .round()
+                                      ]),
                                       'Uploading original ${(widget.repository.uploadProgress! * 100).round()}%'))),
                           ])),
                 if (_batchMessage != null)
@@ -1301,7 +1328,8 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
                       key: const ValueKey('favorites-cancel-send'),
                       onPressed: _busy ? null : _cancelSelectedSend,
                       icon: const Icon(Icons.cancel_outlined),
-                      label: Text(_text('取消剩余发送', 'Cancel remaining sends'))),
+                      label: Text(_text(
+                          AppCopy.text('取消剩余发送'), 'Cancel remaining sends'))),
                 Expanded(
                     key: const ValueKey('favorites-cloud-collection'),
                     child: FavoriteCollectionView(
@@ -1312,7 +1340,8 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
                       onTap: _openDetail,
                       onLongPress: _itemActions,
                       onDelete: (item) => _deleteItems([item]),
-                      emptyActionLabel: _text('添加收藏', 'Add favorite'),
+                      emptyActionLabel:
+                          _text(AppCopy.text('添加收藏'), 'Add favorite'),
                       onEmptyAction: _addFavorite,
                     )),
                 if (_editing)
@@ -1329,7 +1358,9 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
                                     ? null
                                     : _sendSelected,
                                 icon: const Icon(Icons.send_outlined),
-                                label: Text(_text('发送 (${_selectedIds.length})',
+                                label: Text(_text(
+                                    AppCopy.format(
+                                        '发送 ({#0})', [_selectedIds.length]),
                                     'Send (${_selectedIds.length})'))),
                           OutlinedButton.icon(
                             key: const ValueKey('favorites-delete-selected'),
@@ -1338,7 +1369,9 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
                                 : () => _deleteItems(
                                     _selectedItems.values.toList()),
                             icon: const Icon(Icons.delete_outline),
-                            label: Text(_text('删除 (${_selectedIds.length})',
+                            label: Text(_text(
+                                AppCopy.format(
+                                    '删除 ({#0})', [_selectedIds.length]),
                                 'Delete (${_selectedIds.length})')),
                           ),
                         ]),
@@ -1349,7 +1382,7 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
           ? null
           : FloatingActionButton(
               key: const ValueKey('favorites-add-fab'),
-              tooltip: _text('添加收藏', 'Add favorite'),
+              tooltip: _text(AppCopy.text('添加收藏'), 'Add favorite'),
               onPressed: _busy || _invalid ? null : _addFavorite,
               backgroundColor: AppTokens.accent,
               foregroundColor: AppTokens.onAccent,
@@ -1444,8 +1477,8 @@ class _FavoriteCollectionViewState extends State<FavoriteCollectionView> {
       await widget.repository.loadMore();
     } catch (error) {
       if (mounted) {
-        showSettingsError(
-            context, error, _text('加载失败，请重试', 'Could not load. Please retry.'));
+        showSettingsError(context, error,
+            _text(AppCopy.text('加载失败，请重试'), 'Could not load. Please retry.'));
       }
     }
   }
@@ -1518,7 +1551,7 @@ class _FavoriteCollectionViewState extends State<FavoriteCollectionView> {
               unawaited(_refresh());
             },
             decoration: InputDecoration(
-              labelText: _text('搜索收藏内容', 'Search favorites'),
+              labelText: _text(AppCopy.text('搜索收藏内容'), 'Search favorites'),
               prefixIcon: const Icon(Icons.search_rounded),
               filled: true,
               fillColor: AppTokens.surfaceAlt(dark: dark),
@@ -1584,7 +1617,7 @@ class _FavoriteCollectionViewState extends State<FavoriteCollectionView> {
       return TextButton(
         key: const ValueKey('favorites-load-more'),
         onPressed: widget.disabled ? null : _loadNextPage,
-        child: Text(_text('加载更多', 'Load more')),
+        child: Text(_text(AppCopy.text('加载更多'), 'Load more')),
       );
     }
     return Padding(
@@ -1592,9 +1625,12 @@ class _FavoriteCollectionViewState extends State<FavoriteCollectionView> {
       child: Text(
           widget.pickerStyle
               ? _text(
-                  '—  ${_pickerHasMore ? '已加载' : '已收藏'} ${_pickerItems.length} 条内容  —',
+                  AppCopy.format('—  {#0} {#1} 条内容  —', [
+                    _pickerHasMore ? AppCopy.text('已加载') : '已收藏',
+                    _pickerItems.length
+                  ]),
                   '—  ${_pickerItems.length} ${_pickerHasMore ? 'loaded' : 'saved'} items  —')
-              : _text('已显示全部收藏', 'All favorites shown'),
+              : _text(AppCopy.text('已显示全部收藏'), 'All favorites shown'),
           textAlign: TextAlign.center,
           style: TextStyle(
               color: settingsSecondaryTextColor(context)
@@ -1679,7 +1715,7 @@ class _FavoriteCollectionViewState extends State<FavoriteCollectionView> {
                 Padding(
                     padding: const EdgeInsets.all(AppTokens.s3),
                     child: Text(
-                        _text('显示已缓存收藏，正在同步',
+                        _text(AppCopy.text('显示已缓存收藏，正在同步'),
                             'Showing cached favorites while syncing'),
                         style: TextStyle(
                             color: settingsSecondaryTextColor(context)))),
@@ -1696,7 +1732,7 @@ class _FavoriteCollectionViewState extends State<FavoriteCollectionView> {
                                         Theme.of(context).colorScheme.error)))),
                     TextButton(
                         onPressed: widget.disabled ? null : _refresh,
-                        child: Text(_text('重试', 'Retry'))),
+                        child: Text(_text(AppCopy.text('重试'), 'Retry'))),
                   ]),
                 ),
               Flexible(
@@ -1726,17 +1762,20 @@ class _FavoriteCollectionViewState extends State<FavoriteCollectionView> {
                                 ? Icons.cloud_off_outlined
                                 : Icons.bookmark_border_rounded,
                             title: repository.error != null
-                                ? _text('收藏加载失败', 'Could not load favorites')
+                                ? _text(AppCopy.text('收藏加载失败'),
+                                    'Could not load favorites')
                                 : _search.text.isNotEmpty || _kind != null
-                                    ? _text('没有匹配的收藏', 'No matching favorites')
-                                    : _text('暂无收藏', 'No favorites yet'),
+                                    ? _text(AppCopy.text('没有匹配的收藏'),
+                                        'No matching favorites')
+                                    : _text(AppCopy.text('暂无收藏'),
+                                        'No favorites yet'),
                             description: repository.error != null
-                                ? _text('检查网络后重试',
+                                ? _text(AppCopy.text('检查网络后重试'),
                                     'Check your connection and retry')
-                                : _text('长按聊天消息即可收藏，也可以添加笔记或文件',
+                                : _text(AppCopy.text('长按聊天消息即可收藏，也可以添加笔记或文件'),
                                     'Save a message with a long press, or add a note or file'),
                             actionLabel: repository.error != null
-                                ? _text('重试', 'Retry')
+                                ? _text(AppCopy.text('重试'), 'Retry')
                                 : widget.emptyActionLabel,
                             onAction: widget.disabled
                                 ? null
@@ -1804,7 +1843,8 @@ class _FavoriteCollectionViewState extends State<FavoriteCollectionView> {
                       FavoritePickerTokens.footerFontSize,
                   child: Center(
                     child: repository.loading && _pickerItems.isEmpty
-                        ? Text(_text('正在加载收藏', 'Loading favorites'),
+                        ? Text(
+                            _text(AppCopy.text('正在加载收藏'), 'Loading favorites'),
                             style: TextStyle(
                               fontSize: FavoritePickerTokens.footerFontSize,
                               color: settingsSecondaryTextColor(context),
@@ -2049,16 +2089,16 @@ IconData favoriteKindIcon(FavoriteKind kind) => switch (kind) {
 String favoriteKindLabel(BuildContext context, FavoriteKind kind) {
   final labels = switch (kind) {
     FavoriteKind.text => ('文字', 'Text'),
-    FavoriteKind.note => ('笔记', 'Notes'),
-    FavoriteKind.image => ('图片', 'Images'),
-    FavoriteKind.video => ('视频', 'Videos'),
-    FavoriteKind.audio => ('语音', 'Audio'),
-    FavoriteKind.file => ('文件', 'Files'),
-    FavoriteKind.link => ('链接', 'Links'),
+    FavoriteKind.note => (AppCopy.text('笔记'), 'Notes'),
+    FavoriteKind.image => (AppCopy.text('图片'), 'Images'),
+    FavoriteKind.video => (AppCopy.text('视频'), 'Videos'),
+    FavoriteKind.audio => (AppCopy.text('语音'), 'Audio'),
+    FavoriteKind.file => (AppCopy.text('文件'), 'Files'),
+    FavoriteKind.link => (AppCopy.text('链接'), 'Links'),
     FavoriteKind.location => ('定位', 'Locations'),
     FavoriteKind.contact => ('名片', 'Contacts'),
-    FavoriteKind.messageBundle => ('聊天记录', 'Chat history'),
-    FavoriteKind.unknown => ('暂不支持的内容', 'Unsupported content'),
+    FavoriteKind.messageBundle => (AppCopy.text('聊天记录'), 'Chat history'),
+    FavoriteKind.unknown => (AppCopy.text('暂不支持的内容'), 'Unsupported content'),
   };
   return settingsText(context, zh: labels.$1, en: labels.$2);
 }

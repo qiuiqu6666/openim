@@ -14,6 +14,16 @@ import 'package:openim/pages/mine/settings/settings_service.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Keep layout checks independent of network timing while observing page entry.
+class _PageProbeController extends NodeProbeController {
+  _PageProbeController({super.readEndpoint, super.switchService});
+  int tests = 0;
+  @override
+  Future<void> test() async {
+    tests++;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() async {
@@ -45,7 +55,7 @@ void main() {
           var connections = 0;
           var preparations = 0;
           var probes = 0;
-          final controller = NodeProbeController(
+          final controller = _PageProbeController(
             readEndpoint: () => active,
             switchService: ManualNodeSwitchService(
               readEndpoint: () => active,
@@ -87,6 +97,9 @@ void main() {
                   service: const StubSettingsService()),
             ),
           ));
+          expect(controller.tests, 1);
+          await tester.pump();
+          expect(controller.tests, 1);
           expect(find.text('节点01'), findsOneWidget);
           expect(find.text('节点02'), findsOneWidget);
           expect(find.text('节点03'), findsOneWidget);
@@ -114,29 +127,29 @@ void main() {
             expect(tester.takeException(), isNull);
             await tester.tap(find.text('节点03'));
             await tester.pumpAndSettle();
-            final notice = find.text('该节点仅在其他节点不可用时切换');
-            expect(notice, findsOneWidget);
-            expect(tester.getCenter(notice).dx, closeTo(size.width / 2, 1));
-            expect(tester.getCenter(notice).dy, closeTo(size.height / 2, 1));
-            expect(connections, 0);
-            expect(preparations, 0);
-            expect(probes, 0);
-            expect(active, NodeEndpoint.direct);
+            expect(connections, 1);
+            expect(preparations, 1);
+            expect(probes, 1);
+            expect(active, NodeEndpoint.shield);
             expect(find.text('切换中'), findsNothing);
-            expect(find.byKey(const ValueKey('node-notice-2')), findsNothing);
             expect(
                 find.descendant(
-                    of: find.byKey(const ValueKey('node-row-0')),
+                    of: find.byKey(const ValueKey('node-row-2')),
                     matching: find.byIcon(Icons.check_rounded)),
                 findsOneWidget);
-            await tester.pump(const Duration(seconds: 3));
+            await tester.tap(find.text('节点03'));
             await tester.pumpAndSettle();
-            expect(notice, findsNothing);
+            expect(connections, 1);
             await tester.tap(find.text('节点02'));
             await tester.pumpAndSettle();
             expect(active, NodeEndpoint.backup);
-            expect(connections, 1);
+            expect(connections, 2);
           }
+          final page =
+              tester.widget<ScreenUtilInit>(find.byType(ScreenUtilInit));
+          await tester.pumpWidget(const SizedBox());
+          await tester.pumpWidget(page);
+          expect(controller.tests, 2);
         });
       }
     }

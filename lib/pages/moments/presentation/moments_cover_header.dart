@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -144,7 +145,8 @@ class _MomentsCoverHeaderState extends State<MomentsCoverHeader> {
                                   IconButton(
                                       tooltip: momentsText(context,
                                           zh: widget.unreadCount > 0
-                                              ? '互动消息，${widget.unreadCount}条未读'
+                                              ? AppCopy.format('互动消息，{#0}条未读',
+                                                  [widget.unreadCount])
                                               : '互动消息',
                                           en: widget.unreadCount > 0
                                               ? 'Activity, ${widget.unreadCount} unread'

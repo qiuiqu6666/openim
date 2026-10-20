@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../../host/wallet_i18n.dart';
@@ -48,7 +49,8 @@ class WalletJournalDetailBody extends StatelessWidget {
     final fields = <Widget>[
       WalletJournalDetailField(
         id: 'time',
-        label: label('支付时间', '支付時間', 'Payment time', '支払日時', '결제 시간'),
+        label: label(
+            AppCopy.text('支付时间'), '支付時間', 'Payment time', '支払日時', '결제 시간'),
         value: formatWalletApiDateTime(
           DateTime.fromMillisecondsSinceEpoch(entry.createdAt, isUtc: true),
           pattern: 'yyyy-MM-dd HH:mm:ss',
@@ -56,7 +58,8 @@ class WalletJournalDetailBody extends StatelessWidget {
       ),
       WalletJournalDetailField(
         id: 'transaction-type',
-        label: label('交易类型', '交易類型', 'Transaction type', '取引種別', '거래 유형'),
+        label: label(AppCopy.text('交易类型'), AppCopy.text('交易類型'),
+            'Transaction type', '取引種別', '거래 유형'),
         value: entry.direction == 'neutral'
             ? label('中性', '中性', 'Neutral', '中立', '중립')
             : walletJournalDirectionLabel(entry, i18n),
@@ -65,9 +68,10 @@ class WalletJournalDetailBody extends StatelessWidget {
         WalletJournalDetailField(
           id: account.isEmpty ? 'counterparty-user' : 'counterparty-account',
           label: account.isEmpty
-              ? label('对方用户', '對方使用者', 'Counterparty', '相手', '상대방')
-              : label(
-                  '对方账户', '對方帳戶', 'Counterparty account', '相手のアカウント', '상대방 계정'),
+              ? label(
+                  AppCopy.text('对方用户'), '對方使用者', 'Counterparty', '相手', '상대방')
+              : label(AppCopy.text('对方账户'), '對方帳戶', 'Counterparty account',
+                  '相手のアカウント', '상대방 계정'),
           value: account.isNotEmpty
               ? account
               : nickname.isNotEmpty
@@ -76,14 +80,16 @@ class WalletJournalDetailBody extends StatelessWidget {
         ),
       WalletJournalDetailField(
         id: 'journal-id',
-        label: label('交易号', '交易號', 'Transaction ID', '取引番号', '거래 번호'),
+        label: label(AppCopy.text('交易号'), '交易號', 'Transaction ID',
+            AppCopy.text('取引番号'), '거래 번호'),
         value: entry.id,
         copy: true,
       ),
       if ((deposit || withdrawal) && entry.chainTxID.trim().isNotEmpty)
         WalletJournalDetailField(
           id: 'chain-tx-id',
-          label: label('交易哈希', '交易雜湊', 'Transaction hash', '取引ハッシュ', '거래 해시'),
+          label: label(AppCopy.text('交易哈希'), '交易雜湊', 'Transaction hash',
+              '取引ハッシュ', '거래 해시'),
           value: entry.chainTxID,
           copy: true,
           valueColor: colors.blue,
@@ -93,14 +99,16 @@ class WalletJournalDetailBody extends StatelessWidget {
         WalletJournalDetailField(
           id: 'to-address',
           label: withdrawal
-              ? label('提现地址', '提現地址', 'Withdrawal address', '出金先アドレス', '출금 주소')
-              : label('转入地址', '轉入地址', 'Receiving address', '入金先アドレス', '입금 주소'),
+              ? label(AppCopy.text('提现地址'), '提現地址', 'Withdrawal address',
+                  '出金先アドレス', '출금 주소')
+              : label(AppCopy.text('转入地址'), '轉入地址', 'Receiving address',
+                  '入金先アドレス', '입금 주소'),
           value: entry.toAddress,
           copy: true,
         ),
       WalletJournalDetailField(
         id: 'remark',
-        label: label('备注', '備註', 'Remark', '備考', '비고'),
+        label: label(AppCopy.text('备注'), '備註', 'Remark', '備考', '비고'),
         value: entry.remark.trim().isEmpty ? '--' : entry.remark,
       ),
     ];
@@ -149,10 +157,14 @@ class WalletJournalDetailBody extends StatelessWidget {
                                 minHeight: WalletRecordTokens.minTap),
                             child: WalletJournalDetailField(
                               id: 'linked-order',
-                              label: label('关联账单', '關聯帳單', 'Related bill',
-                                  '関連明細', '연결된 청구서'),
-                              value: label('查看账单详情', '查看帳單詳情',
-                                  'View bill details', '請求明細を表示', '청구 내역 보기'),
+                              label: label(AppCopy.text('关联账单'), '關聯帳單',
+                                  'Related bill', '関連明細', '연결된 청구서'),
+                              value: label(
+                                  AppCopy.text('查看账单详情'),
+                                  AppCopy.text('查看帳單詳情'),
+                                  'View bill details',
+                                  '請求明細を表示',
+                                  '청구 내역 보기'),
                               valueColor: colors.blue,
                             ),
                           ),

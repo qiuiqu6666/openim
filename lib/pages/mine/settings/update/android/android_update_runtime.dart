@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -237,7 +238,8 @@ class AndroidUpdateRuntime with WidgetsBindingObserver {
                         ? 'Please download and install the required update to continue.'
                         : 'A new version is available. Open the download page?')
                 : settingsText(context,
-                    zh: 'v${release.latest} 已下载完成，安装后即可使用。',
+                    zh: AppCopy.format(
+                        'v{#0} 已下载完成，安装后即可使用。', [release.latest]),
                     en: 'Version ${release.latest} is downloaded and ready to install.'),
         force: c.force,
         keepOpenOnSuccess: !external || c.force,
@@ -296,7 +298,8 @@ class AndroidUpdateRuntime with WidgetsBindingObserver {
     return switch (c.phase) {
       AndroidUpdatePhase.downloading => settingsText(context,
           zh: c.total > 0
-              ? '后台下载 ${(c.bytes * 100 / c.total).clamp(0, 100).floor()}%'
+              ? AppCopy.format('后台下载 {#0}%',
+                  [(c.bytes * 100 / c.total).clamp(0, 100).floor()])
               : '正在后台下载',
           en: c.total > 0
               ? 'Downloading ${(c.bytes * 100 / c.total).clamp(0, 100).floor()}%'

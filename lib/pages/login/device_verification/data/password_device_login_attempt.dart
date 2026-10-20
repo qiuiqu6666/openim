@@ -83,6 +83,7 @@ class PasswordDeviceLoginAttempt {
 
   Future<LoginCertificate> submit({
     String? verifyCode,
+    String? method,
     bool Function()? isCurrent,
   }) {
     final request = _activeRequest;
@@ -90,33 +91,87 @@ class PasswordDeviceLoginAttempt {
       throw const FormatException('Invalid device verification code');
     }
     return Apis.loginWithRequest(
-      {...request, if (verifyCode != null) 'verifyCode': verifyCode},
+      {
+        ...request,
+        if (verifyCode != null) 'verifyCode': verifyCode,
+        if (method != null) 'deviceVerificationMethod': method
+      },
       isCurrent: isCurrent,
       showErrorToast: false,
     );
   }
 
+  Future<dynamic> _deviceRequest(String path, Map<String, dynamic> extra,
+      bool Function()? isCurrent) async {
+    final endpoint = Uri.parse(Urls.login).resolve(path);
+    if (isCurrent != null && !isCurrent()) {
+      throw StateError('Login attempt is no longer current');
+    }
+    return LegacyPasswordLogin.submit(
+      request: {..._activeRequest, ...extra},
+      endpoint: endpoint,
+      isCurrent: isCurrent,
+      post: (payload) => HttpUtil.post(endpoint.toString(),
+          data: payload,
+          withoutToken: true,
+          requestOperationID: const Uuid().v4(),
+          options: Options(
+              contentType: Headers.jsonContentType, followRedirects: false),
+          showErrorToast: false),
+    );
+  }
+
+  Future<List<String>> methods({bool Function()? isCurrent}) async {
+    final data = await _deviceRequest('device/verification', {}, isCurrent);
+    final methods = data is Map ? data['methods'] : null;
+    if (methods is! List ||
+        methods.any((v) => v != 'phone' && v != 'email') ||
+        methods.toSet().length != methods.length) {
+      throw const FormatException('Invalid device verification methods');
+    }
+    return List<String>.from(methods);
+  }
+
   Future<DeviceVerificationCodeResult> sendCode({
     required String areaCode,
     required String phoneNumber,
-    required String captchaVerifyParam,
+    String captchaVerifyParam = '',
+    String? method,
     bool Function()? isCurrent,
   }) async {
     final request = _activeRequest;
     if (isCurrent != null && !isCurrent()) {
       throw StateError('Login attempt is no longer current');
     }
-    if (areaCode.trim().isEmpty ||
-        phoneNumber.trim().isEmpty ||
-        captchaVerifyParam.isEmpty) {
+    if (method != null) {
+      if (method != 'phone' && method != 'email') {
+        throw const FormatException('Invalid verification method');
+      }
+      final data = await _deviceRequest(
+          'device/code/send',
+          {
+            'deviceVerificationMethod': method,
+          },
+          isCurrent);
+      return DeviceVerificationCodeResult.fromJson(data);
+    }
+    if (captchaVerifyParam.isEmpty) {
       throw const FormatException('Incomplete device verification request');
     }
     final data = await HttpUtil.post(
       Urls.getVerificationCode,
       data: {
         'usedFor': 3,
-        'areaCode': areaCode.trim(),
-        'phoneNumber': phoneNumber.trim(),
+        // Delivery follows the frozen login identity, never editable form data.
+        // Account/email identities are resolved to a bound phone by the server.
+        if (request.containsKey('account'))
+          'loginAccount': request['account']
+        else if (request.containsKey('email'))
+          'loginEmail': request['email']
+        else ...{
+          'areaCode': request['areaCode'],
+          'phoneNumber': request['phoneNumber'],
+        },
         'platform': request['platform'],
         'deviceID': request['deviceID'],
         'captchaVerifyParam': captchaVerifyParam,

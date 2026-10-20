@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -245,7 +246,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                 SettingsCell(
                   key: const ValueKey('notification-open-preview'),
                   title:
-                      '- ${settingsText(context, zh: '通知显示内容', en: 'Notification Content')}',
+                      '- ${settingsText(context, zh: AppCopy.text('通知显示内容'), en: 'Notification Content')}',
                   value: _previewLabel(store.openedNotificationPreview),
                   enabled: active && store.notifyWhenOpen,
                   indent: AppTokens.s3,
@@ -263,7 +264,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                 SettingsCell(
                   key: const ValueKey('notification-message-sound'),
                   title:
-                      '- ${settingsText(context, zh: '默认提示音', en: 'Default Sound')}',
+                      '- ${settingsText(context, zh: AppCopy.text('默认提示音'), en: 'Default Sound')}',
                   value: MessageNotificationSoundPickerPage.label(
                       context, store.messageSound),
                   enabled: active && store.messageSoundEnabled,

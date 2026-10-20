@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../res/app_tokens.dart';
@@ -40,7 +41,7 @@ class MainTabTitle extends StatelessWidget {
     final label = busy
         ? busyLabel ??
             (Localizations.localeOf(context).languageCode == 'zh'
-                ? '正在连接'
+                ? AppCopy.text('正在连接')
                 : 'Connecting')
         : failed
             ? failureLabel ?? title

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 
 import '../moments_widgets.dart';
@@ -24,8 +25,8 @@ class MomentsProfileRangeHint extends StatelessWidget {
               child: Text(
                   momentsText(context,
                       zh: onSettings != null
-                          ? '朋友仅能查看最近$days天的朋友圈'
-                          : '仅展示最近$days天动态',
+                          ? AppCopy.format('朋友仅能查看最近{#0}天的朋友圈', [days])
+                          : AppCopy.format('仅展示最近{#0}天动态', [days]),
                       en: 'Posts from the past $days days'),
                   textAlign: TextAlign.center,
                   style: TextStyle(

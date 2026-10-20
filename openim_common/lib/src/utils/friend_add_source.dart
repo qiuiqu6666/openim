@@ -5,6 +5,8 @@ import 'http_util.dart';
 import '../models/user_full_info.dart';
 import '../apis.dart';
 import '../models/contact_card/contact_card_identity.dart';
+import 'relationships/friend_relationship_guard.dart';
+export 'relationships/friend_relationship_guard.dart';
 
 Future<String> createFriendCardExtension(String userID,
         {String? account}) async =>
@@ -167,6 +169,7 @@ class FriendAddRequest {
     if (parameters == null) {
       throw PlatformException(code: 'FriendGrantRequired');
     }
+    await FriendRelationshipGuard.requireNotBlocked(userID);
     final grant = await Apis.createFriendGrant(parameters);
     if (DataSp.userID != owner || DataSp.chatToken != token) {
       throw PlatformException(code: '20013');
@@ -201,6 +204,15 @@ String? friendAddErrorMessage(Object error, {required bool chinese}) {
     };
   }
   return switch (code) {
+    'FriendApplyUnconfirmed' => chinese
+        ? '暂未确认申请结果，请稍后重试'
+        : 'The request has not been confirmed. Please try again later.',
+    'FriendBlacklisted' => chinese
+        ? '请先将对方移出黑名单，再添加好友'
+        : 'Remove this person from your blacklist before adding them.',
+    '1302' => chinese
+        ? '你已被对方拉黑，无法添加好友。'
+        : 'A blacklist restriction prevents this friend request.',
     '20044' => chinese
         ? '对方不允许通过此方式添加'
         : 'This person does not allow this method of adding friends.',

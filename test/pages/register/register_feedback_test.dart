@@ -6,6 +6,7 @@ import 'package:openim/core/controller/app_controller.dart';
 import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/pages/login/login_logic.dart';
 import 'package:openim/pages/register/register_logic.dart';
+import 'package:openim/pages/register/set_password/set_password_logic.dart';
 import 'package:openim/pages/register/register_view.dart';
 import 'package:openim/pages/register/rules/registration_field.dart';
 import 'package:openim/pages/register/widgets/register_reference_widgets.dart';
@@ -38,7 +39,12 @@ class _Login extends LoginLogic {
 
 class _Register extends RegisterLogic {
   int checks = 0;
-  Object failure = (20006, 'English verification details');
+  Object? failure = (20006, 'English verification details');
+  _DirectRegistration? submitted;
+
+  @override
+  SetPasswordLogic createRegistration(Map<String, dynamic> arguments) =>
+      submitted = _DirectRegistration(arguments);
 
   @override
   Future<void> verifyCredentials({
@@ -49,7 +55,18 @@ class _Register extends RegisterLogic {
     String? invitationCode,
   }) async {
     checks++;
-    throw failure;
+    if (failure != null) throw failure!;
+  }
+}
+
+class _DirectRegistration extends SetPasswordLogic {
+  _DirectRegistration(Map<String, dynamic> arguments)
+      : super(initialArguments: arguments);
+  int attempts = 0;
+  @override
+  Future<void> register() async {
+    attempts++;
+    accountCreated.value = true;
   }
 }
 
@@ -82,14 +99,55 @@ void main() {
     Get.reset();
   });
 
+  testWidgets('one-step registration submits without a profile or avatar page',
+      (tester) async {
+    await tester.pumpWidget(GetMaterialApp(home: RegisterPage()));
+    logic.failure = null;
+    _fillValid(logic);
+    await logic.next();
+    await tester.pump();
+    final submission = logic.submitted!;
+    expect(submission.nicknameCtrl.text, '99Chat用户');
+    expect(submission.avatar.value, isNull);
+    expect(submission.pwdCtrl.text, 'password1');
+    expect(submission.verificationCode, logic.verificationCodeCtrl.text);
+    expect(submission.attempts, 1);
+    expect(find.byType(RegisterPage), findsOneWidget);
+    // A login retry must not verify or create the account again.
+    await logic.next();
+    expect(logic.checks, 1);
+    expect(identical(logic.submitted, submission), isTrue);
+    expect(submission.attempts, 2);
+  });
+
+  testWidgets('registration switches identity and clears the previous code',
+      (tester) async {
+    await tester.pumpWidget(GetMaterialApp(home: RegisterPage()));
+    _fillValid(logic);
+    await tester.tap(find.byKey(const ValueKey('auth-identity-email')));
+    await tester.pump();
+    expect(logic.phone, isNull);
+    expect(logic.verificationCodeCtrl.text, isEmpty);
+    logic.phoneCtrl.text = 'new@example.test';
+    expect(logic.email, 'new@example.test');
+    await tester.tap(find.byKey(const ValueKey('auth-identity-phone')));
+    await tester.pump();
+    expect(logic.email, isNull);
+    expect(logic.phoneCtrl.text, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('registration reveals local errors on blur and updates on edits',
       (tester) async {
     logic.phoneCtrl.text = '123';
     expect(logic.errorFor(RegistrationField.account), isNull);
     await tester.pumpWidget(GetMaterialApp(home: RegisterPage()));
-    expect(find.text('填写账号 · 第 1/2 步'), findsOneWidget);
+    expect(find.text('手机注册'), findsOneWidget);
+    expect(find.text('邮箱注册'), findsOneWidget);
     await tester.tap(_field(logic.phoneCtrl));
     await tester.pump();
+    await tester.ensureVisible(_field(logic.verificationCodeCtrl));
+    await tester.pumpAndSettle();
     await tester.tap(_field(logic.verificationCodeCtrl));
     await tester.pump();
     expect(
@@ -136,7 +194,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(logic.checks, 1);
     final chinese =
-        HttpUtil.errorMessage(logic.failure, path: Urls.checkVerificationCode);
+        HttpUtil.errorMessage(logic.failure!, path: Urls.checkVerificationCode);
     expect(find.text(chinese), findsOneWidget);
     expect(find.byType(AppAlertDialog<void>), findsOneWidget);
     expect(find.textContaining('English verification details'), findsNothing);
@@ -147,7 +205,7 @@ void main() {
     await logic.next();
     await tester.pumpAndSettle();
     final english =
-        HttpUtil.errorMessage(logic.failure, path: Urls.checkVerificationCode);
+        HttpUtil.errorMessage(logic.failure!, path: Urls.checkVerificationCode);
     expect(english, isNot(chinese));
     expect(find.text(english), findsOneWidget);
     expect(logic.pwdCtrl.text, 'password1');
@@ -155,23 +213,27 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('password hints contain three rules with stable geometry',
+  testWidgets('password hints only appear for nonempty invalid input',
       (tester) async {
     await tester.pumpWidget(GetMaterialApp(home: RegisterPage()));
     final checklist = find.byType(RegisterPasswordChecklist);
-    final initial = tester.getSize(checklist);
-    for (final value in ['a', 'a1', 'password1']) {
+    expect(find.text('8–24 位'), findsNothing);
+    for (final value in ['a', 'a1']) {
       logic.pwdCtrl.text = value;
       await tester.pump();
-      expect(tester.getSize(checklist), initial);
+      expect(find.text('8–24 位'), findsOneWidget);
+    }
+    for (final value in ['password1', '']) {
+      logic.pwdCtrl.text = value;
+      await tester.pump();
+      expect(find.text('8–24 位'), findsNothing);
     }
     logic.pwdCtrl.text = 'a';
     logic.touchField(RegistrationField.password);
     await tester.pump();
-    expect(tester.getSize(checklist), initial);
     expect(tester.widget<RegisterPasswordChecklist>(checklist).showInvalid,
         isTrue);
-    expect(find.text('8 位以上'), findsOneWidget);
+    expect(find.text('8–24 位'), findsOneWidget);
     expect(find.text('英文字母'), findsOneWidget);
     expect(find.text('数字'), findsOneWidget);
     expect(find.text('至少 8 位，须同时包含英文字母和数字'), findsNothing);

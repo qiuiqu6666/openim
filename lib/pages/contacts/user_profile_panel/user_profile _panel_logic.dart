@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
 
@@ -805,30 +806,47 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
   final updatingBlacklist = false.obs;
 
   Future<void> setBlacklist(bool enabled) async {
-    if (updatingBlacklist.value) return;
+    if (updatingBlacklist.value || isClosed) return;
+    final account = OpenIM.iMManager.userID;
+    final token = DataSp.chatToken;
+    final peer = userInfo.value.userID;
+    if (peer == null || peer.isEmpty) return;
+    bool active() =>
+        !isClosed &&
+        account == OpenIM.iMManager.userID &&
+        token == DataSp.chatToken &&
+        conversationLogic.isSessionActive;
     updatingBlacklist.value = true;
+    var committed = false;
     try {
       if (enabled) {
         final confirmed = await Get.dialog<bool>(
           CustomDialog(title: StrRes.areYouSureAddBlacklist),
         );
-        if (confirmed != true) return;
+        if (confirmed != true || !active()) return;
       }
       await LoadingView.singleton.wrap(asyncFunction: () async {
+        if (!active()) return;
         if (enabled) {
-          await OpenIM.iMManager.friendshipManager
-              .addBlacklist(userID: userInfo.value.userID!);
+          await OpenIM.iMManager.friendshipManager.addBlacklist(userID: peer);
         } else {
           await OpenIM.iMManager.friendshipManager
-              .removeBlacklist(userID: userInfo.value.userID!);
+              .removeBlacklist(userID: peer);
         }
+        committed = true;
+        if (!active()) return;
+        userInfo.update((value) => value?.isBlacklist = enabled);
+        UserCacheManager().addOrUpdateUserInfo(peer, userInfo.value);
+        if (enabled) await conversationLogic.hidePeerConversation(peer);
       });
-      if (isClosed) return;
-      userInfo.update((value) => value?.isBlacklist = enabled);
-      UserCacheManager()
-          .addOrUpdateUserInfo(userInfo.value.userID!, userInfo.value);
     } catch (_) {
-      IMViews.showToast(StrRes.saveFailed);
+      if (active()) {
+        IMViews.showToast(enabled && committed
+            ? (Get.locale?.languageCode == 'en'
+                ? 'User blocked. Could not remove the conversation. Please retry.'
+                : AppCopy.text('已加入黑名单，会话移除失败，请重试。'))
+            : StrRes.saveFailed);
+      }
     } finally {
       if (!isClosed) updatingBlacklist.value = false;
     }
@@ -858,8 +876,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
       (_targetRole.value == GroupRoleLevel.owner ||
           _targetRole.value == GroupRoleLevel.admin);
 
-  bool get showStrangerBlacklistAction =>
-      userInfo.value.isBlacklist || !isGroupMemberPage;
+  bool get showStrangerBlacklistAction => userInfo.value.isBlacklist;
 
   FriendAddSource get friendAddRequestSource =>
       addSource == FriendAddSource.group && canManageGroupFriendAdd
@@ -971,16 +988,16 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
         _friendAddNotify(error.reason ==
                 ProfileFriendAddUnavailableReason.missingAccount
             ? (chinese
-                ? '对方未公开聊天号，请让对方分享二维码或名片。'
+                ? AppCopy.text('对方未公开聊天号，请让对方分享二维码或名片。')
                 : 'Ask this person to share a QR code or contact card.')
             : (chinese
-                ? '暂时无法通过该聊天号添加，请让对方分享二维码或名片。'
+                ? AppCopy.text('暂时无法通过该聊天号添加，请让对方分享二维码或名片。')
                 : 'This account cannot be used to add the person. Ask for a QR code or contact card.'));
       } else if (!handleSessionAuthFailure(error,
           account: sdkOwner, token: token)) {
         _friendAddNotify(friendAddErrorMessage(error, chinese: chinese) ??
             (chinese
-                ? '暂时无法添加好友，请稍后重试'
+                ? AppCopy.text('暂时无法添加好友，请稍后重试')
                 : 'Unable to add this person. Please try again later.'));
       }
     } finally {

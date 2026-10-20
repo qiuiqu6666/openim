@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat's home_page.dart, customer_service_icon.dart and
 // archivedEditIconSvg in conversation.dart (Apache License 2.0).
 // Source: https://github.com/qiuiqu6666/99chat
@@ -38,7 +39,7 @@ class ConversationHeaderActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          tooltip: zh ? '在线客服' : 'Customer Service',
+          tooltip: zh ? AppCopy.text('在线客服') : 'Customer Service',
           onPressed: onSupport,
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(
@@ -89,7 +90,7 @@ class ConversationEditButton extends StatelessWidget {
       );
     }
     return IconButton(
-      tooltip: zh ? '编辑' : 'Edit',
+      tooltip: zh ? AppCopy.text('编辑') : 'Edit',
       onPressed: onPressed,
       constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
       icon: SvgPicture.string(_archivedEditIconSvg,

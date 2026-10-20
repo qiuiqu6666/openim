@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -80,7 +81,7 @@ class SplashLogic extends GetxController {
       if (_closed || account != userID || credential != token) return;
       IMViews.showToast(e is SdkSessionBusy
           ? (Get.locale?.languageCode == 'zh'
-              ? '上一登录会话仍在清理，请稍后重试'
+              ? AppCopy.text('上一登录会话仍在清理，请稍后重试')
               : 'The previous session is still closing. Please try again shortly.')
           : '$e $s');
       await DataSp.removeLoginCertificate();

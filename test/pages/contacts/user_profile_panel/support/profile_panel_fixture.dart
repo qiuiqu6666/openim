@@ -61,7 +61,7 @@ class ProfilePanelFixture extends GetxController
   final targetGroupManager = false.obs;
   @override
   bool get showStrangerBlacklistAction =>
-      userInfo.value.isBlacklist || !group;
+      userInfo.value.isBlacklist;
   final friendAddEntry = true.obs;
   @override
   bool get hasFriendAddEntry => friendAddEntry.value;

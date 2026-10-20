@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import '../../support/settings_exports.dart';
 
@@ -17,11 +18,11 @@ class SangongOperatorUnavailablePage extends StatelessWidget {
   Widget build(BuildContext context) =>
       SettingsScaffold(title: '三公管理', children: [
         const SizedBox(height: 100),
-        Text(reason, textAlign: TextAlign.center),
-        SettingsPrimaryButton(text: '重试', onPressed: onRetry),
+        Text(AppCopy.text(reason), textAlign: TextAlign.center),
+        SettingsPrimaryButton(text: AppCopy.text('重试'), onPressed: onRetry),
         if (onViewConfig != null)
           Center(
               child: TextButton(
-                  onPressed: onViewConfig, child: const Text('查看我的配置')))
+                  onPressed: onViewConfig, child: Text(AppCopy.text('查看我的配置'))))
       ]);
 }

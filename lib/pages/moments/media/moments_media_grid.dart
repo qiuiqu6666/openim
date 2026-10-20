@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../../services/moments_repository.dart';
@@ -36,7 +37,9 @@ class MomentsMediaGrid extends StatelessWidget {
       return Semantics(
         button: true,
         label: momentsText(context,
-            zh: item.isVideo ? '查看视频' : '查看第${index + 1}张图片',
+            zh: item.isVideo
+                ? '查看视频'
+                : AppCopy.format('查看第{#0}张图片', [index + 1]),
             en: item.isVideo ? 'View video' : 'View image ${index + 1}'),
         child: InkWell(
           key: ValueKey('moments_media_${post.momentId}_$index'),

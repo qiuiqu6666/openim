@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:dio/dio.dart';
 
 /// Convert account errors into actionable text without exposing server internals.
@@ -9,12 +10,13 @@ String securityErrorMessage(Object error,
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
-        return text('请求超时，请稍后重试', 'The request timed out. Please try again.');
+        return text(AppCopy.text('请求超时，请稍后重试'),
+            'The request timed out. Please try again.');
       case DioExceptionType.connectionError:
-        return text('网络连接失败，请检查网络后重试',
+        return text(AppCopy.text('网络连接失败，请检查网络后重试'),
             'Could not connect. Check your network and retry.');
       case DioExceptionType.badResponse:
-        return text('服务暂时不可用，请稍后重试',
+        return text(AppCopy.text('服务暂时不可用，请稍后重试'),
             'The service is unavailable. Please try again later.');
       default:
         return fallback;
@@ -23,13 +25,13 @@ String securityErrorMessage(Object error,
   if (error is! (int, String)) return fallback;
   final (code, reason) = error;
   if (code >= 1501 && code <= 1507) {
-    return text(
-        '登录已失效，请重新登录', 'Your session has expired. Please sign in again.');
+    return text(AppCopy.text('登录已失效，请重新登录'),
+        'Your session has expired. Please sign in again.');
   }
   if (code == 20049 && reason.startsWith('retryAfter:')) {
     final seconds = int.tryParse(reason.substring('retryAfter:'.length));
     if (seconds != null && seconds > 0) {
-      return text('反馈提交过于频繁，请 $seconds 秒后再试',
+      return text(AppCopy.format('反馈提交过于频繁，请 {#0} 秒后再试', [seconds]),
           'Try submitting feedback again in $seconds seconds.');
     }
   }
@@ -68,20 +70,20 @@ String securityErrorMessage(Object error,
   if (known.containsKey(code)) return known[code]!;
   final lower = reason.toLowerCase();
   if (lower.contains('current password is wrong')) {
-    return text(
-        '原登录密码错误，请重新输入', 'Incorrect current login password. Please try again.');
+    return text(AppCopy.text('原登录密码错误，请重新输入'),
+        'Incorrect current login password. Please try again.');
   }
   if (lower.contains('phone number is unchanged')) {
-    return text('新手机号不能与当前手机号相同',
+    return text(AppCopy.text('新手机号不能与当前手机号相同'),
         'The new phone number must differ from the current one.');
   }
   if (lower.contains('invitation') || reason.contains('邀请码')) {
-    return text('邀请码为空或无效，请检查后重试',
+    return text(AppCopy.text('邀请码为空或无效，请检查后重试'),
         'The invitation code is missing or invalid. Check it and retry.');
   }
   if (lower.contains('code') || reason.contains('验证码')) {
     if (lower.contains('expired') || reason.contains('过期')) {
-      return text('验证码已过期，请重新获取',
+      return text(AppCopy.text('验证码已过期，请重新获取'),
           'The verification code has expired. Request a new one.');
     }
     if (lower.contains('frequent') ||
@@ -89,10 +91,10 @@ String securityErrorMessage(Object error,
         lower.contains('repeat') ||
         reason.contains('频繁') ||
         reason.contains('重复')) {
-      return text(
-          '验证码请求过于频繁，请稍后重试', 'Too many code requests. Please try again later.');
+      return text(AppCopy.text('验证码请求过于频繁，请稍后重试'),
+          'Too many code requests. Please try again later.');
     }
-    return text('验证码为空或不正确，请检查后重试',
+    return text(AppCopy.text('验证码为空或不正确，请检查后重试'),
         'The verification code is missing or incorrect. Check it and retry.');
   }
   return fallback;

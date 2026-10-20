@@ -7,6 +7,7 @@ class ChatHistoryCache {
   static const _maxConversations = 12;
   static const _maxMessages = 40;
   static final _entries = <(String, String), List<Message>>{};
+  static final _readyEntries = <(String, String), Object>{};
   static final _removedMessages = <(String, String)>{};
   static final _revocations = <(String, String), RevokedInfo>{};
 
@@ -60,13 +61,25 @@ class ChatHistoryCache {
     return cached.map((m) => applyRevocation(accountID, m)).toList();
   }
 
+  static List<Message> readReady(
+      String accountID, String conversationID, Object session) {
+    final ready = _readyEntries[(accountID, conversationID)];
+    // Display snapshots may be stale: the route refreshes them from the SDK.
+    // Time and new deliveries must not force an otherwise safe page blank.
+    if (ready == null || ready != session) {
+      return [];
+    }
+    return read(accountID, conversationID);
+  }
+
   static void write(
       String accountID, String conversationID, List<Message> messages,
-      {int? epoch}) {
+      {int? epoch, Object? readySession}) {
     if (epoch != null && epoch != _epoch) return;
     if (accountID.isEmpty || conversationID.isEmpty) return;
     final key = (accountID, conversationID);
     _entries.remove(key);
+    _readyEntries.remove(key);
     // Only the contiguous latest page is cached: filtering private items must
     // not pull older messages forward and change first-page chronology.
     final start =
@@ -80,8 +93,17 @@ class ChatHistoryCache {
             m.contentType != MessageType.typing)
         .map((m) => applyRevocation(accountID, m))
         .toList();
-    if (safe.isNotEmpty) _entries[key] = safe;
+    if (safe.isNotEmpty) {
+      _entries[key] = safe;
+      if (readySession != null &&
+          !messages
+              .skip(start)
+              .any((m) => m.attachedInfoElem?.isPrivateChat == true)) {
+        _readyEntries[key] = readySession;
+      }
+    }
     while (_entries.length > _maxConversations) {
+      _readyEntries.remove(_entries.keys.first);
       _entries.remove(_entries.keys.first);
     }
   }
@@ -109,6 +131,7 @@ class ChatHistoryCache {
     MessageWindowCache.shared.invalidate(conversationID);
     final key = (accountID, conversationID);
     _entries.remove(key);
+    _readyEntries.remove(key);
     _conversationRevisions.remove(key);
     _conversationRevisions[key] = ++_nextRevision;
     // Keep invalidation memory bounded. Advancing the floor also invalidates
@@ -124,6 +147,7 @@ class ChatHistoryCache {
     messageRevision++;
     _epoch++;
     _entries.clear();
+    _readyEntries.clear();
     _removedMessages.clear();
     _revocations.clear();
     _conversationRevisions.clear();

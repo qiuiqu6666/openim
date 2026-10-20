@@ -671,8 +671,6 @@ class ChatHistoryLoader {
 
   static int _compare(Message a, Message b) {
     if (_isLocalRecord(a) || _isLocalRecord(b)) {
-      if (_isPendingSend(a.status)) return 1;
-      if (_isPendingSend(b.status)) return -1;
       final time = (a.sendTime ?? a.createTime ?? 0)
           .compareTo(b.sendTime ?? b.createTime ?? 0);
       if (time != 0) return time;
@@ -697,7 +695,9 @@ class ChatHistoryLoader {
   static int compareMessageOrder(Message a, Message b) => _compare(a, b);
 
   static bool _isLocalRecord(Message message) =>
-      (message.seq ?? 0) == 0 && message.status == MessageStatus.succeeded;
+      (message.seq ?? 0) == 0 &&
+      (message.status == MessageStatus.succeeded ||
+          _isPendingSend(message.status));
 
   static List<Message> merge(Iterable<Message> values,
       {Set<String> removedIDs = const {}}) {

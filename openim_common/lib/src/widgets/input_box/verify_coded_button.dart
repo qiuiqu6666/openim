@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -105,12 +106,12 @@ class _VerifyCodedButtonState extends State<VerifyCodedButton> {
     final chinese =
         (Get.locale ?? Localizations.localeOf(context)).languageCode == 'zh';
     final label = _loading
-        ? (chinese ? '发送中' : 'Sending')
+        ? (chinese ? AppCopy.text('发送中') : 'Sending')
         : _remainingSeconds > 0
             ? '${_remainingSeconds}s'
             : _hasSent
-                ? (chinese ? '重新获取' : 'Resend')
-                : (chinese ? '获取验证码' : 'Send code');
+                ? (chinese ? AppCopy.text('重新获取') : 'Resend')
+                : (chinese ? AppCopy.text('获取验证码') : 'Send code');
     return TextButton(
       onPressed: _isEnabled ? _sendCode : null,
       style: TextButton.styleFrom(

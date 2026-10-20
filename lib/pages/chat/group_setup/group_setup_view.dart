@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -75,10 +76,10 @@ class GroupSetupPage extends StatelessWidget {
                   _section([
                     _settingRow('groupReport'.tr,
                         onTap: () => Get.to(() => ComplaintReasonPage(
-                          reportedUserID: '',
-                          targetName: logic.groupInfo.value.groupName ?? '',
-                          groupID: logic.groupInfo.value.groupID,
-                        )))
+                              reportedUserID: '',
+                              targetName: logic.groupInfo.value.groupName ?? '',
+                              groupID: logic.groupInfo.value.groupID,
+                            )))
                   ]),
                 if (logic.isOwner || logic.isAdmin)
                   _section([
@@ -292,7 +293,7 @@ class GroupSetupPage extends StatelessWidget {
     }
     if (logic.membersLoading.value || !logic.membersFailed.value) {
       return Semantics(
-        label: '正在加载群成员',
+        label: AppCopy.text('正在加载群成员'),
         child: ExcludeSemantics(
           child: Row(
             children: List.generate(
@@ -327,7 +328,7 @@ class GroupSetupPage extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 6.w),
           child: Text(
-            '群成员加载失败，点击重试',
+            AppCopy.text('群成员加载失败，点击重试'),
             textAlign: TextAlign.center,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,

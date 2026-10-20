@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'live_surface_visibility.dart';
 import 'package:openim/routes/swipe_back/app_swipe_back_tokens.dart';
 import 'dart:async';
@@ -170,7 +171,7 @@ class _LivePlayerViewState extends State<LivePlayerView>
       await controller.toggleMute();
     }
     if (mounted && controller.current && controller.muteError != null) {
-      IMViews.showToast('声音设置失败，请重试');
+      IMViews.showToast(AppCopy.text('声音设置失败，请重试'));
     }
   }
 
@@ -191,18 +192,19 @@ class _LivePlayerViewState extends State<LivePlayerView>
                         aspectRatio: player.value.aspectRatio,
                         child: LiveVideoSurface(player: player))),
               if (!state.current)
-                const Center(
-                    child: Text('直播会话已失效',
+                Center(
+                    child: Text(AppCopy.text('直播会话已失效'),
                         style: TextStyle(color: LiveStyle.screenInk))),
               if (state.current && state.loading)
-                const Center(
+                Center(
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                   SizedBox.square(
                       dimension: 24,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: LiveStyle.screenInk)),
                   SizedBox(height: 8),
-                  Text('正在连接直播…', style: TextStyle(color: LiveStyle.screenInk))
+                  Text(AppCopy.text('正在连接直播…'),
+                      style: TextStyle(color: LiveStyle.screenInk))
                 ])),
               if (state.current && state.error != null)
                 Center(
@@ -220,7 +222,7 @@ class _LivePlayerViewState extends State<LivePlayerView>
                                       onPressed: () => unawaited(
                                           widget.onRetry?.call() ??
                                               state.open(nextSource: true)),
-                                      child: const Text('重新连接'))
+                                      child: Text(AppCopy.text('重新连接')))
                                 ])))),
               Positioned(
                   top: 4,
@@ -245,16 +247,16 @@ class _LivePlayerViewState extends State<LivePlayerView>
                         state.current &&
                         widget.canTip?.call() != false)
                       IconButton(
-                          tooltip: '打赏主播',
+                          tooltip: AppCopy.text('打赏主播'),
                           icon: const Icon(Icons.card_giftcard_outlined,
                               color: LiveStyle.screenInk, size: 22),
                           onPressed: widget.onTip),
                     IconButton(
                         tooltip: state.muteError != null
-                            ? '重试声音设置'
+                            ? AppCopy.text('重试声音设置')
                             : state.muted
-                                ? '打开声音'
-                                : '静音',
+                                ? AppCopy.text('打开声音')
+                                : AppCopy.text('静音'),
                         icon: Icon(
                             state.muted
                                 ? Icons.volume_off_outlined
@@ -265,7 +267,7 @@ class _LivePlayerViewState extends State<LivePlayerView>
                             state.current ? () => unawaited(_mute()) : null),
                     if (widget.onClose != null)
                       IconButton(
-                          tooltip: '关闭',
+                          tooltip: AppCopy.text('关闭'),
                           icon: const Icon(Icons.close,
                               color: LiveStyle.screenInk, size: 22),
                           onPressed: widget.onClose),

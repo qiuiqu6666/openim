@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat's conversation_peek_overlay.dart action menu (d7c3c65).
 // Source: https://github.com/qiuiqu6666/99chat (Apache License 2.0).
 // Changes: use AppTokens and report selection to the preview coordinator.
@@ -92,20 +93,23 @@ class ConversationPeekMenu extends StatelessWidget {
   String _label(BuildContext context, ConversationPeekAction action) {
     final zh = Localizations.localeOf(context).languageCode == 'zh';
     return switch (action) {
-      ConversationPeekAction.openChat => zh ? '发消息' : 'Send Message',
+      ConversationPeekAction.openChat =>
+        zh ? AppCopy.text('发消息') : 'Send Message',
       ConversationPeekAction.archive => actions.isArchived
-          ? (zh ? '取消归档' : 'Unarchive')
-          : (zh ? '归档' : 'Archive'),
+          ? (zh ? AppCopy.text('取消归档') : 'Unarchive')
+          : (zh ? AppCopy.text('归档') : 'Archive'),
       ConversationPeekAction.addToFolder => actions.hasFolder
-          ? (zh ? '移动至分组' : 'Move to folder')
-          : (zh ? '添加至分组' : 'Add to folder'),
+          ? (zh ? AppCopy.text('移动至分组') : 'Move to folder')
+          : (zh ? AppCopy.text('添加至分组') : 'Add to folder'),
       ConversationPeekAction.removeFromFolder =>
-        zh ? '移出分组' : 'Remove from folder',
-      ConversationPeekAction.togglePin =>
-        actions.isPinned ? (zh ? '取消置顶' : 'Unpin') : (zh ? '置顶' : 'Pin'),
-      ConversationPeekAction.toggleMute =>
-        actions.isMuted ? (zh ? '取消免打扰' : 'Unmute') : (zh ? '静音' : 'Mute'),
-      ConversationPeekAction.delete => zh ? '删除' : 'Delete',
+        zh ? AppCopy.text('移出分组') : 'Remove from folder',
+      ConversationPeekAction.togglePin => actions.isPinned
+          ? (zh ? AppCopy.text('取消置顶') : 'Unpin')
+          : (zh ? AppCopy.text('置顶') : 'Pin'),
+      ConversationPeekAction.toggleMute => actions.isMuted
+          ? (zh ? AppCopy.text('取消免打扰') : 'Unmute')
+          : (zh ? AppCopy.text('静音') : 'Mute'),
+      ConversationPeekAction.delete => zh ? AppCopy.text('删除') : 'Delete',
     };
   }
 }

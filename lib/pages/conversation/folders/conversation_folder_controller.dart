@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -175,17 +176,21 @@ class ConversationFolderController extends ChangeNotifier {
       if (folder.id == currentID) current = folder;
     }
     final target = await showSettingsActionSheet<String>(context,
-        title: _text(context, '添加到分组', 'Add to folder'),
+        title: _text(context, AppCopy.text('添加到分组'), 'Add to folder'),
         actions: [
           for (final folder in logic.folders)
             SettingsAction(folder.name, folder.id,
                 subtitle: folder.id == currentID
-                    ? _text(context, '已在此分组', 'Already in this folder')
+                    ? _text(context, AppCopy.text('已在此分组'),
+                        'Already in this folder')
                     : current == null
                         ? null
-                        : _text(context, '将从「${current.name}」移入',
+                        : _text(
+                            context,
+                            AppCopy.format('将从「{#0}」移入', [current.name]),
                             'Move from "${current.name}"')),
-          SettingsAction(_text(context, '新建分组', 'New folder'), '__create__'),
+          SettingsAction(
+              _text(context, AppCopy.text('新建分组'), 'New folder'), '__create__'),
         ]);
     if (!context.mounted || !_active || target == null) return;
     ChatFolder? folder;

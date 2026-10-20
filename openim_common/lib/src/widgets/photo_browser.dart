@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:io';
 import 'media_browser/media_page_gesture.dart';
@@ -53,6 +54,7 @@ class MediaBrowser extends StatefulWidget {
   final ViewerImageProvider Function(String url, int maxPixels)?
       imageProviderFactory;
   final int initialIndex;
+
   /// Upgrade only the current full-screen page; neighboring warmups stay small.
   final bool autoLoadOriginal;
   final List<MediaSource> sources;
@@ -126,9 +128,8 @@ class _MediaBrowserState extends State<MediaBrowser> {
     return FutureBuilder<bool>(
       key: ValueKey(file.path),
       future: _localFiles.exists(file),
-      builder: (_, snapshot) => snapshot.data == false
-          ? action()
-          : const SizedBox.shrink(),
+      builder: (_, snapshot) =>
+          snapshot.data == false ? action() : const SizedBox.shrink(),
     );
   }
 
@@ -636,7 +637,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
                     if (widget.onForward != null)
                       _roundAction(context,
                           icon: Icons.ios_share,
-                          tooltip: '转发',
+                          tooltip: AppCopy.text('转发'),
                           onPressed: () => widget.onForward!(currentIndex)),
                     if (widget.onSave != null)
                       _roundAction(context,
@@ -646,7 +647,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
                     if (widget.showGallery)
                       _roundAction(context,
                           icon: Icons.grid_view_rounded,
-                          tooltip: '图片和视频', onPressed: () {
+                          tooltip: AppCopy.text('图片和视频'), onPressed: () {
                         _showGrid = true;
                         _notifyChrome();
                       }),
@@ -762,7 +763,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
         icon:
             const Icon(Icons.image_not_supported_outlined, color: Colors.white),
         tooltip: Localizations.localeOf(context).languageCode == 'zh'
-            ? '重试'
+            ? AppCopy.text('重试')
             : 'Retry',
       );
 
@@ -841,7 +842,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
               Align(
                   alignment: Alignment.centerLeft,
                   child: IconButton(
-                    tooltip: zh ? '返回预览' : 'Back to preview',
+                    tooltip: zh ? AppCopy.text('返回预览') : 'Back to preview',
                     color: AppTokens.accent,
                     icon: const Icon(Icons.chevron_left_rounded, size: 32),
                     onPressed: () {
@@ -851,7 +852,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
                   )),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 56),
-                child: Text(zh ? '图片和视频' : 'Photos and videos',
+                child: Text(zh ? AppCopy.text('图片和视频') : 'Photos and videos',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -867,7 +868,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                     zh
-                        ? '共 ${widget.sources.length} 项'
+                        ? AppCopy.format('共 {#0} 项', [widget.sources.length])
                         : '${widget.sources.length} items',
                     style: TextStyle(
                         color: AppTokens.textSecondary(dark: dark),
@@ -889,7 +890,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
                   button: true,
                   selected: currentIndex == index,
                   label:
-                      '${item.isVideo ? (zh ? '视频' : 'Video') : (zh ? '图片' : 'Photo')} ${index + 1}',
+                      '${item.isVideo ? (zh ? AppCopy.text('视频') : 'Video') : (zh ? AppCopy.text('图片') : 'Photo')} ${index + 1}',
                   child: InkWell(
                     onTap: () => _selectGridPage(index),
                     borderRadius: BorderRadius.circular(8),

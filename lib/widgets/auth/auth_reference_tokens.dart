@@ -58,11 +58,21 @@ abstract final class AuthReferenceTokens {
   static const brand100 = Color(0xFFD7EBFF);
   static const divider = Color(0xFFEEF0F4);
   static const rLg = AppTokens.rLg;
+  static const minimalInset = 16.0;
+  static const minimalLogoTop = 46.0;
+  static const minimalLogoBottom = 18.0;
+  static const minimalLogoBottomCompact = 12.0;
+  static const minimalLogoSize = 76.0;
   static const fieldGap = 20.0;
   // A reserved message row already supplies the space between field groups.
   static const feedbackFieldGap = 4.0;
   static const buttonGap = 24.0;
+  static const passwordOptionsGap = 4.0;
+  static const passwordSubmitGap = 8.0;
   static const fieldHeight = 52.0;
+  static const compactButtonHeight = 48.0;
+  static const compactButtonPadding =
+      EdgeInsets.symmetric(horizontal: 18, vertical: 10);
   static const fieldBorderWidth = 1.5;
   static const focusedFieldBorderWidth = 2.0;
   static const fieldContentPadding =
@@ -72,6 +82,7 @@ abstract final class AuthReferenceTokens {
   static const labelGap = 8.0;
   static const messageGap = 4.0;
   static const messageHeight = 18.0;
+  static const compactMessageHeight = 6.0;
   static const tapTarget = 48.0;
   static const toolbarGap = 4.0;
   static const toolbarIcon = 22.0;
@@ -134,5 +145,6 @@ abstract final class AuthReferenceTokens {
       color: Colors.white,
       height: 1.18);
   static const button =
-      TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white);
+      TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.white);
+  static const loginButton = button;
 }

@@ -1,10 +1,13 @@
 // Adapted from 99chat's customer_service_static_page.dart (Apache-2.0).
 // Answers are updated for this OpenIM client's supported product behavior.
 import 'package:flutter/widgets.dart';
+import 'package:openim_common/localization.dart';
 
 String customerServiceText(BuildContext context,
         {required String zh, required String en}) =>
-    Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
+    Localizations.localeOf(context).languageCode == 'zh'
+        ? AppCopy.text(zh, locale: Localizations.localeOf(context))
+        : en;
 
 /// Static product help, separate from live-agent messages and server state.
 class CustomerServiceQuestion {

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import '../services/account_identity/sangong_team_user_search.dart';
 import 'package:openim_common/openim_common.dart'
@@ -117,10 +118,12 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
       final available = agent == null ? null : _amount(agent.transferAvailable);
       final amountText = await AppDialog.prompt(
         context: context,
-        title: '划转积分',
-        message:
-            '将自己的积分划转给 ${sangongDisplayName(member.nickname, member.imUserId)}${available == null ? '' : '\n可划转约 $available'}',
-        placeholder: '请输入划转数量',
+        title: AppCopy.text('划转积分'),
+        message: AppCopy.format('将自己的积分划转给 {#0}{#1}', [
+          sangongDisplayName(member.nickname, member.imUserId),
+          available == null ? '' : AppCopy.format('\n可划转约 {#0}', [available])
+        ]),
+        placeholder: AppCopy.text('请输入划转数量'),
         cancelText: '取消',
         confirmText: '下一步',
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -128,15 +131,15 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
       if (amountText == null || !mounted || !_isCurrentSession) return;
       final amount = num.tryParse(amountText.trim());
       if (amount == null || !amount.isFinite || amount <= 0) {
-        ToastUtils.toast('请输入大于 0 的有效数量', context: context);
+        ToastUtils.toast(AppCopy.text('请输入大于 0 的有效数量'), context: context);
         return;
       }
       final confirmed = await AppDialog.confirm(
         context: context,
-        title: '确认划转',
-        message: '确认划转 ${_amount(amount)} 积分给该下级吗？',
+        title: AppCopy.text('确认划转'),
+        message: AppCopy.format('确认划转 {#0} 积分给该下级吗？', [_amount(amount)]),
         cancelText: '取消',
-        confirmText: '确认划转',
+        confirmText: AppCopy.text('确认划转'),
       );
       if (!confirmed || !mounted || !_isCurrentSession) return;
       final result = await SangongScope.read(context).agent.transferToChild(
@@ -176,7 +179,11 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
         });
       }
       ToastUtils.toast(
-        '划转成功${result['referenceId'] == null ? '' : '，流水号 ${result['referenceId']}'}',
+        AppCopy.format('划转成功{#0}', [
+          result['referenceId'] == null
+              ? ''
+              : AppCopy.format('，流水号 {#0}', [result['referenceId']])
+        ]),
         context: context,
       );
       await _load();
@@ -217,7 +224,8 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
       }
     } catch (error) {
       if (mounted && _isCurrentSession && request == _searchRequest) {
-        ToastUtils.toast('OpenIM 昵称/备注查询失败，请重试', context: context);
+        ToastUtils.toast(AppCopy.text('OpenIM 昵称/备注查询失败，请重试'),
+            context: context);
       }
     }
   }
@@ -263,7 +271,7 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
         appBar: AppBar(
           centerTitle: true,
           leading: const AppBackButton(),
-          title: const Text('查询下级'),
+          title: Text(AppCopy.text('查询下级')),
           actions: [
             if (SangongScope.read(context).canViewRebateHistory)
               TextButton(
@@ -272,7 +280,7 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
                     SangongAgentTransfersPage.open(context);
                   }
                 },
-                child: const Text('划转记录'),
+                child: Text(AppCopy.text('划转记录')),
               ),
           ],
         ),
@@ -281,9 +289,10 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(value: false, label: Text('全部下级')),
-                  ButtonSegment(value: true, label: Text('直属下级')),
+                segments: [
+                  ButtonSegment(
+                      value: false, label: Text(AppCopy.text('全部下级'))),
+                  ButtonSegment(value: true, label: Text(AppCopy.text('直属下级'))),
                 ],
                 selected: {_direct},
                 onSelectionChanged: (value) {
@@ -301,12 +310,12 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
                 textInputAction: TextInputAction.search,
                 onChanged: _search,
                 decoration: InputDecoration(
-                  hintText: '搜索昵称、备注、公开账号或用户ID',
+                  hintText: AppCopy.text('搜索昵称、备注、公开账号或用户ID'),
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _searchQuery.isEmpty
                       ? null
                       : IconButton(
-                          tooltip: '清空搜索',
+                          tooltip: AppCopy.text('清空搜索'),
                           icon: const Icon(Icons.clear),
                           onPressed: () {
                             _searchController.clear();
@@ -359,14 +368,16 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
           children: [
             Text(_error!, textAlign: TextAlign.center),
             const SizedBox(height: 12),
-            FilledButton(onPressed: _load, child: const Text('重试')),
+            FilledButton(onPressed: _load, child: Text(AppCopy.text('重试'))),
           ],
         ),
       );
     }
     if (members.isEmpty) {
       return Center(
-        child: Text(_searchQuery.trim().isEmpty ? '暂无下级' : '未找到匹配的下级'),
+        child: Text(_searchQuery.trim().isEmpty
+            ? AppCopy.text('暂无下级')
+            : AppCopy.text('未找到匹配的下级')),
       );
     }
     return RefreshIndicator(
@@ -381,7 +392,9 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
   }
 
   Widget _memberTile(SangongTeamMemberDto member) {
-    final name = member.nickname.trim().isEmpty ? '用户' : member.nickname.trim();
+    final name = member.nickname.trim().isEmpty
+        ? AppCopy.text('用户')
+        : member.nickname.trim();
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: SangongIMAvatar(
@@ -397,16 +410,21 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
           SangongPublicAccount(
               userID: member.imUserId,
               style: Theme.of(context).textTheme.bodySmall),
-          Text(
-              '第 ${member.levelNo} 级  ·  余额 ${_amount(member.balance)}  ·  未返水 ${_amount(member.pendingRebate)}'),
-          Text(
-              '闲流水 ${_amount(member.playerTurnover)}  ·  庄流水 ${_amount(member.bankerTurnover)}'),
+          Text(AppCopy.format('第 {#0} 级  ·  余额 {#1}  ·  未返水 {#2}', [
+            member.levelNo,
+            _amount(member.balance),
+            _amount(member.pendingRebate)
+          ])),
+          Text(AppCopy.format('闲流水 {#0}  ·  庄流水 {#1}', [
+            _amount(member.playerTurnover),
+            _amount(member.bankerTurnover)
+          ])),
         ],
       ),
       isThreeLine: true,
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         IconButton(
-          tooltip: '划转积分',
+          tooltip: AppCopy.text('划转积分'),
           icon: const Icon(Icons.swap_horiz_rounded),
           onPressed: _transferring || member.imUserId.trim().isEmpty
               ? null

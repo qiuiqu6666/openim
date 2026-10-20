@@ -1,3 +1,5 @@
+import 'package:openim_common/media_localization.dart';
+import 'package:openim_common/localization.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -20,6 +22,7 @@ class CustomerServiceMediaPicker {
     final zh = Localizations.localeOf(context).languageCode == 'zh';
     final assets = await AssetPicker.pickAssets(context,
         pickerConfig: AssetPickerConfig(
+          textDelegate: AppMediaCopy.assets,
           maxAssets: 9,
           requestType: video ? RequestType.video : RequestType.image,
           sortPathsByModifiedDate: true,
@@ -33,8 +36,9 @@ class CustomerServiceMediaPicker {
       final bytes = await file.length();
       if (_closed || !isActive()) break;
       if (bytes <= 0 || bytes > CustomerServiceApi.maxAttachmentBytes) {
-        IMViews.showToast(
-            zh ? '附件大小不能超过 40MB' : 'Attachments must be smaller than 40 MB');
+        IMViews.showToast(zh
+            ? AppCopy.text('附件大小不能超过 40MB')
+            : 'Attachments must be smaller than 40 MB');
         continue;
       }
       var coverPath = '';

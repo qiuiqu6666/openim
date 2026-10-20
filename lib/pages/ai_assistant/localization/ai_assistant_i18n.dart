@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:openim_common/localization.dart';
 
 /// Small adapter for the reference page's inline translations.
 class AiAssistantI18n {
@@ -26,7 +27,9 @@ class AiAssistantI18n {
           region == 'TW' ||
           region == 'HK' ||
           region == 'MO';
-      return traditional ? zhHant ?? zhHans : zhHans;
+      return traditional
+          ? zhHant ?? AppCopy.text(zhHans, locale: locale)
+          : zhHans;
     }
     return en;
   }

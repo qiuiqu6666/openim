@@ -1,3 +1,4 @@
+import 'package:openim_common/media_localization.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -158,6 +159,7 @@ class IMViews {
             final List<AssetEntity>? assets =
                 await AssetPicker.pickAssets(context,
                     pickerConfig: AssetPickerConfig(
+                        textDelegate: AppMediaCopy.assets,
                         requestType: RequestType.image,
                         maxAssets: 1,
                         selectPredicate: (_, entity, isSelected) async {
@@ -190,6 +192,7 @@ class IMViews {
               context,
               locale: Get.locale,
               pickerConfig: CameraPickerConfig(
+                textDelegate: AppMediaCopy.camera,
                 enableAudio: true,
                 enableRecording: true,
                 enableScaledPreview: false,

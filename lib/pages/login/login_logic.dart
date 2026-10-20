@@ -138,9 +138,15 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
     _restoringCredentials = true;
     var map = DataSp.getLoginAccount();
     if (map is Map) {
-      String? phoneNumber = map["phoneNumber"];
+      String? phoneNumber = map["phoneNumber"] ?? map["email"];
       String? areaCode = map["areaCode"];
 
+      final savedType = map["loginType"];
+      if (savedType is int &&
+          savedType >= 0 &&
+          savedType < LoginType.values.length) {
+        loginType.value = LoginType.fromRawValue(savedType);
+      }
       if (phoneNumber != null && phoneNumber.isNotEmpty) {
         phoneCtrl.text = phoneNumber;
       }
@@ -163,25 +169,10 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
       _restoringCredentials = true;
       if (credentials.account.isNotEmpty) {
         areaCode.value = credentials.areaCode;
-        var rememberedAccount = credentials.account;
-        if (credentials.loginType == LoginType.account.rawValue &&
-            !rememberedAccount.startsWith('@')) {
-          // Older secure records stored the request account without its marker.
-          // Recover only a matching original input from the local login record.
-          final original = map is Map ? map['phoneNumber'] : null;
-          if (original is String &&
-              original.trim().startsWith('@') &&
-              original.trim().replaceFirst(RegExp(r'^@+'), '').trim() ==
-                  rememberedAccount) {
-            rememberedAccount = original.trim();
-          } else if (rememberedAccount.contains('@') ||
-              AuthFormRules.phone(rememberedAccount, credentials.areaCode) ==
-                  null) {
-            // Preserve the identity type for older phone/email-shaped IDs.
-            rememberedAccount = '@$rememberedAccount';
-          }
-        }
-        phoneCtrl.text = rememberedAccount;
+        loginType.value = LoginType.values.firstWhere(
+            (type) => type.rawValue == credentials.loginType,
+            orElse: () => LoginType.phone);
+        phoneCtrl.text = credentials.account;
         if (rememberPassword.value && credentials.password != null) {
           pwdCtrl.text = credentials.password!;
         }
@@ -272,20 +263,9 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
 
   void updatePasswordAccountType() {
     if (_closed || isClosed) return;
-    final value = phoneCtrl.text.trim();
-    final type = !isPasswordLogin.value
-        ? LoginType.phone
-        : value.startsWith('@')
-            ? LoginType.account
-            : value.contains('@')
-                ? LoginType.email
-                : RegExp(r'^\d+$').hasMatch(value) &&
-                        AuthFormRules.phone(value, areaCode.value) == null
-                    ? LoginType.phone
-                    : LoginType.account;
-    loginType.value = type;
-    operateType = type;
-    tabController.index = type.rawValue;
+    // Identity is selected explicitly; account text never changes the login path.
+    operateType = loginType.value;
+    tabController.index = loginType.value.rawValue;
   }
 
   Future<void> toggleRememberPassword(bool remember) async {
@@ -489,13 +469,18 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
 
   void togglePasswordType() {
     if (_closed || isClosed) return;
+    if (submitting.value || loginType.value == LoginType.account) return;
     _feedback.reset();
     isPasswordLogin.value = !isPasswordLogin.value;
     _onChanged();
   }
 
   void selectLoginType(LoginType type) {
-    if (_closed || isClosed) return;
+    if (_closed || isClosed || submitting.value || loginType.value == type) {
+      return;
+    }
+    ++_inputRevision;
+    _deviceFlow?.cancel();
     _feedback.reset();
     loginType.value = type;
     operateType = type;
@@ -513,8 +498,12 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
   }
 
   Future<bool> getVerificationCode() async {
-    if (_closed || isClosed) return false;
-    final error = AuthFormRules.phone(phoneCtrl.text, areaCode.value);
+    if (_closed || isClosed || loginType.value == LoginType.account) {
+      return false;
+    }
+    final error = loginType.value == LoginType.email
+        ? AuthFormRules.email(email)
+        : AuthFormRules.phone(phoneCtrl.text, areaCode.value);
     if (!_feedback.validate(
       account: error,
       password: AuthFormRules.loginPassword(pwdCtrl.text),
@@ -539,7 +528,8 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
 
   Future<bool> sendVerificationCode() => requestAccountVerificationCode(
         areaCode: areaCode.value,
-        phoneNumber: phoneCtrl.text.trim(),
+        phoneNumber: phone,
+        email: email,
         usedFor: 3,
       );
 
@@ -552,12 +542,14 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
   }
 
   void registerNow() {
-    operateType = LoginType.phone;
+    operateType =
+        loginType.value == LoginType.email ? LoginType.email : LoginType.phone;
     AppNavigator.startRegister();
   }
 
   void forgetPassword() {
-    operateType = LoginType.phone;
+    operateType =
+        loginType.value == LoginType.email ? LoginType.email : LoginType.phone;
     AppNavigator.startForgetPassword();
   }
 

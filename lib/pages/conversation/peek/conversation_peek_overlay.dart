@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat's conversation_peek_overlay.dart shell and pill header.
 // Source: https://github.com/qiuiqu6666/99chat (Apache License 2.0).
 // Changes: caller-owned content, menu and actions; guarded route dismissal and a11y sizing.
@@ -54,7 +55,7 @@ class ConversationPeekOverlay {
       route = RawDialogRoute<void>(
         barrierDismissible: true,
         barrierLabel: Localizations.localeOf(context).languageCode == 'zh'
-            ? '关闭预览'
+            ? AppCopy.text('关闭预览')
             : 'Dismiss preview',
         barrierColor: Colors.transparent,
         transitionDuration: MediaQuery.disableAnimationsOf(context)

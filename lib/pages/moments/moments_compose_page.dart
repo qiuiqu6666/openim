@@ -1,3 +1,5 @@
+import 'package:openim_common/media_localization.dart';
+import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:openim/routes/swipe_back/app_swipe_back_tokens.dart';
 import 'dart:async';
@@ -187,6 +189,7 @@ class _MomentsComposePageState extends State<MomentsComposePage>
       BuildContext context, int remaining) async {
     final assets = await AssetPicker.pickAssets(context,
         pickerConfig: AssetPickerConfig(
+          textDelegate: AppMediaCopy.assets,
           requestType: RequestType.image,
           maxAssets: remaining,
           selectPredicate: (_, asset, selected) async {
@@ -393,7 +396,8 @@ class _MomentsComposePageState extends State<MomentsComposePage>
             zh: '部分好友（${_store.visibility.audienceUserIds.length}）',
             en: 'Selected friends (${_store.visibility.audienceUserIds.length})'),
         'EXCLUDE' => momentsText(context,
-            zh: '不给谁看（${_store.visibility.audienceUserIds.length}）',
+            zh: AppCopy.format(
+                '不给谁看（{#0}）', [_store.visibility.audienceUserIds.length]),
             en: 'Excluded friends (${_store.visibility.audienceUserIds.length})'),
         _ => momentsText(context, zh: '公开', en: 'Public'),
       };

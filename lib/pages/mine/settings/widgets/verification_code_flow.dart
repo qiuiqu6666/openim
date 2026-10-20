@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -23,7 +24,8 @@ class VerificationCodeFlow extends ChangeNotifier {
   bool get canSend => !_disposed && !_busy && remaining == 0;
   String label(BuildContext context) => remaining > 0
       ? settingsText(context,
-          zh: '${remaining}s 后重发', en: 'Resend in ${remaining}s')
+          zh: AppCopy.format('{#0}s 后重发', [remaining]),
+          en: 'Resend in ${remaining}s')
       : _busy
           ? settingsText(context, zh: '验证/发送中', en: 'Verifying/sending')
           : settingsText(context, zh: '获取验证码', en: 'Get Code');

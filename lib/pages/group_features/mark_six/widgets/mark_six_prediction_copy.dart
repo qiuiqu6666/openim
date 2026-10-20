@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
@@ -20,6 +21,7 @@ class MarkSixPredictionCopy extends StatelessWidget {
   Future<void> _copy(BuildContext context) async {
     final text = switch (attribute) {
       'special' || 'fiveElement' || 'zodiac' => values.join('.'),
+      // Clipboard content is a business command, not presentation copy.
       'head' => values.map((value) => '$value头').join(),
       'tail' => values.map((value) => '$value尾').join(),
       _ => values.join(' '),
@@ -27,9 +29,9 @@ class MarkSixPredictionCopy extends StatelessWidget {
     String message;
     try {
       await Clipboard.setData(ClipboardData(text: text));
-      message = '$label预测已复制';
+      message = AppCopy.format('{#0}预测已复制', [label]);
     } catch (_) {
-      message = '复制失败，请重试';
+      message = AppCopy.text('复制失败，请重试');
     }
     if (!context.mounted) return;
     IMViews.showToast(message);
@@ -40,7 +42,7 @@ class MarkSixPredictionCopy extends StatelessWidget {
     if (values.isEmpty) return child;
     return Semantics(
       button: true,
-      label: '复制$label预测',
+      label: AppCopy.format('复制{#0}预测', [label]),
       child: InkWell(
         onTap: () => _copy(context),
         onLongPress: () => _copy(context),

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'navigation/chat_entry_trace.dart';
 import 'mentions/chat_mention_controller.dart';
 import 'messages/quote/chat_quote_navigation.dart';
@@ -19,7 +20,6 @@ import '../../core/controller/im_controller.dart';
 import '../../core/im_callback.dart';
 import '../../routes/app_navigator.dart';
 import '../../services/favorite_send_coordinator.dart';
-import '../contacts/add_by_search/add_by_search_logic.dart';
 import '../contacts/contacts_logic.dart';
 import '../official_account/models/official_account.dart';
 import '../official_account/presentation/official_account_timeline_policy.dart';
@@ -40,6 +40,7 @@ import 'group/chat_group_controller.dart';
 import 'group/member_actions/chat_member_action_sheet.dart';
 import 'group/member_actions/chat_member_actions_controller.dart';
 import 'history/chat_timeline_controller.dart';
+import 'history/chat_local_display_reader.dart';
 import 'history/chat_history_prefetcher.dart';
 import 'history/chat_history_diagnostics.dart';
 import 'receipts/chat_read_diagnostics.dart';
@@ -499,7 +500,7 @@ class ChatLogic extends SuperController {
 
   final imLogic = Get.find<IMController>();
 
-  final scrollController = ScrollController();
+  final scrollController = ScrollController(keepScrollOffset: false);
   final messagePositionController = ChatListPositionController();
   final refreshController = RefreshController();
   bool playOnce = false;
@@ -556,6 +557,7 @@ class ChatLogic extends SuperController {
     fetchLocalSnapshot: () => OpenIM.iMManager.messageManager
         .getLocalHistorySnapshot(
             conversationID: conversationInfo.conversationID),
+    fetchDisplaySnapshot: () => readChatLocalDisplay(conversationInfo),
     fetchWindow: () =>
         OpenIM.iMManager.messageManager.peekLocalMessageWindow(
             conversationID: conversationInfo.conversationID) ??
@@ -586,6 +588,9 @@ class ChatLogic extends SuperController {
             startMsg: startMsg),
     isClosed: () => _sessionInactive,
     onFirstPage: () {
+      if (!_dateWindow.buffering) {
+        _latestScroll.requestEntry(complete: true);
+      }
       if (!_dateWindow.buffering && !newMessages.awayFromLatest.value) {
         scrollBottom(force: false);
       }
@@ -709,10 +714,10 @@ class ChatLogic extends SuperController {
   Future<void> jumpToMention() async {
     try {
       if (!await mentions.jump() && !_sessionInactive) {
-        IMViews.showToast('暂时无法定位该消息，请重试');
+        IMViews.showToast(AppCopy.text('暂时无法定位该消息，请重试'));
       }
     } catch (_) {
-      if (!_sessionInactive) IMViews.showToast('暂时无法定位该消息，请重试');
+      if (!_sessionInactive) IMViews.showToast(AppCopy.text('暂时无法定位该消息，请重试'));
     }
   }
 
@@ -859,7 +864,7 @@ class ChatLogic extends SuperController {
         notification is ScrollStartNotification &&
         notification.dragDetails != null) {
       messageArrivals.cancel();
-      _latestScroll.cancel();
+      _latestScroll.endEntry();
       _messageFocus.cancel();
       _dateWindow.invalidate();
       _dateJump.invalidate();
@@ -1067,8 +1072,12 @@ class ChatLogic extends SuperController {
       }));
     }
     _entryReadyWorker = ever(initialWindowReady, (bool ready) {
-      if (ready && !_sessionInactive) entryTrace?.mark('window_ready');
+      if (ready && !_sessionInactive) {
+        entryTrace?.mark('window_ready');
+        _latestScroll.requestEntry();
+      }
     });
+    if (searchMessage != null) _latestScroll.endEntry();
     _timeline.initialize(prefetch: false);
     _messageSubscriptions.add(bindMediaOutbox(
         conversationID: conversationInfo.conversationID,
@@ -1286,7 +1295,8 @@ class ChatLogic extends SuperController {
       _forwarding.forwardMessage(message);
   Future sendPicture({required String path, bool sendNow = true}) =>
       _media.sendPicture(path: path, sendNow: sendNow);
-  Future<Message?> prepareAssistantPicture(String path) => _media.preparePicture(path);
+  Future<Message?> prepareAssistantPicture(String path) =>
+      _media.preparePicture(path);
   Future<void> sendForwardRemarkMsg(String content,
           {String? userId, String? groupId}) =>
       _forwarding.sendForwardRemarkMsg(content,
@@ -1396,8 +1406,8 @@ class ChatLogic extends SuperController {
   List<ConfirmedFundCard> get confirmedFundCards => _sessionInactive
       ? const []
       : _funds.confirmedCards.cards.values.toList().reversed.map((card) {
-          return ConfirmedFundCard(card.order, _funds.displayData(card.data),
-              card.anchorMessageID);
+          return ConfirmedFundCard(
+              card.order, _funds.displayData(card.data), card.anchorMessageID);
         }).toList();
   Future<void> openConfirmedFundCard(FundMessageData data) =>
       _funds.openDetail(data);
@@ -1651,7 +1661,11 @@ class ChatLogic extends SuperController {
 
   void sendFriendVerification() {
     if (_sessionInactive) return;
-    AppNavigator.startAddContactsBySearch(searchType: SearchType.user);
+    _navigation.sendFriendVerification(
+      userID: userID,
+      nickname: nickname.value,
+      faceURL: faceUrl.value,
+    );
   }
 
   void _setSdkSyncDataListener() {

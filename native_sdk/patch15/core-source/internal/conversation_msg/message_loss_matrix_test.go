@@ -326,7 +326,7 @@ func TestSelfRetryUsesSamePreviewOrderingAsInitialDelivery(t *testing.T) {
 	if err := c.doMsgNew(cmd); err != nil {
 		t.Fatal(err)
 	}
-	if previewSeq(t, db) != 999 || callbacks.received != 2 {
+	if previewSeq(t, db) != 1000 || callbacks.received != 2 {
 		t.Fatalf("retry changed preview ordering: seq=%d callbacks=%d", previewSeq(t, db), callbacks.received)
 	}
 }

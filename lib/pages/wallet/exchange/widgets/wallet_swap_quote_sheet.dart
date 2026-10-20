@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../record/wallet_record_amount.dart';
@@ -42,12 +43,12 @@ class _WalletSwapQuoteSheet extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('预览闪兑',
+                  Text(AppCopy.text('预览闪兑'),
                       style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w600, color: colors.text)),
                   const SizedBox(height: AppTokens.s7),
                   if (quote != null) ...[
-                    Text('预计实得',
+                    Text(AppCopy.text('预计实得'),
                         style: theme.textTheme.bodyMedium
                             ?.copyWith(color: colors.subText)),
                     const SizedBox(height: AppTokens.s3),
@@ -58,7 +59,10 @@ class _WalletSwapQuoteSheet extends StatelessWidget {
                             color: colors.text, fontWeight: FontWeight.w600)),
                     const SizedBox(height: AppTokens.s5),
                     Text(
-                        '转出 ${walletRecordAmountTwoDecimals(quote.amount.decimal)} ${quote.amount.currency.displayName}',
+                        AppCopy.format('转出 {#0} {#1}', [
+                          walletRecordAmountTwoDecimals(quote.amount.decimal),
+                          quote.amount.currency.displayName
+                        ]),
                         style: theme.textTheme.bodyLarge
                             ?.copyWith(color: colors.text)),
                     const SizedBox(height: AppTokens.s5),
@@ -67,8 +71,8 @@ class _WalletSwapQuoteSheet extends StatelessWidget {
                   Text(
                       quotes.error ??
                           (valid == null
-                              ? '报价已过期，请重新获取'
-                              : '报价有效期为 30 秒，实得数量已包含价格调整。'),
+                              ? AppCopy.text('报价已过期，请重新获取')
+                              : AppCopy.text('报价有效期为 30 秒，实得数量已包含价格调整。')),
                       key: valid == null && !quotes.loading
                           ? const ValueKey('wallet-swap-quote-expired')
                           : null,
@@ -93,13 +97,13 @@ class _WalletSwapQuoteSheet extends StatelessWidget {
                               Navigator.of(context).pop(current);
                             }
                           },
-                    child: const Text('确认兑换'),
+                    child: Text(AppCopy.text('确认兑换')),
                   ),
                   if (valid == null)
                     TextButton(
                       key: const ValueKey('wallet-swap-quote-refresh'),
                       onPressed: quotes.loading ? null : quotes.refresh,
-                      child: const Text('重新获取报价'),
+                      child: Text(AppCopy.text('重新获取报价')),
                     ),
                 ],
               ),

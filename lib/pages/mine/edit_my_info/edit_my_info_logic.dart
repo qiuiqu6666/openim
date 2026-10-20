@@ -5,6 +5,7 @@ import 'package:openim_common/openim_common.dart';
 
 import '../../../core/controller/im_controller.dart';
 import '../my_info/my_avatar_editor.dart';
+import '../../../widgets/auth/auth_copy.dart';
 
 enum EditAttr {
   nickname,
@@ -99,19 +100,10 @@ class EditMyInfoLogic extends GetxController {
           val?.phoneNumber = value;
         });
       } else if (editAttr == EditAttr.email) {
-        if (defaultValue?.isNotEmpty == true && value.isEmpty) {
-          IMViews.showToast(StrRes.plsEnterEmail);
-          return;
-        }
-        await LoadingView.singleton.wrap(
-          asyncFunction: () => Apis.updateUserInfo(
-            userID: OpenIM.iMManager.userID,
-            email: value,
-          ),
-        );
-        imLogic.userInfo.update((val) {
-          val?.email = value;
-        });
+        // Login identities must be changed through verified account security.
+        IMViews.showToast(authText('请在账号安全中验证并修改邮箱',
+            'Verify and change your email in Account Security'));
+        return;
       }
       if (!isClosed) Get.back();
     } catch (_) {

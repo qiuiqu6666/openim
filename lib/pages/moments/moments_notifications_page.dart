@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -316,7 +317,8 @@ class _MomentsNotificationsPageState extends State<MomentsNotificationsPage> {
             child: Semantics(
               label: repository.unreadCount > 0
                   ? momentsText(context,
-                      zh: '${repository.unreadCount} 条未读消息',
+                      zh: AppCopy.format(
+                          '{#0} 条未读消息', [repository.unreadCount]),
                       en: '${repository.unreadCount} unread interactions')
                   : null,
               liveRegion: true,

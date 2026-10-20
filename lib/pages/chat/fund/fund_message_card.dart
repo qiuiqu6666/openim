@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
@@ -332,7 +333,7 @@ class FundMessageCard extends StatelessWidget {
                                   _exclusive
                                       ? StrRes.fundExclusivePacket
                                       : message.isPacket
-                                          ? '99Chat红包'
+                                          ? AppCopy.text('99Chat红包')
                                           : '99Chat',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,

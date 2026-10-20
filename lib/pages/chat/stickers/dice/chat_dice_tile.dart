@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -16,7 +17,7 @@ class ChatDiceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = Localizations.localeOf(context).languageCode == 'zh'
-        ? '掷骰子'
+        ? AppCopy.text('掷骰子')
         : 'Roll dice';
     return Tooltip(
       message: label,

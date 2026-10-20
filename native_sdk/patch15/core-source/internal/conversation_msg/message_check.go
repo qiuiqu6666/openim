@@ -814,6 +814,18 @@ func (c *Conversation) pullMessageIntoTable(ctx context.Context, conversationID 
 	if err := c.persistMessageSyncBatch(ctx, updateMsg, insertMsg, nil, nil); err != nil {
 		return err
 	}
+	// History can reach the server tail before live delivery. Repair from
+	// durable rows only; this does not count unread or emit message arrivals.
+	if _, ok := c.db.(interface {
+		ReconcileConversationPreviews(context.Context, []string, func(*model_struct.LocalChatLog) string) ([]*model_struct.LocalConversation, error)
+	}); ok {
+		c.conversationSyncMutex.Lock()
+		_, err := c.reconcileStoredPreviews(ctx, []string{conversationID})
+		c.conversationSyncMutex.Unlock()
+		if err != nil {
+			return err
+		}
+	}
 	log.ZDebug(ctx, "BatchInsertMessageListController, ", "cost time", time.Since(timeNow).String())
 
 	//Exception message storage

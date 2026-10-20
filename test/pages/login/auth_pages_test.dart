@@ -314,10 +314,10 @@ void main() {
       (tester) async {
     addTearDown(() => _unmount(tester));
     await _mount(tester, LoginPage());
-    expect(find.text('你好，'), findsOneWidget);
-    expect(find.text('欢迎使用99Chat'), findsOneWidget);
-    expect(find.byKey(const ValueKey('auth-tab-0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('auth-tab-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('auth-identity-account')), findsOneWidget);
+
+    expect(find.byKey(const ValueKey('auth-identity-phone')), findsOneWidget);
+    expect(find.byKey(const ValueKey('auth-identity-email')), findsOneWidget);
     expect(find.byType(EditableText), findsNWidgets(2));
     expect(_button(tester).onPressed, isNull);
     final remember =
@@ -340,6 +340,8 @@ void main() {
     expect(account.autofillHints, contains(AutofillHints.username));
     expect(
         tester.widget<EditableText>(_field(login.pwdCtrl)).obscureText, isTrue);
+    login.selectLoginType(LoginType.account);
+    await tester.pump();
     await _enter(tester, login.phoneCtrl, 'user-id');
     await _enter(tester, login.pwdCtrl, 'password1');
     expect(_button(tester).onPressed, isNotNull);
@@ -390,15 +392,15 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('registration first step validates four fields and offers next',
+  testWidgets('registration validates four fields and offers direct registration',
       (tester) async {
     addTearDown(() => _unmount(tester));
     await _mount(tester, RegisterPage());
     expect(find.byType(EditableText), findsNWidgets(4));
-    expect(find.byKey(const ValueKey('registration-step-1')), findsOneWidget);
+    expect(find.text('手机注册'), findsOneWidget);
     expect(find.byType(CircleAvatar), findsNothing);
     expect(find.byType(AuthFormMessage), findsNothing);
-    expect(_button(tester).text, '下一步');
+    expect(_button(tester).text, '注册');
     expect(_button(tester).onPressed, isNull);
     expect(tester.widget<EditableText>(_field(register.phoneCtrl)).keyboardType,
         TextInputType.phone);
@@ -418,11 +420,11 @@ void main() {
     expect(find.byType(SetPasswordPage), findsNothing);
     expect(
         tester
-            .widget<EditableText>(_field(register.pwdAgainCtrl))
+            .widget<EditableText>(_field(register.verificationCodeCtrl))
             .textInputAction,
         TextInputAction.done);
-    await tester.ensureVisible(_field(register.pwdAgainCtrl));
-    await tester.tap(_field(register.pwdAgainCtrl));
+    await tester.ensureVisible(_field(register.verificationCodeCtrl));
+    await tester.tap(_field(register.verificationCodeCtrl));
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(register.submissions, 2);
@@ -496,7 +498,8 @@ void main() {
     addTearDown(() => _unmount(tester));
     await _mount(tester, ForgetPasswordPage());
     expect(find.byType(EditableText), findsNWidgets(4));
-    expect(find.text('找回密码'), findsOneWidget);
+    expect(find.text('手机找回'), findsOneWidget);
+    expect(find.text('邮箱找回'), findsOneWidget);
     expect(find.text('重置密码'), findsOneWidget);
     expect(_button(tester).onPressed, isNull);
     await _enter(tester, recovery.phoneCtrl, '13800138000');
@@ -526,6 +529,8 @@ void main() {
       (tester) async {
     addTearDown(() => _unmount(tester));
     await _mount(tester, LoginPage());
+    login.selectLoginType(LoginType.account);
+    await tester.pump();
     await _enter(tester, login.phoneCtrl, 'user-id');
     await _enter(tester, login.pwdCtrl, 'password1');
     await tester.ensureVisible(find.byKey(const ValueKey('login-language')));
@@ -542,7 +547,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(login.phoneCtrl.text, 'user-id');
     expect(login.pwdCtrl.text, 'password1');
-    expect(find.text('Welcome to 99Chat'), findsOneWidget);
+    expect(find.byKey(const ValueKey('auth-identity-account')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -550,17 +555,20 @@ void main() {
       (tester) async {
     addTearDown(() => _unmount(tester));
     await _mount(tester, LoginPage(), namedLogin: true);
+    login.selectLoginType(LoginType.account);
+    await tester.pump();
     await _enter(tester, login.phoneCtrl, 'user-id');
     await _enter(tester, login.pwdCtrl, 'password1');
-    await tester.tap(find.byKey(const ValueKey('auth-tab-1')));
+    await tester.ensureVisible(find.byKey(const ValueKey('login-register')));
+    await tester.tap(find.byKey(const ValueKey('login-register')));
     await tester.pumpAndSettle();
     expect(find.byType(RegisterPage), findsOneWidget);
     await _enter(tester, register.phoneCtrl, '13800138000');
     await _enter(tester, register.verificationCodeCtrl, '123456');
     await _enter(tester, register.pwdCtrl, 'password1');
     await _enter(tester, register.pwdAgainCtrl, 'password1');
-    await tester.ensureVisible(find.byKey(const ValueKey('auth-tab-0')));
-    await tester.tap(find.byKey(const ValueKey('auth-tab-0')));
+    await tester.ensureVisible(find.byType(TextButton).first);
+    await tester.tap(find.byType(TextButton).first);
     await tester.pumpAndSettle();
     expect(find.byType(LoginPage), findsOneWidget);
     expect(login.phoneCtrl.text, 'user-id');
@@ -780,3 +788,4 @@ void main() {
     }
   }, skip: _previewDirectory.isEmpty);
 }
+

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat's conversation.dart editing action bar.
 // Source: https://github.com/qiuiqu6666/99chat (Apache License 2.0).
 // Changes: use AppTokens and caller-provided OpenIM action callbacks.
@@ -57,7 +58,9 @@ class ConversationEditActionBar extends StatelessWidget {
                     label: readProgress.isNotEmpty
                         ? readProgress
                         : chinese
-                            ? (hasSelection ? '标记已读' : '全部已读')
+                            ? (hasSelection
+                                ? AppCopy.text('标记已读')
+                                : AppCopy.text('全部已读'))
                             : (hasSelection ? 'Mark as read' : 'Read all'),
                   ),
                 ),
@@ -68,8 +71,8 @@ class ConversationEditActionBar extends StatelessWidget {
                     dark: dark,
                     onPressed: busy || !hasSelection ? null : onArchive,
                     label: unarchive
-                        ? (chinese ? '取消归档' : 'Unarchive')
-                        : (chinese ? '归档' : 'Archive'),
+                        ? (chinese ? AppCopy.text('取消归档') : 'Unarchive')
+                        : (chinese ? AppCopy.text('归档') : 'Archive'),
                   ),
                 ),
                 Expanded(
@@ -78,7 +81,7 @@ class ConversationEditActionBar extends StatelessWidget {
                     key: const ValueKey('conversation-edit-delete'),
                     dark: dark,
                     onPressed: busy || !hasSelection ? null : onDelete,
-                    label: chinese ? '删除' : 'Delete',
+                    label: chinese ? AppCopy.text('删除') : 'Delete',
                     color: ConversationEditTokens.delete,
                   ),
                 ),

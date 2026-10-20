@@ -133,7 +133,7 @@ class DataSp {
         : value is String
             ? int.tryParse(value.trim())
             : null;
-    return index != null && index >= 0 && index <= 2 ? index : 0;
+    return index != null && index >= 0 && index <= 3 ? index : 0;
   }
 
   static Future<bool>? putHaveReadUnHandleGroupApplication(

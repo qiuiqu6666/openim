@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -44,8 +45,8 @@ class AnnouncementMentionLink {
       final options = <({String label, VoidCallback open})>[
         for (final user in users)
           (
-            label:
-                '用户：${user.nickname ?? name}（${user.account ?? user.userID}）',
+            label: AppCopy.format('用户：{#0}（{#1}）',
+                [user.nickname ?? name, user.account ?? user.userID]),
             open: () => AppNavigator.startUserProfilePane(
                 userID: user.userID!,
                 nickname: user.nickname,
@@ -59,7 +60,7 @@ class AnnouncementMentionLink {
           ),
       ];
       if (options.isEmpty) {
-        IMViews.showToast('未找到对应用户或群聊');
+        IMViews.showToast(AppCopy.text('未找到对应用户或群聊'));
         return;
       }
       var index = 0;
@@ -67,7 +68,7 @@ class AnnouncementMentionLink {
         final selected = await showDialog<int>(
           context: sheetContext,
           builder: (context) => SimpleDialog(
-            title: const Text('请选择要查看的资料'),
+            title: Text(AppCopy.text('请选择要查看的资料')),
             children: [
               for (var i = 0; i < options.length; i++)
                 SimpleDialogOption(
@@ -84,7 +85,7 @@ class AnnouncementMentionLink {
       if (dismissSheet) Navigator.pop(sheetContext);
       options[index].open();
     } catch (error) {
-      if (current()) IMViews.showToast('暂时无法打开资料，请稍后重试');
+      if (current()) IMViews.showToast(AppCopy.text('暂时无法打开资料，请稍后重试'));
     } finally {
       _resolvingMention = false;
     }

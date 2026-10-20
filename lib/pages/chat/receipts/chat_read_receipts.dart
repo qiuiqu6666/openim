@@ -344,8 +344,10 @@ class ChatReadReceipts {
         extra: {'allowed': canReadConversation}, deduplicate: true);
     if (canReadConversation &&
         (conversationInfo.unreadCount > 0 ||
-            visible
-                .any((message) => message.sendID != OpenIM.iMManager.userID))) {
+            visible.any((message) =>
+                message.sendID != OpenIM.iMManager.userID ||
+                message.contentType ==
+                    MessageType.friendApplicationApprovedNotification))) {
       // Keep private/expiring content on its immediate visibility path.
       final elapsed = _lastViewportRead == null
           ? viewportReadInterval

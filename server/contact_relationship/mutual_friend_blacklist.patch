@@ -1,0 +1,223 @@
+--- a/internal/rpc/msg/verify.go
++++ b/internal/rpc/msg/verify.go
+@@ -18,6 +18,7 @@
+ 	"context"
+ 	"github.com/openimsdk/open-im-server/v3/pkg/authverify"
+ 	"github.com/openimsdk/open-im-server/v3/pkg/common/servererrs"
++	"github.com/openimsdk/open-im-server/v3/pkg/relationshippolicy"
+ 	"github.com/openimsdk/tools/utils/datautil"
+ 	"github.com/openimsdk/tools/utils/encrypt"
+ 	"github.com/openimsdk/tools/utils/timeutil"
+@@ -71,17 +72,10 @@
+ 		if black {
+ 			return servererrs.ErrBlockedByPeer.Wrap()
+ 		}
+-		if m.config.RpcConfig.FriendVerify {
+-			friend, err := m.FriendLocalCache.IsFriend(ctx, data.MsgData.SendID, data.MsgData.RecvID)
+-			if err != nil {
+-				return err
+-			}
+-			if !friend {
+-				return servererrs.ErrNotPeersFriend.Wrap()
+-			}
+-			return nil
+-		}
+-		return nil
++		// Ordinary direct messages require both friend edges. The system/admin
++		// exemptions above remain unchanged; client settings cannot bypass this.
++		return relationshippolicy.RequireMutual(ctx, m.FriendLocalCache.IsFriend,
++			data.MsgData.SendID, data.MsgData.RecvID)
+ 	case constant.ReadGroupChatType:
+ 		groupInfo, err := m.GroupLocalCache.GetGroupInfo(ctx, data.MsgData.GroupID)
+ 		if err != nil {
+--- a/internal/rpc/relation/friend.go
++++ b/internal/rpc/relation/friend.go
+@@ -16,6 +16,7 @@
+ 
+ import (
+ 	"context"
++	"github.com/openimsdk/open-im-server/v3/pkg/relationshippolicy"
+ 
+ 	"github.com/openimsdk/open-im-server/v3/pkg/notification/common_user"
+ 	"github.com/openimsdk/open-im-server/v3/pkg/rpcli"
+@@ -144,13 +145,16 @@
+ 	if req.ToUserID == req.FromUserID {
+ 		return nil, servererrs.ErrCanNotAddYourself.WrapMsg("req.ToUserID", req.ToUserID)
+ 	}
++	if err := relationshippolicy.RequireUnblocked(ctx, s.blackDatabase.CheckIn,
++		req.FromUserID, req.ToUserID); err != nil {
++		return nil, err
++	}
+ 	if err = s.webhookBeforeAddFriend(ctx, &s.config.WebhooksConfig.BeforeAddFriend, req); err != nil && err != servererrs.ErrCallbackContinue {
+ 		return nil, err
+ 	}
+ 	if err := s.userClient.CheckUser(ctx, []string{req.ToUserID, req.FromUserID}); err != nil {
+ 		return nil, err
+ 	}
+-
+ 	in1, in2, err := s.db.CheckIn(ctx, req.FromUserID, req.ToUserID)
+ 	if err != nil {
+ 		return nil, err
+@@ -225,6 +229,10 @@
+ 	}
+ 	if req.HandleResult == constant.FriendResponseAgree {
+ 		if err := s.webhookBeforeAddFriendAgree(ctx, &s.config.WebhooksConfig.BeforeAddFriendAgree, req); err != nil && err != servererrs.ErrCallbackContinue {
++			return nil, err
++		}
++		if err := relationshippolicy.RequireUnblocked(ctx, s.blackDatabase.CheckIn,
++			req.FromUserID, req.ToUserID); err != nil {
+ 			return nil, err
+ 		}
+ 		err := s.db.AgreeFriendRequest(ctx, &friendRequest)
+--- /dev/null
++++ b/internal/rpc/relation/blacklist_policy_test.go
+@@ -0,0 +1,47 @@
++package relation
++
++import (
++	"context"
++	"errors"
++	"testing"
++
++	"github.com/openimsdk/open-im-server/v3/pkg/common/storage/controller"
++	"github.com/openimsdk/protocol/constant"
++	"github.com/openimsdk/protocol/relation"
++	"github.com/openimsdk/tools/mcontext"
++)
++
++type blockedPair struct {
++	controller.BlackDatabase
++	left, right bool
++	err         error
++}
++
++func (b blockedPair) CheckIn(context.Context, string, string) (bool, bool, error) {
++	return b.left, b.right, b.err
++}
++
++func TestBlacklistedRequestsNeverWriteRelationships(t *testing.T) {
++	for _, pair := range []blockedPair{
++		{left: true}, {right: true}, {left: true, right: true},
++		{err: errors.New("blacklist unavailable")},
++	} {
++		// Nil friend DB, user client and notification sender deliberately catch
++		// any attempt to continue or mutate relations after a rejected check.
++		s := &friendServer{config: &Config{}, blackDatabase: pair}
++		if _, err := s.ApplyToAddFriend(
++			mcontext.WithOpUserIDContext(context.Background(), "A"),
++			&relation.ApplyToAddFriendReq{FromUserID: "A", ToUserID: "B"},
++		); err == nil {
++			t.Fatal("blocked request accepted")
++		}
++		if _, err := s.RespondFriendApply(
++			mcontext.WithOpUserIDContext(context.Background(), "B"),
++			&relation.RespondFriendApplyReq{
++				FromUserID: "A", ToUserID: "B", HandleResult: constant.FriendResponseAgree,
++			},
++		); err == nil {
++			t.Fatal("blocked approval accepted")
++		}
++	}
++}
+--- /dev/null
++++ b/pkg/relationshippolicy/policy.go
+@@ -0,0 +1,36 @@
++package relationshippolicy
++
++import (
++	"context"
++
++	"github.com/openimsdk/open-im-server/v3/pkg/common/servererrs"
++)
++
++type PairLookup func(context.Context, string, string) (bool, bool, error)
++type FriendLookup func(context.Context, string, string) (bool, error)
++
++// Friend requests and approvals never change or bypass a blacklist.
++func RequireUnblocked(ctx context.Context, lookup PairLookup, a, b string) error {
++	left, right, err := lookup(ctx, a, b)
++	if err != nil {
++		return err
++	}
++	if left || right {
++		return servererrs.ErrBlockedByPeer.Wrap()
++	}
++	return nil
++}
++
++// Both directed friend edges must exist, including after a unilateral delete.
++func RequireMutual(ctx context.Context, lookup FriendLookup, a, b string) error {
++	for _, pair := range [][2]string{{a, b}, {b, a}} {
++		ok, err := lookup(ctx, pair[0], pair[1])
++		if err != nil {
++			return err
++		}
++		if !ok {
++			return servererrs.ErrNotPeersFriend.Wrap()
++		}
++	}
++	return nil
++}
+--- /dev/null
++++ b/pkg/relationshippolicy/policy_test.go
+@@ -0,0 +1,60 @@
++package relationshippolicy
++
++import (
++	"context"
++	"errors"
++	"testing"
++)
++
++func TestMutualFriendMatrix(t *testing.T) {
++	for _, ab := range []bool{false, true} {
++		for _, ba := range []bool{false, true} {
++			for _, reverse := range []bool{false, true} {
++				a, b := "A", "B"
++				if reverse {
++					a, b = b, a
++				}
++				err := RequireMutual(context.Background(), func(_ context.Context, from, to string) (bool, error) {
++					if from == "A" && to == "B" {
++						return ab, nil
++					}
++					if from == "B" && to == "A" {
++						return ba, nil
++					}
++					t.Fatalf("unexpected pair %s %s", from, to)
++					return false, nil
++				}, a, b)
++				if (err == nil) != (ab && ba) {
++					t.Fatalf("edges %v/%v reverse %v: %v", ab, ba, reverse, err)
++				}
++			}
++		}
++	}
++}
++
++func TestBlacklistMatrix(t *testing.T) {
++	for _, left := range []bool{false, true} {
++		for _, right := range []bool{false, true} {
++			err := RequireUnblocked(context.Background(), func(context.Context, string, string) (bool, bool, error) {
++				return left, right, nil
++			}, "A", "B")
++			if (err == nil) != (!left && !right) {
++				t.Fatalf("blacklist %v/%v: %v", left, right, err)
++			}
++		}
++	}
++}
++
++func TestLookupFailureNeverGrantsPermission(t *testing.T) {
++	want := errors.New("relation unavailable")
++	if err := RequireMutual(context.Background(), func(context.Context, string, string) (bool, error) {
++		return true, want
++	}, "A", "B"); err != want {
++		t.Fatal(err)
++	}
++	if err := RequireUnblocked(context.Background(), func(context.Context, string, string) (bool, bool, error) {
++		return false, false, want
++	}, "A", "B"); err != want {
++		t.Fatal(err)
++	}
++}

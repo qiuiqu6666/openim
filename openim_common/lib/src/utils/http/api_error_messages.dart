@@ -2,6 +2,8 @@ import 'package:get/get.dart';
 
 import '../../res/lang/en_US.dart' as english;
 import '../../res/lang/zh_CN.dart' as chinese;
+import '../../res/lang/zh_TW.dart' as traditional;
+import '../../res/localization/app_copy.dart';
 
 /// Converts protocol errors into copy for the app's current language.
 /// Server details are inspected only for known validation reasons, never shown.
@@ -121,8 +123,11 @@ abstract final class ApiErrorMessages {
     final translated = key.tr;
     if (translated != key) return translated;
     // Keep shared callers useful before GetMaterialApp has installed its table.
-    final fallback =
-        Get.locale?.languageCode == 'zh' ? chinese.zh_CN : english.en_US;
+    final fallback = AppCopy.isTraditional()
+        ? traditional.zhTW
+        : Get.locale?.languageCode == 'zh'
+            ? chinese.zh_CN
+            : english.en_US;
     return fallback[key] ?? key;
   }
 }

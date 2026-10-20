@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -202,7 +203,7 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
         child: TextButton.icon(
           onPressed: _retry,
           icon: const Icon(Icons.refresh),
-          label: const Text('视频加载失败，点击重试'),
+          label: Text(AppCopy.text('视频加载失败，点击重试')),
         ),
       );
     }
@@ -323,10 +324,10 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
                                                   if (context.mounted) {
                                                     ScaffoldMessenger.maybeOf(
                                                             context)
-                                                        ?.showSnackBar(
-                                                            const SnackBar(
-                                                                content: Text(
-                                                                    '倍速设置失败，请重试')));
+                                                        ?.showSnackBar(SnackBar(
+                                                            content: Text(
+                                                                AppCopy.text(
+                                                                    '倍速设置失败，请重试'))));
                                                   }
                                                 } finally {
                                                   if (mounted) {
@@ -385,8 +386,9 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
                                         } catch (_) {
                                           if (context.mounted) {
                                             ScaffoldMessenger.maybeOf(context)
-                                                ?.showSnackBar(const SnackBar(
-                                                    content: Text('跳转失败，请重试')));
+                                                ?.showSnackBar(SnackBar(
+                                                    content: Text(AppCopy.text(
+                                                        '跳转失败，请重试'))));
                                           }
                                         } finally {
                                           if (mounted) {

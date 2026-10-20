@@ -5,7 +5,6 @@ import 'package:openim/routes/app_navigator.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../login/login_logic.dart';
-import '../../widgets/auth/auth_copy.dart';
 import '../../widgets/auth/auth_form_rules.dart';
 import '../../services/auth_credentials/auth_credentials_store.dart';
 import 'form/recovery_form_feedback.dart';
@@ -29,18 +28,37 @@ class ForgetPasswordLogic extends GetxController {
     String areaCode,
   })? _lastInputs;
   final loginController = Get.find<LoginLogic>();
-  ({String areaCode, String phone, String code, String password})? _submission;
+  ({
+    String areaCode,
+    String phone,
+    String? email,
+    String code,
+    String password
+  })? _submission;
+  final emailMode = false.obs;
+  void selectEmail(bool value) {
+    if (submitting.value || _closed || emailMode.value == value) return;
+    emailMode.value = value;
+    phoneCtrl.clear();
+    verificationCodeCtrl.clear();
+    feedback.clearFormError();
+    _onChanged();
+  }
 
-  // The reference recovery form sends SMS to the phone entered on this page,
-  // independently of the credential tab used on the login page.
-  String? get email => null;
+  String? _accountError() => emailMode.value
+      ? AuthFormRules.email(email)
+      : AuthFormRules.phone(phone, areaCode.value);
+
+  // Recovery freezes the selected identity before submitting.
+  String? get email =>
+      emailMode.value ? phoneCtrl.text.trim().toLowerCase() : null;
   String get phone => phoneCtrl.text.trim();
   String? get formError => feedback.formError;
 
   String? fieldError(RecoveryField field) {
     if (!feedback.shouldShow(field)) return null;
     return switch (field) {
-      RecoveryField.phone => AuthFormRules.phone(phone, areaCode.value),
+      RecoveryField.phone => _accountError(),
       RecoveryField.code => AuthFormRules.verificationCode(
           verificationCodeCtrl.text,
           sixDigits: true),
@@ -54,16 +72,7 @@ class ForgetPasswordLogic extends GetxController {
     if (!_closed && !isClosed) feedback.onFocusChanged(field, focused);
   }
 
-  static final _passwordPattern =
-      RegExp(r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$');
-
-  String? passwordError(String? value) {
-    if ((value ?? '').isEmpty) return StrRes.plsEnterPassword;
-    return _passwordPattern.hasMatch(value!)
-        ? null
-        : authText('密码需为 8 位以上英文和数字组合',
-            'Password must contain letters and numbers with at least 8 characters');
-  }
+  String? passwordError(String? value) => AuthFormRules.password(value);
 
   @override
   void onClose() {
@@ -78,6 +87,7 @@ class ForgetPasswordLogic extends GetxController {
 
   @override
   void onInit() {
+    emailMode.value = loginController.operateType == LoginType.email;
     phoneCtrl.addListener(_onChanged);
     verificationCodeCtrl.addListener(_onChanged);
     pwdCtrl.addListener(_onChanged);
@@ -99,7 +109,7 @@ class ForgetPasswordLogic extends GetxController {
       _lastInputs = inputs;
       feedback.edited();
     }
-    enabled.value = AuthFormRules.phone(phone, areaCode.value) == null &&
+    enabled.value = _accountError() == null &&
         AuthFormRules.verificationCode(verificationCodeCtrl.text,
                 sixDigits: true) ==
             null &&
@@ -124,14 +134,14 @@ class ForgetPasswordLogic extends GetxController {
 
   bool _checkingAccount() {
     feedback.touch(RecoveryField.phone);
-    final error = AuthFormRules.phone(phone, areaCode.value);
+    final error = _accountError();
     if (error == null) return true;
     return false;
   }
 
   Future<bool> sendVerificationCode() => requestAccountVerificationCode(
         areaCode: areaCode.value,
-        phoneNumber: phone,
+        phoneNumber: emailMode.value ? null : phone,
         email: email,
         usedFor: 2,
       );
@@ -140,8 +150,9 @@ class ForgetPasswordLogic extends GetxController {
     final request = _submission;
     if (request == null || _closed || isClosed) return;
     await Apis.resetPassword(
-      areaCode: request.areaCode,
-      phoneNumber: request.phone,
+      areaCode: request.email == null ? request.areaCode : null,
+      phoneNumber: request.email == null ? request.phone : null,
+      email: request.email,
       verificationCode: request.code,
       password: request.password,
       showErrorToast: false,
@@ -163,6 +174,7 @@ class ForgetPasswordLogic extends GetxController {
     _submission = (
       areaCode: areaCode.value,
       phone: phone,
+      email: email,
       code: verificationCodeCtrl.text.trim(),
       password: pwdCtrl.text,
     );
@@ -176,7 +188,8 @@ class ForgetPasswordLogic extends GetxController {
       if (_closed || isClosed) return;
       try {
         await AuthCredentialsStore.instance.updatePasswordIfRemembered(
-          account: request.phone,
+          account: request.email ?? request.phone,
+          loginType: request.email == null ? 0 : 1,
           areaCode: request.areaCode,
           password: request.password,
           isCurrent: () => !_closed && !isClosed && _submission == request,
@@ -189,7 +202,8 @@ class ForgetPasswordLogic extends GetxController {
       if (!loginController.isClosed &&
           loginController.rememberPassword.value &&
           loginController.phoneCtrl.text.trim() == request.phone &&
-          loginController.areaCode.value == request.areaCode) {
+          (request.email != null ||
+              loginController.areaCode.value == request.areaCode)) {
         loginController.pwdCtrl.text = request.password;
       }
       IMViews.showToast(StrRes.changedSuccessfully);

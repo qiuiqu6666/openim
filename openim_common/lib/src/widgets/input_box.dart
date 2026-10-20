@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -701,8 +702,8 @@ class _InputBoxState extends State<InputBox> {
           IconButton(
             onPressed: widget.enabled ? _toggleEye : null,
             tooltip: _obscureText
-                ? (chinese ? '显示密码' : 'Show password')
-                : (chinese ? '隐藏密码' : 'Hide password'),
+                ? (chinese ? AppCopy.text('显示密码') : 'Show password')
+                : (chinese ? AppCopy.text('隐藏密码') : 'Hide password'),
             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             visualDensity: VisualDensity.standard,
             color: colors.onSurfaceVariant,

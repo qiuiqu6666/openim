@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -60,18 +61,18 @@ class FundApi {
           walletContract: true);
 
   Future<List<FundBalance>> fetchBalances() async {
-    final data = await _request('/chat/fund/balances', method: 'GET');
+    final data = await _request('/chat/fund/balances',
+        method: 'GET', queryParameters: const {'currencyVisibility': '1'});
     final values = data['balances'];
     if (values is! List) throw const FormatException('Invalid fund balances');
     final balances = values.map((value) {
       if (value is! Map) throw const FormatException('Invalid fund balance');
       return FundBalance.fromJson(Map<String, dynamic>.from(value));
     }).toList();
-    // The contract always returns all three currencies. Never invent a balance.
-    if (balances.length != FundCurrency.values.length ||
-        balances.map((balance) => balance.currency).toSet().length !=
-            FundCurrency.values.length) {
-      throw const FormatException('Incomplete fund balances');
+    // The server omits hidden currencies. Never invent a missing balance.
+    if (balances.map((balance) => balance.currency).toSet().length !=
+        balances.length) {
+      throw const FormatException('Duplicate fund balances');
     }
     return List.unmodifiable(balances);
   }
@@ -456,6 +457,10 @@ class FundApi {
 }
 
 String fundErrorMessage(Object error, {bool? chinese}) {
+  return AppCopy.text(_fundErrorMessage(error, chinese: chinese));
+}
+
+String _fundErrorMessage(Object error, {bool? chinese}) {
   final zh = chinese ?? (Get.locale ?? Get.deviceLocale)?.languageCode != 'en';
   if (error is FormatException) {
     return zh ? error.message : 'Please check the amount and recipient.';

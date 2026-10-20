@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:openim_common/src/utils/http_util.dart' as http;
@@ -12,9 +13,18 @@ void main() {
   final requests = <RequestOptions>[];
   var reject = false;
   var switchAccount = false;
+  var blocked = false;
+  const channel = MethodChannel('flutter_openim_sdk');
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     await SpUtil().init();
+    OpenIM.iMManager.userID = 'applicant';
+    blocked = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'getBlacklist');
+      return blocked ? '[{"blockUserID":"target"}]' : '[]';
+    });
     await DataSp.putLoginCertificate(LoginCertificate.fromJson({
       'userID': 'applicant',
       'chatToken': 'test-chat-token',
@@ -49,12 +59,14 @@ void main() {
                       ? {'friendGrant': 'fg_test', 'expireAt': 9999999999999}
                       : request.path.endsWith('friend-invites')
                           ? {'inviteCode': 'fi_test', 'expireAt': 9999999999999}
-                          : {},
+                          : {'applyState': 'success'},
                 }));
     }));
     http.dio = client;
   });
   tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
     http.dio = previous;
     client.close();
   });
@@ -130,6 +142,22 @@ void main() {
     FriendAddSource.group: {},
     FriendAddSource.manage: {},
   };
+  for (final entry in fields.entries) {
+    test('${entry.key.name} cannot submit while the target is blacklisted',
+        () async {
+      blocked = true;
+      await expectLater(
+          FriendAddRequest.send(
+              userID: 'target',
+              reason: 'hello',
+              source: entry.key,
+              groupID: 'group',
+              fields: entry.value),
+          throwsA(isA<PlatformException>().having(
+              (error) => error.code, 'code', 'FriendBlacklisted')));
+      expect(requests, isEmpty);
+    });
+  }
   for (final entry in fields.entries) {
     final groupEntry = entry.key == FriendAddSource.group ||
         entry.key == FriendAddSource.manage;

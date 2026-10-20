@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -28,15 +29,18 @@ Future<bool> showFavoriteConflictReview(BuildContext context,
               backgroundColor:
                   AppTokens.surfaceAlt(dark: settingsIsDark(context)),
               scrollable: true,
-              title: Text(text('查看最新版本', 'Review latest version')),
+              title:
+                  Text(text(AppCopy.text('查看最新版本'), 'Review latest version')),
               content: !current
-                  ? Text(text('登录或收藏服务状态已改变，请重新打开收藏',
+                  ? Text(text(AppCopy.text('登录或收藏服务状态已改变，请重新打开收藏'),
                       'Your account or favorite service changed. Reopen favorites.'))
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                           Text(
-                              text('服务器最新版本（${currentItem.version}）',
+                              text(
+                                  AppCopy.format(
+                                      '服务器最新版本（{#0}）', [currentItem.version]),
                                   'Latest server version (${currentItem.version})'),
                               style: TextStyle(
                                   color: textColor,
@@ -46,7 +50,7 @@ Future<bool> showFavoriteConflictReview(BuildContext context,
                               key: const ValueKey('favorite-conflict-latest'),
                               style: TextStyle(color: textColor)),
                           const SizedBox(height: AppTokens.s5),
-                          Text(text('我的编辑', 'My edits'),
+                          Text(text(AppCopy.text('我的编辑'), 'My edits'),
                               style: TextStyle(
                                   color: textColor,
                                   fontWeight: FontWeight.w600)),
@@ -57,9 +61,13 @@ Future<bool> showFavoriteConflictReview(BuildContext context,
                           const SizedBox(height: AppTokens.s5),
                           Text(
                               pureText
-                                  ? text('继续会保留你的正文。审阅不会保存，再次点击“完成”才会提交。',
+                                  ? text(
+                                      AppCopy.text(
+                                          '继续会保留你的正文。审阅不会保存，再次点击“完成”才会提交。'),
                                       'Your edits will be kept. Reviewing does not save; tap Done again to submit.')
-                                  : text('最新版本包含其他内容，不能用纯文字覆盖。你的编辑仍保留在编辑页。',
+                                  : text(
+                                      AppCopy.text(
+                                          '最新版本包含其他内容，不能用纯文字覆盖。你的编辑仍保留在编辑页。'),
                                       'The latest version contains other content and cannot be replaced by plain text. Your edits remain in the editor.'),
                               style: TextStyle(
                                   color: settingsSecondaryTextColor(context))),
@@ -68,13 +76,14 @@ Future<bool> showFavoriteConflictReview(BuildContext context,
                 TextButton(
                     key: const ValueKey('favorite-conflict-cancel'),
                     onPressed: () => Navigator.of(context).pop(false),
-                    child: Text(text('返回编辑', 'Back to editor'))),
+                    child: Text(text(AppCopy.text('返回编辑'), 'Back to editor'))),
                 FilledButton(
                     key: const ValueKey('favorite-conflict-accept'),
                     onPressed: current && pureText
                         ? () => Navigator.of(context).pop(true)
                         : null,
-                    child: Text(text('保留我的编辑继续', 'Keep my edits'))),
+                    child:
+                        Text(text(AppCopy.text('保留我的编辑继续'), 'Keep my edits'))),
               ]);
         }
 

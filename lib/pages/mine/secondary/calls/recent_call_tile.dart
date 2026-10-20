@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -16,18 +17,20 @@ String recentCallResult(BuildContext context, CallRecords record) {
   return switch (record.state) {
     'rejected' => record.incomingCall
         ? label('已拒接', 'Declined')
-        : label('对方已拒接', 'Declined by recipient'),
+        : label(AppCopy.text('对方已拒接'), 'Declined by recipient'),
     'cancelled' => record.incomingCall
-        ? label('对方已取消', 'Canceled by caller')
+        ? label(AppCopy.text('对方已取消'), 'Canceled by caller')
         : label('已取消', 'Canceled'),
     'reject' => label('已拒接', 'Declined'),
-    'beRejected' => label('对方已拒接', 'Declined by recipient'),
+    'beRejected' => label(AppCopy.text('对方已拒接'), 'Declined by recipient'),
     'cancel' => label('已取消', 'Canceled'),
     'beCanceled' => label('未接', 'Missed'),
     'timeout' || 'missed' => label('未接', 'Missed'),
-    'networkError' => label('连接失败', 'Connection failed'),
-    'otherAccepted' => label('已在其他设备接听', 'Answered on another device'),
-    'otherReject' => label('已在其他设备拒接', 'Declined on another device'),
+    'networkError' => label(AppCopy.text('连接失败'), 'Connection failed'),
+    'otherAccepted' =>
+      label(AppCopy.text('已在其他设备接听'), 'Answered on another device'),
+    'otherReject' =>
+      label(AppCopy.text('已在其他设备拒接'), 'Declined on another device'),
     _ => label('未接通', 'Not connected'),
   };
 }

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -73,7 +74,7 @@ class FundReferenceCover extends StatelessWidget {
               SizedBox(height: card.maxHeight * .008),
               FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Text('—  万 事 如 意 · 财 源 广 进  —',
+                  child: Text(AppCopy.text('—  万 事 如 意 · 财 源 广 进  —'),
                       style: TextStyle(
                           color: FundTokens.previewGold,
                           fontSize: card.maxWidth *

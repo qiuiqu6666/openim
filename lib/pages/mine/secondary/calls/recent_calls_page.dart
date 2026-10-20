@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -78,10 +79,10 @@ class _RecentCallsPageState extends State<RecentCallsPage>
     if (!_sessionCurrent(account) || userId.trim().isEmpty) return;
     final type = await showSettingsActionSheet<String>(
       context,
-      title: _label('开始通话', 'Start a Call'),
+      title: _label(AppCopy.text('开始通话'), 'Start a Call'),
       actions: [
-        SettingsAction(_label('语音通话', 'Audio Call'), 'audio'),
-        SettingsAction(_label('视频通话', 'Video Call'), 'video'),
+        SettingsAction(_label(AppCopy.text('语音通话'), 'Audio Call'), 'audio'),
+        SettingsAction(_label(AppCopy.text('视频通话'), 'Video Call'), 'video'),
       ],
     );
     if (!mounted || !_sessionCurrent(account) || type == null) return;
@@ -90,8 +91,8 @@ class _RecentCallsPageState extends State<RecentCallsPage>
       await showUnavailableSettingsAction(
           context,
           type == 'video'
-              ? _label('视频通话', 'Video Call')
-              : _label('语音通话', 'Audio Call'));
+              ? _label(AppCopy.text('视频通话'), 'Video Call')
+              : _label(AppCopy.text('语音通话'), 'Audio Call'));
       return;
     }
     starter(userId.trim(), type == 'video');
@@ -149,21 +150,23 @@ class _RecentCallsPageState extends State<RecentCallsPage>
     try {
       final confirmed = await showSettingsConfirm(
         context,
-        title: _label('隐藏通话记录', 'Hide Call Records'),
+        title: _label(AppCopy.text('隐藏通话记录'), 'Hide Call Records'),
         message: bulk
-            ? _label('从本设备隐藏当前列表的 ${snapshot.length} 条通话记录？其他设备仍可查看。',
+            ? _label(
+                AppCopy.format(
+                    '从本设备隐藏当前列表的 {#0} 条通话记录？其他设备仍可查看。', [snapshot.length]),
                 'Hide ${snapshot.length} call records on this device? They remain available on other devices.')
-            : _label('从本设备隐藏这条通话记录？其他设备仍可查看。',
+            : _label(AppCopy.text('从本设备隐藏这条通话记录？其他设备仍可查看。'),
                 'Hide this call record on this device? It remains available on other devices.'),
-        confirmText: _label('隐藏', 'Hide'),
+        confirmText: _label(AppCopy.text('隐藏'), 'Hide'),
         destructive: true,
       );
       if (!confirmed || !_sessionCurrent(account)) return;
       await _cache.deleteCallRecordsBatch(snapshot);
     } catch (error) {
       if (mounted && _sessionCurrent(account)) {
-        showSettingsError(
-            context, error, _label('隐藏失败，请重试', 'Could not hide. Try again.'));
+        showSettingsError(context, error,
+            _label(AppCopy.text('隐藏失败，请重试'), 'Could not hide. Try again.'));
       }
     } finally {
       if (mounted) setState(() => _acting = false);
@@ -249,7 +252,8 @@ class _RecentCallsPageState extends State<RecentCallsPage>
                   const RecentNewCallIcon(),
                   const SizedBox(width: RecentCallTokens.newCallGap),
                   Expanded(
-                      child: Text(_label('开始新通话', 'Start a New Call'),
+                      child: Text(
+                          _label(AppCopy.text('开始新通话'), 'Start a New Call'),
                           style: const TextStyle(
                               color: AppTokens.accent,
                               fontSize: RecentCallTokens.nameSize,
@@ -268,8 +272,8 @@ class _RecentCallsPageState extends State<RecentCallsPage>
     if (records.isEmpty && error != null) {
       return SettingsEmptyState(
         icon: Icons.error_outline,
-        title: _label('通话记录读取失败', 'Could not load call records'),
-        actionLabel: _label('重试', 'Retry'),
+        title: _label(AppCopy.text('通话记录读取失败'), 'Could not load call records'),
+        actionLabel: _label(AppCopy.text('重试'), 'Retry'),
         onAction: () => unawaited(_refresh()),
       );
     }
@@ -279,8 +283,8 @@ class _RecentCallsPageState extends State<RecentCallsPage>
             ? Icons.phone_missed_outlined
             : Icons.call_outlined,
         title: _tab == _RecentCallTab.missed
-            ? _label('暂无未接记录', 'No missed calls')
-            : _label('暂无通话记录', 'No call records'),
+            ? _label(AppCopy.text('暂无未接记录'), 'No missed calls')
+            : _label(AppCopy.text('暂无通话记录'), 'No call records'),
       );
     }
     return ListView.separated(
@@ -352,8 +356,8 @@ class _RecentCallsPageState extends State<RecentCallsPage>
                         fit: BoxFit.scaleDown,
                         child: Text(
                           _tab == _RecentCallTab.all
-                              ? _label('删除全部', 'Delete All')
-                              : _label('删除未接', 'Delete Missed'),
+                              ? _label(AppCopy.text('删除全部'), 'Delete All')
+                              : _label(AppCopy.text('删除未接'), 'Delete Missed'),
                           style: const TextStyle(
                               fontSize: AppTokens.secondaryFontSize,
                               fontWeight: FontWeight.w500),
@@ -386,7 +390,7 @@ class _RecentCallsPageState extends State<RecentCallsPage>
                       child: Text(
                           _editing
                               ? _label('完成', 'Done')
-                              : _label('编辑', 'Edit'),
+                              : _label(AppCopy.text('编辑'), 'Edit'),
                           style: const TextStyle(
                               fontSize: RecentCallTokens.nameSize,
                               fontWeight: FontWeight.w500))),
@@ -408,14 +412,14 @@ class _RecentCallsPageState extends State<RecentCallsPage>
                     child: Row(children: [
                       Expanded(
                           child: Text(
-                        _label('同步失败，已保留本地记录',
+                        _label(AppCopy.text('同步失败，已保留本地记录'),
                             'Sync failed. Saved records are still available.'),
                         style: TextStyle(
                             color: AppTokens.textSecondary(dark: dark)),
                       )),
                       TextButton(
                           onPressed: () => unawaited(_refresh()),
-                          child: Text(_label('重试', 'Retry'))),
+                          child: Text(_label(AppCopy.text('重试'), 'Retry'))),
                     ]),
                   ),
                 Expanded(

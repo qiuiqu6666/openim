@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -75,7 +76,7 @@ class _WalletTrendChartState extends State<WalletTrendChart> {
         final geometry =
             WalletTrendGeometry(_display.points, size, evenlySpaced: true);
         return Semantics(
-          label: '资产余额趋势，按住图表左右滑动查看历史余额，松开后显示当前余额',
+          label: AppCopy.text('资产余额趋势，按住图表左右滑动查看历史余额，松开后显示当前余额'),
           value: selected == null ? null : _pointLabel(selected),
           increasedValue: selected == null
               ? null
@@ -161,7 +162,7 @@ class _WalletTrendChartState extends State<WalletTrendChart> {
 
   String _pointLabel(int index) {
     final amount = _display.points[index].totalCny;
-    return amount == null ? '历史价格暂缺' : '¥$amount';
+    return amount == null ? AppCopy.text('历史价格暂缺') : '¥$amount';
   }
 }
 

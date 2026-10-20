@@ -98,7 +98,7 @@ void main() {
     for (final (key, label) in [
       ('wallet-action-receive', '充值'),
       ('wallet-action-transfer', '提现'),
-      ('wallet-action-swap', '划转'),
+      ('wallet-action-swap', '兑换'),
     ]) {
       expect(
           find.descendant(of: walletHomeKey(key), matching: find.text(label)),

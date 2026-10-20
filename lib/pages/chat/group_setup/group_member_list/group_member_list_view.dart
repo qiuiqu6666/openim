@@ -70,7 +70,11 @@ class GroupMemberListPage extends StatelessWidget {
                   ),
               ]),
             ),
-            if (logic.searching.value) const LinearProgressIndicator(),
+            if (logic.searching.value)
+              LinearProgressIndicator(
+                color: Styles.c_0089FF,
+                backgroundColor: Styles.c_0089FF_opacity10,
+              ),
             if (logic.searchFailed.value)
               TextButton(
                   onPressed: () => logic.searchMembers(),
@@ -117,6 +121,7 @@ class GroupMemberListPage extends StatelessWidget {
                 header: IMViews.buildHeader(),
                 footer: IMViews.buildFooter(),
                 child: ListView.separated(
+                  physics: const ClampingScrollPhysics(),
                   controller: logic.scrollController,
                   itemCount: members.length,
                   separatorBuilder: (_, __) => Padding(

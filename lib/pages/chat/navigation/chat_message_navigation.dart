@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -29,6 +30,70 @@ class ChatMessageNavigation {
   bool get isAdminOrOwner => _isAdminOrOwner();
   String? get groupID => _groupID();
   GroupInfo? get groupInfo => _groupInfo();
+
+  bool _openingFriendVerification = false;
+
+  Future<void> sendFriendVerification({
+    required String? userID,
+    required String nickname,
+    required String faceURL,
+  }) async {
+    if (isClosed ||
+        !isSingleChat ||
+        userID == null ||
+        userID.trim().isEmpty ||
+        _openingFriendVerification) {
+      return;
+    }
+    _openingFriendVerification = true;
+    final owner = (OpenIM.iMManager.userID, DataSp.chatToken);
+    final route = Get.currentRoute;
+    final arguments = Get.arguments;
+    try {
+      await FriendRelationshipGuard.requireNotBlocked(userID);
+      if (isClosed ||
+          owner != (OpenIM.iMManager.userID, DataSp.chatToken) ||
+          route != Get.currentRoute ||
+          !identical(arguments, Get.arguments)) {
+        return;
+      }
+      final users = await LoadingView.singleton.wrap(
+        asyncFunction: () => Apis.getUserFullInfo(
+          userIDList: [userID],
+          showErrorToast: false,
+        ),
+      );
+      if (isClosed ||
+          owner != (OpenIM.iMManager.userID, DataSp.chatToken) ||
+          route != Get.currentRoute ||
+          !identical(arguments, Get.arguments)) {
+        return;
+      }
+      final user = users?.firstWhereOrNull((item) => item.userID == userID);
+      final account = normalizePublicAccountSearch(user?.account ?? '');
+      await AppNavigator.startSendVerificationApplication(
+        userID: userID,
+        targetName: user?.nickname ?? nickname,
+        targetAvatarURL: user?.faceURL ?? faceURL,
+        targetAccount: account,
+        selfNickname: OpenIM.iMManager.userInfo.nickname,
+        addSource:
+            account == null ? FriendAddSource.chat : FriendAddSource.account,
+        friendAddFields: account == null ? const {} : {'account': account},
+      );
+    } catch (error) {
+      if (!isClosed &&
+          owner == (OpenIM.iMManager.userID, DataSp.chatToken) &&
+          route == Get.currentRoute &&
+          identical(arguments, Get.arguments)) {
+        IMViews.showToast(friendAddErrorMessage(error,
+                chinese: Get.locale?.languageCode != 'en') ??
+            StrRes.addFailed);
+      }
+    } finally {
+      _openingFriendVerification = false;
+    }
+  }
 
   void onTapLeftAvatar(Message message) {
     _viewAvatar(UserInfo()
@@ -105,7 +170,7 @@ class ChatMessageNavigation {
     final uri = Uri.tryParse(url);
     if (uri != null && !isClosed) {
       if (!await openInAppBrowser(uri)) {
-        IMViews.showToast('此链接不支持在应用内打开');
+        IMViews.showToast(AppCopy.text('此链接不支持在应用内打开'));
       }
     }
   }

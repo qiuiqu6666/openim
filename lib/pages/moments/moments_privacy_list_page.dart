@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 
@@ -262,7 +263,7 @@ class _MomentsPrivacyListPageState extends State<MomentsPrivacyListPage> {
     return SettingsScaffold(
       title: momentsText(context,
           zh: blocked
-              ? '不让他(她)看我的朋友圈 (${ids.length})'
+              ? AppCopy.format('不让他(她)看我的朋友圈 ({#0})', [ids.length])
               : '不看他(她)的朋友圈 (${ids.length})',
           en: blocked ? 'Hide my posts from' : 'Hide their posts'),
       children: [

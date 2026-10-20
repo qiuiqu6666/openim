@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -29,9 +30,10 @@ class FontSizePage extends StatelessWidget {
   }
 
   static String labelFor(BuildContext context, int index) {
-    const zh = ['小', '标准', '较大', '超大'];
+    final zh = ['小', AppCopy.text('标准'), AppCopy.text('较大'), '超大'];
     const en = ['Small', 'Default', 'Large', 'Extra Large'];
-    final values = Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
+    final values =
+        Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
     return values[index.clamp(0, values.length - 1).toInt()];
   }
 
@@ -204,16 +206,19 @@ class _ChatPreviewNavBar extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     settingsText(context, zh: '在线', en: 'Online'),
-                    style: TextStyle(color: secondary, fontSize: 12, height: 1.1),
+                    style:
+                        TextStyle(color: secondary, fontSize: 12, height: 1.1),
                   ),
                 ],
               ),
             ),
             const Icon(Icons.call_outlined, color: AppTokens.accent, size: 22),
             const SizedBox(width: 18),
-            const Icon(Icons.videocam_outlined, color: AppTokens.accent, size: 24),
+            const Icon(Icons.videocam_outlined,
+                color: AppTokens.accent, size: 24),
             const SizedBox(width: 18),
-            const Icon(Icons.more_horiz_rounded, color: AppTokens.accent, size: 24),
+            const Icon(Icons.more_horiz_rounded,
+                color: AppTokens.accent, size: 24),
             const SizedBox(width: 12),
           ],
         ),
@@ -288,10 +293,12 @@ class _PreviewMessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         margin: const EdgeInsets.only(bottom: 20),
-        padding: EdgeInsets.only(left: isMine ? 58 : 16, right: isMine ? 16 : 58),
+        padding:
+            EdgeInsets.only(left: isMine ? 58 : 16, right: isMine ? 16 : 58),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisAlignment:
+              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
           children: [
             if (!isMine) ...[
               AvatarView(
@@ -304,10 +311,13 @@ class _PreviewMessageRow extends StatelessWidget {
             ],
             Flexible(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                 decoration: BoxDecoration(
                   color: isMine
-                      ? (dark ? const Color(0xFF26384F) : const Color(0xFFDCEEFF))
+                      ? (dark
+                          ? const Color(0xFF26384F)
+                          : const Color(0xFFDCEEFF))
                       : AppTokens.surface(dark: dark),
                   borderRadius: isMine
                       ? const BorderRadius.only(
@@ -436,7 +446,8 @@ class _FontSliderPanel extends StatelessWidget {
                         style: TextStyle(
                           color: selected ? text : secondary,
                           fontSize: 12,
-                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                          fontWeight:
+                              selected ? FontWeight.w600 : FontWeight.w400,
                         ),
                       ),
                     ),

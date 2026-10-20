@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import '../sangong_scope.dart';
 import '../support/sangong_ui.dart';
@@ -33,13 +34,13 @@ class _SangongUserGroupEntryState extends State<SangongUserGroupEntry> {
     final id = widget.imUserId;
     final value = await AppDialog.prompt(
         context: context,
-        title: '积分分组',
-        message: '填写分组名称；留空或填 0 表示取消分组。',
+        title: AppCopy.text('积分分组'),
+        message: AppCopy.text('填写分组名称；留空或填 0 表示取消分组。'),
         initialValue: widget.groupName,
-        placeholder: '例如：A组',
+        placeholder: AppCopy.text('例如：A组'),
         allowEmpty: true,
         cancelText: '取消',
-        confirmText: '保存',
+        confirmText: AppCopy.text('保存'),
         dialogWrapper: (_, child) => SangongAuthorizedView(
             runtime: _runtime,
             isCurrent: () => _current && widget.imUserId == id,
@@ -50,7 +51,7 @@ class _SangongUserGroupEntryState extends State<SangongUserGroupEntry> {
       await _runtime.admin.setUserGroup(imUserId: id, group: value.trim());
       if (!mounted || !_current || widget.imUserId != id) return;
       widget.onChanged();
-      ToastUtils.toast('积分分组已保存', context: context);
+      ToastUtils.toast(AppCopy.text('积分分组已保存'), context: context);
     } catch (error) {
       if (mounted && _current) {
         ToastUtils.toast(DioErrorMessage.forApp(error), context: context);
@@ -63,11 +64,11 @@ class _SangongUserGroupEntryState extends State<SangongUserGroupEntry> {
   @override
   Widget build(BuildContext context) => _current
       ? SettingsCell(
-          title: '积分分组',
+          title: AppCopy.text('积分分组'),
           value: _busy
-              ? '保存中…'
+              ? AppCopy.text('保存中…')
               : widget.groupName.isEmpty
-                  ? '未分组'
+                  ? AppCopy.text('未分组')
                   : widget.groupName,
           showDivider: false,
           onTap: _busy ? null : _edit)

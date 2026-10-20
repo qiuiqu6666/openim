@@ -151,6 +151,7 @@ class AuthCredentialsStore {
   /// A reset can update only the credentials for the matching remembered phone.
   Future<bool> updatePasswordIfRemembered({
     required String account,
+    int loginType = 0,
     required String areaCode,
     required String password,
     required bool Function() isCurrent,
@@ -161,9 +162,12 @@ class AuthCredentialsStore {
         final record = _decode(previous);
         if (!isCurrent() ||
             record == null ||
-            record['account'] != account.trim() ||
-            record['areaCode'] != areaCode ||
-            record['loginType'] != 0) {
+            (loginType == 1
+                ? (record['account'] as String?)?.toLowerCase() !=
+                    account.trim().toLowerCase()
+                : record['account'] != account.trim()) ||
+            (loginType == 0 && record['areaCode'] != areaCode) ||
+            record['loginType'] != loginType) {
           return false;
         }
         record['password'] = password;
@@ -182,5 +186,29 @@ class AuthCredentialsStore {
           return false;
         }
         return true;
+      });
+
+  /// A verified email change updates only the matching email login record.
+  Future<void> renameEmail({
+    required String previousEmail,
+    required String email,
+    required bool Function() isCurrent,
+  }) =>
+      _serialized(() async {
+        if (!isCurrent() || previousEmail.isEmpty) return;
+        final previous = await _storage.read(key: credentialsKey);
+        final record = _decode(previous);
+        if (!isCurrent() ||
+            record == null ||
+            record['loginType'] != 1 ||
+            (record['account'] as String?)?.toLowerCase() !=
+                previousEmail.toLowerCase()) {
+          return;
+        }
+        record['account'] = email;
+        if (!await _rememberEnabled()) record.remove('password');
+        if (!isCurrent()) return;
+        await _storage.write(key: credentialsKey, value: jsonEncode(record));
+        if (!isCurrent()) await _restorePrevious(previous);
       });
 }

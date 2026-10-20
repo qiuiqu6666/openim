@@ -60,4 +60,21 @@ void main() {
         isNull);
     expect(AuthFormRules.verificationCode(' 123456 ', sixDigits: true), isNull);
   });
+  test('new passwords require 8–24 ASCII letters and digits', () {
+    for (final value in ['abc12345', 'a1' + 'a' * 22]) {
+      expect(AuthFormRules.password(value), isNull);
+    }
+    for (final value in [
+      'abc1234',
+      'a1' + 'a' * 23,
+      'abcdefgh',
+      '12345678',
+      'Password1!',
+      'password 1',
+      '中文abc12345'
+    ]) {
+      expect(AuthFormRules.password(value), isNotNull);
+    }
+    expect(AuthFormRules.loginPassword('Password1!'), isNull);
+  });
 }

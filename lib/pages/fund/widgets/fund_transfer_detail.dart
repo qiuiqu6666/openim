@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -64,8 +65,9 @@ class FundTransferDetail extends StatelessWidget {
                 Text(
                     text(
                         order.scene == FundScene.group
-                            ? '$sender群转账给$receiver'
-                            : '$sender向$receiver发起的转账',
+                            ? AppCopy.format('{#0}群转账给{#1}', [sender, receiver])
+                            : AppCopy.format(
+                                '{#0}向{#1}发起的转账', [sender, receiver]),
                         'Transfer from $sender to $receiver'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -104,17 +106,22 @@ class FundTransferDetail extends StatelessWidget {
                     thickness: FundTokens.cardFooterDividerWidth,
                     color: cs.line),
                 const SizedBox(height: FundTokens.referenceTransferMetaTopGap),
-                _detailRow(context, text('当前状态', 'Current status'),
+                _detailRow(
+                    context,
+                    text(AppCopy.text('当前状态'), 'Current status'),
                     received ? text('已接收', 'Received') : statusText,
                     valueKey: const ValueKey('fund-detail-status')),
                 if (remark.isNotEmpty) ...[
                   const SizedBox(height: AppTokens.s4),
-                  _detailRow(context, text('转账备注', 'Memo'), remark,
+                  _detailRow(
+                      context, text(AppCopy.text('转账备注'), 'Memo'), remark,
                       valueKey: const ValueKey('fund-detail-transfer-remark')),
                 ],
                 if (order.createdAt != null) ...[
                   const SizedBox(height: AppTokens.s4),
-                  _detailRow(context, text('转账时间', 'Transfer time'),
+                  _detailRow(
+                      context,
+                      text(AppCopy.text('转账时间'), 'Transfer time'),
                       formatTime(order.createdAt!)),
                 ],
                 const SizedBox(height: AppTokens.s4),

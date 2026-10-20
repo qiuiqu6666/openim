@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -62,7 +63,7 @@ class _IncomingCallViewState extends State<IncomingCallView>
           locale.countryCode == 'TW' ||
           locale.countryCode == 'HK';
       if (traditional) return video ? '邀請你視訊通話' : '邀請你語音通話';
-      return video ? '邀请你视频通话' : '邀请你语音通话';
+      return video ? AppCopy.text('邀请你视频通话') : AppCopy.text('邀请你语音通话');
     }
     return video
         ? 'Invites you to a video call'

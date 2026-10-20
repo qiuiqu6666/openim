@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../../identity/widgets/sangong_identity_view.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -76,12 +77,12 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
       builder: (_, __) => _current
           ? child
           : CupertinoAlertDialog(
-              title: const Text('游戏权限已变化'),
-              content: const Text('请返回当前群后重新进入'),
+              title: Text(AppCopy.text('游戏权限已变化')),
+              content: Text(AppCopy.text('请返回当前群后重新进入')),
               actions: [
                   CupertinoDialogAction(
                       onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: const Text('关闭'))
+                      child: Text(AppCopy.text('关闭')))
                 ]));
 
   Future<void> _run(Future<bool> Function() action) async {
@@ -90,7 +91,7 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
     try {
       final changed = await action();
       if (!mounted || !_current || !changed) return;
-      ToastUtils.toast('已保存', context: context);
+      ToastUtils.toast(AppCopy.text('已保存'), context: context);
       await widget.onChanged();
     } catch (e) {
       if (mounted && _current) {
@@ -106,8 +107,8 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
   Future<bool> _editRate() async {
     final input = await AppDialog.prompt(
         context: context,
-        title: '设置返水比例',
-        message: '$_name\n填写百分比，最多四位小数。下级比例不能超过上级。',
+        title: AppCopy.text('设置返水比例'),
+        message: AppCopy.format('{#0}\n填写百分比，最多四位小数。下级比例不能超过上级。', [_name]),
         initialValue: widget.rebatePct.toStringAsFixed(4),
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         maxLength: 8,
@@ -117,13 +118,15 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
     final identity =
         await SangongIdentityScope.read(context).resolve(widget.imUserId);
     if (!mounted || !_current) return false;
-    final account =
-        identity?.account.isNotEmpty == true ? identity!.account : '账号未获取';
+    final account = identity?.account.isNotEmpty == true
+        ? identity!.account
+        : AppCopy.text('账号未获取');
     final confirmed = await AppDialog.confirm(
         context: context,
-        title: '确认返水比例',
-        message:
-            '将 $_name（$account）在当前下注群的返水比例设为 $rate%。\n修改时不发放返水。未结流水保留，之后按新比例计算；已结返水不变。',
+        title: AppCopy.text('确认返水比例'),
+        message: AppCopy.format(
+            '将 {#0}（{#1}）在当前下注群的返水比例设为 {#2}%。\n修改时不发放返水。未结流水保留，之后按新比例计算；已结返水不变。',
+            [_name, account, rate]),
         dialogWrapper: _dialog);
     if (!mounted || !_current || !confirmed) return false;
     await _api.setRate(_userId, rate);
@@ -134,9 +137,11 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
     if (widget.agent) return false;
     final input = await AppDialog.prompt(
         context: context,
-        title: widget.parentUserId > 0 ? '修改上级代理' : '设置上级代理',
-        message: '填写上级的公开账号名。上级须属于当前下注群，不能是自己或自己的下级。',
-        placeholder: '公开账号名',
+        title: widget.parentUserId > 0
+            ? AppCopy.text('修改上级代理')
+            : AppCopy.text('设置上级代理'),
+        message: AppCopy.text('填写上级的公开账号名。上级须属于当前下注群，不能是自己或自己的下级。'),
+        placeholder: AppCopy.text('公开账号名'),
         maxLength: 128,
         dialogWrapper: _dialog);
     if (!mounted || !_current || input == null) return false;
@@ -160,15 +165,16 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
     if (!mounted || !_current) return false;
     final account = identities[0]?.account.isNotEmpty == true
         ? identities[0]!.account
-        : '账号未获取';
+        : AppCopy.text('账号未获取');
     final parentAccount = identities[1]?.account.isNotEmpty == true
         ? identities[1]!.account
-        : '账号未获取';
+        : AppCopy.text('账号未获取');
     final confirmed = await AppDialog.confirm(
         context: context,
-        title: '确认上级代理',
-        message:
-            '将 $_name（$account）挂靠到 $parentName（$parentAccount）。此关系仅适用于当前下注群。\n下属团队一起迁移，未结返水流水转给新上级，已结部分保留。',
+        title: AppCopy.text('确认上级代理'),
+        message: AppCopy.format(
+            '将 {#0}（{#1}）挂靠到 {#2}（{#3}）。此关系仅适用于当前下注群。\n下属团队一起迁移，未结返水流水转给新上级，已结部分保留。',
+            [_name, account, parentName, parentAccount]),
         dialogWrapper: _dialog);
     if (!mounted || !_current || !confirmed) return false;
     await _api.attach(_userId, parentId);
@@ -185,11 +191,14 @@ class _SangongAgentUserActionsState extends State<SangongAgentUserActions> {
               TextButton.icon(
                   onPressed: _busy ? null : () => _run(_editRate),
                   icon: const Icon(Icons.percent_outlined),
-                  label: Text(_busy ? '处理中…' : '设置返水')),
+                  label: Text(
+                      _busy ? AppCopy.text('处理中…') : AppCopy.text('设置返水'))),
               if (!widget.agent)
                 TextButton.icon(
                     onPressed: _busy ? null : () => _run(_attach),
                     icon: const Icon(Icons.account_tree_outlined),
-                    label: Text(widget.parentUserId > 0 ? '修改上级' : '设置上级')),
+                    label: Text(widget.parentUserId > 0
+                        ? AppCopy.text('修改上级')
+                        : AppCopy.text('设置上级'))),
             ]));
 }

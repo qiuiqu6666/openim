@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -43,7 +44,8 @@ class MineLogic extends GetxController {
     try {
       await settingsService.refresh();
     } catch (_) {
-      IMViews.showToast(_isZh ? '资料刷新失败，显示已缓存资料' : 'Could not refresh profile');
+      IMViews.showToast(
+          _isZh ? AppCopy.text('资料刷新失败，显示已缓存资料') : 'Could not refresh profile');
     }
     if (!context.mounted || isClosed) return;
     final user = imLogic.userInfo.value;
@@ -88,16 +90,18 @@ class MineLogic extends GetxController {
   }
 
   void openFavorites(BuildContext context) => openSettingsPage(
-      context,
-      FavoritesPage(
-        repository: FavoriteRuntime.repository,
-        onSendToConversation: (item) =>
-            FavoriteRuntime.sendToConversation(context, item),
-        onSendItemsToConversation: (items) =>
-            FavoriteRuntime.sendItemsToConversation(context, items),
-        onCancelSendItemsToConversation: (items) =>
-            FavoriteRuntime.cancelSendItems(context, items),
-      ), activityPage: 'favorites',);
+        context,
+        FavoritesPage(
+          repository: FavoriteRuntime.repository,
+          onSendToConversation: (item) =>
+              FavoriteRuntime.sendToConversation(context, item),
+          onSendItemsToConversation: (items) =>
+              FavoriteRuntime.sendItemsToConversation(context, items),
+          onCancelSendItemsToConversation: (items) =>
+              FavoriteRuntime.cancelSendItems(context, items),
+        ),
+        activityPage: 'favorites',
+      );
 
   void openCalls(BuildContext context) => openSettingsPage(
         context,
@@ -183,14 +187,16 @@ class MineLogic extends GetxController {
     final user = imLogic.userInfo.value;
     try {
       await openSettingsPage(
-          context,
-          MomentsPage(
-            authorId: personal ? user.userID : null,
-            profileUser: MomentUser(
-                userId: user.userID ?? '',
-                nickname: user.nickname ?? '',
-                avatarUrl: user.faceURL ?? ''),
-          ), activityPage: 'moments',);
+        context,
+        MomentsPage(
+          authorId: personal ? user.userID : null,
+          profileUser: MomentUser(
+              userId: user.userID ?? '',
+              nickname: user.nickname ?? '',
+              avatarUrl: user.faceURL ?? ''),
+        ),
+        activityPage: 'moments',
+      );
     } finally {
       _momentsRouteOpen = false;
     }
@@ -209,13 +215,17 @@ class MineLogic extends GetxController {
 
   void showReservedFeature(String feature) {
     IMViews.showToast(
-      _isZh ? '$feature 暂未开放' : '$feature is not available yet',
+      _isZh
+          ? AppCopy.format('{#0} 暂未开放', [feature])
+          : '$feature is not available yet',
     );
   }
 
   void showUnavailableFeature(String feature) {
     IMViews.showToast(
-      _isZh ? '$feature 暂未开放' : '$feature is not available yet',
+      _isZh
+          ? AppCopy.format('{#0} 暂未开放', [feature])
+          : '$feature is not available yet',
     );
   }
 

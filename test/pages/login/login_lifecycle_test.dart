@@ -202,6 +202,7 @@ void main() {
     await tester.pumpWidget(_app());
     final logic = await _initLogin(tester);
     logic.loginType.value = LoginType.account;
+    logic.selectLoginType(LoginType.account);
     logic.phoneCtrl.text = 'account';
     logic.pwdCtrl.text = 'password';
     await tester.runAsync(() async {
@@ -231,6 +232,7 @@ void main() {
     await tester.pumpWidget(_app());
     final logic = await _initLogin(tester);
     logic.loginType.value = LoginType.account;
+    logic.selectLoginType(LoginType.account);
     logic.phoneCtrl.text = 'account';
     logic.pwdCtrl.text = 'password';
     await tester.runAsync(() async {
@@ -326,6 +328,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(_app());
         final first = await _initLogin(tester);
+        first.selectLoginType(target.type);
         first.phoneCtrl.text = target.input;
         first.pwdCtrl.text = 'remembered-password';
         await tester.runAsync(() async {
@@ -427,9 +430,9 @@ void main() {
       final logic = await _initLogin(tester);
       await tester.runAsync(
           () => _flushUntil(() => logic.pwdCtrl.text == 'remembered-password'));
-      expect(logic.phoneCtrl.text, record.display);
+      expect(logic.phoneCtrl.text, record.saved);
       expect(logic.loginType.value, LoginType.account);
-      expect(logic.account, record.display);
+      expect(logic.account, record.saved);
       logic.onClose();
     });
   }
@@ -469,6 +472,7 @@ void main() {
     late _PendingSave store;
     final logic =
         await _initLogin(tester, createStore: () => store = _PendingSave());
+    logic.selectLoginType(LoginType.account);
     logic.phoneCtrl.text = 'account';
     logic.pwdCtrl.text = 'password';
     await tester.runAsync(() async {
@@ -493,6 +497,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(_app());
     final logic = await _initLogin(tester, createStore: _UnavailableStore.new);
+    logic.selectLoginType(LoginType.account);
     logic.phoneCtrl.text = 'account';
     logic.pwdCtrl.text = 'password';
     await tester.runAsync(() async {
@@ -514,6 +519,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(_app());
     final logic = await _initLogin(tester);
+    logic.selectLoginType(LoginType.account);
     logic.phoneCtrl.text = 'account';
     logic.pwdCtrl.text = 'password';
     Get.locale = const Locale('zh', 'CN');
@@ -549,6 +555,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(_app());
     final logic = await _initLogin(tester);
+    logic.selectLoginType(LoginType.account);
     logic.phoneCtrl.text = 'account';
     logic.pwdCtrl.text = 'password';
     await tester.runAsync(() async {
@@ -564,19 +571,68 @@ void main() {
   });
 
   for (final target in [
-    (value: '13800138000', identity: '13800138000', key: 'phoneNumber'),
-    (value: 'user@example.com', identity: 'user@example.com', key: 'email'),
-    (value: '12345', identity: '12345', key: 'account'),
-    (value: 'username', identity: 'username', key: 'account'),
-    (value: ' @username ', identity: '@username', key: 'account'),
-    (value: '@ username', identity: '@ username', key: 'account'),
-    (value: '@@123456', identity: '@@123456', key: 'account'),
-    (value: '@13800138000', identity: '@13800138000', key: 'account'),
+    (
+      value: '13800138000',
+      identity: '13800138000',
+      key: 'phoneNumber',
+      areaCode: '+86'
+    ),
+    (
+      value: 'user@example.com',
+      identity: 'user@example.com',
+      key: 'email',
+      areaCode: '+86'
+    ),
+    (value: '12345', identity: '12345', key: 'account', areaCode: '+86'),
+    (
+      value: '13800138000',
+      identity: '13800138000',
+      key: 'account',
+      areaCode: '+86'
+    ),
+    (value: 'username', identity: 'username', key: 'account', areaCode: '+86'),
+    (
+      value: ' @username ',
+      identity: '@username',
+      key: 'account',
+      areaCode: '+86'
+    ),
+    (
+      value: '@ username',
+      identity: '@ username',
+      key: 'account',
+      areaCode: '+86'
+    ),
+    (value: '@@123456', identity: '@@123456', key: 'account', areaCode: '+86'),
+    (
+      value: '@13800138000',
+      identity: '@13800138000',
+      key: 'account',
+      areaCode: '+86'
+    ),
+    (
+      value: '51234567',
+      identity: '51234567',
+      key: 'phoneNumber',
+      areaCode: '+852'
+    ),
+    (
+      value: '912345678',
+      identity: '912345678',
+      key: 'phoneNumber',
+      areaCode: '+886'
+    ),
   ]) {
     testWidgets('password login dispatches ${target.key} for ${target.value}',
         (tester) async {
       await tester.pumpWidget(_app());
       final logic = await _initLogin(tester);
+      logic.selectLoginType(switch (target.key) {
+        'phoneNumber' => LoginType.phone,
+        'email' => LoginType.email,
+        _ => LoginType.account
+      });
+      logic.areaCode.value = target.areaCode;
       logic.phoneCtrl.text = target.value;
       logic.pwdCtrl.text = 'password';
       await tester.runAsync(() async {
@@ -587,7 +643,7 @@ void main() {
         for (final key in ['phoneNumber', 'email', 'account']) {
           if (key != target.key) expect(payload[key], isNull);
         }
-        expect(payload['areaCode'], '+86');
+        expect(payload['areaCode'], target.areaCode);
         adapter.success();
         await login;
         expect(logic.phoneCtrl.text, target.value);
@@ -605,6 +661,7 @@ void main() {
       await tester.pumpWidget(_app());
       final logic = await _initLogin(tester);
       logic.loginType.value = LoginType.account;
+      logic.selectLoginType(LoginType.account);
       logic.phoneCtrl.text = 'account';
       logic.pwdCtrl.text = 'password';
       await tester.runAsync(() async {

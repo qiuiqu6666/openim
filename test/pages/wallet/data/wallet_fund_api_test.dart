@@ -54,7 +54,8 @@ void main() {
       expect(request.method, 'GET');
       expect(request.headers['token'], 'chat-token');
       expect(request.data, isNull);
-      expect(request.queryParameters, isEmpty);
+      expect(request.queryParameters, request.path.endsWith('/balances')
+          ? {'currencyVisibility': '1'} : <String, dynamic>{});
       expect(
           request.headers['operationID'],
           matches(RegExp(

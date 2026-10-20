@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,11 +89,13 @@ void main() {
   var rejectReason = 'too frequent';
   var rejectAt = 'friend-grants';
   var rejectHttp = false;
+  String? responseState = 'success';
 
   setUp(() async {
     Get.reset();
     SharedPreferences.setMockInitialValues({});
     await SpUtil().init();
+    OpenIM.iMManager.userID = 'applicant-private-id';
     await DataSp.putLoginCertificate(LoginCertificate.fromJson({
       'userID': 'applicant-private-id',
       'chatToken': 'test-chat-token',
@@ -107,6 +110,7 @@ void main() {
     rejectReason = 'too frequent';
     rejectAt = 'friend-grants';
     rejectHttp = false;
+    responseState = 'success';
     previousClient = http.dio;
     client = Dio();
     client.interceptors.add(InterceptorsWrapper(
@@ -127,7 +131,7 @@ void main() {
                   'errCode': 0,
                   'data': request.path.endsWith('friend-grants')
                       ? {'friendGrant': 'fg_test'}
-                      : {},
+                      : {if (responseState != null) 'applyState': responseState},
                 },
         );
         if (rejected && rejectHttp) {
@@ -143,6 +147,7 @@ void main() {
     http.dio = client;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdkChannel, (call) async {
+      if (call.method == 'getBlacklist') return '[]';
       if (call.method != 'joinGroup') {
         throw StateError('Unexpected native method: ${call.method}');
       }
@@ -336,7 +341,80 @@ void main() {
     expect(find.text('origin'), findsOneWidget);
   });
 
+  for (final state in [null, 'pending', 'unknown', 'failed']) {
+    testWidgets('unconfirmed application $state never shows success', (tester) async {
+      responseState = state;
+      final logic = SendVerificationApplicationLogic();
+      await _openVerification(tester, logic, {
+        'userID': 'target-private-id',
+        'addSource': FriendAddSource.account,
+        'friendAddFields': {'account': '@real-account'},
+      });
+      final pending = logic.send();
+      await _advanceRequest(tester);
+      await tester.runAsync(() async {
+        applyGate.complete();
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+      });
+      await pending;
+      await tester.pumpAndSettle();
+      expect(find.text('暂未确认申请结果，请稍后重试'), findsOneWidget);
+      expect(find.text(StrRes.sendSuccessfully), findsNothing);
+      expect(find.text('verification'), findsOneWidget);
+      expect(logic.sending.value, false);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+  }
+
   for (final endpoint in ['friend-grants', 'friend-apply']) {
+    for (final httpFailure in [false, true]) {
+      testWidgets('blacklist at $endpoint HTTP error=$httpFailure is explicit and retryable',
+          (tester) async {
+        reject = true;
+        rejectCode = 1302;
+        rejectReason = 'BlockedByPeer';
+        rejectAt = endpoint;
+        rejectHttp = httpFailure;
+        final logic = SendVerificationApplicationLogic();
+        await _openVerification(tester, logic, {
+          'userID': 'target-private-id',
+          'addSource': FriendAddSource.account,
+          'friendAddFields': {'account': '@real-account'},
+        });
+        logic.inputCtrl.text = '保留我的申请';
+        final pending = logic.send();
+        await _advanceRequest(tester);
+        await tester.runAsync(() async {
+          applyGate.complete();
+          await Future<void>.delayed(const Duration(milliseconds: 30));
+        });
+        await pending;
+        await tester.pumpAndSettle();
+        expect(find.text('你已被对方拉黑，无法添加好友。'), findsOneWidget);
+        expect(find.text(StrRes.sendSuccessfully), findsNothing);
+        expect(find.text('verification'), findsOneWidget);
+        expect(logic.inputCtrl.text, '保留我的申请');
+        expect(logic.sending.value, false);
+        expect(requests, hasLength(endpoint == 'friend-grants' ? 1 : 2));
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+        reject = false;
+        applyGate = Completer<void>();
+        final retry = logic.send();
+        await _advanceRequest(tester);
+        await tester.runAsync(() async {
+          applyGate.complete();
+          await Future<void>.delayed(const Duration(milliseconds: 30));
+        });
+        await tester.pumpAndSettle();
+        await retry;
+        expect(find.text('origin'), findsOneWidget);
+        expect(find.text(StrRes.sendSuccessfully), findsOneWidget);
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpAndSettle();
+      });
+    }
     testWidgets('risk block at $endpoint ends loading without toast or success',
         (tester) async {
       reject = true;

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -29,25 +30,26 @@ class ConnectionLatencyBadge extends StatelessWidget {
     final label = failed
         ? (chinese ? '不可用' : 'Unavailable')
         : checking
-            ? (chinese ? '连接中...' : 'Connecting...')
+            ? (chinese ? AppCopy.text('连接中...') : 'Connecting...')
             : measured == null
-                ? (chinese ? '检测中' : 'Checking')
+                ? (chinese ? AppCopy.text('检测中') : 'Checking')
                 : '$measured ms';
     final quality = failed
-        ? (chinese ? '离线' : 'Offline')
+        ? (chinese ? AppCopy.text('离线') : 'Offline')
         : measured == null
-            ? (chinese ? '检测中' : 'Checking')
+            ? (chinese ? AppCopy.text('检测中') : 'Checking')
             : measured < 200
                 ? (chinese ? '良好' : 'Good')
                 : measured < 500
                     ? (chinese ? '一般' : 'Fair')
-                    : (chinese ? '较高' : 'High');
+                    : (chinese ? AppCopy.text('较高') : 'High');
     // The reference's offline capsule contains only the unavailable label.
     final suffix = measured == null || marker == null ? '' : ' · $marker';
     final routeDescription = marker == null ? '' : ' · $marker';
     return Tooltip(
       message: chinese
-          ? '$quality$routeDescription · 当前线路 API 响应耗时，约每 5 秒更新'
+          ? AppCopy.format(
+              '{#0}{#1} · 当前线路 API 响应耗时，约每 5 秒更新', [quality, routeDescription])
           : '$quality$routeDescription · Current route API response time, updated about every 5 seconds',
       child: Semantics(
         liveRegion: checking || failed,

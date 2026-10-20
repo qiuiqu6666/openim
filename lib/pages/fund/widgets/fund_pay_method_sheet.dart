@@ -1,3 +1,4 @@
+import 'package:openim/services/fund_currency_visibility/fund_currency_visibility.dart';
 // Adapted from qiuiqu6666/99chat, revision d7c3c65 (Apache-2.0).
 // Source: lib/src/pages/wallet/widgets/pay_method_sheet.dart.
 import 'dart:math' as math;
@@ -24,6 +25,12 @@ class _FundPayMethodSheetState extends State<FundPayMethodSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final balances = widget.balances
+        .where((balance) => isFundCurrencyVisible(balance.currency))
+        .toList(growable: false);
+    final selected = balances.any((balance) => balance.currency == _selected)
+        ? _selected
+        : balances.firstOrNull?.currency;
     final cs = FundPageColors.of(context);
     final viewport = MediaQuery.sizeOf(context);
     final textScale = MediaQuery.textScalerOf(context).scale(1);
@@ -94,13 +101,13 @@ class _FundPayMethodSheetState extends State<FundPayMethodSheet> {
               child: ListView.separated(
                   padding: EdgeInsets.zero,
                   shrinkWrap: true,
-                  itemCount: widget.balances.length,
+                  itemCount: balances.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 9),
                   itemBuilder: (context, index) {
-                    final balance = widget.balances[index];
+                    final balance = balances[index];
                     return _PayMethodRow(
                         balance: balance,
-                        selected: balance.currency == _selected,
+                        selected: balance.currency == selected,
                         cs: cs,
                         onTap: () =>
                             setState(() => _selected = balance.currency));
@@ -109,7 +116,12 @@ class _FundPayMethodSheetState extends State<FundPayMethodSheet> {
           Semantics(
               button: true,
               child: GestureDetector(
-                  onTap: () => Navigator.of(context).pop(_selected),
+                  onTap: balances.isEmpty
+                      ? null
+                      : () => Navigator.of(context).pop(balances
+                              .any((balance) => balance.currency == _selected)
+                          ? _selected
+                          : balances.first.currency),
                   child: Container(
                       key: const ValueKey('fund-pay-method-confirm'),
                       height: 48,

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -69,7 +70,8 @@ class LiveWatchingBottomBar extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
                         child: Row(mainAxisSize: MainAxisSize.min, children: [
                           Flexible(
-                              child: Text(fullscreen ? '退出全屏' : '全屏观看',
+                              child: Text(
+                                  fullscreen ? '退出全屏' : AppCopy.text('全屏观看'),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
@@ -83,19 +84,22 @@ class FundInternalTransferForm extends StatelessWidget {
       settingsText(context, zh: zh, en: en);
   String _accountLabel(BuildContext context) => switch (accountType) {
         FundTransferAccountType.uid => 'UID',
-        FundTransferAccountType.email => _text(context, '邮箱', 'Email'),
-        FundTransferAccountType.phone => _text(context, '手机号', 'Phone number'),
-        FundTransferAccountType.account => _text(context, '99号', '99Chat ID'),
+        FundTransferAccountType.email =>
+          _text(context, AppCopy.text('邮箱'), 'Email'),
+        FundTransferAccountType.phone =>
+          _text(context, AppCopy.text('手机号'), 'Phone number'),
+        FundTransferAccountType.account =>
+          _text(context, AppCopy.text('99号'), '99Chat ID'),
       };
   String _recipientHint(BuildContext context) => switch (accountType) {
         FundTransferAccountType.uid =>
-          _text(context, '请填写收款人UID', 'Enter recipient UID'),
+          _text(context, AppCopy.text('请填写收款人UID'), 'Enter recipient UID'),
         FundTransferAccountType.email =>
-          _text(context, '请填写收款人邮箱', 'Enter recipient email'),
-        FundTransferAccountType.phone =>
-          _text(context, '请填写收款人手机号', 'Enter recipient phone number'),
-        FundTransferAccountType.account =>
-          _text(context, '请填写收款人99号', 'Enter recipient 99Chat ID'),
+          _text(context, AppCopy.text('请填写收款人邮箱'), 'Enter recipient email'),
+        FundTransferAccountType.phone => _text(
+            context, AppCopy.text('请填写收款人手机号'), 'Enter recipient phone number'),
+        FundTransferAccountType.account => _text(
+            context, AppCopy.text('请填写收款人99号'), 'Enter recipient 99Chat ID'),
       };
 
   TextStyle _style(BuildContext context, double size,
@@ -142,7 +146,8 @@ class FundInternalTransferForm extends StatelessWidget {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Semantics(
           button: true,
-          label: _text(context, '选择手机号区号', 'Choose phone calling code'),
+          label: _text(
+              context, AppCopy.text('选择手机号区号'), 'Choose phone calling code'),
           value: phoneAreaCode,
           child: InkWell(
               key: const ValueKey('internal-transfer-area-code'),
@@ -203,7 +208,9 @@ class FundInternalTransferForm extends StatelessWidget {
                               key: const ValueKey('fund-close'),
                               onPressed: onClose))))),
           Expanded(
-              child: Text(_text(context, '提现 $_coin', 'Withdraw $_coin'),
+              child: Text(
+                  _text(context, AppCopy.format('提现 {#0}', [_coin]),
+                      'Withdraw $_coin'),
                   textAlign: TextAlign.center,
                   softWrap: true,
                   style: _style(context, FundInternalTransferTokens.titleFont,
@@ -212,7 +219,8 @@ class FundInternalTransferForm extends StatelessWidget {
               dimension: FundInternalTransferTokens.targetMinSize,
               child: IconButton(
                   key: const ValueKey('internal-transfer-help'),
-                  tooltip: _text(context, '提现说明', 'Withdrawal help'),
+                  tooltip:
+                      _text(context, AppCopy.text('提现说明'), 'Withdrawal help'),
                   onPressed: isSubmitting ? null : onHelp,
                   icon: Icon(Icons.help_outline_rounded,
                       size: FundInternalTransferTokens.iconSize,
@@ -221,7 +229,7 @@ class FundInternalTransferForm extends StatelessWidget {
               dimension: FundInternalTransferTokens.targetMinSize,
               child: IconButton(
                   key: const ValueKey('internal-transfer-history'),
-                  tooltip: _text(context, '历史记录', 'History'),
+                  tooltip: _text(context, AppCopy.text('历史记录'), 'History'),
                   onPressed: isSubmitting ? null : onHistory,
                   icon: Icon(Icons.history_rounded,
                       size: FundInternalTransferTokens.iconSize,
@@ -232,7 +240,7 @@ class FundInternalTransferForm extends StatelessWidget {
   Widget _accountType(BuildContext context) {
     final colors = FundPageColors.of(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _label(context, _text(context, '账号类型', 'Account type')),
+      _label(context, _text(context, AppCopy.text('账号类型'), 'Account type')),
       const SizedBox(height: FundInternalTransferTokens.labelGap),
       _fieldSurface(
           context,
@@ -286,14 +294,16 @@ class FundInternalTransferForm extends StatelessWidget {
                   context,
                   recipientName?.isNotEmpty == true &&
                           recipientInput.text.isEmpty
-                      ? _text(context, '已选择收款人', 'Recipient selected')
+                      ? _text(
+                          context, AppCopy.text('已选择收款人'), 'Recipient selected')
                       : _recipientHint(context),
                   prefix: accountType == FundTransferAccountType.phone
                       ? _areaCode(context)
                       : null,
                   suffix: IconButton(
                       key: const ValueKey('internal-transfer-contacts'),
-                      tooltip: _text(context, '选择收款人', 'Select recipient'),
+                      tooltip: _text(
+                          context, AppCopy.text('选择收款人'), 'Select recipient'),
                       onPressed: _editable ? onChooseRecipient : null,
                       icon: Icon(Icons.account_circle_outlined,
                           color: colors.subText,
@@ -325,7 +335,8 @@ class FundInternalTransferForm extends StatelessWidget {
     final colors = FundPageColors.of(context);
     final min = currency.decimals == 2 ? '0.01' : '0.000001';
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _label(context, _text(context, '提现数量', 'Withdrawal amount')),
+      _label(
+          context, _text(context, AppCopy.text('提现数量'), 'Withdrawal amount')),
       const SizedBox(height: FundInternalTransferTokens.labelGap),
       _fieldSurface(
           context,
@@ -384,7 +395,7 @@ class FundInternalTransferForm extends StatelessWidget {
             padding:
                 const EdgeInsets.only(top: FundInternalTransferTokens.labelGap),
             child: Text(
-                _text(context, '有一笔待确认的转账，请继续确认支付结果。',
+                _text(context, AppCopy.text('有一笔待确认的转账，请继续确认支付结果。'),
                     'A transfer is pending. Continue to confirm the result.'),
                 style: _style(context, FundInternalTransferTokens.detailFont,
                     color: colors.warningText))),
@@ -402,12 +413,13 @@ class FundInternalTransferForm extends StatelessWidget {
                           color: colors.red)),
                   TextButton(
                       onPressed: isLoading || isSubmitting ? null : onReload,
-                      child: Text(_text(context, '重试', 'Retry'))),
+                      child: Text(_text(context, AppCopy.text('重试'), 'Retry'))),
                 ])),
       if (!passwordSet && !isLoading)
         TextButton(
             onPressed: isSubmitting ? null : onSetPassword,
-            child: Text(_text(context, '设置支付密码', 'Set payment password'))),
+            child: Text(_text(
+                context, AppCopy.text('设置支付密码'), 'Set payment password'))),
     ]);
   }
 
@@ -434,11 +446,15 @@ class FundInternalTransferForm extends StatelessWidget {
             top: FundInternalTransferTokens.footerGap,
             bottom: FundInternalTransferTokens.footerBottom),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          _summaryRow(context, _text(context, '到账数量', 'Arrival amount'),
+          _summaryRow(
+              context,
+              _text(context, AppCopy.text('到账数量'), 'Arrival amount'),
               '$arrivalAmount $_coin'),
           const SizedBox(height: FundInternalTransferTokens.smallGap),
           _summaryRow(
-              context, _text(context, '网络手续费', 'Network fee'), '0.00 $_coin'),
+              context,
+              _text(context, AppCopy.text('网络手续费'), 'Network fee'),
+              '0.00 $_coin'),
           const SizedBox(height: FundInternalTransferTokens.footerGap),
           SizedBox(
               width: double.infinity,
@@ -461,10 +477,11 @@ class FundInternalTransferForm extends StatelessWidget {
                               FundInternalTransferTokens.fieldRadius))),
                   child: Text(
                       isSubmitting
-                          ? _text(context, '正在确认…', 'Confirming…')
+                          ? _text(context, AppCopy.text('正在确认…'), 'Confirming…')
                           : hasPending
-                              ? _text(context, '继续支付', 'Continue payment')
-                              : _text(context, '提现', 'Withdraw'),
+                              ? _text(context, AppCopy.text('继续支付'),
+                                  'Continue payment')
+                              : _text(context, AppCopy.text('提现'), 'Withdraw'),
                       style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                           fontSize: FundInternalTransferTokens.buttonFont,
                           color: canSubmit && !isLoading && !isSubmitting

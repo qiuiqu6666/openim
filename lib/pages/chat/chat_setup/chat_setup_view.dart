@@ -5,7 +5,6 @@ import 'package:openim_common/openim_common.dart';
 import '../../mine/settings/widgets/settings_widgets.dart';
 import 'chat_setup_logic.dart';
 import 'chat_setup_tokens.dart';
-import 'message_retention_page.dart';
 import 'widgets/chat_setup_members_card.dart';
 
 class ChatSetupPage extends StatelessWidget {
@@ -36,15 +35,6 @@ class ChatSetupPage extends StatelessWidget {
               onViewProfile: logic.viewUserInfo,
               onAddMember: logic.createGroup,
             ),
-            SettingsGroup(children: [
-              SettingsCell(
-                key: const ValueKey('chat-setup-retention'),
-                title: 'sdkRetention'.tr,
-                showDivider: false,
-                onTap: () => Get.to(() => MessageRetentionPage(
-                    conversation: logic.conversationInfo.value)),
-              ),
-            ]),
             SettingsGroup(
               key: const ValueKey('chat-setup-history-group'),
               children: [

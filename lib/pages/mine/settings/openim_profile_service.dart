@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -95,6 +96,8 @@ class OpenIMProfileService extends StubSettingsService {
   @override
   String get securityPhone => controller.userInfo.value.phoneNumber ?? '';
   @override
+  String get securityEmail => controller.userInfo.value.email ?? '';
+  @override
   bool get securitySmsExempt => controller.userInfo.value.smsVerificationExempt;
   @override
   String get securityAreaCode {
@@ -115,6 +118,7 @@ class OpenIMProfileService extends StubSettingsService {
     }
     controller.userInfo.update((user) {
       user?.phoneNumber = info.phoneNumber;
+      user?.email = info.email;
       user?.areaCode = info.areaCode;
       user?.smsVerificationExempt = info.smsVerificationExempt;
     });
@@ -272,7 +276,7 @@ class OpenIMProfileService extends StubSettingsService {
     }
     IMViews.showToast(
       (Get.locale ?? Get.deviceLocale)?.languageCode == 'zh'
-          ? '登录密码修改成功，请重新登录'
+          ? AppCopy.text('登录密码修改成功，请重新登录')
           : 'Login password changed successfully. Please sign in again.',
       duration: const Duration(seconds: 2),
     );
@@ -463,6 +467,7 @@ class OpenIMProfileService extends StubSettingsService {
       user?.phoneNumber = info.phoneNumber;
       user?.areaCode = info.areaCode;
       user?.ex = sdkInfo.ex;
+      user?.email = info.email;
     });
   }
 

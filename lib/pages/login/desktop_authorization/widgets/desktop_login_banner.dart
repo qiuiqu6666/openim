@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -91,7 +92,8 @@ class _DesktopLoginBannerState extends State<DesktopLoginBanner>
     }
     final dark = Theme.of(context).brightness == Brightness.dark;
     final platforms = _devices.map((d) => d.platform).toSet();
-    final text = '已在${platforms.first}${platforms.length > 1 ? '等' : ''}登录';
+    final text = AppCopy.format(
+        '已在{#0}{#1}登录', [platforms.first, platforms.length > 1 ? '等' : '']);
     return Semantics(
         button: true,
         label: text,
@@ -101,9 +103,10 @@ class _DesktopLoginBannerState extends State<DesktopLoginBanner>
             onTap: () async {
               final service = _service;
               if (service == null) return;
-              await Navigator.of(context, rootNavigator: true)
-                  .push<void>(AppMaterialPageRoute(
-                      builder: (_) => DesktopLoginDevicesPage(service: service)));
+              await Navigator.of(context, rootNavigator: true).push<void>(
+                  AppMaterialPageRoute(
+                      builder: (_) =>
+                          DesktopLoginDevicesPage(service: service)));
               if (mounted) await _refresh();
             },
             child: Padding(

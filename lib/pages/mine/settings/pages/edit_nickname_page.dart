@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -143,7 +144,8 @@ class _EditNicknamePageState extends State<EditNicknamePage>
       final time =
           '${date.year}-${two(date.month)}-${two(date.day)} ${two(date.hour)}:${two(date.minute)}:${two(date.second)}';
       return settingsText(context,
-          zh: '下次可修改时间：$time', en: 'Next change available: $time');
+          zh: AppCopy.format('下次可修改时间：{#0}', [time]),
+          en: 'Next change available: $time');
     }
     return result.occupied
         ? settingsText(context,
@@ -225,7 +227,7 @@ class _EditNicknamePageState extends State<EditNicknamePage>
         }));
         message = reason.isEmpty
             ? settingsText(context,
-                zh: '保存失败（错误码：${error.$1}）',
+                zh: AppCopy.format('保存失败（错误码：{#0}）', [error.$1]),
                 en: 'Failed to save (code: ${error.$1})')
             : reason;
       }

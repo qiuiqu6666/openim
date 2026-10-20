@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -229,7 +230,7 @@ class _FavoriteNoteEditPageState extends State<FavoriteNoteEditPage> {
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
                   counterText:
-                      '${FavoriteNoteByteFormatter.byteLength(_controller.text)} / ${FavoriteNoteByteFormatter.maxBytes} ${settingsText(context, zh: '字节', en: 'bytes')}',
+                      '${FavoriteNoteByteFormatter.byteLength(_controller.text)} / ${FavoriteNoteByteFormatter.maxBytes} ${settingsText(context, zh: AppCopy.text('字节'), en: 'bytes')}',
                   counterStyle: TextStyle(
                       color: FavoriteNoteByteFormatter.canSave(_controller.text)
                           ? secondary

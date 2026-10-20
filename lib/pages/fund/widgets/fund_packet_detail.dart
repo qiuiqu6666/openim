@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -107,7 +108,8 @@ class FundPacketDetail extends StatelessWidget {
                                   Flexible(
                                       child: Text(
                                           text(
-                                              '${partyName(order.senderID)}的红包',
+                                              AppCopy.format('{#0}的红包',
+                                                  [partyName(order.senderID)]),
                                               'Red packet from ${partyName(order.senderID)}'),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
@@ -172,14 +174,32 @@ class FundPacketDetail extends StatelessWidget {
                           child: Text(
                               directlyCredited
                                   ? text(
-                                      '已到账 1/1 个，共 ${order.amount.displayDecimal}/${order.amount.displayDecimal} ${order.currency.displayName}',
+                                      AppCopy.format(
+                                          '已到账 1/1 个，共 {#0}/{#1} {#2}', [
+                                        order.amount.displayDecimal,
+                                        order.amount.displayDecimal,
+                                        order.currency.displayName
+                                      ]),
                                       '1/1 credited · ${order.amount.displayDecimal}/${order.amount.displayDecimal} ${order.currency.displayName}')
                                   : !order.isOpen && claims.isEmpty
                                       ? text(
-                                          '共 ${order.shareCount} 个，总额 ${order.amount.displayDecimal} ${order.currency.displayName}',
+                                          AppCopy.format(
+                                              '共 {#0} 个，总额 {#1} {#2}', [
+                                            order.shareCount,
+                                            order.amount.displayDecimal,
+                                            order.currency.displayName
+                                          ]),
                                           '${order.shareCount} packets · total ${order.amount.displayDecimal} ${order.currency.displayName}')
                                       : text(
-                                          '已领取 ${claims.length}/${order.shareCount} 个，共 ${totalClaimed.displayDecimal}/${order.amount.displayDecimal} ${order.currency.displayName}',
+                                          AppCopy.format(
+                                              '已领取 {#0}/{#1} 个，共 {#2}/{#3} {#4}',
+                                              [
+                                                claims.length,
+                                                order.shareCount,
+                                                totalClaimed.displayDecimal,
+                                                order.amount.displayDecimal,
+                                                order.currency.displayName
+                                              ]),
                                           '${claims.length}/${order.shareCount} claimed · ${totalClaimed.displayDecimal}/${order.amount.displayDecimal} ${order.currency.displayName}'),
                               key: const ValueKey('fund-detail-share-progress'),
                               style: TextStyle(
@@ -201,9 +221,9 @@ class FundPacketDetail extends StatelessWidget {
                                 vertical: FundTokens.referenceEmptyGap),
                             child: Text(
                                 order.isOpen
-                                    ? text('还没有人领取这个红包',
+                                    ? text(AppCopy.text('还没有人领取这个红包'),
                                         'No one has claimed this red packet yet.')
-                                    : text('暂无领取明细',
+                                    : text(AppCopy.text('暂无领取明细'),
                                         'No claim details are available.'),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
@@ -231,7 +251,8 @@ class FundPacketDetail extends StatelessWidget {
                         child: TextButton(
                             key: const ValueKey('fund-detail-back-cover'),
                             onPressed: onShowCover,
-                            child: Text(text('返回红包封面', 'Back to red packet')))),
+                            child: Text(text(AppCopy.text('返回红包封面'),
+                                'Back to red packet')))),
                   const SliverToBoxAdapter(
                       child: SizedBox(height: AppTokens.s7)),
                 ]),
@@ -278,7 +299,7 @@ class FundPacketDetail extends StatelessWidget {
           Icon(Icons.emoji_events_outlined,
               color: cs.tagTextColor, size: FundTokens.recordTimeFont),
           const SizedBox(width: FundTokens.referenceRecordGap),
-          Text(text('手气最佳', 'Best luck'),
+          Text(text(AppCopy.text('手气最佳'), 'Best luck'),
               style: TextStyle(
                   color: cs.tagTextColor, fontSize: FundTokens.recordTimeFont)),
         ]),

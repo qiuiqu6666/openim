@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../../sangong_scope.dart';
@@ -76,22 +77,23 @@ class _SangongAgentGroupsPageState extends State<SangongAgentGroupsPage> {
     if (!mounted || !_current || _saving || _loading) return;
     final id = _input.text.trim();
     if (id.isEmpty) {
-      ToastUtils.toast('请填写代理群 ID', context: context);
+      ToastUtils.toast(AppCopy.text('请填写代理群 ID'), context: context);
       return;
     }
     setState(() => _saving = true);
     try {
       final confirmed = await AppDialog.confirm(
           context: context,
-          title: '绑定独立代理群',
-          message: '将代理群 $id 绑定到当前下注群 ${_scope.groupId}。该代理群只能归属一个下注群。',
+          title: AppCopy.text('绑定独立代理群'),
+          message: AppCopy.format(
+              '将代理群 {#0} 绑定到当前下注群 {#1}。该代理群只能归属一个下注群。', [id, _scope.groupId]),
           dialogWrapper: (dialogContext, child) =>
               _guard(child, dialogContext: dialogContext));
       if (!mounted || !_current || !confirmed) return;
       await _api.bind(id);
       if (!mounted || !_current) return;
       _input.clear();
-      ToastUtils.toast('代理群已绑定', context: context);
+      ToastUtils.toast(AppCopy.text('代理群已绑定'), context: context);
       await _load();
     } catch (e) {
       if (mounted && _current) {
@@ -110,20 +112,21 @@ class _SangongAgentGroupsPageState extends State<SangongAgentGroupsPage> {
               ? child
               : dialogContext != null
                   ? CupertinoAlertDialog(
-                      title: const Text('游戏权限已变化'),
-                      content: const Text('请返回当前群后重新进入'),
+                      title: Text(AppCopy.text('游戏权限已变化')),
+                      content: Text(AppCopy.text('请返回当前群后重新进入')),
                       actions: [
                           CupertinoDialogAction(
                               onPressed: () =>
                                   Navigator.of(dialogContext).pop(false),
-                              child: const Text('关闭'))
+                              child: Text(AppCopy.text('关闭')))
                         ])
-                  : const SettingsScaffold(
-                      title: '代理群绑定', children: [Text('当前游戏权限已变化，请重新进入')]));
+                  : SettingsScaffold(
+                      title: AppCopy.text('代理群绑定'),
+                      children: [Text(AppCopy.text('当前游戏权限已变化，请重新进入'))]));
 
   @override
   Widget build(BuildContext context) => _guard(SettingsScaffold(
-          title: '代理群绑定',
+          title: AppCopy.text('代理群绑定'),
           dismissKeyboardOnOutsideTap: true,
           children: [
             SettingsGroup(children: [
@@ -138,27 +141,32 @@ class _SangongAgentGroupsPageState extends State<SangongAgentGroupsPage> {
               SettingsGroup(children: [
                 SettingsCell(
                     title: _error!,
-                    value: '重试',
+                    value: AppCopy.text('重试'),
                     onTap: _load,
                     showDivider: false)
               ]),
             if (!_loading && _error == null)
               SettingsGroup(children: [
                 if (_groups.isEmpty)
-                  const SettingsCell(
-                      title: '尚未绑定代理群', showArrow: false, showDivider: false),
+                  SettingsCell(
+                      title: AppCopy.text('尚未绑定代理群'),
+                      showArrow: false,
+                      showDivider: false),
                 for (final id in _groups)
-                  SettingsCell(title: '已绑定代理群', value: id, showArrow: false),
+                  SettingsCell(
+                      title: AppCopy.text('已绑定代理群'),
+                      value: id,
+                      showArrow: false),
               ]),
             SettingsGroup(children: [
               SettingsInputCell(
                   label: '代理群 ID',
-                  hint: '填写独立代理群的群 ID',
+                  hint: AppCopy.text('填写独立代理群的群 ID'),
                   controller: _input,
                   readOnly: _saving)
             ]),
             SettingsPrimaryButton(
-                text: _saving ? '绑定中…' : '绑定代理群',
+                text: _saving ? AppCopy.text('绑定中…') : AppCopy.text('绑定代理群'),
                 loading: _saving || _loading,
                 onPressed: _saving || _loading ? null : _bind),
           ]));

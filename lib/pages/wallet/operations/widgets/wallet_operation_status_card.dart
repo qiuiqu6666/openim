@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../../customer_service/customer_service.dart';
@@ -39,9 +40,9 @@ class WalletOperationStatusCard extends StatelessWidget {
               coordinator.error ??
                   coordinator.receipt?.description ??
                   (coordinator.unresolved
-                      ? '交易状态待确认，请勿重复提交'
+                      ? AppCopy.text('交易状态待确认，请勿重复提交')
                       : draft?.terminal == true
-                          ? '原交易已处理，请查询订单详情'
+                          ? AppCopy.text('原交易已处理，请查询订单详情')
                           : '原交易尚未完成'),
               style: Theme.of(context)
                   .textTheme
@@ -49,13 +50,13 @@ class WalletOperationStatusCard extends StatelessWidget {
                   ?.copyWith(color: cs.text)),
           if (draft != null) ...[
             const SizedBox(height: AppTokens.s3),
-            SelectableText('业务单号：${draft.clientOrderID}',
+            SelectableText(AppCopy.format('业务单号：{#0}', [draft.clientOrderID]),
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall
                     ?.copyWith(color: cs.subText)),
             if (draft.orderID.isNotEmpty)
-              SelectableText('订单号：${draft.orderID}',
+              SelectableText(AppCopy.format('订单号：{#0}', [draft.orderID]),
                   style: Theme.of(context)
                       .textTheme
                       .bodySmall
@@ -71,19 +72,19 @@ class WalletOperationStatusCard extends StatelessWidget {
                   onPressed: coordinator.busy || !coordinator.sameAccount
                       ? null
                       : () => openWalletPaymentPassword(context),
-                  child: const Text('设置支付密码'),
+                  child: Text(AppCopy.text('设置支付密码')),
                 ),
               if (draft?.orderID.isNotEmpty == true || coordinator.unresolved)
                 TextButton(
                   key: const ValueKey('wallet-operation-query'),
                   onPressed: coordinator.busy ? null : onQuery,
-                  child: const Text('查询订单详情'),
+                  child: Text(AppCopy.text('查询订单详情')),
                 ),
               if (coordinator.unresolved)
                 TextButton(
                   key: const ValueKey('wallet-operation-support'),
                   onPressed: () => showCustomerServiceSheet(context),
-                  child: const Text('联系客服'),
+                  child: Text(AppCopy.text('联系客服')),
                 ),
               if (coordinator.canStartNew)
                 TextButton(

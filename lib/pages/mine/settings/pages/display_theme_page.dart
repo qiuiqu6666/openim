@@ -97,6 +97,8 @@ class DisplayThemePage extends StatelessWidget {
         return '简体中文';
       case 2:
         return 'English';
+      case 3:
+        return '繁體中文';
       default:
         return settingsText(context, zh: '跟随系统', en: 'System');
     }
@@ -114,22 +116,15 @@ class DisplayThemePage extends StatelessWidget {
           selected: current == 0,
         ),
         SettingsAction('简体中文', 1, selected: current == 1),
+        SettingsAction('繁體中文', 3, selected: current == 3),
         SettingsAction('English', 2, selected: current == 2),
       ],
     );
     if (selected == null || selected == current) return;
 
-    await DataSp.putLanguage(selected);
-    switch (selected) {
-      case 1:
-        Get.updateLocale(const Locale('zh', 'CN'));
-        break;
-      case 2:
-        Get.updateLocale(const Locale('en', 'US'));
-        break;
-      default:
-        Get.updateLocale(PlatformDispatcher.instance.locale);
-        break;
-    }
+    final saved = await DataSp.putLanguage(selected);
+    if (saved != true) return;
+    await Get.updateLocale(TranslationService.localeForSetting(
+        selected, PlatformDispatcher.instance.locale));
   }
 }

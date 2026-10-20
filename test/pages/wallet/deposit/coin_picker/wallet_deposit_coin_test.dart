@@ -7,10 +7,9 @@ void main() {
   test('supported deposit labels come from endpoint currencies and contract',
       () {
     final coins = WalletDepositCoin.fromAddress(depositAddressFixture());
-    expect(coins.map((coin) => coin.currency),
-        [FundCurrency.usdt, FundCurrency.trx]);
+    expect(coins.map((coin) => coin.currency), [FundCurrency.usdt]);
     expect(coins.first.contractAddress, testUsdtContract);
-    expect(coins.last.contractAddress, isEmpty);
+
     final trxOnly = WalletDepositAddress.fromJson({
       'status': 'pending',
       'network': 'TRON',
@@ -20,7 +19,7 @@ void main() {
       'usdtContract': '',
     });
     expect(WalletDepositCoin.fromAddress(trxOnly).map((coin) => coin.code),
-        ['TRX']);
+        isEmpty);
   });
 
   test('search matches trimmed case-insensitive code, name and server contract',
@@ -39,10 +38,10 @@ void main() {
     for (final query in [' trx ', 'tRoN']) {
       expect(
           coins.where((coin) => coin.matches(query)).map((coin) => coin.code),
-          ['TRX']);
+          isEmpty);
     }
     expect(coins.where((coin) => coin.matches('unknown-contract')), isEmpty);
-    expect(coins.where((coin) => coin.matches('  ')), hasLength(2));
+    expect(coins.where((coin) => coin.matches('  ')), hasLength(1));
   });
 
   test(

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -99,7 +100,8 @@ class GroupQrcodeContent extends StatelessWidget {
                                       fontWeight: FontWeight.w600))),
                         ])),
                     IconButton(
-                        tooltip: _text(context, '复制群号', 'Copy group ID'),
+                        tooltip: _text(
+                            context, AppCopy.text('复制群号'), 'Copy group ID'),
                         onPressed: groupId.isEmpty ? null : onCopy,
                         constraints:
                             const BoxConstraints(minWidth: 48, minHeight: 48),
@@ -136,7 +138,7 @@ class GroupQrcodeContent extends StatelessWidget {
                           )),
                   const SizedBox(height: AppTokens.s5),
                   Text(
-                      _text(context, '扫一扫二维码，立即加入群聊',
+                      _text(context, AppCopy.text('扫一扫二维码，立即加入群聊'),
                           'Scan the QR code to join this group'),
                       textAlign: TextAlign.center,
                       style: TextStyle(

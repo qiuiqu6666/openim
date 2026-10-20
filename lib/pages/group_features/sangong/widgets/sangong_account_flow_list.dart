@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:flutter/material.dart';
@@ -21,7 +22,8 @@ class SangongAccountFlowList extends StatelessWidget {
   String _signed(int value) => value > 0 ? '+$value' : '$value';
   String _time(String raw) {
     final parsed = DateTime.tryParse(raw.trim());
-    if (parsed == null) return raw.trim().isEmpty ? '时间未提供' : raw.trim();
+    if (parsed == null)
+      return raw.trim().isEmpty ? AppCopy.text('时间未提供') : raw.trim();
     final local = parsed.toLocal();
     String pad(int v) => v.toString().padLeft(2, '0');
     return '${pad(local.month)}-${pad(local.day)} ${pad(local.hour)}:${pad(local.minute)}:${pad(local.second)}';
@@ -30,7 +32,7 @@ class SangongAccountFlowList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (entries.isEmpty && contributions.isEmpty) {
-      return const Center(child: Text('暂无记录'));
+      return Center(child: Text(AppCopy.text('暂无记录')));
     }
     final total = entries.fold<int>(0, (sum, e) => sum + e.amount);
     final credit = entries
@@ -61,20 +63,24 @@ class SangongAccountFlowList extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text.rich(
                   TextSpan(children: [
-                    TextSpan(text: '本页${entries.length}笔 ', style: labelStyle),
+                    TextSpan(
+                        text: AppCopy.format('本页{#0}笔 ', [entries.length]),
+                        style: labelStyle),
                     if (contributions.isNotEmpty)
                       TextSpan(
-                          text: '出资${contributions.length}笔 ',
+                          text: AppCopy.format(
+                              '出资{#0}笔 ', [contributions.length]),
                           style: labelStyle),
                     if (bets) ...[
-                      const TextSpan(text: '账变合计:', style: labelStyle),
+                      TextSpan(text: AppCopy.text('账变合计:'), style: labelStyle),
                       TextSpan(text: _signed(total), style: amountStyle),
                     ] else ...[
-                      const TextSpan(text: '总上分:', style: labelStyle),
+                      TextSpan(text: AppCopy.text('总上分:'), style: labelStyle),
                       TextSpan(text: '$credit', style: amountStyle),
-                      const TextSpan(text: ' 总下分:', style: labelStyle),
+                      TextSpan(text: AppCopy.text(' 总下分:'), style: labelStyle),
                       TextSpan(text: '$debit'),
-                      const TextSpan(text: ' 返水净入账:', style: labelStyle),
+                      TextSpan(
+                          text: AppCopy.text(' 返水净入账:'), style: labelStyle),
                       TextSpan(text: _signed(rebate), style: amountStyle),
                     ],
                   ]),
@@ -90,16 +96,21 @@ class SangongAccountFlowList extends StatelessWidget {
                 TextSpan(children: [
                   TextSpan(
                       text:
-                          '【第${entry.periodNo}期】 ${entry.isMainBanker ? '主庄限额' : '合庄出资'}:',
+                          '【第${entry.periodNo}期】 ${entry.isMainBanker ? AppCopy.text('主庄限额') : AppCopy.text('合庄出资')}:',
                       style: labelStyle),
                   TextSpan(text: '${entry.amount}', style: amountStyle),
                   TextSpan(
-                      text: ' 占股:${entry.sharePercent}% 总池:${entry.poolTotal}',
+                      text: AppCopy.format(' 占股:{#0}% 总池:{#1}',
+                          [entry.sharePercent, entry.poolTotal]),
                       style: labelStyle),
                   TextSpan(
-                      text:
-                          ' 已分摊:${entry.settledAmount > 0 ? '+' : ''}${entry.settledAmount}'),
-                  TextSpan(text: '（不扣积分）', style: TextStyle(color: muted)),
+                      text: AppCopy.format(' 已分摊:{#0}{#1}', [
+                    entry.settledAmount > 0 ? '+' : '',
+                    entry.settledAmount
+                  ])),
+                  TextSpan(
+                      text: AppCopy.text('（不扣积分）'),
+                      style: TextStyle(color: muted)),
                 ]),
                 style: textStyle),
           );
@@ -114,10 +125,10 @@ class SangongAccountFlowList extends StatelessWidget {
                 TextSpan(children: [
                   TextSpan(
                       text:
-                          '【${_time(entry.createdAt)}】 ${bets && entry.periodNo != null ? '第${entry.periodNo}期 ' : ''}${entry.label}:',
+                          '【${_time(entry.createdAt)}】 ${bets && entry.periodNo != null ? '第${entry.periodNo}期 ' : ''}${AppCopy.text(entry.label)}:',
                       style: labelStyle),
                   TextSpan(text: _signed(entry.amount), style: amountStyle),
-                  const TextSpan(text: ' 剩余:', style: labelStyle),
+                  TextSpan(text: AppCopy.text(' 剩余:'), style: labelStyle),
                   TextSpan(text: '${entry.balanceAfter}'),
                 ]),
                 style: textStyle),
@@ -126,11 +137,14 @@ class SangongAccountFlowList extends StatelessWidget {
                   receipt: entry.rebate, amount: entry.amount),
             if (!bets)
               entry.operator.isEmpty || entry.operator == 'system'
-                  ? Text(entry.operator == 'system' ? '操作人：系统' : '操作人：未提供',
+                  ? Text(
+                      entry.operator == 'system'
+                          ? AppCopy.text('操作人：系统')
+                          : '操作人：未提供',
                       style: TextStyle(fontSize: 12, color: muted))
                   : SangongPublicAccount(
                       userID: entry.operator,
-                      prefix: '操作人账号：',
+                      prefix: AppCopy.text('操作人账号：'),
                       style: TextStyle(fontSize: 12, color: muted)),
             if (entry.note.isNotEmpty && entry.note != entry.label)
               Text(entry.note,

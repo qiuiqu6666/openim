@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import '../models/live_models.dart';
@@ -152,8 +153,8 @@ class _EnterLiveButton extends StatelessWidget {
             BoxShadow(
                 color: Color(0x40FF6358), blurRadius: 14, offset: Offset(0, 5))
           ]),
-      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-        Text('进入直播间',
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(AppCopy.text('进入直播间'),
             style: TextStyle(
                 color: AppTokens.onAccent,
                 fontSize: 14,

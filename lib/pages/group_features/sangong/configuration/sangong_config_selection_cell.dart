@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 
 import '../../../contacts/select_contacts/selection/contact_single_selection.dart';
@@ -50,7 +51,9 @@ class SangongConfigSelectionCell extends StatelessWidget {
                       ? null
                       : IconButton(
                           tooltip: settingsText(context,
-                              zh: groups ? '从群聊列表选择$label' : '从通讯录选择$label',
+                              zh: groups
+                                  ? AppCopy.format('从群聊列表选择{#0}', [label])
+                                  : AppCopy.format('从通讯录选择{#0}', [label]),
                               en: groups
                                   ? 'Select $label from groups'
                                   : 'Select $label from contacts'),

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -33,15 +34,15 @@ class UserProfileLoadState extends StatelessWidget {
           const SizedBox(height: AppTokens.s4),
           Text(
             failed
-                ? (zh ? '资料加载失败' : 'Could not load profile')
-                : (zh ? '正在加载资料' : 'Loading profile'),
+                ? (zh ? AppCopy.text('资料加载失败') : 'Could not load profile')
+                : (zh ? AppCopy.text('正在加载资料') : 'Loading profile'),
             style: TextStyle(color: UserProfileTokens.muted(context)),
           ),
           if (failed)
             TextButton(
               key: const ValueKey('user_profile_retry'),
               onPressed: onRetry,
-              child: Text(zh ? '重新加载' : 'Retry'),
+              child: Text(zh ? AppCopy.text('重新加载') : 'Retry'),
             ),
         ]),
       ),

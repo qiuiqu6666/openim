@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -62,7 +63,8 @@ class _FundRecipientUserIDState extends State<FundRecipientUserID> {
         _session == _currentSession && cached == _account ? _account : null;
     return SelectableText(
       settingsText(context,
-          zh: '99Chat ID号：${account?.isNotEmpty == true ? account : '--'}',
+          zh: AppCopy.format('99Chat ID号：{#0}',
+              [account?.isNotEmpty == true ? account : '--']),
           en: '99Chat ID: ${account?.isNotEmpty == true ? account : '--'}'),
       key: const ValueKey('fund-recipient-public-id'),
       style: widget.style,

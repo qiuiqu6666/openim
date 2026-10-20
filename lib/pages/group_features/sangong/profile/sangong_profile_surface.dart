@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -183,7 +184,7 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
         setState(() {
           _loading = false;
           if (_groups.isEmpty) {
-            _error = '暂无已配置或授权的游戏群，请先配置游戏群或联系配置者授权';
+            _error = AppCopy.text('暂无已配置或授权的游戏群，请先配置游戏群或联系配置者授权');
           }
         });
       }
@@ -475,7 +476,7 @@ class _SangongProfileSurfaceState extends State<SangongProfileSurface> {
                                         bottom: BorderSide(
                                             color: AppTokens.border(dark: dark)
                                                 .withValues(alpha: .85)))),
-                                child: Text('游戏管理',
+                                child: Text(AppCopy.text('游戏管理'),
                                     style: TextStyle(
                                         fontSize: 16,
                                         height: 1.25,

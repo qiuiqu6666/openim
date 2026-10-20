@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -102,10 +103,10 @@ class _LiveRoomPageState extends State<LiveRoomPage>
     if (_busy || !canOperate) return;
     final confirm = await showAppConfirm(context,
         barrierDismissible: true,
-        title: '结束直播',
-        message: '确认结束直播吗？结束后请在 OBS 中停止推流。',
+        title: AppCopy.text('结束直播'),
+        message: AppCopy.text('确认结束直播吗？结束后请在 OBS 中停止推流。'),
         cancelText: '取消',
-        confirmText: '确认',
+        confirmText: AppCopy.text('确认'),
         destructive: true);
     if (confirm != true || !canOperate) return;
     setState(() => _busy = true);
@@ -180,13 +181,13 @@ class _LiveRoomPageState extends State<LiveRoomPage>
             if (_session?.status == LiveStatus.live &&
                 featureContext.capabilities.live.canTip)
               IconButton(
-                  tooltip: '打赏主播',
+                  tooltip: AppCopy.text('打赏主播'),
                   icon: const Icon(Icons.card_giftcard_outlined),
                   onPressed: canOperate ? _tip : null),
             if (_session?.status.active == true &&
                 featureContext.capabilities.live.canPush)
               IconButton(
-                  tooltip: '推流信息',
+                  tooltip: AppCopy.text('推流信息'),
                   icon: const Icon(Icons.settings_input_antenna),
                   onPressed: canOperate ? _openPush : null),
           ]),
@@ -196,7 +197,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
             Expanded(
                 child: Center(
                     child: !current
-                        ? const Text('登录状态已变化，请重新进入',
+                        ? Text(AppCopy.text('登录状态已变化，请重新进入'),
                             style: TextStyle(color: LiveStyle.screenInk))
                         : _loading
                             ? const CircularProgressIndicator(
@@ -213,7 +214,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                                     })
                                 : _error != null
                                     ? _failure()
-                                    : const Text('暂无直播',
+                                    : Text(AppCopy.text('暂无直播'),
                                         style: TextStyle(
                                             color: LiveStyle.screenInk)))),
             if (_error != null && _session != null)
@@ -226,7 +227,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
               Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   child: LivePrimaryButton(
-                      label: '结束直播',
+                      label: AppCopy.text('结束直播'),
                       busy: _busy,
                       onPressed: canOperate ? _end : null)),
           ])));
@@ -236,6 +237,6 @@ class _LiveRoomPageState extends State<LiveRoomPage>
         Text(liveErrorMessage(_error!),
             style: const TextStyle(color: LiveStyle.screenInk),
             textAlign: TextAlign.center),
-        TextButton(onPressed: _load, child: const Text('重试'))
+        TextButton(onPressed: _load, child: Text(AppCopy.text('重试')))
       ]));
 }

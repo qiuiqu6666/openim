@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
@@ -864,7 +865,10 @@ class _UserBetDetailTile extends StatelessWidget {
       }
     }
     final detail = activeDoors.isNotEmpty
-        ? activeDoors.map((door) => '$door门${doorValues[door - 1]}').join('  ')
+        ? activeDoors
+            .map((door) =>
+                AppCopy.format('{#0}门{#1}', [door, doorValues[door - 1]]))
+            .join('  ')
         : user.detailSummary();
 
     return Padding(

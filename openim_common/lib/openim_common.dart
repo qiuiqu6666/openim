@@ -9,6 +9,7 @@ export 'src/widgets/action_sheet/app_action_sheet.dart';
 export 'src/widgets/alert_dialog/app_alert_dialog.dart';
 
 export 'src/apis.dart';
+export 'src/apis/auth/legacy_password_login.dart';
 export 'src/bridge/package_bridge.dart';
 export 'src/contacts/contact_remark_source.dart';
 export 'src/widgets/contacts/contact_name_builder.dart';

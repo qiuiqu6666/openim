@@ -51,11 +51,11 @@ void main() {
     await tester.pump();
     expect(_form(tester).amountController.text, '5');
     await selectWalletSwapCurrency(
-        tester, 'wallet-swap-from', FundCurrency.trx);
+        tester, 'wallet-swap-from', FundCurrency.bi99);
     await selectWalletSwapCurrency(tester, 'wallet-swap-to', FundCurrency.usdt);
     expect(_form(tester).amountController.text, isEmpty);
-    await enterWalletSwapAmount(tester, '2.345678');
-    expect(_form(tester).amountController.text, '2.345678');
+    await enterWalletSwapAmount(tester, '2.34');
+    expect(_form(tester).amountController.text, '2.34');
     await tester.ensureVisible(preview);
     await tester.tap(preview);
     await tester.pumpAndSettle();
@@ -67,13 +67,13 @@ void main() {
     final second = api.writes.last;
     expect(first['currency'], 'USDT');
     expect(first['amount'], '1.234567');
-    expect(second['currency'], 'TRX');
+    expect(second['currency'], 'BI99');
     expect(second['toCurrency'], 'USDT');
-    expect(second['amount'], '2.345678');
+    expect(second['amount'], '2.34');
     expect(second['clientOrderID'], isNot(first['clientOrderID']));
     expect(second['quoteID'], isNot(first['quoteID']));
     final reviewed = api.issuedQuotes[second['quoteID']]!;
-    expect(reviewed.amount, FundAmount.parse('2.345678', FundCurrency.trx));
+    expect(reviewed.amount, FundAmount.parse('2.34', FundCurrency.bi99));
     expect(reviewed.toCurrency, FundCurrency.usdt);
     expect(operation.draft, isNull);
     expect(operation.receipt, isNull);

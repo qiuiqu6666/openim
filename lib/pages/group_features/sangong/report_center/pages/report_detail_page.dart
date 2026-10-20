@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../../identity/widgets/sangong_identity_view.dart';
 import 'dart:async';
 import '../../widgets/app_back_button.dart';
@@ -78,16 +79,19 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
     return Column(children: [
       MergeSemantics(
           child: ListTile(
-              title: const Text('只看直属成员'),
-              subtitle: Text(_direct ? '当前只查询直接下级' : '当前查询所有层级下级'),
+              title: Text(AppCopy.text('只看直属成员')),
+              subtitle: Text(_direct
+                  ? AppCopy.text('当前只查询直接下级')
+                  : AppCopy.text('当前查询所有层级下级')),
               enabled: onDirectChanged != null,
               onTap: onDirectChanged == null
                   ? null
                   : () => onDirectChanged(!_direct),
               trailing: AppSwitch(value: _direct, onChanged: onDirectChanged))),
-      const ReportSection('下级团队汇总',
-          icon: Icons.groups_outlined, description: '统计当前筛选范围内的下级，不包含负责人本人。'),
-      const ReportNotice('同一成员可能属于多个上级团队，多个团队的金额不能直接相加作为全群总额。'),
+      ReportSection(AppCopy.text('下级团队汇总'),
+          icon: Icons.groups_outlined,
+          description: AppCopy.text('统计当前筛选范围内的下级，不包含负责人本人。')),
+      ReportNotice(AppCopy.text('同一成员可能属于多个上级团队，多个团队的金额不能直接相加作为全群总额。')),
       if (summary is Map)
         ReportMetrics({
           '成员数': summary['memberCount'],
@@ -102,12 +106,15 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
         }),
       if (root is Map)
         ListTile(
-            title: Text('负责人：${reportUser(Map<String, dynamic>.from(root))}'),
-            subtitle: Text(
-                '本人批次最后积分 ${reportValue(root['balance'])} · 当前积分 ${reportValue(root['currentBalance'])}'),
+            title: Text(AppCopy.format(
+                '负责人：{#0}', [reportUser(Map<String, dynamic>.from(root))])),
+            subtitle: Text(AppCopy.format('本人批次最后积分 {#0} · 当前积分 {#1}', [
+              reportValue(root['balance']),
+              reportValue(root['currentBalance'])
+            ])),
             onTap: () => _openUser(Map<String, dynamic>.from(root))),
-      const ReportSection('团队成员',
-          icon: Icons.people_outline, description: '点击成员查看个人明细。'),
+      ReportSection(AppCopy.text('团队成员'),
+          icon: Icons.people_outline, description: AppCopy.text('点击成员查看个人明细。')),
       ..._controller.rows.map((row) => ReportCard(
           child: ListTile(
               leading: SangongIMAvatar(
@@ -117,8 +124,15 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
                   userID: '${row['imUserId'] ?? ''}',
                   nickname: reportUser(row)),
               trailing: const Icon(Icons.chevron_right),
-              subtitle: Text(
-                  '当前积分 ${reportValue(row['currentBalance'])} · 批次最后积分 ${reportValue(row['balance'])}\n闲家流水 ${reportValue(row['playerTurnover'])} · 庄家流水 ${reportValue(row['bankerTurnover'])}\n已入账返水 ${reportValue(row['batchRebate'])}'),
+              subtitle: Text(AppCopy.format(
+                  '当前积分 {#0} · 批次最后积分 {#1}\n闲家流水 {#2} · 庄家流水 {#3}\n已入账返水 {#4}',
+                  [
+                    reportValue(row['currentBalance']),
+                    reportValue(row['balance']),
+                    reportValue(row['playerTurnover']),
+                    reportValue(row['bankerTurnover']),
+                    reportValue(row['batchRebate'])
+                  ])),
               onTap: () => _openUser(row)))),
     ]);
   }
@@ -129,8 +143,8 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
         child: ExpansionTile(
       leading: SangongIMAvatar(userID: '$id', nickname: reportUser(item)),
       title: SangongUserName(userID: '$id', nickname: reportUser(item)),
-      subtitle: Text(
-          '本局净额 ${reportSigned(item['net'])}\n结算后积分 ${reportValue(item['balanceAfter'])}'),
+      subtitle: Text(AppCopy.format('本局净额 {#0}\n结算后积分 {#1}',
+          [reportSigned(item['net']), reportValue(item['balanceAfter'])])),
       children: [
         ReportMetrics({
           '结算前积分': item['balanceBefore'],
@@ -150,9 +164,9 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
         if (id is String && id.isNotEmpty)
           TextButton.icon(
               icon: const Icon(Icons.receipt_long_outlined),
-              label: const Text('查看该用户本批次账变'),
+              label: Text(AppCopy.text('查看该用户本批次账变')),
               onPressed: () => unawaited(SangongReportDetailPage.open(context,
-                  title: '${reportUser(item)} · 账变',
+                  title: AppCopy.format('{#0} · 账变', [reportUser(item)]),
                   resource: 'ledger',
                   listKey: 'entries',
                   query: {'sessionId': round['sessionId'], 'imUserId': id}))),
@@ -169,8 +183,8 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
       ReportSection(
           '第${round['periodNo'] ?? '—'}期 · ${reportPhase(round['status'])}',
           icon: Icons.casino_outlined,
-          description:
-              '庄门 ${round['bankerDoor'] ?? '—'} · 结算时间 ${reportTime(round['settledAt'])}'),
+          description: AppCopy.format('庄门 {#0} · 结算时间 {#1}',
+              [round['bankerDoor'] ?? '—', reportTime(round['settledAt'])])),
       if (settlement.isNotEmpty) ...[
         ReportMetrics({
           '庄家': sangongDisplayName('${settlement['bankerNickname'] ?? ''}',
@@ -179,10 +193,10 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
           '庄家净额': reportSigned(settlement['bankerNet']),
           '本局抽水': settlement['rake'],
         }),
-        const ReportNotice('本局净额：正数为增加，负数为减少。下方展开可查看每位用户的结算前后积分。'),
+        ReportNotice(AppCopy.text('本局净额：正数为增加，负数为减少。下方展开可查看每位用户的结算前后积分。')),
       ],
-      const ReportSection('各门开奖', icon: Icons.grid_view_outlined),
-      if (draws.isEmpty) const ReportNotice('本局尚未录入开奖。'),
+      ReportSection(AppCopy.text('各门开奖'), icon: Icons.grid_view_outlined),
+      if (draws.isEmpty) ReportNotice(AppCopy.text('本局尚未录入开奖。')),
       if (draws.isNotEmpty)
         ReportMetrics({
           for (final draw in draws.whereType<Map>())
@@ -194,13 +208,16 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
         }),
       for (final key in ['bankers', 'players'])
         if (settlement[key] is List) ...[
-          ReportSection(key == 'bankers' ? '庄家与合庄结算' : '闲家结算',
-              description: '共 ${(settlement[key] as List).length} 人 · 点击展开明细'),
+          ReportSection(
+              key == 'bankers' ? AppCopy.text('庄家与合庄结算') : AppCopy.text('闲家结算'),
+              description: AppCopy.format(
+                  '共 {#0} 人 · 点击展开明细', [(settlement[key] as List).length])),
           ...(settlement[key] as List).whereType<Map>().map((item) =>
               _settledPerson(
                   Map<String, dynamic>.from(item), round, key == 'bankers')),
         ],
-      if (settlement.isEmpty) const ReportNotice('本局暂无有效结算。未结算或已作废的牌局不计入结算汇总。'),
+      if (settlement.isEmpty)
+        ReportNotice(AppCopy.text('本局暂无有效结算。未结算或已作废的牌局不计入结算汇总。')),
     ]);
   }
 
@@ -214,13 +231,13 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
                 title: Text(widget.title),
                 actions: [
                   IconButton(
-                      tooltip: '刷新',
+                      tooltip: AppCopy.text('刷新'),
                       onPressed:
                           _controller.busy ? null : () => _controller.load(),
                       icon: const Icon(Icons.refresh))
                 ]),
             body: !_controller.current
-                ? const Center(child: Text('当前群或管理权限已变化，请重新进入'))
+                ? Center(child: Text(AppCopy.text('当前群或管理权限已变化，请重新进入')))
                 : RefreshIndicator(
                     onRefresh: () => _controller.load(),
                     child: ListView(
@@ -233,17 +250,18 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
                           if (widget.resource == 'management-round')
                             _round(_controller.data),
                           if (widget.resource == 'ledger') ...[
-                            const ReportNotice(
-                                '按时间从新到旧显示。正数增加积分，负数减少积分；点击记录可查看操作人和备注。'),
+                            ReportNotice(AppCopy.text(
+                                '按时间从新到旧显示。正数增加积分，负数减少积分；点击记录可查看操作人和备注。')),
                             Padding(
                                 padding: const EdgeInsets.all(16),
                                 child: DropdownButtonFormField<String>(
                                     initialValue: _type,
-                                    decoration: const InputDecoration(
-                                        labelText: '账变类型'),
+                                    decoration: InputDecoration(
+                                        labelText: AppCopy.text('账变类型')),
                                     items: ledgerKinds.entries
                                         .map((e) => DropdownMenuItem(
-                                            value: e.key, child: Text(e.value)))
+                                            value: e.key,
+                                            child: Text(AppCopy.text(e.value))))
                                         .toList(),
                                     onChanged: _controller.busy
                                         ? null
@@ -263,10 +281,10 @@ class _SangongReportDetailPageState extends State<SangongReportDetailPage> {
                             const Center(child: CircularProgressIndicator())
                           else if (_controller.error != null)
                             ListTile(
-                                title: Text(_controller.error!),
+                                title: Text(AppCopy.text(_controller.error!)),
                                 trailing: TextButton(
                                     onPressed: () => _controller.load(),
-                                    child: const Text('重试'))),
+                                    child: Text(AppCopy.text('重试')))),
                         ])),
           ));
 }

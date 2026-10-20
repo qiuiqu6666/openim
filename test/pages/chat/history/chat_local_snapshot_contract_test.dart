@@ -41,6 +41,15 @@ void main() {
                   response['errCode'] == 0
               ? 1
               : 0);
+      final displayRows = await OpenIM.iMManager.messageManager
+          .getLocalHistorySnapshot(
+              conversationID: 'chat', allowIncomplete: true);
+      expect(
+          displayRows.length,
+          response['localSnapshot'] == true &&
+                  (response['errCode'] == null || response['errCode'] == 0)
+              ? 1
+              : 0);
     }
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);

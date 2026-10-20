@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -55,7 +56,8 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _error = text('权限加载失败，请重试', 'Could not load permissions. Retry.');
+          _error = text(
+              AppCopy.text('权限加载失败，请重试'), 'Could not load permissions. Retry.');
         });
       }
     } finally {
@@ -76,11 +78,11 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
       await widget.service.updateAllowAddFriend(value);
       if (!mounted) return;
       widget.store.setAllowAddFriend(value);
-      showSettingsMessage(context, text('已保存', 'Saved'));
+      showSettingsMessage(context, text(AppCopy.text('已保存'), 'Saved'));
     } catch (error) {
       if (mounted) {
-        showSettingsError(
-            context, error, text('保存失败，请重试', 'Could not save. Retry.'));
+        showSettingsError(context, error,
+            text(AppCopy.text('保存失败，请重试'), 'Could not save. Retry.'));
       }
     } finally {
       if (mounted) {
@@ -95,7 +97,7 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
     final visibility = _visibility!;
     await visibility.setVisible(value);
     if (mounted && visibility.showLastSeen.value == value) {
-      showSettingsMessage(context, text('已保存', 'Saved'));
+      showSettingsMessage(context, text(AppCopy.text('已保存'), 'Saved'));
     }
   }
 
@@ -118,7 +120,7 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
             !_saving;
         return Stack(children: [
           SettingsScaffold(
-              title: text('朋友权限', 'Friend Permissions'),
+              title: text(AppCopy.text('朋友权限'), 'Friend Permissions'),
               children: [
                 if (_error != null)
                   Padding(
@@ -126,17 +128,19 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
                       child: Column(children: [
                         Text(_error!),
                         TextButton(
-                            onPressed: _load, child: Text(text('重试', 'Retry')))
+                            onPressed: _load,
+                            child: Text(text(AppCopy.text('重试'), 'Retry')))
                       ])),
                 SettingsGroup(children: [
                   _ToggleCell(
-                      title: text('允许别人添加我', 'Allow Friend Requests'),
-                      subtitle: text('关闭后，其他人将无法向你发送好友申请。',
+                      title: text(
+                          AppCopy.text('允许别人添加我'), 'Allow Friend Requests'),
+                      subtitle: text(AppCopy.text('关闭后，其他人将无法向你发送好友申请。'),
                           'When off, others cannot send you friend requests.'),
                       value: store.allowAddFriend,
                       onChanged: ready ? _setAllowed : null),
                   SettingsCell(
-                      title: text('添加我的方式', 'Ways to Find Me'),
+                      title: text(AppCopy.text('添加我的方式'), 'Ways to Find Me'),
                       showDivider: false,
                       onTap: ready
                           ? () => openSettingsPage(
@@ -148,26 +152,27 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
                 if (!widget.service.supportsFriendPermissions)
                   Padding(
                       padding: const EdgeInsets.all(AppTokens.s5),
-                      child: Text(text('当前服务暂不支持修改好友添加权限',
+                      child: Text(text(AppCopy.text('当前服务暂不支持修改好友添加权限'),
                           'Friend permission updates are unavailable.'))),
                 SettingsGroup(children: [
                   SettingsCell(
-                      title: text('黑名单', 'Blacklist'),
+                      title: text(AppCopy.text('黑名单'), 'Blacklist'),
                       showDivider: false,
                       onTap: AppNavigator.startBlacklist)
                 ]),
                 SettingsGroup(children: [
                   if (_visibility != null)
                     Obx(() => _ToggleCell(
-                          title: text('显示上线时间', 'Show Last Seen'),
+                          title: text(AppCopy.text('显示上线时间'), 'Show Last Seen'),
                           minSubtitleLines: 2,
                           showDivider: false,
                           subtitle: !_visibility!.ready.value
-                              ? text('正在获取设置…', 'Loading setting…')
+                              ? text(
+                                  AppCopy.text('正在获取设置…'), 'Loading setting…')
                               : _visibility!.showLastSeen.value
-                                  ? text('已开启，其他人可以看到你的具体上线时间。',
+                                  ? text(AppCopy.text('已开启，其他人可以看到你的具体上线时间。'),
                                       'Enabled. Others can see your exact last seen time.')
-                                  : text('已关闭，其他人无法看到你的具体上线时间。',
+                                  : text(AppCopy.text('已关闭，其他人无法看到你的具体上线时间。'),
                                       'Disabled. Others cannot see your exact last seen time.'),
                           value: _visibility!.showLastSeen.value,
                           onChanged: _visibility!.ready.value &&
@@ -177,10 +182,10 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
                         ))
                   else
                     _ToggleCell(
-                        title: text('显示上线时间', 'Show Last Seen'),
+                        title: text(AppCopy.text('显示上线时间'), 'Show Last Seen'),
                         minSubtitleLines: 2,
                         showDivider: false,
-                        subtitle: text('当前服务未支持此权限设置；仅好友可见暂不支持。',
+                        subtitle: text(AppCopy.text('当前服务未支持此权限设置；仅好友可见暂不支持。'),
                             'This service does not support this setting. Friends-only visibility is unavailable.'),
                         value: true,
                         onChanged: null),
@@ -188,7 +193,7 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
                     Obx(() => _visibility!.failed.value
                         ? TextButton(
                             onPressed: _visibility!.refresh,
-                            child: Text(text('上线时间权限加载失败，点击重试',
+                            child: Text(text(AppCopy.text('上线时间权限加载失败，点击重试'),
                                 'Could not load last-seen privacy. Retry.')))
                         : const SizedBox.shrink()),
                 ]),

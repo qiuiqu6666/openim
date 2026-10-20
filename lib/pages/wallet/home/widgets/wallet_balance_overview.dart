@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -133,7 +134,7 @@ class WalletBalanceOverview extends StatelessWidget {
                     !visible
                         ? '••••••'
                         : inspecting && inspected == null
-                            ? '历史价格暂缺'
+                            ? AppCopy.text('历史价格暂缺')
                             : '¥${walletAmountDisplay(inspecting ? inspected! : total)}',
                     key: const ValueKey('wallet-total-amount'),
                     // Keep every digit readable without reflowing the action area.

@@ -28,7 +28,9 @@ void main() {
   });
   Future<void> start(
       WidgetTester tester, Future<PlatformConfig> Function() fetch,
-      {Future<bool> Function(Uri)? open, void Function(bool)? finished}) async {
+      {Future<bool> Function(Uri)? open,
+      void Function(bool)? finished,
+      void Function()? onBlocking}) async {
     late BuildContext page;
     await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) {
       page = context;
@@ -37,7 +39,10 @@ void main() {
     await tester.runAsync(() =>
         precacheImage(const AssetImage('assets/images/renew.webp'), page));
     unawaited(checkPlatformUpdate(Navigator.of(page).context,
-            automatic: true, fetchConfig: fetch, openURL: open)
+            automatic: true,
+            fetchConfig: fetch,
+            openURL: open,
+            onBlocking: onBlocking)
         .then((value) => finished?.call(value)));
     await tester.pumpAndSettle();
   }
@@ -83,26 +88,32 @@ void main() {
   });
 
   testWidgets(
-      'failed check retries automatically then stays blocked until recovery',
+      'failed automatic check finishes silently without blocking navigation',
       (tester) async {
     var attempts = 0;
-    var online = false;
+    var blocked = false;
     bool? done;
     await start(tester, () async {
       attempts++;
-      if (!online) throw StateError('offline');
-      return policy(minimum: '1.0.0');
-    }, finished: (value) => done = value);
+      throw StateError('offline');
+    }, finished: (value) => done = value, onBlocking: () => blocked = true);
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
     expect(attempts, 3);
-    expect(done, isNull);
-    expect(find.text('Retry'), findsOneWidget);
-    online = true;
-    await tester.tap(find.text('Retry'));
-    await tester.pumpAndSettle();
-    expect(done, isTrue);
+    expect(done, isFalse);
+    expect(blocked, isFalse);
+    expect(find.text('Update Check Unavailable'), findsNothing);
     expect(find.text('Retry'), findsNothing);
+    expect(find.byType(SnackBar), findsNothing);
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    unawaited(navigator.push(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('Home')))));
+    await tester.pumpAndSettle();
+    expect(find.text('Home'), findsOneWidget);
+
+    await start(tester, () async => policy(minimum: '1.0.0'),
+        finished: (value) => done = value);
+    expect(done, isTrue);
   });
 }

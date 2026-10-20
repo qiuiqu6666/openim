@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -93,17 +94,19 @@ class _MarkSixClockRowState extends State<MarkSixClockRow>
 
   String get _countdown {
     final round = widget.controller.currentRound;
-    if (round == null) return '期数待更新';
-    if (round.status == 'drawn') return '已开奖';
-    if (round.status == 'closed' || round.status == 'drawing') return '正在开奖';
+    if (round == null) return AppCopy.text('期数待更新');
+    if (round.status == 'drawn') return AppCopy.text('已开奖');
+    if (round.status == 'closed' || round.status == 'drawing')
+      return AppCopy.text('正在开奖');
     final stamp = round.raw['closeAt'] ?? round.raw['drawAt'];
-    if (stamp is! num) return round.status == 'open' ? '投注中' : '等待开奖';
+    if (stamp is! num)
+      return round.status == 'open' ? '投注中' : AppCopy.text('等待开奖');
     final seconds =
         (DateTime.fromMillisecondsSinceEpoch(stamp.toInt(), isUtc: true)
                 .difference(widget.controller.now())
                 .inSeconds)
             .clamp(0, 86400);
-    return '${round.status == 'open' ? '封盘' : '开奖'} ${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
+    return '${round.status == 'open' ? AppCopy.text('封盘') : AppCopy.text('开奖')} ${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
   }
 
   @override
@@ -122,7 +125,14 @@ class _MarkSixClockRowState extends State<MarkSixClockRow>
       child: Row(children: [
         Expanded(
             child: Text(
-                '当前时间 ${now.year}-${two(now.month)}-${two(now.day)} ${two(now.hour)}:${two(now.minute)}:${two(now.second)}',
+                AppCopy.format('当前时间 {#0}-{#1}-{#2} {#3}:{#4}:{#5}', [
+                  now.year,
+                  two(now.month),
+                  two(now.day),
+                  two(now.hour),
+                  two(now.minute),
+                  two(now.second)
+                ]),
                 style: TextStyle(fontSize: 11, color: style.secondary),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis)),

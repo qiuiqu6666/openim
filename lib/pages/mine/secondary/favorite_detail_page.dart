@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -117,8 +118,8 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
     } catch (error) {
       if (mounted && _current) {
         setState(() => _error = settingsErrorMessage(context, error,
-            fallback:
-                _text('详情加载失败，请重试', 'Could not load details. Please retry.')));
+            fallback: _text(AppCopy.text('详情加载失败，请重试'),
+                'Could not load details. Please retry.')));
       }
     } finally {
       if (mounted && _current) setState(() => _loading = false);
@@ -185,7 +186,8 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
       if (mounted && _current) {
         setState(() => _error = error is FavoriteApiException
             ? error.message
-            : _text('保存重试失败，请重试', 'Could not retry saving. Please retry.'));
+            : _text(AppCopy.text('保存重试失败，请重试'),
+                'Could not retry saving. Please retry.'));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -212,10 +214,10 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
       }
       setState(() => _confirmingDelete = true);
       final confirmed = await showSettingsConfirm(context,
-          title: _text('删除收藏', 'Delete favorite'),
-          message: _text('删除后无法恢复。已发送的聊天消息会保留。',
+          title: _text(AppCopy.text('删除收藏'), 'Delete favorite'),
+          message: _text(AppCopy.text('删除后无法恢复。已发送的聊天消息会保留。'),
               'This cannot be undone. Messages already sent will be kept.'),
-          confirmText: _text('删除', 'Delete'),
+          confirmText: _text(AppCopy.text('删除'), 'Delete'),
           destructive: true);
       if (!mounted || !confirmed || !_current) return;
       setState(() => _confirmingDelete = false);
@@ -249,7 +251,7 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
         }
         if (!mounted || !_current) return;
         showSettingsError(context, error,
-            _text('删除失败，请重试', 'Could not delete. Please retry.'));
+            _text(AppCopy.text('删除失败，请重试'), 'Could not delete. Please retry.'));
       }
     } finally {
       if (mounted) {
@@ -285,7 +287,7 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
             _pendingSend = false;
             _pendingSendItem = null;
             _error = result.errorMessage ??
-                _text('收藏内容已更新，请检查最新详情再选择发送目标',
+                _text(AppCopy.text('收藏内容已更新，请检查最新详情再选择发送目标'),
                     'This favorite has changed. Check the updated details and select a destination again.');
           });
         }
@@ -296,20 +298,22 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
           _pendingSend = false;
           _pendingSendItem = null;
         });
-        showSettingsMessage(context, _text('已发送', 'Sent'));
+        showSettingsMessage(context, _text(AppCopy.text('已发送'), 'Sent'));
       } else {
         _pendingSend = true;
         _pendingSendItem = sendingItem;
         setState(() => _error = result.status == FavoriteSendStatus.unknown
-            ? _text('发送状态待确认，请先查看目标对话',
+            ? _text(AppCopy.text('发送状态待确认，请先查看目标对话'),
                 'Sending status is unconfirmed. Check the destination chat first.')
             : result.errorMessage ??
-                _text('发送失败，请重试', 'Could not send. Please retry.'));
+                _text(
+                    AppCopy.text('发送失败，请重试'), 'Could not send. Please retry.'));
       }
     } catch (error) {
       if (mounted && _current) {
         setState(() => _error = settingsErrorMessage(context, error,
-            fallback: _text('发送失败，请重试', 'Could not send. Please retry.')));
+            fallback: _text(
+                AppCopy.text('发送失败，请重试'), 'Could not send. Please retry.')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -336,7 +340,8 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
       if (mounted && _current) {
         setState(() => _error = error is FavoriteApiException
             ? error.message
-            : _text('取消失败，请重试', 'Could not cancel. Please retry.'));
+            : _text(
+                AppCopy.text('取消失败，请重试'), 'Could not cancel. Please retry.'));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -442,10 +447,10 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
       if (asset != null) {
         return _assetContent(asset, FavoriteKind.parse(block.type));
       }
-      return Text(_text('附件原件暂不可用，请刷新详情',
+      return Text(_text(AppCopy.text('附件原件暂不可用，请刷新详情'),
           'The original attachment is unavailable. Refresh details.'));
     }
-    return Text(_text('此内容暂无法预览，请更新客户端',
+    return Text(_text(AppCopy.text('此内容暂无法预览，请更新客户端'),
         'This content cannot be previewed yet. Update the app.'));
   }
 
@@ -453,8 +458,8 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
     if (!_item.isSupported) {
       return SettingsEmptyState(
           icon: Icons.help_outline,
-          title: _text(
-              '此版本暂不支持此收藏', 'This version does not support this favorite'));
+          title: _text(AppCopy.text('此版本暂不支持此收藏'),
+              'This version does not support this favorite'));
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if (_item.blocks.isEmpty && _item.text.trim().isNotEmpty)
@@ -477,7 +482,8 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
         Padding(
             padding: const EdgeInsets.only(top: AppTokens.s5),
             child: Text(favoriteStatusLabel(context, _item).isEmpty
-                ? _text('此内容暂不能快捷发送', 'This content cannot be sent yet')
+                ? _text(AppCopy.text('此内容暂不能快捷发送'),
+                    'This content cannot be sent yet')
                 : favoriteStatusLabel(context, _item))),
     ]);
   }
@@ -491,21 +497,23 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
         !widget.readOnly && _pendingSend && widget.onCancelSend != null;
     if (!canShowSend && !canShowEdit && !canShowCancel) return null;
     return FavoriteDetailFooter(
-      pendingAction:
-          !widget.readOnly && _pendingSend && widget.onCancelSend != null
-              ? TextButton.icon(
-                  key: const ValueKey('favorite-detail-cancel-send'),
-                  onPressed: _busy ? null : _cancelSend,
-                  icon: const Icon(Icons.cancel_outlined),
-                  label: Text(_text('取消剩余发送', 'Cancel remaining sends')))
-              : null,
+      pendingAction: !widget.readOnly &&
+              _pendingSend &&
+              widget.onCancelSend != null
+          ? TextButton.icon(
+              key: const ValueKey('favorite-detail-cancel-send'),
+              onPressed: _busy ? null : _cancelSend,
+              icon: const Icon(Icons.cancel_outlined),
+              label:
+                  Text(_text(AppCopy.text('取消剩余发送'), 'Cancel remaining sends')))
+          : null,
       actions: [
         if (!widget.readOnly && _item.status == FavoriteStatus.failed)
           OutlinedButton.icon(
               key: const ValueKey('favorite-detail-retry-archive'),
               onPressed: _busy || _loading ? null : _retryArchive,
               icon: const Icon(Icons.refresh),
-              label: Text(_text('重试保存', 'Retry saving'))),
+              label: Text(_text(AppCopy.text('重试保存'), 'Retry saving'))),
         if (!widget.readOnly &&
             _canEditNote &&
             _item.status != FavoriteStatus.failed)
@@ -513,7 +521,7 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
               key: const ValueKey('favorite-detail-edit'),
               onPressed: _busy || _loading ? null : _edit,
               icon: const Icon(Icons.edit_outlined),
-              label: Text(_text('编辑', 'Edit'))),
+              label: Text(_text(AppCopy.text('编辑'), 'Edit'))),
         if (widget.onSend != null && favoriteP0Kinds.contains(_item.kind))
           FilledButton.icon(
               key: const ValueKey('favorite-detail-send'),
@@ -522,7 +530,7 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
                       ? null
                       : _send,
               icon: const Icon(CupertinoIcons.paperplane),
-              label: Text(_text('发送到对话', 'Send to a chat'))),
+              label: Text(_text(AppCopy.text('发送到对话'), 'Send to a chat'))),
       ],
     );
   }
@@ -539,7 +547,7 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
               color: AppTokens.accent,
               onPressed: () => Navigator.of(context).maybePop(),
               icon: const Icon(CupertinoIcons.chevron_back)),
-          title: Text(_text('收藏详情', 'Favorite details'),
+          title: Text(_text(AppCopy.text('收藏详情'), 'Favorite details'),
               style: TextStyle(
                   fontSize: AppTokens.listTitleFontSize,
                   fontWeight: FontWeight.w600,
@@ -547,7 +555,7 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
           actions: [
             if (!widget.readOnly && !_invalid)
               IconButton(
-                  tooltip: _text('删除收藏', 'Delete favorite'),
+                  tooltip: _text(AppCopy.text('删除收藏'), 'Delete favorite'),
                   onPressed: _busy || _loading ? null : _delete,
                   color: settingsSecondaryTextColor(context),
                   icon: const Icon(Icons.delete_outline)),
@@ -558,7 +566,7 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
           child: _invalid
               ? SettingsEmptyState(
                   icon: Icons.lock_outline,
-                  title: _text('登录状态已改变，请重新打开收藏',
+                  title: _text(AppCopy.text('登录状态已改变，请重新打开收藏'),
                       'Your account changed. Reopen favorites.'))
               : Column(children: [
                   SizedBox(
@@ -595,7 +603,8 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
                                                 TextButton(
                                                     onPressed:
                                                         _busy ? null : _load,
-                                                    child: Text(_text('刷新详情',
+                                                    child: Text(_text(
+                                                        AppCopy.text('刷新详情'),
                                                         'Refresh details'))),
                                               ])),
                                     Container(

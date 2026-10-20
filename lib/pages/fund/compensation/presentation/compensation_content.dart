@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import '../models/compensation_detail.dart';
 import '../state/compensation_controller.dart';
@@ -41,7 +42,7 @@ class CompensationContent extends StatelessWidget {
                           color: CompensationTokens.accent(context)),
                       const SizedBox(width: CompensationTokens.gap),
                       Expanded(
-                          child: Text('活动说明',
+                          child: Text(AppCopy.text('活动说明'),
                               style: TextStyle(
                                   color: CompensationTokens.ink(context),
                                   fontWeight: FontWeight.w800,
@@ -64,16 +65,17 @@ class CompensationRules extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = [
-      ('活动说明', detail.description),
-      ('参与条件', '本次活动邀请名单内的老用户，每人限领一次。'),
+      (AppCopy.text('活动说明'), detail.description),
+      (AppCopy.text('参与条件'), AppCopy.text('本次活动邀请名单内的老用户，每人限领一次。')),
       (
-        '金额规则',
+        AppCopy.text('金额规则'),
         detail.minimum == detail.maximum
-            ? '固定金额，每份 ${detail.minimum} 99币。'
-            : '拼手气随机金额，每份 ${detail.minimum}–${detail.maximum} 99币。'
+            ? AppCopy.format('固定金额，每份 {#0} 99币。', [detail.minimum])
+            : AppCopy.format(
+                '拼手气随机金额，每份 {#0}–{#1} 99币。', [detail.minimum, detail.maximum])
       ),
-      ('到账说明', '领取成功后进入99币钱包余额。'),
-      ('到期说明', '未领取份额自动退回平台资金池。')
+      (AppCopy.text('到账说明'), AppCopy.text('领取成功后进入99币钱包余额。')),
+      (AppCopy.text('到期说明'), AppCopy.text('未领取份额自动退回平台资金池。'))
     ];
     final cs = Theme.of(context).colorScheme;
     return Container(
@@ -123,8 +125,8 @@ class _PoolSummary extends StatelessWidget {
               TextSpan(children: [
                 TextSpan(text: value.replaceAll('99币', '').trim()),
                 if (value.contains('99币'))
-                  const TextSpan(
-                      text: ' 99币',
+                  TextSpan(
+                      text: AppCopy.text(' 99币'),
                       style: TextStyle(fontSize: CompensationTokens.label)),
               ]),
               textAlign: TextAlign.center,
@@ -146,7 +148,7 @@ class _PoolSummary extends StatelessWidget {
                     height: box.maxWidth * .105,
                     child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: item('总资金池', detail.poolLabel))),
+                        child: item(AppCopy.text('总资金池'), detail.poolLabel))),
                 Positioned(
                     left: box.maxWidth * .70,
                     top: box.maxWidth * .025,
@@ -154,11 +156,13 @@ class _PoolSummary extends StatelessWidget {
                     height: box.maxWidth * .105,
                     child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: item('剩余资金', detail.remainingLabel ?? '暂未提供'))),
+                        child: item(AppCopy.text('剩余资金'),
+                            detail.remainingLabel ?? AppCopy.text('暂未提供')))),
               ]));
     }
-    final total = item('总资金池', detail.poolLabel);
-    final remaining = item('剩余资金', detail.remainingLabel ?? '暂未提供');
+    final total = item(AppCopy.text('总资金池'), detail.poolLabel);
+    final remaining = item(
+        AppCopy.text('剩余资金'), detail.remainingLabel ?? AppCopy.text('暂未提供'));
     return Container(
         padding: const EdgeInsets.all(CompensationTokens.space),
         decoration: BoxDecoration(

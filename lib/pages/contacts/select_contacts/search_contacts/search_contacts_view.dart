@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -114,7 +115,7 @@ class SelectContactsFromSearchPage extends StatelessWidget {
                               height: ContactCardPickerTokens.textGap),
                           Text(
                             Localizations.localeOf(context).languageCode == 'zh'
-                                ? '仅接收通知'
+                                ? AppCopy.text('仅接收通知')
                                 : 'Notifications only',
                             style:
                                 ContactCardPickerTokens.subtitleStyle(context),

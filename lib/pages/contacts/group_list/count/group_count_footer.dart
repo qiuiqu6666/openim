@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -20,7 +21,7 @@ class GroupCountFooter extends StatelessWidget {
         child: Center(
           child: Text(
             chinese
-                ? '共 $count 个群聊'
+                ? AppCopy.format('共 {#0} 个群聊', [count])
                 : '$count group ${count == 1 ? 'chat' : 'chats'}',
             textAlign: TextAlign.center,
             style: ContactCardPickerTokens.subtitleStyle(context),

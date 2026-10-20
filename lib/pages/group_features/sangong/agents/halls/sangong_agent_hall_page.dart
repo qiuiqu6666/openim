@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../models/group_feature_context.dart';
@@ -109,8 +110,8 @@ class _SangongAgentHallPageState extends State<SangongAgentHallPage> {
           ? const Center(child: CircularProgressIndicator())
           : Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text(_error ?? '暂无数据'),
-              TextButton(onPressed: _load, child: const Text('重试')),
+              Text(_error ?? AppCopy.text('暂无数据')),
+              TextButton(onPressed: _load, child: Text(AppCopy.text('重试'))),
             ])),
     );
   }

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -200,7 +201,7 @@ class _GroupAnnouncementBannerState extends State<GroupAnnouncementBanner> {
                     child: ClipRect(
                         child: IconButton(
                       key: const ValueKey('group-announcement-close'),
-                      tooltip: '关闭公告栏',
+                      tooltip: AppCopy.text('关闭公告栏'),
                       padding: EdgeInsets.zero,
                       constraints:
                           const BoxConstraints(minWidth: 32, minHeight: 32),

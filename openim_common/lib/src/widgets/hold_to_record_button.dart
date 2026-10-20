@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/gestures.dart';
@@ -298,7 +299,7 @@ class _HoldToRecordButtonState extends State<HoldToRecordButton>
       final duration = await player.setFilePath(file.path);
       if (!isCurrentRecording()) return;
       if (duration == null || duration.inMilliseconds < 1000) {
-        _showRecordingError('录音时间太短，请按住后说话');
+        _showRecordingError(AppCopy.text('录音时间太短，请按住后说话'));
         return;
       }
       final directory = Directory('${Config.cachePath}/outgoing_media');
@@ -343,8 +344,8 @@ class _HoldToRecordButtonState extends State<HoldToRecordButton>
       builder: widget.expandedPanel ? _expandedRecorder : null,
       style: VoiceUIStyle.compact,
       idleText: busy
-          ? (_convertToText ? 'voiceToTextLoading'.tr : '正在发送…')
-          : (_convertToText ? 'voiceRecordConvert'.tr : '按住说话'),
+          ? (_convertToText ? 'voiceToTextLoading'.tr : AppCopy.text('正在发送…'))
+          : (_convertToText ? 'voiceRecordConvert'.tr : AppCopy.text('按住说话')),
       borderRadius: 8,
       onRecorded: recorded,
       onError: (error) => _showRecordingError(
@@ -352,11 +353,12 @@ class _HoldToRecordButtonState extends State<HoldToRecordButton>
       actionWhenCancel: () {},
       maxRecordDuration: const Duration(seconds: 60),
       onMaxDurationReached: _maxDurationReached,
-      permissionNotGrantedMessage: '请允许使用麦克风',
-      recordCancelledMessage: '已取消录音',
+      permissionNotGrantedMessage: AppCopy.text('请允许使用麦克风'),
+      recordCancelledMessage: AppCopy.text('已取消录音'),
       cancelDoneText: '已取消',
-      dragToLeftText:
-          _convertToText ? 'voiceRecordConvertHint'.tr : '左滑取消，松开发送',
+      dragToLeftText: _convertToText
+          ? 'voiceRecordConvertHint'.tr
+          : AppCopy.text('左滑取消，松开发送'),
       iconSize: 22,
       timerFontSize: 12,
       backgroundColor: Styles.c_0089FF,

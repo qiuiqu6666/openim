@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -33,9 +34,9 @@ Future<FundSecurityProof?> authorizeFundSecurity(
     await showAppAlert<void>(
       context,
       barrierDismissible: true,
-      title: '暂时无法转出',
-      message:
-          '手机号或密码变更后需等待2小时。\n允许转出时间：${fundSecurityAllowedTime(check.blockedUntil)}',
+      title: AppCopy.text('暂时无法转出'),
+      message: AppCopy.format('手机号或密码变更后需等待2小时。\n允许转出时间：{#0}',
+          [fundSecurityAllowedTime(check.blockedUntil)]),
       actions: const [AppAction('知道了', null)],
     );
     return null;

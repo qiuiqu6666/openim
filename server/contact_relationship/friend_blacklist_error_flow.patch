@@ -1,0 +1,346 @@
+--- a/internal/rpc/chat/friend_grant.go
++++ b/internal/rpc/chat/friend_grant.go
+@@ -156,6 +156,9 @@
+ 	if err != nil {
+ 		return nil, err
+ 	}
++	if err = o.requireFriendPairUnblocked(ctx, subject); err != nil {
++		return nil, err
++	}
+ 	if err = o.allowFriendSubject(ctx, subject); err != nil {
+ 		return nil, err
+ 	}
+@@ -202,6 +205,9 @@
+ }
+ 
+ func (o *chatSvr) continueFriendApply(ctx context.Context, row *chatdb.FriendGrant, message string) (*chat.ApplyFriendResp, error) {
++	if err := o.requireFriendPairUnblocked(ctx, row); err != nil {
++		return nil, err
++	}
+ 	switch row.ApplyState {
+ 	case chatdb.FriendGrantSuccess:
+ 		return &chat.ApplyFriendResp{ApplyState: chatdb.FriendGrantSuccess}, nil
+@@ -258,7 +264,15 @@
+ 		return nil, grantDenied("apply uncertain")
+ 	}
+ 	callErr := o.IM.AddFriendApply(imCtx, row.ApplicantIMID, row.TargetIMID, message, string(ex))
+-	exists, queryErr := o.IM.FriendApplyExists(imCtx, row.ApplicantIMID, row.TargetIMID)
++	// A definite denial wins over all historical requests and retry state.
++	if isFriendBlocked(callErr) {
++		_, _ = o.Database.SetFriendGrantState(ctx, row.Grant, []string{chatdb.FriendGrantPending}, chatdb.FriendGrantFailed)
++		return nil, friendBlocked()
++	}
++	if err := o.requireFriendPairUnblocked(ctx, row); err != nil {
++		return nil, err
++	}
++	exists, queryErr := o.IM.FriendApplyExistsForOperation(imCtx, row.ApplicantIMID, row.TargetIMID, row.OpID)
+ 	if queryErr != nil {
+ 		_, _ = o.Database.SetFriendGrantState(ctx, row.Grant, []string{chatdb.FriendGrantPending}, chatdb.FriendGrantUnknown)
+ 		return nil, grantDenied("apply uncertain")
+@@ -280,7 +294,7 @@
+ 	if err != nil {
+ 		return nil, grantDenied("apply uncertain")
+ 	}
+-	exists, err := o.IM.FriendApplyExists(imCtx, row.ApplicantIMID, row.TargetIMID)
++	exists, err := o.IM.FriendApplyExistsForOperation(imCtx, row.ApplicantIMID, row.TargetIMID, row.OpID)
+ 	if err != nil {
+ 		return nil, grantDenied("apply uncertain")
+ 	}
+--- /dev/null
++++ b/internal/rpc/chat/friend_blacklist.go
+@@ -0,0 +1,42 @@
++package chat
++
++import (
++	"context"
++	"errors"
++
++	chatdb "github.com/openimsdk/chat/pkg/common/db/table/chat"
++	"github.com/openimsdk/tools/errs"
++)
++
++const friendBlockedCode = 1302
++
++func friendBlocked() error {
++	return errs.NewCodeError(friendBlockedCode, "BlockedByPeer").Wrap()
++}
++
++func isFriendBlocked(err error) bool {
++	var coded errs.CodeError
++	return errors.As(err, &coded) && coded.Code() == friendBlockedCode
++}
++
++// Check both directions, including retries of a previously successful grant.
++// Failure to read a blacklist must never become an application success.
++func (o *chatSvr) requireFriendPairUnblocked(ctx context.Context, row *chatdb.FriendGrant) error {
++	imCtx, err := o.withIMAdmin(ctx)
++	if err != nil {
++		return err
++	}
++	for _, pair := range [][2]string{
++		{row.ApplicantIMID, row.TargetIMID},
++		{row.TargetIMID, row.ApplicantIMID},
++	} {
++		blacks, err := o.IM.SpecifiedBlacks(imCtx, pair[0], []string{pair[1]})
++		if err != nil {
++			return err
++		}
++		if _, blocked := blacks[pair[1]]; blocked {
++			return friendBlocked()
++		}
++	}
++	return nil
++}
+--- /dev/null
++++ b/internal/rpc/chat/friend_blacklist_test.go
+@@ -0,0 +1,144 @@
++package chat
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"testing"
++	"time"
++
++	"github.com/openimsdk/chat/pkg/common/config"
++	"github.com/openimsdk/chat/pkg/common/db/database"
++	chatdb "github.com/openimsdk/chat/pkg/common/db/table/chat"
++	"github.com/openimsdk/chat/pkg/common/imapi"
++)
++
++type blacklistFlowDB struct {
++	database.ChatDatabaseInterface
++	states []string
++}
++
++func (d *blacklistFlowDB) TakeAttributeByUserID(context.Context, string) (*chatdb.Attribute, error) {
++	return openAttribute(), nil
++}
++func (d *blacklistFlowDB) ClaimFriendGrant(_ context.Context, grant, applicant, op string, now time.Time) (*chatdb.FriendGrant, error) {
++	return &chatdb.FriendGrant{Grant: grant, ApplicantIMID: applicant, TargetIMID: "B", Source: "account", OpID: op, ApplyState: chatdb.FriendGrantPending}, nil
++}
++func (d *blacklistFlowDB) SetFriendGrantState(_ context.Context, _ string, _ []string, state string) (bool, error) {
++	d.states = append(d.states, state)
++	return true, nil
++}
++
++type blacklistFlowIM struct {
++	imapi.CallerInterface
++	blockedOwner      string
++	queryErr, sendErr error
++	sent, lookups     int
++	operation         string
++	blockDuringSend   bool
++}
++
++func (i *blacklistFlowIM) ImAdminTokenWithDefaultAdmin(context.Context) (string, error) {
++	return "test", nil
++}
++func (i *blacklistFlowIM) SpecifiedBlacks(_ context.Context, owner string, peers []string) (map[string]struct{}, error) {
++	result := map[string]struct{}{}
++	if owner == i.blockedOwner {
++		result[peers[0]] = struct{}{}
++	}
++	return result, i.queryErr
++}
++func (i *blacklistFlowIM) AddFriendApply(_ context.Context, _, _, _, ex string) error {
++	i.sent++
++	var body struct {
++		Op string `json:"op"`
++	}
++	_ = json.Unmarshal([]byte(ex), &body)
++	if i.sendErr == nil {
++		i.operation = body.Op
++	}
++	if i.blockDuringSend {
++		i.blockedOwner = "B"
++	}
++	return i.sendErr
++}
++func (i *blacklistFlowIM) FriendApplyExistsForOperation(_ context.Context, _, _, op string) (bool, error) {
++	i.lookups++
++	return op != "" && op == i.operation, nil
++}
++func (i *blacklistFlowIM) FriendApplyExists(context.Context, string, string) (bool, error) {
++	panic("historical pair lookup must not authorize a new operation")
++}
++func newBlacklistFlow() (*chatSvr, *blacklistFlowIM, *blacklistFlowDB, *chatdb.FriendGrant) {
++	im, db := &blacklistFlowIM{}, &blacklistFlowDB{}
++	server := &chatSvr{IM: im, Database: db,
++		FriendGrant: config.FriendGrantConfig{ActiveKeyID: 1, Keys: []config.FriendGrantKey{{ID: 1, Secret: "test-only"}}}}
++	row := &chatdb.FriendGrant{Grant: "grant", ApplicantIMID: "A", TargetIMID: "B",
++		Source: "account", ApplyState: chatdb.FriendGrantUnused, ExpireAt: time.Now().Add(time.Minute)}
++	return server, im, db, row
++}
++func TestFriendBlacklistFullApplicationFlow(t *testing.T) {
++	s, im, _, row := newBlacklistFlow()
++	im.blockedOwner = "B"
++	if resp, err := s.continueFriendApply(context.Background(), row, "hello"); resp != nil || !isFriendBlocked(err) || im.sent != 0 {
++		t.Fatalf("blocked submission: %+v %v sent=%d", resp, err, im.sent)
++	}
++	im.blockedOwner = ""
++	if resp, err := s.continueFriendApply(context.Background(), row, "hello"); err != nil || resp.ApplyState != chatdb.FriendGrantSuccess || im.sent != 1 {
++		t.Fatalf("unblocked submission: %+v %v", resp, err)
++	}
++	row.ApplyState = chatdb.FriendGrantSuccess
++	im.blockedOwner = "B"
++	if resp, err := s.continueFriendApply(context.Background(), row, "retry"); resp != nil || !isFriendBlocked(err) {
++		t.Fatalf("cached success bypassed blacklist: %+v %v", resp, err)
++	}
++}
++func TestBlockedErrorWinsOverHistoricalApplication(t *testing.T) {
++	s, im, db, row := newBlacklistFlow()
++	im.operation = "old-operation"
++	im.sendErr = fmt.Errorf("upstream: %w", friendBlocked())
++	resp, err := s.continueFriendApply(context.Background(), row, "hello")
++	if resp != nil || !isFriendBlocked(err) || im.lookups != 0 {
++		t.Fatalf("lost blacklist error: %+v %v lookups=%d", resp, err, im.lookups)
++	}
++	if len(db.states) != 1 || db.states[0] != chatdb.FriendGrantFailed {
++		t.Fatal(db.states)
++	}
++}
++func TestBlacklistAllRetryStatesAndQueryFailure(t *testing.T) {
++	for _, state := range []string{chatdb.FriendGrantUnused, chatdb.FriendGrantPending, chatdb.FriendGrantUnknown, chatdb.FriendGrantSuccess, chatdb.FriendGrantFailed} {
++		for _, owner := range []string{"A", "B"} {
++			s, im, _, row := newBlacklistFlow()
++			row.ApplyState, im.blockedOwner = state, owner
++			if resp, err := s.continueFriendApply(context.Background(), row, "retry"); resp != nil || !isFriendBlocked(err) {
++				t.Fatalf("%s/%s: %+v %v", state, owner, resp, err)
++			}
++		}
++	}
++	s, im, _, row := newBlacklistFlow()
++	im.queryErr = errors.New("lookup failed")
++	if resp, err := s.continueFriendApply(context.Background(), row, "hello"); resp != nil || err == nil || im.sent != 0 {
++		t.Fatal(resp, err)
++	}
++}
++func TestConcurrentBlockAndOldRequestCannotReportSuccess(t *testing.T) {
++	s, im, _, row := newBlacklistFlow()
++	im.blockDuringSend = true
++	if resp, err := s.continueFriendApply(context.Background(), row, "hello"); resp != nil || !isFriendBlocked(err) {
++		t.Fatal(resp, err)
++	}
++	s, im, _, row = newBlacklistFlow()
++	im.operation, im.sendErr = "old-operation", errors.New("connection lost")
++	if resp, err := s.continueFriendApply(context.Background(), row, "hello"); resp != nil || err == nil {
++		t.Fatal(resp, err)
++	}
++	row.ApplyState, row.OpID = chatdb.FriendGrantUnknown, "new-operation"
++	if resp, err := s.continueFriendApply(context.Background(), row, "retry"); resp != nil || err == nil {
++		t.Fatal(resp, err)
++	}
++	im.operation = "new-operation"
++	if resp, err := s.continueFriendApply(context.Background(), row, "retry"); err != nil || resp.ApplyState != chatdb.FriendGrantSuccess {
++		t.Fatal(resp, err)
++	}
++}
+--- a/pkg/common/imapi/caller.go
++++ b/pkg/common/imapi/caller.go
+@@ -45,6 +45,7 @@
+ 	GetUsersOnline(ctx context.Context, userIDs []string) (map[string]bool, error)
+ 	AddFriendApply(ctx context.Context, fromUserID, toUserID, message, ex string) error
+ 	FriendApplyExists(ctx context.Context, fromUserID, toUserID string) (bool, error)
++	FriendApplyExistsForOperation(ctx context.Context, fromUserID, toUserID, opID string) (bool, error)
+ 	GroupMemberRoles(ctx context.Context, groupID string, userIDs []string) (map[string]int32, error)
+ 	GroupMemberIDs(ctx context.Context, groupID string) ([]string, error)
+ 	SendFundMessage(ctx context.Context, sendID, recvID, groupID, data string) error
+--- /dev/null
++++ b/pkg/common/imapi/friend_apply_operation.go
+@@ -0,0 +1,40 @@
++package imapi
++
++import (
++	"context"
++	"encoding/json"
++
++	"github.com/openimsdk/protocol/relation"
++	"github.com/openimsdk/protocol/sdkws"
++)
++
++func (c *Caller) FriendApplyExistsForOperation(ctx context.Context, from, to, opID string) (bool, error) {
++	if opID == "" {
++		return false, nil
++	}
++	resp, err := designatedFriendApply.Call(ctx, c.imApi, &relation.GetDesignatedFriendsApplyReq{
++		FromUserID: from, ToUserID: to,
++	})
++	if err != nil || resp == nil {
++		return false, err
++	}
++	return friendApplyMatchesOperation(resp.FriendRequests, from, to, opID), nil
++}
++
++func friendApplyMatchesOperation(requests []*sdkws.FriendRequest, from, to, opID string) bool {
++	if opID == "" {
++		return false
++	}
++	for _, request := range requests {
++		if request == nil || request.FromUserID != from || request.ToUserID != to {
++			continue
++		}
++		var ex struct {
++			Op string `json:"op"`
++		}
++		if json.Unmarshal([]byte(request.Ex), &ex) == nil && ex.Op == opID {
++			return true
++		}
++	}
++	return false
++}
+--- /dev/null
++++ b/pkg/common/imapi/friend_apply_operation_test.go
+@@ -0,0 +1,50 @@
++package imapi
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"github.com/openimsdk/protocol/sdkws"
++	"github.com/openimsdk/tools/errs"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++)
++
++func TestBlacklistErrorSurvivesHTTPTransport(t *testing.T) {
++	for _, status := range []int{http.StatusOK, http.StatusForbidden} {
++		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++			if r.URL.Path != "/friend/add_friend" {
++				t.Errorf("unexpected path %s", r.URL.Path)
++			}
++			w.Header().Set("Content-Type", "application/json")
++			w.WriteHeader(status)
++			fmt.Fprint(w, `{"errCode":1302,"errMsg":"BlockedByPeer","errDlt":"blocked"}`)
++		}))
++		err := New(server.URL, "", "").AddFriendApply(context.Background(), "A", "B", "hello", `{"op":"new"}`)
++		server.Close()
++		var coded errs.CodeError
++		if !errors.As(err, &coded) || coded.Code() != 1302 {
++			t.Fatalf("HTTP %d lost blacklist code: %v", status, err)
++		}
++	}
++}
++
++func TestFriendApplyOperationIdentity(t *testing.T) {
++	for _, tc := range []struct {
++		from, to, ex, op string
++		want             bool
++	}{
++		{"A", "B", `{"op":"new"}`, "new", true},
++		{"A", "B", `{"op":"old"}`, "new", false},
++		{"A", "B", `{}`, "new", false},
++		{"A", "B", `invalid`, "new", false},
++		{"B", "A", `{"op":"new"}`, "new", false},
++		{"A", "B", `{"op":""}`, "", false},
++	} {
++		requests := []*sdkws.FriendRequest{nil, {FromUserID: tc.from, ToUserID: tc.to, Ex: tc.ex}}
++		if got := friendApplyMatchesOperation(requests, "A", "B", tc.op); got != tc.want {
++			t.Fatalf("%+v got %v", tc, got)
++		}
++	}
++}

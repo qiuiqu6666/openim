@@ -12,6 +12,7 @@ import '../widgets/settings_widgets.dart';
 import 'biometric_pay_page.dart';
 import 'change_password_page.dart';
 import 'change_phone_page.dart';
+import '../account_security/email/email_account_page.dart';
 import 'change_trade_password_page.dart';
 import 'login_devices_page.dart';
 import 'trade_password_page.dart';
@@ -93,6 +94,12 @@ class _AccountSecurityPageState extends State<AccountSecurityPage> {
     if (result == true && mounted) await _reload();
   }
 
+  Future<void> _openEmail() async {
+    await openSettingsPage<bool>(context, const EmailAccountPage(),
+        activityPage: 'account_security');
+    if (mounted) setState(() {});
+  }
+
   Future<bool> _openTradePassword(BuildContext context) async {
     if (!_ready) return false;
     final result = await Navigator.of(context).push<bool>(
@@ -156,6 +163,12 @@ class _AccountSecurityPageState extends State<AccountSecurityPage> {
                           en: 'Change Phone Number',
                         ),
                   onTap: !_ready ? null : _openPhone,
+                ),
+                SettingsCell(
+                  title: widget.service.securityEmail.trim().isEmpty
+                      ? settingsText(context, zh: '绑定邮箱', en: 'Link Email')
+                      : settingsText(context, zh: '修改邮箱', en: 'Change Email'),
+                  onTap: !_ready ? null : _openEmail,
                 ),
                 SettingsCell(
                   title: settingsText(context, zh: '登录设备', en: 'Login Devices'),

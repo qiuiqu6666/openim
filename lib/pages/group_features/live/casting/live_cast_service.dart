@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -32,5 +33,5 @@ class LiveCastFailure implements Exception {
   final String message;
 
   @override
-  String toString() => message;
+  String toString() => AppCopy.text(message);
 }

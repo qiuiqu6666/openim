@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../../mine/settings/widgets/settings_widgets.dart'
     show showSettingsConfirm;
 import 'package:flutter/material.dart';
@@ -89,9 +90,9 @@ class ConversationEditActions {
     final zh = Localizations.localeOf(context).languageCode == 'zh';
     final confirmed = await showSettingsConfirm(
       context,
-      title: zh ? '删除会话' : 'Delete conversations',
+      title: zh ? AppCopy.text('删除会话') : 'Delete conversations',
       message: zh
-          ? '删除选中的 $count 个会话及聊天记录？'
+          ? AppCopy.format('删除选中的 {#0} 个会话及聊天记录？', [count])
           : 'Delete the $count selected conversations and their messages?',
       confirmText: StrRes.delete,
       destructive: true,

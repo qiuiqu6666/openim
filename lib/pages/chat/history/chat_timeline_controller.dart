@@ -18,6 +18,7 @@ class ChatTimelineController {
     required this.conversation,
     required this.fetch,
     this.fetchLocalSnapshot,
+    this.fetchDisplaySnapshot,
     this.fetchWindow,
     this.canPaintInitialWindow,
     this.onLatestDeferred,
@@ -43,11 +44,16 @@ class ChatTimelineController {
   final ConversationInfo Function() conversation;
   final ChatHistoryReader fetch;
   final Future<List<Message>> Function()? fetchLocalSnapshot;
+
+  /// Local database rows for display only, without a latest-window proof.
+  final Future<List<Message>> Function()? fetchDisplaySnapshot;
   final FutureOr<AdvancedMessage> Function()? fetchWindow;
   MessageWindow? _publishedWindow;
   bool get hasPublishableWindow => _publishedWindow?.canPublish == true;
   bool get _hasSnapshotProvider =>
-      fetchLocalSnapshot != null || fetchWindow != null;
+      fetchLocalSnapshot != null ||
+      fetchWindow != null ||
+      fetchDisplaySnapshot != null;
   late final _ingress = MessageWindowIngress(
     conversationID: conversationID,
     publish: _appendWindowBatch,
@@ -93,6 +99,7 @@ class ChatTimelineController {
   final windowRevision = 0.obs;
 
   bool _initialized = false;
+  bool _restoredReadySnapshot = false;
   bool _disposed = false;
   bool _timelineDirty = true;
   bool _identityDirty = true;
@@ -198,9 +205,25 @@ class ChatTimelineController {
       _cacheTimer = Timer(const Duration(milliseconds: 80), _cacheHistory);
     });
     final info = conversation();
+    if (kDebugMode) {
+      debugPrint('chat_entry_probe private=${info.isPrivateChat} '
+          'displayProvider=${fetchDisplaySnapshot != null} '
+          'session=${_isSessionCurrent()}');
+    }
     if (info.isPrivateChat == true) {
       ChatHistoryCache.removeConversation(accountID, conversationID);
       _cacheRevision = ChatHistoryCache.revision(accountID, conversationID);
+    } else if (_hasSnapshotProvider &&
+        _isSessionCurrent() &&
+        accountID == _currentAccountID()) {
+      final cached = ChatHistoryCache.readReady(
+          accountID, conversationID, (accountID, OpenIM.iMManager.token));
+      if (cached.isNotEmpty) {
+        _restoredReadySnapshot = true;
+        _snapshotIDs.addAll(cached.map((m) => m.clientMsgID));
+        messageList.value = ChatHistoryLoader.merge(cached);
+        initialWindowReady.value = true;
+      }
     } else if (!_hasSnapshotProvider) {
       final cached = ChatHistoryCache.read(accountID, conversationID);
       final latest = info.latestMsg;
@@ -218,10 +241,12 @@ class ChatTimelineController {
         messageList.value = ChatHistoryLoader.merge(cached);
       }
     }
-    // Production entry paints only an attested native window, never an old
-    // presentation cache plus one preview. Live arrivals remain hidden until
-    // they can be committed with the initial window.
+    // A previously loaded complete page may paint while the SDK refreshes it.
+    // Arbitrary presentation seeds still cannot open a production window.
     if (!_hasSnapshotProvider) initialWindowReady.value = true;
+    if (fetchDisplaySnapshot != null && messageList.isEmpty) {
+      unawaited(_loadLocalSnapshot(displayOnly: true));
+    }
     if (_hasSnapshotProvider &&
         info.isPrivateChat != true &&
         messageList.length < pageSize) {
@@ -230,21 +255,29 @@ class ChatTimelineController {
     if (prefetch) unawaited(loadOlder());
   }
 
-  Future<void> _loadLocalSnapshot() async {
+  Future<void> _loadLocalSnapshot({bool displayOnly = false}) async {
     final revision = _history.windowRevision;
     final cacheRevision = _cacheRevision;
+    final privateAtStart = conversation().isPrivateChat == true;
     final watch = Stopwatch()..start();
     try {
-      final prepared = fetchWindow?.call();
+      final prepared = displayOnly ? null : fetchWindow?.call();
       // A prewarmed proof can publish in onInit, before the first route build.
       // Awaiting an already completed Future would still paint a skeleton frame.
       final page =
           prepared is Future<AdvancedMessage> ? await prepared : prepared;
       final window = page?.window;
       final rows = page?.messageList ??
-          (fetchLocalSnapshot == null
-              ? <Message>[]
-              : await fetchLocalSnapshot!());
+          (displayOnly
+              ? await fetchDisplaySnapshot!()
+              : fetchLocalSnapshot == null
+                  ? <Message>[]
+                  : await fetchLocalSnapshot!());
+      if (kDebugMode) {
+        debugPrint('chat_entry_probe display=$displayOnly rows=${rows.length} '
+            'loaded=${_history.loaded} ready=${initialWindowReady.value} '
+            'window=${window?.canPublish}');
+      }
       if (window != null &&
           (!window.canPublish || window.conversationID != conversationID)) {
         return;
@@ -252,11 +285,16 @@ class ChatTimelineController {
       if (_closed ||
           !_isSessionCurrent() ||
           accountID != _currentAccountID() ||
-          conversation().isPrivateChat == true ||
+          (displayOnly
+              ? (conversation().isPrivateChat == true) != privateAtStart
+              : conversation().isPrivateChat == true) ||
           _history.loaded ||
           revision != _history.windowRevision ||
           _history.viewingHistory ||
-          (window?.canPublish != true &&
+          (displayOnly &&
+              (initialWindowReady.value || messageList.isNotEmpty)) ||
+          (!displayOnly &&
+              window?.canPublish != true &&
               canPaintInitialWindow?.call() == false) ||
           _cacheEpoch != ChatHistoryCache.epoch ||
           cacheRevision !=
@@ -274,7 +312,8 @@ class ChatTimelineController {
           .toList();
       if (safe.isEmpty && window?.emptyConfirmed != true) return;
       final latest = conversation().latestMsg;
-      if (latest?.clientMsgID?.isNotEmpty == true &&
+      if (!displayOnly &&
+          latest?.clientMsgID?.isNotEmpty == true &&
           !safe.any((m) => m.clientMsgID == latest!.clientMsgID) &&
           !messageList.any((m) => m.clientMsgID == latest!.clientMsgID) &&
           !ChatHistoryCache.isRemoved(accountID, latest!.clientMsgID) &&
@@ -288,7 +327,7 @@ class ChatTimelineController {
       final snapshotEnd =
           safe.map((m) => m.seq ?? 0).fold(0, (a, b) => a > b ? a : b);
       final liveEnd = liveSeqs.fold(0, (a, b) => a > b ? a : b);
-      if (window == null && liveEnd > snapshotEnd) {
+      if (!displayOnly && window == null && liveEnd > snapshotEnd) {
         final stored = {...liveSeqs, ...safe.map((m) => m.seq ?? 0)};
         final start = liveEnd - pageSize + 1;
         for (var seq = start > 1 ? start : 1; seq <= liveEnd; seq++) {
@@ -372,7 +411,6 @@ class ChatTimelineController {
     _rememberRecoveryAnchor(messageList);
     _rememberRecoveryAnchor(messages);
     final offset = captureOffset();
-    final alreadyPainted = _hasPaintedRows;
     final window = _history.currentWindow;
     final awaitingInitial = !hasPublishableWindow && window?.canPublish == true;
     final buffered = awaitingInitial
@@ -411,7 +449,7 @@ class ChatTimelineController {
                         (latest.sendTime ?? latest.createTime ?? 0) &&
                     (m.seq ?? 0) > 0 &&
                     (m.seq ?? 0) <= (latest.seq ?? 0)))));
-    if (firstPage && !_history.viewingHistory && !alreadyPainted) {
+    if (firstPage && !_history.viewingHistory) {
       onFirstPage();
     } else if (refresh) {
       restoreOffset(offset);
@@ -511,6 +549,10 @@ class ChatTimelineController {
       insertion = low;
     }
     next.insert(insertion, message);
+    // Reposition local sends restored from the old pending tail as well as
+    // local call records. Keep the already ordered server rows intact.
+    next = ChatHistoryLoader.appendOrderedBatch(next, const []);
+    insertion = next.indexOf(message);
     var retainedIncoming = true;
     var evicted = false;
     if (trim &&
@@ -627,6 +669,7 @@ class ChatTimelineController {
   /// the returned IDs while this owner clears its own lists and snapshot.
   Set<String> clear() {
     if (_closed) return <String>{};
+    _restoredReadySnapshot = false;
     _hasPaintedRows = false;
     _publishedWindow = null;
     _ingress.reset();
@@ -691,7 +734,11 @@ class ChatTimelineController {
     }
     if (_history.viewingHistory) return;
     ChatHistoryCache.write(accountID, conversationID, messageList,
-        epoch: _cacheEpoch);
+        epoch: _cacheEpoch,
+        readySession: (_history.loaded || _restoredReadySnapshot) &&
+                initialWindowReady.value
+            ? (accountID, OpenIM.iMManager.token)
+            : null);
   }
 
   void close() {

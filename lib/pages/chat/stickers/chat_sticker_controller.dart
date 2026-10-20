@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -93,13 +94,13 @@ class ChatStickerController {
     try {
       await personalStickers.add(url, requestID);
       if (!isClosed && account == DataSp.userID && token == DataSp.chatToken) {
-        IMViews.showToast('已添加到表情');
+        IMViews.showToast(AppCopy.text('已添加到表情'));
       }
     } catch (e) {
       if (!isClosed && account == DataSp.userID && token == DataSp.chatToken) {
         IMViews.showErrorToast(
             e is StickerApiException ? (e.code, e.message) : e,
-            fallback: '添加失败，请重试');
+            fallback: AppCopy.text('添加失败，请重试'));
       }
     } finally {
       _addingMessageSticker = false;
@@ -188,8 +189,11 @@ class ChatStickerController {
           context,
           barrierDismissible: true,
           title: '上次收藏未完成',
-          message: '重试上次收藏，或从相册重新选择？',
-          actions: const [AppAction('重新选择', false), AppAction('重试', true)],
+          message: AppCopy.text('重试上次收藏，或从相册重新选择？'),
+          actions: [
+            AppAction(AppCopy.text('重新选择'), false),
+            AppAction(AppCopy.text('重试'), true)
+          ],
         );
         if (retry == null || !current()) return;
         if (!retry) {
@@ -205,7 +209,7 @@ class ChatStickerController {
             ? 20 * 1024 * 1024
             : 10 * 1024 * 1024;
         if (file.size > maxSize) {
-          IMViews.showToast('文件超过表情收藏上限');
+          IMViews.showToast(AppCopy.text('文件超过表情收藏上限'));
           return;
         }
         final result = await LoadingView.singleton.wrap(
@@ -241,7 +245,7 @@ class ChatStickerController {
       IMViews.showErrorToast((error.code, error.message));
     } catch (error) {
       if (current()) {
-        IMViews.showErrorToast(error, fallback: '收藏失败，请稍后重试');
+        IMViews.showErrorToast(error, fallback: AppCopy.text('收藏失败，请稍后重试'));
       }
     } finally {
       _addingPersonalSticker = false;

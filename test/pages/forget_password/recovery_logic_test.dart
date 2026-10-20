@@ -136,6 +136,26 @@ void main() {
     Get.reset();
   });
 
+  testWidgets('email recovery freezes only the email identity', (tester) async {
+    final logic = await _mount(tester);
+    logic.selectEmail(true);
+    _validFields(logic);
+    logic.phoneCtrl.text = ' Owner@Example.test ';
+    late Future<void> pending;
+    await tester.runAsync(() async {
+      pending = logic.nextStep();
+      await _phase(api.resetStarted.future, 'email request');
+      expect(api.requests.single.data,
+          containsPair('email', 'owner@example.test'));
+      expect(api.requests.single.data['phoneNumber'], isNull);
+      expect(api.requests.single.data['areaCode'], isNull);
+      api.reset.complete(api.response(code: 20006));
+      await _phase(pending, 'email completion');
+    });
+    expect(logic.phoneCtrl.text, ' Owner@Example.test ');
+    expect(logic.submitting.value, isFalse);
+  });
+
   testWidgets('incomplete recovery fields never reach verification or reset',
       (tester) async {
     final logic = await _mount(tester);

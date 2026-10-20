@@ -48,6 +48,57 @@ void main() {
     expect(transport.requests, hasLength(1));
   });
 
+  test('hidden currencies disappear and can be restored without stale rows',
+      () async {
+    final repo = WalletFundRepository(
+        api: transport.wallet, accountProvider: () => 'server:user');
+    final hidden = response();
+    (hidden['balances'] as List).removeWhere((row) => row['currency'] == 'TRX');
+    transport.respond(hidden);
+    expect((await repo.getWallet()).coins.map((coin) => coin.code),
+        ['USDT', '99']);
+    transport.respond({...response(), 'balances': []});
+    expect((await repo.getWallet()).coins, isEmpty);
+    transport.respond(response());
+    expect((await repo.getWallet()).coins.map((coin) => coin.code),
+        ['USDT', 'TRX', '99']);
+  });
+
+  test('payment balance transport accepts visible subsets and empty lists',
+      () async {
+    transport.respond({
+      'balances': [
+        {'currency': 'TRX', 'available': '2', 'frozen': '0'}
+      ]
+    });
+    expect((await transport.fund.fetchBalances()).single.currency.code, 'TRX');
+    transport.respond({'balances': []});
+    expect(await transport.fund.fetchBalances(), isEmpty);
+    final row = {'currency': 'TRX', 'available': '2', 'frozen': '0'};
+    transport.respond({
+      'balances': [row, row]
+    });
+    await expectLater(transport.fund.fetchBalances(), throwsFormatException);
+  });
+
+  test('both balance entry points explicitly negotiate visibility support',
+      () async {
+    transport.respond(response());
+    await transport.wallet.fetchBalanceSnapshot();
+    await transport.fund.fetchBalances();
+    expect(transport.requests, hasLength(2));
+    for (final request in transport.requests) {
+      expect(request.queryParameters['currencyVisibility'], '1');
+    }
+  });
+
+  test('duplicate returned currencies remain invalid', () async {
+    final duplicate = response();
+    (duplicate['balances'] as List).add((duplicate['balances'] as List).first);
+    transport.respond(duplicate);
+    await expectLater(transport.wallet.fetchBalances(), throwsFormatException);
+  });
+
   test('missing rate clears valuation while preserving balances', () async {
     final repo = WalletFundRepository(
         api: transport.wallet, accountProvider: () => 'server:user');

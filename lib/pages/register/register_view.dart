@@ -2,14 +2,15 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:openim/pages/login/login_logic.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../routes/app_navigator.dart';
 import '../../widgets/auth/auth_copy.dart';
 import '../../widgets/auth/auth_reference.dart';
+import '../../widgets/auth/auth_minimal_layout.dart';
 import '../login/widgets/login_toolbar.dart';
 import 'register_logic.dart';
+import '../../widgets/auth/auth_identity_selector.dart';
 import 'rules/registration_field.dart';
 import 'widgets/register_reference_widgets.dart';
 
@@ -26,28 +27,23 @@ class RegisterPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final phone = logic.loginController.operateType != LoginType.email;
-    return AuthEntryScaffold(
-      greeting: authText('你好，', 'Hello,'),
-      accent: authText('欢迎使用99Chat', 'Welcome to 99Chat'),
-      tabs: [authText('登录', 'Login'), authText('注册', 'Register')],
-      activeTab: 1,
-      onTabSelected: (tab) {
-        if (tab == 0 && !logic.submitting.value) {
-          AppNavigator.startBackLogin();
-        }
+    return AuthMinimalLayout(
+      onBack: () {
+        if (!logic.submitting.value) AppNavigator.startBackLogin();
       },
-      headerAction: const LoginToolbar(),
-      footer: const AuthVersionFooter(),
+      footer: const AuthEntryFooter(),
       child: AutofillGroup(
         child: Obx(() {
-          final busy = logic.submitting.value;
+          final busy = logic.submitting.value || logic.accountCreated;
+          final phone = !logic.emailMode.value;
           return Column(
             key: const ValueKey('register'),
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              RegistrationStepHeading(
-                  label: authText('填写账号', 'Account details'), step: 1),
+              AuthIdentitySelector(
+                  action: authText('注册', ' register'),
+                  email: !phone,
+                  onChanged: busy ? null : logic.selectEmail),
               AuthCompoundField(
                 label: phone ? authText('手机号', 'Phone') : StrRes.email,
                 controller: logic.phoneCtrl,
@@ -78,30 +74,6 @@ class RegisterPage extends StatelessWidget {
                     : null,
                 leadingWidth: _countryWidth,
                 textInputAction: TextInputAction.next,
-                onFieldSubmitted: (_) => logic.codeFocus.requestFocus(),
-              ),
-              const SizedBox(height: _fieldGap),
-              AuthCompoundField(
-                controller: logic.verificationCodeCtrl,
-                label: authText('验证码', 'Verification code'),
-                focusNode: logic.codeFocus,
-                hint: phone
-                    ? authText('6 位短信验证码', '6-digit SMS code')
-                    : authText('6 位邮箱验证码', '6-digit email code'),
-                keyboardType: TextInputType.number,
-                autofillHints: const [AutofillHints.oneTimeCode],
-                enabled: !busy,
-                errorText: logic.errorFor(RegistrationField.code),
-                reserveErrorSpace: true,
-                onFocusChanged: (focused) {
-                  if (!focused) logic.touchField(RegistrationField.code);
-                },
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                maxLength: 6,
-                trailing: AuthCodeAction(
-                    onSend: logic.requestVerificationCode, enabled: !busy),
-                trailingWidth: 122,
-                textInputAction: TextInputAction.next,
                 onFieldSubmitted: (_) => logic.pwdFocus.requestFocus(),
               ),
               const SizedBox(height: _fieldGap),
@@ -109,14 +81,15 @@ class RegisterPage extends StatelessWidget {
                 label: authText('密码', 'Password'),
                 controller: logic.pwdCtrl,
                 focusNode: logic.pwdFocus,
-                hint: authText('设置登录密码', 'Create a password'),
+                hint: authText('登录密码为8–24个字母及数字组合',
+                    '8–24 characters with letters and numbers'),
                 obscureText: logic.obscurePassword.value,
                 keyboardType: TextInputType.visiblePassword,
                 autofillHints: const [AutofillHints.newPassword],
                 inputFormatters: [IMUtils.getPasswordFormatter()],
                 enabled: !busy,
                 errorText: logic.errorFor(RegistrationField.password),
-                showErrorMessage: false,
+                showErrorMessage: logic.pwdCtrl.text.isEmpty,
                 onFocusChanged: (focused) {
                   if (!focused) logic.touchField(RegistrationField.password);
                 },
@@ -138,7 +111,7 @@ class RegisterPage extends StatelessWidget {
                 label: authText('确认密码', 'Confirm password'),
                 controller: logic.pwdAgainCtrl,
                 focusNode: logic.pwdAgainFocus,
-                hint: authText('再次输入密码', 'Re-enter password'),
+                hint: authText('请再次输入登录密码', 'Re-enter your login password'),
                 obscureText: logic.obscureConfirmPassword.value,
                 keyboardType: TextInputType.visiblePassword,
                 autofillHints: const [AutofillHints.newPassword],
@@ -153,9 +126,32 @@ class RegisterPage extends StatelessWidget {
                 },
                 suffix: _visibility(context, logic.obscureConfirmPassword,
                     enabled: !busy),
+                textInputAction: TextInputAction.next,
+                onFieldSubmitted: (_) => logic.codeFocus.requestFocus(),
+              ),
+              const SizedBox(height: _fieldGap),
+              AuthCompoundField(
+                controller: logic.verificationCodeCtrl,
+                label: authText('验证码', 'Verification code'),
+                focusNode: logic.codeFocus,
+                hint: authText('请输入验证码', 'Enter verification code'),
+                keyboardType: TextInputType.number,
+                autofillHints: const [AutofillHints.oneTimeCode],
+                enabled: !busy,
+                errorText: logic.errorFor(RegistrationField.code),
+                reserveErrorSpace: true,
+                onFocusChanged: (focused) {
+                  if (!focused) logic.touchField(RegistrationField.code);
+                },
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                maxLength: 6,
+                trailing: AuthCodeAction(
+                    onSend: logic.requestVerificationCode, enabled: !busy),
+                trailingWidth: 122,
                 textInputAction: TextInputAction.done,
                 onFieldSubmitted: (_) => _submit(context),
               ),
+              const SizedBox(height: _fieldGap),
               if (logic.needInvitationCodeRegister) ...[
                 const SizedBox(height: _fieldGap),
                 AuthTextField(
@@ -175,16 +171,19 @@ class RegisterPage extends StatelessWidget {
                   onFieldSubmitted: (_) => _submit(context),
                 ),
               ],
-              const RegisterAgreement(),
               const SizedBox(height: RegistrationReferenceTokens.actionGap),
               AuthPrimaryButton(
                 key: const ValueKey('register-submit'),
-                text: authText('下一步', 'Next'),
-                loadingText: authText('正在验证', 'Verifying'),
-                loading: busy,
+                text: logic.accountCreated
+                    ? authText('继续完成注册', 'Continue registration')
+                    : authText('注册', 'Register'),
+                loadingText: authText('正在注册', 'Registering'),
+                loading: logic.submitting.value,
                 pill: true,
                 onPressed: logic.enabled.value ? () => _submit(context) : null,
               ),
+              const SizedBox(height: RegistrationReferenceTokens.actionGap),
+              const Center(child: RegisterAgreement()),
             ],
           );
         }),

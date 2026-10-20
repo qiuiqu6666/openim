@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Layout adapted from 99chat agent_rebate_descendant_history_page.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'dart:async';
@@ -69,7 +70,7 @@ class _AgentDescendantHistoryPageState
               '${b['businessDate']}'.compareTo('${a['businessDate']}'));
         return Scaffold(
             backgroundColor: style.background,
-            appBar: markSixAppBar(context, '下级历史记录'),
+            appBar: markSixAppBar(context, AppCopy.text('下级历史记录')),
             body: SafeArea(
                 top: false,
                 child: Column(children: [
@@ -81,9 +82,10 @@ class _AgentDescendantHistoryPageState
                           state: _state,
                           onRetry: () => _load(force: true),
                           child: !allowed
-                              ? const MarkSixEmpty(message: '你没有收益历史权限')
+                              ? MarkSixEmpty(message: AppCopy.text('你没有收益历史权限'))
                               : !_state.current
-                                  ? const MarkSixEmpty(message: '登录状态已变更')
+                                  ? MarkSixEmpty(
+                                      message: AppCopy.text('登录状态已变更'))
                                   : _state.loading && _state.data == null
                                       ? Center(child: LoadingView.indicator())
                                       : _state.error != null &&
@@ -105,13 +107,13 @@ class _AgentDescendantHistoryPageState
                                                   separatorBuilder: (_, __) =>
                                                       const SizedBox(
                                                           height: 12),
-                                                  itemBuilder: (_, index) =>
-                                                      rows.isEmpty
-                                                          ? const MarkSixEmpty(
-                                                              message:
-                                                                  '所选日期暂无下级记录')
-                                                          : _card(context,
-                                                              rows[index]))))),
+                                                  itemBuilder: (_, index) => rows
+                                                          .isEmpty
+                                                      ? MarkSixEmpty(
+                                                          message: AppCopy.text(
+                                                              '所选日期暂无下级记录'))
+                                                      : _card(context,
+                                                          rows[index]))))),
                 ])));
       });
   Widget _card(BuildContext context, Map<String, dynamic> item) {
@@ -122,10 +124,10 @@ class _AgentDescendantHistoryPageState
         : profit < 0
             ? style.error
             : MarkSixStyle.green;
-    const metrics = [
+    final metrics = [
       ('流水', 'totalFlow'),
-      ('玩家输赢', 'playerProfitLoss'),
-      ('余额', 'balance'),
+      (AppCopy.text('玩家输赢'), 'playerProfitLoss'),
+      (AppCopy.text('余额'), 'balance'),
       ('待反水', 'pendingRebate'),
       ('上分', 'totalUp'),
       ('下分', 'totalDown')

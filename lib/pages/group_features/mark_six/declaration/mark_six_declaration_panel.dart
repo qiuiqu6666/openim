@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat settings/lottery_dashboard.dart (Apache-2.0).
 // Source: https://github.com/qiuiqu6666/99chat.
 import 'dart:async';
@@ -56,7 +57,7 @@ class _MarkSixDeclarationPanelState extends State<MarkSixDeclarationPanel> {
     await Clipboard.setData(ClipboardData(text: _downloadURL));
     if (mounted && widget.repository.current) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('下载链接已复制')));
+          .showSnackBar(SnackBar(content: Text(AppCopy.text('下载链接已复制'))));
     }
   }
 
@@ -90,7 +91,7 @@ class _MarkSixDeclarationPanelState extends State<MarkSixDeclarationPanel> {
                               fontSize: 16, fontWeight: FontWeight.w800)),
                       const SizedBox(width: 6),
                       Expanded(
-                          child: Text('真实 · 公平 · 安全 · 稳定',
+                          child: Text(AppCopy.text('真实 · 公平 · 安全 · 稳定'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.right,
@@ -119,19 +120,16 @@ class _MarkSixDeclarationPanelState extends State<MarkSixDeclarationPanel> {
                                               color: style.declarationQuote,
                                               fontSize: 86,
                                               fontWeight: FontWeight.w800))))),
-                          const Column(
+                          Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                    '全天候直播开奖(用户实时亲眼所见)！\n'
-                                    '公平骰子！公开发包！无任何套路！\n'
-                                    '杜绝一切不透明开奖！\n'
-                                    '上下分不卡分！快速！红包不回收！\n'
-                                    '全部是真实用户在亲身参与点包！',
+                                    AppCopy.text(
+                                        '全天候直播开奖(用户实时亲眼所见)！\n公平骰子！公开发包！无任何套路！\n杜绝一切不透明开奖！\n上下分不卡分！快速！红包不回收！\n全部是真实用户在亲身参与点包！'),
                                     style:
                                         TextStyle(fontSize: 14, height: 1.55)),
                                 SizedBox(height: 16),
-                                Text('十一年口碑！诚信经营！安全稳定！',
+                                Text(AppCopy.text('十一年口碑！诚信经营！安全稳定！'),
                                     style:
                                         TextStyle(fontSize: 14, height: 1.55)),
                               ]),
@@ -156,7 +154,7 @@ class _MarkSixDeclarationPanelState extends State<MarkSixDeclarationPanel> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                        Text('下载 App',
+                                        Text(AppCopy.text('下载 App'),
                                             style: TextStyle(
                                                 color: style.declarationText,
                                                 fontSize: 14,
@@ -164,10 +162,11 @@ class _MarkSixDeclarationPanelState extends State<MarkSixDeclarationPanel> {
                                         const SizedBox(height: 3),
                                         Text(
                                             _loading
-                                                ? '正在获取下载链接…'
+                                                ? AppCopy.text('正在获取下载链接…')
                                                 : _error ??
                                                     (_downloadURL.isEmpty
-                                                        ? '暂无下载链接，点击重试'
+                                                        ? AppCopy.text(
+                                                            '暂无下载链接，点击重试')
                                                         : _downloadURL),
                                             style: TextStyle(
                                                 fontSize: 12,
@@ -186,7 +185,7 @@ class _MarkSixDeclarationPanelState extends State<MarkSixDeclarationPanel> {
             Container(width: 22, height: 1, color: style.declarationRule),
             const SizedBox(width: 7),
             Flexible(
-                child: Text('公平公开 · 真实可靠',
+                child: Text(AppCopy.text('公平公开 · 真实可靠'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         fontSize: 10, color: style.declarationFooter))),

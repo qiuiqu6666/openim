@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -215,7 +216,9 @@ class _ContactCardFriendPickerState extends State<ContactCardFriendPicker>
       if (widget.selection.isSingleSelection) {
         return contactListPlaceholder(context,
             title: Localizations.localeOf(context).languageCode == 'zh'
-                ? (_query.isEmpty ? '暂无联系人' : '未找到相关联系人')
+                ? (_query.isEmpty
+                    ? AppCopy.text('暂无联系人')
+                    : AppCopy.text('未找到相关联系人'))
                 : (_query.isEmpty ? 'No contacts yet' : 'No matching contacts'),
             loading: false,
             failed: false,
@@ -238,7 +241,7 @@ class _ContactCardFriendPickerState extends State<ContactCardFriendPicker>
       data: data,
       itemCount: data.length,
       itemBuilder: (_, index) => _buildFriend(data[index]),
-      physics: const BouncingScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
       susItemHeight: sectionHeight,
       susItemBuilder: (_, index) {
         final tag = data[index].getSuspensionTag();

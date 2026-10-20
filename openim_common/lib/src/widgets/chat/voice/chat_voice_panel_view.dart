@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -40,15 +41,17 @@ class ChatVoiceIdlePanel extends StatelessWidget {
         ? (hasError ? ChatVoiceTokens.headerTop : belowMic)
         : ChatVoiceTokens.hintTop;
     final title = busy
-        ? '正在处理…'
+        ? AppCopy.text('正在处理…')
         : active
-            ? '松开发送'
-            : '按住说话';
+            ? AppCopy.text('松开发送')
+            : AppCopy.text('按住说话');
     final hint = hasError
         ? error
         : busy
-            ? (largeText ? '请稍候' : '正在处理录音，请稍候')
-            : (largeText ? '松开发送，滑动切换' : '松开发送，向两侧滑动切换操作');
+            ? (largeText ? AppCopy.text('请稍候') : AppCopy.text('正在处理录音，请稍候'))
+            : (largeText
+                ? AppCopy.text('松开发送，滑动切换')
+                : AppCopy.text('松开发送，向两侧滑动切换操作'));
     final duration = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
         : ChatVoiceTokens.stateAnimation;
@@ -107,7 +110,7 @@ class ChatVoiceIdlePanel extends StatelessWidget {
               child: Semantics(
                 button: true,
                 enabled: !busy,
-                label: busy ? '正在处理录音' : '按住说话',
+                label: busy ? AppCopy.text('正在处理录音') : AppCopy.text('按住说话'),
                 child: AnimatedContainer(
                   key: micKey,
                   duration: duration,
@@ -228,11 +231,11 @@ class ChatVoiceRecordingOverlay extends StatelessWidget {
     final minutes = (safeSeconds ~/ 60).toString().padLeft(2, '0');
     final remainder = (safeSeconds % 60).toString().padLeft(2, '0');
     final status = preparing
-        ? '准备中…'
+        ? AppCopy.text('准备中…')
         : switch (activeZone) {
-            ChatVoiceReleaseZone.send => '正在录音',
-            ChatVoiceReleaseZone.cancel => '松开取消',
-            ChatVoiceReleaseZone.convertText => '松开转文字',
+            ChatVoiceReleaseZone.send => AppCopy.text('正在录音'),
+            ChatVoiceReleaseZone.cancel => AppCopy.text('松开取消'),
+            ChatVoiceReleaseZone.convertText => AppCopy.text('松开转文字'),
           };
     final color = switch (activeZone) {
       ChatVoiceReleaseZone.cancel => palette.danger,
@@ -246,7 +249,7 @@ class ChatVoiceRecordingOverlay extends StatelessWidget {
       child: Semantics(
         liveRegion: true,
         excludeSemantics: true,
-        label: '$status，已录制 $safeSeconds 秒',
+        label: AppCopy.format('{#0}，已录制 {#1} 秒', [status, safeSeconds]),
         child: Row(children: [
           if (preparing) ...[
             _loading(context,
@@ -294,8 +297,8 @@ class ChatVoiceRecordingOverlay extends StatelessWidget {
         : palette.selectedText;
     final label = switch (kind) {
       ChatVoiceReleaseZone.cancel => '取消',
-      ChatVoiceReleaseZone.send => '发送',
-      ChatVoiceReleaseZone.convertText => '转文字',
+      ChatVoiceReleaseZone.send => AppCopy.text('发送'),
+      ChatVoiceReleaseZone.convertText => AppCopy.text('转文字'),
     };
     final icon = switch (kind) {
       ChatVoiceReleaseZone.cancel => Icons.close_rounded,

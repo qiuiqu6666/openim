@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -208,16 +209,17 @@ class AddContactsBySearchLogic extends GetxController {
           fields['areaCode']?.isNotEmpty != true) {
         final controller = TextEditingController(text: '+86');
         final code = await Get.dialog<String>(AlertDialog(
-            title: const Text('确认手机号区号'),
+            title: Text(AppCopy.text('确认手机号区号')),
             content: TextField(
                 controller: controller,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(hintText: '例如 +86，需与对方资料一致')),
+                decoration:
+                    InputDecoration(hintText: AppCopy.text('例如 +86，需与对方资料一致'))),
             actions: [
               TextButton(onPressed: () => Get.back(), child: const Text('取消')),
               TextButton(
                   onPressed: () => Get.back(result: controller.text.trim()),
-                  child: const Text('确定'))
+                  child: Text(AppCopy.text('确定')))
             ]));
         controller.dispose();
         if (isClosed || code == null || !RegExp(r'^\+\d{1,4}$').hasMatch(code))
@@ -248,9 +250,12 @@ class AddContactsBySearchLogic extends GetxController {
     final source = _addSources[user.userID];
     final fields = _entryFields[user.userID] ?? const <String, String>{};
     return switch (source) {
-      FriendAddSource.account => '公开账号:${user.account ?? user.nickname ?? ""}',
-      FriendAddSource.phone => '手机号:${fields['phoneNumber'] ?? ""}',
-      FriendAddSource.email => '邮箱:${fields['email'] ?? ""}',
+      FriendAddSource.account =>
+        AppCopy.format('公开账号:{#0}', [user.account ?? user.nickname ?? ""]),
+      FriendAddSource.phone =>
+        AppCopy.format('手机号:{#0}', [fields['phoneNumber'] ?? ""]),
+      FriendAddSource.email =>
+        AppCopy.format('邮箱:{#0}', [fields['email'] ?? ""]),
       _ => user.nickname ?? '',
     };
   }

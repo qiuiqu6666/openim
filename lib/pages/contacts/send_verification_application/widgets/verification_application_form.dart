@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:openim_common/openim_common.dart';
@@ -99,7 +100,7 @@ class VerificationApplicationForm extends StatelessWidget {
                               if (account.isNotEmpty) ...[
                                 const SizedBox(height: AppTokens.s2),
                                 Text(
-                                    '${_text(context, '账号：', 'Account: ')}$account',
+                                    '${_text(context, AppCopy.text('账号：'), 'Account: ')}$account',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -122,7 +123,9 @@ class VerificationApplicationForm extends StatelessWidget {
                             borderRadius: BorderRadius.circular(AppTokens.rMd)),
                         child: Text(
                             unavailableMessage ??
-                                _text(context, '请通过对方的聊天号、二维码或好友名片添加。',
+                                _text(
+                                    context,
+                                    AppCopy.text('请通过对方的聊天号、二维码或好友名片添加。'),
                                     'Add this person using their chat ID, QR code, or contact card.'),
                             style: TextStyle(
                                 color: AppTokens.textPrimary(dark: dark),
@@ -133,7 +136,9 @@ class VerificationApplicationForm extends StatelessWidget {
                     Text(
                         _text(
                             context,
-                            isEnterGroup ? '填写入群申请' : '填写验证信息',
+                            isEnterGroup
+                                ? AppCopy.text('填写入群申请')
+                                : AppCopy.text('填写验证信息'),
                             isEnterGroup
                                 ? 'Join request'
                                 : 'Verification message'),
@@ -164,8 +169,8 @@ class VerificationApplicationForm extends StatelessWidget {
                             color: AppTokens.textPrimary(dark: dark),
                             fontSize: AppTokens.secondaryFontSize),
                         decoration: InputDecoration(
-                            hintText: _text(
-                                context, '向对方介绍一下自己', 'Introduce yourself'),
+                            hintText: _text(context, AppCopy.text('向对方介绍一下自己'),
+                                'Introduce yourself'),
                             hintStyle: TextStyle(
                                 color: AppTokens.textSecondary(dark: dark)),
                             counterStyle: TextStyle(

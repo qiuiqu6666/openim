@@ -1,3 +1,4 @@
+import 'package:openim_common/media_localization.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
@@ -111,9 +112,7 @@ class _MomentsCoverPageState extends State<MomentsCoverPage> {
           maxAssets: 1,
           requestType: RequestType.image,
           themeColor: AppTokens.accent,
-          textDelegate: Localizations.localeOf(context).languageCode == 'zh'
-              ? const AssetPickerTextDelegate()
-              : const EnglishAssetPickerTextDelegate(),
+          textDelegate: AppMediaCopy.assetsFor(Localizations.localeOf(context)),
           selectPredicate: (_, asset, selected) async =>
               selected ||
               const ['image/jpeg', 'image/png', 'image/webp']
@@ -142,8 +141,7 @@ class _MomentsCoverPageState extends State<MomentsCoverPage> {
             code: 'UNSUPPORTED_MEDIA_TYPE');
       }
       final size = await file.length();
-      if (size >
-          (widget.repository.capabilities?.maxImageBytes ?? 10485760)) {
+      if (size > (widget.repository.capabilities?.maxImageBytes ?? 10485760)) {
         throw const MomentsException('Image too large',
             code: 'IMAGE_TOO_LARGE');
       }

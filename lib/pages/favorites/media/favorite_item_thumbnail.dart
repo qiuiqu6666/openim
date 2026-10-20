@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -139,7 +140,7 @@ class _FavoriteItemThumbnailState extends State<FavoriteItemThumbnail> {
               .firstOrNull
               ?.durationMs;
       return Semantics(
-          label: '语音预览',
+          label: AppCopy.text('语音预览'),
           child: LayoutBuilder(builder: (context, constraints) {
             const icon =
                 Icon(Icons.graphic_eq_rounded, color: AppTokens.accent);

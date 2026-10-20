@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -415,7 +416,7 @@ class _FundDetailPageState extends State<FundDetailPage>
 
   String _partyName(FundOrder order, String id) {
     final displayID = _displayPartyID(order, id);
-    if (displayID.isEmpty) return _text('发送人', 'Sender');
+    if (displayID.isEmpty) return _text(AppCopy.text('发送人'), 'Sender');
     if (displayID == _userID) return _text('我', 'You');
     final resolved = _partyNames[displayID];
     if (resolved != null) return resolved;
@@ -427,8 +428,8 @@ class _FundDetailPageState extends State<FundDetailPage>
       return nickname;
     }
     return order.scene == FundScene.group
-        ? _text('群成员', 'Group member')
-        : _text('聊天对象', 'Chat contact');
+        ? _text(AppCopy.text('群成员'), 'Group member')
+        : _text(AppCopy.text('聊天对象'), 'Chat contact');
   }
 
   Widget _partyAvatar(FundOrder order, String id, double size) {
@@ -575,7 +576,7 @@ class _FundDetailPageState extends State<FundDetailPage>
   String _text(String zh, String en) => settingsText(context, zh: zh, en: en);
 
   String _errorMessage(Object error) => error is FormatException
-      ? _text('订单信息不匹配或不完整，请重试',
+      ? _text(AppCopy.text('订单信息不匹配或不完整，请重试'),
           'Order information is invalid or incomplete. Please retry.')
       : fundErrorMessage(error,
           chinese: Localizations.localeOf(context).languageCode == 'zh');
@@ -595,7 +596,7 @@ class _FundDetailPageState extends State<FundDetailPage>
     final remark = order.remark.trim();
     return remark.isNotEmpty
         ? remark
-        : _text('恭喜发财，大吉大利', 'Best wishes and good fortune');
+        : _text(AppCopy.text('恭喜发财，大吉大利'), 'Best wishes and good fortune');
   }
 
   PreferredSizeWidget _detailAppBar(
@@ -613,7 +614,7 @@ class _FundDetailPageState extends State<FundDetailPage>
         onPressed: () => Navigator.of(context).pop(_order));
     final title = transfer
         ? null
-        : Text(_text('红包详情', 'Red Packet Details'),
+        : Text(_text(AppCopy.text('红包详情'), 'Red Packet Details'),
             style: TextStyle(
                 fontSize: AppTokens.listTitleFontSize,
                 fontWeight: FontWeight.w600,
@@ -687,7 +688,7 @@ class _FundDetailPageState extends State<FundDetailPage>
                 child: SizedBox(
                     height: AppTokens.listItemHeight,
                     child: Center(
-                        child: Text(_text('刷新', 'Refresh'),
+                        child: Text(_text(AppCopy.text('刷新'), 'Refresh'),
                             style: TextStyle(
                                 color: cs.text,
                                 fontSize: AppTokens.listTitleFontSize,
@@ -735,7 +736,7 @@ class _FundDetailPageState extends State<FundDetailPage>
       body: Center(
           child: _loading
               ? Semantics(
-                  label: _text('正在加载订单', 'Loading order'),
+                  label: _text(AppCopy.text('正在加载订单'), 'Loading order'),
                   child: _loadingIndicator())
               : Padding(
                   key: const ValueKey('fund-detail-load-error'),
@@ -749,7 +750,7 @@ class _FundDetailPageState extends State<FundDetailPage>
                     const SizedBox(height: AppTokens.s5),
                     TextButton(
                         onPressed: () => _load(),
-                        child: Text(_text('重试', 'Retry'))),
+                        child: Text(_text(AppCopy.text('重试'), 'Retry'))),
                   ]))),
     );
   }
@@ -759,9 +760,12 @@ class _FundDetailPageState extends State<FundDetailPage>
         splitting: _coverSplitting,
         loadingIndicator: _loadingIndicator(),
         onClose: () => Navigator.of(context).pop(_order),
-        closeLabel: _text('关闭红包', 'Close red packet'),
+        closeLabel: _text(AppCopy.text('关闭红包'), 'Close red packet'),
         cover: FundReferenceCover(
-          type: _text(order.biz == 'packet_lucky' ? '拼手气红包' : '普通红包',
+          type: _text(
+              order.biz == 'packet_lucky'
+                  ? AppCopy.text('拼手气红包')
+                  : AppCopy.text('普通红包'),
               order.biz == 'packet_lucky' ? 'Lucky red packet' : 'Red packet'),
           greeting: _greeting(order),
           status: _claiming
@@ -872,7 +876,7 @@ class _FundDetailPageState extends State<FundDetailPage>
                 Text(_errorMessage(_loadError!), textAlign: TextAlign.center),
                 TextButton(
                     onPressed: _claiming ? null : () => _load(),
-                    child: Text(_text('重新加载', 'Reload'))),
+                    child: Text(_text(AppCopy.text('重新加载'), 'Reload'))),
               ])),
         if (_claimError != null)
           Padding(
@@ -890,22 +894,24 @@ class _FundDetailPageState extends State<FundDetailPage>
         collapsedShape: const Border(),
         textColor: FundPageColors.of(context).subText,
         collapsedTextColor: FundPageColors.of(context).subText,
-        title: Text(_text('交易信息', 'Order information'),
+        title: Text(_text(AppCopy.text('交易信息'), 'Order information'),
             style: const TextStyle(fontSize: AppTokens.captionFontSize)),
         childrenPadding: const EdgeInsets.symmetric(
             horizontal: AppTokens.s6, vertical: AppTokens.s4),
         children: [
-          _detailRow(_text('发件人', 'Sender'), _partyName(order, order.senderID)),
+          _detailRow(_text(AppCopy.text('发件人'), 'Sender'),
+              _partyName(order, order.senderID)),
           if (order.recvID.isNotEmpty)
             _detailRow(
                 _text('收款人', 'Recipient'), _partyName(order, order.recvID)),
           if (order.createdAt != null)
-            _detailRow(_text('发送时间', 'Sent at'), _formatTime(order.createdAt!)),
+            _detailRow(_text(AppCopy.text('发送时间'), 'Sent at'),
+                _formatTime(order.createdAt!)),
           if (order.expireAt != null)
-            _detailRow(
-                _text('到期时间', 'Expires at'), _formatTime(order.expireAt!)),
+            _detailRow(_text(AppCopy.text('到期时间'), 'Expires at'),
+                _formatTime(order.expireAt!)),
           Row(children: [
-            Text(_text('订单号', 'Order ID')),
+            Text(_text(AppCopy.text('订单号'), 'Order ID')),
             const SizedBox(width: AppTokens.s4),
             Expanded(
                 child:
@@ -921,9 +927,10 @@ class _FundDetailPageState extends State<FundDetailPage>
             AppTokens.s4 + MediaQuery.paddingOf(context).bottom),
         child: Text(
             order.requiresClaim
-                ? _text('到期后未领取红包将自动退回。',
+                ? _text(AppCopy.text('到期后未领取红包将自动退回。'),
                     'Unclaimed red packets will be refunded after expiry.')
-                : _text('已存入收款人的余额。', 'Added to the recipient’s balance.'),
+                : _text(AppCopy.text('已存入收款人的余额。'),
+                    'Added to the recipient’s balance.'),
             textAlign: TextAlign.center,
             style: TextStyle(
                 color: cs.subText,
@@ -934,30 +941,34 @@ class _FundDetailPageState extends State<FundDetailPage>
   String _statusText(FundOrder order) {
     if (!order.requiresClaim) {
       if (order.recvID == _userID) {
-        return _text('已到账，已存入余额', 'Received in your balance');
+        return _text(AppCopy.text('已到账，已存入余额'), 'Received in your balance');
       }
       if (order.senderID == _userID) {
-        return _text(order.isTransfer ? '已转账，对方已到账' : '红包已发送，对方已到账',
+        return _text(
+            order.isTransfer
+                ? AppCopy.text('已转账，对方已到账')
+                : AppCopy.text('红包已发送，对方已到账'),
             'Delivered to recipient');
       }
-      return _text('${_partyName(order, order.recvID)}已到账',
+      return _text(AppCopy.format('{#0}已到账', [_partyName(order, order.recvID)]),
           'Delivered to ${_partyName(order, order.recvID)}');
     }
     if (_claiming && _claimedAmount == null) {
-      return _text('正在领取红包', 'Claiming red packet');
+      return _text(AppCopy.text('正在领取红包'), 'Claiming red packet');
     }
-    if (order.isRefunded) return _text('未领取金额已退回', 'Unclaimed amount refunded');
+    if (order.isRefunded)
+      return _text(AppCopy.text('未领取金额已退回'), 'Unclaimed amount refunded');
     if (order.status == 'done') {
-      return _text('红包已领完', 'Red packet fully claimed');
+      return _text(AppCopy.text('红包已领完'), 'Red packet fully claimed');
     }
     if (order.isExpired) {
-      return _text('红包已过期，未领取金额将退回',
+      return _text(AppCopy.text('红包已过期，未领取金额将退回'),
           'Red packet expired; unclaimed amount will be refunded');
     }
     if (order.claimedShareFor(_userID) != null || _claimedAmount != null) {
-      return _text('红包已领取', 'Red packet claimed');
+      return _text(AppCopy.text('红包已领取'), 'Red packet claimed');
     }
-    return _text('红包待领取', 'Red packet awaiting claim');
+    return _text(AppCopy.text('红包待领取'), 'Red packet awaiting claim');
   }
 
   String _formatTime(DateTime value) {

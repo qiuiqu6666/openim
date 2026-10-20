@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -109,7 +110,7 @@ class _GroupAnnouncementPageState extends State<GroupAnnouncementPage> {
                                 minLines: 5,
                                 style: theme.textTheme.bodyLarge,
                                 decoration: InputDecoration(
-                                  hintText: '请输入群公告',
+                                  hintText: AppCopy.text('请输入群公告'),
                                   border: InputBorder.none,
                                   enabledBorder: InputBorder.none,
                                   focusedBorder: InputBorder.none,
@@ -140,7 +141,8 @@ class _GroupAnnouncementPageState extends State<GroupAnnouncementPage> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              child: Text(saving ? '正在发布…' : '完成'),
+                              child:
+                                  Text(saving ? AppCopy.text('正在发布…') : '完成'),
                             ),
                           ),
                         ],

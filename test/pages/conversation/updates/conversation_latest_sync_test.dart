@@ -136,6 +136,14 @@ void main() {
     ]);
     await tester.pump();
     expect(published.single, isEmpty);
+    // The fenced snapshot is followed by a fresh authoritative read. A
+    // deletion is allowed to return an empty preview rather than resurrecting
+    // the message observed before the mutation.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(ConversationLatestSync.settleDelay);
+    replies.last.complete([ConversationInfo(conversationID: 'peer')]);
+    await tester.pump();
+    expect(published.last.single.latestMsg, isNull);
   });
 
   testWidgets('new signal during query schedules one later snapshot',

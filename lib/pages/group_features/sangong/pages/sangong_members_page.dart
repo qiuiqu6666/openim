@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
@@ -227,8 +228,9 @@ class _SangongMembersPageState extends State<SangongMembersPage> {
     final profile =
         await SangongIdentityScope.read(context).resolve(member.imUserId);
     if (!mounted || !_matches(scope)) return;
-    final displayAccount =
-        profile?.account.isNotEmpty == true ? profile!.account : '账号未获取';
+    final displayAccount = profile?.account.isNotEmpty == true
+        ? profile!.account
+        : AppCopy.text('账号未获取');
     final ok = await AppDialog.confirm(
       context: context,
       title: i18n.t(zhHans: '移除帮工', zhHant: '移除幫工', en: 'Remove helper'),
@@ -266,8 +268,8 @@ class _SangongMembersPageState extends State<SangongMembersPage> {
   @override
   Widget build(BuildContext context) {
     if (!_matches(_pageScope) || (!_loading && !_runtime.canManageMembers)) {
-      return const Scaffold(
-        body: Center(child: Text('当前游戏权限已变化，请重新进入')),
+      return Scaffold(
+        body: Center(child: Text(AppCopy.text('当前游戏权限已变化，请重新进入'))),
       );
     }
     final i18n = AppI18n.of(context);

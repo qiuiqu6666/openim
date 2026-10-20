@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -313,7 +314,7 @@ class _FundTransferFriendPickerState extends State<FundTransferFriendPicker> {
                     backgroundColor: colors.searchFill),
               Expanded(
                 child: !current
-                    ? _message(colors, '账户已切换，请重新打开',
+                    ? _message(colors, AppCopy.text('账户已切换，请重新打开'),
                         'Account changed. Please reopen.')
                     : _failed
                         ? Center(
@@ -328,7 +329,8 @@ class _FundTransferFriendPickerState extends State<FundTransferFriendPicker> {
                             ),
                           )
                         : !_loading && friends.isEmpty
-                            ? _message(colors, '未找到相关好友', 'No matching friends')
+                            ? _message(colors, AppCopy.text('未找到相关好友'),
+                                'No matching friends')
                             : ListView.separated(
                                 key:
                                     const ValueKey('fund-transfer-friend-list'),

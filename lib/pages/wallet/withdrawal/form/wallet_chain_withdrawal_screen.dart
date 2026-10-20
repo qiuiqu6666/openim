@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:math' as math;
 
@@ -354,7 +355,7 @@ class _WalletChainWithdrawalScreenState
           try {
             if (proof?.isExpired == true) proof = null;
             proof ??= await authorize();
-            if (proof == null) return '请先完成本次提现的安全验证';
+            if (proof == null) return AppCopy.text('请先完成本次提现的安全验证');
             if (!mounted || !_foreground || !_controller.isCurrentAccount) {
               return policyLabels.accountChanged;
             }

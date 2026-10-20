@@ -16,6 +16,7 @@ import 'routes/swipe_back/app_get_transition.dart';
 import 'routes/swipe_back/app_swipe_back_tokens.dart';
 import 'theme/app_theme_controller.dart';
 import 'theme/app_theme_data.dart';
+import 'theme/app_scroll_behavior.dart';
 import 'widgets/app_view.dart';
 
 class ChatApp extends StatelessWidget {
@@ -28,6 +29,7 @@ class ChatApp extends StatelessWidget {
         listenable: AppThemeController.instance,
         builder: (context, _) => GetMaterialApp(
           debugShowCheckedModeBanner: false,
+          scrollBehavior: const AppScrollBehavior(),
           navigatorObservers: [ActivityRuntime.instance.observer],
           enableLog: true,
           routingCallback: (_) {
@@ -48,10 +50,13 @@ class ChatApp extends StatelessWidget {
           fallbackLocale: TranslationService.fallbackLocale,
           locale: locale,
           localeResolutionCallback: (locale, list) {
-            Get.locale ??= locale;
-            return locale;
+            return TranslationService.resolveLocale(locale);
           },
-          supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+          supportedLocales: const [
+            Locale('zh', 'CN'),
+            Locale('zh', 'TW'),
+            Locale('en', 'US')
+          ],
           getPages: AppPages.routes,
           customTransition: AppGetTransition(),
           popGesture: false,

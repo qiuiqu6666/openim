@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:collection/collection.dart';
@@ -63,23 +64,29 @@ mixin OpenIMLive {
 
   /// Called only by the application's authenticated server-state reconciler.
   /// No ordinary 200..204 message is allowed to bypass peer validation here.
-  Future<void> applyServerCallState({required String accountID,
-      required String roomID, required String state, String? reason,
-      bool answeredElsewhere = false, InvitationInfo? verifiedInvitation}) async {
+  Future<void> applyServerCallState(
+      {required String accountID,
+      required String roomID,
+      required String state,
+      String? reason,
+      bool answeredElsewhere = false,
+      InvitationInfo? verifiedInvitation}) async {
     final signal = _activeSignal;
     final generation = _sessionGeneration;
     if (_liveClosed || accountID != OpenIM.iMManager.userID) return;
     if (signal == null || signal.invitation?.roomID != roomID) {
       // A cold PushKit call may be answered elsewhere before Dart creates its
       // media owner. Record the local result without admitting a new call.
-      if (!answeredElsewhere || verifiedInvitation == null ||
+      if (!answeredElsewhere ||
+          verifiedInvitation == null ||
           !validCallInvitation(verifiedInvitation) ||
           verifiedInvitation.roomID != roomID ||
           verifiedInvitation.sessionType != ConversationType.single ||
           !verifiedInvitation.inviteeUserIDList!.contains(accountID)) return;
       _bindAccount(accountID);
       if (!_guard.finish(roomID, accountID)) return;
-      final observed = SignalingInfo(userID: verifiedInvitation.inviterUserID,
+      final observed = SignalingInfo(
+          userID: verifiedInvitation.inviterUserID,
           invitation: verifiedInvitation);
       _roomAccounts[roomID] = accountID;
       try {
@@ -100,16 +107,20 @@ mixin OpenIMLive {
       return;
     }
     if (!answeredElsewhere &&
-        !const ['rejected', 'cancelled', 'ended', 'expired'].contains(state)) return;
+        !const ['rejected', 'cancelled', 'ended', 'expired'].contains(state))
+      return;
     if (!_guard.finish(roomID, accountID)) return;
     final incoming = signal.invitation!.inviterUserID != accountID;
-    final outcome = answeredElsewhere ? CallState.otherAccepted : switch (state) {
-      'rejected' => incoming ? CallState.reject : CallState.beRejected,
-      'cancelled' => incoming ? CallState.beCanceled : CallState.cancel,
-      'expired' => CallState.timeout,
-      _ => reason == 'heartbeat_timeout' || reason == 'rtc_disconnected'
-          ? CallState.networkError : CallState.beHangup,
-    };
+    final outcome = answeredElsewhere
+        ? CallState.otherAccepted
+        : switch (state) {
+            'rejected' => incoming ? CallState.reject : CallState.beRejected,
+            'cancelled' => incoming ? CallState.beCanceled : CallState.cancel,
+            'expired' => CallState.timeout,
+            _ => reason == 'heartbeat_timeout' || reason == 'rtc_disconnected'
+                ? CallState.networkError
+                : CallState.beHangup,
+          };
     _pendingTimeout?.cancel();
     _pendingTimeout = null;
     _pendingInvitation = null;
@@ -132,7 +143,8 @@ mixin OpenIMLive {
   Future<SystemCallAdapter?> _selectIncomingSystemCalls(String room) async {
     final adapter = systemCallAdapter;
     if (adapter is IncomingSystemCallPolicy &&
-        !await (adapter as IncomingSystemCallPolicy).usesSystemIncomingCall(room)) {
+        !await (adapter as IncomingSystemCallPolicy)
+            .usesSystemIncomingCall(room)) {
       return null;
     }
     return adapter;
@@ -367,9 +379,8 @@ mixin OpenIMLive {
       return;
     }
     final owner = _owner(signal)!;
-    final context = _isRunningBackground && systemCalls != null
-        ? null
-        : Get.overlayContext;
+    final context =
+        _isRunningBackground && systemCalls != null ? null : Get.overlayContext;
     if (context != null && !context.mounted) return;
     if (OpenIMLiveClient().currentRoomID == signal.invitation!.roomID) {
       if (context != null) OpenIMLiveClient().showActiveCall(context);
@@ -429,7 +440,7 @@ mixin OpenIMLive {
     if (callObj != CallObj.single) {
       IMViews.showToast(Get.locale?.languageCode == 'en'
           ? 'Group calls are not supported yet'
-          : '暂不支持群聊通话');
+          : AppCopy.text('暂不支持群聊通话'));
       return;
     }
     if (isBusy) {
@@ -566,9 +577,13 @@ mixin OpenIMLive {
     final pending = _terminalRequests[room];
     if (pending != null) return pending;
     late Future<void> request;
-    request = _finishSignal(signal, state, type, duration: duration,
-        requireActive: requireActive, showSendError: showSendError).whenComplete(() {
-      if (identical(_terminalRequests[room], request)) _terminalRequests.remove(room);
+    request = _finishSignal(signal, state, type,
+            duration: duration,
+            requireActive: requireActive,
+            showSendError: showSendError)
+        .whenComplete(() {
+      if (identical(_terminalRequests[room], request))
+        _terminalRequests.remove(room);
       if (generation == _sessionGeneration && activeCallRoomID != room) {
         onCallReleased(room);
       }

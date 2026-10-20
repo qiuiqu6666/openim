@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Product layout adapted from 99chat settings/test_page.dart and lottery_dashboard.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'package:flutter/material.dart';
@@ -95,7 +96,7 @@ class _MarkSixPageState extends State<MarkSixPage> {
         body: SafeArea(
             top: false,
             child: !_allowed
-                ? const MarkSixEmpty(message: '本群尚未开放六合彩')
+                ? MarkSixEmpty(message: AppCopy.text('本群尚未开放六合彩'))
                 : ListenableBuilder(
                     listenable: _controller,
                     builder: (context, _) {
@@ -103,15 +104,16 @@ class _MarkSixPageState extends State<MarkSixPage> {
                       if (!_controller.current) {
                         return MarkSixEmpty(
                             message: _controller.scopeInvalidated
-                                ? '本群六合彩配置已变更，请重新进入'
-                                : '登录状态已变更');
+                                ? AppCopy.text('本群六合彩配置已变更，请重新进入')
+                                : AppCopy.text('登录状态已变更'));
                       }
                       if (!_controller.ready && _controller.loading) {
                         return Center(child: LoadingView.indicator());
                       }
                       if (!_controller.ready) {
                         return MarkSixEmpty(
-                            message: _controller.error ?? '暂无开奖数据',
+                            message:
+                                _controller.error ?? AppCopy.text('暂无开奖数据'),
                             onRetry: () => _controller.refresh(force: true));
                       }
                       return RefreshIndicator(
@@ -141,7 +143,7 @@ class _MarkSixPageState extends State<MarkSixPage> {
                                         TextButton(
                                             onPressed: () => _controller
                                                 .refresh(force: true),
-                                            child: const Text('重试'))
+                                            child: Text(AppCopy.text('重试')))
                                       ])),
                                 if (_tab == 0)
                                   MarkSixHistoryTable(draws: _controller.draws),
@@ -159,7 +161,12 @@ class _MarkSixPageState extends State<MarkSixPage> {
 
   Widget _tabs(BuildContext context) {
     final style = MarkSixStyle.of(context);
-    const tabs = ['开奖历史', '智能预测', '已开统计', '本群宣言'];
+    final tabs = [
+      AppCopy.text('开奖历史'),
+      AppCopy.text('智能预测'),
+      AppCopy.text('已开统计'),
+      '本群宣言'
+    ];
     const icons = [
       Icons.access_time_rounded,
       Icons.auto_awesome_rounded,

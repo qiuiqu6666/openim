@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import '../models/live_errors.dart';
@@ -160,6 +161,6 @@ class LiveError extends StatelessWidget {
         TextButton.icon(
             onPressed: retry,
             icon: const Icon(Icons.refresh),
-            label: const Text('重试'))
+            label: Text(AppCopy.text('重试')))
       ]));
 }

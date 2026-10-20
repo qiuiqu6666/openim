@@ -19,6 +19,75 @@ void main() {
     Styles.isDark = false;
   });
 
+  testWidgets('both methods can switch and switching clears entered proof',
+      (tester) async {
+    addTearDown(() => clearDevicePage(tester));
+    final changes = <String>[];
+    await mountDevicePage(
+        tester,
+        DeviceVerificationPage(
+          methods: const ['phone', 'email'],
+          onMethodChanged: changes.add,
+          onSendCode: (_, __) async => const VerificationCodeResult(
+              captchaVerified: true, sent: true, retryAfter: 60),
+          onVerify: (_) async => false,
+        ));
+    expect(find.text('手机号验证'), findsOneWidget);
+    expect(find.text('邮箱验证'), findsOneWidget);
+    await tester.enterText(deviceCodeField, '123456');
+    await tester.tap(find.text('邮箱验证'));
+    await tester.pump();
+    expect(changes, ['email']);
+    expect(find.textContaining('绑定的邮箱'), findsOneWidget);
+    expect(deviceConfirmButton(tester).onPressed, isNull);
+    await tester.tap(deviceSend);
+    await tester.pump();
+    expect(find.text('60s'), findsOneWidget);
+    await tester.tap(find.text('手机号验证'));
+    await tester.pump();
+    expect(deviceSendButton(tester).onPressed, isNotNull);
+    await tester.tap(find.text('邮箱验证'));
+    await tester.pump();
+    expect(deviceSendButton(tester).onPressed, isNull);
+  });
+
+  testWidgets('email-only defaults to email with no method picker',
+      (tester) async {
+    addTearDown(() => clearDevicePage(tester));
+    await mountDevicePage(
+        tester, const DeviceVerificationPage(methods: ['email']));
+    expect(find.byType(ChoiceChip), findsNothing);
+    expect(find.textContaining('绑定的邮箱'), findsOneWidget);
+    expect(find.textContaining('绑定的手机号'), findsNothing);
+  });
+
+  testWidgets('dual method picker supports large text and both themes',
+      (tester) async {
+    for (final dark in [false, true]) {
+      for (final scale in [1.0, 2.0]) {
+        final key = GlobalKey();
+        await mountDevicePage(
+            tester,
+            DeviceVerificationPage(
+              methods: const ['phone', 'email'],
+              onSendCode: (_, __) async => null,
+              onVerify: (_) async => false,
+            ),
+            dark: dark,
+            scale: scale,
+            boundaryKey: key);
+        await tester.tap(find.text('邮箱验证'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await exportDevicePreview(tester, key, 'dual-method-$dark-$scale');
+        await tester.ensureVisible(deviceConfirm);
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        await clearDevicePage(tester);
+      }
+    }
+  });
+
   testWidgets('static preview never claims to send or verify a code',
       (tester) async {
     addTearDown(() => clearDevicePage(tester));
@@ -56,6 +125,32 @@ void main() {
     expect(find.text('17s'), findsOneWidget);
     expect(deviceSendButton(tester).onPressed, isNull);
     await clearDevicePage(tester);
+  });
+
+  testWidgets('bound phone can be sent directly without entering a phone',
+      (tester) async {
+    addTearDown(() => clearDevicePage(tester));
+    var sends = 0;
+    await mountDevicePage(
+        tester,
+        DeviceVerificationPage(
+          onSendCode: (_, __) async {
+            sends++;
+            return const VerificationCodeResult(
+                captchaVerified: true, sent: true, retryAfter: 17);
+          },
+          onVerify: (_) async => false,
+        ));
+    expect(devicePhoneField, findsNothing);
+    expect(deviceSendButton(tester).onPressed, isNotNull);
+    expect(deviceConfirmButton(tester).onPressed, isNull);
+    await tester.tap(deviceSend);
+    await tester.pump();
+    expect(sends, 1);
+    expect(find.text('17s'), findsOneWidget);
+    await tester.enterText(deviceCodeField, '123456');
+    await tester.pump();
+    expect(deviceConfirmButton(tester).onPressed, isNotNull);
   });
 
   testWidgets('unknown account must supply a valid bound phone before sending',
@@ -311,9 +406,8 @@ void main() {
         await mountDevicePage(
             tester,
             DeviceVerificationPage(
-              phoneMasked: '138****8000',
+              phoneMasked: state == 'account-phone' ? '' : '138****8000',
               initialPhoneNumber: state == 'account-phone' ? '' : '13800138000',
-              requiresPhoneInput: state == 'account-phone',
               onSendCode: (_, __) => send.future,
               onVerify: (_) => state == 'error'
                   ? Future.error((20006, '验证码不正确'))
@@ -321,9 +415,7 @@ void main() {
             ),
             dark: dark,
             boundaryKey: key);
-        if (state == 'account-phone') {
-          await tester.enterText(devicePhoneField, '13800138000');
-        }
+        expect(devicePhoneField, findsNothing);
         if (['input', 'verifying', 'error'].contains(state)) {
           await tester.enterText(deviceCodeField, '123456');
         }
@@ -376,7 +468,6 @@ void main() {
       await mountDevicePage(
           tester,
           DeviceVerificationPage(
-            requiresPhoneInput: true,
             onSendCode: (_, __) async => null,
             onVerify: (_) async => false,
           ),
@@ -384,7 +475,6 @@ void main() {
           scale: viewport.scale,
           keyboard: viewport.keyboard,
           boundaryKey: key);
-      await tester.enterText(devicePhoneField, '13800138000');
       await tester.enterText(deviceCodeField, '123456');
       await tester.ensureVisible(deviceConfirm);
       await tester.pump();

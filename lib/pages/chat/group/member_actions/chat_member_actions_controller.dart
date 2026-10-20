@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart' show graphemeTrim;
 
@@ -69,7 +70,7 @@ class ChatMemberActionsController {
     var snapshot = await _sources.read(id, accountID, targetID);
     if (!_current(id, accountID)) return null;
     if (revision != groupRevision()) {
-      showFeedback('群成员信息已变化，请重新长按头像');
+      showFeedback(AppCopy.text('群成员信息已变化，请重新长按头像'));
       return null;
     }
     if (_isKnownRemoved(targetID)) return snapshot.withTarget(null);
@@ -159,7 +160,9 @@ class ChatMemberActionsController {
       if (snapshot == null || !_current(id, accountID)) return;
       final actions = _actions(snapshot, accountID);
       if (actions.isEmpty) {
-        showFeedback(snapshot.target == null ? '该用户已退出群聊' : '当前无法操作该群成员');
+        showFeedback(snapshot.target == null
+            ? AppCopy.text('该用户已退出群聊')
+            : AppCopy.text('当前无法操作该群成员'));
         return;
       }
       final name = snapshot.target?.nickname?.trim().isNotEmpty == true
@@ -175,7 +178,7 @@ class ChatMemberActionsController {
         return;
       }
       if (menuRevision != groupRevision()) {
-        showFeedback('成员权限或禁言状态已变化，请重新长按头像');
+        showFeedback(AppCopy.text('成员权限或禁言状态已变化，请重新长按头像'));
         return;
       }
       final needsConfirmation = action == ChatMemberAction.mute ||
@@ -186,27 +189,27 @@ class ChatMemberActionsController {
       }
       if (!_current(id, accountID)) return;
       if (menuRevision != groupRevision()) {
-        showFeedback('成员权限或禁言状态已变化，请重新长按头像');
+        showFeedback(AppCopy.text('成员权限或禁言状态已变化，请重新长按头像'));
         return;
       }
 
       final current = await _runLoading(() async {
         if (!_current(id, accountID)) return null;
         if (menuRevision != groupRevision()) {
-          showFeedback('成员权限或禁言状态已变化，请重新长按头像');
+          showFeedback(AppCopy.text('成员权限或禁言状态已变化，请重新长按头像'));
           return null;
         }
         final current = await _read(id, accountID, targetID);
         if (current == null || !_current(id, accountID)) return null;
         if (!_actions(current, accountID).contains(action)) {
-          showFeedback('成员权限或禁言状态已变化，请重新长按头像');
+          showFeedback(AppCopy.text('成员权限或禁言状态已变化，请重新长按头像'));
           return null;
         }
         return current;
       });
       if (current == null || !_current(id, accountID)) return;
       if (menuRevision != groupRevision()) {
-        showFeedback('成员权限或禁言状态已变化，请重新长按头像');
+        showFeedback(AppCopy.text('成员权限或禁言状态已变化，请重新长按头像'));
         return;
       }
       final target = current.target!;
@@ -230,7 +233,7 @@ class ChatMemberActionsController {
       await _runLoading(() async {
         if (!_current(id, accountID)) return;
         if (menuRevision != groupRevision()) {
-          showFeedback('成员权限或禁言状态已变化，请重新长按头像');
+          showFeedback(AppCopy.text('成员权限或禁言状态已变化，请重新长按头像'));
           return;
         }
         switch (action) {
@@ -266,7 +269,8 @@ class ChatMemberActionsController {
         }
       });
     } catch (error) {
-      if (_current(id, accountID)) showFeedback('操作失败：$error');
+      if (_current(id, accountID))
+        showFeedback(AppCopy.format('操作失败：{#0}', [error]));
     } finally {
       _busy = false;
     }

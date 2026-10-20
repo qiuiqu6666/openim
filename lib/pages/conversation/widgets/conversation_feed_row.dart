@@ -218,7 +218,7 @@ class ConversationFeedRow extends StatelessWidget {
                       textStyle: Styles.ts_FFFFFF_14sp_medium,
                     ),
                   ),
-                  if (logic.getUnreadCount(info) > 0)
+                  if (logic.existUnreadMsg(info))
                     Positioned(
                       top: -_spacing(archivedLayout && logic.isNotDisturb(info)
                           ? 2.5
@@ -227,13 +227,20 @@ class ConversationFeedRow extends StatelessWidget {
                           archivedLayout && logic.isNotDisturb(info)
                               ? 2.5
                               : 4.5),
-                      child: logic.isNotDisturb(info)
-                          ? Container(
-                              width: _spacing(10),
-                              height: _spacing(10),
-                              decoration: BoxDecoration(
-                                color: Styles.c_FF381F,
-                                shape: BoxShape.circle,
+                      child: logic.isNotDisturb(info) ||
+                              (logic.hasFriendApprovalNotice(info) &&
+                                  logic.getUnreadCount(info) <= 1)
+                          ? Semantics(
+                              label: logic.hasFriendApprovalNotice(info)
+                                  ? StrRes.friendAddedNtf
+                                  : null,
+                              child: Container(
+                                width: _spacing(10),
+                                height: _spacing(10),
+                                decoration: BoxDecoration(
+                                  color: Styles.c_FF381F,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
                             )
                           : UnreadCountView(

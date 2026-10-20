@@ -39,6 +39,11 @@ class _Api extends MomentsApi {
           {String? cursor, int pageSize = 20}) async =>
       const MomentsPageResult(items: [
         MomentPost(
+            momentId: 'friend-post',
+            author: _friend,
+            text: 'stale server response from blocked friend',
+            version: 1),
+        MomentPost(
             momentId: 'post',
             author: MomentUser(userId: 'me'),
             text: 'authorized own post',
@@ -46,6 +51,10 @@ class _Api extends MomentsApi {
             likeCount: 1,
             version: 1)
       ]);
+
+  @override
+  Future<MomentPost> detail(String momentId) async => MomentPost(
+      momentId: momentId, author: _friend, text: 'private', version: 1);
 
   @override
   Future<MomentsPageResult<MomentNotification>> notifications(
@@ -96,6 +105,7 @@ void main() {
     await repo.loadFeed();
     final scope = repo.authorizationScope;
     expect(repo.postById('post')!.likesPreview, hasLength(1));
+    expect(repo.postById('friend-post'), isNotNull);
     blocked = true;
     im.blacklistAdded(BlacklistInfo(blockUserID: 'friend', userID: 'me'));
     await tester.pump();
@@ -105,6 +115,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
     await tester.pump();
     expect(repo.friends, isEmpty);
+    expect(repo.postById('friend-post'), isNull);
+    expect(repo.feedState.items.map((post) => post.momentId), ['post']);
+    await expectLater(repo.loadDetail('friend-post'),
+        throwsA(isA<MomentsException>()));
+    expect(repo.postById('friend-post'), isNull);
     expect(repo.postById('post')!.likesPreview, isEmpty);
     expect(repo.postById('post')!.interactionCountsTrusted, false);
     blocked = false;
@@ -114,5 +129,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
     await tester.pump();
     expect(repo.postById('post')!.likesPreview, hasLength(1));
+    expect(repo.postById('friend-post'), isNotNull);
   });
 }

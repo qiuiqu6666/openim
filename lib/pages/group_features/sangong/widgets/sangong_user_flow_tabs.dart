@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:openim_common/localization.dart';
 
 /// Keeps ledger tabs reachable while the user/detail controls scroll away.
 class SangongUserFlowTabs extends SliverPersistentHeaderDelegate {
   const SangongUserFlowTabs();
 
-  static const _tabs = TabBar(tabs: [
-    Tab(text: '下注流水'),
-    Tab(text: '庄流水'),
-    Tab(text: '上下分'),
-  ]);
+  static TabBar get _tabs => TabBar(tabs: [
+        const Tab(text: '下注流水'),
+        Tab(text: AppCopy.text('庄流水')),
+        const Tab(text: '上下分'),
+      ]);
 
   @override
   double get minExtent => _tabs.preferredSize.height;

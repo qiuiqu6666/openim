@@ -5,8 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('language accepts current integers and legacy numeric strings', () async {
-    for (final value in <Object>[0, 1, 2, '0', '1', ' 2 ']) {
+  test('language accepts current integers and legacy numeric strings',
+      () async {
+    for (final value in <Object>[0, 1, 2, 3, '0', '1', ' 2 ', '3']) {
       SharedPreferences.setMockInitialValues({'language': value});
       await SpUtil().init();
       expect(DataSp.getLanguage(), int.parse(value.toString().trim()));
@@ -15,7 +16,16 @@ void main() {
 
   test('missing or invalid language falls back to system without throwing',
       () async {
-    for (final value in <Object?>[null, '', 'invalid', 'zh_CN', -1, 3, true, 1.5]) {
+    for (final value in <Object?>[
+      null,
+      '',
+      'invalid',
+      'zh_CN',
+      -1,
+      4,
+      true,
+      1.5
+    ]) {
       SharedPreferences.setMockInitialValues({
         if (value != null) 'language': value,
         'unrelatedPreference': 'keep',

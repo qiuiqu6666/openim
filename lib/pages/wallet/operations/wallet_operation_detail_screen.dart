@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 
 import '../data/wallet_operation_coordinator.dart';
@@ -26,7 +27,7 @@ class WalletOperationDetailScreen extends StatelessWidget {
           appBar: AppBar(
             leading: const AppBackButton(),
             centerTitle: true,
-            title: const Text('订单详情'),
+            title: Text(AppCopy.text('订单详情')),
             backgroundColor: appBar.background,
             foregroundColor: appBar.title,
             surfaceTintColor: appBar.background,
@@ -42,42 +43,43 @@ class WalletOperationDetailScreen extends StatelessWidget {
                       .titleLarge
                       ?.copyWith(color: cs.text)),
               const SizedBox(height: AppTokens.s7),
-              _line(context, '订单号', order.orderID),
-              _line(context, '币种', order.currency.displayName),
-              _line(context, '金额', order.amount),
+              _line(context, AppCopy.text('订单号'), order.orderID),
+              _line(context, AppCopy.text('币种'), order.currency.displayName),
+              _line(context, AppCopy.text('金额'), order.amount),
               if (order.biz == 'withdraw') ...[
-                _line(context, '网络',
+                _line(context, AppCopy.text('网络'),
                     order.network.isEmpty ? 'TRON' : order.network),
                 _line(context, '收款地址', order.toAddress),
-                _line(context, '手续费',
+                _line(context, AppCopy.text('手续费'),
                     fee == null ? '--' : '$fee ${order.currency.displayName}'),
                 if (order.chainTxID.isNotEmpty)
                   TextButton(
                       onPressed: () =>
                           openWalletTronTransaction(context, order.chainTxID),
-                      child: Text('交易哈希：${order.chainTxID}')),
+                      child:
+                          Text(AppCopy.format('交易哈希：{#0}', [order.chainTxID]))),
                 if (order.fromAddress.isNotEmpty)
-                  _line(context, '转出地址', order.fromAddress),
+                  _line(context, AppCopy.text('转出地址'), order.fromAddress),
                 if (order.reviewReason.isNotEmpty)
-                  _line(context, '审核说明', order.reviewReason),
+                  _line(context, AppCopy.text('审核说明'), order.reviewReason),
                 if (order.completionReason.isNotEmpty)
-                  _line(context, '出款说明', order.completionReason),
-                const Text('提现提交后等待审核及人工出款，出款登记不代表链上自动确认。'),
+                  _line(context, AppCopy.text('出款说明'), order.completionReason),
+                Text(AppCopy.text('提现提交后等待审核及人工出款，出款登记不代表链上自动确认。')),
               ],
               if (order.biz == 'swap') ...[
                 _line(
                     context,
-                    '目标币种',
+                    AppCopy.text('目标币种'),
                     (order.targetCurrency ?? receipt.receivedCurrency)
                             ?.displayName ??
                         '--'),
-                _line(context, '实得数量', received ?? '--'),
+                _line(context, AppCopy.text('实得数量'), received ?? '--'),
               ],
-              _line(context, '状态',
+              _line(context, AppCopy.text('状态'),
                   order.biz == 'withdraw' ? receipt.description : order.status),
               _line(
                   context,
-                  '创建时间',
+                  AppCopy.text('创建时间'),
                   order.createdAt == null
                       ? '--'
                       : formatWalletApiDateTime(order.createdAt)),

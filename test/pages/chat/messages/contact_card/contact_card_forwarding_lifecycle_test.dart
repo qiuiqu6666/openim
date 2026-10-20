@@ -61,6 +61,7 @@ class _CardFixture {
       canForward: (_) => true,
       closeToolbox: () => toolboxCloses++,
       showToast: toasts.add,
+      showSuccess: () => successes++,
       selectCardContacts: (
           {required action,
           sharedContact,
@@ -91,6 +92,7 @@ class _CardFixture {
       nickname: 'Card friend',
       faceURL: 'https://example.test/card.png');
   final toasts = <String>[];
+  int successes = 0;
   final pickerActions = <SelAction>[];
   final extensionTargets = <String>[];
   final nativeCalls = <MethodCall>[];
@@ -180,6 +182,24 @@ void main() {
   });
 
   for (final entry in _Entry.values) {
+    test('$entry shows success only after delivery acknowledges', () async {
+      final pending = Completer<void>();
+      fixture.onSend = (message) async {
+        await pending.future;
+        return fixture.receipt(message);
+      };
+      final operation = fixture.run(entry);
+      await _flush();
+      expect(fixture.successes, 0);
+      pending.complete();
+      await operation;
+      expect(fixture.successes, 1);
+    });
+    test('$entry does not show success for failed delivery', () async {
+      fixture.onSend = (_) async => throw StateError('offline');
+      await fixture.run(entry);
+      expect(fixture.successes, 0);
+    });
     for (final error in [(20201, 'risk limited'), (20020, 'too frequent')]) {
       test('$entry stops silently when the invitation is limited: $error',
           () async {

@@ -1,3 +1,4 @@
+import 'package:openim_common/media_localization.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -268,6 +269,7 @@ class ChatMediaController {
   Future<List<AssetEntity>?> _selectAlbumAssets() =>
       AssetPicker.pickAssets(Get.context!,
           pickerConfig: AssetPickerConfig(
+              textDelegate: AppMediaCopy.assets,
               requestType: RequestType.common,
               sortPathsByModifiedDate: true,
               filterOptions: PMFilter.defaultValue(containsPathModified: true),
@@ -468,7 +470,8 @@ class ChatMediaController {
           () =>
               _pickCamera?.call() ??
               CameraPicker.pickFromCamera(Get.context!,
-                  pickerConfig: const CameraPickerConfig(
+                  pickerConfig: CameraPickerConfig(
+                      textDelegate: AppMediaCopy.camera,
                       enableRecording: true,
                       enableAudio: true,
                       maximumRecordingDuration: Duration(seconds: 60))));

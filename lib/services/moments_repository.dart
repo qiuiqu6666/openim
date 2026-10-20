@@ -547,6 +547,24 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
     if (_applyPosts([value])) _notify();
   }
 
+  /// Insert a confirmed self-publish without resetting loaded pages or cursors.
+  void applyPublishedPost(MomentPost value) {
+    _ensureSession();
+    if (value.author.userId != currentUserId) return;
+    if (!_applyPosts([value])) return;
+    final post = _posts[value.momentId]!;
+    for (final state in [
+      feedState,
+      if (_users[currentUserId] != null) _users[currentUserId]!,
+    ]) {
+      state.items = List.unmodifiable([
+        post,
+        ...state.items.where((item) => item.momentId != post.momentId),
+      ]);
+    }
+    _notify();
+  }
+
   /// A page is a single state transition. Existing albums are projected once,
   /// and the loading query is assembled once by its pagination owner.
   bool _applyPosts(Iterable<MomentPost> values,
@@ -555,6 +573,9 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
     if (_disposed) return false;
     final changed = <String, MomentPost>{};
     for (final value in values) {
+      // SDK friends exclude blacklisted peers. Never let an old/cached server
+      // response restore their posts after relationship invalidation.
+      if (!_actorVisible(value.author)) continue;
       final post = _filterPost(value);
       if ((_tombstones[post.momentId] ?? -1) >= post.version) continue;
       final old = _posts[post.momentId];
@@ -601,7 +622,7 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
     _notify();
     final cursor = refresh ? null : state.nextCursor;
     try {
-      await _prepareRead();
+      await _prepareRead(requireFriendship: true);
       _guard(scope, permission);
       final page = await fetch(cursor);
       _guard(scope, permission);
@@ -657,12 +678,16 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
     final scope = _ensureSession();
     final permission = _permissionGeneration;
     try {
-      await _prepareRead();
+      await _prepareRead(requireFriendship: true);
       _guard(scope, permission);
       final post = await api.detail(momentId);
       _guard(scope, permission);
       if (post.momentId != momentId) {
         throw const FormatException('Unexpected moments ID');
+      }
+      if (!_actorVisible(post.author)) {
+        throw const MomentsException('该动态暂不可见',
+            code: 'PERMISSION_REVOKED');
       }
       applyPost(post);
       if (trackForSync) _detailIds.add(momentId);

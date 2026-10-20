@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -218,7 +219,8 @@ class _ConversationStoragePageState extends State<ConversationStoragePage> {
       context,
       title: settingsText(context, zh: '删除所选文件？', en: 'Delete selected files?'),
       description: settingsText(context,
-          zh: '将释放约 ${storageFormatBytes(bytes)} 本机空间。聊天消息不会删除，需要查看时可重新下载。',
+          zh: AppCopy.format('将释放约 {#0} 本机空间。聊天消息不会删除，需要查看时可重新下载。',
+              [storageFormatBytes(bytes)]),
           en: 'This frees about ${storageFormatBytes(bytes)} locally. Chat messages stay and files can be downloaded again.'),
       action: settingsText(context, zh: '删除', en: 'Delete'),
       danger: true,
@@ -407,7 +409,7 @@ class _ConversationStoragePageState extends State<ConversationStoragePage> {
     return SettingsScaffold(
       title: _selecting
           ? settingsText(context,
-              zh: '已选择 ${_selected.length} 项',
+              zh: AppCopy.format('已选择 {#0} 项', [_selected.length]),
               en: '${_selected.length} selected')
           : settingsText(context, zh: '聊天文件', en: 'Chat Files'),
       leading: _selecting
@@ -459,8 +461,10 @@ class _ConversationStoragePageState extends State<ConversationStoragePage> {
               Expanded(
                   child: Text(
                       settingsText(context,
-                          zh:
-                              '${items.length} 个项目 · ${storageFormatBytes(_catalog!.totalBytes)}',
+                          zh: AppCopy.format('{#0} 个项目 · {#1}', [
+                            items.length,
+                            storageFormatBytes(_catalog!.totalBytes)
+                          ]),
                           en:
                               '${items.length} items · ${storageFormatBytes(_catalog!.totalBytes)}'),
                       style: TextStyle(
@@ -508,7 +512,8 @@ class _ConversationStoragePageState extends State<ConversationStoragePage> {
                 child: SettingsDestructiveButton(
                   soft: true,
                   text: settingsText(context,
-                      zh: '删除（${storageFormatBytes(selectedBytes)}）',
+                      zh: AppCopy.format(
+                          '删除（{#0}）', [storageFormatBytes(selectedBytes)]),
                       en: 'Delete (${storageFormatBytes(selectedBytes)})'),
                   loadingText:
                       settingsText(context, zh: '正在删除…', en: 'Deleting…'),

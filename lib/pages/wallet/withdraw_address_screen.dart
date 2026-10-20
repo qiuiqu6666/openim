@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -232,7 +233,7 @@ class _WithdrawAddressScreenState extends State<WithdrawAddressScreen> {
     if (target.isFriend) {
       // A display account/short number is not a transfer receiver user ID.
       if (friend == null || (friend.userID ?? '').trim() != target.value) {
-        WalletTip.show(context, '请从联系人中选择收款人');
+        WalletTip.show(context, AppCopy.text('请从联系人中选择收款人'));
         return;
       }
       await openWalletFriendTransfer(context,

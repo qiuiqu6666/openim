@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
@@ -144,8 +145,9 @@ class _State extends State<SangongAgentMemberDetailPage> {
       final claimedAmount = _dayNum(amount);
       ToastUtils.toast(
           claimedAmount == 0
-              ? '当前暂无可领取返水'
-              : '返水申请已提交，金额 ¥${money(claimedAmount)}，请刷新确认到账',
+              ? AppCopy.text('当前暂无可领取返水')
+              : AppCopy.format(
+                  '返水申请已提交，金额 ¥{#0}，请刷新确认到账', [money(claimedAmount)]),
           context: context);
       await _loadDaily();
     } catch (e) {
@@ -178,7 +180,7 @@ class _State extends State<SangongAgentMemberDetailPage> {
                     SangongAgentTransfersPage.open(context);
                   }
                 },
-                child: const Text('划转记录'),
+                child: Text(AppCopy.text('划转记录')),
               ),
           ],
         ),
@@ -186,8 +188,8 @@ class _State extends State<SangongAgentMemberDetailPage> {
           Material(
             color: Theme.of(context).colorScheme.surface,
             child: Row(children: [
-              _tab('个人最新数据', 0),
-              if (_canViewHistory) _tab('个人每天数据', 1),
+              _tab(AppCopy.text('个人最新数据'), 0),
+              if (_canViewHistory) _tab(AppCopy.text('个人每天数据'), 1),
             ]),
           ),
           if (_loadingDaily) const LinearProgressIndicator(),
@@ -196,7 +198,8 @@ class _State extends State<SangongAgentMemberDetailPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(children: [
                   Expanded(child: Text(_error!)),
-                  TextButton(onPressed: _loadDaily, child: const Text('重试'))
+                  TextButton(
+                      onPressed: _loadDaily, child: Text(AppCopy.text('重试')))
                 ])),
           Expanded(
             child: ListView(
@@ -217,7 +220,9 @@ class _State extends State<SangongAgentMemberDetailPage> {
                           SangongPublicAccount(
                               userID: m.imUserId,
                               style: Theme.of(context).textTheme.bodySmall),
-                          Text('第 ${m.levelNo} 级代理 · 返水 ${money(m.rebatePct)}%',
+                          Text(
+                              AppCopy.format('第 {#0} 级代理 · 返水 {#1}%',
+                                  [m.levelNo, money(m.rebatePct)]),
                               style: TextStyle(
                                   color: Theme.of(context)
                                       .colorScheme
@@ -237,7 +242,7 @@ class _State extends State<SangongAgentMemberDetailPage> {
                     const SizedBox(height: 20),
                     _panelSwitcher(),
                     const SizedBox(height: 14),
-                    const Text('用户数据',
+                    Text(AppCopy.text('用户数据'),
                         style: TextStyle(
                             fontSize: 18, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 10),
@@ -251,22 +256,32 @@ class _State extends State<SangongAgentMemberDetailPage> {
                                 crossAxisCount: 2,
                                 childAspectRatio: 2.7,
                                 children: [
-                                  metric('余额', m.balance),
+                                  metric(AppCopy.text('余额'), m.balance),
                                   metric(
-                                      _summaryView ? '本批次盈亏' : '最新盈亏',
+                                      _summaryView
+                                          ? AppCopy.text('本批次盈亏')
+                                          : AppCopy.text('最新盈亏'),
                                       _summaryView
                                           ? m.batchProfitLoss
                                           : m.todayProfitLoss),
                                   if (_summaryView) ...[
-                                    metric('闲流水', m.playerTurnover),
-                                    metric('庄流水', m.bankerTurnover),
-                                    metric('总流水', m.batchTotalTurnover),
+                                    metric(
+                                        AppCopy.text('闲流水'), m.playerTurnover),
+                                    metric(
+                                        AppCopy.text('庄流水'), m.bankerTurnover),
+                                    metric(AppCopy.text('总流水'),
+                                        m.batchTotalTurnover),
                                   ] else ...[
-                                    metric('闲流水', m.playerTurnover),
-                                    metric('庄流水', m.bankerTurnover),
-                                    metric('总流水', m.displayTotalTurnover),
-                                    metric('最近闲流水', m.latestPlayerTurnover),
-                                    metric('最近庄流水', m.latestBankerTurnover),
+                                    metric(
+                                        AppCopy.text('闲流水'), m.playerTurnover),
+                                    metric(
+                                        AppCopy.text('庄流水'), m.bankerTurnover),
+                                    metric(AppCopy.text('总流水'),
+                                        m.displayTotalTurnover),
+                                    metric(AppCopy.text('最近闲流水'),
+                                        m.latestPlayerTurnover),
+                                    metric(AppCopy.text('最近庄流水'),
+                                        m.latestBankerTurnover),
                                   ],
                                   metric('上分',
                                       _summaryView ? m.batchUp : m.todayUp),
@@ -293,7 +308,9 @@ class _State extends State<SangongAgentMemberDetailPage> {
                             onPressed: _claiming ? null : _claimRebate,
                             icon: const Icon(
                                 Icons.account_balance_wallet_outlined),
-                            label: Text(_claiming ? '申请中…' : '申请返水'),
+                            label: Text(_claiming
+                                ? AppCopy.text('申请中…')
+                                : AppCopy.text('申请返水')),
                           ),
                         ),
                       ),
@@ -314,7 +331,7 @@ class _State extends State<SangongAgentMemberDetailPage> {
         ),
         child: Row(children: [
           _panelButton('最新', false),
-          _panelButton('汇总', true),
+          _panelButton(AppCopy.text('汇总'), true),
         ]),
       );
 
@@ -374,21 +391,21 @@ class _State extends State<SangongAgentMemberDetailPage> {
     final days =
         (_daily?['days'] as List?)?.whereType<Map>().toList() ?? const <Map>[];
     if (days.isEmpty) {
-      return const Padding(
+      return Padding(
           padding: EdgeInsets.only(top: 48),
-          child: Center(child: Text('暂无历史每日数据')));
+          child: Center(child: Text(AppCopy.text('暂无历史每日数据'))));
     }
     return Column(
       children: days.map((day) {
         final metrics = <(String, dynamic)>[
-          ('余额', day['balance']),
-          ('盈亏', day['profitLoss']),
-          ('闲流水', day['playerTurnover']),
-          ('庄流水', day['bankerTurnover']),
-          ('总流水', day['totalTurnover']),
-          ('总上分', day['totalUp']),
-          ('总下分', day['totalDown']),
-          ('总返水', day['rebate'] ?? day['totalRebate']),
+          (AppCopy.text('余额'), day['balance']),
+          (AppCopy.text('盈亏'), day['profitLoss']),
+          (AppCopy.text('闲流水'), day['playerTurnover']),
+          (AppCopy.text('庄流水'), day['bankerTurnover']),
+          (AppCopy.text('总流水'), day['totalTurnover']),
+          (AppCopy.text('总上分'), day['totalUp']),
+          (AppCopy.text('总下分'), day['totalDown']),
+          (AppCopy.text('总返水'), day['rebate'] ?? day['totalRebate']),
         ];
         return Card(
           color: Theme.of(context).colorScheme.surface,

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -85,12 +86,12 @@ class LiveTipForm extends StatelessWidget {
                                       LiveStyle.fieldRadius)))),
                       Row(children: [
                         Expanded(
-                            child: Text('打赏主播',
+                            child: Text(AppCopy.text('打赏主播'),
                                 style: text.titleLarge?.copyWith(
                                     color: LiveStyle.text(context),
                                     fontWeight: FontWeight.w600))),
                         IconButton(
-                            tooltip: '关闭',
+                            tooltip: AppCopy.text('关闭'),
                             onPressed: busy ? null : onClose,
                             color: secondary,
                             icon: const Icon(CupertinoIcons.xmark_circle_fill))
@@ -99,9 +100,9 @@ class LiveTipForm extends StatelessWidget {
                       if (loading)
                         const Center(child: CircularProgressIndicator())
                       else if (pendingUnavailable)
-                        const Text('上次打赏使用的币种已不再提供，请到钱包核对原交易。')
+                        Text(AppCopy.text('上次打赏使用的币种已不再提供，请到钱包核对原交易。'))
                       else if (currencies.isEmpty)
-                        const Text('暂无可用打赏币种，请稍后重试。')
+                        Text(AppCopy.text('暂无可用打赏币种，请稍后重试。'))
                       else ...[
                         // A single supported currency needs no segmented control.
                         if (currencies.length == 1)
@@ -127,7 +128,7 @@ class LiveTipForm extends StatelessWidget {
                                       value.code == currency?.code)
                               }),
                         const SizedBox(height: AppTokens.s6),
-                        Text('打赏金额',
+                        Text(AppCopy.text('打赏金额'),
                             style: text.bodyMedium?.copyWith(color: secondary)),
                         const SizedBox(height: AppTokens.s3),
                         TextField(
@@ -150,15 +151,20 @@ class LiveTipForm extends StatelessWidget {
                           Expanded(
                               child: Text(
                                   balanceLoading
-                                      ? '可用余额加载中…'
+                                      ? AppCopy.text('可用余额加载中…')
                                       : balanceFailed || balance == null
-                                          ? '余额暂不可用，请重试'
-                                          : '可用余额 ${balance!.available.displayDecimal} ${currency!.label}',
+                                          ? AppCopy.text('余额暂不可用，请重试')
+                                          : AppCopy.format('可用余额 {#0} {#1}', [
+                                              balance!.available.displayDecimal,
+                                              currency!.label
+                                            ]),
                                   key: const ValueKey('live-tip-balance'),
                                   style: text.bodySmall
                                       ?.copyWith(color: secondary))),
                           IconButton(
-                              tooltip: balanceFailed ? '重试余额' : '刷新余额',
+                              tooltip: balanceFailed
+                                  ? AppCopy.text('重试余额')
+                                  : AppCopy.text('刷新余额'),
                               onPressed: balanceLoading || busy
                                   ? null
                                   : onRefreshBalance,
@@ -177,9 +183,9 @@ class LiveTipForm extends StatelessWidget {
                             textInputAction: TextInputAction.done,
                             style: text.bodyLarge
                                 ?.copyWith(color: LiveStyle.text(context)),
-                            decoration: decoration('备注（选填）')),
+                            decoration: decoration(AppCopy.text('备注（选填）'))),
                         if (pending)
-                          Text('上次打赏结果待确认，重试将使用同一订单号。',
+                          Text(AppCopy.text('上次打赏结果待确认，重试将使用同一订单号。'),
                               style:
                                   text.bodySmall?.copyWith(color: secondary)),
                       ],
@@ -191,7 +197,9 @@ class LiveTipForm extends StatelessWidget {
                       ],
                       const SizedBox(height: AppTokens.s5),
                       LivePrimaryButton(
-                          label: pending ? '重试原交易' : '确认打赏',
+                          label: pending
+                              ? AppCopy.text('重试原交易')
+                              : AppCopy.text('确认打赏'),
                           busy: busy,
                           onPressed:
                               loading || pendingUnavailable ? null : onSubmit)

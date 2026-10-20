@@ -10,7 +10,7 @@
 
 回归验证：`flutter test test/aliyun_captcha_bridge_test.dart test/captcha_dialog_layout_test.dart test/pages/login/device_verification`；嵌入 JavaScript 的慢初始化、异常及桥接测试：`node --test test/pages/mine/settings/widgets/aliyun_captcha_html_test.mjs`。桥接测试覆盖 Android/iOS 模拟平台与亮暗主题；仍需真机检查网络较慢时的第三方验证弹窗。
 
-参考 99chat `d7c3c65` 的 `lib/src/pages/login.dart` 中 `DeviceChallengePage`，以及 `src/ui/auth_widgets.dart` 中普通认证页和提示条。手机号入口保留原布局、文案、字号、间距、颜色和圆角。参考认证页固定使用亮色；应用暗色下也保持白底。账号或邮箱入口因为当前服务端不返回绑定手机号，增加绑定手机号和区号输入，使用原有国家区号选择器。
+参考 99chat `d7c3c65` 的 `lib/src/pages/login.dart` 中 `DeviceChallengePage`，以及 `src/ui/auth_widgets.dart` 中普通认证页和提示条。保留原布局、文案、字号、间距、颜色和圆角，沿用现有亮暗主题。账号或邮箱入口直接使用冻结的登录身份发送到绑定手机号，不再要求输入手机号或区号。
 
 ## 职责与入口
 
@@ -22,19 +22,15 @@
 
 共用 `AuthCompoundField`、`AuthFieldLabel`、`AuthPrimaryButton`。新增共用 `AuthFormScaffold` 和 `AuthInfoBanner`，因为已有蓝白欢迎页不具备参考普通白底认证页的头部及盾牌提示。共享组件样式扩展均为可选参数，原调用方默认视觉不变。
 
-## 当前接口
+## 当前接口（2026-10-20）
 
-按用户提供的“新设备登录手机二次验证：前端对接”文档接入。Chat 地址继承现有 `Config.appAuthUrl`，不改服务器配置。服务端源码已实现但尚未部署，真实短信与新错误码必须部署后联调。
+1. 原密码登录收到 `20081` 后，以冻结的登录身份、密码和设备信息请求 `/account/device/verification`，由服务器返回 `phone`／`email` 可用方式。无绑定用户的正常密码登录直接成功。
+2. 双绑定显示手机号／邮箱选择，单绑定直接使用该方式；切换清空验证码、保留独立倒计时。
+3. 点击获取验证码直接请求 `/account/device/code/send`，携带原登录字段和 `deviceVerificationMethod`，无需滑块参数。服务器决定接收地址；客户端不接受任意目标邮箱或手机号。
+4. 确认向原 `/account/login` 提交冻结请求，增加 `verifyCode` 和 `deviceVerificationMethod`。成功取得完整 Chat/IM 凭据后才进入已有登录流程。
+5. 新接口不带 token，保留旧密码加密重试、独立 operationID、请求归属检查和取消保护。账号服务端已发布，客户端仍需重新构建发布。
 
-1. 密码登录提交 `/account/login`，使用原有 MD5 密码协议。仅提交一个手机号、账号或邮箱标识。设备 UUID 持久保存，无效旧值在登录前修复并确认保存成功。
-2. 业务错误 `20081` 才打开设备验证页；没有票据、手机号或凭证。此时不写证书，不调用 SDK，不进入首页。
-3. 使用现有阿里云验证后提交 `/account/code/send`：`usedFor: 3`、手机号、区号、原设备 UUID、平台、`captchaVerifyParam`，不传邮箱。仅两个标志均为 `true` 才提示发送成功；通过验证码验证但发送失败时保留服务端 `retryAfter`，页面按绝对到期时间冷却。
-4. 确认再次提交 `/account/login`，完整保留原标识、MD5 密码、设备 UUID、设备名称、版本和平台，仅增加 `verifyCode`。账号或邮箱入口最终请求不混入发送短信所用的手机号。
-5. 完整且非空的 `userID/chatToken/imToken` 才交回既有证书、SDK、推送和首页流程。设备信任状态由服务端记录，不额外请求信任接口。
-
-以上登录和设备发送请求不带 token，使用 JSON，每次请求生成新的 `operationID` UUID；其他 HTTP 调用默认行为保留。验证码错误、过期、次数限制、已使用和再次 `20081` 留在验证页；确认时 `20001` 或 `20082` 返回密码页显示对应错误。未绑定手机号不能在未登录状态调用绑定接口。
-
-验证参数不持久化或写日志；经过设备验证的此次登录不保存密码到记住密码记录。成功清空内存输入及验证码，取消、账号变化及控制器关闭释放快照。已有普通登录记住密码流程保留。
+下面的测试与预览为历史记录；最新定向回归包含双方式选择、单邮箱默认、切换清码和冷却、原身份提交、过期请求及既有手机号登录。
 
 ## 生命周期与验证
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/history/chat_timeline_controller.dart';
@@ -13,6 +15,8 @@ Message _message(String id) => Message(
 ChatTimelineController _timeline({
   required bool Function() sessionCurrent,
   Message? latest,
+  Future<List<Message>> Function()? snapshot,
+  List<Message> rows = const [],
 }) =>
     ChatTimelineController(
       accountID: 'me',
@@ -20,8 +24,9 @@ ChatTimelineController _timeline({
       isSessionCurrent: sessionCurrent,
       conversation: () =>
           ConversationInfo(conversationID: 'chat', latestMsg: latest),
+      fetchLocalSnapshot: snapshot,
       fetch: ({required count, startMsg}) async =>
-          AdvancedMessage(messageList: [], isEnd: true),
+          AdvancedMessage(messageList: rows, isEnd: true),
       isClosed: () => false,
       onFirstPage: () {},
       captureOffset: () => 0,
@@ -33,6 +38,63 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(ChatHistoryCache.clear);
   tearDown(ChatHistoryCache.clear);
+
+  for (final change in ['none', 'delivery', 'clear', 'credentials', 'latest']) {
+    test('production reentry displays safe stale rows before refresh: $change',
+        () async {
+      final originalToken = OpenIM.iMManager.token;
+      addTearDown(() => OpenIM.iMManager.token = originalToken);
+      final first =
+          _timeline(sessionCurrent: () => true, rows: [_message('loaded')]);
+      first.initialize(prefetch: false);
+      await first.loadOlder();
+      first.close();
+      if (change == 'delivery') ChatHistoryCache.receivedMessage();
+      if (change == 'clear') ChatHistoryCache.removeConversation('me', 'chat');
+      if (change == 'credentials') OpenIM.iMManager.token = 'replacement-token';
+      final pending = Completer<List<Message>>();
+      final reopened = _timeline(
+          sessionCurrent: () => true,
+          snapshot: () => pending.future,
+          latest: change == 'latest' ? _message('newer') : null);
+      reopened.initialize(prefetch: false);
+      final canRestore = !['clear', 'credentials'].contains(change);
+      expect(reopened.initialWindowReady.value, canRestore);
+      expect(reopened.messageList.map((m) => m.clientMsgID),
+          canRestore ? ['loaded'] : isEmpty);
+      expect(reopened.hasLoadedHistory, isFalse);
+      reopened.close();
+      pending.complete([]);
+      await Future<void>.delayed(Duration.zero);
+    });
+  }
+
+  testWidgets('later reentry and rapid reopen retain rows until SDK refresh',
+      (tester) async {
+    ChatHistoryCache.write('me', 'chat', [_message('existing')],
+        readySession: ('me', OpenIM.iMManager.token));
+    await tester.pump(const Duration(minutes: 5));
+    final pending = Completer<List<Message>>();
+    final first =
+        _timeline(sessionCurrent: () => true, snapshot: () => pending.future);
+    first.initialize(prefetch: false);
+    expect(first.messageList.single.clientMsgID, 'existing');
+    first.close();
+    final second = _timeline(
+        sessionCurrent: () => true,
+        snapshot: () => pending.future,
+        rows: [_message('existing'), _message('fresh')]);
+    second.initialize(prefetch: false);
+    expect(second.initialWindowReady.value, isTrue);
+    expect(second.messageList.single.clientMsgID, 'existing');
+    final refresh = second.loadOlder();
+    await tester.pump();
+    await refresh;
+    expect(second.messageList.map((m) => m.clientMsgID), ['existing', 'fresh']);
+    second.close();
+    pending.complete([]);
+    await tester.pump();
+  });
 
   test('ordinary route closure preserves its current session snapshot', () {
     final timeline = _timeline(sessionCurrent: () => true);

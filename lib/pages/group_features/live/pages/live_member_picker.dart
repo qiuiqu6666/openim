@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -90,7 +91,7 @@ class _LiveMemberPickerState extends State<LiveMemberPicker> {
       backgroundColor: LiveStyle.card(context),
       appBar: AppBar(
           leading: const LiveBackButton(),
-          title: const Text('选择主播'),
+          title: Text(AppCopy.text('选择主播')),
           backgroundColor: LiveStyle.card(context)),
       body: Column(children: [
         Padding(
@@ -99,7 +100,7 @@ class _LiveMemberPickerState extends State<LiveMemberPicker> {
                 controller: _search,
                 onChanged: _searchChanged,
                 decoration: InputDecoration(
-                    hintText: '搜索群成员',
+                    hintText: AppCopy.text('搜索群成员'),
                     prefixIcon: const Icon(Icons.search),
                     filled: true,
                     fillColor: LiveStyle.field(context),
@@ -126,10 +127,11 @@ class _LiveMemberPickerState extends State<LiveMemberPicker> {
                                     : _more
                                         ? TextButton(
                                             onPressed: () => _load(),
-                                            child: const Text('加载更多'))
+                                            child: Text(AppCopy.text('加载更多')))
                                         : _members.isEmpty
-                                            ? const Center(
-                                                child: Text('没有找到群成员'))
+                                            ? Center(
+                                                child: Text(
+                                                    AppCopy.text('没有找到群成员')))
                                             : const SizedBox.shrink());
                       }
                       final member = _members[index];
@@ -149,8 +151,8 @@ class _LiveMemberPickerState extends State<LiveMemberPicker> {
                                 Text(member.roleLevel == GroupRoleLevel.owner
                                     ? '群主'
                                     : member.roleLevel == GroupRoleLevel.admin
-                                        ? '管理员'
-                                        : '群成员'),
+                                        ? AppCopy.text('管理员')
+                                        : AppCopy.text('群成员')),
                             onTap: () {
                               if (widget.featureContext.sessionCurrent()) {
                                 Navigator.of(context).pop(member);

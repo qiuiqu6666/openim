@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
@@ -21,7 +22,7 @@ class GroupSetupLoading extends StatelessWidget {
           if (!failed) const CircularProgressIndicator.adaptive(),
           SizedBox(height: 12.h),
           Text(
-            failed ? '群资料加载失败' : '正在加载群资料',
+            failed ? AppCopy.text('群资料加载失败') : AppCopy.text('正在加载群资料'),
             style: Styles.ts_8E9AB0_12sp,
           ),
           if (failed)

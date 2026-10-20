@@ -1,3 +1,4 @@
+import 'package:openim/services/fund_currency_visibility/fund_currency_visibility.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -101,6 +102,7 @@ class _WithdrawCoinPickerScreenState extends State<WithdrawCoinPickerScreen>
 
   List<CoinDto> _enabledCoins() => _controller.coins
       .where((coin) =>
+          isFundCurrencyCodeVisible(coin.code) &&
           coin.withdrawEnabled &&
           (widget.initialTargetKind != WithdrawTransferTargetKind.chain ||
               const ['USDT', 'TRX'].contains(coin.code.toUpperCase())))

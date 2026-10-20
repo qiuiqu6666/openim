@@ -55,7 +55,8 @@ void main() {
         builder: (_, __) => GetMaterialApp(
           translations: TranslationService(),
           locale: const Locale('zh', 'CN'),
-          theme: ThemeData(brightness: brightness),
+          theme:
+              ThemeData(brightness: brightness, platform: TargetPlatform.iOS),
           home: GroupMemberListPage(logic: logic),
         ),
       ));
@@ -68,6 +69,16 @@ void main() {
       await tester.tap(find.text('Public peer'));
       await tester.pump();
       expect(logic.checkedList.single.userID, 'im_visible_peer');
+      final shortList = find.byType(SmartRefresher);
+      final shortScroll = tester.state<ScrollableState>(find
+          .descendant(of: shortList, matching: find.byType(Scrollable))
+          .first);
+      final shortDrag = await tester.startGesture(tester.getCenter(shortList));
+      await shortDrag.moveBy(const Offset(0, 160));
+      await tester.pump();
+      expect(shortScroll.position.pixels, shortScroll.position.minScrollExtent);
+      await shortDrag.up();
+      await tester.pump(const Duration(milliseconds: 500));
       logic.memberList.assignAll(List.generate(
           100,
           (i) => GroupMembersInfo(
@@ -80,6 +91,16 @@ void main() {
       final scrollable = tester.state<ScrollableState>(find
           .descendant(of: refresher, matching: find.byType(Scrollable))
           .first);
+      // Hold the drag at the boundary: settling alone would hide iOS bounce.
+      final gesture = await tester.startGesture(tester.getCenter(refresher));
+      await gesture.moveBy(const Offset(0, 160));
+      await tester.pump();
+      expect(scrollable.position.pixels, scrollable.position.minScrollExtent);
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.drag(refresher, const Offset(0, -220));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(scrollable.position.pixels, greaterThan(0));
       scrollable.position.jumpTo(800);
       await tester.pump();
       final before = scrollable.position.pixels;

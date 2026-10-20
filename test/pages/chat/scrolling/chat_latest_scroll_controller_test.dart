@@ -33,12 +33,13 @@ class _ObservedScrollPosition extends ScrollPositionWithSingleContext {
 Future<ChatLatestScrollController> _mount(
   WidgetTester tester,
   ScrollController scroll,
-  VoidCallback onReachedLatest,
-) async {
+  VoidCallback onReachedLatest, {
+  bool follow = true,
+}) async {
   final latest = ChatLatestScrollController(
     controller: scroll,
     isClosed: () => false,
-    shouldFollow: () => true,
+    shouldFollow: () => follow,
     onReachedLatest: onReachedLatest,
   );
   await tester.pumpWidget(MaterialApp(
@@ -61,6 +62,37 @@ Future<ChatLatestScrollController> _mount(
 }
 
 void main() {
+  testWidgets('entry reaches latest despite provisional away state',
+      (tester) async {
+    final scroll = ScrollController(keepScrollOffset: false);
+    var reached = 0;
+    final latest = await _mount(tester, scroll, () => reached++, follow: false);
+    latest.requestEntry();
+    await tester.pump();
+    expect(scroll.offset, scroll.position.minScrollExtent);
+    scroll.jumpTo(400);
+    latest.requestEntry(complete: true);
+    await tester.pump();
+    expect(scroll.offset, scroll.position.minScrollExtent);
+    expect(reached, 2);
+    scroll.jumpTo(400);
+    latest.requestEntry();
+    await tester.pump();
+    expect(scroll.offset, 400);
+  });
+
+  testWidgets('user navigation cancels pending and subsequent entry following',
+      (tester) async {
+    final scroll = ScrollController();
+    final latest = await _mount(tester, scroll, () {});
+    latest.requestEntry();
+    latest.endEntry();
+    await tester.pump();
+    latest.requestEntry(complete: true);
+    await tester.pump();
+    expect(scroll.offset, 900);
+  });
+
   testWidgets('reduced motion returns immediately without an animation',
       (tester) async {
     final scroll = ScrollController();

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -111,7 +112,7 @@ class WalletRecordDetailScreen extends StatelessWidget {
     final isDeposit = item.title == '链上充值';
     final isTransfer = item.title == '收到转账' || item.title == '发起转账';
     final candidates = isWithdraw
-        ? <String>[item.payer, '我的钱包']
+        ? <String>[item.payer, AppCopy.text('我的钱包')]
         : isDeposit
             ? <String>[item.payer]
             : isTransfer

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import '../../data/group_feature_api.dart';
 import '../identity/widgets/sangong_identity_view.dart';
@@ -228,7 +229,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
   int? _positiveAmount(TextEditingController controller, String label) {
     final amount = int.tryParse(controller.text.trim());
     if (amount == null || amount <= 0) {
-      _invalid('请输入大于 0 的整数$label');
+      _invalid(AppCopy.format('请输入大于 0 的整数{#0}', [label]));
       return null;
     }
     return amount;
@@ -242,11 +243,12 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
 
   Future<void> _creditOrDebit({required bool credit}) async {
     if (!_canSubmit) return;
-    final amount = _positiveAmount(_points, '金额');
+    final amount = _positiveAmount(_points, AppCopy.text('金额'));
     if (amount == null) return;
     final target = widget.userID;
     final action = credit ? '上分' : '下分';
-    await _submit(action, '为$_displayName $action $amount 积分？',
+    await _submit(action,
+        AppCopy.format('为{#0} {#1} {#2} 积分？', [_displayName, action, amount]),
         (runtime, current) async {
       if (!credit) {
         final session = await runtime.admin.fetchSession();
@@ -276,7 +278,7 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
   bool _validDoor(int door) {
     final doors = _settings?.doorCount;
     if (doors == null || door < 1 || door > doors) {
-      _invalid('庄门需在 1～${doors ?? '—'} 之间');
+      _invalid(AppCopy.format('庄门需在 1～{#0} 之间', [doors ?? '—']));
       return false;
     }
     return true;
@@ -291,28 +293,30 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
       door = _session?.round?.bankerDoor;
     }
     if (door == null || (setLimit && limit == null)) {
-      _invalid(setLimit ? '请先定庄或输入「庄门.限额」' : '请输入庄门（如 2 或 2.5000）');
+      _invalid(setLimit
+          ? AppCopy.text('请先定庄或输入「庄门.限额」')
+          : AppCopy.text('请输入庄门（如 2 或 2.5000）'));
       return;
     }
     if (!_validDoor(door)) return;
     if (limit != null && limit < 0) {
-      _invalid('展示限额须为大于等于 0 的整数');
+      _invalid(AppCopy.text('展示限额须为大于等于 0 的整数'));
       return;
     }
     final target = widget.userID;
     final roundId = _session?.round?.id ?? 0;
     if (roundId <= 0) {
-      _invalid("请先开机");
+      _invalid(AppCopy.text('请先开机'));
       return;
     }
     if (setLimit &&
         !parsed.hasExplicitLimit &&
         _session?.round?.bankerImUserId != target) {
-      _invalid('请先在当前页面为该用户定庄');
+      _invalid(AppCopy.text('请先在当前页面为该用户定庄'));
       return;
     }
     final savedLimit = limit ?? _session?.round?.bankerLimit ?? 0;
-    await _submit('定庄／限额', '', (runtime, current) async {
+    await _submit(AppCopy.text('定庄／限额'), '', (runtime, current) async {
       final result = await runtime.admin.assignBanker(
           roundId: roundId,
           imUserId: target,
@@ -332,17 +336,19 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     if (!_canSubmit) return;
     final id = _user?.userId;
     if (id == null || id <= 0) {
-      _invalid('缺少游戏账号编号');
+      _invalid(AppCopy.text('缺少游戏账号编号'));
       return;
     }
-    final amount = remove ? null : _positiveAmount(_joint, '合庄金额');
+    final amount =
+        remove ? null : _positiveAmount(_joint, AppCopy.text('合庄金额'));
     if (!remove && amount == null) return;
     final round = _session?.round;
     if (round == null || round.id <= 0 || round.isRoundClosed) {
-      _invalid('当前无有效局');
+      _invalid(AppCopy.text('当前无有效局'));
       return;
     }
-    await _submit(remove ? '取消合庄' : '设置合庄', '', (runtime, current) async {
+    await _submit(remove ? AppCopy.text('取消合庄') : AppCopy.text('设置合庄'), '',
+        (runtime, current) async {
       if (remove) {
         await runtime.admin.removeCoBank(roundId: round.id, userId: id);
       } else {
@@ -355,10 +361,11 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
   Future<void> _send({required bool coBank}) {
     final roundId = _session?.round?.id ?? 0;
     if (roundId <= 0) {
-      _invalid('当前无有效局');
+      _invalid(AppCopy.text('当前无有效局'));
       return Future.value();
     }
-    return _submit(coBank ? '发送合庄' : '发送定庄', '', (runtime, current) async {
+    return _submit(coBank ? AppCopy.text('发送合庄') : AppCopy.text('发送定庄'), '',
+        (runtime, current) async {
       if (!current()) return;
       if (coBank) {
         await runtime.admin.sendCoBankNotification(roundId: roundId);
@@ -395,10 +402,12 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
   String? get _bankerSummary {
     if (_session == null) return null;
     final round = _session!.round;
-    if (round == null) return '庄 不限额';
+    if (round == null) return AppCopy.text('庄 不限额');
     final door = round.bankerDoor;
     final limit = round.bankerLimit;
-    return '${door == null ? '庄' : '庄$door门'} ${limit == null || limit == 0 ? '不限额' : '限额$limit'}';
+    return '${door == null ? AppCopy.text('庄') : AppCopy.format('庄{#0}门', [
+            door
+          ])} ${limit == null || limit == 0 ? AppCopy.text('不限额') : AppCopy.format('限额{#0}', [limit])}';
   }
 
   SangongCoBank? get _coBankPreview {
@@ -420,7 +429,8 @@ class _SangongProfilePanelState extends State<SangongProfilePanel> {
     final members = coBank.members;
     final labels = members.map((member) =>
         '【${member.nickname.trim().isEmpty ? member.imUserId.isEmpty ? member.userId : member.imUserId : member.nickname.trim()}】${member.sharePercent.toStringAsFixed(2)}%');
-    return '庄池：${coBank.poolTotal} · 合庄庄家: ${labels.isEmpty ? '—' : labels.join('，')}';
+    return AppCopy.format('庄池：{#0} · 合庄庄家: {#1}',
+        [coBank.poolTotal, labels.isEmpty ? '—' : labels.join('，')]);
   }
 
   @override

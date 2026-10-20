@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
@@ -35,14 +36,16 @@ class _CompensationPageState extends State<CompensationPage>
         box == null ? null : box.localToGlobal(Offset.zero) & box.size;
     try {
       await Share.share(
-        '${detail.title}\n感谢你一直都在\n老用户补偿总奖池：${detail.poolLabel}\n${detail.description}\n请在99Chat内查看活动详情，参与资格及领取状态以活动页面为准。\n\n下载99Chat：https://99chat.vip',
+        AppCopy.format(
+            '{#0}\n感谢你一直都在\n老用户补偿总奖池：{#1}\n{#2}\n请在99Chat内查看活动详情，参与资格及领取状态以活动页面为准。\n\n下载99Chat：https://99chat.vip',
+            [detail.title, detail.poolLabel, detail.description]),
         subject: detail.title,
         sharePositionOrigin: origin,
       );
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('暂时无法打开系统分享，请重试')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppCopy.text('暂时无法打开系统分享，请重试'))));
       }
     } finally {
       if (mounted) setState(() => _sharing = false);
@@ -109,9 +112,9 @@ class _CompensationPageState extends State<CompensationPage>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Row(children: [
-                            const Expanded(child: Text('参与规则')),
+                            Expanded(child: Text(AppCopy.text('参与规则'))),
                             IconButton(
-                                tooltip: '关闭',
+                                tooltip: AppCopy.text('关闭'),
                                 onPressed: () => Navigator.pop(c),
                                 icon: const Icon(Icons.close))
                           ]),
@@ -168,15 +171,17 @@ class _CompensationPageState extends State<CompensationPage>
                                                           .space),
                                                   Text(
                                                       _controller.error ??
-                                                          '正在加载活动',
+                                                          AppCopy.text(
+                                                              '正在加载活动'),
                                                       textAlign:
                                                           TextAlign.center),
                                                   if (!_controller.busy)
                                                     TextButton(
                                                         onPressed:
                                                             _controller.refresh,
-                                                        child:
-                                                            const Text('重新加载')),
+                                                        child: Text(
+                                                            AppCopy.text(
+                                                                '重新加载'))),
                                                 ])))
                                     : ListView(
                                         padding: const EdgeInsets.all(
@@ -205,7 +210,7 @@ class _CompensationPageState extends State<CompensationPage>
                       end: CompensationTokens.small,
                       child: IconButton(
                         key: _shareButton,
-                        tooltip: '分享活动',
+                        tooltip: AppCopy.text('分享活动'),
                         color: CompensationTokens.ink(context),
                         onPressed: d == null || _sharing ? null : _share,
                         constraints: const BoxConstraints(
@@ -254,15 +259,18 @@ class _CompensationPageState extends State<CompensationPage>
         );
       });
   String _buttonLabel(CompensationState? state) {
-    if (_controller.busy) return _controller.synchronized ? '领取中…' : '正在查询…';
-    if (_controller.uncertain) return '查询领取结果';
-    if (state == CompensationState.claimed) return '查看入账记录';
-    if (!_controller.synchronized) return '重新查询活动';
+    if (_controller.busy)
+      return _controller.synchronized
+          ? AppCopy.text('领取中…')
+          : AppCopy.text('正在查询…');
+    if (_controller.uncertain) return AppCopy.text('查询领取结果');
+    if (state == CompensationState.claimed) return AppCopy.text('查看入账记录');
+    if (!_controller.synchronized) return AppCopy.text('重新查询活动');
     return switch (state) {
-      CompensationState.unclaimed => '领取补偿红包',
-      CompensationState.ended => '返回首页',
-      CompensationState.ineligible => '查看参与规则',
-      _ => '重新加载'
+      CompensationState.unclaimed => AppCopy.text('领取补偿红包'),
+      CompensationState.ended => AppCopy.text('返回首页'),
+      CompensationState.ineligible => AppCopy.text('查看参与规则'),
+      _ => AppCopy.text('重新加载')
     };
   }
 

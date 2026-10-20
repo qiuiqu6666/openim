@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -21,17 +22,19 @@ class ConversationEmptyState extends StatelessWidget {
     final chinese = Localizations.localeOf(context).languageCode == 'zh';
     final dark = Theme.of(context).brightness == Brightness.dark;
     final title = folderSelected
-        ? (chinese ? '分组内暂无会话' : 'No chats in this folder yet')
+        ? (chinese ? AppCopy.text('分组内暂无会话') : 'No chats in this folder yet')
         : groupChats
-            ? (chinese ? '暂无群聊' : 'No group chats yet')
-            : (chinese ? '暂无消息' : 'No messages yet');
+            ? (chinese ? AppCopy.text('暂无群聊') : 'No group chats yet')
+            : (chinese ? AppCopy.text('暂无消息') : 'No messages yet');
     final description = folderSelected
-        ? (chinese ? '可将会话添加到此分组' : 'Move chats into this folder')
+        ? (chinese ? AppCopy.text('可将会话添加到此分组') : 'Move chats into this folder')
         : groupChats
             ? (chinese
-                ? '点击右上角“+”创建或加入群聊'
+                ? AppCopy.text('点击右上角“+”创建或加入群聊')
                 : 'Use + in the top right to create or join a group')
-            : (chinese ? '添加好友，开启聊天吧' : 'Add a friend to start chatting');
+            : (chinese
+                ? AppCopy.text('添加好友，开启聊天吧')
+                : 'Add a friend to start chatting');
 
     return LayoutBuilder(builder: (context, constraints) {
       final imageWidth = (constraints.maxWidth - AppTokens.s8 * 2)

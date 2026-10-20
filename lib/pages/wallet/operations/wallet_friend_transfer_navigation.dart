@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -45,7 +46,7 @@ Future<void> openWalletFriendTransfer(
     WalletOrderEvents.notifyRecord(accountKey: owner);
   } catch (error) {
     if (context.mounted && WalletOrderEvents.currentAccountKey == owner) {
-      WalletTip.show(context, '暂时无法打开转账，请稍后重试');
+      WalletTip.show(context, AppCopy.text('暂时无法打开转账，请稍后重试'));
     }
   }
 }
