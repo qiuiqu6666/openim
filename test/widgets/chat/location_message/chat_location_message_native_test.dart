@@ -19,6 +19,32 @@ void main() {
     installUnavailableDetailGps();
   });
   tearDown(Get.reset);
+  testWidgets('iOS thumbnail moves to the message coordinate before snapshot',
+      (tester) async {
+    final previous = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    final native = NativeMapPlatformFixture(TargetPlatform.iOS)..install();
+    try {
+      await mountMarkdown(tester, ChatLocationMessageCard(message: location()));
+      await tester.pumpAndSettle();
+      expect(native.creates.single.params['latitude'], 39.9115);
+      expect(native.creates.single.params['longitude'], 116.4042);
+      final move = native.calls.indexWhere((call) => call.method == 'move');
+      final snapshot =
+          native.calls.indexWhere((call) => call.method == 'snapshot');
+      expect(move, greaterThanOrEqualTo(0));
+      expect(snapshot, greaterThan(move));
+      final coordinates = native.calls[move].arguments as Map;
+      expect(coordinates['latitude'], 39.9115);
+      expect(coordinates['longitude'], 116.4042);
+      expect(coordinates['zoom'], 16);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      native.uninstall();
+      debugDefaultTargetPlatformOverride = previous;
+    }
+  });
   testWidgets('incoming card does not initialize AMap until detail consent',
       (tester) async {
     final previous = debugDefaultTargetPlatformOverride;

@@ -51,95 +51,69 @@ class _ChatLocationMessageCardState extends State<ChatLocationMessageCard> {
     final data = ChatLocationMessageData.parse(
         point?.description, point?.latitude, point?.longitude);
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final secondary = AppTokens.textSecondary(dark: dark);
-    return SizedBox(
-        width: ChatLocationMessageTokens.width,
-        child: Material(
-            key: const ValueKey('chat-location-message-card'),
-            color: AppTokens.surface(dark: dark),
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(
-                borderRadius:
-                    BorderRadius.circular(ChatLocationMessageTokens.radius),
-                side: BorderSide(color: AppTokens.border(dark: dark))),
-            child: InkWell(
-                onTap: data.point == null ? null : () => _open(data),
-                child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                          padding: const EdgeInsets.all(AppTokens.s4),
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                    data.name.isEmpty
-                                        ? 'location'.tr
-                                        : data.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                        color:
-                                            AppTokens.textPrimary(dark: dark),
-                                        fontSize:
-                                            ChatLocationMessageTokens.titleSize,
-                                        fontWeight: FontWeight.w600)),
-                                if (data.address.isNotEmpty) ...[
-                                  const SizedBox(height: AppTokens.s2),
-                                  Text(data.address,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                          color: secondary,
-                                          fontSize: ChatLocationMessageTokens
-                                              .detailSize)),
-                                ],
-                              ])),
-                      Stack(children: [
-                        ChatLocationThumbnail(
-                            key: ValueKey(
-                                '${widget.message.clientMsgID}:$_revision'),
-                            data: data,
-                            mapBuilder: widget.mapBuilder),
-                        if (widget.time != null || widget.status != null)
-                          Positioned(
-                              right: AppTokens.s3,
-                              bottom: AppTokens.s3,
-                              child: DecoratedBox(
-                                  key: const ValueKey(
-                                      'chat-location-time-watermark'),
-                                  decoration: BoxDecoration(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.45),
-                                      borderRadius:
-                                          BorderRadius.circular(AppTokens.rSm)),
-                                  child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: AppTokens.s2,
-                                          vertical: AppTokens.s2),
-                                      child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (widget.time != null)
-                                              Text(widget.time!,
-                                                  style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize:
-                                                          ChatLocationMessageTokens
-                                                              .footerSize)),
-                                            if (widget.status != null) ...[
-                                              if (widget.time != null)
-                                                const SizedBox(
-                                                    width: AppTokens.s2),
-                                              IconTheme(
-                                                  data: const IconThemeData(
-                                                      color: Colors.white),
-                                                  child: widget.status!),
-                                            ],
-                                          ])))),
-                      ]),
-                    ]))));
+    return Semantics(
+        label: [data.name.isEmpty ? 'location'.tr : data.name, data.address]
+            .where((text) => text.isNotEmpty)
+            .join(', '),
+        child: SizedBox(
+            width: ChatLocationMessageTokens.width,
+            child: Material(
+                key: const ValueKey('chat-location-message-card'),
+                color: AppTokens.surface(dark: dark),
+                clipBehavior: Clip.antiAlias,
+                shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(ChatLocationMessageTokens.radius),
+                    side: BorderSide(color: AppTokens.border(dark: dark))),
+                child: InkWell(
+                    onTap: data.point == null ? null : () => _open(data),
+                    child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Stack(children: [
+                            ChatLocationThumbnail(
+                                key: ValueKey(
+                                    '${widget.message.clientMsgID}:$_revision'),
+                                data: data,
+                                mapBuilder: widget.mapBuilder),
+                            if (widget.time != null || widget.status != null)
+                              Positioned(
+                                  right: AppTokens.s3,
+                                  bottom: AppTokens.s3,
+                                  child: DecoratedBox(
+                                      key: const ValueKey(
+                                          'chat-location-time-watermark'),
+                                      decoration: BoxDecoration(
+                                          color: Colors.black
+                                              .withValues(alpha: 0.45),
+                                          borderRadius: BorderRadius.circular(
+                                              AppTokens.rSm)),
+                                      child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: AppTokens.s2,
+                                              vertical: AppTokens.s2),
+                                          child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (widget.time != null)
+                                                  Text(widget.time!,
+                                                      style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize:
+                                                              ChatLocationMessageTokens
+                                                                  .footerSize)),
+                                                if (widget.status != null) ...[
+                                                  if (widget.time != null)
+                                                    const SizedBox(
+                                                        width: AppTokens.s2),
+                                                  IconTheme(
+                                                      data: const IconThemeData(
+                                                          color: Colors.white),
+                                                      child: widget.status!),
+                                                ],
+                                              ])))),
+                          ]),
+                        ])))));
   }
 }

@@ -344,7 +344,7 @@ class _ChatLocationDetailPageState extends State<ChatLocationDetailPage>
                                   point: widget.data.point!)))),
                 if (widget.data.point != null)
                   Positioned(
-                      bottom: safe.bottom + AppTokens.s3,
+                      bottom: safe.bottom,
                       left: AppTokens.s3,
                       right: AppTokens.s3,
                       child: Center(
@@ -352,8 +352,9 @@ class _ChatLocationDetailPageState extends State<ChatLocationDetailPage>
                               constraints: const BoxConstraints(
                                   maxWidth:
                                       ChatLocationDetailTokens.maxCardWidth),
-                              child: SizedBox(
-                                  height: cardHeight,
+                              child: ConstrainedBox(
+                                  constraints:
+                                      BoxConstraints(maxHeight: cardHeight),
                                   child: SingleChildScrollView(
                                       child: ChatLocationDetailCard(
                                           data: data,

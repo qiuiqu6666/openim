@@ -1,7 +1,8 @@
 # Location messages
 
-`ChatLocationMessageCard` renders the location name, optional address, real map
-thumbnail, and existing message time/delivery status. `ChatItemView` owns the
+`ChatLocationMessageCard` renders a map-only thumbnail with the existing
+message time/delivery status. Name/address remain available to accessibility
+and the detail page, without a separate header above the map. `ChatItemView` owns the
 surrounding message actions; the card does not add a second colored bubble.
 
 Tapping opens `ChatLocationDetailPage` inside the app. The map can pan and zoom,
@@ -14,7 +15,9 @@ coordinate. A late automatic fix does not override an explicit recenter. Closing
 Android reuses the existing AMap privacy consent gate. Before consent, the card
 shows a location placeholder without creating an AMap view. The detail page
 offers the existing consent flow. Returning refreshes the thumbnail consent.
-Android uses AMap snapshots; iOS retains MapKit with MKMapSnapshotter. Mobile
+Android uses AMap snapshots; iOS retains MapKit with MKMapSnapshotter. iOS
+snapshot regions are derived directly from the message pin at street scale,
+independent of a newly created map view’s default camera region. Mobile
 thumbnail map views are released after capture or timeout. An in-memory cache
 retains at most 32 snapshots, keyed by coordinate and theme. Failed snapshots
 show a placeholder; no street map or address is fabricated. Desktop retains
@@ -43,7 +46,8 @@ lighting, translucent tint), initializes the existing renderer and uses bounded
 implicit press scaling. High contrast and reduced motion retain the existing
 accessible fallback. Map thumbnails and the picker retain their original pin.
 
-Directions show installed Apple/Google/AMap/Baidu apps with their branded icons in a dismissible glass bottom sheet. A browser fallback appears when no supported map app is detected.
+Directions show installed Apple/Google/AMap/Baidu apps with their branded icons in an opaque, theme-aware bottom sheet that slides up from the screen edge.
+Icons use rounded clipping and four columns per row. A browser fallback appears when no supported map app is detected.
 The destination and shared URL always use the message's WGS84 coordinate; AMap
 receives `dev=1`, Baidu receives `coord_type=wgs84`. The public platform interface
 is awaited because map_launcher 4.4.2's convenience wrapper drops launch errors.

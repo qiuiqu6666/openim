@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:map_launcher/map_launcher.dart';
 import '../../../../res/app_tokens.dart';
-import 'chat_location_detail_chrome.dart';
 import 'chat_location_detail_labels.dart';
 import 'chat_location_detail_tokens.dart';
 
@@ -14,23 +13,31 @@ class ChatLocationMapsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labels = ChatLocationDetailLabels.of(context);
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.all(AppTokens.s3),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: ChatLocationDetailTokens.maxCardWidth,
-            maxHeight: MediaQuery.sizeOf(context).height * .7,
-          ),
-          child: ChatLocationDetailSurface(
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .7,
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: Material(
+          color: AppTokens.surface(
+              dark: Theme.of(context).brightness == Brightness.dark),
+          borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(ChatLocationDetailTokens.cardRadius)),
+          clipBehavior: Clip.antiAlias,
+          child: SafeArea(
+            top: false,
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(AppTokens.s5),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Row(children: [
-                  ChatLocationDetailControl(
-                    label: MaterialLocalizations.of(context).closeButtonTooltip,
-                    icon: Icons.close,
+                  IconButton(
+                    tooltip:
+                        MaterialLocalizations.of(context).closeButtonTooltip,
+                    icon: const Icon(Icons.close),
+                    constraints: const BoxConstraints.tightFor(
+                        width: ChatLocationDetailTokens.controlSize,
+                        height: ChatLocationDetailTokens.controlSize),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const SizedBox(width: AppTokens.s3),
@@ -46,36 +53,52 @@ class ChatLocationMapsSheet extends StatelessWidget {
                 ]),
                 const SizedBox(height: AppTokens.s8),
                 if (maps.isNotEmpty)
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: AppTokens.s5,
-                    runSpacing: AppTokens.s5,
-                    children: [
-                      for (var i = 0; i < maps.length; i++)
-                        SizedBox(
-                          width: ChatLocationDetailTokens.mapAppWidth,
-                          child: TextButton(
-                            onPressed: () => Navigator.pop(context, i),
-                            child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ExcludeSemantics(
-                                    child: SvgPicture.asset(
-                                      maps[i].icon,
-                                      width:
-                                          ChatLocationDetailTokens.mapAppIcon,
-                                      height:
-                                          ChatLocationDetailTokens.mapAppIcon,
+                  LayoutBuilder(builder: (context, constraints) {
+                    final itemWidth = (constraints.maxWidth -
+                            AppTokens.s3 *
+                                (ChatLocationDetailTokens.mapAppColumns - 1)) /
+                        ChatLocationDetailTokens.mapAppColumns;
+                    return Wrap(
+                      alignment: WrapAlignment.start,
+                      spacing: AppTokens.s3,
+                      runSpacing: AppTokens.s5,
+                      children: [
+                        for (var i = 0; i < maps.length; i++)
+                          SizedBox(
+                            width: itemWidth,
+                            child: TextButton(
+                              style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: AppTokens.s2,
+                                      vertical: AppTokens.s3)),
+                              onPressed: () => Navigator.pop(context, i),
+                              child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ExcludeSemantics(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(
+                                            AppTokens.rLg),
+                                        child: SvgPicture.asset(
+                                          maps[i].icon,
+                                          width: ChatLocationDetailTokens
+                                              .mapAppIcon,
+                                          height: ChatLocationDetailTokens
+                                              .mapAppIcon,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: AppTokens.s3),
-                                  Text(maps[i].mapName,
-                                      textAlign: TextAlign.center),
-                                ]),
+                                    const SizedBox(height: AppTokens.s3),
+                                    Text(maps[i].mapName,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center),
+                                  ]),
+                            ),
                           ),
-                        ),
-                    ],
-                  )
+                      ],
+                    );
+                  })
                 else ...[
                   Text(labels.text('未检测到可用的地图应用', '未偵測到可用的地圖 App',
                       'No supported map apps found')),

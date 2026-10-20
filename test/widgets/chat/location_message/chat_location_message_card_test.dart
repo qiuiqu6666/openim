@@ -61,6 +61,8 @@ void main() {
           expect(tester.widget<Material>(card).color,
               AppTokens.surface(dark: dark));
           expect(find.textContaining('39.9115'), findsNothing);
+          expect(find.textContaining('GRAFF'), findsNothing);
+          expect(find.textContaining('北京市东城区'), findsNothing);
           expect(find.text('14:08'), findsOneWidget);
           expect(find.byType(ChatReadReceiptIcon),
               outgoing ? findsOneWidget : findsNothing);
@@ -96,7 +98,7 @@ void main() {
                   onSelected: options.onSelected);
             }));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('GRAFF'));
+    await tester.tap(find.byKey(const ValueKey('chat-location-message-card')));
     await tester.pumpAndSettle();
     expect(find.byType(ChatLocationDetailPage), findsOneWidget);
     expect(readOnly, isTrue);
@@ -118,7 +120,7 @@ void main() {
         ChatLocationMessageCard(
             message: location(description: '旧地点', latitude: 91)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('旧地点'));
+    await tester.tap(find.byKey(const ValueKey('chat-location-message-card')));
     await tester.pumpAndSettle();
     expect(find.byType(ChatLocationDetailPage), findsNothing);
     expect(find.textContaining('王府井'), findsNothing);
@@ -148,7 +150,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.runAsync(() => saveMarkdownPreview(
           tester, 'location-card-${dark ? 'dark' : 'light'}'));
-      await tester.tap(find.textContaining('GRAFF'));
+      await tester
+          .tap(find.byKey(const ValueKey('chat-location-message-card')));
       await tester.pumpAndSettle();
       await tester.runAsync(() async {
         final boundary = tester.renderObject<RenderRepaintBoundary>(find

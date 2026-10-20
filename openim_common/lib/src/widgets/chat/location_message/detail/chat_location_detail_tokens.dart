@@ -3,7 +3,7 @@ import '../../../../res/app_tokens.dart';
 
 abstract final class ChatLocationDetailTokens {
   static const controlSize = 48.0;
-  static const mapAppWidth = 120.0;
+  static const mapAppColumns = 4;
   static const mapAppIcon = 64.0;
   static const cardRadius = 28.0;
   static const buttonHeight = 52.0;

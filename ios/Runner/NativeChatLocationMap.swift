@@ -178,7 +178,11 @@ private final class NativeChatLocationMap: NSObject,
             return
         }
         let options = MKMapSnapshotter.Options()
-        options.region = map.region
+        // A newly mounted thumbnail can still have MapKit's default world
+        // region. Snapshot the message coordinate directly, independently of
+        // the platform view's layout and camera-update timing.
+        options.region = MKCoordinateRegion(center: pin.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.0055, longitudeDelta: 0.0055))
         options.size = map.bounds.size.width > 0 ? map.bounds.size : CGSize(width: 280, height: 150)
         options.traitCollection = map.traitCollection
         let renderer = MKMapSnapshotter(options: options)

@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:map_launcher/map_launcher.dart';
 import 'package:openim_common/src/widgets/liquid_glass_surface.dart';
+import 'package:openim_common/src/widgets/chat/location_message/detail/chat_location_detail_chrome.dart';
 import 'package:openim_common/src/widgets/chat/location_message/chat_location_detail_page.dart';
 import 'package:openim_common/src/widgets/chat/location_message/chat_location_message_data.dart';
 import 'package:openim_common/src/widgets/chat/location_message/detail/chat_location_detail_actions.dart';
@@ -55,7 +56,8 @@ void main() {
   Future<void> mount(WidgetTester tester, Source source, Actions actions,
       {Size size = const Size(390, 844),
       double scale = 1,
-      bool dark = false}) async {
+      bool dark = false,
+      double bottomInset = 0}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -66,8 +68,9 @@ void main() {
         locale: const Locale('zh', 'CN'),
         theme: ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
         builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: TextScaler.linear(scale)),
+            data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(scale),
+                padding: EdgeInsets.only(bottom: bottomInset)),
             child: child!),
         home: ChatLocationDetailPage(
             data: data,
@@ -83,6 +86,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
   }
 
+  for (final dark in [false, true]) {
+    for (final inset in [0.0, 34.0]) {
+      testWidgets('location card hugs bottom dark=$dark inset=$inset',
+          (tester) async {
+        await mount(tester, Source(), Actions(),
+            dark: dark, bottomInset: inset);
+        final card = tester.getRect(find.byType(ChatLocationDetailCard));
+        expect(card.bottom, closeTo(844 - inset, .1));
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
   testWidgets(
       'each visit automatically locates without overwriting shared destination',
       (tester) async {
