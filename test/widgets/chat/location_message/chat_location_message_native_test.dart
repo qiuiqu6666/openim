@@ -27,7 +27,8 @@ void main() {
     try {
       await mountMarkdown(tester, ChatLocationMessageCard(message: location()));
       expect(native.creates, isEmpty);
-      await tester.tap(find.textContaining('GRAFF'));
+      await tester
+          .tap(find.byKey(const ValueKey('chat-location-message-card')));
       await tester.pumpAndSettle();
       expect(native.creates, isEmpty);
       expect(find.byKey(const ValueKey('chat-location-amap-consent')),

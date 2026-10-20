@@ -13,6 +13,7 @@ import '../location_picker/native/chat_location_native_map.dart';
 import '../location_picker/native/chat_location_native_map_options.dart';
 import 'chat_location_message_data.dart';
 import 'detail/chat_location_detail_actions.dart';
+import 'detail/chat_location_maps_sheet.dart';
 import 'detail/chat_location_address_source.dart';
 import 'weather/chat_location_weather_chip.dart';
 import 'detail/chat_location_detail_chrome.dart';
@@ -145,25 +146,12 @@ class _ChatLocationDetailPageState extends State<ChatLocationDetailPage>
           maps = [];
         }
         if (!mounted) return;
-        final labels = ChatLocationDetailLabels.of(context);
-        // Always offer a web route, including devices without a maps application.
         final selection = await showModalBottomSheet<int>(
             context: context,
             useSafeArea: true,
-            builder: (context) => SafeArea(
-                    child: SingleChildScrollView(
-                        child:
-                            Column(mainAxisSize: MainAxisSize.min, children: [
-                  for (var i = 0; i < maps.length; i++)
-                    ListTile(
-                        leading: const Icon(Icons.map_outlined),
-                        title: Text(maps[i].mapName),
-                        onTap: () => Navigator.pop(context, i)),
-                  ListTile(
-                      leading: const Icon(Icons.open_in_browser),
-                      title: Text(labels.browser),
-                      onTap: () => Navigator.pop(context, -1)),
-                ]))));
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (context) => ChatLocationMapsSheet(maps: maps));
         if (!mounted || selection == null) return;
         await widget.actions
             .directions(_displayData, selection < 0 ? null : maps[selection]);
