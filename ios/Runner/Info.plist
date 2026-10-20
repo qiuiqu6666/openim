@@ -34,6 +34,7 @@
 			<string>openim.friend.invites</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>chat99</string>
 				<string>openim</string>
 			</array>
 		</dict>

@@ -7,6 +7,8 @@ import 'package:openim/pages/group_features/sangong/models/agent_rebate_models.d
 import 'package:openim/pages/group_features/sangong/pages/sangong_agent_member_detail_page.dart';
 import 'package:openim/pages/group_features/sangong/support/sangong_ui.dart';
 import 'package:openim/pages/group_features/sangong/widgets/app_back_button.dart';
+import '../agents/dashboard/dashboard_visuals.dart';
+import '../agents/dashboard/sangong_team_daily_view.dart';
 import '../widgets/authorization/sangong_agent_authorized_view.dart';
 
 class SangongAgentDashboardPage extends StatefulWidget {
@@ -36,6 +38,9 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
   late final _accountSession = AgentSessionSnapshot(SangongScope.read(context));
   bool get _isCurrentSession => mounted && _accountSession.isCurrent;
 
+  String _search = '';
+  int _sort = 0;
+  bool _daily = false;
   int _loadRequest = 0;
   bool _loading = true;
   String? _error;
@@ -115,254 +120,321 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
   @override
   Widget build(BuildContext context) {
     final summary = _map(_data?['summary']);
-    final batch = _map(_data?['batch']);
     final members = (_data?['members'] is List)
         ? (_data!['members'] as List).whereType<Map>().map(_map).toList()
         : const <Map<String, dynamic>>[];
+    final visible = members.where((member) {
+      final query = _search.trim().toLowerCase();
+      return (query.isEmpty ||
+          ['nickname', 'imUserId', 'remark', 'account']
+              .any((key) => _text(member[key]).toLowerCase().contains(query)));
+    }).toList();
+    visible.sort((a, b) {
+      final left = _sort == 0 ? _asNum(a['balance']) : _totalTurnover(a);
+      final right = _sort == 0 ? _asNum(b['balance']) : _totalTurnover(b);
+      // Unknown amounts go last; equal amounts retain a deterministic order.
+      if (left == null && right != null) return 1;
+      if (left != null && right == null) return -1;
+      final order = left == null ? 0 : right!.compareTo(left);
+      return order != 0
+          ? order
+          : _text(a['imUserId']).compareTo(_text(b['imUserId']));
+    });
+    final t = DashboardVisuals(context);
     return SangongAgentAuthorizedView(
       runtime: _accountSession.runtime,
       session: _accountSession,
       child: Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        backgroundColor: t.background,
         appBar: AppBar(
           leading: const AppBackButton(),
-          title: Text(AppCopy.text('团队统计'),
-              style: TextStyle(fontWeight: FontWeight.w700)),
+          title: Text(AppCopy.text('团队统计'), style: t.title),
           centerTitle: true,
+          bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(56),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: DashboardVisuals.gap),
+                child: SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('团队概览')),
+                    ButtonSegment(value: true, label: Text('团队每日'))
+                  ],
+                  selected: {_daily},
+                  onSelectionChanged: (value) =>
+                      setState(() => _daily = value.first),
+                ),
+              )),
           surfaceTintColor: Colors.transparent,
         ),
-        body: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? Center(
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text(_error!),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                        onPressed: _load, child: Text(AppCopy.text('重试')))
-                  ]))
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        _batchCard(batch),
-                        const SizedBox(height: 18),
-                        _sectionTitle(
-                            AppCopy.text('团队概览'), Icons.insights_rounded),
-                        const SizedBox(height: 10),
-                        _summaryCard(summary),
-                        const SizedBox(height: 22),
-                        _sectionTitle(
-                            AppCopy.text('下级明细'), Icons.groups_2_rounded,
-                            trailing: '${members.length} 人'),
-                        const SizedBox(height: 10),
-                        if (members.isEmpty)
-                          Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Center(child: Text(AppCopy.text('暂无下级')))),
-                        ...members.map(_memberCard),
-                      ],
-                    ),
-                  ),
+        body: SafeArea(
+            top: false,
+            child: _daily
+                ? const SangongTeamDailyView()
+                : _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                        ? Center(
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                Text(_error!),
+                                FilledButton(
+                                    onPressed: _load,
+                                    child: Text(AppCopy.text('重试')))
+                              ]))
+                        : RefreshIndicator(
+                            onRefresh: _load,
+                            child: ListView.builder(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
+                              padding:
+                                  const EdgeInsets.all(DashboardVisuals.inset),
+                              itemCount: visible.length + 3,
+                              itemBuilder: (context, index) {
+                                if (index == 0) return _summaryCard(summary);
+                                if (index == 1) return _membersHeader(members);
+                                if (index == visible.length + 2) {
+                                  return Container(
+                                      padding: const EdgeInsets.all(
+                                          DashboardVisuals.inset),
+                                      decoration: t.panel(bottom: true),
+                                      child: visible.isEmpty
+                                          ? Center(
+                                              child: Text(AppCopy.text(
+                                                  members.isEmpty
+                                                      ? '暂无下级'
+                                                      : '没有匹配的下级')))
+                                          : null);
+                                }
+                                return Container(
+                                  color: t.surface,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: DashboardVisuals.inset),
+                                  child: _memberCard(visible[index - 2]),
+                                );
+                              },
+                            ),
+                          )),
       ),
     );
   }
 
-  Widget _batchCard(Map<String, dynamic> batch) {
-    final running = _text(batch['status']).toLowerCase() == 'running';
-    final start = _text(batch['startedAt']);
-    final stop = _text(batch['stoppedAt']);
-    String time(String value) => value.length >= 16
-        ? value.substring(5, 16).replaceFirst('T', ' ')
-        : value;
-    return Card(
-      elevation: 0,
-      color: Theme.of(context).colorScheme.surface,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Row(children: [
-          Icon(Icons.calendar_today_rounded,
-              size: 19, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 10),
-          Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(AppCopy.text('当前业务批次'),
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 4),
-                Text(
-                    _text(batch['batchNo']).isEmpty
-                        ? '未指定'
-                        : _text(batch['batchNo']),
-                    style: const TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w700)),
-                if (start.isNotEmpty)
-                  Text('${time(start)} ～ ${running ? '至今' : time(stop)}',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant)),
-              ])),
-          Text(
-              running
-                  ? AppCopy.text('● 开机中')
-                  : _text(batch['status']).isEmpty
-                      ? AppCopy.text('状态未知')
-                      : AppCopy.text('已结算'),
-              style: TextStyle(
-                  color: running
-                      ? (Theme.of(context).brightness == Brightness.dark
-                          ? Colors.green.shade300
-                          : Colors.green.shade800)
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600)),
+  Widget _membersHeader(List<Map<String, dynamic>> members) {
+    final t = DashboardVisuals(context);
+    return Container(
+      margin: const EdgeInsets.only(top: DashboardVisuals.sectionGap),
+      padding: const EdgeInsets.all(DashboardVisuals.inset),
+      decoration: t.panel(top: true),
+      child: Column(children: [
+        Row(children: [
+          Icon(Icons.groups_rounded, color: t.blue),
+          const SizedBox(width: DashboardVisuals.gap),
+          Expanded(child: Text(AppCopy.text('下级明细'), style: t.heading)),
+          Text('${members.length} 人', style: t.label),
         ]),
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String title, IconData icon, {String? trailing}) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 7),
-        Text(title,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-        const Spacer(),
-        if (trailing != null)
-          Text(trailing,
-              style: TextStyle(
-                  fontSize: 13,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
-      ],
+        const SizedBox(height: DashboardVisuals.inset),
+        Row(children: [
+          Expanded(
+              child: TextField(
+            onChanged: (value) => setState(() => _search = value),
+            decoration: InputDecoration(
+              hintText: AppCopy.text('搜索下级昵称/ID'),
+              prefixIcon: const Icon(Icons.search_rounded),
+              filled: true,
+              fillColor: t.soft,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(DashboardVisuals.radius),
+                  borderSide: BorderSide.none),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(DashboardVisuals.radius),
+                  borderSide: BorderSide.none),
+            ),
+          )),
+          PopupMenuButton<int>(
+            tooltip: AppCopy.text('选择排序方式'),
+            initialValue: _sort,
+            onSelected: (value) => setState(() => _sort = value),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 0, child: Text('按积分（从高到低）')),
+              PopupMenuItem(value: 1, child: Text('按总流水（从高到低）')),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.all(DashboardVisuals.gap),
+              child: Row(children: [
+                Icon(Icons.filter_alt_outlined, color: t.blue),
+                Text(AppCopy.text(_sort == 0 ? '按积分' : '按流水'), style: t.label)
+              ]),
+            ),
+          ),
+        ]),
+      ]),
     );
   }
 
   Widget _summaryCard(Map<String, dynamic> summary) {
-    return Card(
-      elevation: 0,
-      color: Theme.of(context).colorScheme.surface,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _heroMetric(
-              AppCopy.text('团队总余额'), _money(summary['totalBalance']), null),
-          const SizedBox(height: 12),
-          _heroMetric(
-            AppCopy.text('总流水'),
-            _money(_totalTurnover(summary)),
-            null,
-          ),
-          const SizedBox(height: 14),
-          _compactGrid(summary),
-        ]),
+    final t = DashboardVisuals(context);
+    final fields = <(String, String, IconData, Color)>[
+      (
+        '闲流水',
+        _money(summary['playerTurnover']),
+        Icons.schedule_rounded,
+        t.purple
       ),
+      (
+        '庄流水',
+        _money(summary['bankerTurnover']),
+        Icons.storage_rounded,
+        t.orange
+      ),
+      (
+        '团队人数',
+        _num(summary['memberCount']),
+        Icons.people_outline_rounded,
+        t.blue
+      ),
+      (
+        '直属人数',
+        _num(summary['directMemberCount']),
+        Icons.person_outline_rounded,
+        t.pink
+      ),
+      ('上分', _money(summary['totalUp']), Icons.trending_up_rounded, t.green),
+      ('下分', _money(summary['totalDown']), Icons.arrow_downward_rounded, t.red),
+      (
+        '团队盈亏',
+        _money(summary['totalProfitLoss'] ?? summary['profitLoss']),
+        Icons.bar_chart_rounded,
+        t.blue
+      ),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(DashboardVisuals.inset),
+      decoration: t.panel(top: true, bottom: true),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.bar_chart_rounded, color: t.blue),
+          const SizedBox(width: DashboardVisuals.gap),
+          Text(AppCopy.text('团队概览'), style: t.heading)
+        ]),
+        const SizedBox(height: DashboardVisuals.inset),
+        Container(
+          decoration: BoxDecoration(
+              color: t.soft,
+              borderRadius: BorderRadius.circular(DashboardVisuals.radius)),
+          child: _metricRow([
+            (
+              '团队总余额',
+              _money(summary['totalBalance']),
+              Icons.account_balance_wallet_outlined,
+              t.blue
+            ),
+            (
+              '总流水',
+              _money(_totalTurnover(summary)),
+              Icons.storage_rounded,
+              t.green
+            ),
+          ], hero: true),
+        ),
+        const SizedBox(height: DashboardVisuals.gap),
+        Container(
+          decoration: BoxDecoration(
+              border: Border.all(color: t.line),
+              borderRadius: BorderRadius.circular(DashboardVisuals.radius)),
+          child: Column(children: [
+            for (var i = 0; i < fields.length; i += 2) ...[
+              if (i > 0) Divider(height: 1, color: t.line),
+              _metricRow(fields.skip(i).take(2).toList()),
+            ],
+          ]),
+        ),
+      ]),
     );
   }
 
-  Widget _heroMetric(String label, String value, dynamic state) {
-    final number = state is num ? state : num.tryParse(_text(state)) ?? 0;
-    final color = state == null
-        ? Theme.of(context).colorScheme.onSurface
-        : number > 0
-            ? (Theme.of(context).brightness == Brightness.dark
-                ? Colors.green.shade300
-                : Colors.green.shade800)
-            : number < 0
-                ? Theme.of(context).colorScheme.error
-                : Theme.of(context).colorScheme.onSurface;
-    return Row(children: [
-      Expanded(
-          child: Text(label,
-              style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant))),
-      Text(value,
-          style: TextStyle(
-              fontSize: 22, fontWeight: FontWeight.w800, color: color))
-    ]);
-  }
-
-  Widget _compactGrid(Map<String, dynamic> summary) {
-    final fields = <(String, String, bool)>[
-      (AppCopy.text('闲流水'), _money(summary['playerTurnover']), false),
-      (AppCopy.text('庄流水'), _money(summary['bankerTurnover']), false),
-      (AppCopy.text('团队人数'), _num(summary['memberCount']), false),
-      (AppCopy.text('直属人数'), _num(summary['directMemberCount']), false),
-      ('上分', _money(summary['totalUp']), false),
-      ('下分', _money(summary['totalDown']), false),
-      (
-        AppCopy.text('团队盈亏'),
-        _money(summary['totalProfitLoss'] ?? summary['profitLoss']),
-        false
-      ),
-    ];
-    return GridView.count(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: 2,
-        childAspectRatio: 3.8,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 12,
-        children: fields
-            .map((item) => Row(children: [
-                  Expanded(
-                      child: Text(item.$1,
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant))),
-                  Text(item.$2,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700))
-                ]))
-            .toList());
+  Widget _metricRow(List<(String, String, IconData, Color)> fields,
+      {bool hero = false}) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final stacked = constraints.maxWidth < 280 ||
+          MediaQuery.textScalerOf(context).scale(14) > 22;
+      final widgets = fields
+          .map((f) => DashboardMetric(
+              label: f.$1, value: f.$2, icon: f.$3, color: f.$4, hero: hero))
+          .toList();
+      return stacked
+          ? Column(children: widgets)
+          : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              ...widgets.map((widget) => Expanded(child: widget)),
+              if (widgets.length == 1) const Spacer(),
+            ]);
+    });
   }
 
   Widget _memberCard(Map<String, dynamic> member) {
+    final t = DashboardVisuals(context);
     final name = _text(member['nickname']).trim().isEmpty
         ? AppCopy.text('用户')
         : _text(member['nickname']);
-    return Card(
-      elevation: 0,
-      color: Theme.of(context).colorScheme.surface,
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        leading: SangongIMAvatar(
-            userID: _text(member['imUserId']), nickname: name, size: 48),
-        title: SangongUserName(
-            userID: _text(member['imUserId']),
-            nickname: name,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-              AppCopy.format('{#0} · 余额 {#1} · 返水 {#2} · 闲 {#3} · 庄 {#4}', [
-            _levelLabel(member['levelNo']),
-            _money(member['balance']),
-            _rebateRate(member),
-            _money(member['playerTurnover']),
-            _money(member['bankerTurnover'])
-          ])),
+    return Padding(
+      padding: const EdgeInsets.only(top: DashboardVisuals.gap),
+      child: Material(
+        color: t.surface,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DashboardVisuals.radius),
+            side: BorderSide(color: t.line)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            if (!_isCurrentSession) return;
+            SangongAgentMemberDetailPage.open(
+                context, SangongTeamMemberDto.fromJson(member));
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(DashboardVisuals.gap),
+            child: Row(children: [
+              SangongIMAvatar(
+                  userID: _text(member['imUserId']),
+                  nickname: name,
+                  size: DashboardVisuals.avatar),
+              const SizedBox(width: DashboardVisuals.gap),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    SangongUserName(
+                        userID: _text(member['imUserId']),
+                        nickname: name,
+                        style: t.memberName),
+                    const SizedBox(height: DashboardVisuals.smallGap),
+                    Wrap(
+                        spacing: DashboardVisuals.gap,
+                        runSpacing: DashboardVisuals.smallGap,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: DashboardVisuals.smallGap,
+                                  vertical: DashboardVisuals.badgeInset),
+                              decoration: BoxDecoration(
+                                  color: t.blue.withValues(alpha: .09),
+                                  borderRadius: BorderRadius.circular(
+                                      DashboardVisuals.badgeRadius)),
+                              child: Text(_levelLabel(member['levelNo']),
+                                  style: t.detail.copyWith(color: t.blue))),
+                          Text('余额 ${_money(member['balance'])}',
+                              style: t.detail),
+                          Text('返水 ${_rebateRate(member)}', style: t.detail),
+                          Text('闲 ${_money(member['playerTurnover'])}',
+                              style: t.detail),
+                          Text('庄 ${_money(member['bankerTurnover'])}',
+                              style: t.detail),
+                        ]),
+                  ])),
+              Icon(Icons.chevron_right_rounded, color: t.secondary),
+            ]),
+          ),
         ),
-        trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: () {
-          if (!_isCurrentSession) return;
-          SangongAgentMemberDetailPage.open(
-            context,
-            SangongTeamMemberDto.fromJson(member),
-          );
-        },
       ),
     );
   }

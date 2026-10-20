@@ -33,27 +33,32 @@ class ChatMediaUpload {
   Future<String> _upload(
       String id, String path, String? contentType, ChatMediaTrace trace) async {
     if (isClosed()) throw StateError('Chat closed');
-    final result = await trace.run(
-        id.startsWith('chat-media:') ? 'upload_source' : 'upload_preview',
-        () => OpenIM.iMManager
-            .uploadFile(
-              id: id,
-              filePath: path,
-              fileName: p.basename(path),
-              contentType: contentType,
-              operationID: trace.id,
-            )
-            .timeout(uploadTimeout));
-    if (isClosed()) throw StateError('Chat closed');
-    final decoded = result is String ? jsonDecode(result) : result;
-    final url = decoded is Map ? decoded['url'] : null;
-    final uri = url is String ? Uri.tryParse(url) : null;
-    if (uri == null ||
-        !{'http', 'https'}.contains(uri.scheme) ||
-        uri.host.isEmpty) {
-      throw const FormatException('Upload did not return a media URL');
-    }
-    return url as String;
+    return trace.run(
+        id.startsWith('chat-media:')
+            ? 'upload_source'
+            : id.startsWith('chat-snapshot:')
+                ? 'upload_video_cover'
+                : 'upload_preview', () async {
+      final result = await OpenIM.iMManager
+          .uploadFile(
+            id: id,
+            filePath: path,
+            fileName: p.basename(path),
+            contentType: contentType,
+            operationID: trace.id,
+          )
+          .timeout(uploadTimeout);
+      if (isClosed()) throw StateError('Chat closed');
+      final decoded = result is String ? jsonDecode(result) : result;
+      final url = decoded is Map ? decoded['url'] : null;
+      final uri = url is String ? Uri.tryParse(url) : null;
+      if (uri == null ||
+          !{'http', 'https'}.contains(uri.scheme) ||
+          uri.host.isEmpty) {
+        throw const FormatException('Upload did not return a media URL');
+      }
+      return url as String;
+    });
   }
 
   Future<({PictureInfo picture, String? extra})?> _optionalPreview(

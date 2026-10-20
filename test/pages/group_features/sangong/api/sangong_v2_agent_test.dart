@@ -43,6 +43,7 @@ void main() {
     final runtime = SangongRuntime(sangongTestContext(api));
     addTearDown(runtime.dispose);
     api.respond = (call) => {
+          'snapshotId': 'test-snapshot',
           'version': 4,
           'nextBeforeId': call.query?['beforeId'] == null ? 9 : 0,
           'members': [
@@ -52,6 +53,8 @@ void main() {
     final team = await completeSangongRequest(
         tester, runtime.agent.fetchSangongTeamMembers());
     expect(team.members.map((m) => m.imUserId), ['first', 'second']);
+    expect(api.calls.first.query?['snapshotId'], 'new');
+    expect(api.calls.last.query?['snapshotId'], 'test-snapshot');
     expect(api.calls.last.query?['beforeId'], 9);
     api.respond = (call) => {
           'version': call.query?['beforeId'] == null ? 4 : 5,
@@ -60,6 +63,36 @@ void main() {
         };
     await rejectSangongRequest(
         tester, runtime.agent.fetchSangongTeamMembers(), isA<StateError>());
+  });
+
+  testWidgets('team restarts once after a version change and discards old rows',
+      (tester) async {
+    final api = SangongTestApi();
+    final runtime = SangongRuntime(sangongTestContext(api));
+    addTearDown(runtime.dispose);
+    var requests = 0;
+    api.respond = (call) {
+      requests++;
+      final first = call.query?['beforeId'] == null;
+      return {
+        'version': requests == 1 ? 4 : 5,
+        'nextBeforeId': first ? 9 : 0,
+        'members': [
+          {
+            'imUserId': requests == 1
+                ? 'stale'
+                : first
+                    ? 'fresh-first'
+                    : 'fresh-second'
+          }
+        ],
+      };
+    };
+    final team = await completeSangongRequest(
+        tester, runtime.agent.fetchSangongTeamMembers());
+    expect(
+        team.members.map((m) => m.imUserId), ['fresh-first', 'fresh-second']);
+    expect(requests, 4);
   });
 
   testWidgets('command success requires the matching idempotency receipt',

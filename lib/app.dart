@@ -18,6 +18,9 @@ import 'theme/app_theme_controller.dart';
 import 'theme/app_theme_data.dart';
 import 'theme/app_scroll_behavior.dart';
 import 'widgets/app_view.dart';
+import 'services/messaging/browser_link_share.dart';
+import 'services/media_recognition/media_image_recognition_host.dart';
+import 'package:openim_common/media_recognition.dart';
 
 class ChatApp extends StatelessWidget {
   const ChatApp({super.key});
@@ -75,6 +78,8 @@ class ChatApp extends StatelessWidget {
 class InitBinding extends Bindings {
   @override
   void dependencies() {
+    InAppBrowserShare.send = shareBrowserLink;
+    MediaImageRecognition.start = recognizePreviewImage;
     final network = Get.put(StartupNetworkPreparation(
         prepareNetwork: (onShieldStarting) =>
             YoumengRuntime.prepare(onShieldStarting: onShieldStarting)));

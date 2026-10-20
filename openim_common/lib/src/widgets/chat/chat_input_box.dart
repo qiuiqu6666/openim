@@ -25,6 +25,8 @@ class ChatInputBox extends StatefulWidget {
     this.style,
     this.atStyle,
     this.enabled = true,
+    this.pendingSend = false,
+    this.pendingSending = false,
     this.showDisabledWarning = true,
     this.isNotInGroup = false,
     this.hintText,
@@ -44,6 +46,8 @@ class ChatInputBox extends StatefulWidget {
   final TextStyle? style;
   final TextStyle? atStyle;
   final bool enabled;
+  final bool pendingSend;
+  final bool pendingSending;
   final bool showDisabledWarning;
   final bool isNotInGroup;
   final String? hintText;
@@ -129,7 +133,8 @@ class _ChatInputBoxState extends State<ChatInputBox>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _sendButtonVisible = widget.controller?.text.isNotEmpty ?? false;
+    _sendButtonVisible =
+        widget.pendingSend || (widget.controller?.text.isNotEmpty ?? false);
     _focusNode.addListener(_focusChanged);
 
     _toolSubscription = widget.forceCloseToolboxSub?.listen((value) {
@@ -157,15 +162,22 @@ class _ChatInputBoxState extends State<ChatInputBox>
       (oldWidget.focusNode ?? _fallbackFocusNode).removeListener(_focusChanged);
       _focusNode.addListener(_focusChanged);
     }
+    if (oldWidget.pendingSend != widget.pendingSend) {
+      _sendButtonVisible =
+          widget.pendingSend || (widget.controller?.text.isNotEmpty ?? false);
+      if (widget.pendingSend) _leftKeyboardButton = false;
+    }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_syncSendButton);
       widget.controller?.addListener(_syncSendButton);
-      _sendButtonVisible = widget.controller?.text.isNotEmpty ?? false;
+      _sendButtonVisible =
+          widget.pendingSend || (widget.controller?.text.isNotEmpty ?? false);
     }
   }
 
   void _syncSendButton() {
-    final visible = widget.controller?.text.isNotEmpty ?? false;
+    final visible =
+        widget.pendingSend || (widget.controller?.text.isNotEmpty ?? false);
     if (mounted && visible != _sendButtonVisible) {
       setState(() => _sendButtonVisible = visible);
     }
@@ -195,7 +207,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
     final emojiVisible = _emojiVisible && showPanel;
     final voiceVisible = _leftKeyboardButton && showPanel;
     final alternatePanelVisible = emojiVisible || voiceVisible;
-    final content = _inputBlocked
+    final content = _inputBlocked && !widget.pendingSending
         ? ChatDisableInputBox(
             showWarning: widget.isNotInGroup || widget.showDisabledWarning,
             message: widget.isNotInGroup
@@ -215,7 +227,14 @@ class _ChatInputBoxState extends State<ChatInputBox>
                 ),
                 child: Row(
                   children: [
-                    if (widget.onTapVoice != null)
+                    if (widget.pendingSend) ...[
+                      _buildIconAction(
+                          tooltip: StrRes.add,
+                          onPressed: widget.enabled ? toggleToolbox : null,
+                          asset: 'add'),
+                      const SizedBox(width: ChatComposerTokens.actionGap),
+                    ],
+                    if (widget.onTapVoice != null && !widget.pendingSend)
                       _buildIconAction(
                         tooltip: StrRes.voiceCapture,
                         onPressed: widget.enabled
@@ -234,7 +253,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
                             : null,
                         asset: _leftKeyboardButton ? 'keyboard' : 'voice',
                       ),
-                    if (widget.onTapVoice != null)
+                    if (widget.onTapVoice != null && !widget.pendingSend)
                       const SizedBox(width: ChatComposerTokens.actionGap),
                     Expanded(
                       child: Stack(
@@ -497,7 +516,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
     if (_inputBlocked) return;
     if (null != widget.onSend && null != widget.controller) {
       final text = widget.controller!.text;
-      if (text.trim().isNotEmpty) widget.onSend!(text);
+      if (widget.pendingSend || text.trim().isNotEmpty) widget.onSend!(text);
     }
   }
 

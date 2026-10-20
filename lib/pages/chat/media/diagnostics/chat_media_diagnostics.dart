@@ -20,12 +20,14 @@ class ChatMediaDiagnostics {
     final code = error is PlatformException ? int.tryParse(error.code) : null;
     final event = <String, Object?>{
       'stage': stage,
+      'timestampUtc': DateTime.now().toUtc().toIso8601String(),
       if (traceID != null) 'traceID': traceID,
       if (messageID != null) 'clientMsgID': messageID,
       if (outcome != null) 'outcome': outcome,
       if (elapsedMs != null) 'elapsedMs': elapsedMs,
       if (count != null) 'count': count,
       if (error != null) 'errorType': error.runtimeType.toString(),
+      if (error != null) ...mediaErrorFields(error),
       if (code != null) 'sdkCode': code,
       if (error is FileSystemException && error.osError != null)
         'osCode': error.osError!.errorCode,

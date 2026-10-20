@@ -1,3 +1,4 @@
+import '../../widgets/group_feature_tokens.dart';
 import 'package:openim_common/localization.dart';
 import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
@@ -141,64 +142,91 @@ class _TransfersState extends State<SangongAgentTransfersPage> {
         session: _session,
         requireHistory: true,
         child: Scaffold(
+          backgroundColor: GroupFeatureTokens.of(context).background,
           appBar: AppBar(
+            centerTitle: true,
             leading: const AppBackButton(),
             title: Text(AppCopy.text('我的划转记录')),
           ),
-          body: Column(children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: SegmentedButton<String>(
-                segments: [
-                  ButtonSegment(value: 'all', label: Text('全部')),
-                  ButtonSegment(value: 'out', label: Text(AppCopy.text('转出'))),
-                  ButtonSegment(value: 'in', label: Text(AppCopy.text('转入'))),
-                ],
-                selected: {_direction},
-                onSelectionChanged: (values) {
-                  if (values.first == _direction) return;
-                  setState(() {
-                    _direction = values.first;
-                    _limit = 100;
-                  });
-                  _load();
-                },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(children: [
-                Expanded(
-                  child: TextField(
-                    controller: _batchController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => _applyBatch(),
-                    decoration: InputDecoration(
-                      labelText: AppCopy.text('批次 ID（选填）'),
-                      hintText: AppCopy.text('留空查询全部批次'),
-                      errorText: _batchError,
-                      isDense: true,
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        tooltip: AppCopy.text('清除批次筛选'),
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _batchController.clear();
-                          _applyBatch();
+          body: SafeArea(
+              top: false,
+              child: Column(children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: SizedBox(
+                      width: double.infinity,
+                      child: SegmentedButton<String>(
+                        showSelectedIcon: false,
+                        style: ButtonStyle(
+                          minimumSize: const WidgetStatePropertyAll(
+                              Size(0, kMinInteractiveDimension)),
+                          side: WidgetStatePropertyAll(BorderSide(
+                              color: GroupFeatureTokens.of(context).divider)),
+                        ),
+                        segments: [
+                          ButtonSegment(value: 'all', label: Text('全部')),
+                          ButtonSegment(
+                              value: 'out', label: Text(AppCopy.text('转出'))),
+                          ButtonSegment(
+                              value: 'in', label: Text(AppCopy.text('转入'))),
+                        ],
+                        selected: {_direction},
+                        onSelectionChanged: (values) {
+                          if (values.first == _direction) return;
+                          setState(() {
+                            _direction = values.first;
+                            _limit = 100;
+                          });
+                          _load();
                         },
+                      )),
+                ),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _batchController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (_) => _applyBatch(),
+                        decoration: InputDecoration(
+                          hintText: AppCopy.text('输入批次 ID 筛选'),
+                          filled: true,
+                          fillColor: GroupFeatureTokens.of(context).surface,
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          errorText: _batchError,
+                          isDense: true,
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                  GroupFeatureTokens.of(context).cardRadius),
+                              borderSide: BorderSide.none),
+                          suffixIcon: IconButton(
+                            tooltip: AppCopy.text('清除批次筛选'),
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _batchController.clear();
+                              _applyBatch();
+                            },
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                        style: FilledButton.styleFrom(
+                            minimumSize: const Size(kMinInteractiveDimension,
+                                kMinInteractiveDimension)),
+                        onPressed: _applyBatch,
+                        child: Text(AppCopy.text('查询'))),
+                  ]),
                 ),
-                const SizedBox(width: 8),
-                FilledButton(
-                    onPressed: _applyBatch, child: Text(AppCopy.text('查询'))),
-              ]),
-            ),
-            Expanded(child: _body()),
-          ]),
+                Expanded(child: _body()),
+              ])),
         ),
       );
 
@@ -219,6 +247,7 @@ class _TransfersState extends State<SangongAgentTransfersPage> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         itemCount: _records.length + 2,
@@ -237,9 +266,37 @@ class _TransfersState extends State<SangongAgentTransfersPage> {
           }
           if (index <= _records.length) return _record(_records[index - 1]);
           if (_records.isEmpty) {
+            final tokens = GroupFeatureTokens.of(context);
             return Padding(
-              padding: EdgeInsets.all(40),
-              child: Center(child: Text(AppCopy.text('暂无划转记录'))),
+              padding: EdgeInsets.symmetric(
+                  vertical: tokens.inset * 3, horizontal: tokens.inset),
+              child: Column(children: [
+                CircleAvatar(
+                    radius: tokens.inset * 2,
+                    backgroundColor: tokens.surfaceAlt,
+                    child: Icon(Icons.swap_horiz_rounded,
+                        size: tokens.inset * 2, color: tokens.secondary)),
+                SizedBox(height: tokens.inset),
+                Text(AppCopy.text('暂无划转记录'),
+                    style: Theme.of(context).textTheme.titleMedium),
+                SizedBox(height: tokens.inset / 2),
+                Text(
+                    AppCopy.text(_sessionId != null
+                        ? '当前批次没有符合条件的记录，可清除筛选查看'
+                        : '完成积分划转后，可在这里查看明细'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: tokens.secondary)),
+                if (_sessionId != null)
+                  TextButton(
+                      onPressed: () {
+                        _batchController.clear();
+                        _applyBatch();
+                      },
+                      child: Text(AppCopy.text('查看全部批次'))),
+              ]),
             );
           }
           if (_records.length >= _limit && _limit < 500) {
@@ -272,10 +329,16 @@ class _TransfersState extends State<SangongAgentTransfersPage> {
     final color = record.isOutgoing
         ? Theme.of(context).colorScheme.onSurface
         : Theme.of(context).colorScheme.primary;
+    final tokens = GroupFeatureTokens.of(context);
+    final textTheme = Theme.of(context).textTheme;
     return Card(
+      elevation: 0,
+      color: tokens.surface,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(tokens.cardRadius)),
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(tokens.inset),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             SizedBox(
@@ -294,7 +357,8 @@ class _TransfersState extends State<SangongAgentTransfersPage> {
             Expanded(
               child: Text(
                 '${record.isOutgoing ? AppCopy.text('转出给') : AppCopy.text('转入自')} ${sangongDisplayName(record.displayName, record.counterpartImUserId)}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style:
+                    textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
           ]),
@@ -302,14 +366,19 @@ class _TransfersState extends State<SangongAgentTransfersPage> {
           Text(
               AppCopy.format(
                   '{#0}{#1} 积分', [record.isOutgoing ? '−' : '+', amount]),
-              style: TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.w700, color: color)),
+              style: textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w700, color: color)),
           if (record.counterpartImUserId.isNotEmpty)
             SangongPublicAccount(userID: record.counterpartImUserId),
-          Text(time),
-          Text('批次 ID：${record.sessionId}'),
+          SizedBox(height: tokens.inset / 2),
+          Divider(color: tokens.divider),
+          Text(time,
+              style: textTheme.bodySmall?.copyWith(color: tokens.secondary)),
+          Text('批次 ID：${record.sessionId}',
+              style: textTheme.bodySmall?.copyWith(color: tokens.secondary)),
           if (record.referenceId.isNotEmpty)
-            SelectableText(AppCopy.format('流水号：{#0}', [record.referenceId])),
+            SelectableText(AppCopy.format('流水号：{#0}', [record.referenceId]),
+                style: textTheme.bodySmall?.copyWith(color: tokens.secondary)),
         ]),
       ),
     );

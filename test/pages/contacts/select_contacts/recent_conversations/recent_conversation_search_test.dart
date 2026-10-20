@@ -11,6 +11,7 @@ Finder get _search => find.descendant(
 
 Future<void> _query(WidgetTester tester, String text) async {
   await tester.enterText(_search, text);
+  await tester.pump(const Duration(milliseconds: 300));
   await tester.pumpAndSettle();
 }
 
@@ -20,10 +21,53 @@ Future<void> _clear(WidgetTester tester) async {
       widget.image is AssetImage &&
       (widget.image as AssetImage).assetName == ImageRes.clearText);
   await tester.tap(icon);
+  await tester.pump(const Duration(milliseconds: 300));
   await tester.pumpAndSettle();
 }
 
 void main() {
+  testWidgets('loading and searching only check up to 40 matching groups',
+      (tester) async {
+    final calls = <String>[];
+    final rows = [
+      for (var i = 0; i < 100; i++)
+        recentConversation(id: '$i', name: 'Group $i', group: true),
+    ];
+    final fixture = RecentConversationFixture(
+        data: rows,
+        isJoinedGroup: (id) async {
+          calls.add(id);
+          return true;
+        });
+    await fixture.open(tester);
+    await fixture.selection.reloadRecentConversations();
+    await tester.pumpAndSettle();
+    expect(calls, rows.take(40).map((row) => row.groupID).toList());
+    expect(fixture.selection.conversationList, hasLength(40));
+    calls.clear();
+    await _query(tester, 'Group 99');
+    expect(calls, ['group-99']);
+    expect(fixture.selection.conversationList, [rows.last]);
+    calls.clear();
+    await _clear(tester);
+    expect(calls, rows.take(40).map((row) => row.groupID).toList());
+    expect(fixture.selection.conversationList, hasLength(40));
+  });
+  testWidgets('recent list is capped at 40 and search can find older chats',
+      (tester) async {
+    final rows = [
+      for (var i = 0; i < 65; i++) recentConversation(id: '$i', name: '联系人$i'),
+    ];
+    final fixture = RecentConversationFixture(data: rows);
+    await fixture.open(tester);
+    expect(fixture.selection.visibleConversations, rows.take(40).toList());
+    await _query(tester, '联系人64');
+    expect(fixture.selection.visibleConversations, [rows.last]);
+    await _query(tester, '联系人');
+    expect(fixture.selection.visibleConversations, hasLength(40));
+    await _clear(tester);
+    expect(fixture.selection.visibleConversations, rows.take(40).toList());
+  });
   for (final brightness in Brightness.values) {
     testWidgets(
         '${brightness.name} search filters names and clears empty state',
@@ -122,7 +166,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(recentConversationRow('new'), findsOneWidget);
     expect(fixture.selection.visibleConversations, hasLength(2));
-    expect(fixture.selection.conversationList, hasLength(101));
+    expect(fixture.selection.conversationList, hasLength(2));
     expect(tester.takeException(), isNull);
   });
 }

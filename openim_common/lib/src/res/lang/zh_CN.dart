@@ -34,6 +34,8 @@ const Map<String, String> zh_CN = {
   'chatHistoryRetry': '重试',
   'chatSelectionEnter': '选择',
   'chatSelectionTitle': '选择消息',
+  'chatPendingForwardCount': '转发@count条消息',
+  'chatCancelForward': '取消转发',
   'chatSelectionCount': '已选择 @count 条',
   'chatSelectionMessage': '选择消息',
   'chatSelectionClearAll': '取消全选',

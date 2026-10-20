@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../in_app_browser/in_app_browser.dart';
 
 import '../chat_location_picker_tokens.dart';
+import '../../../../res/app_tokens.dart';
 import 'chat_location_native_map_options.dart';
 
 /// Preserve the existing web/desktop map without loading a mobile SDK.
@@ -27,8 +28,8 @@ class _ChatLocationDesktopMapState extends State<ChatLocationDesktopMap> {
     if (_ready &&
         widget.options.centerRequest != oldWidget.options.centerRequest &&
         widget.options.selected != null) {
-      _map.move(
-          widget.options.selected!, ChatLocationPickerTokens.selectedZoom);
+      _map.move(widget.options.cameraTarget ?? widget.options.selected!,
+          ChatLocationPickerTokens.selectedZoom);
     }
   }
 
@@ -51,7 +52,10 @@ class _ChatLocationDesktopMapState extends State<ChatLocationDesktopMap> {
             onMapReady: () {
               _ready = true;
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) widget.options.onReady();
+                if (mounted) {
+                  widget.options.onCapabilities?.call(false);
+                  widget.options.onReady();
+                }
               });
             },
             interactionOptions: InteractionOptions(
@@ -79,18 +83,36 @@ class _ChatLocationDesktopMapState extends State<ChatLocationDesktopMap> {
                   width: ChatLocationPickerTokens.emptyIconSize,
                   height: ChatLocationPickerTokens.emptyIconSize,
                   alignment: Alignment.topCenter,
-                  child: const Icon(Icons.location_on_rounded,
-                      color: ChatLocationPickerTokens.accent,
+                  child: Icon(Icons.location_on_rounded,
+                      color: options.detail
+                          ? AppTokens.accent
+                          : ChatLocationPickerTokens.accent,
                       size: ChatLocationPickerTokens.emptyIconSize))
             ]),
-          RichAttributionWidget(
-              alignment: AttributionAlignment.bottomLeft,
-              attributions: [
-                TextSourceAttribution('OpenStreetMap contributors',
-                    onTap: () => unawaited(openInAppBrowser(
-                        Uri.parse('https://www.openstreetmap.org/copyright'),
-                        context: context)))
-              ]),
+          if (options.userLocation != null)
+            MarkerLayer(markers: [
+              Marker(
+                  point: options.userLocation!,
+                  width: AppTokens.s7,
+                  height: AppTokens.s7,
+                  child: Container(
+                      decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppTokens.accent,
+                          border: Border.all(
+                              color: AppTokens.onAccent, width: AppTokens.s2))))
+            ]),
+          Padding(
+              padding: EdgeInsets.only(bottom: options.viewportInsets.bottom),
+              child: RichAttributionWidget(
+                  alignment: AttributionAlignment.bottomLeft,
+                  attributions: [
+                    TextSourceAttribution('OpenStreetMap contributors',
+                        onTap: () => unawaited(openInAppBrowser(
+                            Uri.parse(
+                                'https://www.openstreetmap.org/copyright'),
+                            context: context)))
+                  ])),
         ]);
   }
 }

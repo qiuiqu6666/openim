@@ -13,6 +13,7 @@ import UserNotifications
     var chatNotifications: ChatCommunicationNotificationBridge?
     var callPictureInPicture: CallPictureInPictureBridge?
     var deviceSyncOriginals: DeviceSyncOriginalsBridge?
+    private var locationAddressBridge: ChatLocationAddressBridge?
     private let apnsPush = IOSAPNsPushBridge()
     private let voipCalls = IOSVoIPCallBridge()
     private let youmeng = YoumengBridge()
@@ -46,6 +47,7 @@ import UserNotifications
             self.handleReplayKitFromFlutter(result: result, call:call)
         })
         
+        locationAddressBridge = ChatLocationAddressBridge(messenger: controller.binaryMessenger)
         GeneratedPluginRegistrant.register(with: self)
         controller.registrar(forPlugin: "NativeChatLocationMap")?.register(
             NativeChatLocationMapFactory(messenger: controller.binaryMessenger),
@@ -105,7 +107,7 @@ import UserNotifications
     
     override func application(_ app: UIApplication, open url: URL,
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        guard url.scheme == "openim", url.host == "user" else {
+        guard ["chat99", "openim"].contains(url.scheme?.lowercased() ?? ""), url.host == "user" else {
             return super.application(app, open: url, options: options)
         }
         let value = url.absoluteString

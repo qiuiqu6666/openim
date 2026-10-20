@@ -1,4 +1,5 @@
 import 'package:openim_common/localization.dart';
+import 'sangong_account_flow_colors.dart';
 import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:flutter/material.dart';
@@ -22,8 +23,9 @@ class SangongAccountFlowList extends StatelessWidget {
   String _signed(int value) => value > 0 ? '+$value' : '$value';
   String _time(String raw) {
     final parsed = DateTime.tryParse(raw.trim());
-    if (parsed == null)
+    if (parsed == null) {
       return raw.trim().isEmpty ? AppCopy.text('时间未提供') : raw.trim();
+    }
     final local = parsed.toLocal();
     String pad(int v) => v.toString().padLeft(2, '0');
     return '${pad(local.month)}-${pad(local.day)} ${pad(local.hour)}:${pad(local.minute)}:${pad(local.second)}';
@@ -45,8 +47,10 @@ class SangongAccountFlowList extends StatelessWidget {
         .where((e) => e.isRebate)
         .fold<int>(0, (sum, e) => sum + e.amount);
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    const labelStyle = TextStyle(color: Color(0xFF88B04B));
-    const amountStyle = TextStyle(color: Color(0xFFC0504D));
+    final colors = SangongAccountFlowColors(context);
+    final labelStyle = TextStyle(color: muted);
+    final amountStyle =
+        TextStyle(color: Theme.of(context).colorScheme.onSurface);
     final textStyle = TextStyle(
       fontSize: 15,
       height: 1.25,
@@ -75,13 +79,24 @@ class SangongAccountFlowList extends StatelessWidget {
                       TextSpan(text: AppCopy.text('账变合计:'), style: labelStyle),
                       TextSpan(text: _signed(total), style: amountStyle),
                     ] else ...[
-                      TextSpan(text: AppCopy.text('总上分:'), style: labelStyle),
-                      TextSpan(text: '$credit', style: amountStyle),
-                      TextSpan(text: AppCopy.text(' 总下分:'), style: labelStyle),
-                      TextSpan(text: '$debit'),
                       TextSpan(
-                          text: AppCopy.text(' 返水净入账:'), style: labelStyle),
-                      TextSpan(text: _signed(rebate), style: amountStyle),
+                          text: AppCopy.text('总上分:'),
+                          style: TextStyle(color: colors.credit)),
+                      TextSpan(
+                          text: '$credit',
+                          style: TextStyle(color: colors.credit)),
+                      TextSpan(
+                          text: AppCopy.text(' 总下分:'),
+                          style: TextStyle(color: colors.debit)),
+                      TextSpan(
+                          text: '$debit',
+                          style: TextStyle(color: colors.debit)),
+                      TextSpan(
+                          text: AppCopy.text(' 返水净入账:'),
+                          style: TextStyle(color: colors.rebate)),
+                      TextSpan(
+                          text: _signed(rebate),
+                          style: TextStyle(color: colors.rebate)),
                     ],
                   ]),
                   style: textStyle),
@@ -116,6 +131,7 @@ class SangongAccountFlowList extends StatelessWidget {
           );
         }
         final entry = entries[index];
+        final entryStyle = TextStyle(color: colors.forType(entry.type));
         return Padding(
           key: ValueKey('sangong-ledger-${entry.ledgerId}'),
           padding: const EdgeInsets.symmetric(vertical: 1),
@@ -126,8 +142,8 @@ class SangongAccountFlowList extends StatelessWidget {
                   TextSpan(
                       text:
                           '【${_time(entry.createdAt)}】 ${bets && entry.periodNo != null ? '第${entry.periodNo}期 ' : ''}${AppCopy.text(entry.label)}:',
-                      style: labelStyle),
-                  TextSpan(text: _signed(entry.amount), style: amountStyle),
+                      style: entryStyle),
+                  TextSpan(text: _signed(entry.amount), style: entryStyle),
                   TextSpan(text: AppCopy.text(' 剩余:'), style: labelStyle),
                   TextSpan(text: '${entry.balanceAfter}'),
                 ]),

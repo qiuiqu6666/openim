@@ -9,7 +9,7 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' as glass;
 import 'navigation_glass_controller.dart';
 import 'app_system_bars.dart';
 
-enum NavigationGlassSurface { top, bottom }
+enum NavigationGlassSurface { top, bottom, floating }
 
 /// Shared navigation settings for the package's glass renderer.
 abstract final class NavigationGlassTokens {
@@ -30,6 +30,12 @@ abstract final class NavigationGlassTokens {
   static const topShape = BorderRadius.zero;
   static const topBlur = 18.0;
   static const bottomBlur = 20.0;
+  static const floatingBlur = 8.0;
+  static double blur(NavigationGlassSurface surface) => switch (surface) {
+        NavigationGlassSurface.top => topBlur,
+        NavigationGlassSurface.bottom => bottomBlur,
+        NavigationGlassSurface.floating => floatingBlur,
+      };
   static const lightOpacity = .76;
   static const darkOpacity = .70;
 
@@ -72,12 +78,25 @@ abstract final class NavigationGlassTokens {
       double? opacity,
       NavigationGlassSurface surface = NavigationGlassSurface.bottom}) {
     final isTop = surface == NavigationGlassSurface.top;
+    final isFloating = surface == NavigationGlassSurface.floating;
     return glass.LiquidGlassSettings(
       glassColor: frostedTint(context, tint: tint, opacity: opacity),
-      blur: isTop ? topBlur : bottomBlur,
-      thickness: isTop ? 12 : 24,
-      lightIntensity: isTop ? 0 : .4,
-      refractiveIndex: isTop ? 0 : 1.2,
+      blur: blur(surface),
+      thickness: isFloating
+          ? 32
+          : isTop
+              ? 12
+              : 24,
+      lightIntensity: isFloating
+          ? 1
+          : isTop
+              ? 0
+              : .4,
+      refractiveIndex: isFloating
+          ? 1.35
+          : isTop
+              ? 0
+              : 1.2,
       // The standard renderer multiplies the tint by ambient light. Using
       // 0.8 turns an opaque white surface grey even with a white glassColor.
       ambientStrength:
@@ -130,12 +149,8 @@ class LiquidGlassSurface extends StatelessWidget {
             ? content
             : BackdropFilter(
                 filter: ui.ImageFilter.blur(
-                  sigmaX: surface == NavigationGlassSurface.top
-                      ? NavigationGlassTokens.topBlur
-                      : NavigationGlassTokens.bottomBlur,
-                  sigmaY: surface == NavigationGlassSurface.top
-                      ? NavigationGlassTokens.topBlur
-                      : NavigationGlassTokens.bottomBlur,
+                  sigmaX: NavigationGlassTokens.blur(surface),
+                  sigmaY: NavigationGlassTokens.blur(surface),
                   tileMode: TileMode.clamp,
                 ),
                 child: content,

@@ -149,13 +149,13 @@ class MediaSendTask {
     // Keep observing the native result after the UI deadline. A timeout never
     // authorizes resending a message whose delivery is uncertain.
     final operation = _owner._sender.send(message, target).then((result) {
-      if (!visible) return;
       ChatMediaDiagnostics.record('send_receipt',
           messageID: message.clientMsgID,
           outcome: result.status.name,
           error: result.errorCode == null
               ? null
               : PlatformException(code: result.errorCode!));
+      if (!visible) return;
       if (result.isSuccess) {
         message.update(result.message!);
       } else if (result.status == FavoriteSendStatus.failed) {

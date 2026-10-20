@@ -1,3 +1,4 @@
+import '../pages/chat/messages/forwarding/pending_forward.dart';
 import 'package:openim_common/localization.dart';
 import '../pages/chat/navigation/chat_entry_trace.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -81,6 +82,36 @@ class AppNavigator {
     );
   }
 
+  static Future<bool?> stageForward(PendingForward pending,
+      {required bool Function() isCurrent}) async {
+    final userID = IMUtils.emptyStrToNull(
+        IMUtils.convertCheckedToUserID(pending.recipient));
+    final groupID = IMUtils.emptyStrToNull(
+        IMUtils.convertCheckedToGroupID(pending.recipient));
+    final conversation =
+        await OpenIM.iMManager.conversationManager.getOneConversation(
+      sourceID: groupID ?? userID!,
+      sessionType:
+          APNsOfflinePushInfo.sessionTypeForSelection(pending.recipient) ??
+              (groupID == null
+                  ? ConversationType.single
+                  : ConversationType.superGroup),
+    );
+    if (!isCurrent()) return false;
+    final resolution =
+        await OfficialAccountResolver.shared.resolveConversation(conversation);
+    if (!isCurrent()) return false;
+    if (resolution.target != OfficialConversationTarget.chat) {
+      return null;
+    }
+    _startResolvedChat<void>(
+        conversationInfo: conversation,
+        resolution: resolution,
+        offUntilHome: false,
+        pendingForward: pending);
+    return true;
+  }
+
   static Future<T?>? _startResolvedChat<T>({
     required ConversationInfo conversationInfo,
     required OfficialConversationResolution resolution,
@@ -88,6 +119,7 @@ class AppNavigator {
     bool historyPrepared = false,
     bool offUntilHome = true,
     bool replaceCurrent = false,
+    PendingForward? pendingForward,
     String? draftText,
     Message? searchMessage,
   }) {
@@ -110,6 +142,7 @@ class AppNavigator {
       if (entryTrace != null) 'chatEntryTrace': entryTrace,
       'conversationInfo': conversationInfo,
       'searchMessage': searchMessage,
+      if (pendingForward != null) 'pendingForward': pendingForward,
       if (resolution.account != null) 'officialAccount': resolution.account,
     };
 
@@ -443,6 +476,7 @@ class AppNavigator {
     String? groupID,
     String? ex,
     ForwardPreviewData? forwardPreview,
+    bool stageSingleForward = false,
   }) =>
       Get.toNamed(AppRoutes.selectContacts, arguments: {
         'action': action,
@@ -457,6 +491,7 @@ class AppNavigator {
         'groupID': groupID,
         'ex': ex,
         'forwardPreview': forwardPreview,
+        'stageSingleForward': stageSingleForward,
       });
 
   static startSelectContactsFromFriends() =>

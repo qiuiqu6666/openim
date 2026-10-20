@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import 'scrolling/chat_list_position_controller.dart';
+import 'scrolling/chat_position_motion.dart';
 
 export 'scrolling/chat_list_position_controller.dart'
     show ChatListPositionController;
@@ -172,7 +173,7 @@ class _ChatListViewportState extends State<ChatListViewport>
     _schedule();
   }
 
-  void _cancelPositionJump() {
+  void _cancelPositionJump({bool stopScroll = true}) {
     _jumpGeneration++;
     final wasJumping = _jumping;
     _jumping = false;
@@ -181,6 +182,9 @@ class _ChatListViewportState extends State<ChatListViewport>
     _pendingJump = null;
     if (pending != null && !pending.isCompleted) pending.complete(false);
     if (wasJumping) {
+      if (stopScroll && _controller.hasClients) {
+        _controller.position.jumpTo(_controller.position.pixels);
+      }
       _restoreAnchors = null;
       _lastAnchors.clear();
       if (mounted && !_disposing) {
@@ -197,6 +201,8 @@ class _ChatListViewportState extends State<ChatListViewport>
     }
     final generation = _jumpGeneration;
     final pending = _pendingJump = Completer<bool>();
+    final row = _mountedRows[id];
+    final alreadyMounted = row != null && row.attached && row.hasSize;
     setState(() {
       _jumping = true;
       _jumpTargetID = id;
@@ -204,14 +210,16 @@ class _ChatListViewportState extends State<ChatListViewport>
       _lastAnchors.clear();
       // Moving the sliver center materializes the target directly, even with
       // thousands of variable-height messages between it and the old view.
-      _centerID = id;
-      _historyKey = UniqueKey();
-      _newerKey = UniqueKey();
-      _updatePartition();
       final position = _controller.position;
       position
           .jumpTo(position.pixels); // Cancel an outstanding scroll activity.
-      position.correctBy(-position.pixels);
+      if (!alreadyMounted) {
+        _centerID = id;
+        _historyKey = UniqueKey();
+        _newerKey = UniqueKey();
+        _updatePartition();
+        position.correctBy(-position.pixels);
+      }
     });
     _positionMessage(id, alignment, generation).then((visible) {
       if (!mounted || generation != _jumpGeneration) return;
@@ -261,7 +269,19 @@ class _ChatListViewportState extends State<ChatListViewport>
       final pixels = (position.pixels + desiredTop - actualTop)
           .clamp(position.minScrollExtent, position.maxScrollExtent);
       if ((pixels - position.pixels).abs() > 0.5) {
-        position.jumpTo(pixels);
+        if (!mounted) return false;
+        final reduceMotion =
+            MediaQuery.maybeOf(context)?.disableAnimations == true ||
+                WidgetsBinding.instance.platformDispatcher.accessibilityFeatures
+                    .disableAnimations;
+        if (attempt == 0 && !reduceMotion) {
+          await position.animateTo(pixels,
+              duration: ChatPositionMotion.duration,
+              curve: ChatPositionMotion.curve);
+          if (!_isCurrentJump(id, generation)) return false;
+        } else {
+          position.jumpTo(pixels);
+        }
       }
       await _nextPaint();
       if (!_isCurrentJump(id, generation)) return false;
@@ -461,7 +481,7 @@ class _ChatListViewportState extends State<ChatListViewport>
                     _lastAnchors.map((id, top) => MapEntry(id, top + delta));
               }
               if (notification.dragDetails != null) {
-                _cancelPositionJump();
+                _cancelPositionJump(stopScroll: false);
                 _restoreAnchors = null;
               }
             }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -6,12 +7,15 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:openim_common/media_recognition.dart';
 import 'package:openim_common/src/widgets/media_browser/media_grid_thumbnail.dart';
+import 'package:openim_common/src/widgets/media_browser/media_share_sheet.dart';
 
 const _previewDirectory =
     String.fromEnvironment('MEDIA_BROWSER_ACTIONS_PREVIEW_DIR');
@@ -67,9 +71,13 @@ class _Fixture {
     bool canViewInChat = true,
     bool canDelete = true,
     bool closeOnly = false,
+    bool shareExtras = false,
+    Size size = const Size(390, 844),
+    double textScale = 1,
+    Future<List<MediaShareRecipient>> Function()? recipientLoader,
   }) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 844);
+    tester.view.physicalSize = size;
     tester.view.padding = const FakeViewPadding(top: 44, bottom: 34);
     tester.view.viewPadding = const FakeViewPadding(top: 44, bottom: 34);
     addTearDown(tester.view.reset);
@@ -117,6 +125,11 @@ class _Fixture {
               ),
             ),
           ),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(textScale)),
+            child: EasyLoading.init()(context, child),
+          ),
           home: Scaffold(
             body: Center(
               child: TextButton(
@@ -131,6 +144,28 @@ class _Fixture {
                         closeOnly: closeOnly,
                         onSave: (index) => _record('save', index),
                         onForward: (index) => _record('forward', index),
+                        onFavorite: shareExtras
+                            ? (index) => _record('favorite', index)
+                            : null,
+                        loadShareRecipients: recipientLoader ??
+                            (shareExtras
+                                ? () async => const [
+                                      MediaShareRecipient(id: '1', name: '小林'),
+                                      MediaShareRecipient(
+                                          id: '2',
+                                          name: '设计讨论群',
+                                          isGroup: true),
+                                      MediaShareRecipient(
+                                          id: '3', name: 'Alex'),
+                                      MediaShareRecipient(
+                                          id: '4', name: '产品交流', isGroup: true),
+                                      MediaShareRecipient(id: '5', name: '周末见'),
+                                    ]
+                                : null),
+                        onForwardTo: shareExtras
+                            ? (index, recipient) =>
+                                _record('recipient:${recipient.id}', index)
+                            : null,
                         onDelete: canDelete
                             ? (index) => _record('delete', index)
                             : null,
@@ -161,14 +196,15 @@ class _Fixture {
   Future<void> openMenu(WidgetTester tester) async {
     await tester.tap(find.byTooltip('更多操作'));
     await tester.pumpAndSettle();
-    expect(find.byType(CupertinoActionSheet), findsOneWidget);
+    expect(find.byType(MediaShareSheet), findsOneWidget);
   }
 }
 
-Finder _action(String label) =>
-    find.widgetWithText(CupertinoActionSheetAction, label);
+Finder _action(String label) => find.byKey(ValueKey('media-share-$label'));
 
 Future<void> _choose(WidgetTester tester, String label) async {
+  await tester.ensureVisible(_action(label));
+  await tester.pumpAndSettle();
   await tester.tap(_action(label));
   await tester.pumpAndSettle();
 }
@@ -212,6 +248,128 @@ Future<void> _capture(WidgetTester tester, String name) async {
 }
 
 void main() {
+  tearDown(() => MediaImageRecognition.start = null);
+  for (final brightness in Brightness.values) {
+    testWidgets('${brightness.name} recognized link opens only after menu closes',
+        (tester) async {
+      final fixture = _Fixture();
+      var cancelled = false, opened = false;
+      MediaImageRecognition.start = (_) => MediaRecognitionRequest(
+          Future.value(MediaRecognitionResult([
+            MediaRecognitionTarget(
+              value: 'https://example.com',
+              title: '二维码链接',
+              copyLabel: '复制链接',
+              openLabel: '识别图中二维码',
+              open: (context, active) async {
+                expect(active(), isTrue);
+                expect(fixture.events, contains('pop:menu'));
+                opened = true;
+              },
+            ),
+          ])), () => cancelled = true);
+      await fixture.mount(tester, brightness: brightness, shareExtras: true);
+      await fixture.openMenu(tester);
+      expect(find.text('https://example.com'), findsNothing);
+      expect(tester.getTopLeft(_action('复制链接')).dy,
+          tester.getTopLeft(_action('保存到相册')).dy);
+      await _capture(tester, 'recognition-${brightness.name}');
+      await tester.ensureVisible(find.text('识别图中二维码'));
+      await tester.tap(find.text('识别图中二维码'));
+      await tester.pumpAndSettle();
+      expect(opened, isTrue);
+      expect(cancelled, isTrue);
+      expect(find.byType(MediaBrowser), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('late recognition is discarded when menu closes', (tester) async {
+    final fixture = _Fixture();
+    final result = Completer<MediaRecognitionResult>();
+    var cancelled = false;
+    MediaImageRecognition.start = (_) =>
+        MediaRecognitionRequest(result.future, () => cancelled = true);
+    await fixture.mount(tester);
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('正在识别二维码和地址…'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(_action('保存到相册'), findsOneWidget);
+    fixture.navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    result.complete(const MediaRecognitionResult([]));
+    await tester.pumpAndSettle();
+    expect(cancelled, isTrue);
+    expect(find.byType(MediaShareSheet), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('recognized action cannot open for replaced source', (tester) async {
+    final fixture = _Fixture();
+    var opened = false;
+    MediaImageRecognition.start = (_) => MediaRecognitionRequest(
+        Future.value(MediaRecognitionResult([
+          MediaRecognitionTarget(
+              value: 'https://example.com', title: '二维码链接',
+              copyLabel: '复制链接', openLabel: '打开链接',
+              open: (context, active) async => opened = true),
+        ])), () {});
+    await fixture.mount(tester);
+    await fixture.openMenu(tester);
+    fixture.sources.value = fixture.sources.value.reversed.toList();
+    await tester.pump();
+    await tester.ensureVisible(find.text('打开链接'));
+    await tester.tap(find.text('打开链接'));
+    await tester.pumpAndSettle();
+    expect(opened, isFalse);
+  });
+  testWidgets('recognized address copies the exact value', (tester) async {
+    const address = 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8';
+    String? copied;
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = call.arguments['text'] as String;
+      }
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null));
+    MediaImageRecognition.start = (_) => MediaRecognitionRequest(
+        Future.value(const MediaRecognitionResult([
+          MediaRecognitionTarget(value: address,
+              title: 'TRON 地址', copyLabel: '复制地址'),
+        ])), () {});
+    final fixture = _Fixture();
+    await fixture.mount(tester);
+    await fixture.openMenu(tester);
+    await tester.ensureVisible(find.text('复制地址'));
+    await tester.tap(find.text('复制地址'));
+    await tester.pumpAndSettle();
+    expect(copied, address);
+    expect(find.byType(MediaBrowser), findsOneWidget);
+    await EasyLoading.dismiss(animation: false);
+    await tester.pump();
+  });
+  testWidgets('recognition failure stays silent and reopening scans again',
+      (tester) async {
+    var attempt = 0;
+    MediaImageRecognition.start = (_) => MediaRecognitionRequest(
+        ++attempt == 1
+            ? Future.error(StateError('unavailable'))
+            : Future.value(const MediaRecognitionResult([])), () {});
+    final fixture = _Fixture();
+    await fixture.mount(tester);
+    await fixture.openMenu(tester);
+    expect(find.text('识别未完成，点击重试'), findsNothing);
+    expect(_action('转发'), findsOneWidget);
+    fixture.navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    await fixture.openMenu(tester);
+    expect(find.text('识别未完成，点击重试'), findsNothing);
+    expect(attempt, 2);
+    expect(_action('转发'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => Get.testMode = true);
   tearDown(Get.reset);
@@ -223,35 +381,19 @@ void main() {
         final fixture = _Fixture();
         await fixture.mount(tester, brightness: brightness, platform: platform);
         await fixture.openMenu(tester);
-        final sheet = tester
-            .widget<CupertinoActionSheet>(find.byType(CupertinoActionSheet));
-        expect(sheet.title, isNull);
-        expect(sheet.actions, hasLength(4));
-        expect(sheet.cancelButton, isNotNull);
-        expect(find.byType(BottomSheet), findsNothing);
+        expect(find.byType(BottomSheet), findsOneWidget);
         for (final label in ['保存到相册', '转发', '在聊天中查看', '删除', '取消']) {
           expect(_action(label), findsOneWidget);
         }
-        final delete = tester.widget<CupertinoActionSheetAction>(_action('删除'));
-        expect(delete.isDestructiveAction, isTrue);
         expect(
-            DefaultTextStyle.of(tester.element(find.text('保存到相册'))).style.color,
-            CupertinoColors.systemBlue
-                .resolveFrom(tester.element(find.text('保存到相册'))));
-        expect(
-            DefaultTextStyle.of(tester.element(find.text('删除'))).style.color,
-            CupertinoColors.destructiveRed
-                .resolveFrom(tester.element(find.text('删除'))));
-        expect(
-            CupertinoTheme.brightnessOf(
-                tester.element(find.byType(CupertinoActionSheet))),
+            Theme.of(tester.element(find.byType(MediaShareSheet))).brightness,
             brightness);
         final cancelRect = tester.getRect(_action('取消'));
         expect(cancelRect.bottom, lessThanOrEqualTo(844 - 34));
         await _capture(tester, '${brightness.name}-${platform.name}');
         await _choose(tester, '取消');
         expect(find.byType(MediaBrowser), findsOneWidget);
-        expect(find.byType(CupertinoActionSheet), findsNothing);
+        expect(find.byType(MediaShareSheet), findsNothing);
         expect(fixture.callbacks, isEmpty);
         expect(fixture.events, ['pop:menu']);
         expect(tester.takeException(), isNull);
@@ -278,7 +420,7 @@ void main() {
       expect(fixture.events, ['pop:menu', 'pop:preview', 'locate:1']);
       expect(fixture.callbacks, ['locate:1']);
       expect(find.byType(MediaBrowser), findsNothing);
-      expect(find.byType(CupertinoActionSheet), findsNothing);
+      expect(find.byType(MediaShareSheet), findsNothing);
       expect(find.text('原聊天页面'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -292,7 +434,7 @@ void main() {
       await _choose(tester, operation.$1);
       expect(fixture.events, ['pop:menu', '${operation.$2}:0']);
       expect(find.byType(MediaBrowser), findsOneWidget);
-      expect(find.byType(CupertinoActionSheet), findsNothing);
+      expect(find.byType(MediaShareSheet), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }
@@ -315,11 +457,6 @@ void main() {
     await fixture.mount(tester, canViewInChat: false);
     await fixture.openMenu(tester);
     expect(_action('在聊天中查看'), findsNothing);
-    expect(
-        tester
-            .widget<CupertinoActionSheet>(find.byType(CupertinoActionSheet))
-            .actions,
-        hasLength(3));
     await _choose(tester, '取消');
     expect(fixture.callbacks, isEmpty);
     expect(tester.takeException(), isNull);
@@ -345,7 +482,7 @@ void main() {
     expect(find.byIcon(Icons.ios_share), findsNothing);
     await tester.longPressAt(const Offset(195, 400));
     await tester.pumpAndSettle();
-    expect(find.byType(CupertinoActionSheet), findsNothing);
+    expect(find.byType(MediaShareSheet), findsNothing);
     expect(fixture.callbacks, isEmpty);
     await tester.tapAt(const Offset(195, 400));
     await tester.pumpAndSettle();
@@ -390,7 +527,7 @@ void main() {
     fixture.navigator.currentState!.removeRoute(fixture.previewRoute);
     await tester.pumpAndSettle();
     expect(find.byType(MediaBrowser), findsNothing);
-    expect(find.byType(CupertinoActionSheet), findsOneWidget);
+    expect(find.byType(MediaShareSheet), findsOneWidget);
     await _choose(tester, '在聊天中查看');
     expect(fixture.callbacks, isEmpty);
     expect(find.text('原聊天页面'), findsOneWidget);
@@ -402,17 +539,17 @@ void main() {
     final fixture = _Fixture();
     await fixture.mount(tester);
     await fixture.openMenu(tester);
-    final locate = tester.widget<CupertinoActionSheetAction>(_action('在聊天中查看'));
+    final locate = tester.widget<TextButton>(_action('在聊天中查看'));
 
     // Both operations happen before the sheet's awaiting caller resumes.
-    locate.onPressed();
+    locate.onPressed!();
     fixture.navigator.currentState!.push(MaterialPageRoute<void>(
       builder: (_) => const Scaffold(body: Center(child: Text('新页面'))),
     ));
     await tester.pumpAndSettle();
 
     expect(find.text('新页面'), findsOneWidget);
-    expect(find.byType(CupertinoActionSheet), findsNothing);
+    expect(find.byType(MediaShareSheet), findsNothing);
     expect(find.byType(MediaBrowser), findsNothing);
     expect(find.byType(MediaBrowser, skipOffstage: false), findsOneWidget);
     expect(fixture.callbacks, isEmpty);
@@ -420,6 +557,109 @@ void main() {
     fixture.navigator.currentState!.pop();
     await tester.pumpAndSettle();
     expect(find.byType(MediaBrowser), findsOneWidget);
+    expect(fixture.callbacks, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final brightness in Brightness.values) {
+    testWidgets('${brightness.name} recipient panel and favorite',
+        (tester) async {
+      final fixture = _Fixture();
+      await fixture.mount(tester, shareExtras: true, brightness: brightness);
+      await fixture.openMenu(tester);
+      expect(find.text('小林'), findsOneWidget);
+      expect(find.text('收藏'), findsOneWidget);
+      await _capture(tester, 'share-${brightness.name}');
+      await _choose(tester, '小林');
+      expect(fixture.callbacks, ['recipient:1:0']);
+      expect(find.byType(MediaBrowser), findsOneWidget);
+      await fixture.openMenu(tester);
+      await _choose(tester, '收藏');
+      expect(fixture.callbacks.last, 'favorite:0');
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final size in [const Size(320, 568), const Size(844, 390)]) {
+    testWidgets('large text panel fits $size and keeps cancel reachable',
+        (tester) async {
+      final fixture = _Fixture();
+      await fixture.mount(tester, shareExtras: true, size: size, textScale: 2);
+      await fixture.openMenu(tester);
+      expect(
+          tester.getRect(_action('取消')).bottom, lessThanOrEqualTo(size.height));
+      expect(tester.takeException(), isNull);
+      await _choose(tester, '取消');
+      expect(fixture.callbacks, isEmpty);
+    });
+  }
+
+  testWidgets('gallery action opens gallery without closing preview',
+      (tester) async {
+    final fixture = _Fixture();
+    await fixture.mount(tester);
+    await fixture.openMenu(tester);
+    await _choose(tester, '图片和视频');
+    expect(find.byType(MediaGridThumbnail), findsNWidgets(2));
+    expect(find.byType(MediaBrowser), findsOneWidget);
+    expect(fixture.callbacks, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'recipient load failure can retry and empty list keeps forwarding',
+      (tester) async {
+    var attempts = 0;
+    final fixture = _Fixture();
+    await fixture.mount(tester, shareExtras: true, recipientLoader: () async {
+      if (attempts++ == 0) throw StateError('offline');
+      return [];
+    });
+    await fixture.openMenu(tester);
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('暂无最近会话'), findsOneWidget);
+    await _choose(tester, '转发');
+    expect(fixture.callbacks, ['forward:0']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('panel shows only six recipients with two action rows',
+      (tester) async {
+    final fixture = _Fixture();
+    await fixture.mount(tester,
+        shareExtras: true,
+        recipientLoader: () async => [
+              for (var i = 1; i <= 9; i++)
+                MediaShareRecipient(id: '$i', name: '会话$i'),
+            ]);
+    await fixture.openMenu(tester);
+    expect(_action('会话6'), findsOneWidget);
+    expect(_action('会话7'), findsNothing);
+    expect(_action('更多'), findsOneWidget);
+    expect(tester.getTopLeft(_action('保存到相册')).dy,
+        greaterThan(tester.getBottomLeft(_action('转发')).dy));
+    await _capture(tester, 'six-recipients');
+    await _choose(tester, '会话6');
+    expect(fixture.callbacks, ['recipient:6:0']);
+    await fixture.openMenu(tester);
+    await _choose(tester, '更多');
+    expect(fixture.callbacks, ['recipient:6:0', 'forward:0']);
+    expect(find.byType(MediaShareSheet), findsNothing);
+    expect(find.byType(MediaBrowser), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('long press opens panel and stale recipient cannot forward',
+      (tester) async {
+    final fixture = _Fixture();
+    await fixture.mount(tester, shareExtras: true);
+    await tester.longPressAt(const Offset(195, 400));
+    await tester.pumpAndSettle();
+    expect(find.byType(MediaShareSheet), findsOneWidget);
+    fixture.sources.value = fixture.sources.value.reversed.toList();
+    await tester.pump();
+    await _choose(tester, '小林');
     expect(fixture.callbacks, isEmpty);
     expect(tester.takeException(), isNull);
   });

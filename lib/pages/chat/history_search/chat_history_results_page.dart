@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../media/chat_picture_gallery.dart';
+import '../media/chat_media_preview.dart';
 import '../stickers/sticker_video_message.dart';
 import 'chat_history_category.dart';
 import 'chat_history_search_controller.dart';
@@ -195,14 +196,15 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
         IMViews.showToast(chatHistorySearchText(context, 'mediaUnavailable'));
         return;
       }
-      await IMUtils.previewMediaFile(
-        context: context,
-        message: message,
-        sources: gallery.sources,
-        initialIndex: gallery.initialIndex,
-        onAutoPlay: (index) =>
-            index == gallery.initialIndex && gallery.sources[index].isVideo,
-        onlySave: true,
+      await ChatMediaPreview.open(
+        context,
+        conversationID: widget.conversationID,
+        selected: message,
+        messages: _controller.results,
+        gallery: gallery,
+        isCurrent: () => mounted && _sameSession,
+        navigation: _messageNavigation,
+        onDeleted: _controller.removeMessage,
       );
     } catch (_) {
       if (mounted &&

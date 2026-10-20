@@ -1,5 +1,7 @@
 # 媒体预览子组件
 
+聊天历史入口统一：应用 `lib/pages/chat/media/chat_media_preview.dart` 为聊天记录搜索、消息上下文、存储管理中的聊天图片和视频提供完整菜单。操作前按会话和消息 ID 精确读取 SDK 原记录；复用现有转发、收藏、消息删除控制器及删除确认，不注册额外 ChatLogic。删除通知原聊天并更新来源列表，定位复用 ChatHistoryMessageNavigation。普通聊天气泡继续使用其已有控制器能力。私密和过期消息不进入公共历史图库；头像、表情、合并记录等无独立原消息的预览保留各自能力边界。
+
 `media_page_gesture.dart` 统一新旧图库的翻页方向判定：单指超过触摸阈值后，仅横向位移大于纵向位移 2 倍时接受翻页，本次拖动锁定方向，斜向阅读和双指手势留给图片处理。方向缓存使用弱引用，不累计历史手势。复用 ExtendedImage 的手势竞争机制；沿用 99chat 长图优先纵向阅读的交互方向。
 
 `reading_image_gesture.dart` 通过 ExtendedImage 的加载完成组件入口扩展长图手势，保留原有渲染、缩放、惯性和滑出动画。组件原有的图片边界到图库的直接拖动转交不经过图库方向检查，因此长图同时锁定图片自身的拖动方向和松手速度，避免竖向阅读中途向左抖动触发翻页。按宽阅读、手势从顶部开始时允许下拉关闭；从中间往下拖到顶部仍仅滚动，下一次下拉才关闭。手动放大后不触发此关闭路径；双指取消正在进行的下拉，普通短图行为保持不变。
@@ -20,10 +22,9 @@
 
 `../photo_browser_hero.dart` 在飞行动画期间保留全屏图片子树，避免动画结束时重新执行文件检查、解码并闪回加载占位；飞行副本使用独立子树，快速返回仍交由原有 Hero 处理。网络加载占位也复用 `AdaptiveMediaImage`，缩略图和原图按相同规则从长图顶部显示，使用与预加载一致的缓存配置。逐帧交接、动画中返回和缩略图升级的回归见 `test/widgets/media_browser/media_browser_transition_test.dart`。
 
-`media_action_sheet.dart` 只组装媒体的可用操作，复用程序共享的
-`AppAction` / `showAppActionSheet`，不另画底部菜单。外观对照 99chat 的
-`media_preview_chrome.dart` 和 `media_preview_video_chrome.dart` 的手机菜单：
-独立取消、保存/转发与红色删除，随系统亮暗主题切换。
+`media_action_sheet.dart` 打开媒体专用底部分享面板，`media_share_sheet.dart` 按用户提供的图标分享面板参考实现：顶部横向最多六个最近会话、两排紧凑图标操作、底部固定取消。复用 AppTokens、AvatarView 和 Material 按钮；通用文字选择菜单仍由 AppActionSheet 负责。两者用途不同，不修改其他业务菜单。支持亮暗主题、大字体、小屏和横屏滚动；空列表仍可通过下方转发选择联系人，加载失败支持重试。
+
+普通媒体长按或点击更多打开面板，表情的 closeOnly 模式仍不提供菜单。收藏、最近会话为可选回调；聊天通过 `chat_media_share_recipients.dart` 使用真实会话列表和既有群成员资格检查，快捷选择仅建立 PendingForward 待确认内容，复用目标聊天的发送流程。共享包不依赖聊天业务。图库在当前预览内打开。未接通的 AI、翻译、小程序等不展示。
 
 `MediaBrowser.onViewInChat` 是可选消息定位回调，`IMUtils.previewMediaFile`
 保留同名透传参数。菜单打开时固定媒体索引和来源身份；取消、页面关闭或
@@ -31,7 +32,7 @@
 原聊天调用既有消息定位能力。没有原聊天消息的头像等预览不传该回调。
 保存与转发只关闭菜单，删除继续关闭预览并交给原调用方处理。
 
-菜单回归在应用 `test/widgets/media_browser/media_browser_actions_test.dart`，覆盖亮暗主题、Android/iOS、滑动及网格选择后的索引、回调前关闭预览、取消、来源替换和新页面覆盖保护。
+分享面板回归在应用 `test/widgets/media_browser/media_browser_actions_test.dart`，覆盖亮暗主题、Android/iOS、滑动及网格选择后的索引、回调前关闭预览、取消、来源替换和新页面覆盖保护。
 
 文件与手势回归见 `test/widgets/media_browser/media_browser_availability_test.dart` 及既有 `media_browser_swipe_test.dart`、`media_browser_grid_test.dart`。涉及实际文件的 Widget 测试需让 `runAsync` 等待系统 IO；不能仅靠 FakeAsync 的帧时间推进。
 

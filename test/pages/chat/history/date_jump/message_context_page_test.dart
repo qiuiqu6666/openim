@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -165,5 +166,37 @@ void main() {
     expect(calls.map((call) => call.method), ['findMessageList']);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('context picture opens the complete chat media menu',
+      (tester) async {
+    found = [
+      Message.fromJson({
+        ...target.toJson(),
+        'contentType': MessageType.picture,
+        'pictureElem': {
+          'sourcePath': File('assets/ai/11.webp').absolute.path,
+          'sourcePicture': {'width': 100, 'height': 100},
+        },
+      })
+    ];
+    await mount(tester);
+    tester.widget<ChatItemView>(targetRow()).onClickItemView!();
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+    }
+    await tester.pumpAndSettle();
+    final browser = tester.widget<MediaBrowser>(find.byType(MediaBrowser));
+    expect(browser.onForward, isNotNull);
+    expect(browser.onFavorite, isNotNull);
+    expect(browser.onDelete, isNotNull);
+    expect(browser.onViewInChat, isNotNull);
+    expect(browser.loadShareRecipients, isNotNull);
+    expect(browser.onForwardTo, isNotNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 }

@@ -39,6 +39,8 @@ const Map<String, String> en_US = {
   'chatHistoryRetry': 'Retry',
   'chatSelectionEnter': 'Select',
   'chatSelectionTitle': 'Select messages',
+  'chatPendingForwardCount': 'Forward @count messages',
+  'chatCancelForward': 'Cancel forwarding',
   'chatSelectionCount': '@count selected',
   'chatSelectionMessage': 'Select message',
   'chatSelectionClearAll': 'Deselect all',

@@ -44,6 +44,7 @@ import 'settings/conversation_settings_projection.dart';
 import 'unread/conversation_unread_count.dart';
 import 'unread/conversation_unread_sync.dart';
 import 'unread/friend_approval_notice.dart';
+import 'membership/conversation_membership.dart';
 
 class ConversationLogic extends GetxController with WidgetsBindingObserver {
   ConversationLogic({LegacyServiceConversationCleanup? legacyCleanup})
@@ -56,6 +57,11 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final folders = <ChatFolder>[].obs;
   final states = <String, ChatConversationState>{}.obs;
   ConversationFeedSnapshotCache? _feedCache;
+  late final _membership = ConversationMembership(
+    fetchPage: (offset, count) => OpenIM.iMManager.groupManager
+        .getJoinedGroupListPage(offset: offset, count: count),
+    isActive: () => _sessionActive,
+  );
   late final _pinOrderKey =
       'pinned_group_order_v1_${Config.imApiUrl}_$_accountID';
   late final _pinnedGroupOrder = PinnedGroupOrder(
@@ -66,7 +72,9 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   );
   ConversationFeedSnapshot get feedSnapshot =>
       (_feedCache ??= ConversationFeedSnapshotCache(list, states,
-              order: _pinnedGroupOrder.apply))
+              order: _pinnedGroupOrder.apply,
+              allows: _membership.allows,
+              membershipRevision: _membership.revision))
           .read();
   final organizerLoading = false.obs;
   final organizerError = RxnString();
@@ -184,6 +192,11 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   @override
   void onInit() {
+    _subscriptions.add(imLogic.joinedGroupAddedSubject
+        .listen((group) => _membership.changed(group.groupID, true)));
+    _subscriptions.add(imLogic.joinedGroupDeletedSubject
+        .listen((group) => _membership.changed(group.groupID, false)));
+    unawaited(_membership.refresh());
     getFirstPage();
     WidgetsBinding.instance.addObserver(this);
     _businessSubscription = imLogic.customBusinessMessageSubject
@@ -209,6 +222,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       imStatus.value = status;
 
       if (status == IMSdkStatus.connectionSucceeded) {
+        unawaited(_membership.refresh());
         refreshOrganizer(userInitiated: false, source: 'reconnect');
         if (previousStatus != IMSdkStatus.connectionSucceeded &&
             !_listFailed.value) {
@@ -297,6 +311,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _updates.setForeground(state == AppLifecycleState.resumed);
     if (_sessionActive && state == AppLifecycleState.resumed) {
+      unawaited(_membership.refresh());
       refreshOrganizer(userInitiated: false, source: 'resume');
       groupFeatures.refreshKnownGroups();
       if (_listFailed.value) {
@@ -784,6 +799,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   Future<void> onRefresh() => _refreshConversations();
 
   Future<void> _refreshConversations({bool afterCurrentRead = false}) async {
+    unawaited(_membership.refresh());
     final clearing = _clearGeneration;
     await _loadConversationList(
         firstPageOnly: false, afterCurrentRead: afterCurrentRead);

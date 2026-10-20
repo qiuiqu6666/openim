@@ -31,8 +31,9 @@ class SelectContactsLogic extends GetxController
   SelectContactsLogic({Future<bool> Function(String)? isJoinedGroup})
       : _onPicked = null,
         _selectionCurrent = null,
-        _recentDirectory = RecentConversationDirectory(isJoinedGroup ??
-            ((id) => OpenIM.iMManager.groupManager.isJoinedGroup(groupID: id)));
+        _recentDirectory = isJoinedGroup == null
+            ? RecentConversationDirectory.sdk()
+            : RecentConversationDirectory(isJoinedGroup);
 
   /// Reuses the existing single-contact/group pages without a send dialog.
   /// This controller is owned by the caller, not registered over an active
@@ -42,8 +43,7 @@ class SelectContactsLogic extends GetxController
     required bool Function() isCurrent,
   })  : _onPicked = onPicked,
         _selectionCurrent = isCurrent,
-        _recentDirectory = RecentConversationDirectory(
-            (id) => OpenIM.iMManager.groupManager.isJoinedGroup(groupID: id)) {
+        _recentDirectory = RecentConversationDirectory.sdk() {
     action = SelAction.carte;
     openSelectedSheet = false;
   }
@@ -69,6 +69,7 @@ class SelectContactsLogic extends GetxController
   final recentLoadFailed = false.obs;
   final RecentConversationDirectory _recentDirectory;
   int _recentGeneration = 0;
+  Timer? _recentSearchTimer;
   final _confirmingSelection = false.obs;
   final _localMembershipCache = RecentMembershipCache();
   RecentMembershipCache get _membershipCache =>
@@ -78,6 +79,7 @@ class SelectContactsLogic extends GetxController
           : _localMembershipCache;
   String? ex;
   ForwardPreviewData? forwardPreview;
+  bool stageSingleForward = false;
   UserInfo? sharedContact;
   String? cardRecipientName;
   String? cardRecipientFaceURL;
@@ -85,12 +87,18 @@ class SelectContactsLogic extends GetxController
   final inputCtrl = TextEditingController();
   final recentScrollController = ScrollController();
   final conversationSearch = ''.obs;
+  static const recentConversationLimit = 40;
 
   List<ConversationInfo> get visibleConversations {
     final query = conversationSearch.value;
-    if (query.isEmpty) return conversationList;
+    if (query.isEmpty) {
+      return conversationList
+          .take(recentConversationLimit)
+          .toList(growable: false);
+    }
     return conversationList
         .where((info) => (info.showName ?? '').toLowerCase().contains(query))
+        .take(recentConversationLimit)
         .toList(growable: false);
   }
 
@@ -98,6 +106,12 @@ class SelectContactsLogic extends GetxController
     final query = graphemeTrim(value).toLowerCase();
     if (query == conversationSearch.value) return;
     conversationSearch.value = query;
+    // Stop obsolete workers immediately; only query after typing settles.
+    ++_recentGeneration;
+    _recentSearchTimer?.cancel();
+    _recentSearchTimer = Timer(const Duration(milliseconds: 250), () {
+      unawaited(reloadRecentConversations());
+    });
     if (recentScrollController.hasClients) recentScrollController.jumpTo(0);
   }
 
@@ -126,6 +140,7 @@ class SelectContactsLogic extends GetxController
     openSelectedSheet = Get.arguments['openSelectedSheet'];
     ex = Get.arguments['ex'];
     forwardPreview = Get.arguments['forwardPreview'];
+    stageSingleForward = Get.arguments['stageSingleForward'] == true;
     sharedContact = Get.arguments['sharedContact'];
     cardRecipientName = Get.arguments['cardRecipientName'];
     cardRecipientFaceURL = Get.arguments['cardRecipientFaceURL'];
@@ -135,6 +150,7 @@ class SelectContactsLogic extends GetxController
 
   @override
   void onClose() {
+    _recentSearchTimer?.cancel();
     ++_recentGeneration;
     _recentPreviews?.dispose();
     inputCtrl.dispose();
@@ -183,6 +199,7 @@ class SelectContactsLogic extends GetxController
           showNotificationAccounts: action == SelAction.forward);
 
   Future<void> reloadRecentConversations() async {
+    _recentSearchTimer?.cancel();
     if (!selectionCurrent ||
         hiddenConversations ||
         _confirmingSelection.value) {
@@ -194,7 +211,17 @@ class SelectContactsLogic extends GetxController
     recentLoadFailed.value = false;
     try {
       final result = await _recentDirectory.load(
-        List<ConversationInfo>.of(Get.find<ConversationLogic>().list),
+        Get.find<ConversationLogic>()
+            .list
+            .where((row) =>
+                isVisible(row) &&
+                row.conversationType != ConversationType.notification &&
+                (conversationSearch.value.isEmpty ||
+                    (row.showName ?? '')
+                        .toLowerCase()
+                        .contains(conversationSearch.value)))
+            .take(recentConversationLimit)
+            .toList(growable: false),
         isVisible: isVisible,
         isCurrent: current,
         cache: _membershipCache,
@@ -361,6 +388,12 @@ class SelectContactsLogic extends GetxController
     if (action == SelAction.forward || action == SelAction.recommend) {
       final recipients = checkedList.values.toList();
       if (recipients.isEmpty) return false;
+      if (action == SelAction.forward &&
+          stageSingleForward &&
+          recipients.length == 1) {
+        Get.back(result: {'checkedList': recipients});
+        return true;
+      }
       final contact = sharedContact;
       final sure =
           await Get.dialog(action == SelAction.recommend && contact != null

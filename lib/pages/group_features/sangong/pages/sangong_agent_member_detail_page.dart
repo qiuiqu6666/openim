@@ -33,6 +33,7 @@ class _State extends State<SangongAgentMemberDetailPage> {
 
   SangongTeamMemberDto? _liveMember;
   Map<String, dynamic>? _daily;
+  Map<String, dynamic>? _lifetime;
   String? _error;
   bool _loadingDaily = true;
   int _tabIndex = 0;
@@ -52,15 +53,17 @@ class _State extends State<SangongAgentMemberDetailPage> {
       _error = null;
     });
     try {
-      String? batchNo;
       String? dashboardError;
       SangongTeamMemberDto? live;
+      Map<String, dynamic>? lifetime;
       try {
         final dashboard = await SangongScope.read(context)
             .agent
             .fetchSangongMemberDashboard(imUserId: widget.member.imUserId);
-        final batch = dashboard['batch'];
-        batchNo = batch is Map ? batch['batchNo']?.toString() : null;
+        final rawLifetime = dashboard['lifetime'];
+        if (rawLifetime is Map && rawLifetime['aggregation'] == 'all_time') {
+          lifetime = Map<String, dynamic>.from(rawLifetime);
+        }
         final member = dashboard['member'];
         if (member is Map) {
           live =
@@ -75,26 +78,20 @@ class _State extends State<SangongAgentMemberDetailPage> {
       if (!_canViewHistory) {
         setState(() {
           _liveMember = live;
+          _lifetime = lifetime;
           _error = dashboardError;
           _daily = null;
           _loadingDaily = false;
         });
         return;
       }
-      var daily = await SangongScope.read(context)
+      final daily = await SangongScope.read(context)
           .agent
-          .fetchSangongMemberDaily(
-              imUserId: widget.member.imUserId, batchNo: batchNo);
-      if (!mounted || !_isCurrentSession) return;
-      if ((daily['days'] is! List || (daily['days'] as List).isEmpty) &&
-          batchNo != null) {
-        daily = await SangongScope.read(context)
-            .agent
-            .fetchSangongMemberDaily(imUserId: widget.member.imUserId);
-      }
+          .fetchSangongMemberDaily(imUserId: widget.member.imUserId);
       if (mounted && _isCurrentSession) {
         setState(() {
           _daily = daily;
+          _lifetime = lifetime;
           _error = dashboardError;
           _loadingDaily = false;
           if (live != null) _liveMember = live;
@@ -122,6 +119,18 @@ class _State extends State<SangongAgentMemberDetailPage> {
         Text('${money(value)}$suffix',
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
       ]);
+
+  Widget _lifetimeMetric(String label, String key) {
+    final raw = _lifetime?[key];
+    final value = raw is num ? raw : num.tryParse('$raw');
+    if (value != null && value.isFinite) {
+      return metric(AppCopy.text(label), value);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(AppCopy.text(label), style: Theme.of(context).textTheme.bodySmall),
+      Text('—', style: Theme.of(context).textTheme.titleMedium),
+    ]);
+  }
 
   bool get _isCurrentLoginMember {
     final selfId = ChatIdFormat.rawUserUid(
@@ -256,42 +265,31 @@ class _State extends State<SangongAgentMemberDetailPage> {
                                 crossAxisCount: 2,
                                 childAspectRatio: 2.7,
                                 children: [
-                                  metric(AppCopy.text('余额'), m.balance),
-                                  metric(
-                                      _summaryView
-                                          ? AppCopy.text('本批次盈亏')
-                                          : AppCopy.text('最新盈亏'),
-                                      _summaryView
-                                          ? m.batchProfitLoss
-                                          : m.todayProfitLoss),
+                                  if (_summaryView)
+                                    _lifetimeMetric('余额', 'balance')
+                                  else
+                                    metric(AppCopy.text('余额'), m.balance),
                                   if (_summaryView) ...[
-                                    metric(
-                                        AppCopy.text('闲流水'), m.playerTurnover),
-                                    metric(
-                                        AppCopy.text('庄流水'), m.bankerTurnover),
-                                    metric(AppCopy.text('总流水'),
-                                        m.batchTotalTurnover),
+                                    _lifetimeMetric('累计盈亏', 'profitLoss'),
+                                    _lifetimeMetric('闲流水', 'playerTurnover'),
+                                    _lifetimeMetric('庄流水', 'bankerTurnover'),
+                                    _lifetimeMetric('总流水', 'totalTurnover'),
+                                    _lifetimeMetric('上分', 'totalUp'),
+                                    _lifetimeMetric('下分', 'totalDown'),
+                                    _lifetimeMetric('已返水', 'rebate'),
                                   ] else ...[
+                                    metric(AppCopy.text('最新盈亏'),
+                                        m.todayProfitLoss),
                                     metric(
                                         AppCopy.text('闲流水'), m.playerTurnover),
                                     metric(
                                         AppCopy.text('庄流水'), m.bankerTurnover),
                                     metric(AppCopy.text('总流水'),
                                         m.displayTotalTurnover),
-                                    metric(AppCopy.text('最近闲流水'),
-                                        m.latestPlayerTurnover),
-                                    metric(AppCopy.text('最近庄流水'),
-                                        m.latestBankerTurnover),
+                                    metric('上分', m.todayUp),
+                                    metric('下分', m.todayDown),
+                                    metric('已返水', m.todayRebate),
                                   ],
-                                  metric('上分',
-                                      _summaryView ? m.batchUp : m.todayUp),
-                                  metric('下分',
-                                      _summaryView ? m.batchDown : m.todayDown),
-                                  metric(
-                                      '已返水',
-                                      _summaryView
-                                          ? m.batchRebate
-                                          : m.todayRebate),
                                   metric('待返水', m.pendingRebate),
                                   metric('返水比例', m.rebatePct, suffix: '%'),
                                 ]))),
@@ -371,7 +369,7 @@ class _State extends State<SangongAgentMemberDetailPage> {
               border: Border(
                 bottom: BorderSide(
                   color: _tabIndex == index
-                      ? Theme.of(context).colorScheme.primary
+                      ? AppTokens.accent
                       : Colors.transparent,
                   width: 2,
                 ),
@@ -380,7 +378,7 @@ class _State extends State<SangongAgentMemberDetailPage> {
             child: Text(label,
                 style: TextStyle(
                     color: _tabIndex == index
-                        ? Theme.of(context).colorScheme.primary
+                        ? AppTokens.accent
                         : Theme.of(context).colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w600)),
           ),

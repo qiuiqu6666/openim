@@ -44,7 +44,8 @@ class AppView extends StatelessWidget {
             background: Theme.of(context).appBarTheme.backgroundColor ??
                 Theme.of(context).colorScheme.surface,
             navigationBackground: Theme.of(context).scaffoldBackgroundColor,
-            child: NetworkRecoveryOverlay(child: widget!),
+            child:
+                NetworkRecoveryOverlay(child: InAppBrowserHost(child: widget!)),
           ),
         );
       },

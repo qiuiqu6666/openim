@@ -27,7 +27,7 @@ String? friendCardInviteCode(String? extension) {
 
 Map<String, String>? parseFriendInvite(String text) {
   final uri = Uri.tryParse(text.trim());
-  if (uri?.scheme != 'openim' ||
+  if (!{'chat99', 'openim'}.contains(uri?.scheme) ||
       uri?.host != 'user' ||
       uri!.pathSegments.length != 1) {
     return null;

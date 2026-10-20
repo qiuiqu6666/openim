@@ -15,6 +15,7 @@ import '../../fund/fund_message_card.dart';
 import '../../group/announcements/announcement_mention_link.dart';
 import '../../media/chat_picture_gallery.dart';
 import '../../media/chat_media_message_locator.dart';
+import '../../media/chat_media_share_recipients.dart';
 import '../../media/widgets/chat_video_thumbnail.dart';
 import '../../media/widgets/chat_video_play_indicator.dart';
 import '../../stickers/sticker_video_bubble.dart';
@@ -372,6 +373,9 @@ class ChatMessageTile extends StatelessWidget {
                       'mediaViewInChatFailed'.tr,
                   }));
 
+          var previewActive = true;
+          final shareRecipients = ChatMediaShareRecipients(
+              isCurrent: () => previewActive && current());
           await IMUtils.previewMediaFile(
               context: context,
               message: message,
@@ -387,6 +391,21 @@ class ChatMessageTile extends StatelessWidget {
               onViewInChat: (index) async {
                 await locator.viewInChat(index);
               },
+              loadShareRecipients: shareRecipients.load,
+              onForwardTo: (index, recipient) async {
+                final target = locator.currentMessageAt(index);
+                if (target != null && logic.canForward(target)) {
+                  await shareRecipients.stage(target, recipient);
+                }
+              },
+              onFavorite: (index) {
+                final target = locator.currentMessageAt(index);
+                if (target != null && logic.canFavorite(target)) {
+                  logic.favoriteMessage(target);
+                } else {
+                  IMViews.showToast('mediaMessageUnavailable'.tr);
+                }
+              },
               onForward: (index) {
                 final target = locator.currentMessageAt(index);
                 if (target != null && logic.canForward(target)) {
@@ -398,7 +417,7 @@ class ChatMessageTile extends StatelessWidget {
               onDelete: (index) {
                 final target = locator.currentMessageAt(index);
                 if (target != null) logic.deleteMessage(target);
-              });
+              }).whenComplete(() => previewActive = false);
         } catch (_) {
           if (current()) IMViews.showToast('mediaViewInChatFailed'.tr);
         } finally {

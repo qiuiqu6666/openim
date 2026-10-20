@@ -6,9 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_openim_sdk/src/logger.dart';
+import '../diagnostics/media_operation_diagnostics.dart';
 
 class IMManager {
   MethodChannel _channel;
+  late final _mediaDiagnostics = MediaOperationDiagnostics(_channel);
   late final DiagnosticLoggingManager diagnosticLoggingManager =
       DiagnosticLoggingManager(_channel);
   late ConversationManager conversationManager;
@@ -30,7 +32,8 @@ class IMManager {
   IMManager(this._channel) {
     conversationManager = ConversationManager(_channel);
     friendshipManager = FriendshipManager(_channel);
-    messageManager = MessageManager(_channel);
+    messageManager =
+        MessageManager(_channel, mediaDiagnostics: _mediaDiagnostics);
     groupManager = GroupManager(_channel);
     userManager = UserManager(_channel);
     _addNativeCallback(_channel);
@@ -400,6 +403,9 @@ class IMManager {
   }) {
     _connectListener = listener;
     config.logFilePath ??= config.dataDir;
+    if (config.logFilePath != null) {
+      _mediaDiagnostics.configure(config.logFilePath!);
+    }
     return _channel.invokeMethod(
       'initSDK',
       _buildParam(
@@ -433,6 +439,7 @@ class IMManager {
     String? operationID,
   }) {
     _connectListener = listener;
+    _mediaDiagnostics.configure(logFilePath ?? dataDir);
     return _channel.invokeMethod(
       'initSDK',
       _buildParam(
@@ -541,18 +548,37 @@ class IMManager {
     String? contentType,
     String? cause,
     String? operationID,
-  }) =>
-      _channel.invokeMethod(
-        'uploadFile',
-        _buildParam({
-          'id': id,
-          'filePath': filePath,
-          'name': fileName,
-          'contentType': contentType,
-          'cause': cause,
-          'operationID': Utils.checkOperationID(operationID),
-        }),
-      );
+  }) {
+    final op = Utils.checkOperationID(operationID);
+    Future<dynamic> upload() => _channel.invokeMethod(
+          'uploadFile',
+          _buildParam({
+            'id': id,
+            'filePath': filePath,
+            'name': fileName,
+            'contentType': contentType,
+            'cause': cause,
+            'operationID': op,
+          }),
+        );
+    final mediaType = contentType?.startsWith('video/') == true
+        ? 'video'
+        : contentType?.startsWith('image/') == true
+            ? 'image'
+            : null;
+    if (mediaType == null && !id.startsWith('chat-')) return upload();
+    return _mediaDiagnostics.run({
+      'stage': 'sdk_upload',
+      if (mediaType != null) 'mediaType': mediaType,
+      if (id.startsWith('chat-') && id.contains(':'))
+        'clientMsgID': id.substring(id.indexOf(':') + 1),
+      'part': id.startsWith('chat-snapshot:')
+          ? 'video_cover'
+          : id.startsWith('chat-media:')
+              ? 'source'
+              : 'preview',
+    }, op, upload);
+  }
 
   /// Update the Firebase client registration token
   /// [fcmToken] Firebase token
@@ -574,14 +600,18 @@ class IMManager {
     String? ex,
     int line = 0,
     String? operationID,
-  }) =>
-      _channel.invokeMethod(
-          'uploadLogs',
-          _buildParam({
-            'ex': ex,
-            'line': line,
-            'operationID': Utils.checkOperationID(operationID),
-          }));
+  }) async {
+    final op = Utils.checkOperationID(operationID);
+    await _mediaDiagnostics.prepareExport(op);
+    return _channel.invokeMethod(
+        'uploadLogs',
+        _buildParam({
+          'ex': ex,
+          // Leave room for SDK bookkeeping after the snapshot is written.
+          'line': line > 0 && line < 100 ? 100 : line,
+          'operationID': op,
+        }));
+  }
 
   Future logs({
     int logLevel = 5,
@@ -591,18 +621,20 @@ class IMManager {
     String? err,
     List<dynamic>? keyAndValues,
     String? operationID,
-  }) =>
-      _channel.invokeMethod(
-          'logs',
-          _buildParam({
-            'line': line,
-            'logLevel': logLevel,
-            'file': file,
-            'msgs': msgs,
-            'err': err,
-            if (keyAndValues != null) 'keyAndValue': jsonEncode(keyAndValues),
-            'operationID': Utils.checkOperationID(operationID),
-          }));
+  }) {
+    _mediaDiagnostics.journal.capture(msgs);
+    return _channel.invokeMethod(
+        'logs',
+        _buildParam({
+          'line': line,
+          'logLevel': logLevel,
+          'file': file,
+          'msgs': msgs,
+          'err': err,
+          if (keyAndValues != null) 'keyAndValue': jsonEncode(keyAndValues),
+          'operationID': Utils.checkOperationID(operationID),
+        }));
+  }
 
   void setUploadLogsListener(OnUploadLogsListener listener) {
     _uploadLogsListener = listener;

@@ -1,15 +1,27 @@
 import 'package:openim_common/localization.dart';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../res/app_tokens.dart';
+import '../views.dart';
+import 'in_app_browser_share.dart';
+import 'in_app_browser_host.dart';
 
 class InAppBrowserPage extends StatefulWidget {
-  const InAppBrowserPage({super.key, required this.uri});
+  const InAppBrowserPage(
+      {super.key,
+      required this.uri,
+      this.onLocationChanged,
+      this.onMetadataChanged});
   final Uri uri;
+  final ValueChanged<Uri>? onLocationChanged;
+  final void Function(String? title, Uri? icon)? onMetadataChanged;
 
   @override
   State<InAppBrowserPage> createState() => _InAppBrowserPageState();
@@ -25,7 +37,51 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
   int _titleRequest = 0;
   bool _failed = false;
   bool _canGoBack = false;
+  bool _canGoForward = false;
   bool _goingBack = false;
+  final _addressController = TextEditingController();
+  final _addressFocus = FocusNode();
+  bool _editingAddress = false;
+
+  void _editAddress() {
+    _addressController.text = _uri.toString();
+    _addressController.selection = TextSelection(
+        baseOffset: 0, extentOffset: _addressController.text.length);
+    setState(() => _editingAddress = true);
+    _addressFocus.requestFocus();
+  }
+
+  Future<void> _submitAddress(String value) async {
+    final text = value.trim();
+    final parsed = Uri.tryParse(text);
+    final uri = parsed != null && !parsed.hasScheme
+        ? Uri.tryParse('https://$text')
+        : parsed;
+    if (text.isEmpty || RegExp(r'\s').hasMatch(text) || !_allowed(uri)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(_text('请输入有效的 HTTP 或 HTTPS 网址',
+              'Enter a valid HTTP or HTTPS address.'))));
+      _addressFocus.requestFocus();
+      return;
+    }
+    _addressFocus.unfocus();
+    setState(() {
+      _editingAddress = false;
+      _uri = uri!;
+    });
+    widget.onLocationChanged?.call(_uri);
+    if (!_supported) return;
+    if (_failed || _controller == null) {
+      await _load();
+    } else {
+      try {
+        await _controller!.loadRequest(uri!);
+      } catch (_) {
+        if (mounted) setState(() => _failed = true);
+      }
+    }
+  }
+
   bool get _supported =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -52,6 +108,7 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
       _failed = false;
       _loading = true;
       _canGoBack = false;
+      _canGoForward = false;
       _title = null;
     });
     bool active() => mounted && generation == _generation;
@@ -90,6 +147,7 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
             _uri = Uri.tryParse(url) ?? _uri;
             _loading = true;
           });
+          widget.onLocationChanged?.call(_uri);
           startTimeout();
         },
         onPageFinished: (_) async {
@@ -98,10 +156,12 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
           _timeout?.cancel();
           try {
             final back = await controller.canGoBack();
+            final forward = await controller.canGoForward();
             if (active() && !_failed) {
               setState(() {
                 _loading = false;
                 _canGoBack = back;
+                _canGoForward = forward;
               });
             }
           } catch (_) {
@@ -112,10 +172,17 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
           final uri = Uri.tryParse(change.url ?? '');
           if (!active() || !_allowed(uri)) return;
           setState(() => _uri = uri!);
+          widget.onLocationChanged?.call(_uri);
           unawaited(_readTitle(controller, generation));
           try {
             final back = await controller.canGoBack();
-            if (active()) setState(() => _canGoBack = back);
+            final forward = await controller.canGoForward();
+            if (active()) {
+              setState(() {
+                _canGoBack = back;
+                _canGoForward = forward;
+              });
+            }
           } catch (_) {/* A closing platform view may no longer respond. */}
         },
         onWebResourceError: (error) {
@@ -151,6 +218,28 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
           title?.startsWith('http://') == true;
       setState(() => _title =
           title != null && title.isNotEmpty && !isAddress ? title : null);
+      widget.onMetadataChanged?.call(_title, _uri.resolve('/favicon.ico'));
+      try {
+        final result = await controller.runJavaScriptReturningResult(
+            """document.querySelector('link[rel~="icon"]')?.href || ''""");
+        var iconUrl = result.toString();
+        if (iconUrl.startsWith('"')) {
+          iconUrl = jsonDecode(iconUrl) as String;
+        }
+        if (!mounted ||
+            generation != _generation ||
+            request != _titleRequest ||
+            _failed) {
+          return;
+        }
+        final icon = iconUrl.isEmpty
+            ? _uri.resolve('/favicon.ico')
+            : _uri.resolve(iconUrl);
+        widget.onMetadataChanged?.call(
+            _title, _allowed(icon) ? icon : _uri.resolve('/favicon.ico'));
+      } catch (_) {
+        // The origin favicon remains available when metadata is inaccessible.
+      }
     } catch (_) {
       // Missing metadata must not turn an otherwise readable page into an error.
     }
@@ -181,8 +270,59 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
     }
   }
 
+  Future<void> _forward() async {
+    try {
+      await _controller?.goForward();
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  bool _sharing = false;
+  Future<void> _share() async {
+    if (_sharing) return;
+    final send = InAppBrowserShare.send;
+    if (send == null) {
+      _actionFailed();
+      return;
+    }
+    setState(() => _sharing = true);
+    try {
+      final host = InAppBrowserHost.active;
+      final count = host == null
+          ? await send(_uri, _title)
+          : await host.suspendFor(() => send(_uri, _title));
+      if (mounted && count > 0) {
+        IMViews.showToast(_text('已分享', 'Shared'), centered: true);
+      }
+    } catch (_) {
+      _actionFailed();
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  Future<void> _external() async {
+    try {
+      if (!await launchUrl(_uri, mode: LaunchMode.externalApplication)) {
+        _actionFailed();
+      }
+    } catch (_) {
+      _actionFailed();
+    }
+  }
+
+  void _actionFailed() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:
+            Text(_text('操作失败，请重试', 'Unable to complete action. Try again.'))));
+  }
+
   @override
   void dispose() {
+    _addressController.dispose();
+    _addressFocus.dispose();
     _generation++;
     _timeout?.cancel();
     super.dispose();
@@ -200,64 +340,170 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
       },
       child: Scaffold(
         backgroundColor: AppTokens.surface(dark: dark),
-        appBar: AppBar(
-          centerTitle: true,
-          backgroundColor: AppTokens.surface(dark: dark),
-          foregroundColor: AppTokens.textPrimary(dark: dark),
-          leading: IconButton(
-              tooltip: _text('返回', 'Back'),
-              color: AppTokens.accent,
-              onPressed: _back,
-              icon: const Icon(Icons.arrow_back_ios_new_rounded)),
-          title: Text(_title ?? _text(AppCopy.text('网页'), 'Web page'),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          actions: [
-            IconButton(
-                tooltip: _text(AppCopy.text('刷新'), 'Refresh'),
-                color: AppTokens.accent,
-                onPressed: _supported && !invalid ? _refresh : null,
-                icon: const Icon(Icons.refresh)),
-          ],
-        ),
         body: SafeArea(
+            top: false,
             child: Column(children: [
-          if (!recovery && _loading)
-            LinearProgressIndicator(
-                color: AppTokens.accent,
-                value: MediaQuery.disableAnimationsOf(context) ? 1 : null,
-                semanticsLabel: _text(AppCopy.text('网页加载中'), 'Loading page')),
-          Expanded(
-              child: recovery
-                  ? Center(
-                      child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(AppTokens.s7),
-                          child:
-                              Column(mainAxisSize: MainAxisSize.min, children: [
-                            Text(
-                                invalid
-                                    ? _text(
-                                        AppCopy.text('链接无效'), 'Invalid link')
-                                    : !_supported
-                                        ? _text(AppCopy.text('当前平台暂不支持内嵌网页'),
-                                            'Embedded web pages are not supported on this platform.')
-                                        : _text(AppCopy.text('网页加载失败，请检查网络后重试'),
-                                            'Unable to load the page. Check your connection and retry.'),
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodyLarge),
-                            if (_supported && !invalid) ...[
-                              const SizedBox(height: AppTokens.s5),
-                              TextButton(
-                                  onPressed: _load,
-                                  child: Text(
-                                      _text(AppCopy.text('重新加载'), 'Retry'))),
-                            ],
-                          ])))
-                  : _controller == null
-                      ? const SizedBox.expand()
-                      : WebViewWidget(
-                          key: ValueKey(_generation),
-                          controller: _controller!)),
-        ])),
+              Padding(
+                padding: const EdgeInsets.all(AppTokens.s3),
+                child: Row(children: [
+                  TextButton(
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppTokens.accent,
+                        minimumSize: const Size(AppTokens.minimumTapSize,
+                            AppTokens.minimumTapSize)),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(_text('完成', 'Done')),
+                  ),
+                  Expanded(
+                    child: Semantics(
+                      button: !_editingAddress,
+                      label: _editingAddress
+                          ? null
+                          : _text('修改网址', 'Edit address'),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _editingAddress ? null : _editAddress,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                              minHeight: AppTokens.minimumTapSize),
+                          child: Center(
+                              child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: AppTokens.s4,
+                                vertical: AppTokens.s2),
+                            decoration: BoxDecoration(
+                              color: AppTokens.surfaceAlt(dark: dark),
+                              borderRadius:
+                                  BorderRadius.circular(AppTokens.rSm),
+                            ),
+                            child: _editingAddress
+                                ? TextField(
+                                    controller: _addressController,
+                                    focusNode: _addressFocus,
+                                    keyboardType: TextInputType.url,
+                                    textInputAction: TextInputAction.go,
+                                    autocorrect: false,
+                                    enableSuggestions: false,
+                                    textDirection: TextDirection.ltr,
+                                    style:
+                                        Theme.of(context).textTheme.bodyLarge,
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      border: InputBorder.none,
+                                      contentPadding: EdgeInsets.zero,
+                                      hintText: _text('输入网址', 'Enter address'),
+                                    ),
+                                    onSubmitted: _submitAddress,
+                                    onTapOutside: (_) {
+                                      _addressFocus.unfocus();
+                                      setState(() => _editingAddress = false);
+                                    },
+                                  )
+                                : Text(_uri.toString(),
+                                    textDirection: TextDirection.ltr,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyLarge
+                                        ?.copyWith(
+                                          color: AppTokens.textSecondary(
+                                              dark: dark),
+                                        )),
+                          )),
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                      tooltip: _text(AppCopy.text('刷新'), 'Refresh'),
+                      color: AppTokens.accent,
+                      onPressed: _supported && !invalid ? _refresh : null,
+                      icon: const Icon(Icons.refresh)),
+                ]),
+              ),
+              if (!recovery && _loading)
+                LinearProgressIndicator(
+                    color: AppTokens.accent,
+                    value: MediaQuery.disableAnimationsOf(context) ? 1 : null,
+                    semanticsLabel:
+                        _text(AppCopy.text('网页加载中'), 'Loading page')),
+              Expanded(
+                  child: recovery
+                      ? Center(
+                          child: SingleChildScrollView(
+                              padding: const EdgeInsets.all(AppTokens.s7),
+                              child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                        invalid
+                                            ? _text(AppCopy.text('链接无效'),
+                                                'Invalid link')
+                                            : !_supported
+                                                ? _text(
+                                                    AppCopy.text(
+                                                        '当前平台暂不支持内嵌网页'),
+                                                    'Embedded web pages are not supported on this platform.')
+                                                : _text(
+                                                    AppCopy.text(
+                                                        '网页加载失败，请检查网络后重试'),
+                                                    'Unable to load the page. Check your connection and retry.'),
+                                        textAlign: TextAlign.center,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyLarge),
+                                    if (_supported && !invalid) ...[
+                                      const SizedBox(height: AppTokens.s5),
+                                      TextButton(
+                                          onPressed: _load,
+                                          child: Text(_text(
+                                              AppCopy.text('重新加载'), 'Retry'))),
+                                    ],
+                                  ])))
+                      : _controller == null
+                          ? const SizedBox.expand()
+                          : WebViewWidget(
+                              key: ValueKey(_generation),
+                              // Web content retains scrolling; drag the native
+                              // browser chrome to dismiss the sheet.
+                              gestureRecognizers: {
+                                Factory<VerticalDragGestureRecognizer>(
+                                    VerticalDragGestureRecognizer.new),
+                              },
+                              controller: _controller!)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppTokens.s5),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                        tooltip: _text('返回', 'Back'),
+                        color: AppTokens.accent,
+                        onPressed: _canGoBack && !recovery ? _back : null,
+                        icon: const Icon(Icons.arrow_back_ios_new_rounded)),
+                    IconButton(
+                        tooltip: _text('前进', 'Forward'),
+                        color: AppTokens.accent,
+                        onPressed: _canGoForward && !recovery ? _forward : null,
+                        icon: const Icon(Icons.arrow_forward_ios_rounded)),
+                    Builder(
+                        builder: (anchor) => IconButton(
+                            tooltip: _text('分享', 'Share'),
+                            color: AppTokens.accent,
+                            onPressed: invalid || _sharing ? null : _share,
+                            icon: const Icon(Icons.ios_share))),
+                    IconButton(
+                        tooltip: _text('在浏览器中打开', 'Open in browser'),
+                        color: AppTokens.accent,
+                        onPressed: invalid ? null : _external,
+                        icon: const Icon(Icons.explore_outlined)),
+                  ],
+                ),
+              ),
+            ])),
       ),
     );
   }

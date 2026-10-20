@@ -10,14 +10,16 @@ public final class QrImageDecoderPlugin: NSObject, FlutterPlugin {
         registrar.addMethodCallDelegate(QrImageDecoderPlugin(), channel: channel)
     }
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        guard call.method == "decode" else { result(FlutterMethodNotImplemented); return }
+        guard call.method == "decode" || call.method == "recognizeText" else { result(FlutterMethodNotImplemented); return }
         guard !busy else { result(FlutterError(code: "busy", message: "Busy", details: nil)); return }
         guard let args = call.arguments as? [String: Any], let path = args["path"] as? String else {
             result(FlutterError(code: "invalidImage", message: "Invalid image", details: nil)); return
         }
         busy = true
         queue.async {
-            let reply: Any = autoreleasepool { self.decode(path) }
+            let reply: Any = autoreleasepool {
+                call.method == "recognizeText" ? ImageTextRecognizer.recognize(path) : self.decode(path)
+            }
             DispatchQueue.main.async { self.busy = false; result(reply) }
         }
     }

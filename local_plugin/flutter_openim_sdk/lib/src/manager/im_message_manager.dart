@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import '../window/message_window_cache.dart';
+import '../diagnostics/media_operation_diagnostics.dart';
 
 class MessageManager {
   final windowCache = MessageWindowCache.shared;
@@ -10,7 +11,26 @@ class MessageManager {
   late OnAdvancedMsgListener msgListener;
   OnCustomBusinessListener? customBusinessListener;
 
-  MessageManager(this._channel);
+  final MediaOperationDiagnostics? _mediaDiagnostics;
+  MessageManager(this._channel, {MediaOperationDiagnostics? mediaDiagnostics})
+      : _mediaDiagnostics = mediaDiagnostics;
+
+  Future<Message> _traceMediaSend(Message message, String operationID,
+      String stage, Future<Message> Function() action) {
+    final diagnostics = _mediaDiagnostics;
+    if (diagnostics == null ||
+        ![MessageType.picture, MessageType.video]
+            .contains(message.contentType)) {
+      return action();
+    }
+    return diagnostics.run({
+      'stage': stage,
+      'clientMsgID': message.clientMsgID,
+      'mediaType': message.contentType == MessageType.video ? 'video' : 'image',
+      'bytes': message.videoElem?.videoSize ??
+          message.pictureElem?.sourcePicture?.size,
+    }, operationID, action);
+  }
 
   /// Message listener
   Future setAdvancedMsgListener(OnAdvancedMsgListener listener) {
@@ -40,19 +60,26 @@ class MessageManager {
     String? groupID,
     bool isOnlineOnly = false,
     String? operationID,
-  }) =>
-      _channel
-          .invokeMethod(
-              'sendMessage',
-              _buildParam({
-                'message': message.toJson(),
-                'offlinePushInfo': offlinePushInfo.toJson(),
-                'userID': userID ?? '',
-                'groupID': groupID ?? '',
-                'isOnlineOnly': isOnlineOnly,
-                'operationID': Utils.checkOperationID(operationID),
-              }))
-          .then((value) => Utils.toObj(value, (map) => Message.fromJson(map)));
+  }) {
+    final op = Utils.checkOperationID(operationID);
+    return _traceMediaSend(
+        message,
+        op,
+        'sdk_send',
+        () => _channel
+            .invokeMethod(
+                'sendMessage',
+                _buildParam({
+                  'message': message.toJson(),
+                  'offlinePushInfo': offlinePushInfo.toJson(),
+                  'userID': userID ?? '',
+                  'groupID': groupID ?? '',
+                  'isOnlineOnly': isOnlineOnly,
+                  'operationID': op,
+                }))
+            .then(
+                (value) => Utils.toObj(value, (map) => Message.fromJson(map))));
+  }
 
   /// Delete a message from local storage
   /// [message] Message to be deleted
@@ -752,19 +779,26 @@ class MessageManager {
     String? groupID,
     bool isOnlineOnly = false,
     String? operationID,
-  }) =>
-      _channel
-          .invokeMethod(
-              'sendMessageNotOss',
-              _buildParam({
-                'message': message.toJson(),
-                'offlinePushInfo': offlinePushInfo.toJson(),
-                'userID': userID ?? '',
-                'groupID': groupID ?? '',
-                'isOnlineOnly': isOnlineOnly,
-                'operationID': Utils.checkOperationID(operationID),
-              }))
-          .then((value) => Utils.toObj(value, (map) => Message.fromJson(map)));
+  }) {
+    final op = Utils.checkOperationID(operationID);
+    return _traceMediaSend(
+        message,
+        op,
+        'sdk_send_uploaded',
+        () => _channel
+            .invokeMethod(
+                'sendMessageNotOss',
+                _buildParam({
+                  'message': message.toJson(),
+                  'offlinePushInfo': offlinePushInfo.toJson(),
+                  'userID': userID ?? '',
+                  'groupID': groupID ?? '',
+                  'isOnlineOnly': isOnlineOnly,
+                  'operationID': op,
+                }))
+            .then(
+                (value) => Utils.toObj(value, (map) => Message.fromJson(map))));
+  }
 
   /// Create an image message by URL
   Future<Message> createImageMessageByURL({

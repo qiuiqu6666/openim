@@ -103,6 +103,46 @@ Future<bool> _jump(
 }
 
 void main() {
+  testWidgets('positioning accelerates and resolves only after travel',
+      (tester) async {
+    final position = ChatListPositionController();
+    final scroll = ScrollController();
+    await _mount(tester, position, scroll);
+    var completed = false;
+    final pending = position.jumpToMessage('m-6').then((value) {
+      completed = true;
+      return value;
+    });
+    await tester.pump();
+    await tester.pump();
+    final start = scroll.offset;
+    await tester.pump(const Duration(milliseconds: 100));
+    final early = scroll.offset;
+    expect(completed, isFalse);
+    await tester.pump(const Duration(milliseconds: 100));
+    final later = scroll.offset;
+    expect((early - start).abs(), greaterThan(0));
+    expect((later - early).abs(), greaterThan((early - start).abs()));
+    await tester.pumpAndSettle();
+    expect(await pending, isTrue);
+    _expectVisible(tester, 'm-6');
+  });
+
+  testWidgets('cancelling active travel stops movement and rejects the jump',
+      (tester) async {
+    final position = ChatListPositionController();
+    final scroll = ScrollController();
+    await _mount(tester, position, scroll);
+    final pending = position.jumpToMessage('m-6');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    position.cancel();
+    final stopped = scroll.offset;
+    await tester.pumpAndSettle();
+    expect(await pending, isFalse);
+    expect(scroll.offset, closeTo(stopped, 0.5));
+  });
+
   testWidgets('a far lazy variable-height message paints without a height scan',
       (tester) async {
     final position = ChatListPositionController();

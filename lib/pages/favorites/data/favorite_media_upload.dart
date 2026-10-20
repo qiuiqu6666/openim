@@ -38,10 +38,12 @@ class FavoriteMediaUploader {
   const FavoriteMediaUploader(this.api);
   final FavoriteApi api;
 
+  static int maxSizeBytes(FavoriteKind kind) =>
+      kind == FavoriteKind.image || kind == FavoriteKind.audio
+          ? 20 * 1024 * 1024
+          : 100 * 1024 * 1024;
   static void validateFileSize(FavoriteKind kind, int size) {
-    final max = kind == FavoriteKind.image || kind == FavoriteKind.audio
-        ? 20 * 1024 * 1024
-        : 100 * 1024 * 1024;
+    final max = maxSizeBytes(kind);
     if (size > max || size <= 0) {
       throw const FavoriteApiException(20058, '文件超过大小限制');
     }

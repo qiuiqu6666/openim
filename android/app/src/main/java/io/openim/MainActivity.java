@@ -24,6 +24,7 @@ public class MainActivity extends FlutterFragmentActivity {
     private LiveCastBridge liveCastBridge;
     private CallPictureInPictureBridge callPipBridge;
     private NativeChatLocationMapFactory chatLocationMapFactory;
+    private io.openim.location.ChatLocationAddressBridge locationAddressBridge;
     private io.openim.update.AndroidUpdateBridge updateBridge;
     private String pendingInvite;
     private static final String SYSTEM_SHARE_CHANNEL = "openim_system_share";
@@ -39,6 +40,7 @@ public class MainActivity extends FlutterFragmentActivity {
                 } else result.notImplemented();
             });
         nativeNotificationBridge = new io.openim.messaging.NativeNotificationBridge(this, flutterEngine);
+        locationAddressBridge = new io.openim.location.ChatLocationAddressBridge(this, flutterEngine.getDartExecutor().getBinaryMessenger());
         chatLocationMapFactory = new NativeChatLocationMapFactory(
                 getLifecycle(), flutterEngine.getDartExecutor().getBinaryMessenger());
         flutterEngine.getPlatformViewsController().getRegistry().registerViewFactory(
@@ -103,6 +105,7 @@ public class MainActivity extends FlutterFragmentActivity {
             liveCastBridge.dispose();
             liveCastBridge = null;
         }
+        if (locationAddressBridge != null) { locationAddressBridge.dispose(); locationAddressBridge = null; }
         super.cleanUpFlutterEngine(flutterEngine);
     }
 

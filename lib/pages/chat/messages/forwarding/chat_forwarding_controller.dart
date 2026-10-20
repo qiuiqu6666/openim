@@ -42,6 +42,7 @@ class ChatForwardingController {
     void Function(String)? showToast,
     void Function()? showSuccess,
     this.onForwardNeedsReview,
+    this.stageForward,
   })  : _delivery = delivery,
         _messages = messages,
         _isClosed = isClosed,
@@ -77,6 +78,8 @@ class ChatForwardingController {
         _showToast = showToast ?? ((text) => IMViews.showToast(text)),
         _showSuccess = showSuccess ?? ForwardSuccessFeedback.show;
 
+  final Future<bool?> Function(
+      List<Message> messages, dynamic recipient, bool merged)? stageForward;
   final ChatDeliveryController _delivery;
   final List<Message> Function() _messages;
   final bool Function() _isClosed, _isGroupChat;
@@ -181,8 +184,21 @@ class ChatForwardingController {
           {required bool merged}) =>
       _forwardMessages(selection, merged: merged, requireCurrentSources: true);
 
+  Future<bool> sendPending(List<Message> messages, dynamic recipient,
+          {required bool merged, String? mergeTitle}) =>
+      _forwardMessages(messages,
+          merged: merged,
+          requireCurrentSources: false,
+          selectedResult: {
+            'checkedList': [recipient]
+          },
+          mergeTitle: mergeTitle);
+
   Future<bool> _forwardMessages(List<Message> selection,
-      {required bool merged, required bool requireCurrentSources}) async {
+      {required bool merged,
+      required bool requireCurrentSources,
+      Map<String, dynamic>? selectedResult,
+      String? mergeTitle}) async {
     final snapshot = List<Message>.of(selection);
     final selectedIDs = snapshot.map((message) => message.clientMsgID).toList();
     String? invalidHint;
@@ -199,7 +215,8 @@ class ChatForwardingController {
 
     bool fail({String? hint}) {
       if (isClosed) return false;
-      if (requireCurrentSources && (confirmedCount > 0 || uncertain)) {
+      if ((requireCurrentSources || selectedResult != null) &&
+          (confirmedCount > 0 || uncertain)) {
         // Keeping the selection would let a retry resend accepted messages.
         // An uncertain receipt also requires checking the destination first.
         if (!reviewNotified) {
@@ -219,7 +236,12 @@ class ChatForwardingController {
     Future<bool> send(Message message,
         ({String? userID, String? groupID, int? sessionType}) target) async {
       final receipt = await _sendForwarded(message, target);
-      if (isClosed) return false;
+      if (isClosed) {
+        // A closed route cannot finish the batch. Do not restore a batch whose
+        // in-flight message may already have reached the recipient.
+        if (selectedResult != null) onForwardNeedsReview?.call();
+        return false;
+      }
       if (receipt?.isSuccess == true) {
         confirmedCount++;
         return true;
@@ -235,15 +257,17 @@ class ChatForwardingController {
       final description = merged
           ? 'sdkMergedHistory'.tr
           : IMUtils.parseMsg(messages.first, isConversation: true);
-      final result = _selectContacts != null
-          ? await _selectContacts(description)
-          : await AppNavigator.startSelectContacts(
-              action: SelAction.forward,
-              ex: description,
-              forwardPreview: ForwardPreviewData.fromMessages(messages,
-                  merged: merged,
-                  mergeTitle: '${_nickname()} · ${'sdkMergedHistory'.tr}'),
-            );
+      final result = selectedResult ??
+          (_selectContacts != null
+              ? await _selectContacts(description)
+              : await AppNavigator.startSelectContacts(
+                  action: SelAction.forward,
+                  stageSingleForward: stageForward != null,
+                  ex: description,
+                  forwardPreview: ForwardPreviewData.fromMessages(messages,
+                      merged: merged,
+                      mergeTitle: '${_nickname()} · ${'sdkMergedHistory'.tr}'),
+                ));
       messages = resolve();
       if (messages == null) return fail(hint: invalidHint);
       if (result == null || result is! Map) return false;
@@ -262,6 +286,21 @@ class ChatForwardingController {
           sessionType: APNsOfflinePushInfo.sessionTypeForSelection(contact),
         ));
       }
+      if (selectedResult == null &&
+          stageForward != null &&
+          targets.length == 1) {
+        final staged = await stageForward!(messages, checked.first, merged);
+        if (staged != null) return staged;
+        // Specialized account pages do not host the normal chat composer.
+        final confirmed = await Get.dialog<bool>(ForwardHintDialog(
+          title: description,
+          preview: ForwardPreviewData.fromMessages(messages, merged: merged),
+          checkedList: checked.toList(),
+        ));
+        if (confirmed != true) return false;
+        messages = resolve();
+        if (messages == null) return fail(hint: invalidHint);
+      }
       final orderedIDs =
           messages.map((message) => message.clientMsgID!).toList();
       for (final target in targets) {
@@ -270,7 +309,7 @@ class ChatForwardingController {
         if (merged) {
           final message = await _createMerger(
               messageList: messages,
-              title: '${_nickname()} · ${'sdkMergedHistory'.tr}',
+              title: mergeTitle ?? '${_nickname()} · ${'sdkMergedHistory'.tr}',
               summaryList: messages
                   .take(3)
                   .map((m) =>

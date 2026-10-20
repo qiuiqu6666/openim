@@ -95,7 +95,7 @@ class _QrProfilePageState extends State<QrProfilePage> {
   }
 
   String _inviteUrl(String code, String source) => Uri(
-      scheme: 'openim',
+      scheme: 'chat99',
       host: 'user',
       path: '/${widget.userId.trim()}',
       queryParameters: {'inviteCode': code, 'source': source}).toString();

@@ -60,6 +60,18 @@ void main() {
   }
 
   for (final dark in [false, true]) {
+    testWidgets('generates chat99 QR and copied invitation ($dark)',
+        (tester) async {
+      await mount(tester, (_) async => 'fi_valid', dark: dark);
+      expect(find.byType(QrImageView), findsOneWidget);
+      await tester.ensureVisible(find.text('复制链接'));
+      await tester.tap(find.text('复制链接'));
+      await tester.pumpAndSettle();
+      expect(clipboard.single.toString(),
+          contains('chat99://user/im_test?inviteCode=fi_valid&source=link'));
+      await EasyLoading.dismiss(animation: false);
+      await tester.pumpAndSettle();
+    });
     testWidgets(
         'limited QR and link quietly stop and allow manual retry ($dark)',
         (tester) async {
