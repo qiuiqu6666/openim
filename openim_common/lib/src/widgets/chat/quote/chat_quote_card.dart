@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
@@ -18,7 +19,7 @@ class ChatQuoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
         button: onTap != null,
-        onTapHint: onTap == null ? null : '定位原消息',
+        onTapHint: onTap == null ? null : AppCopy.text('定位原消息'),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,

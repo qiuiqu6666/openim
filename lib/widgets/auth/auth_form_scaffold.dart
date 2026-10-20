@@ -14,8 +14,10 @@ class AuthFormScaffold extends StatelessWidget {
     this.showBack = true,
     this.onBack,
     this.backLabel,
+    this.titleStyle,
   });
 
+  final TextStyle? titleStyle;
   final String title;
   final String subtitle;
   final Widget child;
@@ -102,8 +104,8 @@ class AuthFormScaffold extends StatelessWidget {
                         ),
                       ],
                       Text(title,
-                          style: AuthReferenceTokens.style(
-                              context, AuthReferenceTokens.formTitle)),
+                          style: AuthReferenceTokens.style(context,
+                              titleStyle ?? AuthReferenceTokens.formTitle)),
                       const SizedBox(
                           height: AuthReferenceTokens.formHeaderSubtitleGap),
                       Text(subtitle,

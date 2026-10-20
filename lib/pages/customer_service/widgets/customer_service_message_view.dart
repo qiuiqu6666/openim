@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -108,7 +109,7 @@ class CustomerServiceMessageView extends StatelessWidget {
                           label: Text(
                               Localizations.localeOf(context).languageCode ==
                                       'zh'
-                                  ? '发送失败，点击重试'
+                                  ? AppCopy.text('发送失败，点击重试')
                                   : 'Send failed. Retry'),
                         )
                       : Padding(
@@ -116,7 +117,7 @@ class CustomerServiceMessageView extends StatelessWidget {
                           child: Text(
                               Localizations.localeOf(context).languageCode ==
                                       'zh'
-                                  ? '发送中…'
+                                  ? AppCopy.text('发送中…')
                                   : 'Sending…',
                               style: TextStyle(
                                   color: CustomerServiceTokens.secondaryText(

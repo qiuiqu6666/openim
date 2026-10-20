@@ -1,3 +1,5 @@
+import 'package:openim_common/localization.dart';
+import 'package:openim/services/fund_currency_visibility/fund_currency_visibility.dart';
 import 'package:flutter/material.dart';
 
 import '../../mine/settings/settings_service.dart';
@@ -122,7 +124,7 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
           await _prepareNext(completion!);
           if (!mounted || !_operation.sameAccount) return;
         } catch (_) {
-          _resetError = '闪兑已成功，暂未恢复输入，请点击继续闪兑重试';
+          _resetError = AppCopy.text('闪兑已成功，暂未恢复输入，请点击继续闪兑重试');
         }
       }
       final draft = _operation.draft;
@@ -131,9 +133,26 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
         _to = draft.toCurrency!;
         _amount.text = draft.amount.decimal;
       }
-      final balances = await _operation.api.fetchBalances();
+      final balances = (await _operation.api.fetchBalances())
+          .where((balance) => isFundCurrencyVisible(balance.currency))
+          .toList(growable: false);
       if (!mounted || !_operation.sameAccount) return;
-      setState(() => _balances = balances);
+      setState(() {
+        _balances = balances;
+        if (_operation.draft == null) {
+          final currencies =
+              balances.map((balance) => balance.currency).toList();
+          if (currencies.isNotEmpty && !currencies.contains(_from)) {
+            _from = currencies.first;
+            _amount.clear();
+          }
+          if (!currencies.contains(_to) || _to == _from) {
+            _to =
+                currencies.where((currency) => currency != _from).firstOrNull ??
+                    _from;
+          }
+        }
+      });
     } catch (failure) {
       if (mounted) setState(() => _loadError = walletOperationError(failure));
     } finally {
@@ -162,7 +181,8 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
         amount.isPositive &&
         balance != null &&
         amount.compareTo(balance.available) <= 0 &&
-        _from != _to;
+        _from != _to &&
+        _balances.any((balance) => balance.currency == _to);
   }
 
   void _selectFrom(FundCurrency currency) {
@@ -237,7 +257,7 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
       final preview = await _quotes.ensureQuote();
       if (!mounted || !_operation.sameAccount) return;
       if (preview == null) {
-        WalletTip.show(context, _quotes.error ?? '暂时无法获取报价，请重试');
+        WalletTip.show(context, _quotes.error ?? AppCopy.text('暂时无法获取报价，请重试'));
         return;
       }
       final quote = await showWalletSwapQuoteSheet(context, _quotes);
@@ -249,7 +269,7 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
       }
       if (!mounted || !_operation.sameAccount) return;
       if (quote.isExpired(_quotes.now())) {
-        WalletTip.show(context, '报价已过期，请重新预览');
+        WalletTip.show(context, AppCopy.text('报价已过期，请重新预览'));
         return;
       }
       var expiredDuringPayment = false;
@@ -258,15 +278,16 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
       try {
         await PayAuthHelper.collectAndSubmit(
           context: context,
-          title: '闪兑 · ${amount.currency.displayName} → ${target.displayName}',
+          title: AppCopy.format('闪兑 · {#0} → {#1}',
+              [amount.currency.displayName, target.displayName]),
           amountText: walletRecordAmountTwoDecimals(amount.decimal),
           amountCoin: amount.currency.displayName,
-          payText: '${amount.currency.displayName} 钱包',
+          payText: AppCopy.format('{#0} 钱包', [amount.currency.displayName]),
           payCoinCode: amount.currency.code,
           walletSubtitle:
               '可用 ${walletRecordAmountTwoDecimals(_balance!.available.decimal)} ${amount.currency.displayName}',
-          receiverName:
-              '预计实得 ${walletRecordAmountTwoDecimals(quote.estimatedReceived.decimal)}',
+          receiverName: AppCopy.format('预计实得 {#0}',
+              [walletRecordAmountTwoDecimals(quote.estimatedReceived.decimal)]),
           receiverId: target.displayName,
           onSubmit: (password) async {
             try {
@@ -275,14 +296,15 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
                 if (mounted && paymentSheetActive && _operation.sameAccount) {
                   Navigator.of(context, rootNavigator: true).pop(false);
                 }
-                return '报价已过期，请重新预览';
+                return AppCopy.text('报价已过期，请重新预览');
               }
               final receipt = await _operation.submit(
                   amount: amount,
                   toCurrency: target,
                   payPassword: password,
                   quote: quote);
-              if (!mounted || !_operation.sameAccount) return '账号已变化，请重新打开钱包';
+              if (!mounted || !_operation.sameAccount)
+                return AppCopy.text('账号已变化，请重新打开钱包');
               // Dismissing the PIN does not cancel a write already sent. A
               // late success still refreshes real balances in this page.
               if (!paymentSheetActive) {
@@ -311,7 +333,7 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
         paymentSheetActive = false;
       }
       if (mounted && _operation.sameAccount && expiredDuringPayment) {
-        WalletTip.show(context, '报价已过期，请重新预览');
+        WalletTip.show(context, AppCopy.text('报价已过期，请重新预览'));
       }
       if (mounted && _operation.sameAccount && quoteRefusal != null) {
         WalletTip.show(context, quoteRefusal!);
@@ -414,10 +436,10 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
                     ?.copyWith(color: cs.red)),
             TextButton(
                 onPressed: _loading ? null : _load,
-                child: const Text('重新加载余额')),
+                child: Text(AppCopy.text('重新加载余额'))),
           ])
         : insufficient
-            ? Text('余额不足',
+            ? Text(AppCopy.text('余额不足'),
                 key: const ValueKey('wallet-swap-validation'),
                 style: Theme.of(context)
                     .textTheme
@@ -430,13 +452,13 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
                 Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.red))
         : balanceFeedback ??
             (_quotes.loading
-                ? Text('正在获取报价…',
+                ? Text(AppCopy.text('正在获取报价…'),
                     style: Theme.of(context)
                         .textTheme
                         .bodySmall
                         ?.copyWith(color: cs.subText))
                 : _quotes.error != null && _operation.draft == null
-                    ? Text(_quotes.error!,
+                    ? Text(AppCopy.text(_quotes.error!),
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -448,7 +470,7 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
         backgroundColor: background,
         appBar: AppBar(
           leading: const AppBackButton(),
-          title: const Text('闪兑'),
+          title: Text(AppCopy.text('闪兑')),
           centerTitle: true,
           backgroundColor: background,
           foregroundColor: cs.text,
@@ -464,6 +486,7 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
                 locked: locked,
                 inputValueUsd: quote?.inputValueUsd),
             form: WalletExchangeForm(
+              currencies: _balances.map((balance) => balance.currency).toList(),
               from: _from,
               to: _to,
               amountController: _amount,
@@ -510,8 +533,8 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
                 child: Text(_operation.busy
                     ? '提交中'
                     : continueSwap
-                        ? '继续闪兑'
-                        : '预览'),
+                        ? AppCopy.text('继续闪兑')
+                        : AppCopy.text('预览')),
               ),
             ),
             keypad: WalletExchangeKeypad(

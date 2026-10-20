@@ -567,9 +567,12 @@ class MessageManager {
 
   /// Display-only local rows. Does not establish synchronization or cursors.
   /// Older native SDKs cannot attest this contract and their result is ignored.
+  /// [allowIncomplete] permits a locally attested but incomplete page for
+  /// startup display while a separate authoritative history read runs.
   Future<List<Message>> getLocalHistorySnapshot({
     required String conversationID,
     int count = 40,
+    bool allowIncomplete = false,
     String? operationID,
   }) =>
       _channel
@@ -585,7 +588,7 @@ class MessageManager {
               }))
           .then((value) => Utils.toObj(value, (map) {
                 if (map['localSnapshot'] != true ||
-                    map['snapshotReady'] != true ||
+                    (!allowIncomplete && map['snapshotReady'] != true) ||
                     (map['errCode'] != null && map['errCode'] != 0)) {
                   return <Message>[];
                 }

@@ -160,7 +160,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  setupTest('retention row reads SDK settings for the current conversation',
+  setupTest('retention entry stays hidden without reading SDK settings',
       (tester) async {
     final sdk = RetentionSdkFixture();
     await sdk.initialize();
@@ -171,15 +171,9 @@ void main() {
     logic.conversationInfo.value = currentConversation;
     sdk.server = currentConversation;
     await mountChatSetupUi(tester, ChatSetupPage(logic: logic));
-    expect(key('chat-setup-retention').hitTestable(), findsOneWidget);
-    await tester.tap(key('chat-setup-retention'));
-    await tester.pumpAndSettle();
-    final page =
-        tester.widget<MessageRetentionPage>(find.byType(MessageRetentionPage));
-    expect(page.conversation.conversationID, 'si-current-settings');
-    expect(sdk.reads, hasLength(1));
-    expect(sdk.reads.single.arguments,
-        containsPair('conversationIDList', ['si-current-settings']));
+    expect(key('chat-setup-retention'), findsNothing);
+    expect(find.byType(MessageRetentionPage), findsNothing);
+    expect(sdk.reads, isEmpty);
     expect(tester.takeException(), isNull);
   });
 
@@ -187,11 +181,10 @@ void main() {
       (tester) async {
     final logic = ChatSetupFakeLogic();
     await mountChatSetupUi(tester, ChatSetupPage(logic: logic));
-    expect(key('chat-setup-retention').hitTestable(), findsOneWidget);
+    expect(key('chat-setup-retention'), findsNothing);
     expect(find.text('消息免打扰'), findsOneWidget);
     final referenceOrder = [
       'chat-setup-members',
-      'chat-setup-retention',
       'chat-setup-search',
       'chat-setup-pin',
       'chat-setup-mute',
@@ -234,7 +227,7 @@ void main() {
           findsOneWidget);
       expect(find.descendant(of: material, matching: key('chat-setup-mute')),
           findsOneWidget);
-      expect(key('chat-setup-retention'), findsOneWidget);
+      expect(key('chat-setup-retention'), findsNothing);
       await exportChatSetupUi(
           tester, boundary, 'chat-setup-${dark ? 'dark' : 'light'}');
       await tester.scrollUntilVisible(key('chat-setup-clear'), 160,
@@ -268,7 +261,7 @@ void main() {
           findsOneWidget);
       expect(key('chat-setup-member-profile').hitTestable(), findsOneWidget);
       expect(key('chat-setup-search').hitTestable(), findsOneWidget);
-      expect(key('chat-setup-retention').hitTestable(), findsOneWidget);
+      expect(key('chat-setup-retention'), findsNothing);
       expect(tester.takeException(), isNull);
       await exportChatSetupUi(tester, boundary, 'chat-setup-normal-light');
     });

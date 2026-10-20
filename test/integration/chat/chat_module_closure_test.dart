@@ -23,6 +23,7 @@ import 'package:openim/pages/chat/composer/chat_composer_controller.dart';
 import 'package:openim/pages/chat/receipts/chat_read_receipts.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:openim/services/chat_history_cache.dart';
 import '../../support/chat_closure/chat_closure_fixture.dart';
 
 void main() {
@@ -37,6 +38,7 @@ void main() {
     OpenIM.iMManager.userID = 'self';
     SharedPreferences.setMockInitialValues({});
     await DataSp.init();
+    ChatHistoryCache.clear();
     Get.put<AppController>(ClosureApp());
     im = Get.put<IMController>(ClosureIM()) as ClosureIM;
     Get.put<HomeLogic>(ClosureHome());
@@ -154,25 +156,138 @@ void main() {
     owner.list.add(row);
     handler = (call) async {
       if (call.method == 'deleteFriend') return null;
-      if (call.method == 'deleteConversationAndDeleteAllMsg') {
+      if (call.method == 'hideConversation') {
         owner.queueChanges([ConversationInfo.fromJson(row.toJson())]);
         return null;
       }
       throw StateError('Unexpected ${call.method}');
     };
     final settings = FriendSetupLogic();
+    ChatHistoryCache.write('self', row.conversationID,
+        [Message(clientMsgID: 'retained', seq: 1000)]);
     settings.deleteFromFriendList();
     await tester.pumpAndSettle();
     Get.back(result: true);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 5));
     await tester.pumpAndSettle();
+    expect(calls.where((c) => c.method == 'hideConversation'), hasLength(1));
     expect(calls.where((c) => c.method == 'deleteConversationAndDeleteAllMsg'),
-        hasLength(1));
+        isEmpty);
+    expect(ChatHistoryCache.read('self', row.conversationID).single.clientMsgID,
+        'retained');
     await tester.pump(const Duration(milliseconds: 100));
     expect(owner.list, isEmpty,
         reason:
             'Friend deletion must use the same buffer cleanup/tombstone as conversation deletion.');
+  });
+
+  testWidgets('blocking hides the conversation and retains local history',
+      (tester) async {
+    await tester.pumpWidget(ScreenUtilInit(
+        designSize: const Size(375, 812),
+        builder: (_, __) => GetMaterialApp(
+            builder: EasyLoading.init(), home: const Scaffold())));
+    final owner = Get.put<ConversationLogic>(ClosureConversationOwner());
+    final row = ConversationInfo(
+        conversationID: 'si_peer_self',
+        userID: 'peer',
+        conversationType: ConversationType.single,
+        latestMsgSendTime: 1000,
+        latestMsg: Message(clientMsgID: 'retained', seq: 1000));
+    owner.list.add(row);
+    ChatHistoryCache.write('self', row.conversationID, [row.latestMsg!]);
+    final profile = UserProfilePanelLogic()
+      ..userInfo = UserFullInfo(userID: 'peer', nickname: 'Peer').obs;
+    handler = (call) async {
+      if (call.method == 'addBlacklist') return null;
+      if (call.method == 'hideConversation') {
+        owner.queueChanges([ConversationInfo.fromJson(row.toJson())]);
+        return null;
+      }
+      throw StateError('Unexpected ${call.method}');
+    };
+    final action = profile.setBlacklist(true);
+    await tester.pumpAndSettle();
+    Get.back(result: true);
+    await tester.pumpAndSettle();
+    await action;
+    await tester.pump(const Duration(seconds: 1));
+    expect(profile.userInfo.value.isBlacklist, isTrue);
+    expect(owner.list, isEmpty);
+    expect(calls.map((c) => c.method),
+        containsAllInOrder(['addBlacklist', 'hideConversation']));
+    expect(calls.any((c) => c.method == 'deleteConversationAndDeleteAllMsg'),
+        isFalse);
+    expect(ChatHistoryCache.read('self', row.conversationID).single.clientMsgID,
+        'retained');
+  });
+
+  test('failed hide retains conversation and messages; retry can hide it',
+      () async {
+    final owner = ConversationLogic();
+    addTearDown(owner.onClose);
+    final row = ConversationInfo(
+        conversationID: 'chat',
+        userID: 'peer',
+        conversationType: ConversationType.single,
+        latestMsgSendTime: 1000);
+    owner.list.add(row);
+    ChatHistoryCache.write('self', 'chat', [Message(clientMsgID: 'kept')]);
+    var failing = true;
+    handler = (call) async {
+      if (call.method != 'hideConversation')
+        throw StateError('Unexpected ${call.method}');
+      if (failing) throw PlatformException(code: '500');
+      return null;
+    };
+    await expectLater(
+        owner.hidePeerConversation('peer'), throwsA(isA<PlatformException>()));
+    expect(owner.list.single.conversationID, 'chat');
+    failing = false;
+    await owner.hidePeerConversation('peer');
+    expect(owner.list, isEmpty);
+    expect(ChatHistoryCache.read('self', 'chat').single.clientMsgID, 'kept');
+  });
+
+  test('hiding a stranger without a persisted conversation is a no-op',
+      () async {
+    final owner = ConversationLogic();
+    addTearDown(owner.onClose);
+    handler = (call) async {
+      if (call.method == 'getOneConversation') {
+        return jsonEncode(ConversationInfo(
+                conversationID: 'si_peer_self',
+                userID: 'peer',
+                conversationType: ConversationType.single,
+                latestMsgSendTime: 0)
+            .toJson());
+      }
+      throw StateError('Unexpected ${call.method}');
+    };
+    await owner.hidePeerConversation('peer');
+    expect(calls.map((call) => call.method), ['getOneConversation']);
+    expect(owner.list, isEmpty);
+  });
+
+  testWidgets('unblocking does not remove or recreate a conversation',
+      (tester) async {
+    await tester.pumpWidget(
+        GetMaterialApp(builder: EasyLoading.init(), home: const Scaffold()));
+    final owner = Get.put<ConversationLogic>(ClosureConversationOwner());
+    final profile = UserProfilePanelLogic()
+      ..userInfo =
+          UserFullInfo(userID: 'peer', nickname: 'Peer', isBlacklist: true).obs;
+    handler = (call) async {
+      if (call.method == 'removeBlacklist') return null;
+      throw StateError('Unexpected ${call.method}');
+    };
+    final action = profile.setBlacklist(false);
+    await tester.pumpAndSettle();
+    await action;
+    expect(profile.userInfo.value.isBlacklist, isFalse);
+    expect(owner.list, isEmpty);
+    expect(calls.map((call) => call.method), ['removeBlacklist']);
   });
 
   test('initial friend load failure can be retried by directory consumers',

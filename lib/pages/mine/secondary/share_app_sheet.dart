@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../../../services/platform_config_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -68,7 +69,7 @@ class _ShareAppSheetState extends State<ShareAppSheet> {
 
   String _shareText(BuildContext context) => settingsText(
         context,
-        zh: '我正在使用 99chat，快来一起聊天吧！官方地址：$_website',
+        zh: AppCopy.format('我正在使用 99chat，快来一起聊天吧！官方地址：{#0}', [_website]),
         en: 'I am using 99chat. Join me and start chatting: $_website',
       );
 

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -132,7 +133,8 @@ class _StoragePageState extends State<StoragePage> {
       title: settingsText(context, zh: '清理缓存', en: 'Clear Cache'),
       description: settingsText(
         context,
-        zh: '将清理图片缩略图、临时文件等，共约 ${storageFormatBytes(before)}。不会删除聊天记录，可放心清理。',
+        zh: AppCopy.format('将清理图片缩略图、临时文件等，共约 {#0}。不会删除聊天记录，可放心清理。',
+            [storageFormatBytes(before)]),
         en: 'Clear thumbnails and temporary files (about ${storageFormatBytes(before)}). Chat messages will remain.',
       ),
       action: settingsText(context, zh: '清理', en: 'Clear'),
@@ -315,7 +317,8 @@ class _StoragePageState extends State<StoragePage> {
                       context,
                       AppTokens.accent,
                       settingsText(context,
-                          zh: '聊天媒体 ${storageFormatBytes(_mediaBytes)}',
+                          zh: AppCopy.format(
+                              '聊天媒体 {#0}', [storageFormatBytes(_mediaBytes)]),
                           en: 'Chat media ${storageFormatBytes(_mediaBytes)}')),
                   _legend(
                       context,
@@ -323,7 +326,8 @@ class _StoragePageState extends State<StoragePage> {
                           ? AppTokens.decorativeSparkle
                           : AppTokens.borderLight,
                       settingsText(context,
-                          zh: '缓存 ${storageFormatBytes(_cacheBytes)}',
+                          zh: AppCopy.format(
+                              '缓存 {#0}', [storageFormatBytes(_cacheBytes)]),
                           en: 'Cache ${storageFormatBytes(_cacheBytes)}')),
                 ],
               ),

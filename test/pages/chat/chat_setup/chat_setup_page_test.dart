@@ -44,7 +44,7 @@ void main() {
     expect(find.text('设置当前聊天背景'), findsOneWidget);
     expect(find.text('消息免打扰'), findsOneWidget);
     expect(find.text('投诉'), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-setup-retention')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-setup-retention')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

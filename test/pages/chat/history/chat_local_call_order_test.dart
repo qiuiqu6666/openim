@@ -22,6 +22,36 @@ void main() {
   setUp(ChatHistoryCache.clear);
   tearDown(ChatHistoryCache.clear);
 
+  test('failed sends interleave by time and retain same-time arrival order', () {
+    final failed = _row('failed-first', 150, status: MessageStatus.failed);
+    final sameTime = _row('failed-second', 150, status: MessageStatus.failed);
+    final fallback = _row('create-time-only', 250, status: MessageStatus.failed)
+      ..sendTime = null;
+    final rows = [
+      _row('earlier', 100, seq: 1),
+      _row('later', 200, seq: 2),
+      failed,
+      sameTime,
+      fallback,
+    ];
+    final expected = [
+      'earlier',
+      'failed-first',
+      'failed-second',
+      'later',
+      'create-time-only',
+    ];
+    final merged = ChatHistoryLoader.merge(rows);
+    expect(merged.map((m) => m.clientMsgID), expected);
+    expect(merged[1], same(failed));
+    expect(ChatHistoryLoader.merge(merged).map((m) => m.clientMsgID), expected);
+    expect(
+        ChatHistoryLoader.appendOrderedBatch(rows, [
+          _row('newest', 300, seq: 3),
+        ]).map((m) => m.clientMsgID),
+        [...expected, 'newest']);
+  });
+
   test('ordered batches keep server sequence order across backwards clocks',
       () {
     final rows = [
@@ -34,17 +64,17 @@ void main() {
     final batch = [_row('image12', 400, seq: 12, type: MessageType.picture)];
     final merged = ChatHistoryLoader.appendOrderedBatch(rows, batch);
     expect(merged.map((m) => m.clientMsgID), [
+      'pending',
       'old-call',
       'server10',
       'server11',
       'recent-call',
       'image12',
-      'pending',
     ]);
     expect(merged.map((m) => m.clientMsgID),
         ChatHistoryLoader.merge([...rows, ...batch]).map((m) => m.clientMsgID));
     expect(rows[2].sendTime, 100);
-    expect(identical(merged.first, rows[2]), isTrue);
+    expect(identical(merged[1], rows[2]), isTrue);
   });
 
   for (final activeWindow in [false, true]) {
@@ -84,10 +114,10 @@ void main() {
             trim: true);
         await tester.pump(const Duration(milliseconds: 20));
         expect(timeline.messageList.map((m) => m.clientMsgID), [
-          ...original,
-          for (var n = 12; n <= seq; n++) 'image$n',
           'sending',
           'failed',
+          ...original,
+          for (var n = 12; n <= seq; n++) 'image$n',
         ]);
       }
       // A covered replay must not duplicate the image or relocate old calls.

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'app.dart';
+import 'pages/group_features/data/group_name_cache.dart';
 import 'theme/app_theme_controller.dart';
 
 void main() {
@@ -16,6 +17,7 @@ void main() {
     };
 
     unawaited(Config.init(() async {
+      await GroupNameCache.initialize();
       await AppSystemBars.initialize();
       AppThemeController.instance.load();
       NavigationGlassController.instance.load();

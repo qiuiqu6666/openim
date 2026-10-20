@@ -1,4 +1,5 @@
 import 'sangong_admin_models.dart';
+import 'package:openim_common/localization.dart';
 
 /// Entries and totals share the same business date or selected session.
 class SangongUserFlowResult {
@@ -20,10 +21,13 @@ class SangongUserFlowResult {
   bool get reachedLedgerLimit => nextBeforeId > 0;
 
   String coverageMessage({required bool batch}) {
-    final scope = batch ? '本批次' : '所选经营日（按上海时间开机日归属）';
-    return '$scope共 $totalEntries 条账变，已显示 $returnedLedgerCount 条。'
-        '${nextBeforeId > 0 ? '仅展示最近 $ledgerLimit 条，完整金额以汇总为准。' : '所选范围的账变已全部读取。'}'
-        '${batch && coBankHasMore ? '合庄出资仅展示最近 500 局。' : ''}';
+    final scope = batch ? '本批次' : AppCopy.text('所选经营日（按上海时间开机日归属）');
+    return AppCopy.format('{#0}共 {#1} 条账变，已显示 {#2} 条。',
+            [scope, totalEntries, returnedLedgerCount]) +
+        (nextBeforeId > 0
+            ? AppCopy.format('仅展示最近 {#0} 条，完整金额以汇总为准。', [ledgerLimit])
+            : AppCopy.text('所选范围的账变已全部读取。')) +
+        (batch && coBankHasMore ? AppCopy.text('合庄出资仅展示最近 500 局。') : '');
   }
 
   factory SangongUserFlowResult.fromJson(Map<String, dynamic> json) {

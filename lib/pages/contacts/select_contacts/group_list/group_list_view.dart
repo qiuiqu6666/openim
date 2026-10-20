@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import '../../../group_features/identity/group_name_label.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -83,7 +84,9 @@ class SelectContactsFromGroupPage extends StatelessWidget {
                 ? contactListPlaceholder(
                     context,
                     title: Localizations.localeOf(context).languageCode == 'zh'
-                        ? (logic.searchQuery.isEmpty ? '暂无群聊' : '未找到相关群聊')
+                        ? (logic.searchQuery.isEmpty
+                            ? AppCopy.text('暂无群聊')
+                            : AppCopy.text('未找到相关群聊'))
                         : (logic.searchQuery.isEmpty
                             ? 'No groups yet'
                             : 'No matching groups'),

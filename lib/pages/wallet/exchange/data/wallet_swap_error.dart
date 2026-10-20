@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../../data/wallet_fund_api.dart';
 import '../../../../services/fund_api.dart';
 
@@ -8,6 +9,10 @@ bool walletSwapRequiresNewQuote(Object failure) =>
 
 /// Swap-specific refusals do not change messages in other fund flows.
 String walletSwapErrorMessage(Object failure) {
+  return AppCopy.text(_walletSwapErrorMessage(failure));
+}
+
+String _walletSwapErrorMessage(Object failure) {
   if (failure is FundApiException && !failure.isUncertain) {
     switch (failure.code) {
       case 20030:

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -75,7 +76,7 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
           }
           if (active() && request.isMainFrame) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(_text('此链接不支持在应用内打开',
+              content: Text(_text(AppCopy.text('此链接不支持在应用内打开'),
                   'This link cannot be opened inside the app.')),
             ));
           }
@@ -208,11 +209,11 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
               color: AppTokens.accent,
               onPressed: _back,
               icon: const Icon(Icons.arrow_back_ios_new_rounded)),
-          title: Text(_title ?? _text('网页', 'Web page'),
+          title: Text(_title ?? _text(AppCopy.text('网页'), 'Web page'),
               maxLines: 1, overflow: TextOverflow.ellipsis),
           actions: [
             IconButton(
-                tooltip: _text('刷新', 'Refresh'),
+                tooltip: _text(AppCopy.text('刷新'), 'Refresh'),
                 color: AppTokens.accent,
                 onPressed: _supported && !invalid ? _refresh : null,
                 icon: const Icon(Icons.refresh)),
@@ -224,7 +225,7 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
             LinearProgressIndicator(
                 color: AppTokens.accent,
                 value: MediaQuery.disableAnimationsOf(context) ? 1 : null,
-                semanticsLabel: _text('网页加载中', 'Loading page')),
+                semanticsLabel: _text(AppCopy.text('网页加载中'), 'Loading page')),
           Expanded(
               child: recovery
                   ? Center(
@@ -234,11 +235,12 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
                               Column(mainAxisSize: MainAxisSize.min, children: [
                             Text(
                                 invalid
-                                    ? _text('链接无效', 'Invalid link')
+                                    ? _text(
+                                        AppCopy.text('链接无效'), 'Invalid link')
                                     : !_supported
-                                        ? _text('当前平台暂不支持内嵌网页',
+                                        ? _text(AppCopy.text('当前平台暂不支持内嵌网页'),
                                             'Embedded web pages are not supported on this platform.')
-                                        : _text('网页加载失败，请检查网络后重试',
+                                        : _text(AppCopy.text('网页加载失败，请检查网络后重试'),
                                             'Unable to load the page. Check your connection and retry.'),
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context).textTheme.bodyLarge),
@@ -246,7 +248,8 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
                               const SizedBox(height: AppTokens.s5),
                               TextButton(
                                   onPressed: _load,
-                                  child: Text(_text('重新加载', 'Retry'))),
+                                  child: Text(
+                                      _text(AppCopy.text('重新加载'), 'Retry'))),
                             ],
                           ])))
                   : _controller == null

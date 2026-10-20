@@ -3,20 +3,20 @@ import 'package:openim/pages/mine/settings/widgets/account_code_request.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/login/login_logic.dart';
-import 'package:openim/routes/app_navigator.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../core/controller/app_controller.dart';
 import '../../core/controller/im_controller.dart';
 import '../../widgets/auth/auth_form_rules.dart';
-import 'profile/registration_profile_draft.dart';
+import 'set_password/set_password_logic.dart';
 import 'rules/register_password_rules.dart';
 import 'rules/registration_field.dart';
 import 'session/registration_session.dart';
 
 class RegisterLogic extends GetxController {
   final appLogic = Get.find<AppController>();
-  final profileDraft = RegistrationProfileDraft();
+  SetPasswordLogic? _registration;
+  bool get accountCreated => _registration?.accountCreated.value ?? false;
   final phoneCtrl = TextEditingController();
   final verificationCodeCtrl = TextEditingController();
   final pwdCtrl = TextEditingController();
@@ -35,6 +35,20 @@ class RegisterLogic extends GetxController {
   bool _closed = false;
   Worker? _areaCodeWorker;
   final loginController = Get.find<LoginLogic>();
+  final emailMode = false.obs;
+  void selectEmail(bool value) {
+    if (submitting.value ||
+        accountCreated ||
+        _closed ||
+        emailMode.value == value) return;
+    emailMode.value = value;
+    loginController.operateType = value ? LoginType.email : LoginType.phone;
+    phoneCtrl.clear();
+    verificationCodeCtrl.clear();
+    _touchedFields.clear();
+    _onChanged();
+  }
+
   String? get email => loginController.operateType == LoginType.email
       ? phoneCtrl.text.trim()
       : null;
@@ -70,6 +84,7 @@ class RegisterLogic extends GetxController {
   void onClose() {
     _closed = true;
     _areaCodeWorker?.dispose();
+    _registration?.onClose();
     phoneCtrl.dispose();
     verificationCodeCtrl.dispose();
     pwdCtrl.dispose();
@@ -84,6 +99,7 @@ class RegisterLogic extends GetxController {
 
   @override
   void onInit() {
+    emailMode.value = loginController.operateType == LoginType.email;
     phoneCtrl.addListener(_onChanged);
     verificationCodeCtrl.addListener(_onChanged);
     pwdCtrl.addListener(_onChanged);
@@ -164,7 +180,7 @@ class RegisterLogic extends GetxController {
 
   Future<void> next() async {
     if (_closed || isClosed || submitting.value) return;
-    if (!_checkingInput(includeCredentials: true)) return;
+    if (!accountCreated && !_checkingInput(includeCredentials: true)) return;
     final requestedAreaCode = areaCode.value;
     final requestedPhone = phone;
     final requestedEmail = email;
@@ -177,24 +193,33 @@ class RegisterLogic extends GetxController {
     );
     submitting.value = true;
     try {
-      await verifyCredentials(
-        areaCode: requestedAreaCode,
-        phoneNumber: requestedPhone,
-        email: requestedEmail,
-        verificationCode: requestedCode,
-        invitationCode: requestedInvitation,
-      );
+      if (!accountCreated)
+        await verifyCredentials(
+          areaCode: requestedAreaCode,
+          phoneNumber: requestedPhone,
+          email: requestedEmail,
+          verificationCode: requestedCode,
+          invitationCode: requestedInvitation,
+        );
       if (!session.isCurrent) return;
-      AppNavigator.startSetPassword(
-        profileDraft: profileDraft,
-        areaCode: requestedAreaCode,
-        phoneNumber: requestedPhone,
-        email: requestedEmail,
-        usedFor: 1,
-        verificationCode: requestedCode,
-        invitationCode: requestedInvitation,
-        password: requestedPassword,
-      );
+      if (_registration == null) {
+        _registration = createRegistration({
+          'nickname': '99Chat用户',
+          'areaCode': requestedAreaCode,
+          'phoneNumber': requestedPhone,
+          'email': requestedEmail,
+          'usedFor': 1,
+          'verificationCode': requestedCode,
+          'invitationCode': requestedInvitation,
+          'password': requestedPassword,
+        });
+        _registration!.onInit();
+      }
+      await _registration!.register();
+      if (!accountCreated && !_closed && !isClosed) {
+        _registration?.onClose();
+        _registration = null;
+      }
     } catch (error) {
       if (session.isCurrent) {
         showAuthNotice(
@@ -204,6 +229,9 @@ class RegisterLogic extends GetxController {
       if (!_closed && !isClosed) submitting.value = false;
     }
   }
+
+  SetPasswordLogic createRegistration(Map<String, dynamic> arguments) =>
+      SetPasswordLogic(initialArguments: arguments);
 
   Future<void> verifyCredentials({
     required String areaCode,

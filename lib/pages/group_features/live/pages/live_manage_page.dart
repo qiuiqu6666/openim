@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
@@ -247,7 +248,7 @@ class _LiveManagePageState extends State<LiveManagePage>
         _scheduled = session.scheduledAt?.toLocal();
         _immediate = _scheduled == null;
       });
-      _savedNotice = '直播设置已保存';
+      _savedNotice = AppCopy.text('直播设置已保存');
       _savedState = session;
       _publishSaved();
       if (!_foreground) return;
@@ -301,8 +302,8 @@ class _LiveManagePageState extends State<LiveManagePage>
               _immediate = _scheduled == null;
               _creationUncertain = false;
               _error = StateError(error.code == '20069'
-                  ? '该群已有未结束的直播，已显示当前场次'
-                  : '创建结果尚未确认，已显示当前场次，请核对后继续');
+                  ? AppCopy.text('该群已有未结束的直播，已显示当前场次')
+                  : AppCopy.text('创建结果尚未确认，已显示当前场次，请核对后继续'));
             });
             widget.onStateChanged?.call(actual);
             await _permissions.refresh();
@@ -310,8 +311,9 @@ class _LiveManagePageState extends State<LiveManagePage>
           }
         } catch (calibrationError) {
           if (sessionCurrent && _foreground) {
-            setState(() => _error = StateError(
-                '创建结果尚未确认，请刷新当前场次：${liveErrorMessage(calibrationError)}'));
+            setState(() => _error = StateError(AppCopy.format(
+                '创建结果尚未确认，请刷新当前场次：{#0}',
+                [liveErrorMessage(calibrationError)])));
           }
           return;
         }
@@ -375,10 +377,12 @@ class _LiveManagePageState extends State<LiveManagePage>
                 (!revoke || _summary!.status != 'live')));
     final confirmed = await showAppConfirm(context,
         barrierDismissible: true,
-        title: revoke ? '撤销直播' : '结束直播',
-        message: revoke ? '确认撤销这场直播吗？' : '确认结束直播吗？结束后请在 OBS 中停止推流。',
+        title: revoke ? AppCopy.text('撤销直播') : AppCopy.text('结束直播'),
+        message: revoke
+            ? AppCopy.text('确认撤销这场直播吗？')
+            : AppCopy.text('确认结束直播吗？结束后请在 OBS 中停止推流。'),
         cancelText: '取消',
-        confirmText: '确认',
+        confirmText: AppCopy.text('确认'),
         destructive: true);
     if (confirmed != true || _busy || _loading || !actionCurrent()) return;
     _beginMutation();
@@ -451,16 +455,16 @@ class _LiveManagePageState extends State<LiveManagePage>
                           onPressed: _busy ? null : _end,
                           child: Text(
                               _session!.status == LiveStatus.live
-                                  ? '结束直播'
-                                  : '撤销直播',
+                                  ? AppCopy.text('结束直播')
+                                  : AppCopy.text('撤销直播'),
                               style: const TextStyle(color: AppTokens.danger))),
                     if (editable)
                       LivePrimaryButton(
                           label: _creationUncertain
-                              ? '刷新当前场次'
+                              ? AppCopy.text('刷新当前场次')
                               : active
-                                  ? '保存修改'
-                                  : '开启直播',
+                                  ? AppCopy.text('保存修改')
+                                  : AppCopy.text('开启直播'),
                           busy: _busy,
                           onPressed: _creationUncertain
                               ? sessionCurrent && _foreground
@@ -496,7 +500,7 @@ class _LiveManagePageState extends State<LiveManagePage>
                                 Padding(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 12),
-                                    child: Text('直播间配置',
+                                    child: Text(AppCopy.text('直播间配置'),
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                             color: LiveStyle.text(context),
@@ -530,14 +534,16 @@ class _LiveManagePageState extends State<LiveManagePage>
                                                 crossAxisAlignment:
                                                     WrapCrossAlignment.center,
                                                 children: [
-                                                  Text('直播设置',
+                                                  Text(AppCopy.text('直播设置'),
                                                       style: TextStyle(
                                                           fontSize: 18,
                                                           fontWeight:
                                                               FontWeight.w700,
                                                           color: LiveStyle.text(
                                                               context))),
-                                                  Text('简单几步，快速开启直播',
+                                                  Text(
+                                                      AppCopy.text(
+                                                          '简单几步，快速开启直播'),
                                                       style: TextStyle(
                                                           fontSize: 13,
                                                           color: LiveStyle
@@ -547,22 +553,24 @@ class _LiveManagePageState extends State<LiveManagePage>
                                             const SizedBox(height: 22),
                                             _field(
                                                 Icons.title,
-                                                '直播间名称',
+                                                AppCopy.text('直播间名称'),
                                                 _counterField(
                                                     key: const ValueKey(
                                                         'live-room-name'),
                                                     controller: _name,
                                                     enabled: editable && !_busy,
                                                     maxLength: 10,
-                                                    hint: '请输入直播间名称')),
+                                                    hint: AppCopy.text(
+                                                        '请输入直播间名称'))),
                                             _field(
                                                 Icons.article,
-                                                '直播描述（可选）',
+                                                AppCopy.text('直播描述（可选）'),
                                                 _counterField(
                                                     controller: _description,
                                                     enabled: !active && !_busy,
                                                     maxLength: 30,
-                                                    hint: '介绍一下你的直播内容，吸引更多观众')),
+                                                    hint: AppCopy.text(
+                                                        '介绍一下你的直播内容，吸引更多观众'))),
                                             _field(
                                                 Icons.person,
                                                 '主播',
@@ -587,7 +595,8 @@ class _LiveManagePageState extends State<LiveManagePage>
                                                                 ?.nickname ??
                                                             _session
                                                                 ?.anchorID ??
-                                                            '请选择主播'),
+                                                            AppCopy.text(
+                                                                '请选择主播')),
                                                         trailing: const Icon(
                                                             Icons
                                                                 .chevron_right),
@@ -596,14 +605,15 @@ class _LiveManagePageState extends State<LiveManagePage>
                                                             : null))),
                                             _field(
                                                 Icons.calendar_today_outlined,
-                                                '预计开播时间',
+                                                AppCopy.text('预计开播时间'),
                                                 Row(children: [
                                                   Expanded(
                                                       child: _mode(
                                                           true,
                                                           Icons.bolt_rounded,
-                                                          '立即开播',
-                                                          '准备好就开始直播',
+                                                          AppCopy.text('立即开播'),
+                                                          AppCopy.text(
+                                                              '准备好就开始直播'),
                                                           !active && !_busy
                                                               ? () => setState(
                                                                   () =>
@@ -616,9 +626,10 @@ class _LiveManagePageState extends State<LiveManagePage>
                                                           false,
                                                           Icons
                                                               .calendar_month_outlined,
-                                                          '预约开播',
+                                                          AppCopy.text('预约开播'),
                                                           _scheduled == null
-                                                              ? '设置未来的开播时间'
+                                                              ? AppCopy.text(
+                                                                  '设置未来的开播时间')
                                                               : DateFormat(
                                                                       'yyyy-MM-dd HH:mm')
                                                                   .format(
@@ -634,9 +645,11 @@ class _LiveManagePageState extends State<LiveManagePage>
                                                   onPressed: current
                                                       ? _openPush
                                                       : null,
-                                                  child: const Text('查看推流地址')),
+                                                  child: Text(
+                                                      AppCopy.text('查看推流地址'))),
                                             if (!allowed)
-                                              Text('当前账号没有配置直播的权限',
+                                              Text(
+                                                  AppCopy.text('当前账号没有配置直播的权限'),
                                                   style: TextStyle(
                                                       color:
                                                           LiveStyle.secondary(

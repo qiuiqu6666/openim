@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import '../models/compensation_detail.dart';
 import 'compensation_tokens.dart';
@@ -16,16 +17,16 @@ class CompensationHero extends StatelessWidget {
     final received = state == CompensationState.claimed;
     final accent = CompensationTokens.accent(context);
     final label = switch (state) {
-      CompensationState.claimed => '已领取',
-      CompensationState.ended => '活动已截止',
-      CompensationState.ineligible => '暂无参与资格',
-      _ => '未领取',
+      CompensationState.claimed => AppCopy.text('已领取'),
+      CompensationState.ended => AppCopy.text('活动已截止'),
+      CompensationState.ineligible => AppCopy.text('暂无参与资格'),
+      _ => AppCopy.text('未领取'),
     };
     final largeText =
         MediaQuery.textScalerOf(context).scale(CompensationTokens.body) >
             CompensationTokens.body * 1.3;
     final reward = Column(mainAxisSize: MainAxisSize.min, children: [
-      Text('恭喜获得老用户补偿',
+      Text(AppCopy.text('恭喜获得老用户补偿'),
           textAlign: TextAlign.center,
           style: TextStyle(
               color: CompensationTokens.invitationInk,
@@ -35,8 +36,8 @@ class CompensationHero extends StatelessWidget {
       Text.rich(
           TextSpan(children: [
             TextSpan(text: detail.amount),
-            const TextSpan(
-                text: ' 99币',
+            TextSpan(
+                text: AppCopy.text(' 99币'),
                 style: TextStyle(fontSize: CompensationTokens.body))
           ]),
           textAlign: TextAlign.center,
@@ -49,10 +50,10 @@ class CompensationHero extends StatelessWidget {
       if (largeText) ...[
         Semantics(
             header: true,
-            label: '${detail.title}，感谢你一直都在',
+            label: AppCopy.format('{#0}，感谢你一直都在', [detail.title]),
             child: const CompensationArtwork.states(
                 Rect.fromLTWH(0, 0, 1222, 220))),
-        Text('老用户补偿总奖池 ${detail.poolLabel}',
+        Text(AppCopy.format('老用户补偿总奖池 {#0}', [detail.poolLabel]),
             textAlign: TextAlign.center,
             style: TextStyle(
                 color: accent,
@@ -63,7 +64,7 @@ class CompensationHero extends StatelessWidget {
             builder: (context, box) => Stack(children: [
                   Semantics(
                       header: true,
-                      label: '${detail.title}，感谢你一直都在',
+                      label: AppCopy.format('{#0}，感谢你一直都在', [detail.title]),
                       child: const CompensationArtwork.states(
                           CompensationArtwork.stateHeader)),
                   Positioned(
@@ -73,7 +74,7 @@ class CompensationHero extends StatelessWidget {
                       child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Row(children: [
-                            const Text('老用户补偿总奖池',
+                            Text(AppCopy.text('老用户补偿总奖池'),
                                 style: TextStyle(
                                     color: CompensationTokens.invitationInk,
                                     fontSize: CompensationTokens.label,
@@ -187,10 +188,10 @@ class CompensationHero extends StatelessWidget {
       const SizedBox(height: CompensationTokens.gap),
       Text(
           switch (state) {
-            CompensationState.claimed => '补偿已发放至您的99币钱包',
-            CompensationState.ended => '未领取份额自动退回平台资金池',
-            CompensationState.ineligible => '当前账号不在本次活动邀请名单内',
-            _ => '专属补偿红包，感谢你的陪伴',
+            CompensationState.claimed => AppCopy.text('补偿已发放至您的99币钱包'),
+            CompensationState.ended => AppCopy.text('未领取份额自动退回平台资金池'),
+            CompensationState.ineligible => AppCopy.text('当前账号不在本次活动邀请名单内'),
+            _ => AppCopy.text('专属补偿红包，感谢你的陪伴'),
           },
           textAlign: TextAlign.center,
           style: TextStyle(
@@ -200,7 +201,9 @@ class CompensationHero extends StatelessWidget {
       if (received)
         Padding(
             padding: const EdgeInsets.only(top: CompensationTokens.gap),
-            child: Text('领取时间：${formatCompensationDate(detail.claimedAt!)}',
+            child: Text(
+                AppCopy.format(
+                    '领取时间：{#0}', [formatCompensationDate(detail.claimedAt!)]),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,

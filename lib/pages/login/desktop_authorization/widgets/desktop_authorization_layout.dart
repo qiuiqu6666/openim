@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -30,7 +31,7 @@ class DesktopAuthorizationLayout extends StatelessWidget {
         Align(
             alignment: Alignment.centerLeft,
             child: IconButton(
-                tooltip: '关闭',
+                tooltip: AppCopy.text('关闭'),
                 onPressed: busy ? null : onClose,
                 icon: const Icon(Icons.close, size: 26),
                 color: AppTokens.accent)),

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -27,7 +28,7 @@ class CustomerServiceComposer extends StatelessWidget {
         child: Row(children: [
           IconButton(
             key: const ValueKey('customer-service-attach'),
-            tooltip: zh ? '图片或视频' : 'Photo or video',
+            tooltip: zh ? AppCopy.text('图片或视频') : 'Photo or video',
             onPressed: enabled ? onAttach : null,
             color: CustomerServiceTokens.text(context),
             icon: const Icon(Icons.add_rounded),
@@ -43,7 +44,9 @@ class CustomerServiceComposer extends StatelessWidget {
                   color: CustomerServiceTokens.text(context),
                   fontSize: CustomerServiceTokens.faqFontSize),
               decoration: InputDecoration(
-                hintText: zh ? '请输入您的问题，将会转接人工在线客服' : 'Type your question',
+                hintText: zh
+                    ? AppCopy.text('请输入您的问题，将会转接人工在线客服')
+                    : 'Type your question',
                 hintStyle: TextStyle(
                     color: CustomerServiceTokens.secondaryText(context),
                     fontSize: CustomerServiceTokens.faqFontSize),
@@ -66,7 +69,7 @@ class CustomerServiceComposer extends StatelessWidget {
             valueListenable: controller,
             builder: (_, value, __) => IconButton.filled(
               key: const ValueKey('customer-service-send'),
-              tooltip: zh ? '发送' : 'Send',
+              tooltip: zh ? AppCopy.text('发送') : 'Send',
               onPressed:
                   enabled && value.text.trim().isNotEmpty ? onSend : null,
               style: IconButton.styleFrom(

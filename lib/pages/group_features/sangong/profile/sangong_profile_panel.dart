@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import '../sangong_scope.dart';
@@ -131,8 +132,9 @@ class _SangongProfileEntryCardState extends State<SangongProfileEntryCard> {
                 alignment: Alignment.center,
                 child: TextButton(
                     onPressed: entry.loading ? null : () => _chooseGroup(entry),
-                    child: Text(
-                        entry.selectedGroupID == null ? '选择游戏群' : '切换游戏群'))),
+                    child: Text(entry.selectedGroupID == null
+                        ? AppCopy.text('选择游戏群')
+                        : AppCopy.text('切换游戏群')))),
           if (ready || retain)
             SangongProfilePanel(
                 userID: widget.userID,

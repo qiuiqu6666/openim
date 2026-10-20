@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'package:flutter/material.dart';
@@ -25,7 +26,7 @@ class SangongAgentPersonalPage extends StatefulWidget {
   static String _personalErrorText(Object error) {
     final text = DioErrorMessage.forApp(error);
     if (text.contains('Incorrect result size') || text.contains('用户不存在')) {
-      return '当前账号在该群没有代理数据';
+      return AppCopy.text('当前账号在该群没有代理数据');
     }
     return text;
   }
@@ -124,12 +125,13 @@ class _State extends State<SangongAgentPersonalPage> {
         runtime: _accountSession.runtime,
         session: _accountSession,
         child: Scaffold(
-          appBar:
-              AppBar(leading: const AppBackButton(), title: const Text('个人数据')),
+          appBar: AppBar(
+              leading: const AppBackButton(),
+              title: Text(AppCopy.text('个人数据'))),
           body: Center(
               child: _loading
                   ? const CircularProgressIndicator()
-                  : Text(_error ?? '暂无数据')),
+                  : Text(_error ?? AppCopy.text('暂无数据'))),
         ),
       );
 }

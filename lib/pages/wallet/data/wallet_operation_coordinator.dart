@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -33,7 +34,9 @@ class WalletOperationReceipt {
       ? const ['withdraw_done', 'withdraw_failed'].contains(order.status)
       : const ['done', 'refunded'].contains(order.status);
 
-  String get description {
+  String get description => AppCopy.text(_description);
+
+  String get _description {
     if (order.biz == 'withdraw') {
       switch (order.status) {
         case 'withdraw_done':
@@ -50,7 +53,7 @@ class WalletOperationReceipt {
       final currency = order.targetCurrency ?? receivedCurrency;
       return amount == null || currency == null
           ? '闪兑已完成，实得金额请查看订单详情'
-          : '闪兑成功，实得 $amount ${currency.displayName}';
+          : AppCopy.format('闪兑成功，实得 {#0} {#1}', [amount, currency.displayName]);
     }
     if (order.status == 'refunded') return '订单已退款';
     return '订单状态待确认';
@@ -470,6 +473,10 @@ class WalletOperationCoordinator extends ChangeNotifier {
 }
 
 String walletOperationError(Object failure, {bool unresolved = false}) {
+  return AppCopy.text(_walletOperationError(failure, unresolved: unresolved));
+}
+
+String _walletOperationError(Object failure, {bool unresolved = false}) {
   if (unresolved) return '交易状态待确认，请核对订单或联系客服，勿重复提交';
   if (failure is FundApiException || failure is FormatException) {
     return walletFundErrorMessage(failure);

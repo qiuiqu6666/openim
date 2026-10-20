@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -240,7 +241,7 @@ class _MomentsPrivacyFriendPickerState
               padding: MomentsSecondaryLayout.searchInset,
               child: Semantics(
                 label: momentsText(context,
-                    zh: '已选择 ${_selected.length} 位朋友',
+                    zh: AppCopy.format('已选择 {#0} 位朋友', [_selected.length]),
                     en: '${_selected.length} friends selected'),
                 child: TextField(
                   key: const ValueKey('moments_privacy_friend_search'),

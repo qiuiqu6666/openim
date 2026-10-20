@@ -53,7 +53,7 @@ void main() {
     }
   });
 
-  test('local records preserve server sequence order and pending tail', () {
+  test('local records preserve server sequence order and pending time', () {
     final pending = server('pending', 0, 50)..status = MessageStatus.sending;
     final result = ChatHistoryLoader.merge([
       server('second', 2, 100),
@@ -63,7 +63,7 @@ void main() {
     ]);
     expect(result.where((m) => (m.seq ?? 0) > 0).map((m) => m.clientMsgID),
         ['first', 'second']);
-    expect(result.last, same(pending));
+    expect(result.first, same(pending));
     expect(ChatHistoryLoader.merge(result).map((m) => m.clientMsgID),
         result.map((m) => m.clientMsgID));
   });

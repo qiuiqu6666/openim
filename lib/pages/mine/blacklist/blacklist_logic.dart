@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 
@@ -6,6 +7,25 @@ class BlacklistLogic extends GetxController {
   final loading = true.obs;
   final failed = false.obs;
   final removing = <String>{}.obs;
+  final searchController = TextEditingController();
+  final keyword = ''.obs;
+
+  void search(String value) => keyword.value = value.trim().toLowerCase();
+
+  List<BlacklistInfo> get filteredBlacklist {
+    final query = keyword.value;
+    return blacklist.where((info) {
+      return query.isEmpty ||
+          (info.nickname ?? '').toLowerCase().contains(query) ||
+          (blockedUserID(info) ?? '').toLowerCase().contains(query);
+    }).toList();
+  }
+
+  @override
+  void onClose() {
+    searchController.dispose();
+    super.onClose();
+  }
   bool _fetching = false;
   Future<void> loadBlacklist() async {
     if (_fetching) return;

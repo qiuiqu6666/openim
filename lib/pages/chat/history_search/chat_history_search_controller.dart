@@ -107,15 +107,15 @@ class ChatHistorySearchController extends ChangeNotifier {
 
   Future<void> loadMore() async {
     if (_disposed || _loading || !hasMore) return;
-    await _load(untilNewResult: true);
+    await _load(fillPage: true);
   }
 
   Future<void> retry() async {
     if (_disposed || _loading || !_failed) return;
-    await _load(untilNewResult: true);
+    await _load(fillPage: true);
   }
 
-  Future<void> _load({bool untilNewResult = false}) async {
+  Future<void> _load({bool fillPage = false}) async {
     if (_usesKeywordApi) return _loadKeyword();
     final generation = _generation;
     final query = _query;
@@ -137,7 +137,7 @@ class ChatHistorySearchController extends ChangeNotifier {
       do {
         if (cloud != null &&
             cloud.cloudHasMore &&
-            collected.isEmpty &&
+            collected.length < pageSize &&
             (rawPage == 1 || !rawHasMore)) {
           await cloud.supplement(conversationID, () => _isCurrent(generation));
           if (!_isCurrent(generation)) return;
@@ -171,14 +171,14 @@ class ChatHistorySearchController extends ChangeNotifier {
           }
         }
         if (!_isCurrent(generation)) return;
-        if (!untilNewResult ||
-            collected.isNotEmpty ||
+        if (!fillPage ||
+            collected.length >= pageSize ||
             (!rawHasMore && cloud?.cloudHasMore != true)) {
           break;
         }
-        // A history page without new matches is not a search result page.
-        // Keep the same loading operation active until there is something to
-        // show or the SDK confirms the end; query changes cancel further work.
+        // A raw history batch may contain only a few matching media items.
+        // Fill one visible page, or stop at the confirmed end of history.
+        // Query changes cancel further work.
         await Future<void>.delayed(Duration.zero);
         if (!_isCurrent(generation)) return;
       } while (true);

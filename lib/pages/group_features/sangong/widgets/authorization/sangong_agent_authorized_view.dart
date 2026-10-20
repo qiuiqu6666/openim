@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import '../../agents/halls/sangong_agent_hall_banner.dart';
 import '../../sangong_scope.dart';
@@ -82,6 +83,6 @@ class _SangongAgentAuthorizedViewState
             leading: const AppBackButton(),
             title: const Text('三公代理'),
           ),
-          body: const Center(child: Text('当前游戏权限已变化，请重新进入')),
+          body: Center(child: Text(AppCopy.text('当前游戏权限已变化，请重新进入'))),
         );
 }

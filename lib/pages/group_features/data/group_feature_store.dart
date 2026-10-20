@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import '../models/group_feature_context.dart';
 import 'group_feature_api.dart';
+import 'group_name_cache.dart';
 import '../../../services/account_privilege/account_privilege_runtime.dart';
 
 bool _samePermissionValue(Object? a, Object? b) {
@@ -37,6 +38,7 @@ class GroupFeatureStore extends ChangeNotifier {
       {required this.api,
       required this.sessionCurrent,
       required this.fetchGroups,
+      this.nameCache,
       AccountPrivilegeAccess? accountPrivilege,
       DateTime Function()? clock})
       : _clock = clock ?? DateTime.now,
@@ -49,6 +51,7 @@ class GroupFeatureStore extends ChangeNotifier {
   }
 
   final GroupFeatureApi api;
+  final GroupNameCache? nameCache;
   final bool Function() sessionCurrent;
   final Future<List<GroupInfo>> Function(List<String>) fetchGroups;
   final DateTime Function() _clock;
@@ -88,7 +91,7 @@ class GroupFeatureStore extends ChangeNotifier {
 
   bool get active => !_closed && !_invalidated && sessionCurrent();
   GroupGameType gameType(String id) => active && !_left.contains(id)
-      ? _gameTypes[id] ?? GroupGameType.ordinary
+      ? _gameTypes[id] ?? nameCache?.read(id) ?? GroupGameType.ordinary
       : GroupGameType.ordinary;
   GroupFeatures features(String id) => _features[id] ?? const GroupFeatures();
   GroupLiveFeature liveFeature(String id) =>
@@ -195,6 +198,7 @@ class GroupFeatureStore extends ChangeNotifier {
     final gameTypeChanged = gameType(id) != nextGameType;
     _groups[id] = GroupInfo.fromJson(info.toJson());
     _gameTypes[id] = nextGameType;
+    unawaited(nameCache?.write(id, nextGameType));
     _requested.add(id);
     _queued.remove(id);
     final summary = GroupFeatures.fromEx(info.ex);
@@ -671,6 +675,7 @@ class GroupFeatureStore extends ChangeNotifier {
     _metadataAttempts.remove(id);
     _groups.remove(id);
     _gameTypes.remove(id);
+    unawaited(nameCache?.write(id, null));
     _features.remove(id);
     _liveStates.remove(id);
     _pendingMirrors.remove(id);

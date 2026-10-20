@@ -25,7 +25,8 @@ class _NavigationProbe extends ChatHistoryMessageNavigation {
   Future<bool> open(BuildContext context,
       {required String conversationID,
       required Message message,
-      required bool Function() isEntryCurrent}) async {
+      required bool Function() isEntryCurrent,
+      bool? preserveEntryRoute}) async {
     expect(isEntryCurrent(), isTrue);
     calls.add((conversationID: conversationID, message: message));
     return true;

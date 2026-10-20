@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -71,11 +72,11 @@ class ChatPage extends StatelessWidget {
               child: ListenableBuilder(
                 listenable: logic.groupFeatures,
                 builder: (context, _) => Obx(() {
-                  final contactName = logic.isSingleChat &&
-                          Get.isRegistered<ContactsLogic>()
-                      ? Get.find<ContactsLogic>()
-                          .friendDisplayNameFor(logic.userID)
-                      : null;
+                  final contactName =
+                      logic.isSingleChat && Get.isRegistered<ContactsLogic>()
+                          ? Get.find<ContactsLogic>()
+                              .friendDisplayNameFor(logic.userID)
+                          : null;
                   final cachedPresence = logic.isSingleChat &&
                           Get.isRegistered<ContactsLogic>()
                       ? Get.find<ContactsLogic>().presence.users[logic.userID]
@@ -142,7 +143,8 @@ class ChatPage extends StatelessWidget {
                                   ? NewMessageIndicator(
                                       labelText: logic.mentions.busy.value
                                           ? '正在定位…'
-                                          : '${logic.mentions.pending.length}条@我的消息',
+                                          : AppCopy.format('{#0}条@我的消息',
+                                              [logic.mentions.pending.length]),
                                       icon: Icons.alternate_email,
                                       onTap: logic.mentions.busy.value
                                           ? null

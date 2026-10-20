@@ -169,13 +169,13 @@ class _MomentsPageState extends State<MomentsPage> {
   }
 
   Future<void> _compose() async {
-    final result = await Navigator.of(context).push<MomentPost>(
+    await Navigator.of(context).push<MomentPost>(
         AppMaterialPageRoute(
             builder: (_) => MomentsComposePage(
                 repository: _repository,
                 displayName: widget.profileUser?.displayName,
                 avatarUrl: widget.profileUser?.avatarUrl)));
-    if (result != null && mounted) await _load();
+    // The account-owned draft store inserts confirmed posts into live queries.
   }
 
   void _author(MomentUser author) =>
@@ -265,6 +265,10 @@ class _MomentsPageState extends State<MomentsPage> {
                       zh: '请返回后重新进入朋友圈', en: 'Go back and reopen Moments.')));
         }
         final state = _state;
+        final itemIndices = <Key, int>{
+          for (var index = 0; index < state.items.length; index++)
+            ValueKey(state.items[index].momentId): index,
+        };
         final initialRangePending =
             !_feed && _own && !_initialLoaded && _loading;
         final title = _feed
@@ -351,6 +355,7 @@ class _MomentsPageState extends State<MomentsPage> {
                                 _feed ? 24 : MomentsLayout.timelineListBottom),
                             sliver: SliverList.builder(
                                 itemCount: state.items.length,
+                                findChildIndexCallback: (key) => itemIndices[key],
                                 itemBuilder: (context, index) {
                                   final id = state.items[index].momentId;
                                   return MomentsSelectedBuilder(

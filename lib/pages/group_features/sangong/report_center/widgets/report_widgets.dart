@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../../identity/widgets/sangong_identity_view.dart';
 import 'package:flutter/material.dart';
 import '../../models/sangong_account_flow_entry.dart';
@@ -16,11 +17,13 @@ String reportValue(Object? value) {
 String reportSigned(Object? value) =>
     value is num && value > 0 ? '+${reportValue(value)}' : reportValue(value);
 String reportDoorBets(Object? raw) {
-  if (raw is! Map || raw.isEmpty) return '暂无各门下注';
+  if (raw is! Map || raw.isEmpty) return AppCopy.text('暂无各门下注');
   final entries = raw.entries.toList()
     ..sort((a, b) => (int.tryParse('${a.key}') ?? 0)
         .compareTo(int.tryParse('${b.key}') ?? 0));
-  return entries.map((e) => '${e.key}门 ${reportValue(e.value)}').join(' · ');
+  return entries
+      .map((e) => AppCopy.format('{#0}门 {#1}', [e.key, reportValue(e.value)]))
+      .join(' · ');
 }
 
 String reportTime(Object? raw) {
@@ -39,11 +42,10 @@ String reportUser(Map<String, dynamic> row) {
       return sangongDisplayName(value, '${row['imUserId'] ?? ''}');
     }
   }
-  return '用户';
+  return AppCopy.text('用户');
 }
 
-String reportPhase(Object? status) =>
-    const {
+String reportPhase(Object? status) => AppCopy.text(const {
       'await_banker': '待定庄',
       'await_banker_door': '待选庄门',
       'betting': '下注阶段',
@@ -55,9 +57,9 @@ String reportPhase(Object? status) =>
       'stopped': '已关机',
       'closed': '已结束',
     }['$status'] ??
-    reportValue(status);
-String ledgerLabel(Object? type) =>
-    ledgerKinds[type] ?? SangongAccountFlowEntry.fromJson({'type': type}).label;
+    reportValue(status));
+String ledgerLabel(Object? type) => AppCopy.text(ledgerKinds[type] ??
+    SangongAccountFlowEntry.fromJson({'type': type}).label);
 const ledgerKinds = {
   '': '全部账变',
   'admin_credit': '上分',
@@ -109,7 +111,7 @@ class ReportMetrics extends StatelessWidget {
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(entry.key,
+                              Text(AppCopy.text(entry.key),
                                   style: Theme.of(context).textTheme.bodySmall),
                               Text(reportValue(entry.value),
                                   style: Theme.of(context)
@@ -118,7 +120,7 @@ class ReportMetrics extends StatelessWidget {
                                       ?.copyWith(fontWeight: FontWeight.w600)),
                               if (hints[entry.key] != null) ...[
                                 const SizedBox(height: 4),
-                                Text(hints[entry.key]!,
+                                Text(AppCopy.text(hints[entry.key]!),
                                     style:
                                         Theme.of(context).textTheme.bodySmall),
                               ],
@@ -135,23 +137,27 @@ class ReportPagingFooter extends StatelessWidget {
         if (controller.error != null)
           Padding(
               padding: const EdgeInsets.all(12),
-              child: Text(controller.error!)),
+              child: Text(AppCopy.text(controller.error!))),
         if (controller.busy)
           const Padding(
               padding: EdgeInsets.all(16), child: CircularProgressIndicator()),
         if (!controller.busy && controller.error != null)
           TextButton(
-              onPressed: () => controller.load(), child: const Text('刷新重试')),
+              onPressed: () => controller.load(),
+              child: Text(AppCopy.text('刷新重试'))),
         if (!controller.busy && controller.cursor > 0)
           TextButton(
               onPressed: () => controller.load(more: true),
-              child: const Text('加载更多')),
+              child: Text(AppCopy.text('加载更多'))),
         if (!controller.busy && controller.error == null)
           Padding(
               padding: const EdgeInsets.all(12),
               child: Text(controller.rows.isEmpty
-                  ? '暂无记录，请尝试其他批次或筛选条件'
-                  : '已显示 ${controller.rows.length} 条${controller.cursor == 0 ? ' · 已全部加载' : ''}')),
+                  ? AppCopy.text('暂无记录，请尝试其他批次或筛选条件')
+                  : AppCopy.format('已显示 {#0} 条{#1}', [
+                      controller.rows.length,
+                      controller.cursor == 0 ? AppCopy.text(' · 已全部加载') : ''
+                    ]))),
       ]);
 }
 
@@ -181,11 +187,12 @@ class ReportLedgerTile extends StatelessWidget {
               receipt: entry.rebate, amount: entry.amount),
         Wrap(spacing: 12, runSpacing: 4, children: [
           Text(
-              '${negative ? '减少' : amount is num && amount > 0 ? '增加' : '变动'} ${reportSigned(amount)}',
+              '${negative ? AppCopy.text('减少') : amount is num && amount > 0 ? '增加' : AppCopy.text('变动')} ${reportSigned(amount)}',
               style: TextStyle(
                   color: negative ? colors.error : colors.primary,
                   fontWeight: FontWeight.w600)),
-          Text('变动后积分 ${reportValue(row['balanceAfter'])}'),
+          Text(
+              AppCopy.format('变动后积分 {#0}', [reportValue(row['balanceAfter'])])),
         ]),
       ]),
       children: [
@@ -196,14 +203,20 @@ class ReportLedgerTile extends StatelessWidget {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               SangongPublicAccount(userID: '${row['imUserId'] ?? ''}'),
               SangongPublicAccount(
-                  userID: '${row['operator'] ?? ''}', prefix: '操作人账号：'),
+                  userID: '${row['operator'] ?? ''}',
+                  prefix: AppCopy.text('操作人账号：')),
             ])),
         ListTile(
             title: Text((row['note']?.toString().isNotEmpty ?? false)
                 ? '${row['note']}'
-                : '无备注'),
+                : AppCopy.text('无备注')),
             subtitle: SelectableText(
-                '流水编号 ${row['id'] ?? row['ledgerId']}\n批次编号 ${row['sessionId'] ?? '—'}\n关联记录 ${row['refType'] ?? '—'} #${row['refId'] ?? '—'}')),
+                AppCopy.format('流水编号 {#0}\n批次编号 {#1}\n关联记录 {#2} #{#3}', [
+              row['id'] ?? row['ledgerId'],
+              row['sessionId'] ?? '—',
+              row['refType'] ?? '—',
+              row['refId'] ?? '—'
+            ]))),
       ],
     ));
   }

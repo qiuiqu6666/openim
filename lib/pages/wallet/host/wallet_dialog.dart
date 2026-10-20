@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -25,8 +26,9 @@ class AppDialog {
         ),
         actions: [
           CupertinoDialogAction(
-            onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(),
-            child: Text(buttonText),
+            onPressed: () =>
+                Navigator.of(dialogContext, rootNavigator: true).pop(),
+            child: Text(AppCopy.text(buttonText)),
           ),
         ],
       ),

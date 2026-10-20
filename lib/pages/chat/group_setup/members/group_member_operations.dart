@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -71,9 +72,12 @@ class GroupMemberOperations {
       Get.dialog<bool>(CustomDialog(
           title: Get.locale?.languageCode == 'en'
               ? 'Retry removing $count members?'
-              : '重试移除上次未完成的 $count 名成员？',
-          leftText: Get.locale?.languageCode == 'en' ? 'Select again' : '重新选择',
-          rightText: Get.locale?.languageCode == 'en' ? 'Retry' : '重试'));
+              : AppCopy.format('重试移除上次未完成的 {#0} 名成员？', [count]),
+          leftText: Get.locale?.languageCode == 'en'
+              ? 'Select again'
+              : AppCopy.text('重新选择'),
+          rightText:
+              Get.locale?.languageCode == 'en' ? 'Retry' : AppCopy.text('重试')));
 
   Future<GroupMemberBatchResult?> _write(String group, List<String> ids,
       bool Function() current, MemberBatchWrite write) async {
@@ -160,17 +164,17 @@ class GroupMemberOperations {
 
   void _showFailure() => _showFeedback(Get.locale?.languageCode == 'en'
       ? 'Member operation failed. Please retry.'
-      : '成员操作失败，请重试。');
+      : AppCopy.text('成员操作失败，请重试。'));
 
   void _showResult(GroupMemberBatchResult result, {required bool invite}) {
     final english = Get.locale?.languageCode == 'en';
     _showFeedback(result.failed.isEmpty
         ? (english
             ? (invite ? 'Invitation sent' : 'Members removed')
-            : (invite ? '邀请已发送' : '成员已移除'))
+            : (invite ? AppCopy.text('邀请已发送') : AppCopy.text('成员已移除')))
         : (english
             ? '${result.failed.length} member operations were not completed. Please retry.'
-            : '${result.failed.length} 名成员的操作未完成，请重试。'));
+            : AppCopy.format('{#0} 名成员的操作未完成，请重试。', [result.failed.length])));
   }
 
   void close() {

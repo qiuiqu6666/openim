@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:uuid/uuid.dart';
@@ -206,7 +207,8 @@ class _CommentEditorState extends State<_CommentEditor> {
                     widget.replyTo == null
                         ? momentsText(context, zh: '写评论', en: 'Add a comment')
                         : momentsText(context,
-                            zh: '回复 ${widget.replyTo!.author.displayName}',
+                            zh: AppCopy.format('回复 {#0}',
+                                [widget.replyTo!.author.displayName]),
                             en:
                                 'Reply to ${widget.replyTo!.author.displayName}'),
                     style: TextStyle(

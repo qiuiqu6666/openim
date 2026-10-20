@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../widgets/auth/auth_copy.dart';
 import '../../widgets/auth/auth_reference.dart';
+import '../../widgets/auth/auth_minimal_layout.dart';
 import 'login_logic.dart';
+import '../../widgets/auth/auth_identity_selector.dart';
 import 'widgets/login_toolbar.dart';
 
 class LoginPage extends StatelessWidget {
@@ -19,25 +21,25 @@ class LoginPage extends StatelessWidget {
   Widget build(BuildContext context) {
     // Re-render retained local/server failures when the app locale changes.
     Localizations.localeOf(context);
-    return Obx(() => AuthEntryScaffold(
-          greeting: authText('你好，', 'Hello,'),
-          accent: authText('欢迎使用99Chat', 'Welcome to 99Chat'),
-          tabs: [authText('登录', 'Login'), authText('注册', 'Register')],
-          activeTab: 0,
-          onTabSelected: logic.submitting.value
-              ? null
-              : (index) {
-                  if (index == 1) {
-                    logic.operateType = LoginType.phone;
-                    logic.registerNow();
-                  }
-                },
-          headerAction: const LoginToolbar(),
-          footer: AuthVersionFooter(version: logic.displayVersion.value),
+    return Obx(() => AuthMinimalLayout(
+          header: const LoginToolbar(onHero: false, showSupport: false),
+          footer: AuthEntryFooter(version: logic.displayVersion.value),
           child: AutofillGroup(
-              child: logic.isPasswordLogin.value
-                  ? _passwordForm(context)
-                  : _smsForm()),
+              child: Column(children: [
+            AuthIdentitySelector(
+                showAccount: true,
+                email: logic.loginType.value == LoginType.email,
+                account: logic.loginType.value == LoginType.account,
+                onAccountSelected: logic.submitting.value
+                    ? null
+                    : () => logic.selectLoginType(LoginType.account),
+                action: authText('登录', ' login'),
+                onChanged: logic.submitting.value
+                    ? null
+                    : (email) => logic.selectLoginType(
+                        email ? LoginType.email : LoginType.phone)),
+            logic.isPasswordLogin.value ? _passwordForm(context) : _smsForm(),
+          ])),
         ));
   }
 
@@ -45,7 +47,15 @@ class LoginPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           key: const ValueKey('login-password-form'),
           children: [
-            AuthTextField(
+            AuthCompoundField(
+                leadingWidth: 84,
+                leading: logic.loginType.value == LoginType.phone
+                    ? AuthCountryCode(
+                        code: logic.areaCode.value,
+                        onTap: logic.submitting.value
+                            ? null
+                            : logic.openCountryCodePicker)
+                    : null,
                 label: authText('账号', 'Account'),
                 key: const ValueKey('login-account'),
                 controller: logic.phoneCtrl,
@@ -54,7 +64,19 @@ class LoginPage extends StatelessWidget {
                 reserveErrorSpace: true,
                 onFocusChanged: logic.accountFocusChanged,
                 enabled: !logic.submitting.value,
-                hint: authText('请输入手机号或用户ID', 'Enter phone number or user ID'),
+                hint: switch (logic.loginType.value) {
+                  LoginType.phone => authText('手机号码', 'Phone number'),
+                  LoginType.email => authText('邮箱地址', 'Email address'),
+                  LoginType.account => authText('请输入用户ID', 'Enter user ID'),
+                },
+                keyboardType: switch (logic.loginType.value) {
+                  LoginType.phone => TextInputType.phone,
+                  LoginType.email => TextInputType.emailAddress,
+                  LoginType.account => TextInputType.text,
+                },
+                inputFormatters: logic.loginType.value == LoginType.phone
+                    ? [FilteringTextInputFormatter.digitsOnly]
+                    : null,
                 autofillHints: const [AutofillHints.username],
                 onFieldSubmitted: (_) => logic.pwdFocus?.requestFocus()),
             const SizedBox(height: AuthReferenceTokens.feedbackFieldGap),
@@ -64,7 +86,7 @@ class LoginPage extends StatelessWidget {
                 controller: logic.pwdCtrl,
                 focusNode: logic.pwdFocus,
                 errorText: logic.passwordError,
-                reserveErrorSpace: true,
+                reserveErrorSpace: false,
                 onFocusChanged: logic.passwordFocusChanged,
                 enabled: !logic.submitting.value,
                 hint: authText('请输入密码', 'Enter password'),
@@ -87,7 +109,7 @@ class LoginPage extends StatelessWidget {
                         size: 20,
                         color: AuthReferenceTokens.color(
                             context, AuthReferenceTokens.ink300)))),
-            const SizedBox(height: 8),
+            const SizedBox(height: AuthReferenceTokens.passwordOptionsGap),
             _passwordOptions(context),
             _submission(),
           ]);
@@ -97,7 +119,9 @@ class LoginPage extends StatelessWidget {
           key: const ValueKey('login-sms-form'),
           children: [
             AuthCompoundField(
-                label: authText('手机号', 'Phone number'),
+                label: logic.loginType.value == LoginType.email
+                    ? authText('邮箱', 'Email')
+                    : authText('手机号', 'Phone number'),
                 key: const ValueKey('login-account'),
                 controller: logic.phoneCtrl,
                 focusNode: logic.accountFocus,
@@ -105,17 +129,29 @@ class LoginPage extends StatelessWidget {
                 reserveErrorSpace: true,
                 onFocusChanged: logic.accountFocusChanged,
                 enabled: !logic.submitting.value,
-                hint: authText('请输入手机号', 'Enter phone number'),
-                keyboardType: TextInputType.phone,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                maxLength: 15,
-                autofillHints: const [AutofillHints.telephoneNumberNational],
+                hint: logic.loginType.value == LoginType.email
+                    ? authText('请输入邮箱', 'Enter email')
+                    : authText('请输入手机号', 'Enter phone number'),
+                keyboardType: logic.loginType.value == LoginType.email
+                    ? TextInputType.emailAddress
+                    : TextInputType.phone,
+                inputFormatters: logic.loginType.value == LoginType.email
+                    ? null
+                    : [FilteringTextInputFormatter.digitsOnly],
+                maxLength: logic.loginType.value == LoginType.email ? 254 : 15,
+                autofillHints: [
+                  logic.loginType.value == LoginType.email
+                      ? AutofillHints.email
+                      : AutofillHints.telephoneNumberNational
+                ],
                 leadingWidth: 102,
-                leading: AuthCountryCode(
-                    code: logic.areaCode.value,
-                    onTap: logic.submitting.value
-                        ? null
-                        : logic.openCountryCodePicker)),
+                leading: logic.loginType.value == LoginType.email
+                    ? null
+                    : AuthCountryCode(
+                        code: logic.areaCode.value,
+                        onTap: logic.submitting.value
+                            ? null
+                            : logic.openCountryCodePicker)),
             const SizedBox(height: AuthReferenceTokens.feedbackFieldGap),
             AuthCompoundField(
                 key: const ValueKey('login-code'),
@@ -125,7 +161,9 @@ class LoginPage extends StatelessWidget {
                 reserveErrorSpace: true,
                 onFocusChanged: logic.codeFocusChanged,
                 enabled: !logic.submitting.value,
-                hint: authText('6 位短信验证码', '6-digit SMS code'),
+                hint: logic.loginType.value == LoginType.email
+                    ? authText('6 位邮箱验证码', '6-digit email code')
+                    : authText('6 位短信验证码', '6-digit SMS code'),
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 maxLength: 6,
@@ -141,6 +179,8 @@ class LoginPage extends StatelessWidget {
 
   Widget _button() => AuthPrimaryButton(
       key: const ValueKey('login-submit'),
+      compact: true,
+      textStyle: AuthReferenceTokens.loginButton,
       text: authText('登录', 'Login'),
       loadingText: authText('登录中', 'Logging in'),
       pill: true,
@@ -188,17 +228,31 @@ class LoginPage extends StatelessWidget {
                 key: const ValueKey('login-forgot-password')),
           ]));
 
-  Widget _submission() => Column(children: [
-        const SizedBox(height: AuthReferenceTokens.buttonGap),
+  Widget _submission() =>
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SizedBox(
+            height: logic.isPasswordLogin.value
+                ? AuthReferenceTokens.passwordSubmitGap
+                : AuthReferenceTokens.buttonGap),
         _button(),
         const SizedBox(height: 4),
-        Center(
-            child: _action(
-                logic.isPasswordLogin.value
-                    ? authText('验证码登录', 'Use SMS code')
-                    : authText('密码登录', 'Use password'),
-                logic.togglePasswordType,
-                key: const ValueKey('login-mode-switch'))),
+        Wrap(
+            alignment: logic.loginType.value == LoginType.account
+                ? WrapAlignment.end
+                : WrapAlignment.spaceBetween,
+            spacing: 24,
+            children: [
+              if (logic.loginType.value != LoginType.account)
+                _action(
+                    logic.isPasswordLogin.value
+                        ? authText('验证码登录', 'Use verification code')
+                        : authText('密码登录', 'Use password'),
+                    logic.togglePasswordType,
+                    key: const ValueKey('login-mode-switch')),
+              _action(
+                  authText('还没账户？去注册', 'Create an account'), logic.registerNow,
+                  key: const ValueKey('login-register')),
+            ]),
       ]);
 
   Widget _action(String text, VoidCallback onTap, {Key? key}) => Builder(

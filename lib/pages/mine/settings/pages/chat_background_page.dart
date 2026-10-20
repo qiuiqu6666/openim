@@ -1,3 +1,5 @@
+import 'package:openim_common/media_localization.dart';
+import 'package:openim_common/localization.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -142,6 +144,7 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
       final result = await AssetPicker.pickAssets(
         context,
         pickerConfig: AssetPickerConfig(
+          textDelegate: AppMediaCopy.assets,
           maxAssets: 1,
           requestType: RequestType.image,
           sortPathsByModifiedDate: true,
@@ -259,7 +262,8 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
         : settingsText(context, zh: '聊天背景', en: 'Chat Background');
     final clearTitle = _scope == _BackgroundScope.allChats
         ? settingsText(context, zh: '清除全局默认背景', en: 'Clear Global Default')
-        : settingsText(context, zh: '清除本聊天背景', en: 'Clear This Chat Background');
+        : settingsText(context,
+            zh: '清除本聊天背景', en: 'Clear This Chat Background');
 
     if (SettingsResponsive.isDesktop(context) &&
         MediaQuery.sizeOf(context).width >= 760) {
@@ -306,8 +310,11 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
         margin: EdgeInsets.zero,
         children: [
           SettingsCell(
-            title: settingsText(context, zh: '从手机相册选择', en: 'Choose from Photos'),
-            value: _saving ? settingsText(context, zh: '处理中…', en: 'Working…') : null,
+            title:
+                settingsText(context, zh: '从手机相册选择', en: 'Choose from Photos'),
+            value: _saving
+                ? settingsText(context, zh: '处理中…', en: 'Working…')
+                : null,
             enabled: !_saving,
             onTap: _pickBackground,
           ),
@@ -350,7 +357,8 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
         context,
         title: settingsText(context, zh: '推荐背景', en: 'Recommended Backgrounds'),
         expanded: _recommendedExpanded,
-        onTap: () => setState(() => _recommendedExpanded = !_recommendedExpanded),
+        onTap: () =>
+            setState(() => _recommendedExpanded = !_recommendedExpanded),
       ),
       if (_recommendedExpanded)
         Container(
@@ -385,7 +393,8 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
       final selected = _scope == scope;
       return Expanded(
         child: GestureDetector(
-          onTap: _saving || selected ? null : () => setState(() => _scope = scope),
+          onTap:
+              _saving || selected ? null : () => setState(() => _scope = scope),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             height: 36,
@@ -399,7 +408,8 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
             child: Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.white : AppTokens.textPrimary(dark: dark),
+                color:
+                    selected ? Colors.white : AppTokens.textPrimary(dark: dark),
                 fontSize: 14,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
               ),
@@ -433,8 +443,11 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
         ? settingsText(context, zh: '对方', en: 'Contact')
         : widget.conversationName.trim();
     final title = all
-        ? settingsText(context, zh: '全部聊天 · 默认背景', en: 'All chats · Default background')
-        : settingsText(context, zh: '仅当前聊天 · $name', en: 'This chat only · $name');
+        ? settingsText(context,
+            zh: '全部聊天 · 默认背景', en: 'All chats · Default background')
+        : settingsText(context,
+            zh: AppCopy.format('仅当前聊天 · {#0}', [name]),
+            en: 'This chat only · $name');
     final subtitle = all
         ? settingsText(
             context,
@@ -562,7 +575,8 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
             right: 16,
             top: 44,
             child: _bubble(
-              text: settingsText(context, zh: '你好，今晚见面聊', en: 'Hi, let’s talk tonight.'),
+              text: settingsText(context,
+                  zh: '你好，今晚见面聊', en: 'Hi, let’s talk tonight.'),
               self: true,
               dark: dark,
             ),
@@ -608,8 +622,8 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
     return _defaultBackground(dark);
   }
 
-  Widget _defaultBackground(bool dark) =>
-      ColoredBox(color: dark ? const Color(0xFF111111) : const Color(0xFFF3F5F8));
+  Widget _defaultBackground(bool dark) => ColoredBox(
+      color: dark ? const Color(0xFF111111) : const Color(0xFFF3F5F8));
 
   Widget _sectionHeader(
     BuildContext context, {
@@ -636,7 +650,9 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
               ),
             ),
             Icon(
-              expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+              expanded
+                  ? Icons.keyboard_arrow_up_rounded
+                  : Icons.keyboard_arrow_down_rounded,
               color: AppTokens.textSecondary(dark: dark),
             ),
           ],
@@ -719,7 +735,9 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: selected ? AppTokens.accent : AppTokens.border(dark: dark),
+                  color: selected
+                      ? AppTokens.accent
+                      : AppTokens.border(dark: dark),
                   width: selected ? 2.5 : 0.6,
                 ),
               ),
@@ -776,7 +794,8 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
           flex: 5,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-            children: _content(context, dark, clearTitle, includePreview: false),
+            children:
+                _content(context, dark, clearTitle, includePreview: false),
           ),
         ),
         VerticalDivider(

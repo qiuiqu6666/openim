@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../../services/authorization/sangong_access_policy.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -285,10 +286,10 @@ class _SangongPrivilegeRouteGuardState
                           _revalidationFailed = false;
                           _recoverOrClose();
                         },
-                        child: const Text('暂时无法确认当前群权限，点击重试'),
+                        child: Text(AppCopy.text('暂时无法确认当前群权限，点击重试')),
                       )
-                    : const LinearProgressIndicator(
-                        semanticsLabel: '正在确认当前群权限',
+                    : LinearProgressIndicator(
+                        semanticsLabel: AppCopy.text('正在确认当前群权限'),
                       ),
               ),
             ),
@@ -297,9 +298,9 @@ class _SangongPrivilegeRouteGuardState
     }
     if (_revalidationFailed) {
       return SettingsScaffold(title: '三公', children: [
-        const Text('暂时无法确认当前群权限，请重试', textAlign: TextAlign.center),
+        Text(AppCopy.text('暂时无法确认当前群权限，请重试'), textAlign: TextAlign.center),
         SettingsPrimaryButton(
-            text: '重试',
+            text: AppCopy.text('重试'),
             onPressed: () {
               _revalidationFailed = false;
               _recoverOrClose();

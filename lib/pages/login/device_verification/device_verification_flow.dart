@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../mine/settings/verification_code_result.dart';
-import '../../mine/settings/widgets/aliyun_captcha_dialog.dart';
 import '../../../routes/app_pages.dart';
 import '../../../routes/swipe_back/app_page_route.dart';
 import 'data/password_device_login_attempt.dart';
@@ -32,8 +31,8 @@ class DeviceVerificationFlow {
   final bool Function() isCurrent;
   final DeviceCaptchaPresenter? captchaPresenter;
   AppMaterialPageRoute<bool>? _route;
-  Route<VerificationCodeResult>? _captchaRoute;
   bool _cancelled = false;
+  String _method = "phone";
   Object? _fatalError;
   LoginCertificate? _certificate;
 
@@ -42,13 +41,20 @@ class DeviceVerificationFlow {
 
   Future<LoginCertificate?> run(BuildContext context) async {
     if (!_ownsAttempt || !context.mounted) return null;
+    final methods = await attempt.methods(isCurrent: () => _ownsAttempt);
+    if (!_ownsAttempt || !context.mounted) return null;
+    if (methods.isEmpty) {
+      return attempt.submit(isCurrent: () => _ownsAttempt);
+    }
+    _method = methods.first;
     final navigator = Navigator.of(context, rootNavigator: true);
     final route = AppMaterialPageRoute<bool>(
       settings: const RouteSettings(name: AppRoutes.deviceVerification),
       builder: (pageContext) => DeviceVerificationPage(
+        methods: methods,
+        onMethodChanged: (method) => _method = method,
         initialPhoneNumber: phoneNumber,
         initialAreaCode: areaCode,
-        requiresPhoneInput: phoneNumber.isEmpty,
         onSendCode: (phone, area) => _send(pageContext, phone, area),
         onVerify: _verify,
       ),
@@ -64,44 +70,25 @@ class DeviceVerificationFlow {
   Future<VerificationCodeResult?> _send(
       BuildContext context, String phone, String area) async {
     if (!_ownsPage || !context.mounted) return null;
-    Future<VerificationCodeResult> request(String proof) async {
-      if (!_ownsAttempt) throw const DeviceVerificationCancelled();
-      final result = await attempt.sendCode(
-        areaCode: area,
-        phoneNumber: phone,
-        captchaVerifyParam: proof,
-        isCurrent: () => _ownsAttempt,
-      );
-      if (!_ownsAttempt) throw const DeviceVerificationCancelled();
-      return VerificationCodeResult(
-        captchaVerified: result.captchaVerified,
-        sent: result.sent,
-        retryAfter: result.retryAfter,
-      );
-    }
-
-    try {
-      VerificationCodeResult? result;
-      if (captchaPresenter != null) {
-        if (!context.mounted || !_ownsPage) return null;
-        result = await captchaPresenter!(context, request);
-      } else {
-        if (!context.mounted || !_ownsPage) return null;
-        result = await showAliyunCaptcha(context, request,
-            finishOnSendFailure: true,
-            onRouteCreated: (route) => _captchaRoute = route);
-      }
-      return _ownsPage ? result : null;
-    } finally {
-      _captchaRoute = null;
-    }
+    final result = await attempt.sendCode(
+      method: _method,
+      areaCode: area,
+      phoneNumber: phone,
+      isCurrent: () => _ownsAttempt,
+    );
+    if (!_ownsPage) return null;
+    return VerificationCodeResult(
+      captchaVerified: result.captchaVerified,
+      sent: result.sent,
+      retryAfter: result.retryAfter,
+    );
   }
 
   Future<bool> _verify(String code) async {
     if (!_ownsPage) return false;
     try {
-      final certificate =
-          await attempt.submit(verifyCode: code, isCurrent: () => _ownsAttempt);
+      final certificate = await attempt.submit(
+          verifyCode: code, method: _method, isCurrent: () => _ownsAttempt);
       if (!_ownsPage) return false;
       _certificate = certificate;
       return true;
@@ -116,13 +103,11 @@ class DeviceVerificationFlow {
     }
   }
 
-  /// Remove owned routes even when the captcha temporarily covers the page.
+  /// Remove the route owned by this login attempt.
   void cancel() {
     if (_cancelled) return;
     _cancelled = true;
     _certificate = null;
-    final captcha = _captchaRoute;
-    if (captcha?.isActive == true) captcha!.navigator?.removeRoute(captcha);
     final page = _route;
     if (page?.isActive == true) page!.navigator?.removeRoute(page);
   }

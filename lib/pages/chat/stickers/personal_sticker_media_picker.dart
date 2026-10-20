@@ -1,3 +1,4 @@
+import 'package:openim_common/media_localization.dart';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -25,6 +26,7 @@ Future<PlatformFile?> pickPersonalStickerMedia({
     }
     final assets = await AssetPicker.pickAssets(context,
         pickerConfig: AssetPickerConfig(
+          textDelegate: AppMediaCopy.assets,
           maxAssets: 1,
           requestType: RequestType.common,
           sortPathsByModifiedDate: true,

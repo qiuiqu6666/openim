@@ -85,6 +85,26 @@ void main() {
         .setMockMethodCallHandler(sdkChannel, null);
   });
 
+  testWidgets('visible self approval clears its notice with zero SDK unread',
+      (tester) async {
+    messages.add(Message(
+        clientMsgID: 'approved',
+        contentType: MessageType.friendApplicationApprovedNotification,
+        sendID: 'self',
+        seq: 10,
+        isRead: true));
+    unawaited(receipts.markVisibleMessages(['approved'], atLatest: true));
+    await tester.pump();
+    expect(calls, hasLength(1));
+    expect(projections.single.messageID, 'approved');
+    calls.single.result.complete();
+    await tester.pump();
+    expect(await projections.single.result, isTrue);
+    await receipts.markVisibleMessages(['approved'], atLatest: true);
+    expect(calls, hasLength(1), reason: 'do not repeat reads on every frame');
+    receipts.close();
+  });
+
   testWidgets(
       'busy viewport sends latest at most once per second and drains tail',
       (tester) async {

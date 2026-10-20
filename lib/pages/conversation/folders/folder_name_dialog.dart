@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat's conversation.dart _promptFolderName.
 // Source: https://github.com/qiuiqu6666/99chat (Apache License 2.0).
 // Changes: state-owned controller, keyboard submission and optional validation.
@@ -60,7 +61,7 @@ class _FolderNameDialogState extends State<FolderNameDialog> {
       controller: _controller,
       autofocus: true,
       maxLength: 16,
-      placeholder: chinese ? '分组名称' : 'Folder name',
+      placeholder: chinese ? AppCopy.text('分组名称') : 'Folder name',
       textInputAction: TextInputAction.done,
       onSubmitted: (_) => _submit(),
       onChanged: (_) {
@@ -69,8 +70,8 @@ class _FolderNameDialogState extends State<FolderNameDialog> {
     );
     return CupertinoAlertDialog(
       title: Text(widget.initialName == null
-          ? (chinese ? '新建分组' : 'New folder')
-          : (chinese ? '重命名分组' : 'Rename folder')),
+          ? (chinese ? AppCopy.text('新建分组') : 'New folder')
+          : (chinese ? AppCopy.text('重命名分组') : 'Rename folder')),
       content: Padding(
         padding: const EdgeInsets.only(top: AppTokens.s4),
         child: Column(
@@ -97,7 +98,7 @@ class _FolderNameDialogState extends State<FolderNameDialog> {
         CupertinoDialogAction(
           isDefaultAction: true,
           onPressed: _submit,
-          child: Text(chinese ? '确定' : 'OK'),
+          child: Text(chinese ? AppCopy.text('确定') : 'OK'),
         ),
       ],
     );

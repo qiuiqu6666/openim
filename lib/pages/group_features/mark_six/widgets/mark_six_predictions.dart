@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat lottery_dashboard.dart _livePredictions.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'package:flutter/material.dart';
@@ -36,8 +37,8 @@ class _MarkSixPredictionsState extends State<MarkSixPredictions> {
     final c = widget.controller;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        const Expanded(
-            child: Text('逐期预测',
+        Expanded(
+            child: Text(AppCopy.text('逐期预测'),
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
         TextButton(
             onPressed: () => _selectWindow(context),
@@ -50,7 +51,7 @@ class _MarkSixPredictionsState extends State<MarkSixPredictions> {
               Padding(
                   padding: const EdgeInsets.only(right: 4),
                   child: ChoiceChip(
-                      label: Text(attribute.value,
+                      label: Text(AppCopy.text(attribute.value),
                           style: const TextStyle(fontSize: 12)),
                       selected: _attribute == attribute.key,
                       onSelected: (_) =>
@@ -59,9 +60,9 @@ class _MarkSixPredictionsState extends State<MarkSixPredictions> {
       MergeSemantics(
           child: ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-              title: const Text('综合预测 · 全部属性',
+              title: Text(AppCopy.text('综合预测 · 全部属性'),
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-              subtitle: Text('基于历史数据，AI智能分析仅供参考',
+              subtitle: Text(AppCopy.text('基于历史数据，AI智能分析仅供参考'),
                   style: TextStyle(fontSize: 10, color: style.secondary)),
               onTap: () => _setCombined(!_combined),
               trailing: AppSwitch(value: _combined, onChanged: _setCombined))),
@@ -93,12 +94,15 @@ class _MarkSixPredictionsState extends State<MarkSixPredictions> {
             onRetry: () =>
                 c.loadPredictions(more: c.predictionPage > 0, force: true))
       else if (c.predictions.isEmpty)
-        const MarkSixEmpty(message: '暂无预测')
+        MarkSixEmpty(message: AppCopy.text('暂无预测'))
       else
         Padding(
             padding: const EdgeInsets.all(16),
             child: Center(
-                child: Text(c.predictionsHasMore ? '继续滑动加载更多' : '已加载全部预测',
+                child: Text(
+                    c.predictionsHasMore
+                        ? AppCopy.text('继续滑动加载更多')
+                        : AppCopy.text('已加载全部预测'),
                     style: TextStyle(color: style.secondary)))),
     ]);
   }
@@ -130,7 +134,7 @@ class _MarkSixPredictionsState extends State<MarkSixPredictions> {
             : style.secondary;
     return MarkSixPredictionCopy(
       attribute: key,
-      label: markSixAttributes[key] ?? key,
+      label: AppCopy.text(markSixAttributes[key] ?? key),
       values: values,
       child: Container(
           padding: const EdgeInsets.symmetric(vertical: 5),
@@ -150,7 +154,7 @@ class _MarkSixPredictionsState extends State<MarkSixPredictions> {
             const SizedBox(width: 4),
             SizedBox(
                 width: 48,
-                child: Text(markSixAttributes[key] ?? key,
+                child: Text(AppCopy.text(markSixAttributes[key] ?? key),
                     style: const TextStyle(
                         fontSize: 12, fontWeight: FontWeight.w600))),
             Expanded(
@@ -165,7 +169,7 @@ class _MarkSixPredictionsState extends State<MarkSixPredictions> {
                 decoration: BoxDecoration(
                     color: color.withValues(alpha: .09),
                     borderRadius: BorderRadius.circular(12)),
-                child: Text(labels[status] ?? '—',
+                child: Text(AppCopy.text(labels[status] ?? '—'),
                     style: TextStyle(fontSize: 11, color: color))),
           ])),
     );
@@ -180,7 +184,7 @@ class _MarkSixPredictionsState extends State<MarkSixPredictions> {
         context: context,
         builder: (context) => SafeArea(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const ListTile(title: Text('统计范围')),
+              ListTile(title: Text(AppCopy.text('统计范围'))),
               for (final count in choices)
                 ListTile(
                     title: Text('最近 $count 期'),

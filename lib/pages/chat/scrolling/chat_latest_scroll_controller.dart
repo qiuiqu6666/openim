@@ -24,9 +24,23 @@ class ChatLatestScrollController {
   bool _forced = false;
   bool _animated = false;
   bool _returning = false;
+  bool _entryFollowing = true;
   int _revision = 0;
 
   bool get _active => !_closed && !isClosed() && controller.hasClients;
+
+  /// Initial layout offsets are not evidence of a deliberate history read.
+  /// Follow both the local preview and the first authoritative page.
+  void requestEntry({bool complete = false}) {
+    if (!_entryFollowing) return;
+    request(force: true);
+    if (complete) _entryFollowing = false;
+  }
+
+  void endEntry() {
+    _entryFollowing = false;
+    cancel();
+  }
 
   void request({bool force = true, bool animated = false}) {
     if (_closed || isClosed() || (!force && _returning)) return;

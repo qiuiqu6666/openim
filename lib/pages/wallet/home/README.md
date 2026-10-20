@@ -72,7 +72,7 @@ selects a coin then starts with the wallet-address tab; internal transfer starts
 with contacts. P2P is visible as unavailable until a real trading flow exists.
 Existing callers of the withdrawal
 picker/address pages retain their friend-transfer default. Per the user's
-explicit choice, the action labelled 划转 continues to open currency exchange.
+explicit choice, the action labelled 兑换 continues to open currency exchange.
 
 Both the main-tab host's safe-area ownership and standalone navigation are
 supported. The main-tab header uses ordinary themed text. Old purely

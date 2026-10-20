@@ -1,3 +1,5 @@
+import 'package:openim_common/localization.dart';
+
 /// SDK versions expose seconds or milliseconds. Render in the device timezone.
 String requestHistoryTime(int? timestamp,
     {bool group = false, bool english = false, DateTime? now}) {
@@ -20,7 +22,15 @@ String requestHistoryTime(int? timestamp,
   if (days > 0 && days < 7) {
     return (english
         ? const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-        : const ['周一', '周二', '周三', '周四', '周五', '周六', '周日'])[date.weekday - 1];
+        : [
+            AppCopy.text('周一'),
+            AppCopy.text('周二'),
+            AppCopy.text('周三'),
+            AppCopy.text('周四'),
+            AppCopy.text('周五'),
+            AppCopy.text('周六'),
+            AppCopy.text('周日')
+          ])[date.weekday - 1];
   }
   return english ? '${date.month}/${date.day}' : '${date.month}月${date.day}日';
 }

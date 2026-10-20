@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -70,7 +71,7 @@ class _LiveCastButtonState extends State<LiveCastButton> {
       );
     }
     return IconButton(
-      tooltip: _opening ? '正在打开投屏设置' : '投屏',
+      tooltip: _opening ? AppCopy.text('正在打开投屏设置') : '投屏',
       constraints: const BoxConstraints.tightFor(
         width: LiveStyle.controlExtent,
         height: LiveStyle.controlExtent,

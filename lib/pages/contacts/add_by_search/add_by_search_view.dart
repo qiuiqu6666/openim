@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
@@ -27,7 +28,7 @@ class AddContactsBySearchPage extends StatelessWidget {
             controller: logic.searchCtrl,
             hintText: logic.isSearchUser
                 ? (Get.locale?.languageCode == 'zh'
-                    ? '搜索公开账号、手机号或邮箱'
+                    ? AppCopy.text('搜索公开账号、手机号或邮箱')
                     : 'Search public account, phone or email')
                 : StrRes.searchIDAddGroup,
             enabled: true,

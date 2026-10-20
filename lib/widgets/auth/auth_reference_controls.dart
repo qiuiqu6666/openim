@@ -30,6 +30,7 @@ class AuthPrimaryButton extends StatelessWidget {
       this.loadingText,
       this.loading = false,
       this.pill = false,
+      this.compact = false,
       this.disabledForegroundColor = AuthReferenceTokens.ink400,
       this.textStyle,
       this.onPressed});
@@ -37,6 +38,7 @@ class AuthPrimaryButton extends StatelessWidget {
   final String? loadingText;
   final bool loading;
   final bool pill;
+  final bool compact;
   final Color disabledForegroundColor;
   final TextStyle? textStyle;
   final VoidCallback? onPressed;
@@ -53,8 +55,14 @@ class AuthPrimaryButton extends StatelessWidget {
                     AuthReferenceTokens.surface
                 ? Colors.white
                 : AuthReferenceTokens.color(context, disabledForegroundColor),
-            minimumSize: const Size(0, AuthReferenceTokens.fieldHeight),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            minimumSize: Size(
+                0,
+                compact
+                    ? AuthReferenceTokens.compactButtonHeight
+                    : AuthReferenceTokens.fieldHeight),
+            padding: compact
+                ? AuthReferenceTokens.compactButtonPadding
+                : const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AuthReferenceTokens.rLg)),
             textStyle: (textStyle ?? AuthReferenceTokens.button).copyWith(

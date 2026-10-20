@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -125,8 +126,8 @@ class _AiAssistantChatPageState extends State<AiAssistantChatPage> {
                         final matches = _matches;
                         return AiAssistantHeader(
                           dark: dark,
-                          searchLabel:
-                              _text('查找已加载消息', 'Find in loaded messages'),
+                          searchLabel: _text(AppCopy.text('查找已加载消息'),
+                              'Find in loaded messages'),
                           userID: _logic.userID,
                           ex: _logic.conversationInfo.ex,
                           title: _logic.userID == 'assistant'
@@ -134,10 +135,10 @@ class _AiAssistantChatPageState extends State<AiAssistantChatPage> {
                               : _logic.nickname.value,
                           subtitle: _logic.assistantStreams.snapshots
                                   .any((reply) => !reply.timedOut)
-                              ? _text('正在回复…', 'Replying…')
+                              ? _text(AppCopy.text('正在回复…'), 'Replying…')
                               : _logic.peerTyping.value
                                   ? _text('思考中…', 'Thinking…')
-                                  : _text('官方助理 · 你的专属对话',
+                                  : _text(AppCopy.text('官方助理 · 你的专属对话'),
                                       'Official assistant · Your personal chat'),
                           toolbarHeight: toolbarHeight,
                           searching: _searching,
@@ -174,8 +175,8 @@ class _AiAssistantChatPageState extends State<AiAssistantChatPage> {
                               if (_searching)
                                 TextButton.icon(
                                   icon: const Icon(Icons.manage_search_rounded),
-                                  label: Text(_text(
-                                      '搜索全部聊天记录', 'Search all chat history')),
+                                  label: Text(_text(AppCopy.text('搜索全部聊天记录'),
+                                      'Search all chat history')),
                                   onPressed: () {
                                     _searchFocus.unfocus();
                                     Get.to(() => ChatHistorySearchPage(

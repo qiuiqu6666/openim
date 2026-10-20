@@ -20,6 +20,8 @@ class DeviceVerificationPage extends StatefulWidget {
     this.requiresPhoneInput = false,
     this.onSendCode,
     this.onVerify,
+    this.methods = const ['phone'],
+    this.onMethodChanged,
   });
 
   final String phoneMasked;
@@ -29,6 +31,8 @@ class DeviceVerificationPage extends StatefulWidget {
   final Future<VerificationCodeResult?> Function(
       String phoneNumber, String areaCode)? onSendCode;
   final Future<bool> Function(String code)? onVerify;
+  final List<String> methods;
+  final ValueChanged<String>? onMethodChanged;
 
   @override
   State<DeviceVerificationPage> createState() => _DeviceVerificationPageState();
@@ -47,6 +51,8 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
   int _requestVersion = 0;
   Timer? _timer;
   DateTime? _resendAt;
+  late String _method;
+  final _cooldowns = <String, DateTime>{};
 
   bool get _busy => _sending || _verifying;
   bool get _active => mounted && (ModalRoute.of(context)?.isCurrent ?? true);
@@ -55,16 +61,20 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
       RegExp(r'^\d+$').hasMatch(_phoneNumber) &&
       IMUtils.isMobile(_areaCode, _phoneNumber);
   bool get _canSend =>
-      !_busy && _remaining == 0 && _phoneValid && widget.onSendCode != null;
+      !_busy &&
+      _remaining == 0 &&
+      (!widget.requiresPhoneInput || _phoneValid) &&
+      widget.onSendCode != null;
   bool get _canVerify =>
       !_busy &&
-      _phoneValid &&
+      (!widget.requiresPhoneInput || _phoneValid) &&
       RegExp(r'^\d{6}$').hasMatch(_code.text.trim()) &&
       widget.onVerify != null;
 
   @override
   void initState() {
     super.initState();
+    _method = widget.methods.first;
     _phone = TextEditingController(text: widget.initialPhoneNumber.trim());
     _observedPhone = _phone.text;
     _areaCode = widget.initialAreaCode;
@@ -138,6 +148,7 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
     _timer?.cancel();
     final duration = seconds.clamp(1, 86400);
     _resendAt = DateTime.now().add(Duration(seconds: duration));
+    _cooldowns[_method] = _resendAt!;
     _remaining = duration;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -152,6 +163,20 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
       setState(() => _remaining = secondsLeft.clamp(0, 86400));
       if (_remaining == 0) timer.cancel();
     });
+  }
+
+  void _chooseMethod(String method) {
+    if (_busy || method == _method) return;
+    setState(() {
+      _invalidatePhone();
+      _method = method;
+      final until = _cooldowns[method];
+      if (until != null && until.isAfter(DateTime.now())) {
+        _startCooldown(
+            (until.difference(DateTime.now()).inMilliseconds / 1000).ceil());
+      }
+    });
+    widget.onMethodChanged?.call(method);
   }
 
   Future<void> _sendCode() async {
@@ -231,19 +256,48 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
     final masked = _maskedPhone;
     return AuthFormScaffold(
       title: strings.title,
+      titleStyle:
+          AuthReferenceTokens.formTitle.copyWith(fontWeight: FontWeight.w500),
       subtitle: strings.subtitle,
       backLabel: strings.back,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (widget.methods.length > 1) ...[
+            Wrap(
+              spacing: AuthReferenceTokens.fieldGap,
+              children: [
+                for (final method in widget.methods)
+                  ChoiceChip(
+                    label: Text(method == 'phone'
+                        ? strings.phoneMethod
+                        : strings.emailMethod),
+                    selected: _method == method,
+                    selectedColor: AuthReferenceTokens.color(
+                            context, AuthReferenceTokens.brand500)
+                        .withValues(alpha: 0.12),
+                    checkmarkColor: AuthReferenceTokens.color(
+                        context, AuthReferenceTokens.brand500),
+                    onSelected: _busy ? null : (_) => _chooseMethod(method),
+                    materialTapTargetSize: MaterialTapTargetSize.padded,
+                  ),
+              ],
+            ),
+            const SizedBox(height: AuthReferenceTokens.fieldGap),
+          ],
           AuthInfoBanner(
             icon: Icons.shield_outlined,
-            text: masked.isEmpty ? strings.smsHint : strings.sentTo(masked),
+            text: _method == 'email'
+                ? strings.emailHint
+                : masked.isEmpty
+                    ? strings.smsHint
+                    : strings.sentTo(masked),
           ),
           const SizedBox(height: AuthReferenceTokens.plainFormBannerGap),
           if (widget.requiresPhoneInput) ...[
             AuthFieldLabel(strings.phoneLabel,
-                style: AuthReferenceTokens.plainFieldLabel,
+                style: AuthReferenceTokens.plainFieldLabel
+                    .copyWith(fontWeight: FontWeight.w400),
                 padding: AuthReferenceTokens.plainFieldLabelPadding),
             AuthCompoundField(
               key: const ValueKey('device-verification-phone'),
@@ -269,7 +323,8 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
             const SizedBox(height: AuthReferenceTokens.plainFormBannerGap),
           ],
           AuthFieldLabel(strings.codeLabel,
-              style: AuthReferenceTokens.plainFieldLabel,
+              style: AuthReferenceTokens.plainFieldLabel
+                  .copyWith(fontWeight: FontWeight.w400),
               padding: AuthReferenceTokens.plainFieldLabelPadding),
           AuthCompoundField(
             key: const ValueKey('device-verification-code'),
@@ -299,6 +354,7 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
                 padding: EdgeInsets.zero,
                 minimumSize: const Size(0, AuthReferenceTokens.tapTarget),
                 textStyle: AuthReferenceTokens.codeAction.copyWith(
+                    fontWeight: FontWeight.w500,
                     fontFamily:
                         Theme.of(context).textTheme.bodyMedium?.fontFamily),
               ),
@@ -324,7 +380,8 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
               loading: _verifying,
               pill: true,
               disabledForegroundColor: AuthReferenceTokens.surface,
-              textStyle: AuthReferenceTokens.plainFormButton,
+              textStyle: AuthReferenceTokens.plainFormButton
+                  .copyWith(fontWeight: FontWeight.w500),
               onPressed: _canVerify ? _verify : null,
             ),
           ),

@@ -4,19 +4,48 @@ import 'package:get/get.dart';
 
 import 'lang/en_US.dart';
 import 'lang/zh_CN.dart';
+import 'lang/zh_TW.dart';
 
 class TranslationService extends Translations {
   static Locale? get locale => Get.deviceLocale;
   static const fallbackLocale = Locale('en', 'US');
 
+  static Locale resolveLocale(Locale? locale) {
+    if (locale?.languageCode == 'zh') {
+      if (locale?.scriptCode == 'Hant' ||
+          (locale?.scriptCode != 'Hans' &&
+              const ['TW', 'HK', 'MO'].contains(locale?.countryCode))) {
+        return const Locale('zh', 'TW');
+      }
+      return const Locale('zh', 'CN');
+    }
+    return fallbackLocale;
+  }
+
+  // Preserve existing persisted values; traditional Chinese is appended as 3.
+  static Locale localeForSetting(int setting, Locale? systemLocale) {
+    switch (setting) {
+      case 1:
+        return const Locale('zh', 'CN');
+      case 2:
+        return fallbackLocale;
+      case 3:
+        return const Locale('zh', 'TW');
+      default:
+        return resolveLocale(systemLocale);
+    }
+  }
+
   @override
   Map<String, Map<String, String>> get keys => {
         'en_US': en_US,
         'zh_CN': zh_CN,
+        'zh_TW': zhTW,
       };
 }
 
 class StrRes {
+  static String get traditionalChinese => 'traditionalChinese'.tr;
   static String get diceLabel => 'diceLabel'.tr;
   static String dicePoint(int value) =>
       'dicePoint'.trParams({'value': '$value'});

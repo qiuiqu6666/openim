@@ -30,7 +30,9 @@ class ConversationLatestSync {
   final _ids = SdkQueryGate<String>(limit: 4);
   final _pending = <String, ConversationRefreshRequest>{};
   final _pendingMessageIDs = <String, String>{};
+  final _pendingSequences = <String, int>{};
   final _callbackMessages = <String, String>{};
+  final _knownSequences = <String, int>{};
   final _forced = <String>{};
   final _pendingAttempts = <String, int>{};
   final _retries = <String, _LatestSyncAttempt>{};
@@ -59,6 +61,7 @@ class ConversationLatestSync {
     if (id != null && _callbackMessages[request.key] == id) return;
     _forgetRetry(request.key);
     if (id != null) _pendingMessageIDs[request.key] = id;
+    _pendingSequences[request.key] = message.seq ?? 0;
     _pending[request.key] = request;
     _schedule();
   }
@@ -78,6 +81,17 @@ class ConversationLatestSync {
   /// A matching authoritative callback already supplies this message's row.
   void conversationsUpdated(Iterable<ConversationInfo> rows) {
     for (final row in rows) {
+      final previous = _knownSequences[row.conversationID] ?? 0;
+      final sequence = row.latestMsg?.seq ?? 0;
+      if (sequence > 0 && sequence < previous) {
+        // A late callback can arrive after a successful read. It may also be
+        // a legitimate deletion: re-read native state rather than rejecting
+        // the callback using a permanent "maximum seq" rule.
+        requestRefresh(ConversationRefreshRequest(
+            accountID: OpenIM.iMManager.userID,
+            conversationID: row.conversationID));
+      }
+      _rememberSequence(row);
       final id = row.latestMsg?.clientMsgID;
       if (id == null || id.isEmpty) continue;
       final source = row.isSingleChat ? row.userID : row.groupID;
@@ -90,6 +104,7 @@ class ConversationLatestSync {
         if (!_forced.contains(key) && _pendingMessageIDs[key] == id) {
           _pending.remove(key);
           _pendingMessageIDs.remove(key);
+          _pendingSequences.remove(key);
           _pendingAttempts.remove(key);
         }
         final retry = _retries[key];
@@ -103,7 +118,16 @@ class ConversationLatestSync {
     }
   }
 
+  void _rememberSequence(ConversationInfo row) {
+    _knownSequences.remove(row.conversationID);
+    _knownSequences[row.conversationID] = row.latestMsg?.seq ?? 0;
+    while (_knownSequences.length > 256) {
+      _knownSequences.remove(_knownSequences.keys.first);
+    }
+  }
+
   void discard(ConversationInfo info) {
+    _knownSequences.remove(info.conversationID);
     final keys = [
       info.conversationID,
       '${info.conversationType}:${info.isSingleChat ? info.userID : info.groupID}'
@@ -111,6 +135,7 @@ class ConversationLatestSync {
     for (final key in keys) {
       _pending.remove(key);
       _pendingMessageIDs.remove(key);
+      _pendingSequences.remove(key);
       _forced.remove(key);
       _callbackMessages.remove(key);
       _forgetRetry(key);
@@ -133,14 +158,15 @@ class ConversationLatestSync {
     }
   }
 
-  void _retryLater(_LatestSyncAttempt attempt) {
+  void _retryLater(_LatestSyncAttempt attempt, {bool afterCallback = false}) {
     final request = attempt.request;
     if (!_active ||
         !request.isCurrent ||
         attempt.number >= _maxRetries ||
         _pending.containsKey(request.key) ||
         _discardedDuringRead.contains(request.key) ||
-        _changedDuringRead.contains(attempt.conversationID) ||
+        (!afterCallback &&
+            _changedDuringRead.contains(attempt.conversationID)) ||
         (!attempt.forced &&
             attempt.messageID != null &&
             _callbackMessages[request.key] == attempt.messageID)) {
@@ -160,6 +186,7 @@ class ConversationLatestSync {
         if (retry.messageID != null) {
           _pendingMessageIDs[request.key] = retry.messageID!;
         }
+        _pendingSequences[request.key] = retry.sequence;
         if (retry.forced) _forced.add(request.key);
       }
       _schedule();
@@ -174,6 +201,7 @@ class ConversationLatestSync {
         .take(_batchSize)
         .map((request) => _LatestSyncAttempt(request,
             messageID: _pendingMessageIDs[request.key],
+            sequence: _pendingSequences[request.key] ?? 0,
             forced: _forced.contains(request.key),
             number: _pendingAttempts[request.key] ?? 0))
         .toList();
@@ -181,6 +209,7 @@ class ConversationLatestSync {
       final request = attempt.request;
       _pending.remove(request.key);
       _pendingMessageIDs.remove(request.key);
+      _pendingSequences.remove(request.key);
       _forced.remove(request.key);
       _pendingAttempts.remove(request.key);
     }
@@ -219,11 +248,40 @@ class ConversationLatestSync {
       }
       // Publish any buffered callback before applying the query snapshot.
       flushChanges();
-      publish(rows
+      final deferred = <String>{};
+      final byID = {for (final row in rows) row.conversationID: row};
+      for (final attempt in attempts) {
+        final id = attempt.conversationID;
+        if (id == null) continue;
+        if (_changedDuringRead.contains(id)) {
+          // Keep the callback fence, then read again. The callback can be a
+          // delete/revoke, or older metadata that raced a newer snapshot.
+          _retryLater(attempt, afterCallback: true);
+          continue;
+        }
+        final latest = byID[id]?.latestMsg;
+        if (attempt.sequence > 0 &&
+            latest != null &&
+            (latest.seq ?? 0) > 0 &&
+            latest.seq! < attempt.sequence &&
+            attempt.number < _maxRetries) {
+          deferred.add(id);
+          _retryLater(attempt);
+        }
+      }
+      // A lower authoritative snapshot after bounded reconciliation is valid:
+      // the observed message may have been deleted. Never synthesize its body
+      // from the arrival event or pin a permanent sequence floor.
+      final accepted = rows
           .where((row) =>
               ids.contains(row.conversationID) &&
+              !deferred.contains(row.conversationID) &&
               !_changedDuringRead.contains(row.conversationID))
-          .toList());
+          .toList();
+      for (final row in accepted) {
+        _rememberSequence(row);
+      }
+      publish(accepted);
     } catch (error) {
       if (current()) {
         for (final attempt in attempts) {
@@ -252,7 +310,9 @@ class ConversationLatestSync {
     _pendingAttempts.clear();
     _pending.clear();
     _pendingMessageIDs.clear();
+    _pendingSequences.clear();
     _callbackMessages.clear();
+    _knownSequences.clear();
     _forced.clear();
     _changedDuringRead.clear();
     _discardedDuringRead.clear();
@@ -269,11 +329,15 @@ class ConversationLatestSync {
 
 class _LatestSyncAttempt {
   _LatestSyncAttempt(this.request,
-      {required this.messageID, required this.forced, required this.number})
+      {required this.messageID,
+      required this.sequence,
+      required this.forced,
+      required this.number})
       : conversationID = request.conversationID;
 
   final ConversationRefreshRequest request;
   final String? messageID;
+  final int sequence;
   final bool forced;
   final int number;
   String? conversationID;

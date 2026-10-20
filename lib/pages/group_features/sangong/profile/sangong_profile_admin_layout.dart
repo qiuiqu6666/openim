@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See ../LICENSE-99chat.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -62,8 +63,10 @@ class SangongProfileAdminLayout extends StatelessWidget {
     final muted = AppTokens.textSecondary(dark: dark);
     final border = AppTokens.border(dark: dark);
     final skeleton = border.withValues(alpha: dark ? .55 : .85);
-    final pointsText = '当前积分 ${points ?? '—'}'
-        '${parentLabel.isNotEmpty ? ' · 上级 $parentLabel' : ''}'
+    final pointsText = '${AppCopy.format('当前积分 {#0}', [points ?? '—'])}'
+        '${parentLabel.isNotEmpty ? AppCopy.format(' · 上级 {#0}', [
+                parentLabel
+              ]) : ''}'
         '${rebatePer10000 == null ? '' : ' · 返水 ${rebatePer10000!.toStringAsFixed(0)}'}';
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -80,8 +83,8 @@ class SangongProfileAdminLayout extends StatelessWidget {
                       fontSize: SangongProfileAdminTokens.captionSize)),
               Align(
                   alignment: Alignment.center,
-                  child:
-                      TextButton(onPressed: onRetry, child: const Text('重试'))),
+                  child: TextButton(
+                      onPressed: onRetry, child: Text(AppCopy.text('重试')))),
             ]),
           ),
         _section(
@@ -89,7 +92,7 @@ class SangongProfileAdminLayout extends StatelessWidget {
             dark,
             _block(context,
                 caption: _caption(pointsText, primary, skeleton, spans: [
-                  TextSpan(text: '当前积分 '),
+                  TextSpan(text: AppCopy.text('当前积分 ')),
                   TextSpan(
                       text: '${points ?? '—'}',
                       style: TextStyle(
@@ -97,12 +100,13 @@ class SangongProfileAdminLayout extends StatelessWidget {
                               ? primary
                               : AppTokens.walletDanger)),
                   if (parentLabel.isNotEmpty)
-                    TextSpan(text: ' · 上级 $parentLabel'),
+                    TextSpan(text: AppCopy.format(' · 上级 {#0}', [parentLabel])),
                   if (rebatePer10000 != null)
                     TextSpan(
                         text: ' · 返水 ${rebatePer10000!.toStringAsFixed(0)}'),
                 ]),
-                input: _input(context, pointsController, '金额', dark),
+                input:
+                    _input(context, pointsController, AppCopy.text('金额'), dark),
                 actions: [
                   _ProfileAction('上分', primary, disabled ? null : onCredit),
                   _ProfileAction('下分', primary, disabled ? null : onDebit),
@@ -112,14 +116,18 @@ class SangongProfileAdminLayout extends StatelessWidget {
             'banker',
             dark,
             _block(context,
-                caption: _caption(bankerSummary ?? '庄 —', body, skeleton),
-                input: _input(context, bankerController, '庄门.限额', dark,
+                caption: _caption(
+                    bankerSummary ?? AppCopy.text('庄 —'), body, skeleton),
+                input: _input(
+                    context, bankerController, AppCopy.text('庄门.限额'), dark,
                     banker: true),
                 actions: [
-                  _ProfileAction(
-                      '定庄', primary, disabled ? null : onAssignBanker),
-                  _ProfileAction('限额', primary, disabled ? null : onSetLimit),
-                  _ProfileAction('发送', primary, disabled ? null : onSendBanker),
+                  _ProfileAction(AppCopy.text('定庄'), primary,
+                      disabled ? null : onAssignBanker),
+                  _ProfileAction(AppCopy.text('限额'), primary,
+                      disabled ? null : onSetLimit),
+                  _ProfileAction(AppCopy.text('发送'), primary,
+                      disabled ? null : onSendBanker),
                 ],
                 muted: muted)),
         _section(
@@ -128,17 +136,23 @@ class SangongProfileAdminLayout extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               _block(context,
                   caption: _caption(
-                      '合庄占股 ${sharePercent == null ? '—' : '${sharePercent!.toStringAsFixed(2)}%'}',
+                      AppCopy.format('合庄占股 {#0}', [
+                        sharePercent == null
+                            ? '—'
+                            : '${sharePercent!.toStringAsFixed(2)}%'
+                      ]),
                       body,
                       skeleton),
-                  input:
-                      _input(context, jointController, '金额', dark, last: true),
+                  input: _input(
+                      context, jointController, AppCopy.text('金额'), dark,
+                      last: true),
                   actions: [
-                    _ProfileAction('设置', muted, disabled ? null : onSetCoBank),
-                    _ProfileAction(
-                        '取消合庄', primary, disabled ? null : onRemoveCoBank),
-                    _ProfileAction(
-                        '发送', primary, disabled ? null : onSendCoBank),
+                    _ProfileAction(AppCopy.text('设置'), muted,
+                        disabled ? null : onSetCoBank),
+                    _ProfileAction(AppCopy.text('取消合庄'), primary,
+                        disabled ? null : onRemoveCoBank),
+                    _ProfileAction(AppCopy.text('发送'), primary,
+                        disabled ? null : onSendCoBank),
                   ],
                   muted: muted),
               const SizedBox(height: AppTokens.s3),
@@ -151,7 +165,8 @@ class SangongProfileAdminLayout extends StatelessWidget {
                         loading
                             ? _skeleton(
                                 skeleton, const ValueKey('summary-skeleton'))
-                            : Text(coBankSummary ?? '庄池：— · 合庄庄家：—',
+                            : Text(
+                                coBankSummary ?? AppCopy.text('庄池：— · 合庄庄家：—'),
                                 key: ValueKey(coBankSummary),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,

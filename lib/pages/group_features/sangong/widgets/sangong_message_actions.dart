@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
@@ -65,12 +66,12 @@ class SangongMessageActions {
       if (SangongBetSubmitCutoff.fromLongPressedMessage(message) != null)
         PopMenuInfo(
             id: 'sangong_stats',
-            text: '统计',
+            text: AppCopy.text('统计'),
             onTap: () => run(preview)),
       if (canAssign(message))
         PopMenuInfo(
             id: 'sangong_banker',
-            text: '定庄',
+            text: AppCopy.text('定庄'),
             onTap: () => run(() async {
                   final session = await runtime.admin.fetchSession();
                   final roundId = session.round?.id ?? 0;

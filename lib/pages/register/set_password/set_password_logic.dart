@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../../../widgets/auth/feedback/auth_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -26,9 +27,11 @@ typedef _RegistrationInput = ({
 });
 
 class SetPasswordLogic extends GetxController {
-  SetPasswordLogic({RegistrationAvatarService? avatarService})
+  SetPasswordLogic(
+      {RegistrationAvatarService? avatarService, this.initialArguments})
       : _avatarService = avatarService ?? const RegistrationAvatarService();
 
+  final Map<String, dynamic>? initialArguments;
   final RegistrationAvatarService _avatarService;
   final imLogic = Get.find<IMController>();
   final nicknameCtrl = TextEditingController();
@@ -98,16 +101,17 @@ class SetPasswordLogic extends GetxController {
 
   @override
   void onInit() {
-    phoneNumber = Get.arguments['phoneNumber'];
-    email = Get.arguments['email'];
-    areaCode = Get.arguments['areaCode'];
-    usedFor = Get.arguments['usedFor'];
-    verificationCode = Get.arguments['verificationCode'];
-    invitationCode = Get.arguments['invitationCode'];
-    _profileDraft = Get.arguments['profileDraft'];
-    nicknameCtrl.text = _profileDraft?.nickname ?? '';
+    final arguments = initialArguments ?? Get.arguments;
+    phoneNumber = arguments['phoneNumber'];
+    email = arguments['email'];
+    areaCode = arguments['areaCode'];
+    usedFor = arguments['usedFor'];
+    verificationCode = arguments['verificationCode'];
+    invitationCode = arguments['invitationCode'];
+    _profileDraft = arguments['profileDraft'];
+    nicknameCtrl.text = arguments['nickname'] ?? _profileDraft?.nickname ?? '';
     avatar.value = _profileDraft?.avatar;
-    final password = Get.arguments['password'];
+    final password = arguments['password'];
     credentialPasswordProvided = password is String && password.isNotEmpty;
     if (password is String) {
       pwdCtrl.text = password;
@@ -277,7 +281,7 @@ class SetPasswordLogic extends GetxController {
         } else {
           final message = HttpUtil.errorMessage(error, path: failurePath);
           showAuthNotice(_registered
-              ? authText('账号已注册，请重试以继续完成：$message',
+              ? authText(AppCopy.format('账号已注册，请重试以继续完成：{#0}', [message]),
                   'Account registered. Please retry to finish: $message')
               : message);
         }

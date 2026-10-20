@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Layout adapted from 99chat agent_rebate_history_page.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'dart:async';
@@ -66,7 +67,7 @@ class _AgentHistoryPageState extends State<AgentHistoryPage> {
     final saved = await _export.save(_range);
     if (mounted && _state.current && saved) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('历史记录已下载')));
+          .showSnackBar(SnackBar(content: Text(AppCopy.text('历史记录已下载'))));
     }
   }
 
@@ -77,17 +78,18 @@ class _AgentHistoryPageState extends State<AgentHistoryPage> {
         final style = MarkSixStyle.of(context);
         return Scaffold(
             backgroundColor: style.background,
-            appBar:
-                markSixAppBar(context, _personal ? '个人历史' : '团队历史', actions: [
-              if (!_personal && allowed)
-                TextButton.icon(
-                    onPressed:
-                        _state.loading || _export.busy ? null : _download,
-                    icon: _export.busy
-                        ? LoadingView.indicator(size: 20)
-                        : const Icon(Icons.download_rounded, size: 20),
-                    label: const Text('下载'))
-            ]),
+            appBar: markSixAppBar(context,
+                _personal ? AppCopy.text('个人历史') : AppCopy.text('团队历史'),
+                actions: [
+                  if (!_personal && allowed)
+                    TextButton.icon(
+                        onPressed:
+                            _state.loading || _export.busy ? null : _download,
+                        icon: _export.busy
+                            ? LoadingView.indicator(size: 20)
+                            : const Icon(Icons.download_rounded, size: 20),
+                        label: Text(AppCopy.text('下载')))
+                ]),
             body: SafeArea(
                 top: false,
                 child: Column(children: [
@@ -106,9 +108,10 @@ class _AgentHistoryPageState extends State<AgentHistoryPage> {
                           state: _state,
                           onRetry: () => _load(force: true),
                           child: !allowed
-                              ? const MarkSixEmpty(message: '你没有收益历史权限')
+                              ? MarkSixEmpty(message: AppCopy.text('你没有收益历史权限'))
                               : !_state.current
-                                  ? const MarkSixEmpty(message: '登录状态已变更')
+                                  ? MarkSixEmpty(
+                                      message: AppCopy.text('登录状态已变更'))
                                   : _state.loading && _state.data == null
                                       ? Center(child: LoadingView.indicator())
                                       : _state.error != null &&
@@ -132,7 +135,9 @@ class _AgentHistoryPageState extends State<AgentHistoryPage> {
                         icon: Icon(_personal
                             ? Icons.groups_2_outlined
                             : Icons.person_outline_rounded),
-                        label: Text(_personal ? '团队历史' : '个人历史')))));
+                        label: Text(_personal
+                            ? AppCopy.text('团队历史')
+                            : AppCopy.text('个人历史'))))));
       });
   Widget _body(BuildContext context) {
     final data = _state.data;
@@ -148,13 +153,14 @@ class _AgentHistoryPageState extends State<AgentHistoryPage> {
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               if (days.isEmpty) {
-                return const MarkSixEmpty(message: '所选日期暂无反水记录');
+                return MarkSixEmpty(message: AppCopy.text('所选日期暂无反水记录'));
               }
               final summary =
                   index == 0 ? markSixMap(data?['total']) : days[index - 1];
               return AgentSummaryCard(
-                  title:
-                      index == 0 ? '合计' : '${days[index - 1]['businessDate']}',
+                  title: index == 0
+                      ? AppCopy.text('合计')
+                      : '${days[index - 1]['businessDate']}',
                   subtitle: index == 0
                       ? '${_range.startApiValue} — ${_range.endApiValue}'
                       : null,

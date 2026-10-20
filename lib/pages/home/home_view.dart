@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:extended_image/extended_image.dart';
 import 'package:get/get.dart';
@@ -253,10 +254,10 @@ class _HomePageState extends State<HomePage> {
     }
     return switch (language) {
       'zh' => switch (tab) {
-          _MainTab.messages => '消息',
+          _MainTab.messages => AppCopy.text('消息'),
           _MainTab.groups => '群聊',
-          _MainTab.contacts => '通讯录',
-          _MainTab.wallet => '钱包',
+          _MainTab.contacts => AppCopy.text('通讯录'),
+          _MainTab.wallet => AppCopy.text('钱包'),
           _MainTab.me => '我的',
         },
       'ja' => switch (tab) {

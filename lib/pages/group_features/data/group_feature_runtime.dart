@@ -4,6 +4,7 @@ import '../../../core/controller/im_controller.dart';
 import '../../../core/im_callback.dart';
 import 'group_feature_api.dart';
 import 'group_feature_store.dart';
+import 'group_name_cache.dart';
 export 'group_feature_store.dart';
 
 /// One cache per login session, shared by every route. Transport switches keep
@@ -19,6 +20,7 @@ class GroupFeatureRuntime {
       _user = user;
       _token = token;
       _store = GroupFeatureStore(
+          nameCache: GroupNameCache(user),
           api: GroupFeatureApi(),
           sessionCurrent: () =>
               OpenIM.iMManager.userID == user && DataSp.chatToken == token,

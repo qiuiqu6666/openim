@@ -240,11 +240,11 @@ class _WalletHomeViewState extends State<WalletHomeView> {
                     child: WalletHomeAction(
                       key: const ValueKey('wallet-action-swap'),
                       label: i18n.t(
-                          zhHans: '划转',
-                          zhHant: '劃轉',
-                          en: 'Transfer',
-                          ja: '振替',
-                          ko: '이체'),
+                          zhHans: '兑换',
+                          zhHant: '兌換',
+                          en: 'Exchange',
+                          ja: '両替',
+                          ko: '교환'),
                       onTap: () => openWalletPage<void>(
                         context,
                         const WalletExchangeScreen(),

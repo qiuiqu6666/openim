@@ -48,18 +48,21 @@ class RegisterPasswordChecklist extends StatelessWidget {
   final bool showInvalid;
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-        constraints: const BoxConstraints(
-            minHeight: RegistrationReferenceTokens.ruleAreaMinHeight),
-        child: Wrap(spacing: 10, runSpacing: 4, children: [
-          _rule(context, authText('8 位以上', '8+ characters'),
-              RegisterPasswordRules.hasMinimumLength(password)),
-          _rule(context, authText('英文字母', 'Letters'),
-              RegisterPasswordRules.hasLetter(password)),
-          _rule(context, authText('数字', 'Numbers'),
-              RegisterPasswordRules.hasDigit(password)),
-        ]),
-      );
+  Widget build(BuildContext context) =>
+      password.isEmpty || RegisterPasswordRules.valid(password)
+          ? const SizedBox.shrink()
+          : ConstrainedBox(
+              constraints: const BoxConstraints(
+                  minHeight: RegistrationReferenceTokens.ruleAreaMinHeight),
+              child: Wrap(spacing: 10, runSpacing: 4, children: [
+                _rule(context, authText('8–24 位', '8–24 characters'),
+                    RegisterPasswordRules.hasValidLength(password)),
+                _rule(context, authText('英文字母', 'Letters'),
+                    RegisterPasswordRules.hasLetter(password)),
+                _rule(context, authText('数字', 'Numbers'),
+                    RegisterPasswordRules.hasDigit(password)),
+              ]),
+            );
 
   Widget _rule(BuildContext context, String text, bool ok) {
     final color = ok
@@ -97,16 +100,18 @@ class RegisterAgreement extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Align(
-        alignment: Alignment.centerLeft,
+        alignment: Alignment.center,
         child: Wrap(
+          alignment: WrapAlignment.center,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(authText('注册代表同意', 'By registering, you agree to'),
                 style: style),
             GestureDetector(
-              onTap: () => Navigator.of(context).push(AppMaterialPageRoute<void>(
-                  builder: (_) =>
-                      const LegalDocumentPage(kind: LegalDocumentKind.terms))),
+              onTap: () => Navigator.of(context).push(
+                  AppMaterialPageRoute<void>(
+                      builder: (_) => const LegalDocumentPage(
+                          kind: LegalDocumentKind.terms))),
               child: Padding(
                 padding: const EdgeInsets.only(left: 2),
                 child: Text(authText('《用户协议》', '《User Agreement》'),

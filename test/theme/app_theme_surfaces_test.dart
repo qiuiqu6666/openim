@@ -26,6 +26,7 @@ void main() {
             return Scaffold(
               body: Column(children: [
                 const CircularProgressIndicator(),
+                const LinearProgressIndicator(),
                 Checkbox(value: true, onChanged: (_) {}),
               ]),
             );
@@ -34,6 +35,11 @@ void main() {
       ));
       expect(_contrast(theme.progressIndicatorTheme.color!, theme.cardColor),
           greaterThanOrEqualTo(3));
+      expect(theme.progressIndicatorTheme.color, AppTokens.accent);
+      expect(
+          theme.progressIndicatorTheme.linearTrackColor,
+          AppTokens.accent
+              .withValues(alpha: brightness == Brightness.dark ? .2 : .1));
       final selected = {WidgetState.selected};
       expect(
           _contrast(theme.checkboxTheme.checkColor!.resolve(selected)!,

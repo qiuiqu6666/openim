@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -31,7 +32,7 @@ class TradePasswordPinCells extends StatelessWidget {
       label: paymentText(context, zh: '六位交易密码', en: 'Six-digit password'),
       value: paymentText(
         context,
-        zh: '已输入 $length 位，共 6 位',
+        zh: AppCopy.format('已输入 {#0} 位，共 6 位', [length]),
         en: '$length of 6 digits entered',
       ),
       liveRegion: true,

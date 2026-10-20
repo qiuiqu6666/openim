@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:convert';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -57,7 +58,9 @@ class FundClaimNotice {
     final who = claimerID == viewerID
         ? '你'
         : (name?.isNotEmpty == true ? name! : claimerID);
-    return senderID == viewerID ? '$who领取了你的红包' : '$who领取了红包';
+    return senderID == viewerID
+        ? AppCopy.format('{#0}领取了你的红包', [who])
+        : AppCopy.format('{#0}领取了红包', [who]);
   }
 }
 
@@ -88,7 +91,7 @@ class FundClaimNoticeSender {
               order.senderID.isNotEmpty ? order.senderID : messageSenderID,
         }),
         extension: '',
-        description: '领取了红包',
+        description: AppCopy.text('领取了红包'),
       );
       if (OpenIM.iMManager.userID != claimerID ||
           DataSp.userID != claimerID ||

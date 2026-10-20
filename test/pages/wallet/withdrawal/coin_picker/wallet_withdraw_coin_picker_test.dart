@@ -13,9 +13,9 @@ void main() {
     final repository = HomeTestRepository(data: withdrawWalletFixture());
     await pumpWalletWithdrawCoins(tester, repository: repository);
     expect(withdrawCoinRow('USDT'), findsOneWidget);
-    expect(withdrawCoinRow('TRX'), findsOneWidget);
+    expect(withdrawCoinRow('TRX'), findsNothing);
     expect(withdrawCoinRow('99'), findsOneWidget);
-    for (final code in ['USDT', 'TRX', '99']) {
+    for (final code in ['USDT', '99']) {
       expect(find.text(code), findsOneWidget);
       expect(withdrawCoinKey('all-$code'), findsNothing);
     }
@@ -77,7 +77,7 @@ void main() {
       expect(withdrawCoinKey('index-T'), findsNothing);
     }
     await searchWithdrawCoins(tester, 'tRoN');
-    expect(withdrawCoinRow('TRX', section: 'search'), findsOneWidget);
+    expect(withdrawCoinRow('TRX', section: 'search'), findsNothing);
     expect(withdrawCoinRow('USDT', section: 'search'), findsNothing);
     for (final query in ['平台币', 'Backend reward', '99']) {
       await searchWithdrawCoins(tester, query);
@@ -180,7 +180,7 @@ void main() {
 
   for (final entry in [
     (code: '99', currency: FundCurrency.bi99),
-    (code: 'TRX', currency: FundCurrency.trx),
+    (code: 'USDT', currency: FundCurrency.usdt),
   ]) {
     testWidgets(
         'friend ${entry.code} selection opens the selected transfer currency',

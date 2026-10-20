@@ -1,5 +1,7 @@
 import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart';
+import 'package:openim_common/localization.dart';
 import 'my_avatar_editor.dart';
+import '../settings/account_security/email/email_account_page.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/login/login_logic.dart';
@@ -27,8 +29,7 @@ class MyInfoLogic extends GetxController {
         attr: EditAttr.mobile,
       );
 
-  void editEmail() =>
-      AppNavigator.startEditMyInfo(attr: EditAttr.email, maxLength: 30);
+  void editEmail() => Get.to(() => const EmailAccountPage());
 
   void openPhotoSheet() => MyAvatarEditor.open(imLogic);
 
@@ -37,7 +38,11 @@ class MyInfoLogic extends GetxController {
     var isZh = appLocale!.languageCode.toLowerCase().contains("zh");
     DatePicker.showDatePicker(
       Get.context!,
-      locale: isZh ? LocaleType.zh : LocaleType.en,
+      locale: AppCopy.isTraditional(appLocale)
+          ? LocaleType.tw
+          : isZh
+              ? LocaleType.zh
+              : LocaleType.en,
       maxTime: DateTime.now(),
       currentTime: DateTime.fromMillisecondsSinceEpoch(
           imLogic.userInfo.value.birth ?? 0),

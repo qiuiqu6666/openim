@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../report_center/pages/report_center_page.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
@@ -170,14 +171,14 @@ class SangongManageHomePage extends StatelessWidget {
                 },
               ),
             SettingsCell(
-              title: '报表中心',
-              value: '汇总 / 用户 / 团队 / 账变 / 牌局',
+              title: AppCopy.text('报表中心'),
+              value: AppCopy.text('汇总 / 用户 / 团队 / 账变 / 牌局'),
               showDivider: true,
               onTap: () => SangongReportCenterPage.open(context),
             ),
             SettingsCell(
-              title: '全部用户',
-              value: '查看用户积分、返水与上级',
+              title: AppCopy.text('全部用户'),
+              value: AppCopy.text('查看用户积分、返水与上级'),
               showDivider: false,
               onTap: () => SangongAllUsersPage.open(context),
             ),

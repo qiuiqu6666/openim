@@ -1,4 +1,6 @@
 import 'dart:ui' as ui;
+import 'package:get/get.dart';
+import 'package:openim_common/localization.dart';
 import '../../data/group_feature_api.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
@@ -17,7 +19,8 @@ class AppI18n {
   final Locale locale;
   static AppI18n of(BuildContext context) =>
       AppI18n(Localizations.localeOf(context));
-  static AppI18n get current => AppI18n(ui.PlatformDispatcher.instance.locale);
+  static AppI18n get current =>
+      AppI18n(Get.locale ?? ui.PlatformDispatcher.instance.locale);
   String t(
       {required String zhHans,
       String? zhHant,
@@ -25,9 +28,8 @@ class AppI18n {
       String? ja,
       String? ko}) {
     if (locale.languageCode == 'zh') {
-      return locale.scriptCode == 'Hant' ||
-              ['TW', 'HK', 'MO'].contains(locale.countryCode)
-          ? zhHant ?? zhHans
+      return AppCopy.isTraditional(locale)
+          ? zhHant ?? AppCopy.text(zhHans, locale: locale)
           : zhHans;
     }
     return en;
@@ -92,8 +94,10 @@ class ToastUtils {
 class DioErrorMessage {
   static String sanitizeUserText(String? value, {required String fallback}) =>
       value?.trim().isNotEmpty == true ? value!.trim() : fallback;
-  static String loadFailed() => '加载失败，请重试';
-  static String forApp(Object error) {
+  static String loadFailed() => AppCopy.text('加载失败，请重试');
+  static String forApp(Object error) => AppCopy.text(_forApp(error));
+
+  static String _forApp(Object error) {
     if (error is GroupFeatureException) return error.message;
     if (error is DioException) {
       if (error.error is GroupFeatureException) {
@@ -109,19 +113,23 @@ class DioErrorMessage {
           if (value is String && value.trim().isNotEmpty) return value.trim();
         }
       }
-      if (error.response?.statusCode == 404) return '三公接口暂不可用，请稍后重试';
-      if (error.response?.statusCode == 403) return '没有此操作权限';
-      if (error.type == DioExceptionType.cancel) return '账号或群上下文已变化，请重新进入';
+      if (error.response?.statusCode == 404)
+        return AppCopy.text('三公接口暂不可用，请稍后重试');
+      if (error.response?.statusCode == 403) return AppCopy.text('没有此操作权限');
+      if (error.type == DioExceptionType.cancel)
+        return AppCopy.text('账号或群上下文已变化，请重新进入');
       if (error.type == DioExceptionType.connectionTimeout ||
           error.type == DioExceptionType.receiveTimeout ||
           error.type == DioExceptionType.connectionError) {
-        return '网络连接失败，请重试';
+        return AppCopy.text('网络连接失败，请重试');
       }
-      return error.error is String ? error.error.toString() : '请求失败，请重试';
+      return error.error is String
+          ? error.error.toString()
+          : AppCopy.text('请求失败，请重试');
     }
     if (error is StateError) return error.message.toString();
-    if (error is FormatException) return '返回数据格式无效，请重试';
-    return '请求失败，请重试';
+    if (error is FormatException) return AppCopy.text('返回数据格式无效，请重试');
+    return AppCopy.text('请求失败，请重试');
   }
 }
 

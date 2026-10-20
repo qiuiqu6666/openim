@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -44,7 +45,7 @@ class ConnectionHealthTitle extends StatelessWidget {
           busyLabel: StrRes.connecting,
           failed: latencyMs == null && failed,
           failureLabel: api == false
-              ? (chinese ? '服务连接异常' : 'Service unavailable')
+              ? (chinese ? AppCopy.text('服务连接异常') : 'Service unavailable')
               : StrRes.connectionFailed);
       final latency = latencyMs;
       if (latency == null) return heading;

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -26,7 +27,8 @@ Future<void> openWalletPaymentPassword(BuildContext context,
       activityPage: 'pay_password',
     );
   } catch (_) {
-    if (context.mounted) WalletTip.show(context, '无法打开支付密码设置，请重新登录后重试');
+    if (context.mounted)
+      WalletTip.show(context, AppCopy.text('无法打开支付密码设置，请重新登录后重试'));
   }
 }
 
@@ -39,7 +41,7 @@ Future<bool> ensureWalletPaymentPassword(BuildContext context,
   var hasPassword = await settings.hasTradePassword();
   if (!context.mounted || !isActive()) return false;
   if (!hasPassword) {
-    WalletTip.show(context, '请先设置支付密码');
+    WalletTip.show(context, AppCopy.text('请先设置支付密码'));
     await openWalletPaymentPassword(context, service: settings);
     if (!context.mounted || !isActive()) return false;
     hasPassword = await settings.hasTradePassword();

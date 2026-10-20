@@ -1,0 +1,22 @@
+{
+  "internal/rpc/msg/verify.go": {
+    "baseline_sha256": "7e5a50c2a243204a3ac10ecacc81fb01b959981a775fb12d2ee73becef09111e",
+    "result_sha256": "275132b6b160979bb28e179adff978c7539215f69a7c9dfd4ef3057052989c2e"
+  },
+  "internal/rpc/relation/friend.go": {
+    "baseline_sha256": "430c281e5f379876810393a3c923f17cd34c0dff190d7da9af2780e050dc23a2",
+    "result_sha256": "0b3fe7fe95417de57c410a7df08d52ed9339aefbb58cc574a503941441be58d8"
+  },
+  "internal/rpc/relation/blacklist_policy_test.go": {
+    "baseline_sha256": null,
+    "result_sha256": "a717a8c89e6dd607b4bc14689d27e393b40087fa0610895c739972975c76ea02"
+  },
+  "pkg/relationshippolicy/policy.go": {
+    "baseline_sha256": null,
+    "result_sha256": "462a92d49046d3d6f99126752beff62b6d5f3bf5dc6d333af70d85d8f7c96ab9"
+  },
+  "pkg/relationshippolicy/policy_test.go": {
+    "baseline_sha256": null,
+    "result_sha256": "ca14091cb1a0b541727dc2da47871809bb1fe8ac1ec7094b407e998777fca3b6"
+  }
+}

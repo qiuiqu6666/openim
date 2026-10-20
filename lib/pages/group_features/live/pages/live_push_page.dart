@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -120,8 +121,8 @@ class _LivePushPageState extends State<LivePushPage>
       _info = null;
       if (!_permissions.current || !featureContext.capabilities.live.canPush) {
         _error = StateError(featureContext.reloadCapabilities == null
-            ? '操作权限已变化，请重新打开页面'
-            : '推流权限已变化，正在校准最新权限');
+            ? AppCopy.text('操作权限已变化，请重新打开页面')
+            : AppCopy.text('推流权限已变化，正在校准最新权限'));
       }
       if (_foreground && !_busy && _permissions.current) {
         if (_loading) {
@@ -250,7 +251,7 @@ class _LivePushPageState extends State<LivePushPage>
     await Clipboard.setData(ClipboardData(text: _info!.combinedURL));
     if (!mounted) return;
     if (current) {
-      IMViews.showToast('推流地址已复制');
+      IMViews.showToast(AppCopy.text('推流地址已复制'));
     }
   }
 
@@ -259,10 +260,12 @@ class _LivePushPageState extends State<LivePushPage>
     final revoke = _session.status != LiveStatus.live;
     final ok = await showAppConfirm(context,
         barrierDismissible: true,
-        title: revoke ? '撤销直播' : '结束直播',
-        message: revoke ? '确认撤销这场直播吗？' : '确认结束直播吗？结束后请在 OBS 中停止推流。',
+        title: revoke ? AppCopy.text('撤销直播') : AppCopy.text('结束直播'),
+        message: revoke
+            ? AppCopy.text('确认撤销这场直播吗？')
+            : AppCopy.text('确认结束直播吗？结束后请在 OBS 中停止推流。'),
         cancelText: '取消',
-        confirmText: '确认',
+        confirmText: AppCopy.text('确认'),
         destructive: true);
     // A live update can change the action while its confirmation is open.
     // Require a fresh confirmation for the new action instead of reusing it.
@@ -349,7 +352,7 @@ class _LivePushPageState extends State<LivePushPage>
   Widget build(BuildContext context) => LiveSetupShell(
           actions: [
             IconButton(
-                tooltip: '刷新状态',
+                tooltip: AppCopy.text('刷新状态'),
                 icon: const Icon(Icons.refresh_rounded),
                 onPressed: !_busy && !_loading && sessionCurrent && _foreground
                     ? () => _load(forcePermissions: true)
@@ -359,7 +362,9 @@ class _LivePushPageState extends State<LivePushPage>
                   !_retired &&
                   featureContext.capabilities.live.canManage
               ? LivePrimaryButton(
-                  label: _session.status == LiveStatus.live ? '结束直播' : '撤销直播',
+                  label: _session.status == LiveStatus.live
+                      ? AppCopy.text('结束直播')
+                      : AppCopy.text('撤销直播'),
                   busy: _busy,
                   onPressed: !_busy && !_loading && _canEnd ? _end : null)
               : null,
@@ -372,7 +377,7 @@ class _LivePushPageState extends State<LivePushPage>
                     width: double.infinity, fit: BoxFit.contain)),
             const SizedBox(height: 80),
             if (!sessionCurrent)
-              Center(child: const Text('登录状态已变化，请重新进入'))
+              Center(child: Text(AppCopy.text('登录状态已变化，请重新进入')))
             else if (_loading && _info == null)
               const Center(child: CircularProgressIndicator())
             else if (_error != null && _info == null)
@@ -397,15 +402,15 @@ class _LivePushPageState extends State<LivePushPage>
       child: Column(children: [
         const Icon(Icons.schedule, size: 40, color: LiveStyle.blue),
         const SizedBox(height: 12),
-        const Text('直播已预约',
+        Text(AppCopy.text('直播已预约'),
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
         const SizedBox(height: 12),
         Text(_session.scheduledAt == null
-            ? '等待开播'
+            ? AppCopy.text('等待开播')
             : DateFormat('yyyy-MM-dd HH:mm')
                 .format(_session.scheduledAt!.toLocal())),
         const SizedBox(height: 12),
-        const Text('开播后可获取推流地址，请刷新状态。', textAlign: TextAlign.center)
+        Text(AppCopy.text('开播后可获取推流地址，请刷新状态。'), textAlign: TextAlign.center)
       ]));
   Widget _card() => Container(
       padding: const EdgeInsets.all(16),
@@ -425,7 +430,7 @@ class _LivePushPageState extends State<LivePushPage>
           const Icon(Icons.settings_outlined, color: LiveStyle.blue),
           const SizedBox(width: 8),
           Expanded(
-              child: Text('直播设置',
+              child: Text(AppCopy.text('直播设置'),
                   style: TextStyle(
                       color: LiveStyle.text(context),
                       fontSize: 16,
@@ -450,7 +455,10 @@ class _LivePushPageState extends State<LivePushPage>
                               ? LiveStyle.field(context)
                               : const Color(0xFFF4F7FB),
                           borderRadius: BorderRadius.circular(26)),
-                      child: Text(expired ? '推流地址已过期，请刷新' : _info!.combinedURL,
+                      child: Text(
+                          expired
+                              ? AppCopy.text('推流地址已过期，请刷新')
+                              : _info!.combinedURL,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -462,14 +470,14 @@ class _LivePushPageState extends State<LivePushPage>
                   child: InkWell(
                       onTap: expired ? null : _copy,
                       customBorder: const CircleBorder(),
-                      child: const SizedBox.square(
+                      child: SizedBox.square(
                           dimension: 52,
                           child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.copy_rounded,
                                     size: 16, color: LiveStyle.blue),
-                                Text('复制',
+                                Text(AppCopy.text('复制'),
                                     style: TextStyle(
                                         fontSize: 10,
                                         height: 1.1,
@@ -479,13 +487,13 @@ class _LivePushPageState extends State<LivePushPage>
             ])),
         const SizedBox(height: 16),
         if (expired)
-          const Text('地址已过期，请刷新后重新复制到推流软件。',
+          Text(AppCopy.text('地址已过期，请刷新后重新复制到推流软件。'),
               style: TextStyle(color: AppTokens.danger))
         else
           LayoutBuilder(builder: (context, box) {
             final qr =
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _label(Icons.widgets_outlined, '二维码'),
+              _label(Icons.widgets_outlined, AppCopy.text('二维码')),
               const SizedBox(height: 10),
               Container(
                   padding: const EdgeInsets.all(16),
@@ -501,12 +509,12 @@ class _LivePushPageState extends State<LivePushPage>
             final tips = Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _tipBox('使用芯象扫描二维码\n快速填写推流地址',
+                  _tipBox(AppCopy.text('使用芯象扫描二维码\n快速填写推流地址'),
                       Icons.center_focus_strong_outlined),
                   const SizedBox(height: 12),
                   _tipBox(
-                      '温馨提示\n\n1. 请在其他直播应用中填写以上推流地址开始直播\n\n'
-                      '2. 支持 OBS 等主流直播软件\n\n3. 直播过程请保持网络稳定',
+                      AppCopy.text(
+                          '温馨提示\n\n1. 请在其他直播应用中填写以上推流地址开始直播\n\n2. 支持 OBS 等主流直播软件\n\n3. 直播过程请保持网络稳定'),
                       Icons.lightbulb_outline_rounded)
                 ]);
             if (box.maxWidth < 310 ||

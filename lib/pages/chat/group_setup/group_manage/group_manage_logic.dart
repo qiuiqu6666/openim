@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'group_member_permissions_page.dart';
@@ -119,7 +120,7 @@ class GroupManageLogic extends GetxController {
     } catch (_) {
       if (current()) {
         await groupSetupLogic.getGroupInfo();
-        if (current()) IMViews.showToast('群成员隐私设置未完成，请重试');
+        if (current()) IMViews.showToast(AppCopy.text('群成员隐私设置未完成，请重试'));
       }
     } finally {
       if (!_closed && !isClosed) busy.value = false;

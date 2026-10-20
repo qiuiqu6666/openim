@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 
 import 'package:azlistview/azlistview.dart';
@@ -111,7 +112,7 @@ class ContactsPage extends StatelessWidget {
       padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
       data: rows,
       itemCount: rows.length,
-      physics: const BouncingScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
       itemBuilder: (_, index) {
         final row = rows[index];
         if (row.isFooter) return _buildFooter(context);
@@ -271,9 +272,9 @@ class ContactsPage extends StatelessWidget {
   Widget _buildFooter(BuildContext context) {
     final chinese = Localizations.localeOf(context).languageCode == 'zh';
     final label = logic.friends.isEmpty
-        ? (chinese ? '无联系人' : 'No contacts')
+        ? (chinese ? AppCopy.text('无联系人') : 'No contacts')
         : (chinese
-            ? '${logic.friends.length}位联系人'
+            ? AppCopy.format('{#0}位联系人', [logic.friends.length])
             : '${logic.friends.length} contacts');
     return Padding(
       padding: EdgeInsets.fromLTRB(16.w, 16.h, 32.w, 24.h),
@@ -286,7 +287,7 @@ class ContactsPage extends StatelessWidget {
                   ? TextButton(
                       onPressed: logic.loadFriends,
                       child: Text(chinese
-                          ? '联系人加载失败，点击重试'
+                          ? AppCopy.text('联系人加载失败，点击重试')
                           : 'Could not load contacts. Retry'),
                     )
                   : Text(label, style: Styles.ts_8E9AB0_13sp)),

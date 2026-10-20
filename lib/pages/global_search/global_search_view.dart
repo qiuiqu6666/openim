@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../chat/history_search/widgets/chat_history_search_bar.dart';
 
 import 'package:flutter/material.dart';
@@ -327,7 +328,9 @@ class GlobalSearchPage extends StatelessWidget {
                     const SizedBox(height: 10),
                     Text(
                         zh
-                            ? (noResults ? '试试其他关键词' : '输入关键词，快速找到你想要的内容')
+                            ? (noResults
+                                ? AppCopy.text('试试其他关键词')
+                                : AppCopy.text('输入关键词，快速找到你想要的内容'))
                             : (noResults
                                 ? 'Try another keyword'
                                 : 'Enter a keyword to find what you need'),

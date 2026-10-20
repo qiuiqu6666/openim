@@ -18,15 +18,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _NavigationProbe extends ChatHistoryMessageNavigation {
   final calls = <({String conversationID, Message message})>[];
+  Completer<bool>? pending;
 
   @override
   Future<bool> open(BuildContext context,
       {required String conversationID,
       required Message message,
-      required bool Function() isEntryCurrent}) async {
+      required bool Function() isEntryCurrent,
+      bool? preserveEntryRoute}) async {
     expect(isEntryCurrent(), isTrue);
     calls.add((conversationID: conversationID, message: message));
-    return true;
+    return pending == null ? true : await pending!.future;
   }
 }
 
@@ -163,6 +165,36 @@ void main() {
 
   final more = find.byKey(const ValueKey('chat-history-more'));
   final retry = find.byKey(const ValueKey('chat-history-retry'));
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+        'message click shows spinner and clears after failure in $brightness',
+        (tester) async {
+      final source = _SearchSource((_) async => [_message('opening-match')]);
+      await mount(tester, source, brightness: brightness);
+      messageNavigation.pending = Completer<bool>();
+      final row =
+          find.byKey(const ValueKey('chat-history-result-opening-match'));
+      await tester.tap(row);
+      await tester.pump();
+      final spinner =
+          find.byKey(const ValueKey('chat-history-opening-spinner'));
+      expect(spinner, findsOneWidget);
+      expect(tester.widget<CircularProgressIndicator>(spinner).value, isNull);
+      await tester.tap(row, warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(messageNavigation.calls, hasLength(1));
+      messageNavigation.pending!.complete(false);
+      await tester.pumpAndSettle();
+      expect(spinner, findsNothing);
+      messageNavigation.pending = null;
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      expect(messageNavigation.calls, hasLength(2));
+      expect(spinner, findsNothing);
+      await unmount(tester);
+    });
+  }
 
   for (final brightness in Brightness.values) {
     testWidgets(

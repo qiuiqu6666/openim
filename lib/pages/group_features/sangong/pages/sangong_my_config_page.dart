@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
@@ -492,7 +493,7 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
       if (!mounted || !_pageActive || !_runtime.isCurrent) return;
       _pageScope = _captureScope();
       _scopeInvalid = false;
-      ToastUtils.toast('已保存', context: context);
+      ToastUtils.toast(AppCopy.text('已保存'), context: context);
       if (ModalRoute.of(context)?.isCurrent == true) {
         Navigator.of(context).pop(config);
       }
@@ -548,8 +549,8 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
   @override
   Widget build(BuildContext context) {
     if (!_matches(_pageScope)) {
-      return const Scaffold(
-        body: Center(child: Text('当前游戏权限已变化，请重新进入')),
+      return Scaffold(
+        body: Center(child: Text(AppCopy.text('当前游戏权限已变化，请重新进入'))),
       );
     }
     final i18n = AppI18n.of(context);
@@ -731,8 +732,8 @@ class _SangongMyConfigPageState extends State<SangongMyConfigPage> {
         if (_canEdit && _config.configured)
           SettingsGroup(children: [
             SettingsCell(
-                title: '代理群绑定',
-                value: '独立代理群',
+                title: AppCopy.text('代理群绑定'),
+                value: AppCopy.text('独立代理群'),
                 showDivider: false,
                 onTap: () => SangongAgentGroupsPage.open(context))
           ]),

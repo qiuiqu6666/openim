@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -40,7 +41,7 @@ class SelectContactsPage extends StatelessWidget {
         title: logic.action == SelAction.recommend
             ? StrRes.recommendToFriend
             : Localizations.localeOf(context).languageCode == 'zh'
-                ? '选择多个会话'
+                ? AppCopy.text('选择多个会话')
                 : 'Select conversations',
       ),
       backgroundColor: Styles.c_F8F9FA,
@@ -110,7 +111,7 @@ class SelectContactsPage extends StatelessWidget {
                             : logic.reloadRecentConversations,
                         child: Text(
                             Localizations.localeOf(context).languageCode == 'zh'
-                                ? '会话加载失败，点击重试'
+                                ? AppCopy.text('会话加载失败，点击重试')
                                 : 'Could not load chats. Retry'),
                       )),
                     ),
@@ -255,7 +256,7 @@ class SelectContactsPage extends StatelessWidget {
                                     text: Localizations.localeOf(context)
                                                 .languageCode ==
                                             'zh'
-                                        ? '仅接收通知 · '
+                                        ? AppCopy.text('仅接收通知 · ')
                                         : 'Notifications only · '),
                               TextSpan(text: preview.unread),
                               TextSpan(

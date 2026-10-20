@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../../../services/fund_api.dart';
 import '../exchange/data/wallet_swap_quote.dart';
 import '../record/journals/wallet_journal_page.dart';
@@ -34,7 +35,8 @@ class WalletFundApi {
       (await fetchBalanceSnapshot()).balances;
 
   Future<WalletBalanceSnapshot> fetchBalanceSnapshot() async {
-    final data = await _api.requestData('/chat/fund/balances', method: 'GET');
+    final data = await _api.requestData('/chat/fund/balances',
+        method: 'GET', queryParameters: const {'currencyVisibility': '1'});
     final values = data['balances'];
     if (values is! List) throw const FormatException('Invalid wallet balances');
     final balances = values.map((value) {
@@ -42,10 +44,9 @@ class WalletFundApi {
       return FundBalance.fromJson(Map<String, dynamic>.from(value),
           allowNegativeAvailable: true);
     }).toList(growable: false);
-    if (balances.length != FundCurrency.values.length ||
-        balances.map((balance) => balance.currency).toSet().length !=
-            FundCurrency.values.length) {
-      throw const FormatException('Incomplete wallet balances');
+    if (balances.map((balance) => balance.currency).toSet().length !=
+        balances.length) {
+      throw const FormatException('Duplicate wallet balances');
     }
     final daily = data['dailyChange'];
     final ready = daily is Map && daily['status'] == 'ready';
@@ -323,6 +324,10 @@ class WalletFundApi {
 
 /// Wallet-safe user messages without changing already integrated fund pages.
 String walletFundErrorMessage(Object error) {
+  return AppCopy.text(_walletFundErrorMessage(error));
+}
+
+String _walletFundErrorMessage(Object error) {
   if (error is FormatException) {
     return RegExp(r'[\u3400-\u9FFF]').hasMatch(error.message)
         ? error.message

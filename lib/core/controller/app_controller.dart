@@ -483,19 +483,10 @@ class AppController extends GetxController with UpgradeManger {
     super.onClose();
   }
 
-  Locale? getLocale() {
-    var local = Get.locale;
-    var index = DataSp.getLanguage() ?? 0;
-    switch (index) {
-      case 1:
-        local = const Locale('zh', 'CN');
-        break;
-      case 2:
-        local = const Locale('en', 'US');
-        break;
-    }
-    return local;
-  }
+  Locale? getLocale() => TranslationService.localeForSetting(
+        DataSp.getLanguage() ?? 0,
+        Get.deviceLocale,
+      );
 
   @override
   void onReady() {

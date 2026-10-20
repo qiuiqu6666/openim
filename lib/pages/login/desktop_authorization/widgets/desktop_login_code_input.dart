@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:openim_common/localization.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,7 +26,7 @@ class DesktopLoginCodeInput extends StatefulWidget {
 class _DesktopLoginCodeInputState extends State<DesktopLoginCodeInput> {
   final _focus = FocusNode();
   static const _length = 6;
-  static const _label = '输入电脑上的六位数字';
+  static String get _label => AppCopy.text('输入电脑上的六位数字');
 
   @override
   void dispose() {

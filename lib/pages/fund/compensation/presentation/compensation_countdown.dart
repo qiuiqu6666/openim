@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'compensation_artwork.dart';
 import 'compensation_tokens.dart';
@@ -17,9 +18,9 @@ class CompensationCountdown extends StatelessWidget {
       safe.inMinutes % 60,
       safe.inSeconds % 60
     ];
-    const units = ['天', '时', '分', '秒'];
+    final units = ['天', AppCopy.text('时'), '分', '秒'];
     final cs = Theme.of(context).colorScheme;
-    final heading = expired ? '活动已结束' : '活动剩余时间';
+    final heading = expired ? AppCopy.text('活动已结束') : AppCopy.text('活动剩余时间');
     final adaptive = Theme.of(context).brightness == Brightness.dark ||
         MediaQuery.textScalerOf(context).scale(CompensationTokens.body) >
             CompensationTokens.body * 1.3 ||
@@ -35,8 +36,8 @@ class CompensationCountdown extends StatelessWidget {
       child: Column(children: [
         if (!adaptive)
           Semantics(
-              label:
-                  '$heading，${values[0]}天${values[1]}小时${values[2]}分${values[3]}秒',
+              label: AppCopy.format('{#0}，{#1}天{#2}小时{#3}分{#4}秒',
+                  [heading, values[0], values[1], values[2], values[3]]),
               excludeSemantics: true,
               child: LayoutBuilder(
                   builder: (context, box) => Stack(children: [
@@ -95,8 +96,8 @@ class CompensationCountdown extends StatelessWidget {
                 ]),
                 const SizedBox(height: CompensationTokens.space),
                 Semantics(
-                    label:
-                        '${values[0]}天${values[1]}小时${values[2]}分${values[3]}秒',
+                    label: AppCopy.format('{#0}天{#1}小时{#2}分{#3}秒',
+                        [values[0], values[1], values[2], values[3]]),
                     excludeSemantics: true,
                     child: Wrap(
                         alignment: WrapAlignment.center,

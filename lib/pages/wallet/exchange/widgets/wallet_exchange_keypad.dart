@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -53,9 +54,9 @@ class WalletExchangeKeypad extends StatelessWidget {
             ? 'delete'
             : value;
     final label = value == '.'
-        ? '小数点'
+        ? AppCopy.text('小数点')
         : value == 'del'
-            ? '删除一位'
+            ? AppCopy.text('删除一位')
             : value;
     void activate() {
       HapticFeedback.selectionClick();

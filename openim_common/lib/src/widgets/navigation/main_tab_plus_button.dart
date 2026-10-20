@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Plus action adapted from 99chat's home_page.dart (Apache License 2.0).
 // Source: https://github.com/qiuiqu6666/99chat
 import 'package:flutter/material.dart';
@@ -27,7 +28,7 @@ class MainTabPlusButton extends StatelessWidget {
         (MediaQuery.maybeDisableAnimationsOf(context) ?? false);
     return IconButton(
       key: buttonKey,
-      tooltip: zh ? '添加' : 'Add',
+      tooltip: zh ? AppCopy.text('添加') : 'Add',
       onPressed: onPressed,
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.standard,

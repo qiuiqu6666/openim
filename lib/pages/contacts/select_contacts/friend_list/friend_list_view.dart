@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 
 import 'package:azlistview/azlistview.dart';
@@ -346,7 +347,7 @@ class _SelectContactsFromFriendsPageState
                         if (readOnly)
                           Text(
                             Localizations.localeOf(context).languageCode == 'zh'
-                                ? '仅接收通知'
+                                ? AppCopy.text('仅接收通知')
                                 : 'Notifications only',
                             style:
                                 ContactCardPickerTokens.subtitleStyle(context),

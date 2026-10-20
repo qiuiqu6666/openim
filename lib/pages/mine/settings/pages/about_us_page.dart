@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../../../../services/platform_config_service.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -180,7 +181,7 @@ class _AboutUsPageState extends State<AboutUsPage> {
                     ? settingsText(context, zh: '专业版', en: 'Pro')
                     : settingsText(
                         context,
-                        zh: '专业版 v$_version',
+                        zh: AppCopy.format('专业版 v{#0}', [_version]),
                         en: 'Pro v$_version',
                       ),
                 style: TextStyle(color: secondary, fontSize: 15),

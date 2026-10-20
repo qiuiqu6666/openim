@@ -1,3 +1,4 @@
+import 'package:openim/services/fund_currency_visibility/fund_currency_visibility.dart';
 import '../../data/wallet_fund_api.dart';
 
 /// Searchable labels for currencies explicitly enabled by the deposit endpoint.
@@ -23,7 +24,7 @@ class WalletDepositCoin {
 
   static List<WalletDepositCoin> fromAddress(WalletDepositAddress address) => [
         for (final currency in address.currencies)
-          if (currency != FundCurrency.bi99)
+          if (currency != FundCurrency.bi99 && isFundCurrencyVisible(currency))
             WalletDepositCoin(
               currency: currency,
               name: currency == FundCurrency.usdt ? 'Tether' : 'TRON',

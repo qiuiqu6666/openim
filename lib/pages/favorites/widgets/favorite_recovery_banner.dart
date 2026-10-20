@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -87,8 +88,9 @@ class _FavoriteRecoveryBannerState extends State<FavoriteRecoveryBanner> {
                                         if (pending > 0)
                                           Text(
                                               settingsText(context,
-                                                  zh:
-                                                      '$pending 条收藏操作待确认，原内容已保留',
+                                                  zh: AppCopy.format(
+                                                      '{#0} 条收藏操作待确认，原内容已保留',
+                                                      [pending]),
                                                   en:
                                                       '$pending favorite operations need confirmation. Original contents are kept.'),
                                               style: TextStyle(

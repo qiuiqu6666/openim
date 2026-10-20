@@ -22,7 +22,8 @@ class _MentionSearchTransport implements HttpClientAdapter {
   @override
   Future<ResponseBody> fetch(RequestOptions options,
       Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
-    expect(options.uri.toString(), Urls.searchUserFullInfo);
+    expect(options.uri.toString(),
+        anyOf(Urls.searchUserFullInfo, Urls.getUsersFullInfo));
     requests.add(options);
     return ResponseBody.fromString(
       jsonEncode({
@@ -42,6 +43,7 @@ class _MentionSearchTransport implements HttpClientAdapter {
 
 class _MentionNavigationFixture {
   final usersOpened = <Map<String, dynamic>>[];
+  final verificationsOpened = <Map<String, dynamic>>[];
   final groupsOpened = <Map<String, dynamic>>[];
   final nativeCalls = <MethodCall>[];
   List<Map<String, dynamic>> groups = [];
@@ -58,6 +60,8 @@ class _MentionNavigationFixture {
   Future<dynamic> nativeCall(MethodCall call) async {
     nativeCalls.add(call);
     switch (call.method) {
+      case 'getBlacklist':
+        return '[]';
       case 'getGroupsInfo':
       case 'searchGroups':
         return jsonEncode(groups);
@@ -77,6 +81,14 @@ class _MentionNavigationFixture {
         builder: EasyLoading.init(),
         home: const Scaffold(body: Text('Chat')),
         getPages: [
+          GetPage<dynamic>(
+            name: AppRoutes.sendVerificationApplication,
+            page: () {
+              verificationsOpened
+                  .add(Map<String, dynamic>.from(Get.arguments as Map));
+              return const Scaffold(body: Text('Friend verification'));
+            },
+          ),
           GetPage<dynamic>(
             name: AppRoutes.myProfile,
             page: () => const Scaffold(body: Text('My profile')),
@@ -114,6 +126,34 @@ void main() {
   late Dio previousDio;
   late _MentionSearchTransport transport;
   late _MentionNavigationFixture fixture;
+
+  testWidgets('chat verification opens the current peer directly and returns',
+      (tester) async {
+    transport.users = [
+      {'userID': 'peer', 'nickname': 'Peer', 'account': 'abcdefgh12'}
+    ];
+    await fixture.mount(tester);
+    await tester.runAsync(() async {
+      fixture.navigation.sendFriendVerification(
+        userID: 'peer',
+        nickname: 'Chat name',
+        faceURL: 'peer-avatar',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('Friend verification'), findsOneWidget);
+    final args = fixture.verificationsOpened.single;
+    expect(args['userID'], 'peer');
+    expect(args['targetName'], 'Peer');
+    expect(args['targetAvatarURL'], 'peer-avatar');
+    expect(args['addSource'], FriendAddSource.account);
+    expect(args['friendAddFields'], {'account': 'abcdefgh12'});
+    expect(fixture.usersOpened, isEmpty);
+    Get.back<void>();
+    await tester.pumpAndSettle();
+    expect(find.text('Chat'), findsOneWidget);
+  });
 
   setUp(() async {
     Get.testMode = true;

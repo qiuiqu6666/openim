@@ -379,6 +379,30 @@ Future<void> _changePaymentCurrency(
 }
 
 void main() {
+  for (final packet in [false, true]) {
+    testWidgets('TRX hidden in form and payment picker packet=$packet',
+        (tester) async {
+      final api = _Api();
+      await _open(tester, api, packet: packet);
+      await tester.tap(find.byKey(const ValueKey('fund-currency')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('fund-pay-method-TRX')), findsNothing);
+      expect(
+          find.byKey(const ValueKey('fund-pay-method-USDT')), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('fund-pay-method-BI99')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('fund-pay-method-close')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('fund-amount')), '1');
+      await _requestPin(tester);
+      await tester.tap(find.byKey(const ValueKey('fund-pay-change-currency')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('fund-pay-method-TRX')), findsNothing);
+      expect(
+          find.byKey(const ValueKey('fund-pay-method-USDT')), findsOneWidget);
+    });
+  }
+
   for (final packet in [true, false]) {
     testWidgets('confirmed card is published before returning, packet=$packet',
         (tester) async {
@@ -572,7 +596,7 @@ void main() {
     testWidgets(
         '99bi default ignores saved preference and reaches payment packet=$packet',
         (tester) async {
-      await _preferences().save(FundCurrency.trx);
+      await _preferences().save(FundCurrency.usdt);
       final api = _Api();
       FundOrder? returned;
       await _open(tester, api,
@@ -615,10 +639,10 @@ void main() {
     await _open(tester, api);
     await tester.enterText(find.byKey(const ValueKey('fund-amount')), '1');
     await _requestPin(tester);
-    await _changePaymentCurrency(tester, FundCurrency.trx);
+    await _changePaymentCurrency(tester, FundCurrency.usdt);
     await tester.tap(find.byKey(const ValueKey('fund-cancel-pay')));
     await tester.pumpAndSettle();
-    expect(await _preferences().read(), FundCurrency.trx);
+    expect(await _preferences().read(), FundCurrency.usdt);
     expect(api.ids, isEmpty);
     await _open(tester, api, packet: true, groupID: 'group-1');
     expect(find.text('100.00 元'), findsOneWidget);
@@ -630,7 +654,7 @@ void main() {
   for (final inPayment in [false, true]) {
     testWidgets('cancelled picker preserves default inPayment=$inPayment',
         (tester) async {
-      await _preferences().save(FundCurrency.trx);
+      await _preferences().save(FundCurrency.usdt);
       final api = _Api();
       await _open(tester, api);
       await tester.enterText(find.byKey(const ValueKey('fund-amount')), '1');
@@ -641,7 +665,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('fund-pay-method-BI99')));
       await tester.tap(find.byKey(const ValueKey('fund-pay-method-close')));
       await tester.pumpAndSettle();
-      expect(await _preferences().read(), FundCurrency.trx);
+      expect(await _preferences().read(), FundCurrency.usdt);
       await _open(tester, api);
       await tester.enterText(find.byKey(const ValueKey('fund-amount')), '1');
       await _pay(tester);
@@ -660,7 +684,7 @@ void main() {
       await tester.tap(find.byKey(
           ValueKey(inPayment ? 'fund-pay-change-currency' : 'fund-currency')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('fund-pay-method-TRX')));
+      await tester.tap(find.byKey(const ValueKey('fund-pay-method-USDT')));
       await tester.tap(find.byKey(const ValueKey('fund-pay-method-confirm')));
       await tester.pumpAndSettle();
       expect(find.text('无法保存支付币种，请重试'), findsWidgets);
@@ -694,14 +718,14 @@ void main() {
   });
 
   testWidgets('another account defaults independently', (tester) async {
-    await _preferences().save(FundCurrency.trx);
+    await _preferences().save(FundCurrency.usdt);
     final api = _Api();
     await _open(tester, api, currentUserID: 'another-account');
     await tester.enterText(find.byKey(const ValueKey('fund-amount')), '1');
     await _pay(tester);
     expect(api.currencies, [FundCurrency.bi99]);
     expect(await _preferences(account: 'another-account').read(), isNull);
-    expect(await _preferences().read(), FundCurrency.trx);
+    expect(await _preferences().read(), FundCurrency.usdt);
   });
 
   testWidgets('submission waits for confirmed currency persistence',
@@ -714,7 +738,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('fund-currency')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('fund-pay-method-TRX')));
+    await tester.tap(find.byKey(const ValueKey('fund-pay-method-USDT')));
     await tester.tap(find.byKey(const ValueKey('fund-pay-method-confirm')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('fund-submit')),
@@ -725,15 +749,15 @@ void main() {
     preferences.release.complete();
     await tester.pumpAndSettle();
     await _pay(tester);
-    expect(api.currencies, [FundCurrency.trx]);
-    expect(await _preferences().read(), FundCurrency.trx);
+    expect(api.currencies, [FundCurrency.usdt]);
+    expect(await _preferences().read(), FundCurrency.usdt);
   });
 
   for (final packet in [false, true]) {
     for (final dark in [false, true]) {
       testWidgets('sheet switches reviewed currency packet=$packet dark=$dark',
           (tester) async {
-        final api = _Api()..available[FundCurrency.trx] = '200';
+        final api = _Api()..available[FundCurrency.usdt] = '200';
         FundOrder? returned;
         await _open(tester, api,
             packet: packet,
@@ -750,7 +774,7 @@ void main() {
             tester.getRect(find.byKey(const ValueKey('fund-payment-sheet')));
         await tester.enterText(
             find.byKey(const ValueKey('fund-pay-password')), '123');
-        await _changePaymentCurrency(tester, FundCurrency.trx);
+        await _changePaymentCurrency(tester, FundCurrency.usdt);
         expect(tester.element(find.byKey(const ValueKey('fund-payment-sheet'))),
             same(element));
         expect(tester.getRect(find.byKey(const ValueKey('fund-payment-sheet'))),
@@ -758,11 +782,11 @@ void main() {
         final paymentSheet = find.byKey(const ValueKey('fund-payment-sheet'));
         expect(
             find.descendant(
-                of: paymentSheet, matching: find.text('200.00 TRX')),
+                of: paymentSheet, matching: find.text('200.00 USDT')),
             findsOneWidget);
         expect(find.descendant(of: paymentSheet, matching: find.text('1.25')),
             findsOneWidget);
-        expect(find.descendant(of: paymentSheet, matching: find.text('TRX')),
+        expect(find.descendant(of: paymentSheet, matching: find.text('USDT')),
             findsOneWidget);
         expect(
             tester
@@ -774,13 +798,13 @@ void main() {
         expect(api.ids, isEmpty);
         await _pay(tester, packet: packet);
         expect(api.ids, hasLength(1));
-        expect(returned?.currency, FundCurrency.trx);
+        expect(returned?.currency, FundCurrency.usdt);
         expect(returned?.amount.decimal, '1.25');
         expect(api.remarks, ['原备注']);
         if (packet) {
-          expect(api.packets.single['currency'], 'TRX');
+          expect(api.packets.single['currency'], 'USDT');
         } else {
-          expect(api.currencies, [FundCurrency.trx]);
+          expect(api.currencies, [FundCurrency.usdt]);
         }
         expect(tester.takeException(), isNull);
       });
@@ -802,7 +826,7 @@ void main() {
             .widget<TextField>(find.byKey(const ValueKey('fund-pay-password')))
             .enabled,
         isFalse);
-    await tester.tap(find.byKey(const ValueKey('fund-pay-method-TRX')));
+    await tester.tap(find.byKey(const ValueKey('fund-pay-method-USDT')));
     await tester.tap(find.byKey(const ValueKey('fund-pay-method-close')));
     await tester.pumpAndSettle();
     expect(find.text('100.00 元'), findsOneWidget);
@@ -891,7 +915,7 @@ void main() {
     await _open(tester, api);
     await tester.enterText(find.byKey(const ValueKey('fund-amount')), '2');
     await _requestPin(tester);
-    await _changePaymentCurrency(tester, FundCurrency.trx);
+    await _changePaymentCurrency(tester, FundCurrency.usdt);
     final change = tester
         .widget<InkWell>(find.byKey(const ValueKey('fund-pay-change-currency')))
         .onTap!;
@@ -918,11 +942,11 @@ void main() {
     expect(find.byKey(const ValueKey('fund-pay-method-confirm')), findsNothing);
     final saved = await FundPendingStore(accountKey: 'test:me')
         .read('transfer:single:other');
-    expect(saved?['currency'], 'TRX');
+    expect(saved?['currency'], 'USDT');
     api.uncertain = false;
     api.transferGate = null;
     await _pay(tester);
-    expect(api.currencies, [FundCurrency.trx, FundCurrency.trx]);
+    expect(api.currencies, [FundCurrency.usdt, FundCurrency.usdt]);
     expect(api.ids.toSet(), hasLength(1));
     expect(tester.takeException(), isNull);
   });
@@ -1255,7 +1279,7 @@ void main() {
     expect(
         find.descendant(
             of: find.byType(BottomSheet), matching: find.text('100.00')),
-        findsNWidgets(3));
+        findsNWidgets(2));
     await tester.tap(find.byKey(const ValueKey('fund-pay-method-BI99')));
     await tester.pump();
     final mark = tester.widget<Container>(

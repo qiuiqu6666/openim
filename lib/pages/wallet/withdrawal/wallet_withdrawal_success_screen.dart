@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import '../data/wallet_operation_coordinator.dart';
 import '../widgets/wallet_99chat_tokens.dart';
@@ -16,7 +17,7 @@ class WalletWithdrawalSuccessScreen extends StatelessWidget {
       appBar: AppBar(
           backgroundColor: colors.card,
           foregroundColor: colors.text,
-          title: const Text('提现结果')),
+          title: Text(AppCopy.text('提现结果'))),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppTokens.s7),
@@ -30,7 +31,7 @@ class WalletWithdrawalSuccessScreen extends StatelessWidget {
                 const Icon(Icons.check_circle_outline,
                     color: AppTokens.success, size: AppTokens.s10),
                 const SizedBox(height: AppTokens.s7),
-                Text('提现申请成功',
+                Text(AppCopy.text('提现申请成功'),
                     style: Theme.of(context)
                         .textTheme
                         .headlineSmall

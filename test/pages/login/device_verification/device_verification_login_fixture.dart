@@ -29,12 +29,26 @@ const fixtureCertificate = {
 
 class DeviceAuthHTTP implements HttpClientAdapter {
   final requests = <RequestOptions>[];
+  final optionRequests = <RequestOptions>[];
+  List<String> methods = ["phone"];
   final _responses = <Completer<ResponseBody>>[];
   @override
   void close({bool force = false}) {}
   @override
   Future<ResponseBody> fetch(
       RequestOptions options, Stream<Uint8List>? body, Future<void>? cancel) {
+    if (options.uri.path.endsWith('/device/verification')) {
+      optionRequests.add(options);
+      return Future.value(ResponseBody.fromString(
+          jsonEncode({
+            'errCode': 0,
+            'data': {'methods': methods}
+          }),
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType]
+          }));
+    }
     requests.add(options);
     final response = Completer<ResponseBody>();
     _responses.add(response);
@@ -163,6 +177,11 @@ class DeviceLoginFixture {
 
   Future<void> startChallenge(WidgetTester tester,
       {String account = '13800138000'}) async {
+    logic.selectLoginType(account.startsWith('@')
+        ? LoginType.account
+        : account.contains('@')
+            ? LoginType.email
+            : LoginType.phone);
     logic.phoneCtrl.text = account;
     logic.pwdCtrl.text = 'password';
     await tester.runAsync(() async {
@@ -200,7 +219,7 @@ class DeviceLoginFixture {
     expect(deviceSendButton(tester).onPressed, isNotNull);
     await tester.tap(deviceSend);
     await tester.pump();
-    expect(captchaCalls, 1);
+    expect(captchaCalls, 0);
     await _pumpRequest(tester, count + 1);
     await tester.runAsync(() async {
       await waitForAuth(() => adapter.requests.length == count + 1);

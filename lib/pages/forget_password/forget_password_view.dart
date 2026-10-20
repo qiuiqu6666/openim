@@ -5,7 +5,9 @@ import 'package:openim/pages/login/widgets/login_toolbar.dart';
 
 import '../../widgets/auth/auth_copy.dart';
 import '../../widgets/auth/auth_reference.dart';
+import '../../widgets/auth/auth_minimal_layout.dart';
 import 'forget_password_logic.dart';
+import '../../widgets/auth/auth_identity_selector.dart';
 import 'form/recovery_form_feedback.dart';
 
 class ForgetPasswordPage extends StatefulWidget {
@@ -53,44 +55,60 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
   }
 
   @override
-  Widget build(BuildContext context) => AuthEntryScaffold(
-        greeting: authText('你好，', 'Hello,'),
-        accent: authText('找回密码', 'Reset Password'),
+  Widget build(BuildContext context) => AuthMinimalLayout(
         onBack: () => Get.back(),
-        headerAction: const LoginToolbar(customerServiceOnly: true),
-        footer: const AuthVersionFooter(),
+        footer: const AuthEntryFooter(),
         child: AutofillGroup(
           child: Obx(() => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  AuthIdentitySelector(
+                      action: authText('找回', ' recovery'),
+                      email: logic.emailMode.value,
+                      onChanged:
+                          logic.submitting.value ? null : logic.selectEmail),
                   AuthCompoundField(
-                    label: authText('手机号', 'Phone'),
+                    label: logic.emailMode.value
+                        ? authText('邮箱', 'Email')
+                        : authText('手机号', 'Phone'),
                     controller: logic.phoneCtrl,
-                    hint: authText('请输入手机号', 'Enter phone number'),
+                    hint: logic.emailMode.value
+                        ? authText('请输入邮箱', 'Enter email')
+                        : authText('请输入手机号', 'Enter phone number'),
                     enabled: !logic.submitting.value,
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    maxLength: 15,
+                    keyboardType: logic.emailMode.value
+                        ? TextInputType.emailAddress
+                        : TextInputType.phone,
+                    inputFormatters: logic.emailMode.value
+                        ? null
+                        : [FilteringTextInputFormatter.digitsOnly],
+                    maxLength: logic.emailMode.value ? 254 : 15,
                     errorText: logic.fieldError(RecoveryField.phone),
                     reserveErrorSpace: true,
                     onFocusChanged: (focused) =>
                         logic.onFocusChanged(RecoveryField.phone, focused),
-                    autofillHints: const [
-                      AutofillHints.telephoneNumberNational
+                    autofillHints: [
+                      logic.emailMode.value
+                          ? AutofillHints.email
+                          : AutofillHints.telephoneNumberNational
                     ],
-                    leading: AuthCountryCode(
-                      code: logic.areaCode.value,
-                      onTap: logic.submitting.value
-                          ? null
-                          : logic.openCountryCodePicker,
-                    ),
+                    leading: logic.emailMode.value
+                        ? null
+                        : AuthCountryCode(
+                            code: logic.areaCode.value,
+                            onTap: logic.submitting.value
+                                ? null
+                                : logic.openCountryCodePicker,
+                          ),
                     leadingWidth: 102,
                   ),
                   const SizedBox(height: AuthReferenceTokens.feedbackFieldGap),
                   AuthCompoundField(
                     controller: logic.verificationCodeCtrl,
                     label: authText('验证码', 'Verification code'),
-                    hint: authText('6 位短信验证码', '6-digit SMS code'),
+                    hint: logic.emailMode.value
+                        ? authText('6 位邮箱验证码', '6-digit email code')
+                        : authText('6 位短信验证码', '6-digit SMS code'),
                     enabled: !logic.submitting.value,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -110,7 +128,8 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
                   AuthTextField(
                     label: authText('新密码', 'New password'),
                     controller: logic.pwdCtrl,
-                    hint: authText('输入新密码', 'Enter a new password'),
+                    hint: authText('登录密码为8–24个字母及数字组合',
+                        'Use 8–24 characters with both letters and numbers only'),
                     errorText: logic.fieldError(RecoveryField.password),
                     reserveErrorSpace: true,
                     onFocusChanged: (focused) =>
@@ -124,7 +143,7 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
                   AuthTextField(
                     label: authText('确认新密码', 'Confirm new password'),
                     controller: logic.pwdAgainCtrl,
-                    hint: authText('再次输入新密码', 'Re-enter the new password'),
+                    hint: authText('请再次输入登录密码', 'Re-enter your login password'),
                     errorText: logic.fieldError(RecoveryField.confirmation),
                     reserveErrorSpace: true,
                     onFocusChanged: (focused) => logic.onFocusChanged(
@@ -142,6 +161,7 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
                     const SizedBox(height: AuthReferenceTokens.fieldGap),
                   AuthPrimaryButton(
                     key: const ValueKey('recovery-submit'),
+                    compact: true,
                     text: authText('重置密码', 'Reset Password'),
                     loading: logic.submitting.value,
                     pill: true,

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -32,7 +33,7 @@ class DesktopLoginDeviceDetails extends StatelessWidget {
         Padding(
             padding: const EdgeInsets.only(top: 28, bottom: 20),
             child: Semantics(
-                label: '核对码 $code',
+                label: AppCopy.format('核对码 {#0}', [code]),
                 excludeSemantics: true,
                 child: Container(
                   constraints:
@@ -55,7 +56,7 @@ class DesktopLoginDeviceDetails extends StatelessWidget {
                               color: AppTokens.accent))),
                 ))),
       const SizedBox(height: 2),
-      Text('请核对电脑上的数字，仅登录你本人正在使用的设备',
+      Text(AppCopy.text('请核对电脑上的数字，仅登录你本人正在使用的设备'),
           textAlign: TextAlign.center,
           style: TextStyle(
               fontSize: 16,

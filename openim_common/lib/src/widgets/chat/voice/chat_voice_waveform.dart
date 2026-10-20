@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -21,7 +22,7 @@ class ChatVoiceWaveform extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-        label: '实时音量波形',
+        label: AppCopy.text('实时音量波形'),
         image: true,
         child: SizedBox(
           height: height,

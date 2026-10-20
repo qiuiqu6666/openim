@@ -329,12 +329,13 @@ class ChatForwardingController {
           selected.userID?.isNotEmpty != true) {
         return;
       }
-      await _sendCarte(
+      final sent = await _sendCarte(
         userID: selected.userID!,
         nickname: selected.nickname,
         faceURL: selected.faceURL,
         current: current,
       );
+      if (sent && current()) _showSuccess();
     } catch (error) {
       if (!current() || isSilentFriendRisk(error)) return;
       Logger.print('Send contact card failed: $error');
@@ -358,7 +359,7 @@ class ChatForwardingController {
     }
   }
 
-  Future<void> _sendCarte({
+  Future<bool> _sendCarte({
     required String userID,
     required bool Function() current,
     String? nickname,
@@ -366,19 +367,22 @@ class ChatForwardingController {
     String? recipientUserID,
     String? recipientGroupID,
   }) async {
-    if (!current()) return;
+    if (!current()) return false;
     final extension = await _cardExtension(userID, current);
-    if (!current() || extension == null) return;
+    if (!current() || extension == null) return false;
     final message = await OpenIM.iMManager.messageManager.createCardMessage(
       userID: userID,
       ex: extension,
       nickname: nickname?.trim().isNotEmpty == true ? nickname! : userID,
       faceURL: faceURL,
     );
-    if (!current()) return;
-    await _sendMessage(message,
-        userId: recipientUserID, groupId: recipientGroupID);
-    if (!current()) return;
+    if (!current()) return false;
+    FavoriteSendResult? result;
+    await _delivery.send(message,
+        userId: recipientUserID,
+        groupId: recipientGroupID,
+        favoriteResult: (value) => result = value);
+    return current() && result?.isSuccess == true;
   }
 
   bool Function() _cardSessionGuard() {
@@ -420,6 +424,7 @@ class ChatForwardingController {
       final customEx = result['customEx'];
       final checkedList = result['checkedList'];
       if (checkedList is! Iterable) return;
+      var sentCount = 0;
       for (final info in checkedList) {
         if (!current()) return;
         final userID = IMUtils.convertCheckedToUserID(info);
@@ -437,7 +442,7 @@ class ChatForwardingController {
           );
           if (!current()) return;
         }
-        await _sendCarte(
+        final sent = await _sendCarte(
           userID: cardUserID!,
           nickname: nickname,
           faceURL: faceURL,
@@ -445,8 +450,10 @@ class ChatForwardingController {
           recipientUserID: userID,
           recipientGroupID: groupID,
         );
-        if (!current()) return;
+        if (!current() || !sent) return;
+        sentCount++;
       }
+      if (sentCount > 0 && current()) _showSuccess();
     } catch (error) {
       if (!current() || isSilentFriendRisk(error)) return;
       Logger.print('Recommend contact card failed: $error');

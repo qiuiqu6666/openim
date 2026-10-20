@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -54,7 +55,8 @@ class MomentsComposerMediaTile extends StatelessWidget {
             width: AppTokens.s8 * 3, height: AppTokens.s8 * 3, child: image),
         child: Semantics(
           label: momentsText(context,
-              zh: '图片 ${index + 1}', en: 'Image ${index + 1}'),
+              zh: AppCopy.format('图片 {#0}', [index + 1]),
+              en: 'Image ${index + 1}'),
           child: DecoratedBox(
               decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppTokens.rMd),

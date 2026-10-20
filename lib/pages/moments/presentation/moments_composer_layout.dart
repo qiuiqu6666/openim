@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -67,7 +68,7 @@ class MomentsComposerLayout extends StatelessWidget {
               errorText:
                   graphemeTrim(controller.text).characters.length > maxText
                       ? momentsText(context,
-                          zh: '正文最多 $maxText 个字',
+                          zh: AppCopy.format('正文最多 {#0} 个字', [maxText]),
                           en: 'Use no more than $maxText characters')
                       : null),
           style: TextStyle(

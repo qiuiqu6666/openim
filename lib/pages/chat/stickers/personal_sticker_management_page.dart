@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart'
@@ -65,8 +66,8 @@ class _PersonalStickerManagementPageState
 
   void _showError(Object error) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('操作失败：$error')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppCopy.format('操作失败：{#0}', [AppCopy.error(error)]))));
   }
 
   Future<void> _add() async {
@@ -109,7 +110,7 @@ class _PersonalStickerManagementPageState
             ),
             const SizedBox(height: 12),
             IconButton.filledTonal(
-              tooltip: '关闭预览',
+              tooltip: AppCopy.text('关闭预览'),
               onPressed: () => Navigator.pop(context),
               icon: const Icon(Icons.close),
             ),
@@ -124,10 +125,10 @@ class _PersonalStickerManagementPageState
     final confirmed = await showAppConfirm(
       context,
       barrierDismissible: true,
-      title: '删除选中的 ${_selected.length} 个表情？',
-      message: '已发送的消息不会受到影响。',
+      title: AppCopy.format('删除选中的 {#0} 个表情？', [_selected.length]),
+      message: AppCopy.text('已发送的消息不会受到影响。'),
       cancelText: '取消',
-      confirmText: '删除',
+      confirmText: AppCopy.text('删除'),
       destructive: true,
     );
     if (confirmed != true || !mounted) return;
@@ -169,7 +170,7 @@ class _PersonalStickerManagementPageState
     try {
       await widget.store.reorder(ids);
     } on StickerApiException catch (error) {
-      _showError(error.code == 20025 ? '收藏已在其他设备改变，请重试' : error);
+      _showError(error.code == 20025 ? AppCopy.text('收藏已在其他设备改变，请重试') : error);
     } catch (error) {
       _showError(error);
     } finally {
@@ -228,9 +229,9 @@ class _PersonalStickerManagementPageState
                   Navigator.pop(context);
                 }
               },
-              child: Text(_organizing ? '取消' : '关闭'),
+              child: Text(_organizing ? '取消' : AppCopy.text('关闭')),
             ),
-            title: Text('添加的单个表情 (${items.length})',
+            title: Text(AppCopy.format('添加的单个表情 ({#0})', [items.length]),
                 style:
                     const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             actions: [
@@ -250,8 +251,8 @@ class _PersonalStickerManagementPageState
               const LinearProgressIndicator(minHeight: 2),
             if (widget.store.error != null)
               ListTile(
-                title: const Text('加载失败，点击重试'),
-                subtitle: Text(widget.store.error!),
+                title: Text(AppCopy.text('加载失败，点击重试')),
+                subtitle: Text(AppCopy.text(widget.store.error!)),
                 onTap: _loadAll,
               ),
             Expanded(
@@ -405,7 +406,7 @@ class _PersonalStickerManagementPageState
                       const Spacer(),
                       TextButton(
                         onPressed: _selected.isEmpty ? null : _deleteSelected,
-                        child: Text('删除',
+                        child: Text(AppCopy.text('删除'),
                             style: TextStyle(
                                 color: _selected.isEmpty
                                     ? colors.onSurfaceVariant

@@ -35,7 +35,42 @@ class Source implements ChatHistorySearchSource, ChatHistoryCloudSource {
       ];
 }
 
+class SparseMediaSource extends Source {
+  @override
+  Future<List<Message>> search({
+    required String conversationID,
+    required ChatHistorySearchQuery query,
+    required int pageIndex,
+    int count = 30,
+  }) async {
+    final messages = List.generate(
+      supplements * 4,
+      (i) => Message(clientMsgID: 'image-$i', contentType: MessageType.picture),
+    );
+    return messages.skip((pageIndex - 1) * count).take(count).toList();
+  }
+}
+
 void main() {
+  test('sparse media fills 30 new results and preserves overflow and final page',
+      () async {
+    final source = SparseMediaSource()..totalPages = 10;
+    final controller =
+        ChatHistorySearchController(conversationID: 'group', source: source);
+    addTearDown(controller.dispose);
+    await controller.search(
+      const ChatHistorySearchQuery(messageTypes: [MessageType.picture]),
+    );
+    expect(controller.results.length, 4);
+    await controller.loadMore();
+    expect(controller.results.length, 34);
+    expect(source.supplements, 9);
+    expect(controller.hasMore, isTrue);
+    await controller.loadMore();
+    expect(controller.results.length, 40);
+    expect(controller.results.map((m) => m.clientMsgID).toSet().length, 40);
+    expect(controller.hasMore, isFalse);
+  });
   test(
       'empty yielded scan preserves progress and failed continuation retries the same position',
       () async {
@@ -109,9 +144,9 @@ void main() {
         ChatHistorySearchController(conversationID: 'group', source: source);
     await controller.search(const ChatHistorySearchQuery(keyword: 'needle'));
     await controller.loadMore();
-    expect(source.supplements, 3);
+    expect(source.supplements, 5);
     expect(controller.results.map((m) => m.clientMsgID), ['local', 'cloud']);
-    expect(controller.hasMore, isTrue);
+    expect(controller.hasMore, isFalse);
     await controller.loadMore();
     expect(source.supplements, 5);
     expect(controller.hasMore, isFalse);

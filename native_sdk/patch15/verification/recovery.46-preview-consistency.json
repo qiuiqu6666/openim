@@ -1,0 +1,63 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.46-preview-consistency",
+  "source_sha256": "c843be5ce503ad9c3bc98f5e6fd24ac583932181a1f9facf964986ce4fe7ad55",
+  "patch_sha256": "b7d8c00d2880c58a678c720416b0fc57d88741f63afd000fe0447bdd7a900c56",
+  "source_files": 700,
+  "aar_sha256": "1984153b61329b74b1ababf1228e0fd0c2322182650f56dd0942329217c0855f",
+  "apk_sha256": "aecc1764df2a0dbf4ee8abd744e37409268e483875a377e64c1e00ad222c6c34",
+  "apk_native_sha256": "8be773401871e287178716bbaaa5954a733ab2cfd84047cc7d8eb82ad1e0a3a6",
+  "apk_abis": [
+    "arm64-v8a"
+  ],
+  "native_parity": true,
+  "parity_mode": "NDK strip-unneeded",
+  "checks": {
+    "native_full_regression": "internal/conversation_msg and pkg/db passed",
+    "native_full_race": "both packages passed on locked mobile source",
+    "native_stress": "20 repetitions of SQLite preview scenarios and concurrent deletion passed with race detector",
+    "flutter_focused": {
+      "passed": 481,
+      "skipped": 12,
+      "failed": 0
+    },
+    "flutter_broad": {
+      "passed": 838,
+      "skipped": 20,
+      "failed": 24
+    },
+    "baseline_comparison": "identical 24 failures with pre-fix latest-sync implementation",
+    "source_lock_tests": 15,
+    "dart_analyzer": "no issues",
+    "patch_roundtrip": "491 files match after normalizing line endings; documented build overlays excluded",
+    "android_build": "four-ABI AAR and signed arm64 debug APK passed"
+  },
+  "baseline_failures": [
+    "pages/conversation/conversation_chrome_test.dart: actual header matches reference decoration and states (false)",
+    "pages/conversation/conversation_chrome_test.dart: actual header matches reference decoration and states (true)",
+    "pages/conversation/conversation_chrome_test.dart: conversation rows retain reference layout (false, 1.0)",
+    "pages/conversation/conversation_edit_host_test.dart: archive uses the root route and hides the home navigation (false)",
+    "pages/conversation/conversation_edit_host_test.dart: archive uses the root route and hides the home navigation (true)",
+    "pages/conversation/conversation_edit_host_test.dart: contacts search hides navigation and back restores its tab (false)",
+    "pages/conversation/conversation_edit_host_test.dart: contacts search hides navigation and back restores its tab (true)",
+    "pages/conversation/conversation_edit_host_test.dart: done leaves read batch running and blocks duplicates (false)",
+    "pages/conversation/conversation_edit_host_test.dart: done leaves read batch running and blocks duplicates (true)",
+    "pages/conversation/conversation_edit_host_test.dart: entire search field responds while the SDK session is recovering",
+    "pages/conversation/conversation_edit_host_test.dart: home search hides navigation and system back restores it (false, false)",
+    "pages/conversation/conversation_edit_host_test.dart: home search hides navigation and system back restores it (false, true)",
+    "pages/conversation/conversation_edit_host_test.dart: home search hides navigation and system back restores it (true, false)",
+    "pages/conversation/conversation_edit_host_test.dart: home search hides navigation and system back restores it (true, true)",
+    "pages/conversation/conversation_edit_host_test.dart: home swaps its navigation for selected conversation actions (false)",
+    "pages/conversation/conversation_edit_host_test.dart: home swaps its navigation for selected conversation actions (true)",
+    "pages/conversation/empty/conversation_empty_state_test.dart: group empty state follows the filtered live conversation list",
+    "pages/conversation/folders/conversation_folder_page_test.dart: All follows its tab while folders include both chat types (false)",
+    "pages/conversation/peek/conversation_peek_content_test.dart: older history retry retains the viewport and uses its raw cursor",
+    "pages/conversation/peek/conversation_peek_integration_test.dart: official preview is online without changing ordinary presence",
+    "pages/conversation/peek/conversation_peek_reply_media_test.dart: long image is a clear top crop in both directions (false)",
+    "pages/conversation/peek/conversation_peek_reply_media_test.dart: long image is a clear top crop in both directions (true)",
+    "pages/conversation/search/conversation_search_surface_test.dart: search expands in current route and cancel restores feed (false)",
+    "pages/conversation/search/conversation_search_surface_test.dart: search expands in current route and cancel restores feed (true)"
+  ],
+  "device_runtime": "not tested; no device installation performed",
+  "ios": "shared source updated; Framework and App require macOS rebuild",
+  "logs_directory": "E:\\openim\\artifacts\\preview-consistency-20261020"
+}

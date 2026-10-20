@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'widgets/desktop_login_code_input.dart';
 import 'data/qr_login_api.dart';
 import 'widgets/desktop_login_device_details.dart';
@@ -44,7 +45,7 @@ class _DesktopLoginConfirmPageState extends State<DesktopLoginConfirmPage> {
         _timer?.cancel();
         if (mounted) {
           setState(() {
-            _error = '登录状态已变化，请重新扫码';
+            _error = AppCopy.text('登录状态已变化，请重新扫码');
             _value = null;
           });
         }
@@ -59,7 +60,7 @@ class _DesktopLoginConfirmPageState extends State<DesktopLoginConfirmPage> {
     if (!_current) {
       setState(() {
         _loading = false;
-        _error = '请先登录 99Chat，再扫描电脑上的二维码';
+        _error = AppCopy.text('请先登录 99Chat，再扫描电脑上的二维码');
       });
       return;
     }
@@ -75,8 +76,8 @@ class _DesktopLoginConfirmPageState extends State<DesktopLoginConfirmPage> {
         setState(() => _error = error is QrLoginFailure
             ? error.message
             : error is DesktopAuthorizationUnavailable
-                ? '扫码登录暂不可用，请稍后再试'
-                : '无法获取登录请求，请检查网络后重试');
+                ? AppCopy.text('扫码登录暂不可用，请稍后再试')
+                : AppCopy.text('无法获取登录请求，请检查网络后重试'));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -91,7 +92,7 @@ class _DesktopLoginConfirmPageState extends State<DesktopLoginConfirmPage> {
       return;
     }
     if (!RegExp(r'^[0-9]{6}$').hasMatch(_code.text)) {
-      setState(() => _error = '请输入电脑上显示的六位数字');
+      setState(() => _error = AppCopy.text('请输入电脑上显示的六位数字'));
       return;
     }
     FocusScope.of(context).unfocus();
@@ -105,8 +106,9 @@ class _DesktopLoginConfirmPageState extends State<DesktopLoginConfirmPage> {
       if (_current) setState(() => _value = value);
     } catch (error) {
       if (_current) {
-        setState(() => _error =
-            error is QrLoginFailure ? error.message : '确认结果暂未获取，请重试核对');
+        setState(() => _error = error is QrLoginFailure
+            ? error.message
+            : AppCopy.text('确认结果暂未获取，请重试核对'));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -133,13 +135,14 @@ class _DesktopLoginConfirmPageState extends State<DesktopLoginConfirmPage> {
     final value = _value;
     final state = _expired ? DesktopAuthorizationState.expired : value?.state;
     final title = switch (state) {
-      DesktopAuthorizationState.active => '${value!.platform}已登录',
-      DesktopAuthorizationState.approved => '已确认，请在电脑上继续',
-      DesktopAuthorizationState.expired => '二维码已过期',
-      DesktopAuthorizationState.cancelled => '已取消登录',
+      DesktopAuthorizationState.active =>
+        AppCopy.format('{#0}已登录', [value!.platform]),
+      DesktopAuthorizationState.approved => AppCopy.text('已确认，请在电脑上继续'),
+      DesktopAuthorizationState.expired => AppCopy.text('二维码已过期'),
+      DesktopAuthorizationState.cancelled => AppCopy.text('已取消登录'),
       _ => value == null
-          ? (_error ?? '正在获取登录请求')
-          : '登录 ${value.platform} 版 99Chat',
+          ? (_error ?? AppCopy.text('正在获取登录请求'))
+          : AppCopy.format('登录 {#0} 版 99Chat', [value.platform]),
     };
     final canConfirm = state == DesktopAuthorizationState.scanned && _current;
     return PopScope(
@@ -154,9 +157,9 @@ class _DesktopLoginConfirmPageState extends State<DesktopLoginConfirmPage> {
           loggedIn: state == DesktopAuthorizationState.active,
           onClose: () => unawaited(_close()),
           action: canConfirm
-              ? '确认登录'
+              ? AppCopy.text('确认登录')
               : value == null
-                  ? '重试'
+                  ? AppCopy.text('重试')
                   : '完成',
           onAction: canConfirm
               ? () => unawaited(_confirm())
@@ -178,7 +181,7 @@ class _DesktopLoginConfirmPageState extends State<DesktopLoginConfirmPage> {
               ),
             ],
             if (state == DesktopAuthorizationState.expired)
-              const Text('请在电脑上刷新二维码后重新扫描。'),
+              Text(AppCopy.text('请在电脑上刷新二维码后重新扫描。')),
             if (_error != null && value != null)
               Text(_error!, textAlign: TextAlign.center),
           ]),

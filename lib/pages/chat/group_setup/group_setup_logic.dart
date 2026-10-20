@@ -1,3 +1,4 @@
+import 'package:openim_common/media_localization.dart';
 import 'package:openim/core/user_activity/activity_sdk.dart';
 import 'dart:async';
 import 'dart:io';
@@ -540,8 +541,10 @@ class GroupSetupLogic extends GetxController {
   void modifyGroupAvatar() async {
     final List<AssetEntity>? assets = await AssetPicker.pickAssets(
       Get.context!,
-      pickerConfig:
-          const AssetPickerConfig(maxAssets: 1, requestType: RequestType.image),
+      pickerConfig: AssetPickerConfig(
+          textDelegate: AppMediaCopy.assets,
+          maxAssets: 1,
+          requestType: RequestType.image),
     );
     if (assets != null) {
       final file = await assets.first.file;

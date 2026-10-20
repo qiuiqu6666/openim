@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Presets ported from 99chat agent_rebate_date_range_picker.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'package:flutter/material.dart';
@@ -14,18 +15,18 @@ Future<AgentRebateDateRange?> showAgentRebateDateRangePicker(
   final choices = <(String, AgentRebateDateRange)>[
     ('昨天', AgentRebateDateRange.yesterday(clock)),
     ('今天', AgentRebateDateRange.today(clock)),
-    ('一周', AgentRebateDateRange.recentDays(7, clock)),
+    (AppCopy.text('一周'), AgentRebateDateRange.recentDays(7, clock)),
     ('30天', AgentRebateDateRange.recentDays(30, clock)),
     ('90天', AgentRebateDateRange.recentDays(90, clock)),
   ];
   return showSettingsActionSheet<AgentRebateDateRange>(context,
-      title: '选择查询时间',
+      title: AppCopy.text('选择查询时间'),
       actions: [
         for (final choice in choices)
           SettingsAction(choice.$1, choice.$2,
               subtitle: choice.$2.start == initialRange.start &&
                       choice.$2.end == initialRange.end
-                  ? '当前选择'
+                  ? AppCopy.text('当前选择')
                   : '${choice.$2.startApiValue} — ${choice.$2.endApiValue}')
       ]);
 }

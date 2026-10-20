@@ -11,6 +11,36 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadDevicePreviewFonts);
 
+  for (final methods in [
+    <String>['email'],
+    <String>['phone', 'email']
+  ]) {
+    testWidgets('email device verification with methods $methods',
+        (tester) async {
+      final f = DeviceLoginFixture();
+      f.adapter.methods = methods;
+      await f.initialize(tester);
+      addTearDown(() => f.dispose(tester));
+      await f.startChallenge(tester);
+      if (methods.length > 1) {
+        await tester.tap(find.text('邮箱验证'));
+        await tester.pump();
+      } else {
+        expect(find.byType(ChoiceChip), findsNothing);
+      }
+      await f.sendCode(tester);
+      expect(f.adapter.requests.last.data['deviceVerificationMethod'], 'email');
+      expect(f.adapter.requests.last.data['phoneNumber'], '13800138000');
+      expect(f.adapter.requests.last.data['email'], isNull);
+      final index = await f.submitCode(tester);
+      expect(
+          f.adapter.requests[index].data['deviceVerificationMethod'], 'email');
+      await f.respond(tester, index, data: fixtureCertificate);
+      await f.finishLogin(tester);
+      expect(f.im.logins, hasLength(1));
+    });
+  }
+
   for (final entrance in [
     (input: '13800138000', key: 'phoneNumber', value: '13800138000'),
     (input: '@12345678', key: 'account', value: '@12345678'),
@@ -31,31 +61,30 @@ void main() {
       for (final key in ['phoneNumber', 'account', 'email']) {
         if (key != entrance.key) expect(first[key], isNull);
       }
-      if (entrance.key == 'phoneNumber') {
-        expect(devicePhoneField, findsNothing);
-      } else {
-        expect(devicePhoneField, findsOneWidget);
-        await tester.enterText(devicePhoneField, '13800138000');
-        await tester.pump();
-      }
+      expect(devicePhoneField, findsNothing);
+      expect(deviceSendButton(tester).onPressed, isNotNull);
       await f.sendCode(tester);
       f.expectNoSession();
       expect(find.text('17s'), findsOneWidget);
       final sent = f.adapter.requests[1];
-      expect(sent.uri.path, '/account/code/send');
-      expect(sent.data['usedFor'], 3);
-      expect(sent.data['phoneNumber'], '13800138000');
-      expect(sent.data['areaCode'], '+86');
+      expect(sent.uri.path, '/account/device/code/send');
+      expect(sent.data['deviceVerificationMethod'], 'phone');
+      expect(sent.data[entrance.key], entrance.value);
+      expect(f.adapter.optionRequests.single.data, first);
       expect(sent.data['deviceID'], first['deviceID']);
       expect(sent.data['platform'], first['platform']);
-      expect(sent.data['captchaVerifyParam'], 'test-slider-proof');
-      expect(sent.data['password'], isNull);
+      expect(sent.data.containsKey('captchaVerifyParam'), isFalse);
+      expect(sent.data['password'], first['password']);
+      expect(sent.data['passwordPlaintext'], isNull);
       final index = await f.submitCode(tester);
       await tester.tap(deviceConfirm);
       await tester.pump();
       expect(f.adapter.requests, hasLength(3));
-      expect(
-          f.adapter.requests[index].data, {...first, 'verifyCode': '123456'});
+      expect(f.adapter.requests[index].data, {
+        ...first,
+        'verifyCode': '123456',
+        'deviceVerificationMethod': 'phone'
+      });
       expect(f.adapter.requests[index].uri.path, '/account/login');
       f.expectNoSession();
       await f.respond(tester, index, data: fixtureCertificate);
@@ -136,6 +165,7 @@ void main() {
       final f = DeviceLoginFixture();
       await f.initialize(tester);
       addTearDown(() => f.dispose(tester));
+      f.logic.selectLoginType(LoginType.account);
       f.logic.phoneCtrl.text = '@12345678';
       f.logic.pwdCtrl.text = 'password';
       await tester.runAsync(() async {

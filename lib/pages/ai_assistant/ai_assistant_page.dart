@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -93,7 +94,7 @@ class _AiAssistantPageState extends State<AiAssistantPage>
     if (error != null && !identical(error, _shownError)) {
       _shownError = error;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _controller.current) _toast(error.message);
+        if (mounted && _controller.current) _toast(AppCopy.text(error.message));
       });
     }
     if (_followsBottom) _scrollToEnd();
@@ -211,8 +212,8 @@ class _AiAssistantPageState extends State<AiAssistantPage>
       if (!mounted || !_controller.current || card == null) return;
       _controller.selectTool(id);
       if (!_controller.addCard(card)) {
-        _toast(
-            _text('已添加或附件数量超过限制', 'Already added or attachment limit reached'));
+        _toast(_text(AppCopy.text('已添加或附件数量超过限制'),
+            'Already added or attachment limit reached'));
       }
     } else {
       _controller.selectTool(id);
@@ -229,8 +230,8 @@ class _AiAssistantPageState extends State<AiAssistantPage>
             : AiCardPickerKind.group);
     if (!mounted || !_controller.current || card == null) return;
     if (!_controller.addCard(card)) {
-      _toast(
-          _text('已添加或附件数量超过限制', 'Already added or attachment limit reached'));
+      _toast(_text(AppCopy.text('已添加或附件数量超过限制'),
+          'Already added or attachment limit reached'));
     }
     _focusInput();
   }
@@ -245,15 +246,16 @@ class _AiAssistantPageState extends State<AiAssistantPage>
           : AiAssistantAttachments.files());
       if (!mounted || !_controller.current || files.isEmpty) return;
       if (!_controller.addFiles(files)) {
-        _toast(_text('一次最多添加8个内容', 'You can add at most 8 items'));
+        _toast(
+            _text(AppCopy.text('一次最多添加8个内容'), 'You can add at most 8 items'));
       }
       _focusInput();
     } on AiAssistantException catch (error) {
-      if (mounted && _controller.current) _toast(error.message);
+      if (mounted && _controller.current) _toast(AppCopy.text(error.message));
     } catch (_) {
       if (mounted && _controller.current) {
-        _toast(_text(
-            '无法打开选择器，请检查权限', 'Unable to open picker. Check permissions.'));
+        _toast(_text(AppCopy.text('无法打开选择器，请检查权限'),
+            'Unable to open picker. Check permissions.'));
       }
     } finally {
       _picking = false;
@@ -276,7 +278,7 @@ class _AiAssistantPageState extends State<AiAssistantPage>
       return;
     }
     await Clipboard.setData(ClipboardData(text: text));
-    if (mounted) _toast(_text('已复制', 'Copied'));
+    if (mounted) _toast(_text(AppCopy.text('已复制'), 'Copied'));
   }
 
   Future<void> _send() async {
@@ -306,7 +308,7 @@ class _AiAssistantPageState extends State<AiAssistantPage>
       await OpenFilex.open(path);
       return;
     }
-    _toast(_text('原文件暂不可用', 'Original file is unavailable'));
+    _toast(_text(AppCopy.text('原文件暂不可用'), 'Original file is unavailable'));
   }
 
   Future<void> _needFile(String id) async {
@@ -348,8 +350,8 @@ class _AiAssistantPageState extends State<AiAssistantPage>
         fileCache: _fileCache,
         onNeedFile: (id) => unawaited(_needFile(id)),
         imageBytes: _fileCache[AiAssistantApi.fileIdFromUrl(value.imageUrl)],
-        onComingSoon: (_) =>
-            _toast(_text('AI 服务尚未接入', 'AI service is not connected yet')),
+        onComingSoon: (_) => _toast(_text(
+            AppCopy.text('AI 服务尚未接入'), 'AI service is not connected yet')),
         onLongPress: () => unawaited(_copy(value)));
     final reply = _controller.reply;
     if (reply != null &&

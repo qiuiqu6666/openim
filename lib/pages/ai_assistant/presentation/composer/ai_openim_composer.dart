@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
@@ -84,11 +85,12 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
         if (restoreOnError) _restoreInput(input);
         IMViews.showToast(error is AiImageTurnUnsupported
             ? error.generateImage
-                ? _text('当前服务暂不支持参考图生成，请稍后重试',
+                ? _text(AppCopy.text('当前服务暂不支持参考图生成，请稍后重试'),
                     'Reference image generation is not available on this server yet.')
-                : _text('当前服务暂不支持图文一起提问，请稍后重试',
+                : _text(AppCopy.text('当前服务暂不支持图文一起提问，请稍后重试'),
                     'Combined image questions are not available on this server yet.')
-            : _text('操作失败，请重试', 'Could not complete. Try again.', '操作失敗，請重試'));
+            : _text(AppCopy.text('操作失败，请重试'), 'Could not complete. Try again.',
+                '操作失敗，請重試'));
       }
     } finally {
       if (preserveInput) _restoreInput(input);
@@ -140,14 +142,14 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
         for (final file in picked.files) {
           if (!AiOpenimPayload.acceptsDocument(file.name, file.size)) {
             IMViews.showToast(_text(
-                '仅支持不超过 20 MiB 的 PDF、DOCX、TXT 文件',
+                AppCopy.text('仅支持不超过 20 MiB 的 PDF、DOCX、TXT 文件'),
                 'Choose a PDF, DOCX or TXT file up to 20 MiB.',
                 '僅支援不超過 20 MiB 的 PDF、DOCX、TXT 檔案'));
             return;
           }
           if (file.path?.isNotEmpty != true) {
-            IMViews.showToast(
-                _text('无法读取所选文件', 'Cannot access this file.', '無法讀取所選檔案'));
+            IMViews.showToast(_text(AppCopy.text('无法读取所选文件'),
+                'Cannot access this file.', '無法讀取所選檔案'));
             return;
           }
           files.add(AiAssistantFileRef(
@@ -164,8 +166,8 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
   void _stageFiles(List<AiAssistantFileRef> files) {
     if (!_current) return;
     if (_files.length + files.length > 3) {
-      IMViews.showToast(_text('一次最多添加 3 个附件',
-          'Add up to 3 attachments at a time.', '一次最多添加 3 個附件'));
+      IMViews.showToast(_text(AppCopy.text('一次最多添加 3 个附件'),
+          'Add up to 3 attachments at a time.', AppCopy.text('一次最多添加 3 個附件')));
       return;
     }
     setState(() => _files.addAll(files));
@@ -209,7 +211,7 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
         _tool == 'image' &&
         _files.isNotEmpty &&
         input.text.trim().isEmpty) {
-      IMViews.showToast(_text('请描述希望参考图片生成或修改的内容',
+      IMViews.showToast(_text(AppCopy.text('请描述希望参考图片生成或修改的内容'),
           'Describe what to generate or change using the reference image.'));
       return;
     }
@@ -218,12 +220,12 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
         _files.any((file) => file.kind == AiAssistantFileKind.image)) {
       if (_cards.isNotEmpty ||
           _files.any((file) => file.kind != AiAssistantFileKind.image)) {
-        IMViews.showToast(_text('图片暂不能与文件或名片一起提交，请分开提问',
+        IMViews.showToast(_text(AppCopy.text('图片暂不能与文件或名片一起提交，请分开提问'),
             'Please submit images separately from documents or contact cards.'));
         return;
       }
       if (input.text.runes.length > 8000) {
-        IMViews.showToast(_text('图文提问最多输入 8000 字',
+        IMViews.showToast(_text(AppCopy.text('图文提问最多输入 8000 字'),
             'Use up to 8,000 characters for an image question.'));
         return;
       }
@@ -232,7 +234,7 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
         final quote = _logic.quotedMessage.value;
         final question = quote == null
             ? input.text
-            : '${_text('引用消息', 'Quoted message')}:\n${aiOpenimMessageText(quote)}\n\n${input.text}';
+            : '${_text(AppCopy.text('引用消息'), 'Quoted message')}:\n${aiOpenimMessageText(quote)}\n\n${input.text}';
         final message = await AiImageTurnSender(
           isCurrent: () => _current,
           preparePicture: _logic.prepareAssistantPicture,
@@ -381,7 +383,7 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
   Future<void> _sendSticker(PersonalSticker sticker) async {
     if (!_canAct) return;
     if (sticker.isVideo) {
-      IMViews.showToast(_text('助理暂不支持视频表情',
+      IMViews.showToast(_text(AppCopy.text('助理暂不支持视频表情'),
           'The assistant cannot read video stickers.', '助理暫不支援影片表情'));
       return;
     }
@@ -427,7 +429,7 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
           final excerpt = quote.textElem?.content ??
               quote.atTextElem?.text ??
               quote.quoteElem?.text ??
-              _text('[消息]', '[Message]', '[訊息]');
+              _text(AppCopy.text('[消息]'), '[Message]', '[訊息]');
           return ListTile(
             dense: true,
             contentPadding: const EdgeInsets.only(left: AiMetrics.space16),
@@ -489,8 +491,9 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
             dark: dark,
             hint: _tool == null
                 ? _assistant
-                    ? _text('问 AI助理…', 'Ask the AI assistant…', '問 AI助理…')
-                    : _text('输入消息…', 'Write a message…', '輸入訊息…')
+                    ? _text(AppCopy.text('问 AI助理…'), 'Ask the AI assistant…',
+                        '問 AI助理…')
+                    : _text(AppCopy.text('输入消息…'), 'Write a message…', '輸入訊息…')
                 : aiAssistantComposerHint(i18n, _tool),
             controller: _logic.inputCtrl,
             focusNode: _logic.focusNode,
@@ -499,9 +502,10 @@ class _AiOpenIMComposerState extends State<AiOpenIMComposer> {
             maxLines: 4,
             replying: false,
             addLabel: _text('更多附件', 'More attachments'),
-            imageLabel: _text('选择图片', 'Select images', '選擇圖片'),
-            attachLabel: _text('选择文件', 'Select documents', '選擇檔案'),
-            submitLabel: _text('发送', 'Send', '傳送'),
+            imageLabel: _text(AppCopy.text('选择图片'), 'Select images', '選擇圖片'),
+            attachLabel:
+                _text(AppCopy.text('选择文件'), 'Select documents', '選擇檔案'),
+            submitLabel: _text(AppCopy.text('发送'), 'Send', '傳送'),
             onAdd: () => unawaited(_more()),
             onImage: () => unawaited(_pickImages()),
             onAttach: () => unawaited(_pickFiles()),

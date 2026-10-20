@@ -103,9 +103,8 @@ class WalletFundRepository extends UnavailableWalletRepository
     final balances = snapshot.balances;
     _requireCurrentAccount();
     final byCurrency = {for (final item in balances) item.currency: item};
-    if (byCurrency.length != FundCurrency.values.length ||
-        balances.length != FundCurrency.values.length) {
-      throw const FormatException('Incomplete wallet balances');
+    if (byCurrency.length != balances.length) {
+      throw const FormatException('Duplicate wallet balances');
     }
     return WalletDto(
       totalBal: snapshot.totalCny,
@@ -113,7 +112,7 @@ class WalletFundRepository extends UnavailableWalletRepository
       dailyPercentage: snapshot.dailyPercentage,
       trxAddr: '',
       coins: [
-        for (final currency in FundCurrency.values)
+        for (final currency in byCurrency.keys)
           _coin(byCurrency[currency]!,
               fiat: snapshot.valuesCny[currency] == null ||
                       snapshot.valuesCny[currency] == '--'

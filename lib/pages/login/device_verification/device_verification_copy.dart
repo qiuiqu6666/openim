@@ -21,6 +21,11 @@ class DeviceVerificationCopy {
   String get smsHint => _text('验证码将发送到您账号绑定的手机号，请点击右侧发送',
       'A code will be sent to your bound phone number. Tap Send on the right',
       hant: '驗證碼將發送到您帳號綁定的手機號，請點擊右側發送');
+  String get phoneMethod => _text('手机号验证', 'Phone verification', hant: '手機號驗證');
+  String get emailMethod => _text('邮箱验证', 'Email verification', hant: '郵箱驗證');
+  String get emailHint => _text('验证码将发送到您账号绑定的邮箱，请点击右侧发送',
+      'A code will be sent to your bound email. Tap Send on the right',
+      hant: '驗證碼將發送到您帳號綁定的郵箱，請點擊右側發送');
   String sentTo(String phoneMasked) => _text('验证码将发送到 $phoneMasked',
       'The verification code will be sent to $phoneMasked',
       hant: '驗證碼將發送到 $phoneMasked');

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../pages/chat/navigation/chat_entry_trace.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -59,7 +60,8 @@ class AppNavigator {
     entryTrace ??= ChatEntryTrace(conversationInfo.conversationType);
     // Preparation overlaps account resolution and the route transition.
     entryTrace.mark('prefetch_start');
-    ChatHistoryPrefetcher.shared.prepare(conversationInfo, mark: entryTrace.mark);
+    ChatHistoryPrefetcher.shared
+        .prepare(conversationInfo, mark: entryTrace.mark);
     final resolution = await OfficialAccountResolver.shared
         .resolveConversation(conversationInfo);
     entryTrace.mark('account_resolved');
@@ -92,7 +94,8 @@ class AppNavigator {
     if (!historyPrepared) {
       entryTrace ??= ChatEntryTrace(conversationInfo.conversationType);
       entryTrace.mark('prefetch_start');
-      ChatHistoryPrefetcher.shared.prepare(conversationInfo, mark: entryTrace.mark);
+      ChatHistoryPrefetcher.shared
+          .prepare(conversationInfo, mark: entryTrace.mark);
     }
     entryTrace?.mark('route_push');
     GetTags.createChatTag();
@@ -130,7 +133,7 @@ class AppNavigator {
   static Future<T?>? startAiAssistant<T>({bool offUntilHome = false}) async {
     final owner = (OpenIM.iMManager.userID, DataSp.imToken);
     if (owner.$1.isEmpty || owner.$2?.isNotEmpty != true) {
-      IMViews.showToast('请先登录后使用 AI 助理');
+      IMViews.showToast(AppCopy.text('请先登录后使用 AI 助理'));
       return null;
     }
     ConversationInfo conversation;
@@ -141,14 +144,14 @@ class AppNavigator {
               sessionType: ConversationType.single);
     } catch (_) {
       if (owner == (OpenIM.iMManager.userID, DataSp.imToken)) {
-        IMViews.showToast('无法打开 AI 助理，请稍后再试');
+        IMViews.showToast(AppCopy.text('无法打开 AI 助理，请稍后再试'));
       }
       return null;
     }
     if (owner != (OpenIM.iMManager.userID, DataSp.imToken)) return null;
     if (conversation.userID != OfficialAccountResolver.assistantUserID ||
         conversation.conversationType != ConversationType.single) {
-      IMViews.showToast('无法打开 AI 助理，请稍后再试');
+      IMViews.showToast(AppCopy.text('无法打开 AI 助理，请稍后再试'));
       return null;
     }
     if (conversation.showName?.trim().isNotEmpty != true) {
@@ -265,14 +268,14 @@ class AppNavigator {
               sourceID: userID, sessionType: ConversationType.single);
     } catch (_) {
       if (owner == (OpenIM.iMManager.userID, DataSp.imToken)) {
-        IMViews.showToast('无法打开官方账号，请稍后再试');
+        IMViews.showToast(AppCopy.text('无法打开官方账号，请稍后再试'));
       }
       return null;
     }
     if (owner != (OpenIM.iMManager.userID, DataSp.imToken)) return null;
     if (conversation.userID != userID ||
         conversation.conversationType != ConversationType.single) {
-      IMViews.showToast('无法打开官方账号，请稍后再试');
+      IMViews.showToast(AppCopy.text('无法打开官方账号，请稍后再试'));
       return null;
     }
     if (conversation.showName?.trim().isNotEmpty != true &&

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -32,7 +33,7 @@ Future<ChatMemberAction?> showChatMemberActionSheet(
       return Semantics(
         scopesRoute: true,
         namesRoute: true,
-        label: '$displayName 的群成员操作',
+        label: AppCopy.format('{#0} 的群成员操作', [displayName]),
         explicitChildNodes: true,
         child: Material(
           color: Colors.transparent,
@@ -74,9 +75,9 @@ Future<bool> confirmChatMemberAction(
   }
 
   final title = switch (action) {
-    ChatMemberAction.mute => '确定禁言「$displayName」吗？',
-    ChatMemberAction.unmute => '确定解除「$displayName」的禁言吗？',
-    ChatMemberAction.remove => '确定将「$displayName」移除群聊吗？',
+    ChatMemberAction.mute => AppCopy.format('确定禁言「{#0}」吗？', [displayName]),
+    ChatMemberAction.unmute => AppCopy.format('确定解除「{#0}」的禁言吗？', [displayName]),
+    ChatMemberAction.remove => AppCopy.format('确定将「{#0}」移除群聊吗？', [displayName]),
     ChatMemberAction.mention => '',
     ChatMemberAction.exclusiveRedPacket => '',
   };
@@ -92,8 +93,8 @@ Future<bool> confirmChatMemberAction(
 }
 
 String _label(ChatMemberAction action) => switch (action) {
-      ChatMemberAction.mention => '@对方',
-      ChatMemberAction.exclusiveRedPacket => '专属红包',
+      ChatMemberAction.mention => AppCopy.text('@对方'),
+      ChatMemberAction.exclusiveRedPacket => AppCopy.text('专属红包'),
       ChatMemberAction.mute => '禁言',
       ChatMemberAction.unmute => '解除禁言',
       ChatMemberAction.remove => '移除群聊',

@@ -1,4 +1,5 @@
 const Map<String, String> en_US = {
+  'traditionalChinese': '繁體中文',
   'forwardPreviewBatch': 'Forward individually',
   'forwardPreviewCount': '@count messages',
   'networkPreparing': 'Connecting…',
@@ -1015,7 +1016,7 @@ const Map<String, String> errorMessages = {
   '1701': 'File upload has expired',
   '20001': 'The password is wrong',
   'apiNewDeviceVerificationRequired':
-      'New device detected. Please complete SMS verification.',
+      'New device detected. Please verify your identity.',
   'apiNewDevicePhoneNotBound':
       'This account has no bound phone number. Bind one from a signed-in device and try again.',
   'apiLoginDeviceIDInvalid':

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Brand navigation geometry adapted from 99chat settings/test_page.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'package:flutter/material.dart';
@@ -38,7 +39,7 @@ AppBar markSixLotteryAppBar(BuildContext context) {
       title: FittedBox(
           fit: BoxFit.scaleDown,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('京东微信红包',
+            Text(AppCopy.text('京东微信红包'),
                 style: TextStyle(
                     color: style.text,
                     fontSize: 18,
@@ -46,7 +47,7 @@ AppBar markSixLotteryAppBar(BuildContext context) {
                     fontWeight: FontWeight.w700,
                     letterSpacing: .4)),
             const SizedBox(height: 1),
-            Text('极速六合彩',
+            Text(AppCopy.text('极速六合彩'),
                 style: TextStyle(
                     color:
                         style.dark ? style.secondary : const Color(0xFF74839B),

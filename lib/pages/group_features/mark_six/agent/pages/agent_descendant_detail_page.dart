@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Layout adapted from 99chat agent_rebate_descendant_detail_page.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'dart:async';
@@ -139,14 +140,14 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
           });
         return Scaffold(
             backgroundColor: style.background,
-            appBar: markSixAppBar(
-                context, '${widget.initialItem?['displayName'] ?? '下级详情'}',
+            appBar: markSixAppBar(context,
+                '${widget.initialItem?['displayName'] ?? AppCopy.text('下级详情')}',
                 actions: [
                   if (allowed &&
                       widget.featureContext.capabilities.markSix
                           .canViewRebateHistory)
                     IconButton(
-                        tooltip: '历史记录',
+                        tooltip: AppCopy.text('历史记录'),
                         onPressed: () {
                           if (!_state.current) return;
                           Navigator.of(context).push(MaterialPageRoute<void>(
@@ -162,9 +163,9 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                     state: _state,
                     onRetry: () => _load(force: true),
                     child: !allowed
-                        ? const MarkSixEmpty(message: '你没有代理功能权限')
+                        ? MarkSixEmpty(message: AppCopy.text('你没有代理功能权限'))
                         : !_state.current
-                            ? const MarkSixEmpty(message: '登录状态已变更')
+                            ? MarkSixEmpty(message: AppCopy.text('登录状态已变更'))
                             : _state.loading && _state.data == null
                                 ? Center(child: LoadingView.indicator())
                                 : _state.error != null && _state.data == null
@@ -173,8 +174,9 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                                         onRetry: () => _load(force: true))
                                     : item.isEmpty ||
                                             '${item['userId']}' != widget.userID
-                                        ? const MarkSixEmpty(
-                                            message: '下级资料缺失或上下文不匹配')
+                                        ? MarkSixEmpty(
+                                            message:
+                                                AppCopy.text('下级资料缺失或上下文不匹配'))
                                         : RefreshIndicator(
                                             onRefresh: () => _load(force: true),
                                             child: ListView(
@@ -229,7 +231,11 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                                                                         height:
                                                                             4),
                                                                     Text(
-                                                                        '用户编号：${item['playerNo'] ?? '—'}',
+                                                                        AppCopy.format(
+                                                                            '用户编号：{#0}',
+                                                                            [
+                                                                              item['playerNo'] ?? '—'
+                                                                            ]),
                                                                         style: TextStyle(
                                                                             fontSize:
                                                                                 12,
@@ -257,17 +263,35 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                                                           spacing: 24,
                                                           runSpacing: 8,
                                                           children: [
-                                                            Text(
-                                                                '直属下级：${_state.data?['directChildCount'] ?? '—'}'),
-                                                            Text(
-                                                                '全部下级：${_state.data?['descendantCount'] ?? '—'}'),
-                                                            Text(
-                                                                '团队上分：${markSixAmount(_state.data?['teamTotalUp'])}'),
-                                                            Text(
-                                                                '团队下分：${markSixAmount(_state.data?['teamTotalDown'])}'),
+                                                            Text(AppCopy.format(
+                                                                '直属下级：{#0}', [
+                                                              _state.data?[
+                                                                      'directChildCount'] ??
+                                                                  '—'
+                                                            ])),
+                                                            Text(AppCopy.format(
+                                                                '全部下级：{#0}', [
+                                                              _state.data?[
+                                                                      'descendantCount'] ??
+                                                                  '—'
+                                                            ])),
+                                                            Text(AppCopy.format(
+                                                                '团队上分：{#0}',
+                                                                [
+                                                                  markSixAmount(
+                                                                      _state.data?[
+                                                                          'teamTotalUp'])
+                                                                ])),
+                                                            Text(AppCopy.format(
+                                                                '团队下分：{#0}',
+                                                                [
+                                                                  markSixAmount(
+                                                                      _state.data?[
+                                                                          'teamTotalDown'])
+                                                                ])),
                                                           ])),
                                                   const SizedBox(height: 16),
-                                                  const Text('直属下级',
+                                                  Text(AppCopy.text('直属下级'),
                                                       style: TextStyle(
                                                           fontSize: 16,
                                                           fontWeight:
@@ -286,8 +310,9 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                                                                             'directChildCount']
                                                                         as num?)
                                                                     ?.toInt()),
-                                                        child: Text(
-                                                            '直属下级加载失败，点击重试：$_childrenError')),
+                                                        child: Text(AppCopy.format(
+                                                            '直属下级加载失败，点击重试：{#0}',
+                                                            [_childrenError]))),
                                                   for (final child
                                                       in directChildren)
                                                     AgentDescendantTile(
@@ -313,21 +338,22 @@ class _AgentDescendantDetailPageState extends State<AgentDescendantDetailPage> {
                                                   if (!_childrenLoading &&
                                                       _childrenError == null &&
                                                       directChildren.isEmpty)
-                                                    const MarkSixEmpty(
-                                                        message: '暂无已加载的直属下级'),
+                                                    MarkSixEmpty(
+                                                        message: AppCopy.text(
+                                                            '暂无已加载的直属下级')),
                                                 ])))));
       });
 
   Widget _metrics(BuildContext context, Map<String, dynamic> item) {
     final style = MarkSixStyle.of(context);
-    const metrics = [
-      ('总积分', 'balance'),
-      ('总流水', 'totalFlow'),
+    final metrics = [
+      (AppCopy.text('总积分'), 'balance'),
+      (AppCopy.text('总流水'), 'totalFlow'),
       ('已用流水', 'usedFlow'),
-      ('剩余流水', 'remainingFlow'),
-      ('玩家输赢', 'playerProfitLoss'),
-      ('总上分', 'totalUp'),
-      ('总下分', 'totalDown'),
+      (AppCopy.text('剩余流水'), 'remainingFlow'),
+      (AppCopy.text('玩家输赢'), 'playerProfitLoss'),
+      (AppCopy.text('总上分'), 'totalUp'),
+      (AppCopy.text('总下分'), 'totalDown'),
       ('已反水', 'totalRebated'),
       ('待反水', 'pendingRebate'),
       ('反水比例', 'rebateRate')

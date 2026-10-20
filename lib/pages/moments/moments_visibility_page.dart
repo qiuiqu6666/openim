@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -222,7 +223,8 @@ class _MomentsVisibilityPageState extends State<MomentsVisibilityPage> {
                             children: [
                           Text(
                               momentsText(context,
-                                  zh: '已选择 ${_selected.length} 位好友',
+                                  zh: AppCopy.format(
+                                      '已选择 {#0} 位好友', [_selected.length]),
                                   en: '${_selected.length} friends selected'),
                               style: TextStyle(
                                   color: MomentsTheme.secondary(dark))),

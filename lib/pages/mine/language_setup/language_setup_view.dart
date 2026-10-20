@@ -15,12 +15,12 @@ class LanguageSetupPage extends StatelessWidget {
     return Scaffold(
       appBar: TitleBar.back(title: StrRes.languageSetup),
       backgroundColor: Styles.c_F8F9FA,
-      body: Obx(() => Column(
+      body: Obx(() => ListView(
             children: [
               12.verticalSpace,
               _buildItemView(
                 label: StrRes.followSystem,
-                isChecked: logic.isFollowSystem.value,
+                isChecked: logic.selectedLanguage.value == 0,
                 onTap: () => logic.switchLanguage(0),
                 isTopRadius: true,
               ),
@@ -31,7 +31,7 @@ class LanguageSetupPage extends StatelessWidget {
               ),
               _buildItemView(
                 label: StrRes.chinese,
-                isChecked: logic.isChinese.value,
+                isChecked: logic.selectedLanguage.value == 1,
                 onTap: () => logic.switchLanguage(1),
               ),
               Container(
@@ -40,8 +40,18 @@ class LanguageSetupPage extends StatelessWidget {
                 height: .5,
               ),
               _buildItemView(
+                label: StrRes.traditionalChinese,
+                isChecked: logic.selectedLanguage.value == 3,
+                onTap: () => logic.switchLanguage(3),
+              ),
+              Container(
+                margin: EdgeInsets.only(left: 26.w, right: 10.w),
+                color: Styles.c_E8EAEF,
+                height: .5,
+              ),
+              _buildItemView(
                 label: StrRes.english,
-                isChecked: logic.isEnglish.value,
+                isChecked: logic.selectedLanguage.value == 2,
                 onTap: () => logic.switchLanguage(2),
                 isBottomRadius: true,
               ),
@@ -59,36 +69,43 @@ class LanguageSetupPage extends StatelessWidget {
   }) =>
       Container(
         margin: EdgeInsets.symmetric(horizontal: 10.w),
-        child: Ink(
-          height: 60.h,
-          decoration: BoxDecoration(
-            color: Styles.c_FFFFFF,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(isTopRadius ? 6.r : 0),
-              topRight: Radius.circular(isTopRadius ? 6.r : 0),
-              bottomRight: Radius.circular(isBottomRadius ? 6.r : 0),
-              bottomLeft: Radius.circular(isBottomRadius ? 6.r : 0),
+        child: Semantics(
+          selected: isChecked,
+          inMutuallyExclusiveGroup: true,
+          child: Ink(
+            decoration: BoxDecoration(
+              color: Styles.c_FFFFFF,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(isTopRadius ? 6.r : 0),
+                topRight: Radius.circular(isTopRadius ? 6.r : 0),
+                bottomRight: Radius.circular(isBottomRadius ? 6.r : 0),
+                bottomLeft: Radius.circular(isBottomRadius ? 6.r : 0),
+              ),
             ),
-          ),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(isTopRadius ? 6.r : 0),
-              topRight: Radius.circular(isTopRadius ? 6.r : 0),
-              bottomRight: Radius.circular(isBottomRadius ? 6.r : 0),
-              bottomLeft: Radius.circular(isBottomRadius ? 6.r : 0),
-            ),
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.w),
-              child: Row(
-                children: [
-                  label.toText..style = Styles.ts_0C1C33_17sp,
-                  const Spacer(),
-                  if (isChecked)
-                    ImageRes.checked.toImage
-                      ..width = 24.w
-                      ..height = 24.h,
-                ],
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(isTopRadius ? 6.r : 0),
+                topRight: Radius.circular(isTopRadius ? 6.r : 0),
+                bottomRight: Radius.circular(isBottomRadius ? 6.r : 0),
+                bottomLeft: Radius.circular(isBottomRadius ? 6.r : 0),
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: 60.h < 48 ? 48 : 60.h),
+                child: Padding(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                  child: Row(
+                    children: [
+                      Expanded(
+                          child: label.toText..style = Styles.ts_0C1C33_17sp),
+                      if (isChecked)
+                        ImageRes.checked.toImage
+                          ..width = 24.w
+                          ..height = 24.h,
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

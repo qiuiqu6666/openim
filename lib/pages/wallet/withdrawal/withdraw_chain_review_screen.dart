@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'wallet_withdrawal_feedback.dart';
@@ -251,7 +252,7 @@ class _WithdrawChainReviewScreenState extends State<WithdrawChainReviewScreen>
           try {
             if (proof?.isExpired == true) proof = null;
             proof ??= await authorize();
-            if (proof == null) return '请先完成本次提现的安全验证';
+            if (proof == null) return AppCopy.text('请先完成本次提现的安全验证');
             if (!_canAuthorize) {
               return policyLabels.accountChanged;
             }

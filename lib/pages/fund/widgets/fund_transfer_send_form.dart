@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from qiuiqu6666/99chat, revision d7c3c65 (Apache-2.0).
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -62,8 +63,11 @@ class FundTransferSendForm extends StatelessWidget {
                       children: [
                     Text(
                         recipientName == null
-                            ? _text(context, '请选择收款人', 'Select a recipient')
-                            : _text(context, '转账给 $recipientName',
+                            ? _text(context, AppCopy.text('请选择收款人'),
+                                'Select a recipient')
+                            : _text(
+                                context,
+                                AppCopy.format('转账给 {#0}', [recipientName]),
                                 'Transfer to $recipientName'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -181,7 +185,7 @@ class FundTransferSendForm extends StatelessWidget {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                            _text(context, '转账金额',
+                                            _text(context, AppCopy.text('转账金额'),
                                                 'Transfer Amount'),
                                             style: _walletStyle(
                                                 context, 14.5 * scale,
@@ -192,8 +196,8 @@ class FundTransferSendForm extends StatelessWidget {
                                 else
                                   Row(children: [
                                     Text(
-                                        _text(
-                                            context, '转账金额', 'Transfer Amount'),
+                                        _text(context, AppCopy.text('转账金额'),
+                                            'Transfer Amount'),
                                         style: _walletStyle(
                                             context, 14.5 * scale,
                                             weight: FontWeight.w700)),

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/compensation_detail.dart';
@@ -33,15 +34,15 @@ class CompensationInvitation extends StatelessWidget {
                 aspectRatio: 1086 / 1448,
                 child: Semantics(
                     button: true,
-                    label: '查看并领取',
-                    hint: '打开活动详情，不会直接领取',
+                    label: AppCopy.text('查看并领取'),
+                    hint: AppCopy.text('打开活动详情，不会直接领取'),
                     child: InkWell(
                         key: const ValueKey('compensation-invitation-poster'),
                         onTap: () => Navigator.pop(context, true),
                         child: Image.asset(CompensationTokens.poster,
                             fit: BoxFit.contain, excludeFromSemantics: true)))),
             IconButton(
-                tooltip: '关闭活动提醒',
+                tooltip: AppCopy.text('关闭活动提醒'),
                 onPressed: () => Navigator.pop(context, false),
                 style: IconButton.styleFrom(
                     foregroundColor: CompensationTokens.gold,

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../sangong/services/authorization/sangong_access_policy.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -35,7 +36,7 @@ class GroupFeatureActions {
                 onStateChanged: (_) => onLiveStateChanged?.call())),
       if (privileged)
         ToolboxItemInfo(
-            text: '三公运营',
+            text: AppCopy.text('三公运营'),
             icon: '',
             symbol: Icons.sports_esports_outlined,
             onTap: () => SangongModule.openManage(context,
@@ -49,7 +50,7 @@ class GroupFeatureActions {
                 featureContext: feature, runtime: sangongRuntime)),
       if (feature.showMarkSixDrawHistory)
         ToolboxItemInfo(
-            text: '开奖记录',
+            text: AppCopy.text('开奖记录'),
             icon: '',
             symbol: Icons.history_rounded,
             onTap: () => MarkSixModule.openDrawHistory(context, feature)),
@@ -66,7 +67,7 @@ class GroupFeatureActions {
           games.markSix.rebateHistoryEntry &&
           caps.markSix.canViewRebateHistory)
         ToolboxItemInfo(
-            text: '反水历史',
+            text: AppCopy.text('反水历史'),
             icon: '',
             symbol: Icons.receipt_long_outlined,
             onTap: () => MarkSixModule.openRebateHistory(context, feature)),
@@ -153,11 +154,11 @@ class GroupFeatureActions {
                                               feature.groupID)
                                           ? null
                                           : () => refresh(force: true),
-                                      child: const Text('重试'))),
+                                      child: Text(AppCopy.text('重试')))),
                             if (actions.isEmpty && error == null)
                               Padding(
                                   padding: const EdgeInsets.all(20),
-                                  child: Text('此群暂无可用功能',
+                                  child: Text(AppCopy.text('此群暂无可用功能'),
                                       textAlign: TextAlign.center,
                                       style:
                                           TextStyle(color: tokens.secondary))),

@@ -1,3 +1,5 @@
+import 'package:openim_common/localization.dart';
+import 'package:openim/services/fund_currency_visibility/fund_currency_visibility.dart';
 import 'dart:async';
 
 import 'package:openim/routes/swipe_back/app_page_route.dart';
@@ -65,6 +67,7 @@ class FundSendPage extends StatefulWidget {
   /// userID/recipientName/recipientFaceURL as its initial recipient.
   final FundPacketBiz? initialPacketBiz;
   final FundApi? api;
+
   /// Publishes a confirmed order to the originating chat before navigation.
   final ValueChanged<FundOrder>? onPaid;
   final SettingsService? settingsService;
@@ -265,9 +268,12 @@ class _FundSendPageState extends State<FundSendPage>
       if (!mounted) return;
       if (!_sameAccount) throw StateError('The account changed');
       setState(() {
-        _balances = results[0] as List<FundBalance>;
+        _balances = (results[0] as List<FundBalance>)
+            .where((balance) => isFundCurrencyVisible(balance.currency))
+            .toList(growable: false);
         _passwordSet = results[1] as bool;
-        if (!_currencyInitialized) {
+        if (!_currencyInitialized ||
+            (_pending == null && !isFundCurrencyVisible(_currency))) {
           if (_pending == null) {
             final available = _balances.map((balance) => balance.currency);
             final defaultCurrency = widget.internalWithdrawal
@@ -287,11 +293,12 @@ class _FundSendPageState extends State<FundSendPage>
         setState(() {
           _balances = [];
           _error = error is FundPendingConflict
-              ? _text('群内已有其他红包待确认，请返回原红包入口重试',
+              ? _text(AppCopy.text('群内已有其他红包待确认，请返回原红包入口重试'),
                   'Another group packet is pending. Return to its original entry to retry.')
               : _sameAccount
-                  ? _text('加载失败，请重试', 'Could not load funds. Please retry.')
-                  : _text('登录状态已变更，请重新打开页面',
+                  ? _text(AppCopy.text('加载失败，请重试'),
+                      'Could not load funds. Please retry.')
+                  : _text(AppCopy.text('登录状态已变更，请重新打开页面'),
                       'Your account changed. Please reopen this page.');
         });
       }
@@ -387,22 +394,24 @@ class _FundSendPageState extends State<FundSendPage>
     try {
       final value = FundAmount.parse(raw?.trim() ?? '', _currency);
       if (!value.isPositive) {
-        return _text('金额必须大于 0', 'Enter an amount greater than zero');
+        return _text(
+            AppCopy.text('金额必须大于 0'), 'Enter an amount greater than zero');
       }
       if (value.units > BigInt.parse('9223372036854775807') ||
           (_total?.units ?? BigInt.zero) >
               BigInt.parse('9223372036854775807')) {
-        return _text('金额超出可处理范围', 'Amount exceeds the supported range');
+        return _text(
+            AppCopy.text('金额超出可处理范围'), 'Amount exceeds the supported range');
       }
       if (_multiple &&
           _biz == FundPacketBiz.lucky &&
           value.units < BigInt.from(int.tryParse(_count.text) ?? 1)) {
-        return _text(
-            '总金额不足以分配这些红包', 'Total amount is too small for this packet count');
+        return _text(AppCopy.text('总金额不足以分配这些红包'),
+            'Total amount is too small for this packet count');
       }
       return null;
     } catch (_) {
-      return _text('请输入有效金额，最多 ${_currency.decimals} 位小数',
+      return _text(AppCopy.format('请输入有效金额，最多 {#0} 位小数', [_currency.decimals]),
           'Enter a valid amount with up to ${_currency.decimals} decimal places');
     }
   }
@@ -412,7 +421,7 @@ class _FundSendPageState extends State<FundSendPage>
       FundRemark.normalize(raw ?? '');
       return null;
     } on FormatException {
-      return _text('最多输入12个字符', 'Use at most 12 characters');
+      return _text(AppCopy.text('最多输入12个字符'), 'Use at most 12 characters');
     }
   }
 
@@ -425,14 +434,15 @@ class _FundSendPageState extends State<FundSendPage>
     final value = FundAmount.parse(raw!.trim(), _currency);
     final available = _balance?.available;
     return available == null || value.compareTo(available) > 0
-        ? _text('可用余额不足', 'Insufficient available balance')
+        ? _text(AppCopy.text('可用余额不足'), 'Insufficient available balance')
         : null;
   }
 
   String? _validateTransferRecipient(String? raw) =>
       (_recvID ?? '').isNotEmpty || (raw ?? '').trim().isNotEmpty
           ? null
-          : _text('请填写收款人账号或选择好友', 'Enter an account or select a friend');
+          : _text(AppCopy.text('请填写收款人账号或选择好友'),
+              'Enter an account or select a friend');
 
   void _recipientEdited() {
     if (_locked || _loading) return;
@@ -506,8 +516,8 @@ class _FundSendPageState extends State<FundSendPage>
       await _load();
     } catch (_) {
       if (mounted) {
-        setState(() => _error =
-            _text('无法加载收款人，请重试', 'Could not load recipient. Please retry.'));
+        setState(() => _error = _text(AppCopy.text('无法加载收款人，请重试'),
+            'Could not load recipient. Please retry.'));
       }
     } finally {
       if (mounted) setState(() => _resolvingRecipient = false);
@@ -549,8 +559,8 @@ class _FundSendPageState extends State<FundSendPage>
       return;
     }
     if (!_sameAccount) {
-      setState(() => _error = _text(
-          '登录状态已变更，请重新打开页面', 'Your account changed. Please reopen this page.'));
+      setState(() => _error = _text(AppCopy.text('登录状态已变更，请重新打开页面'),
+          'Your account changed. Please reopen this page.'));
       return;
     }
     if (!_form.currentState!.validate()) return;
@@ -600,7 +610,7 @@ class _FundSendPageState extends State<FundSendPage>
       await _load();
       if (!mounted || !_sameAccount) return false;
       if (_pending != null) {
-        setState(() => _error = _text('已恢复待确认转账，请核对收款人和金额后重试',
+        setState(() => _error = _text(AppCopy.text('已恢复待确认转账，请核对收款人和金额后重试'),
             'Pending transfer restored. Review the recipient and amount before retrying.'));
         return false;
       }
@@ -610,9 +620,9 @@ class _FundSendPageState extends State<FundSendPage>
         setState(() => _error = error is FormatException
             ? error.message
             : _sameAccount
-                ? _text(
-                    '收款人查询失败，请重试', 'Could not find recipient. Please retry.')
-                : _text('登录状态已变更，请重新打开页面',
+                ? _text(AppCopy.text('收款人查询失败，请重试'),
+                    'Could not find recipient. Please retry.')
+                : _text(AppCopy.text('登录状态已变更，请重新打开页面'),
                     'Your account changed. Please reopen this page.'));
       }
       return false;
@@ -683,7 +693,7 @@ class _FundSendPageState extends State<FundSendPage>
     FocusScope.of(context).unfocus();
     unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.hide'));
     IMViews.showToast(_text(
-      widget.isRedPacket ? '红包已发出' : '转账成功，已直接到账',
+      widget.isRedPacket ? AppCopy.text('红包已发出') : AppCopy.text('转账成功，已直接到账'),
       widget.isRedPacket
           ? 'Red packet sent'
           : 'Transfer completed; funds delivered',
@@ -711,8 +721,8 @@ class _FundSendPageState extends State<FundSendPage>
       return;
     }
     if (_needsRecipient && ((_recvID ?? '').isEmpty || _recvID == _accountID)) {
-      setState(() => _error =
-          _text('请选择其他成员作为收款人', 'Choose another member as the recipient'));
+      setState(() => _error = _text(AppCopy.text('请选择其他成员作为收款人'),
+          'Choose another member as the recipient'));
       return;
     }
     if (!_passwordSet) {
@@ -775,12 +785,16 @@ class _FundSendPageState extends State<FundSendPage>
         context: context,
         builder: (sheetContext) => FundPaySheet(
           total: total,
-          title: _text(widget.isRedPacket ? '红包' : (_group ? '群转账' : '转账'),
+          title: _text(
+              widget.isRedPacket
+                  ? AppCopy.text('红包')
+                  : (_group ? AppCopy.text('群转账') : AppCopy.text('转账')),
               widget.isRedPacket ? 'Red Packet' : 'Transfer'),
           available: _balance?.available.displayDecimal ?? '—',
           recipient: _multiple
-              ? _text('群红包', 'Group packet')
-              : (_recipientDisplayName ?? _text('聊天对象', 'Chat recipient')),
+              ? _text(AppCopy.text('群红包'), 'Group packet')
+              : (_recipientDisplayName ??
+                  _text(AppCopy.text('聊天对象'), 'Chat recipient')),
           paymentDetails: () => FundPaymentDetails(
               total: draft.total,
               available: _balances
@@ -975,7 +989,8 @@ class _FundSendPageState extends State<FundSendPage>
               error is FormatException
           ? error
           : PasswordPaymentException(mounted
-              ? _text('无法保存本次交易，请重试', 'Cannot save this payment. Please retry.')
+              ? _text(AppCopy.text('无法保存本次交易，请重试'),
+                  'Cannot save this payment. Please retry.')
               : 'Cannot save this payment. Please retry.');
       if (mounted) {
         setState(() {
@@ -1008,9 +1023,10 @@ class _FundSendPageState extends State<FundSendPage>
   FundBalance? get _balance =>
       _balances.where((b) => b.currency == _currency).firstOrNull;
   String _bizLabel(FundPacketBiz biz) => switch (biz) {
-        FundPacketBiz.normal => _text('普通红包', 'Regular packet'),
-        FundPacketBiz.lucky => _text('拼手气红包', 'Lucky packet'),
-        FundPacketBiz.exclusive => _text('专属红包', 'Exclusive packet'),
+        FundPacketBiz.normal => _text(AppCopy.text('普通红包'), 'Regular packet'),
+        FundPacketBiz.lucky => _text(AppCopy.text('拼手气红包'), 'Lucky packet'),
+        FundPacketBiz.exclusive =>
+          _text(AppCopy.text('专属红包'), 'Exclusive packet'),
       };
   Future<void> _choosePacketType() async {
     if (_locked || _loading) return;

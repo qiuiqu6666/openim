@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 import '../../mine/settings/settings_service.dart';
@@ -32,7 +33,7 @@ class _DesktopLoginDevicesPageState extends State<DesktopLoginDevicesPage> {
     if (!_current) {
       setState(() {
         _loading = false;
-        _error = '登录状态已变化，请重新登录';
+        _error = AppCopy.text('登录状态已变化，请重新登录');
       });
       return;
     }
@@ -50,7 +51,7 @@ class _DesktopLoginDevicesPageState extends State<DesktopLoginDevicesPage> {
         }
       });
     } catch (_) {
-      if (_current) setState(() => _error = '无法获取设备状态，请检查网络后重试');
+      if (_current) setState(() => _error = AppCopy.text('无法获取设备状态，请检查网络后重试'));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -68,7 +69,7 @@ class _DesktopLoginDevicesPageState extends State<DesktopLoginDevicesPage> {
       await widget.service.removeDevice(id);
       if (_current) await _load();
     } catch (_) {
-      if (_current) setState(() => _error = '退出未完成，请重试核对设备状态');
+      if (_current) setState(() => _error = AppCopy.text('退出未完成，请重试核对设备状态'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -79,16 +80,18 @@ class _DesktopLoginDevicesPageState extends State<DesktopLoginDevicesPage> {
     final selected = _devices.where((d) => d.id == _selected).firstOrNull;
     return DesktopAuthorizationLayout(
       title: _error ??
-          (selected == null ? '暂无在线的桌面设备' : '${selected.platform}已登录'),
+          (selected == null
+              ? AppCopy.text('暂无在线的桌面设备')
+              : AppCopy.format('{#0}已登录', [selected.platform])),
       loggedIn: true,
       loading: _loading,
       busy: _busy,
       onClose: () => Navigator.of(context).pop(),
       action: _error != null
-          ? '重试'
+          ? AppCopy.text('重试')
           : selected == null
               ? '完成'
-              : '退出该设备',
+              : AppCopy.text('退出该设备'),
       onAction: _error != null
           ? _load
           : selected == null

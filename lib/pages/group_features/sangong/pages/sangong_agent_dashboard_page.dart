@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
@@ -125,8 +126,8 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           leading: const AppBackButton(),
-          title:
-              const Text('团队统计', style: TextStyle(fontWeight: FontWeight.w700)),
+          title: Text(AppCopy.text('团队统计'),
+              style: TextStyle(fontWeight: FontWeight.w700)),
           centerTitle: true,
           surfaceTintColor: Colors.transparent,
         ),
@@ -137,7 +138,8 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                     Text(_error!),
                     const SizedBox(height: 12),
-                    FilledButton(onPressed: _load, child: const Text('重试'))
+                    FilledButton(
+                        onPressed: _load, child: Text(AppCopy.text('重试')))
                   ]))
                 : RefreshIndicator(
                     onRefresh: _load,
@@ -146,17 +148,19 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
                       children: [
                         _batchCard(batch),
                         const SizedBox(height: 18),
-                        _sectionTitle('团队概览', Icons.insights_rounded),
+                        _sectionTitle(
+                            AppCopy.text('团队概览'), Icons.insights_rounded),
                         const SizedBox(height: 10),
                         _summaryCard(summary),
                         const SizedBox(height: 22),
-                        _sectionTitle('下级明细', Icons.groups_2_rounded,
+                        _sectionTitle(
+                            AppCopy.text('下级明细'), Icons.groups_2_rounded,
                             trailing: '${members.length} 人'),
                         const SizedBox(height: 10),
                         if (members.isEmpty)
-                          const Padding(
+                          Padding(
                               padding: EdgeInsets.all(24),
-                              child: Center(child: Text('暂无下级'))),
+                              child: Center(child: Text(AppCopy.text('暂无下级')))),
                         ...members.map(_memberCard),
                       ],
                     ),
@@ -187,7 +191,7 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                Text('当前业务批次',
+                Text(AppCopy.text('当前业务批次'),
                     style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurfaceVariant)),
@@ -207,10 +211,10 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
               ])),
           Text(
               running
-                  ? '● 开机中'
+                  ? AppCopy.text('● 开机中')
                   : _text(batch['status']).isEmpty
-                      ? '状态未知'
-                      : '已结算',
+                      ? AppCopy.text('状态未知')
+                      : AppCopy.text('已结算'),
               style: TextStyle(
                   color: running
                       ? (Theme.of(context).brightness == Brightness.dark
@@ -249,10 +253,11 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _heroMetric('团队总余额', _money(summary['totalBalance']), null),
+          _heroMetric(
+              AppCopy.text('团队总余额'), _money(summary['totalBalance']), null),
           const SizedBox(height: 12),
           _heroMetric(
-            '总流水',
+            AppCopy.text('总流水'),
             _money(_totalTurnover(summary)),
             null,
           ),
@@ -287,14 +292,14 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
 
   Widget _compactGrid(Map<String, dynamic> summary) {
     final fields = <(String, String, bool)>[
-      ('闲流水', _money(summary['playerTurnover']), false),
-      ('庄流水', _money(summary['bankerTurnover']), false),
-      ('团队人数', _num(summary['memberCount']), false),
-      ('直属人数', _num(summary['directMemberCount']), false),
+      (AppCopy.text('闲流水'), _money(summary['playerTurnover']), false),
+      (AppCopy.text('庄流水'), _money(summary['bankerTurnover']), false),
+      (AppCopy.text('团队人数'), _num(summary['memberCount']), false),
+      (AppCopy.text('直属人数'), _num(summary['directMemberCount']), false),
       ('上分', _money(summary['totalUp']), false),
       ('下分', _money(summary['totalDown']), false),
       (
-        '团队盈亏',
+        AppCopy.text('团队盈亏'),
         _money(summary['totalProfitLoss'] ?? summary['profitLoss']),
         false
       ),
@@ -324,7 +329,7 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
 
   Widget _memberCard(Map<String, dynamic> member) {
     final name = _text(member['nickname']).trim().isEmpty
-        ? '用户'
+        ? AppCopy.text('用户')
         : _text(member['nickname']);
     return Card(
       elevation: 0,
@@ -342,7 +347,13 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(
-              '${_levelLabel(member['levelNo'])} · 余额 ${_money(member['balance'])} · 返水 ${_rebateRate(member)} · 闲 ${_money(member['playerTurnover'])} · 庄 ${_money(member['bankerTurnover'])}'),
+              AppCopy.format('{#0} · 余额 {#1} · 返水 {#2} · 闲 {#3} · 庄 {#4}', [
+            _levelLabel(member['levelNo']),
+            _money(member['balance']),
+            _rebateRate(member),
+            _money(member['playerTurnover']),
+            _money(member['bankerTurnover'])
+          ])),
         ),
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: () {
@@ -358,7 +369,14 @@ class _SangongAgentDashboardPageState extends State<SangongAgentDashboardPage> {
 
   String _levelLabel(dynamic value) {
     final level = int.tryParse(_text(value)) ?? 0;
-    const labels = <String>['', '一级代理', '二级代理', '三级代理'];
-    return level > 0 && level < labels.length ? labels[level] : '第 $level 级';
+    final labels = <String>[
+      '',
+      AppCopy.text('一级代理'),
+      AppCopy.text('二级代理'),
+      AppCopy.text('三级代理')
+    ];
+    return level > 0 && level < labels.length
+        ? labels[level]
+        : AppCopy.format('第 {#0} 级', [level]);
   }
 }

@@ -66,8 +66,8 @@ ThemeData buildAppThemeData(Brightness brightness) {
       ),
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData().copyWith(
-        color: base.colorScheme.primary,
-        linearTrackColor: base.colorScheme.surfaceContainerHighest,
+        color: AppTokens.accent,
+        linearTrackColor: AppTokens.accent.withValues(alpha: dark ? .2 : .1),
         circularTrackColor: base.colorScheme.surfaceContainerHighest),
     cupertinoOverrideTheme: CupertinoThemeData(
       brightness: brightness,

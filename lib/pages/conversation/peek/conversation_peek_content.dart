@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -74,7 +75,7 @@ class _ConversationPeekContentState extends State<ConversationPeekContent> {
             : 'conversation-peek-retry'),
         onPressed: onRetry,
         icon: const Icon(Icons.refresh_rounded, size: 17),
-        label: Text(_text(context, '重试', 'Retry')),
+        label: Text(_text(context, AppCopy.text('重试'), 'Retry')),
       );
 
   @override
@@ -94,7 +95,9 @@ class _ConversationPeekContentState extends State<ConversationPeekContent> {
             if (loader.error != null) {
               return Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(_text(context, '加载失败，请重试', 'Unable to load messages'),
+                  Text(
+                      _text(context, AppCopy.text('加载失败，请重试'),
+                          'Unable to load messages'),
                       style: TextStyle(fontSize: 14, color: secondary)),
                   const SizedBox(height: 12),
                   _retry(context, () => unawaited(loader.loadInitial())),
@@ -105,9 +108,9 @@ class _ConversationPeekContentState extends State<ConversationPeekContent> {
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
               Text(
                   loader.isCurrent
-                      ? _text(context, '暂无消息', 'No messages')
-                      : _text(
-                          context, '会话已失效', 'This session is no longer active'),
+                      ? _text(context, AppCopy.text('暂无消息'), 'No messages')
+                      : _text(context, AppCopy.text('会话已失效'),
+                          'This session is no longer active'),
                   style: TextStyle(fontSize: 14, color: secondary)),
               if (loader.olderError != null)
                 _retry(context, () => unawaited(loader.retryOlder()),
@@ -116,8 +119,8 @@ class _ConversationPeekContentState extends State<ConversationPeekContent> {
                 TextButton(
                   key: const ValueKey('conversation-peek-load-older'),
                   onPressed: () => unawaited(loader.loadOlder()),
-                  child:
-                      Text(_text(context, '加载更早消息', 'Load earlier messages')),
+                  child: Text(_text(context, AppCopy.text('加载更早消息'),
+                      'Load earlier messages')),
                 ),
             ]));
           }

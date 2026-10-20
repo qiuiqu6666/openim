@@ -33,6 +33,9 @@ class ProcessFriendRequestsLogic extends GetxController {
     try {
       final manager = OpenIM.iMManager.friendshipManager;
       if (accept) {
+        await FriendRelationshipGuard.requireNotBlocked(
+            applicationInfo.fromUserID!);
+        if (!current()) return;
         await manager.acceptFriendApplication(
             userID: applicationInfo.fromUserID!);
       } else {
@@ -44,9 +47,12 @@ class ProcessFriendRequestsLogic extends GetxController {
       IMViews.showToast(
           accept ? StrRes.addSuccessfully : StrRes.rejectSuccessfully);
       Get.back(result: applicationInfo.handleResult);
-    } catch (_) {
+    } catch (error) {
       if (current()) {
-        IMViews.showToast(accept ? StrRes.addFailed : StrRes.rejectFailed);
+        IMViews.showToast(
+            friendAddErrorMessage(error,
+                    chinese: Get.locale?.languageCode != 'en') ??
+                (accept ? StrRes.addFailed : StrRes.rejectFailed));
       }
     } finally {
       if (!isClosed) processing.value = false;

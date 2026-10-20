@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -90,7 +91,7 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
         .loadHtmlString(
             aliyunCaptchaHtml(
               language: locale.languageCode == 'zh'
-                  ? (locale.countryCode == 'TW' ? 'tw' : 'cn')
+                  ? (AppCopy.isTraditional(locale) ? 'tw' : 'cn')
                   : 'en',
             ),
             baseUrl: Config.appAuthUrl)
@@ -103,7 +104,7 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
     _timeout?.cancel();
     setState(() {
       _loadFailed = true;
-      _error = text('验证加载失败，请检查网络后重试',
+      _error = text(AppCopy.text('验证加载失败，请检查网络后重试'),
           'Could not load verification. Check your connection and retry.');
       _ready = false;
     });
@@ -185,9 +186,9 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
           reload = result.captchaVerified && !result.sent;
           if (!result.sent) {
             final error = result.captchaVerified
-                ? text('短信发送失败，请重新验证后重试',
+                ? text(AppCopy.text('短信发送失败，请重新验证后重试'),
                     'SMS could not be sent. Verify again to retry.')
-                : text('验证未通过或服务超时，请重新验证',
+                : text(AppCopy.text('验证未通过或服务超时，请重新验证'),
                     'Verification failed or timed out. Please retry.');
             if (result.captchaVerified && !widget.finishOnSendFailure) {
               showSettingsMessage(context, error);
@@ -207,10 +208,11 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
             return;
           }
           final errorText = error is TimeoutException
-              ? text('请求超时，请稍后重试', 'The request timed out. Please try again.')
+              ? text(AppCopy.text('请求超时，请稍后重试'),
+                  'The request timed out. Please try again.')
               : HttpUtil.errorMessage(error,
                   path: Urls.getVerificationCode,
-                  fallback: text('发送失败，请重新验证后重试',
+                  fallback: text(AppCopy.text('发送失败，请重新验证后重试'),
                       'Could not send the code. Verify again to retry.'));
           showSettingsMessage(context, errorText);
         }
@@ -226,7 +228,7 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
             return;
           }
           reload = true;
-          _error = text('验证连接中断，请重试',
+          _error = text(AppCopy.text('验证连接中断，请重试'),
               'Verification connection interrupted. Please retry.');
         }
         if (_closing) return;
@@ -305,7 +307,9 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
                           Text(_error!, textAlign: TextAlign.center),
                         if (!_supported)
                           Text(
-                              text('当前平台暂不支持安全验证，请使用 Android 或 iOS 客户端',
+                              text(
+                                  AppCopy.text(
+                                      '当前平台暂不支持安全验证，请使用 Android 或 iOS 客户端'),
                                   'Use the Android or iOS app to complete security verification.'),
                               textAlign: TextAlign.center),
                         if (_error != null)
@@ -314,7 +318,8 @@ class _CaptchaDialogState extends State<_CaptchaDialog> {
                           TextButton(
                               onPressed:
                                   _checking ? null : () => setState(_load),
-                              child: Text(text('重新加载', 'Reload'))),
+                              child:
+                                  Text(text(AppCopy.text('重新加载'), 'Reload'))),
                         TextButton(
                             onPressed: _checking ? null : _finish,
                             child: Text(text('返回', 'Back'))),

@@ -1,3 +1,4 @@
+import 'package:openim_common/media_localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:file_picker/file_picker.dart';
 
@@ -10,6 +11,7 @@ import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:wechat_camera_picker/wechat_camera_picker.dart';
 
 import '../settings_draft_store.dart';
+import '../account_security/email/email_account_page.dart';
 import '../settings_navigation.dart';
 import '../settings_service.dart';
 import '../widgets/settings_widgets.dart';
@@ -115,7 +117,8 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
         if (source == 'camera') {
           asset = await CameraPicker.pickFromCamera(
             context,
-            pickerConfig: const CameraPickerConfig(
+            pickerConfig: CameraPickerConfig(
+              textDelegate: AppMediaCopy.camera,
               enableRecording: false,
               enableAudio: false,
               enableScaledPreview: false,
@@ -125,6 +128,7 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
           final assets = await AssetPicker.pickAssets(
             context,
             pickerConfig: AssetPickerConfig(
+              textDelegate: AppMediaCopy.assets,
               maxAssets: 1,
               requestType: RequestType.image,
               sortPathsByModifiedDate: true,
@@ -389,6 +393,12 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
     );
   }
 
+  Future<void> _openEmail() async {
+    await openSettingsPage<bool>(context, const EmailAccountPage());
+    // The shared email flow updates the current profile after a successful save.
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
         animation: widget.store,
@@ -440,6 +450,13 @@ class _ProfileInfoPageState extends State<ProfileInfoPage> {
                         ? settingsText(context, zh: '未绑定', en: 'Not linked')
                         : widget.phoneNumber.trim(),
                     onTap: _openPhone,
+                  ),
+                  SettingsCell(
+                    title: settingsText(context, zh: '邮箱', en: 'Email'),
+                    value: widget.service.securityEmail.trim().isEmpty
+                        ? settingsText(context, zh: '未绑定', en: 'Not linked')
+                        : widget.service.securityEmail.trim(),
+                    onTap: _openEmail,
                   ),
                   SettingsCell(
                     title: settingsText(context, zh: '99号ID', en: '99 ID'),

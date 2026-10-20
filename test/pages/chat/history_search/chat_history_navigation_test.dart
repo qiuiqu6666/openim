@@ -27,7 +27,8 @@ class _NavigationProbe extends ChatHistoryMessageNavigation {
   Future<bool> open(BuildContext context,
       {required String conversationID,
       required Message message,
-      required bool Function() isEntryCurrent}) async {
+      required bool Function() isEntryCurrent,
+      bool? preserveEntryRoute}) async {
     expect(isEntryCurrent(), isTrue);
     calls.add((conversationID: conversationID, message: message));
     return pending == null ? true : await pending!.future;
@@ -180,6 +181,75 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+      'inherited navigation returns from chat to the selected member list',
+      (tester) async {
+    source.messages = List.generate(
+        20,
+        (index) => _textMessage()
+          ..clientMsgID = 'member-result-$index'
+          ..sendID = _SenderSource.member.userID
+          ..textElem = TextElem(content: 'Member message $index'));
+    Route<dynamic>? originalRoute;
+    var reusedOriginal = false;
+    final navigation = ChatHistoryMessageNavigation(
+      // Match production: the shared parent adapter was created without preservation.
+      currentSession: () => 'same-session',
+      findMessage: (_, id) async =>
+          source.messages.firstWhere((m) => m.clientMsgID == id),
+      findConversation: (_) async =>
+          ConversationInfo(conversationID: conversationID),
+      currentChat: (_) => ChatHistoryActiveChat(
+          conversationID: conversationID,
+          route: originalRoute,
+          isCurrent: () => true,
+          focusMessage: (_) async {
+            reusedOriginal = true;
+            return true;
+          }),
+      startChat: (_, message, isCurrent) async {
+        if (!isCurrent()) return;
+        await Get.key.currentState!.push(MaterialPageRoute<void>(
+            builder: (_) =>
+                Scaffold(body: Text('Positioned ${message.clientMsgID}'))));
+      },
+    );
+    await mount(tester,
+        page: ChatHistorySearchPage(
+            conversationID: conversationID,
+            isGroup: true,
+            source: source,
+            senderSource: senderSource,
+            messageNavigation: navigation));
+    originalRoute =
+        ModalRoute.of(tester.element(find.byType(ChatHistoryResultsPage)));
+    await tester.tap(categoryEntry(ChatHistoryCategory.sender));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('chat-history-sender-member-42')));
+    await tester.pumpAndSettle();
+    final pageState = tester.state(find.byType(ChatHistoryResultsPage));
+    final row =
+        find.byKey(const ValueKey('chat-history-result-member-result-8'));
+    await tester.scrollUntilVisible(row, 350);
+    await tester.pumpAndSettle();
+    final list = find.byKey(const PageStorageKey('chat-history-results-list'));
+    final scroll = tester.state<ScrollableState>(
+        find.descendant(of: list, matching: find.byType(Scrollable)));
+    final offset = scroll.position.pixels;
+    final calls = source.resultCalls.length;
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    expect(find.text('Positioned member-result-8'), findsOneWidget);
+    expect(reusedOriginal, isFalse);
+    await pop(tester);
+    expect(tester.state(find.byType(ChatHistoryResultsPage)), same(pageState));
+    expect(find.text(_SenderSource.member.displayName), findsWidgets);
+    expect(scroll.position.pixels, offset);
+    expect(source.resultCalls.length, calls);
+    await disposePage(tester);
+  });
 
   for (final brightness in Brightness.values) {
     for (final category in [

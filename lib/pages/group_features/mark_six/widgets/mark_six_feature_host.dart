@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Edge handle / agent controls adapted from 99chat lottery_chat_entry.dart
 // and agent_rebate_floating_entry.dart (Apache-2.0).
 import 'dart:async';
@@ -64,7 +65,7 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
     _robotBinding?.removeListener(_robotBindingChanged);
     _robotBinding?.dispose();
     _robotBinding = null;
-    MarkSixApiDebugLog.event('群入口检查', {
+    MarkSixApiDebugLog.event(AppCopy.text('群入口检查'), {
       'groupId': widget.featureContext.groupID,
       'gameType': widget.featureContext.gameType.index,
       'queryRobotBinding':
@@ -191,7 +192,7 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
                           }
                         },
                         child: Semantics(
-                            label: '点击查看开奖记录',
+                            label: AppCopy.text('点击查看开奖记录'),
                             button: true,
                             child: SizedBox(
                                 width: 40,
@@ -297,7 +298,7 @@ class _AgentFloatingEntryState extends State<_AgentFloatingEntry> {
 
   void _toggle() {
     if (!widget.canAgent && !widget.canHistory) {
-      IMViews.showToast('暂无代理功能权限');
+      IMViews.showToast(AppCopy.text('暂无代理功能权限'));
       return;
     }
     setState(() => _expanded = !_expanded);
@@ -359,22 +360,35 @@ class _AgentFloatingEntryState extends State<_AgentFloatingEntry> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: !_expanded ||
                                         (!widget.canAgent && !widget.canHistory)
-                                    ? [_button(context, '显', '展开代理功能', _toggle)]
+                                    ? [
+                                        _button(context, AppCopy.text('显'),
+                                            AppCopy.text('展开代理功能'), _toggle)
+                                      ]
                                     : [
                                         if (widget.canAgent) ...[
-                                          _button(context, '查', '查下级',
+                                          _button(
+                                              context,
+                                              '查',
+                                              AppCopy.text('查下级'),
                                               widget.onQuery),
                                           const SizedBox(height: 10),
-                                          _button(context, '反', '当前反水',
+                                          _button(
+                                              context,
+                                              '反',
+                                              AppCopy.text('当前反水'),
                                               widget.onRebate),
                                           const SizedBox(height: 10)
                                         ],
                                         if (widget.canHistory) ...[
-                                          _button(context, '历', '历史记录',
+                                          _button(
+                                              context,
+                                              AppCopy.text('历'),
+                                              AppCopy.text('历史记录'),
                                               widget.onHistory),
                                           const SizedBox(height: 10)
                                         ],
-                                        _button(context, '隐', '收起', _toggle),
+                                        _button(context, AppCopy.text('隐'),
+                                            '收起', _toggle),
                                       ]))))))
       ]);
     }));

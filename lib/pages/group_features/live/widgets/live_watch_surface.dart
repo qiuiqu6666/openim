@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../playback/live_surface_visibility.dart';
 import 'package:openim/routes/swipe_back/app_swipe_back_tokens.dart';
 import 'dart:async';
@@ -313,13 +314,13 @@ class _GroupLiveWatchSurfaceState extends State<GroupLiveWatchSurface>
             loading: state.loading,
             active: state.session.status.active,
             message: !state.current
-                ? '直播会话已失效'
+                ? AppCopy.text('直播会话已失效')
                 : state.error != null
                     ? liveErrorMessage(state.error!)
                     : state.session.status == LiveStatus.scheduled
-                        ? '直播尚未开始，请稍候'
+                        ? AppCopy.text('直播尚未开始，请稍候')
                         : state.session.status == LiveStatus.authorized
-                            ? '直播准备中，请稍候…'
+                            ? AppCopy.text('直播准备中，请稍候…')
                             : state.session.status.label,
             muted: state.muted,
             fullscreen: fullscreen,

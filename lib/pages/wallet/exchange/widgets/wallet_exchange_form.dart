@@ -1,3 +1,5 @@
+import 'package:openim_common/localization.dart';
+import 'package:openim/services/fund_currency_visibility/fund_currency_visibility.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/wallet_fund_api.dart';
@@ -19,10 +21,12 @@ class WalletExchangeForm extends StatelessWidget {
       required this.onTo,
       required this.onReverse,
       required this.onAmountChanged,
+      this.currencies = FundCurrency.values,
       this.outputAmount = '--',
       this.outputEstimated = false});
 
   final FundCurrency from, to;
+  final List<FundCurrency> currencies;
   final TextEditingController amountController;
   final String available;
   final bool locked;
@@ -39,7 +43,7 @@ class WalletExchangeForm extends StatelessWidget {
           color: WalletExchangeTokens.panel(context),
           borderRadius: BorderRadius.circular(AppTokens.rXl)),
       child: Column(children: [
-        _currency(context, from, 'wallet-swap-from', '转出',
+        _currency(context, from, 'wallet-swap-from', AppCopy.text('转出'),
             '$available ${from.displayName}', onFrom,
             available: true),
         SizedBox(
@@ -50,7 +54,7 @@ class WalletExchangeForm extends StatelessWidget {
                 child: Divider(height: 1, color: colors.line)),
             IconButton(
                 key: const ValueKey('wallet-swap-reverse'),
-                tooltip: '交换币种',
+                tooltip: AppCopy.text('交换币种'),
                 onPressed: locked ? null : onReverse,
                 style: IconButton.styleFrom(
                     backgroundColor: colors.card,
@@ -61,7 +65,7 @@ class WalletExchangeForm extends StatelessWidget {
                 icon: const Icon(Icons.swap_vert_rounded)),
           ]),
         ),
-        _currency(context, to, 'wallet-swap-to', '转入',
+        _currency(context, to, 'wallet-swap-to', AppCopy.text('转入'),
             '$outputAmount ${to.displayName}', onTo),
       ]),
     );
@@ -71,22 +75,26 @@ class WalletExchangeForm extends StatelessWidget {
       String label, String quantity, ValueChanged<FundCurrency> changed,
       {bool available = false}) {
     final colors = WalletPageColors.of(context);
+    final visibleCurrencies = currencies.where(isFundCurrencyVisible).toList();
     return Padding(
       padding: const EdgeInsets.symmetric(
           horizontal: AppTokens.s5, vertical: AppTokens.s3),
       child: DropdownButtonHideUnderline(
           child: DropdownButton<FundCurrency>(
         key: ValueKey(key),
-        value: currency,
+        value: visibleCurrencies.contains(currency) ? currency : null,
+        hint: Text(visibleCurrencies.isEmpty
+            ? AppCopy.text('暂无可用币种')
+            : AppCopy.text('请选择币种')),
         isExpanded: true,
         itemHeight: null,
         dropdownColor: colors.card,
         icon: const SizedBox.shrink(),
-        selectedItemBuilder: (_) => FundCurrency.values
+        selectedItemBuilder: (_) => visibleCurrencies
             .map((coin) => _selectedRow(context, coin, label, quantity,
                 available: available))
             .toList(),
-        items: FundCurrency.values
+        items: visibleCurrencies
             .map((coin) =>
                 DropdownMenuItem(value: coin, child: Text(coin.displayName)))
             .toList(),
@@ -130,12 +138,12 @@ class WalletExchangeForm extends StatelessWidget {
               style: body),
           Text(
               available
-                  ? '可用余额'
+                  ? AppCopy.text('可用余额')
                   : outputAmount == '--'
-                      ? '成交后显示'
+                      ? AppCopy.text('成交后显示')
                       : outputEstimated
-                          ? '预计实得'
-                          : '实得数量',
+                          ? AppCopy.text('预计实得')
+                          : AppCopy.text('实得数量'),
               style: caption),
         ]);
     final logo = WalletCoinLogo(

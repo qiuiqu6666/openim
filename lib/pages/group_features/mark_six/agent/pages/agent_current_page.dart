@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Layout adapted from 99chat agent_rebate_current_page.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'dart:async';
@@ -45,17 +46,17 @@ class _AgentCurrentPageState extends State<AgentCurrentPage> {
     try {
       final confirmed = await showAppConfirm(context,
           barrierDismissible: true,
-          title: '确认级差反水',
-          message: '申请结算本人级差待结算。金额由机器人侧核算，确定继续吗？',
+          title: AppCopy.text('确认级差反水'),
+          message: AppCopy.text('申请结算本人级差待结算。金额由机器人侧核算，确定继续吗？'),
           cancelText: '取消',
-          confirmText: '确认申请');
+          confirmText: AppCopy.text('确认申请'));
       if (!mounted || !allowed || confirmed != true || !_state.canApply()) {
         return;
       }
       await _state.apply();
       if (mounted && _state.current && _state.settled) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('反水结算成功')));
+            .showSnackBar(SnackBar(content: Text(AppCopy.text('反水结算成功'))));
       }
     } finally {
       _confirming = false;
@@ -69,15 +70,15 @@ class _AgentCurrentPageState extends State<AgentCurrentPage> {
         final style = MarkSixStyle.of(context);
         return Scaffold(
             backgroundColor: style.background,
-            appBar: markSixAppBar(context, '当前反水汇总'),
+            appBar: markSixAppBar(context, AppCopy.text('当前反水汇总')),
             body: SafeArea(
                 top: false,
                 child: Column(children: [
                   Expanded(
                       child: !allowed
-                          ? const MarkSixEmpty(message: '你没有代理功能权限')
+                          ? MarkSixEmpty(message: AppCopy.text('你没有代理功能权限'))
                           : !_state.current
-                              ? const MarkSixEmpty(message: '登录状态已变更')
+                              ? MarkSixEmpty(message: AppCopy.text('登录状态已变更'))
                               : _state.loading
                                   ? Center(child: LoadingView.indicator())
                                   : _state.error != null
@@ -109,8 +110,8 @@ class _AgentCurrentPageState extends State<AgentCurrentPage> {
                                       const SizedBox(width: 8),
                                       Flexible(
                                           child: Text(_state.restoring
-                                              ? '正在确认上次申请状态…'
-                                              : '反水处理中，请稍候…'))
+                                              ? AppCopy.text('正在确认上次申请状态…')
+                                              : AppCopy.text('反水处理中，请稍候…')))
                                     ])),
                           SizedBox(
                               width: double.infinity,
@@ -130,20 +131,20 @@ class _AgentCurrentPageState extends State<AgentCurrentPage> {
                                               ? _confirmApply
                                               : null,
                                   child: Text(_state.restoring
-                                      ? '恢复申请状态中…'
+                                      ? AppCopy.text('恢复申请状态中…')
                                       : _state.submitting
                                           ? '提交中…'
                                           : _state.polling
-                                              ? '处理中'
+                                              ? AppCopy.text('处理中')
                                               : _state.needsStatusQuery
-                                                  ? '查询处理状态'
-                                                  : '申请反水'))),
+                                                  ? AppCopy.text('查询处理状态')
+                                                  : AppCopy.text('申请反水')))),
                         ])),
                 ])));
       });
   Widget _body(BuildContext context) {
     final data = _state.data;
-    if (data == null) return const MarkSixEmpty(message: '暂无当前汇总');
+    if (data == null) return MarkSixEmpty(message: AppCopy.text('暂无当前汇总'));
     final summary = markSixMap(data['summary']);
     final dataTime = DateTime.tryParse('${summary['dataTime'] ?? ''}');
     final localDataTime = dataTime == null
@@ -160,23 +161,24 @@ class _AgentCurrentPageState extends State<AgentCurrentPage> {
             children: [
               if (personal.isNotEmpty)
                 AgentSummaryCard(
-                    title: '个人反水汇总',
+                    title: AppCopy.text('个人反水汇总'),
                     summary: personal,
                     personal: true,
                     highlight: true),
               if (personal.isNotEmpty) const SizedBox(height: 12),
               if (summary.isNotEmpty)
                 AgentSummaryCard(
-                    title: '${summary['agentName'] ?? '当前汇总'}',
+                    title: '${summary['agentName'] ?? AppCopy.text('当前汇总')}',
                     subtitle: [
                       if (summary['agentNo'] != null)
-                        '用户编号：${summary['agentNo']}',
-                      if (summary['dataTime'] != null) '数据时间：$localDataTime'
+                        AppCopy.format('用户编号：{#0}', [summary['agentNo']]),
+                      if (summary['dataTime'] != null)
+                        AppCopy.format('数据时间：{#0}', [localDataTime])
                     ].join('  ·  '),
                     summary: summary,
                     highlight: true)
               else
-                const MarkSixEmpty(message: '暂无当前汇总'),
+                MarkSixEmpty(message: AppCopy.text('暂无当前汇总')),
             ]));
   }
 }

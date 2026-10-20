@@ -574,7 +574,7 @@ class MomentsDraftStore extends ChangeNotifier {
 
   Future<MomentPost> _complete(MomentPost post) async {
     _checkSession();
-    repository.applyPost(post);
+    repository.applyPublishedPost(post);
     final oldMedia = List<MomentsDraftMedia>.from(media);
     text = '';
     media.clear();

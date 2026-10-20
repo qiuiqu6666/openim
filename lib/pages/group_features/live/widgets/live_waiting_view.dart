@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 
 import '../casting/live_cast_button.dart';
@@ -66,7 +67,7 @@ class LiveWaitingView extends StatelessWidget {
                     maintainSize: true,
                     child: TextButton(
                       onPressed: loading ? null : onRefresh,
-                      child: const Text('刷新状态'),
+                      child: Text(AppCopy.text('刷新状态')),
                     ),
                   ),
                 ]),
@@ -79,7 +80,7 @@ class LiveWaitingView extends StatelessWidget {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const LiveCastButton(),
               IconButton(
-                tooltip: muted ? '打开声音' : '静音',
+                tooltip: muted ? AppCopy.text('打开声音') : AppCopy.text('静音'),
                 onPressed: onMute,
                 icon: Icon(
                     muted
@@ -89,7 +90,7 @@ class LiveWaitingView extends StatelessWidget {
                     size: LiveStyle.controlIconSize),
               ),
               IconButton(
-                tooltip: '关闭',
+                tooltip: AppCopy.text('关闭'),
                 onPressed: onClose,
                 icon: const Icon(Icons.close, color: LiveStyle.screenInk),
               ),

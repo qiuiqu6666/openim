@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Preview geometry adapted from 99chat lottery_drawer.dart.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'package:flutter/material.dart';
@@ -17,7 +18,7 @@ Future<void> showMarkSixDrawer(
   final expanded = await showGeneralDialog<bool>(
       context: context,
       barrierDismissible: true,
-      barrierLabel: '关闭开奖预览',
+      barrierLabel: AppCopy.text('关闭开奖预览'),
       barrierColor: Colors.black12,
       transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (context, animation, secondaryAnimation) {
@@ -44,7 +45,7 @@ Future<void> showMarkSixDrawer(
                             child: Semantics(
                                 key: cardKey,
                                 button: true,
-                                label: '全屏查看开奖记录',
+                                label: AppCopy.text('全屏查看开奖记录'),
                                 child: InkWell(
                                     key: const ValueKey('lottery-preview-open'),
                                     borderRadius: BorderRadius.circular(16),
@@ -190,7 +191,7 @@ class _LatestPreviewShellState extends State<_LatestPreviewShell> {
                                             preview: true))))))),
             Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Text('点击卡片 · 全屏查看开奖记录',
+                child: Text(AppCopy.text('点击卡片 · 全屏查看开奖记录'),
                     style: TextStyle(
                         fontSize: 11,
                         color: style.secondary,

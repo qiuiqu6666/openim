@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'auth_reference_tokens.dart';
+import 'auth_minimal_layout.dart';
 
 /// Lets Material animate the label and cut its gap in the field outline.
 InputDecoration authReferenceInputDecoration({
@@ -16,12 +17,15 @@ InputDecoration authReferenceInputDecoration({
   Widget? prefix,
   Widget? suffix,
 }) {
+  final minimal = AuthMinimalLayout.of(context);
   final invalid = errorText?.trim().isNotEmpty ?? false;
   final outlined = label != null && showBorder;
   InputBorder border(Color color, double width) => outlined
       ? OutlineInputBorder(
           borderRadius: BorderRadius.circular(AuthReferenceTokens.rLg),
-          borderSide: BorderSide(color: color, width: width),
+          borderSide: minimal && !focused && !invalid
+              ? BorderSide.none
+              : BorderSide(color: color, width: width),
         )
       : InputBorder.none;
   final normalBorder = border(
@@ -33,7 +37,7 @@ InputDecoration authReferenceInputDecoration({
     filled: label != null,
     fillColor:
         AuthReferenceTokens.color(context, AuthReferenceTokens.fieldFill),
-    labelText: label,
+    labelText: minimal ? null : label,
     labelStyle: hintStyle,
     floatingLabelStyle: hintStyle.copyWith(
       color: invalid

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../wallet/host/wallet_navigation.dart';
@@ -163,7 +164,7 @@ class _CompensationHomeEntryState extends State<CompensationHomeEntry>
           vertical: CompensationTokens.small),
       child: Semantics(
         button: true,
-        label: '${d.title}，查看活动详情',
+        label: AppCopy.format('{#0}，查看活动详情', [d.title]),
         child: Material(
             color: Colors.transparent,
             child: InkWell(

@@ -1,4 +1,5 @@
 const Map<String, String> zh_CN = {
+  'traditionalChinese': '繁體中文',
   'forwardPreviewBatch': '逐条转发',
   'forwardPreviewCount': '共 @count 条消息',
   'networkPreparing': '正在连接…',
@@ -959,7 +960,7 @@ const Map<String, String> errorMessages = {
   '1602': '连接握手参数错误',
   '1701': '文件上传过期',
   '20001': '密码错误',
-  'apiNewDeviceVerificationRequired': '检测到新设备，请完成短信验证',
+  'apiNewDeviceVerificationRequired': '检测到新设备，请完成身份验证',
   'apiNewDevicePhoneNotBound': '账号未绑定手机号，请在已登录的设备上绑定手机号后重试',
   'apiLoginDeviceIDInvalid': '设备信息无效，请退出登录页面后重试',
   '20002': '账号不存在',

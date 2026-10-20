@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -116,7 +117,19 @@ class FavoritePickerItemTile extends StatelessWidget {
                                               FavoritePickerTokens.sourceGap),
                                       Text(
                                           text(
-                                              '来源：${source?.isNotEmpty == true ? source : item.source != null ? text('聊天消息', 'Chat message') : text('手动添加', 'Manual')}',
+                                              AppCopy.format('来源：{#0}', [
+                                                source?.isNotEmpty == true
+                                                    ? source
+                                                    : item.source != null
+                                                        ? text(
+                                                            AppCopy.text(
+                                                                '聊天消息'),
+                                                            'Chat message')
+                                                        : text(
+                                                            AppCopy.text(
+                                                                '手动添加'),
+                                                            'Manual')
+                                              ]),
                                               'Source: ${source?.isNotEmpty == true ? source : item.source != null ? 'Chat message' : 'Manual'}'),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -76,14 +77,14 @@ class LiveObsGuideSheet extends StatelessWidget {
                         child: Image.asset(LiveStyle.guideAsset,
                             width: double.infinity,
                             fit: BoxFit.contain,
-                            semanticLabel:
-                                '直播教程：下载芯象，填写完整推流地址，设置推荐参数，开始与结束直播。')),
+                            semanticLabel: AppCopy.text(
+                                '直播教程：下载芯象，填写完整推流地址，设置推荐参数，开始与结束直播。'))),
                     const SizedBox(height: AppTokens.s5),
                     LivePrimaryButton(
                         label: switch (
                             Localizations.localeOf(context).languageCode) {
                           'en' => 'Got it',
-                          'ja' => '了解',
+                          'ja' => AppCopy.text('了解'),
                           'ko' => '확인',
                           _ => '我知道了'
                         },

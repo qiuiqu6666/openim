@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart' show AppTokens;
 
@@ -17,12 +18,12 @@ class SangongProfileLedgerFrame extends StatelessWidget {
       child: SafeArea(
         child: Column(children: [
           ListTile(
-            title: Text('游戏流水',
+            title: Text(AppCopy.text('游戏流水'),
                 style: TextStyle(color: AppTokens.textPrimary(dark: dark))),
             trailing: embedded
                 ? null
                 : IconButton(
-                    tooltip: '关闭',
+                    tooltip: AppCopy.text('关闭'),
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.pop(context),
                   ),

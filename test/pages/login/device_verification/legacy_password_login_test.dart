@@ -6,8 +6,14 @@ import 'dart:convert';
 void main() {
   test('new deployment supports encrypted legacy login only on Chat port', () {
     const host = '127.0.0.1';
-    expect(LegacyPasswordEnvelope.permits(Uri.parse('http://$host:10008/account/login')), isTrue);
-    expect(LegacyPasswordEnvelope.permits(Uri.parse('http://$host:10002/account/login')), isFalse);
+    expect(
+        LegacyPasswordEnvelope.permits(
+            Uri.parse('http://$host:10008/account/login')),
+        isTrue);
+    expect(
+        LegacyPasswordEnvelope.permits(
+            Uri.parse('http://$host:10002/account/login')),
+        isFalse);
   });
   const request = <String, dynamic>{
     'account': 'owner',

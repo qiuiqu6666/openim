@@ -119,6 +119,39 @@ void main() {
     });
   }
 
+  test(
+      'device options and sending preserve password identity without raw secrets',
+      () async {
+    final original = _passwordRequest(identity: 'account');
+    final attempt = PasswordDeviceLoginAttempt.fromRequest(original);
+    adapter.reply({
+      'methods': ['phone', 'email']
+    });
+    expect(await attempt.methods(), ['phone', 'email']);
+    expect(adapter.requests.last.uri.path, '/account/device/verification');
+    adapter.reply(
+        {'captchaVerifyResult': true, 'bizResult': true, 'retryAfter': 60});
+    await attempt.sendCode(
+        areaCode: '+1',
+        phoneNumber: 'attacker',
+        method: 'email',
+        captchaVerifyParam: 'proof');
+    expect(adapter.requests.last.uri.path, '/account/device/code/send');
+    expect(adapter.requests.last.data['account'], original['account']);
+    expect(adapter.requests.last.data['phoneNumber'], isNull);
+    expect(adapter.requests.last.data['email'], isNull);
+    expect(adapter.requests.last.data['deviceVerificationMethod'], 'email');
+    expect(
+        adapter.requests.every((r) =>
+            r.data['passwordPlaintext'] == null && r.headers['token'] == null),
+        isTrue);
+    adapter.reply({
+      'methods': ['untrusted']
+    });
+    await expectLater(attempt.methods(), throwsFormatException);
+    expect(DataSp.getLoginCertificate(), isNull);
+  });
+
   test('login preparation keeps one identity and a stable persisted device',
       () async {
     for (final identity in ['phoneNumber', 'account', 'email']) {
@@ -233,8 +266,7 @@ void main() {
     expect(adapter.requests.every((r) => r.headers['token'] == null), isTrue);
   });
 
-  test(
-      'SMS request uses login purpose and the same device without account data',
+  test('SMS request resolves the frozen account without requiring a phone',
       () async {
     final attempt = PasswordDeviceLoginAttempt.fromRequest(_passwordRequest());
     adapter.reply({
@@ -253,8 +285,7 @@ void main() {
     expect(request.uri.path, '/account/code/send');
     expect(request.data, {
       'usedFor': 3,
-      'areaCode': '+86',
-      'phoneNumber': '13800138000',
+      'loginAccount': 'public-account',
       'platform': 2,
       'deviceID': _device,
       'captchaVerifyParam': 'real-slider-proof',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'auth_reference_tokens.dart';
+import 'auth_minimal_layout.dart';
 
 /// Keeps the hint line stable while allowing translated or enlarged text to wrap.
 class AuthFieldMessage extends StatelessWidget {
@@ -17,8 +18,10 @@ class AuthFieldMessage extends StatelessWidget {
       padding: const EdgeInsets.only(top: AuthReferenceTokens.messageGap),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          minHeight: MediaQuery.textScalerOf(context)
-              .scale(AuthReferenceTokens.messageHeight),
+          minHeight: !hasMessage && AuthMinimalLayout.of(context)
+              ? AuthReferenceTokens.compactMessageHeight
+              : MediaQuery.textScalerOf(context)
+                  .scale(AuthReferenceTokens.messageHeight),
         ),
         child: Align(
           alignment: Alignment.centerLeft,

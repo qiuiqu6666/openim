@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
@@ -35,8 +36,11 @@ class ConversationPeekMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     final zh = Localizations.localeOf(context).languageCode == 'zh';
     if (containsPrivateContent(message)) {
-      return _systemText(context,
-          zh ? '私密消息请进入会话查看' : 'Open the chat to view private messages');
+      return _systemText(
+          context,
+          zh
+              ? AppCopy.text('私密消息请进入会话查看')
+              : 'Open the chat to view private messages');
     }
     final notice = FundClaimNotice.parse(message);
     if (notice != null) {

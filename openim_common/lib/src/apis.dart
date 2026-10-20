@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:dio/dio.dart';
@@ -23,10 +24,13 @@ class Apis {
 
   static Future<void> applyFriendGrant(
       {required String grant, required String message}) async {
-    await HttpUtil.post('${Config.appAuthUrl}/chat/friend-apply',
+    final data = await HttpUtil.post('${Config.appAuthUrl}/chat/friend-apply',
         data: {'friendGrant': grant, 'message': message},
         options: chatTokenOptions..contentType = Headers.jsonContentType,
         showErrorToast: false);
+    if (data is! Map || data['applyState'] != 'success') {
+      throw PlatformException(code: 'FriendApplyUnconfirmed');
+    }
   }
 
   static Future<String> createFriendInvite(FriendAddSource source,

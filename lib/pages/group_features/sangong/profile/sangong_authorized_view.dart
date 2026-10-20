@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import '../sangong_scope.dart';
 
@@ -13,5 +14,5 @@ class SangongAuthorizedView extends StatelessWidget {
       listenable: runtime,
       builder: (_, __) => runtime.canManage && (isCurrent?.call() ?? true)
           ? child
-          : const Center(child: Text('当前游戏权限已变化，请重新进入')));
+          : Center(child: Text(AppCopy.text('当前游戏权限已变化，请重新进入'))));
 }

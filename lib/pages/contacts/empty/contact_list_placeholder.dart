@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -29,10 +30,12 @@ CustomScrollView contactListPlaceholder(
                         icon: Icons.inbox_outlined,
                         title: failed
                             ? (chinese
-                                ? '加载失败，请重试'
+                                ? AppCopy.text('加载失败，请重试')
                                 : 'Could not load. Please retry.')
                             : title,
-                        actionLabel: failed ? (chinese ? '重试' : 'Retry') : null,
+                        actionLabel: failed
+                            ? (chinese ? AppCopy.text('重试') : 'Retry')
+                            : null,
                         onAction: failed ? onRetry : null,
                       )),
             if (footer != null && !loading && !failed) footer,

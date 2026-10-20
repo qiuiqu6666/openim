@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -14,23 +15,26 @@ List<HomeQuickAction> homeContactActions({
   return [
     HomeQuickAction(
         id: 'searchAdd',
-        title: zh ? '搜索添加' : 'Search & Add',
-        subtitle: zh ? '通过账号/手机号搜索好友' : 'Find friends by account or phone',
+        title: zh ? AppCopy.text('搜索添加') : 'Search & Add',
+        subtitle: zh
+            ? AppCopy.text('通过账号/手机号搜索好友')
+            : 'Find friends by account or phone',
         onTap: onSearchAdd),
     HomeQuickAction(
         id: 'createGroup',
         title: StrRes.createGroup,
-        subtitle: zh ? '发起多人聊天' : 'Start a group conversation',
+        subtitle: zh ? AppCopy.text('发起多人聊天') : 'Start a group conversation',
         onTap: onCreateGroup),
     HomeQuickAction(
         id: 'createChannel',
-        title: zh ? '创建频道' : 'Create Channel',
-        subtitle: zh ? '暂未开放' : 'Coming soon',
+        title: zh ? AppCopy.text('创建频道') : 'Create Channel',
+        subtitle: zh ? AppCopy.text('暂未开放') : 'Coming soon',
         enabled: false),
     HomeQuickAction(
         id: 'scanQRCode',
         title: StrRes.scan,
-        subtitle: zh ? '扫描好友或群二维码' : 'Scan a friend or group QR code',
+        subtitle:
+            zh ? AppCopy.text('扫描好友或群二维码') : 'Scan a friend or group QR code',
         onTap: onScan),
   ];
 }

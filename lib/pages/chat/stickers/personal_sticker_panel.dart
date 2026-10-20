@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart' show AppTokens;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -36,8 +37,8 @@ class _PersonalStickerPanelState extends State<PersonalStickerPanel> {
   }
 
   void _showError(Object error) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('操作失败：$error')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppCopy.format('操作失败：{#0}', [AppCopy.error(error)]))));
   }
 
   Future<void> _sendDice() async {
@@ -74,7 +75,7 @@ class _PersonalStickerPanelState extends State<PersonalStickerPanel> {
               child: Row(children: [
                 Padding(
                   padding: EdgeInsets.only(left: 12.w),
-                  child: Text('添加的单个表情',
+                  child: Text(AppCopy.text('添加的单个表情'),
                       style: TextStyle(
                           fontSize: 13.sp, color: colors.onSurfaceVariant)),
                 ),
@@ -89,7 +90,8 @@ class _PersonalStickerPanelState extends State<PersonalStickerPanel> {
             if (store.loading) const LinearProgressIndicator(minHeight: 2),
             if (store.error != null)
               TextButton(
-                  onPressed: store.refresh, child: const Text('加载失败，点击重试')),
+                  onPressed: store.refresh,
+                  child: Text(AppCopy.text('加载失败，点击重试'))),
             Expanded(
               child: GridView.builder(
                 padding: EdgeInsets.fromLTRB(8.w, 4.h, 8.w, 8.h),
@@ -110,7 +112,7 @@ class _PersonalStickerPanelState extends State<PersonalStickerPanel> {
                         heightFactor: .68,
                         child: Semantics(
                           button: true,
-                          label: '添加表情',
+                          label: AppCopy.text('添加表情'),
                           child: InkWell(
                             key: const ValueKey('sticker-add-tile'),
                             borderRadius: BorderRadius.circular(AppTokens.rSm),
@@ -143,7 +145,7 @@ class _PersonalStickerPanelState extends State<PersonalStickerPanel> {
                   }
                   if (index == store.items.length + offset) {
                     return IconButton(
-                      tooltip: '加载更多',
+                      tooltip: AppCopy.text('加载更多'),
                       onPressed: store.loading ? null : store.loadMore,
                       icon: const Icon(Icons.more_horiz),
                     );

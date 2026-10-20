@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -141,6 +142,7 @@ class _LiveEntryPageState extends State<LiveEntryPage> {
                 padding: const EdgeInsets.only(top: 120),
                 child: Center(child: LoadingView.indicator()))
             : LiveError(
-                error: _error ?? StateError('登录状态已变化，请重新进入'), retry: _load));
+                error: _error ?? StateError(AppCopy.text('登录状态已变化，请重新进入')),
+                retry: _load));
   }
 }

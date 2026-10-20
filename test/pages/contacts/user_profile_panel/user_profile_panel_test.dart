@@ -487,19 +487,16 @@ void main() {
     await tester.pumpAndSettle();
     final add = tester.widget<Button>(find.ancestor(
         of: find.text(StrRes.addFriend), matching: find.byType(Button)));
-    final block = tester.widget<Button>(find.ancestor(
-        of: find.text('profileAddBlacklist'.tr),
-        matching: find.byType(Button)));
+    expect(find.text('profileAddBlacklist'.tr), findsNothing);
     expect(add.enabled, isFalse);
-    expect(block.enabled, isFalse);
     await _tap(tester, find.text(StrRes.addFriend));
-    await _tap(tester, find.text('profileAddBlacklist'.tr));
     expect(fixture.actions, isEmpty);
     expect(fixture.blacklistRequests, isEmpty);
     fixture.updatingBlacklist.value = false;
     await tester.pump();
-    await _tap(tester, find.text('profileAddBlacklist'.tr));
-    expect(fixture.blacklistRequests, [true]);
+    expect(find.text('profileAddBlacklist'.tr), findsNothing);
+    fixture.userInfo.update((user) => user?.isBlacklist = true);
+    await tester.pump();
     expect(find.text('profileRemoveBlacklist'.tr), findsOneWidget);
     final blockedAdd = tester.widget<Button>(find.ancestor(
         of: find.text(StrRes.addFriend), matching: find.byType(Button)));

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:flutter/material.dart';
 import 'package:openim/pages/group_features/sangong/models/group_game_round_status.dart';
@@ -209,13 +210,13 @@ class _DoorColumn extends StatelessWidget {
                               ),
                             ],
                           ),
-                          child: const Padding(
+                          child: Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: 5,
                               vertical: 1,
                             ),
                             child: Text(
-                              '庄',
+                              AppCopy.text('庄'),
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,

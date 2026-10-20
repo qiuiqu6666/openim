@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:openim_common/localization.dart';
 import '../../../services/moments_repository.dart';
 
 String momentsText(BuildContext context,
         {required String zh, required String en}) =>
-    Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
+    Localizations.localeOf(context).languageCode == 'zh'
+        ? AppCopy.text(zh, locale: Localizations.localeOf(context))
+        : en;
 
 bool momentsDark(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark;
@@ -96,11 +99,13 @@ String momentsTime(BuildContext context, int timestamp) {
   }
   if (elapsed.inHours < 1) {
     return momentsText(context,
-        zh: '${elapsed.inMinutes} 分钟前', en: '${elapsed.inMinutes}m ago');
+        zh: AppCopy.format('{#0} 分钟前', [elapsed.inMinutes]),
+        en: '${elapsed.inMinutes}m ago');
   }
   if (elapsed.inDays < 1) {
     return momentsText(context,
-        zh: '${elapsed.inHours} 小时前', en: '${elapsed.inHours}h ago');
+        zh: AppCopy.format('{#0} 小时前', [elapsed.inHours]),
+        en: '${elapsed.inHours}h ago');
   }
   if (elapsed.inDays < 7) {
     return momentsText(context,

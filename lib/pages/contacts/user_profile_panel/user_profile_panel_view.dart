@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:common_utils/common_utils.dart';
 import 'package:flutter/material.dart';
@@ -254,7 +255,6 @@ class UserProfilePanelPage extends StatelessWidget {
     return UserProfileIdentity(
       key: const ValueKey('user_profile_identity'),
       compact: compact,
-      reserveAccountSpace: true,
       name: nickname.isNotEmpty
           ? nickname
           : (_showAccount && logic.displayedUserID.isNotEmpty
@@ -263,12 +263,16 @@ class UserProfilePanelPage extends StatelessWidget {
       avatarUrl: user.faceURL,
       gender: user.gender,
       account: _showAccount ? logic.displayedUserID : '',
-      copyLabel: _text(context, '复制聊天号', 'Copy chat ID'),
+      copyLabel: _text(context, AppCopy.text('复制聊天号'), 'Copy chat ID'),
       onCopy: logic.copyID,
       signature: signature.isNotEmpty
           ? signature
           : _text(
-              context, logic.isMyself ? '暂未设置个性签名' : '对方什么都没有写', 'No bio yet'),
+              context,
+              logic.isMyself
+                  ? AppCopy.text('暂未设置个性签名')
+                  : AppCopy.text('对方什么都没有写'),
+              'No bio yet'),
       trailing: logic.isFriendship &&
               !logic.isMyself &&
               Get.isRegistered<ContactsLogic>()
@@ -336,9 +340,11 @@ class UserProfilePanelPage extends StatelessWidget {
     final zh = (Get.locale ?? Get.deviceLocale)?.languageCode == 'zh';
     final action = await Get.bottomSheet<String>(
       BottomSheetView(items: [
-        SheetItem(label: zh ? '分享联系人' : 'Share Contact', result: 'share'),
         SheetItem(
-            label: zh ? '删除好友' : 'Delete Friend',
+            label: zh ? AppCopy.text('分享联系人') : 'Share Contact',
+            result: 'share'),
+        SheetItem(
+            label: zh ? AppCopy.text('删除好友') : 'Delete Friend',
             textStyle: Styles.ts_0C1C33_17sp
                 .copyWith(color: Theme.of(context).colorScheme.error),
             result: 'delete'),
@@ -375,7 +381,7 @@ class UserProfilePanelPage extends StatelessWidget {
                 Text(
                   (Get.locale?.languageCode == 'en')
                       ? 'This person has not shared their chat ID. Ask them to share a QR code or contact card.'
-                      : '对方未公开聊天号，请让对方分享二维码或名片。',
+                      : AppCopy.text('对方未公开聊天号，请让对方分享二维码或名片。'),
                   key: const ValueKey('user_profile_add_method_hint'),
                   style: Theme.of(context)
                       .textTheme

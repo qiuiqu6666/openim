@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -147,7 +148,8 @@ class _WalletJournalLinkedOrderScreenState
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         systemOverlayStyle: walletPageOverlayStyle(context),
-        title: Text(label('账单详情', '帳單詳情', 'Order Details', '注文詳細', '주문 상세')),
+        title: Text(label(AppCopy.text('账单详情'), '帳單詳情', 'Order Details',
+            AppCopy.text('注文詳細'), '주문 상세')),
       ),
       body: SafeArea(
         top: false,
@@ -165,16 +167,17 @@ class _WalletJournalLinkedOrderScreenState
                           Text(
                             !_sameAccount
                                 ? label(
-                                    '登录状态已变化，请返回后重试',
+                                    AppCopy.text('登录状态已变化，请返回后重试'),
                                     '登入狀態已變更，請返回後重試',
                                     'Session changed. Go back and try again.',
-                                    'ログイン状態が変更されました。戻って再試行してください。',
+                                    AppCopy.text(
+                                        'ログイン状態が変更されました。戻って再試行してください。'),
                                     '로그인 상태가 변경되었습니다. 돌아가서 다시 시도하세요.')
                                 : label(
-                                    '暂时无法加载账单，请重试',
+                                    AppCopy.text('暂时无法加载账单，请重试'),
                                     '暫時無法載入帳單，請重試',
                                     'Unable to load the order. Please try again.',
-                                    '注文を読み込めません。再試行してください。',
+                                    AppCopy.text('注文を読み込めません。再試行してください。'),
                                     '주문을 불러올 수 없습니다. 다시 시도하세요.'),
                             key: const ValueKey('wallet-journal-order-error'),
                             textAlign: TextAlign.center,
@@ -184,8 +187,8 @@ class _WalletJournalLinkedOrderScreenState
                             TextButton(
                               key: const ValueKey('wallet-journal-order-retry'),
                               onPressed: _load,
-                              child: Text(
-                                  label('重试', '重試', 'Retry', '再試行', '다시 시도')),
+                              child: Text(label(AppCopy.text('重试'), '重試',
+                                  'Retry', '再試行', '다시 시도')),
                             ),
                         ],
                       ),
@@ -210,36 +213,48 @@ class _WalletJournalLinkedOrderScreenState
                               children: [
                                 WalletJournalDetailField(
                                   id: 'linked-order-id',
-                                  label: label('订单号', '訂單號', 'Order ID', '注文番号',
+                                  label: label(
+                                      AppCopy.text('订单号'),
+                                      '訂單號',
+                                      'Order ID',
+                                      AppCopy.text('注文番号'),
                                       '주문 번호'),
                                   value: order.orderID,
                                   copy: true,
                                 ),
                                 WalletJournalDetailField(
                                   id: 'linked-order-biz',
-                                  label:
-                                      label('业务类型', '業務類型', 'Type', '種類', '유형'),
+                                  label: label(AppCopy.text('业务类型'),
+                                      AppCopy.text('業務類型'), 'Type', '種類', '유형'),
                                   value:
                                       walletJournalFilterLabel(order.biz, i18n),
                                 ),
                                 WalletJournalDetailField(
                                   id: 'linked-order-amount',
                                   amount: true,
-                                  label: label('订单金额', '訂單金額', 'Order amount',
-                                      '注文金額', '주문 금액'),
+                                  label: label(
+                                      AppCopy.text('订单金额'),
+                                      '訂單金額',
+                                      'Order amount',
+                                      AppCopy.text('注文金額'),
+                                      '주문 금액'),
                                   value: walletJournalAmount(
                                       order.amount, order.currency.code),
                                 ),
                                 WalletJournalDetailField(
                                   id: 'linked-order-status',
-                                  label: label('订单当前状态', '訂單目前狀態',
-                                      'Current status', '現在の状態', '현재 상태'),
+                                  label: label(
+                                      AppCopy.text('订单当前状态'),
+                                      '訂單目前狀態',
+                                      'Current status',
+                                      AppCopy.text('現在の状態'),
+                                      '현재 상태'),
                                   value: _status(order.status, i18n),
                                 ),
                                 WalletJournalDetailField(
                                   id: 'linked-order-time',
-                                  label: label('创建时间', '建立時間', 'Created at',
-                                      '作成日時', '생성 시간'),
+                                  label: label(AppCopy.text('创建时间'), '建立時間',
+                                      'Created at', '作成日時', '생성 시간'),
                                   value: order.createdAt == null
                                       ? '--'
                                       : formatWalletApiDateTime(
@@ -248,7 +263,7 @@ class _WalletJournalLinkedOrderScreenState
                                 if (order.toAddress.isNotEmpty)
                                   WalletJournalDetailField(
                                     id: 'linked-order-address',
-                                    label: label('提现地址', '提現地址',
+                                    label: label(AppCopy.text('提现地址'), '提現地址',
                                         'Withdrawal address', '出金先', '출금 주소'),
                                     value: order.toAddress,
                                     copy: true,
@@ -256,7 +271,7 @@ class _WalletJournalLinkedOrderScreenState
                                 if (order.chainTxID.isNotEmpty)
                                   WalletJournalDetailField(
                                     id: 'linked-order-hash',
-                                    label: label('交易哈希', '交易雜湊',
+                                    label: label(AppCopy.text('交易哈希'), '交易雜湊',
                                         'Transaction hash', '取引ハッシュ', '거래 해시'),
                                     value: order.chainTxID,
                                     copy: true,
@@ -267,7 +282,7 @@ class _WalletJournalLinkedOrderScreenState
                                 if (order.fromAddress.isNotEmpty)
                                   WalletJournalDetailField(
                                     id: 'linked-order-from-address',
-                                    label: label('转出地址', '轉出地址',
+                                    label: label(AppCopy.text('转出地址'), '轉出地址',
                                         'Sending address', '送信元', '출금 주소'),
                                     value: order.fromAddress,
                                     copy: true,
@@ -275,23 +290,23 @@ class _WalletJournalLinkedOrderScreenState
                                 if (order.reviewReason.isNotEmpty)
                                   WalletJournalDetailField(
                                     id: 'linked-order-review-reason',
-                                    label: label('审核说明', '審核說明', 'Review note',
-                                        '審査メモ', '심사 메모'),
+                                    label: label(AppCopy.text('审核说明'), '審核說明',
+                                        'Review note', '審査メモ', '심사 메모'),
                                     value: order.reviewReason,
                                   ),
                                 if (order.completionReason.isNotEmpty)
                                   WalletJournalDetailField(
                                     id: 'linked-order-completion-reason',
-                                    label: label('出款说明', '出款說明', 'Payment note',
-                                        '送金メモ', '지급 메모'),
+                                    label: label(AppCopy.text('出款说明'), '出款說明',
+                                        'Payment note', '送金メモ', '지급 메모'),
                                     value: order.completionReason,
                                   ),
                                 if (order.fee != null)
                                   WalletJournalDetailField(
                                     id: 'linked-order-fee-amount',
                                     amount: true,
-                                    label: label(
-                                        '手续费', '手續費', 'Fee', '手数料', '수수료'),
+                                    label: label(AppCopy.text('手续费'), '手續費',
+                                        'Fee', AppCopy.text('手数料'), '수수료'),
                                     value: walletJournalAmount(
                                         order.fee, order.currency.code),
                                   ),
@@ -300,7 +315,7 @@ class _WalletJournalLinkedOrderScreenState
                                   WalletJournalDetailField(
                                     id: 'linked-order-target-amount',
                                     amount: true,
-                                    label: label('转入金额', '轉入金額',
+                                    label: label(AppCopy.text('转入金额'), '轉入金額',
                                         'Received amount', '受取金額', '받은 금액'),
                                     value: walletJournalAmount(
                                         order.targetAmount,
@@ -321,11 +336,11 @@ class _WalletJournalLinkedOrderScreenState
 String _status(String status, AppI18n i18n) {
   final (zh, hant, en) = switch (status) {
     'done' => ('已完成', '已完成', 'Completed'),
-    'open' => ('待领取', '待領取', 'Awaiting claim'),
+    'open' => (AppCopy.text('待领取'), '待領取', 'Awaiting claim'),
     'refunded' => ('已退回', '已退回', 'Refunded'),
-    'withdraw_pending' => ('等待审核', '等待審核', 'Awaiting review'),
+    'withdraw_pending' => (AppCopy.text('等待审核'), '等待審核', 'Awaiting review'),
     'withdraw_approved' => ('等待出款', '等待出款', 'Awaiting payment'),
-    'withdraw_done' => ('已登记出款', '已登記出款', 'Payment recorded'),
+    'withdraw_done' => (AppCopy.text('已登记出款'), '已登記出款', 'Payment recorded'),
     'withdraw_failed' => ('已退回', '已退回', 'Returned'),
     _ => ('--', '--', '--'),
   };

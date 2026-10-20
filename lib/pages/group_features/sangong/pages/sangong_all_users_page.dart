@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../identity/widgets/sangong_identity_view.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'dart:async';
@@ -218,7 +219,7 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
     });
     if (_isAccountQuery) {
       if (normalizePublicAccountSearch(_query) == null) {
-        setState(() => _accountError = '请输入完整的 10 位公开账号名');
+        setState(() => _accountError = AppCopy.text('请输入完整的 10 位公开账号名'));
         return;
       }
       setState(() => _accountLoading = true);
@@ -272,8 +273,8 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
   Widget build(BuildContext context) {
     if (!_matches(_pageScope)) {
       return Scaffold(
-        appBar: AppBar(title: const Text('全部用户'), centerTitle: true),
-        body: const Center(child: Text('当前游戏权限已变化，请重新进入')),
+        appBar: AppBar(title: Text(AppCopy.text('全部用户')), centerTitle: true),
+        body: Center(child: Text(AppCopy.text('当前游戏权限已变化，请重新进入'))),
       );
     }
     final users = _visibleUsers();
@@ -291,13 +292,13 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
               decoration: InputDecoration(
                 prefixIcon: Icon(Icons.search_rounded,
                     size: 21, color: colors.onSurfaceVariant),
-                hintText: '搜索公开账号或昵称',
+                hintText: AppCopy.text('搜索公开账号或昵称'),
                 hintStyle:
                     TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
                 suffixIcon: _searchController.text.isEmpty
                     ? null
                     : IconButton(
-                        tooltip: '清空搜索',
+                        tooltip: AppCopy.text('清空搜索'),
                         icon: const Icon(Icons.cancel_rounded, size: 19),
                         onPressed: () {
                           _searchController.clear();
@@ -333,7 +334,9 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: IconButton(
-              tooltip: _pointsDescending ? '积分从高到低' : '积分从低到高',
+              tooltip: _pointsDescending
+                  ? AppCopy.text('积分从高到低')
+                  : AppCopy.text('积分从低到高'),
               onPressed: () =>
                   setState(() => _pointsDescending = !_pointsDescending),
               icon: Icon(
@@ -348,7 +351,7 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
       ),
     );
     return Scaffold(
-      appBar: AppBar(title: const Text('全部用户'), centerTitle: true),
+      appBar: AppBar(title: Text(AppCopy.text('全部用户')), centerTitle: true),
       body: ListView.builder(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         itemCount: 1 +
@@ -371,7 +374,7 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
                   if (normalizePublicAccountSearch(_query) != null)
                     TextButton(
                       onPressed: () => _onQueryChanged(_query),
-                      child: const Text('重试'),
+                      child: Text(AppCopy.text('重试')),
                     ),
                 ]),
               );
@@ -381,12 +384,14 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
           if (_loading) return const Center(child: CircularProgressIndicator());
           if (_failed) {
             return TextButton(
-                onPressed: _loadFirst, child: const Text('加载失败，点击重试'));
+                onPressed: _loadFirst, child: Text(AppCopy.text('加载失败，点击重试')));
           }
           if (index == users.length + 1) {
             return TextButton(
                 onPressed: _loadingMore ? null : _loadMore,
-                child: Text(_loadingMore ? '加载中…' : '加载更多用户'));
+                child: Text(_loadingMore
+                    ? AppCopy.text('加载中…')
+                    : AppCopy.text('加载更多用户')));
           }
           return _userCell(context, users[index - 1]);
         },
@@ -416,7 +421,7 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            nickname.isNotEmpty ? nickname : '未设置昵称',
+            nickname.isNotEmpty ? nickname : AppCopy.text('未设置昵称'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -424,13 +429,14 @@ class _SangongAllUsersPageState extends State<SangongAllUsersPage> {
               userID: id, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 3),
           Text(
-            '下级 ${user.childrenCount}  ·  返水 ${user.rebatePer10000}',
+            AppCopy.format('下级 {#0}  ·  返水 {#1}',
+                [user.childrenCount, user.rebatePer10000]),
             style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
           ),
         ],
       ),
       trailing: Text(
-        '积分 ${user.balance}',
+        AppCopy.format('积分 {#0}', [user.balance]),
         style: TextStyle(
           color: colors.error,
           fontSize: 15,

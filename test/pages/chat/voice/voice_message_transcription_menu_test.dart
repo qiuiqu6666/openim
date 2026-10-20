@@ -99,7 +99,7 @@ void main() {
           ),
         ));
         await tester.pumpAndSettle();
-        expect(find.text('阅后即焚'), findsOneWidget);
+        expect(find.text('阅后即焚'), findsNothing);
         await tester.longPress(find.byType(ChatVoiceMessageView));
         await tester.pumpAndSettle();
         expect(find.text('转文字'), findsOneWidget);

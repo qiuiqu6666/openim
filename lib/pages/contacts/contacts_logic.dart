@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
@@ -588,7 +589,7 @@ class ContactsLogic extends GetxController
   scanOutUserID(String userID) {
     final invite = parseFriendInvite(userID);
     if (invite == null) {
-      IMViews.showToast('邀请已失效，请获取新的邀请');
+      IMViews.showToast(AppCopy.text('邀请已失效，请获取新的邀请'));
       return;
     }
     return AppNavigator.startUserProfilePane(

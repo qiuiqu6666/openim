@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -74,7 +75,7 @@ class MineProfileHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${mineText(context, zh: '99号ID', en: '99 ID')}: $userId',
+                    '${mineText(context, zh: AppCopy.text('99号ID'), en: '99 ID')}: $userId',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -114,7 +115,7 @@ class MineProfileHeader extends StatelessWidget {
                           SizedBox(width: signatureGap),
                           Flexible(
                             child: Text(
-                              '${mineText(context, zh: '个性签名', en: 'Bio')}: $signature',
+                              '${mineText(context, zh: AppCopy.text('个性签名'), en: 'Bio')}: $signature',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

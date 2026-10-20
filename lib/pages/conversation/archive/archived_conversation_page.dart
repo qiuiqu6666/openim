@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../../mine/settings/widgets/settings_widgets.dart'
     show showSettingsConfirm;
 // Layout and actions adapted from 99chat's ArchivedConversationPage,
@@ -125,12 +126,12 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
           CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(sheetContext, 'pin'),
             child: Text(info.isPinned == true
-                ? (_zh ? '取消置顶' : 'Unpin')
-                : (_zh ? '置顶' : 'Pin')),
+                ? (_zh ? AppCopy.text('取消置顶') : 'Unpin')
+                : (_zh ? AppCopy.text('置顶') : 'Pin')),
           ),
           CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(sheetContext, 'unarchive'),
-            child: Text(_zh ? '取消归档' : 'Unarchive'),
+            child: Text(_zh ? AppCopy.text('取消归档') : 'Unarchive'),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
@@ -205,10 +206,10 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
           children: [
             _swipeAction(_zh ? '更多' : 'More', const Color(0xFFF5A623),
                 () => _showMore(info)),
-            _swipeAction(_zh ? '取消归档' : 'Unarchive', AppTokens.accent,
-                () => _unarchive(info)),
-            _swipeAction(_zh ? '删除' : 'Delete', const Color(0xFFEF3B36),
-                () => _confirmDelete(info)),
+            _swipeAction(_zh ? AppCopy.text('取消归档') : 'Unarchive',
+                AppTokens.accent, () => _unarchive(info)),
+            _swipeAction(_zh ? AppCopy.text('删除') : 'Delete',
+                const Color(0xFFEF3B36), () => _confirmDelete(info)),
           ],
         ),
         child: ConversationFeedRow(
@@ -250,13 +251,13 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
             child: TextButton(
                 key: const ValueKey('archived-conversation-retry'),
                 onPressed: _refresh,
-                child: Text(_zh ? '重试' : 'Retry')));
+                child: Text(_zh ? AppCopy.text('重试') : 'Retry')));
       }
       return Center(
         child: Text(
           widget.groupChats
-              ? (_zh ? '暂无归档群聊' : 'No archived groups')
-              : (_zh ? '暂无归档会话' : 'No archived chats'),
+              ? (_zh ? AppCopy.text('暂无归档群聊') : 'No archived groups')
+              : (_zh ? AppCopy.text('暂无归档会话') : 'No archived chats'),
           style: TextStyle(
               fontSize: 14,
               color: AppTokens.textSecondary(
@@ -323,7 +324,7 @@ class _ArchivedConversationPageState extends State<ArchivedConversationPage> {
                 icon: const Icon(Icons.arrow_back_ios_new_rounded),
                 onPressed: () => Navigator.of(context).maybePop(),
               ),
-              title: Text(_zh ? '已归档' : 'Archived',
+              title: Text(_zh ? AppCopy.text('已归档') : 'Archived',
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,

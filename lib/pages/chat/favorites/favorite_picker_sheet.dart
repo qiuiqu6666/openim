@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -79,8 +80,8 @@ class _FavoritePickerSheetState extends State<FavoritePickerSheet> {
     if (mounted && !_invalid && !widget.repository.isSessionCurrent(_scope)) {
       setState(() {
         _invalid = true;
-        _error =
-            _text('登录状态已改变，请重新打开收藏', 'Your account changed. Reopen favorites.');
+        _error = _text(AppCopy.text('登录状态已改变，请重新打开收藏'),
+            'Your account changed. Reopen favorites.');
       });
     }
   }
@@ -91,7 +92,8 @@ class _FavoritePickerSheetState extends State<FavoritePickerSheet> {
     if (!canSendFavoriteP0(item)) {
       setState(() => _error = favoriteStatusLabel(context, item).isNotEmpty
           ? favoriteStatusLabel(context, item)
-          : _text('此内容暂不能快捷发送', 'This content cannot be sent yet'));
+          : _text(
+              AppCopy.text('此内容暂不能快捷发送'), 'This content cannot be sent yet'));
       return;
     }
     setState(() {
@@ -110,13 +112,15 @@ class _FavoritePickerSheetState extends State<FavoritePickerSheet> {
           _unknown = result.status == FavoriteSendStatus.unknown;
           _unknownAttemptID = _unknown ? result.sendAttemptID : null;
           _error = _unknown
-              ? _text('发送状态待确认，请先查看目标对话，避免重复发送',
+              ? _text(AppCopy.text('发送状态待确认，请先查看目标对话，避免重复发送'),
                   'Sending status is unconfirmed. Check the destination chat before sending again.')
               : result.errorMessage ??
-                  _text('发送失败，点击该收藏右侧的发送按钮重试',
+                  _text(AppCopy.text('发送失败，点击该收藏右侧的发送按钮重试'),
                       'Could not send. Tap Send beside the same favorite to retry.');
           if (result.sentCount > 0 && result.totalCount > result.sentCount) {
-            _error = _text('已发送 ${result.sentCount}/${result.totalCount} 项。',
+            _error = _text(
+                    AppCopy.format('已发送 {#0}/{#1} 项。',
+                        [result.sentCount, result.totalCount]),
                     '${result.sentCount}/${result.totalCount} items sent. ') +
                 _error!;
           }
@@ -124,8 +128,8 @@ class _FavoritePickerSheetState extends State<FavoritePickerSheet> {
       }
     } catch (_) {
       if (mounted) {
-        setState(
-            () => _error = _text('发送失败，请重试', 'Could not send. Please retry.'));
+        setState(() => _error =
+            _text(AppCopy.text('发送失败，请重试'), 'Could not send. Please retry.'));
       }
     } finally {
       if (mounted) setState(() => _sendingID = null);
@@ -152,18 +156,18 @@ class _FavoritePickerSheetState extends State<FavoritePickerSheet> {
         setState(() {
           _unknown = false;
           _unknownAttemptID = null;
-          _error = _text('已核实已发送部分，点击该收藏右侧的发送按钮继续发送剩余内容',
+          _error = _text(AppCopy.text('已核实已发送部分，点击该收藏右侧的发送按钮继续发送剩余内容'),
               'Sent content has been confirmed. Tap Send beside the same favorite to continue the remaining content.');
         });
       } else {
         setState(() => _error = result.errorMessage ??
-            _text('发送状态仍待确认，请稍后核实',
+            _text(AppCopy.text('发送状态仍待确认，请稍后核实'),
                 'Sending status is still unconfirmed. Check again later.'));
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = _text(
-            '暂时无法核实，请稍后重试', 'Could not verify yet. Please try again later.'));
+        setState(() => _error = _text(AppCopy.text('暂时无法核实，请稍后重试'),
+            'Could not verify yet. Please try again later.'));
       }
     } finally {
       if (mounted) setState(() => _reconciling = false);
@@ -240,7 +244,7 @@ class _FavoritePickerSheetState extends State<FavoritePickerSheet> {
                                     fontWeight: FontWeight.w700,
                                     color: AppTokens.textPrimary(dark: dark)))),
                         IconButton(
-                            tooltip: _text('关闭', 'Close'),
+                            tooltip: _text(AppCopy.text('关闭'), 'Close'),
                             onPressed: () => Navigator.of(context).pop(false),
                             icon: Icon(Icons.close_rounded,
                                 size: FavoritePickerTokens.closeIconSize,
@@ -265,7 +269,8 @@ class _FavoritePickerSheetState extends State<FavoritePickerSheet> {
                         key: const ValueKey('favorite-reconcile'),
                         onPressed: _reconciling ? null : _reconcileUnknown,
                         icon: const Icon(Icons.fact_check_outlined),
-                        label: Text(_text('核实发送结果', 'Verify sending result'))),
+                        label: Text(_text(
+                            AppCopy.text('核实发送结果'), 'Verify sending result'))),
                   Expanded(
                       child: _invalid
                           ? const SizedBox.shrink()
@@ -280,7 +285,7 @@ class _FavoritePickerSheetState extends State<FavoritePickerSheet> {
                                 onTap: _preview,
                                 trailingBuilder: (item) => IconButton(
                                   key: ValueKey('favorite-send-${item.id}'),
-                                  tooltip: _text('发送', 'Send'),
+                                  tooltip: _text(AppCopy.text('发送'), 'Send'),
                                   style: IconButton.styleFrom(
                                     backgroundColor: _sendingID == item.id
                                         ? null

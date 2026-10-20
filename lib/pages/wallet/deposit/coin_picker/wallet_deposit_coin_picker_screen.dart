@@ -1,3 +1,4 @@
+import 'package:openim/services/fund_currency_visibility/fund_currency_visibility.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/wallet_fund_api.dart';
@@ -81,7 +82,8 @@ class _WalletDepositCoinPickerScreenState
   }
 
   Future<void> _select(FundCurrency currency) async {
-    if (_opening ||
+    if (!isFundCurrencyVisible(currency) ||
+        _opening ||
         !_foreground ||
         !_visible ||
         !_controller.isCurrentAccount ||

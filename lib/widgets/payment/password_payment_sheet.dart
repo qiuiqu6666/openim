@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -408,8 +409,12 @@ class _PasswordPaymentSheetState<T> extends State<PasswordPaymentSheet<T>> {
                                                     en:
                                                         'Six-digit payment password'),
                                                 value: paymentText(context,
-                                                    zh:
-                                                        '已输入 ${_passwordState ? _pin.text.length : 6} 位，共 6 位',
+                                                    zh: AppCopy.format(
+                                                        '已输入 {#0} 位，共 6 位', [
+                                                      _passwordState
+                                                          ? _pin.text.length
+                                                          : 6
+                                                    ]),
                                                     en:
                                                         '${_passwordState ? _pin.text.length : 6} of 6 digits entered'),
                                                 enabled: _entering,

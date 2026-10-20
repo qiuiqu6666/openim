@@ -16,7 +16,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 3.0.1+2044
+version: 3.0.1+2033
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -136,6 +136,9 @@ dependencies:
   flutter_zxing: 2.3.0
 
 dependency_overrides:
+  # Unregister native callbacks before releasing Dart FFI trampolines.
+  media_kit:
+    path: local_plugin/media_kit
   # Use light index feedback instead of the upstream generic vibration.
   azlistview:
     path: local_plugin/azlistview
@@ -156,6 +159,8 @@ dependency_overrides:
     path: local_plugin/uri_to_file
 
 dev_dependencies:
+  # Allocate native events for the MPV callback lifecycle regression test.
+  ffi: ^2.1.4
   integration_test:
     sdk: flutter
   # Location picker boundary/interaction fixtures use the same coordinate type.

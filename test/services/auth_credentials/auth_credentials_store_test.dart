@@ -158,6 +158,38 @@ void main() {
     expect((await store.load()).password, isNull);
   });
 
+  test('email reset and change update only matching email credentials',
+      () async {
+    final store = AuthCredentialsStore();
+    await store.saveSuccessful(
+        account: 'Owner@Example.test',
+        areaCode: '+86',
+        loginType: 1,
+        password: 'old-password',
+        rememberPassword: true,
+        isCurrent: () => true);
+    expect(
+        await store.updatePasswordIfRemembered(
+            account: 'owner@example.test',
+            areaCode: '',
+            loginType: 1,
+            password: 'new-password',
+            isCurrent: () => true),
+        isTrue);
+    await store.renameEmail(
+        previousEmail: 'owner@example.test',
+        email: 'next@example.test',
+        isCurrent: () => true);
+    expect((await store.load()).account, 'next@example.test');
+    expect((await store.load()).password, 'new-password');
+    await _save(store);
+    await store.renameEmail(
+        previousEmail: '13800138000',
+        email: 'wrong@example.test',
+        isCurrent: () => true);
+    expect((await store.load()).account, '13800138000');
+  });
+
   test('corrupt saved data safely falls back to empty credentials', () async {
     FlutterSecureStorage.setMockInitialValues({
       AuthCredentialsStore.credentialsKey: '{invalid json',

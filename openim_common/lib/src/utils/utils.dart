@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -453,9 +454,9 @@ class IMUtils {
       if (DateUtil.isToday(message.sendTime!)) {
         dateStr = languageCode == 'zh' ? '今天' : 'Today';
       } else if (DateUtil.isWeek(message.sendTime!)) {
-        dateStr = languageCode == 'zh' ? '本周' : 'This Week';
+        dateStr = languageCode == 'zh' ? AppCopy.text('本周') : 'This Week';
       } else if (dateTime.isThisMonth) {
-        dateStr = languageCode == 'zh' ? '这个月' : 'This Month';
+        dateStr = languageCode == 'zh' ? AppCopy.text('这个月') : 'This Month';
       } else {
         dateStr = DateUtil.formatDate(dateTime, format: 'yyyy/MM');
       }
@@ -610,8 +611,10 @@ class IMUtils {
                   ?.map((e) => getGroupMemberShowName(e))
                   .toList()
                   .join('、');
-              text = sprintf(
-                  label, [getGroupMemberShowName(ntf.inviterUser ?? ntf.opUser!), b ?? '']);
+              text = sprintf(label, [
+                getGroupMemberShowName(ntf.inviterUser ?? ntf.opUser!),
+                b ?? ''
+              ]);
             }
             break;
           case MessageType.memberKickedNotification:

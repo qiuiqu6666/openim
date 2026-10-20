@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'index/group_indexed_list.dart';
 import 'package:flutter/material.dart';
 import '../../group_features/identity/group_name_label.dart';
@@ -116,7 +117,7 @@ class GroupListPage extends StatelessWidget {
       },
       child: groups.isEmpty
           ? contactListPlaceholder(context,
-              title: chinese ? '暂无群聊' : 'No groups yet',
+              title: chinese ? AppCopy.text('暂无群聊') : 'No groups yet',
               loading: loading,
               failed: failed, onRetry: () async {
               await Future.wait(
@@ -130,7 +131,9 @@ class GroupListPage extends StatelessWidget {
                     await Future.wait(
                         [logic.iCreatedInitial(), logic.iJoinedInitial()]);
                   },
-                  child: Text(chinese ? '加载失败，点击重试' : 'Loading failed. Retry'),
+                  child: Text(chinese
+                      ? AppCopy.text('加载失败，点击重试')
+                      : 'Loading failed. Retry'),
                 ),
               Expanded(
                   child: _buildList(groups, showCount: !loading && !failed)),

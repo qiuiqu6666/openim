@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -62,16 +63,16 @@ class GroupManagePage extends StatelessWidget {
                       const SizedBox(height: 16),
                       _section([
                         if (!logic.friendProtection.ready.value)
-                          _row('群成员隐私保护',
+                          _row(AppCopy.text('群成员隐私保护'),
                               subtitle: logic.friendProtection.failed.value
-                                  ? '读取失败，点击重试'
-                                  : '正在读取',
+                                  ? AppCopy.text('读取失败，点击重试')
+                                  : AppCopy.text('正在读取'),
                               onTap: logic.friendProtection.busy.value
                                   ? null
                                   : logic.friendProtection.refresh),
                         if (logic.friendProtection.ready.value)
-                          _toggle('群成员隐私保护',
-                              subtitle: '开启后不允许查看群成员资料，关闭后允许查看',
+                          _toggle(AppCopy.text('群成员隐私保护'),
+                              subtitle: AppCopy.text('开启后不允许查看群成员资料，关闭后允许查看'),
                               value: logic.friendProtection.protect.value ||
                                   info.lookMemberInfo == 1,
                               onChanged: busy ||
@@ -228,11 +229,11 @@ class GroupManagePage extends StatelessWidget {
     }
     final confirmed = await showAppConfirm(
       context,
-      title: '确认修改入群验证',
-      message:
-          '将入群验证修改为“${'sdkJoinRule$selected'.tr}”？\n${'sdkJoinRuleDescription$selected'.tr}',
+      title: AppCopy.text('确认修改入群验证'),
+      message: AppCopy.format('将入群验证修改为“{#0}”？\n{#1}',
+          ['sdkJoinRule$selected'.tr, 'sdkJoinRuleDescription$selected'.tr]),
       cancelText: StrRes.cancel,
-      confirmText: '确认修改',
+      confirmText: AppCopy.text('确认修改'),
     );
     if (!confirmed ||
         !context.mounted ||

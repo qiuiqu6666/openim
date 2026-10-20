@@ -8,6 +8,43 @@ import 'wallet_home_test_support.dart';
 
 void main() {
   for (final brightness in Brightness.values) {
+    testWidgets('TRX stays hidden after sorting and expanding in $brightness',
+        (tester) async {
+      final data = WalletDto(totalBal: '8,659.48', trxAddr: '', coins: [
+        ...walletHomeFixture.coins,
+        const CoinDto(
+            name: 'TRX',
+            code: 'TRX',
+            sub: '',
+            bal: '7.00',
+            fiat: '¥7.00',
+            type: CoinType.trx),
+      ]);
+      final controller = await loadedHomeController(
+          repository: HomeTestRepository(data: data));
+      await pumpWalletHome(tester,
+          controller: controller, brightness: brightness);
+      await tester.pumpAndSettle();
+      void expectHidden() {
+        expect(find.text('TRX'), findsNothing);
+        expect(walletHomeKey('wallet-asset-quantity-TRX'), findsNothing);
+        expect(find.text('USDT'), findsOneWidget);
+        expect(find.text('99币'), findsOneWidget);
+        expect(controller.coins, hasLength(3));
+        expect(controller.totalBal, '8,659.48');
+      }
+
+      expectHidden();
+      for (var i = 0; i < 2; i++) {
+        await tester.tap(walletHomeKey('wallet-assets-filter'));
+        await tester.pumpAndSettle();
+        expectHidden();
+      }
+      await _toggleList(tester);
+      await _toggleList(tester);
+      expectHidden();
+    });
+
     testWidgets('tokens show quantity left and raw value right in $brightness',
         (tester) async {
       final semantics = tester.ensureSemantics();

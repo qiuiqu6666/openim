@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -54,10 +55,12 @@ class _AgentQueryFeedbackState extends State<AgentQueryFeedback> {
       final zh = Localizations.localeOf(context).languageCode == 'zh';
       _notice?.close();
       _notice = ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            zh ? '刷新失败，已保留上次结果' : 'Refresh failed. Previous results are kept.'),
+        content: Text(zh
+            ? AppCopy.text('刷新失败，已保留上次结果')
+            : 'Refresh failed. Previous results are kept.'),
         action: SnackBarAction(
-            label: zh ? '重试' : 'Retry', onPressed: widget.onRetry),
+            label: zh ? AppCopy.text('重试') : 'Retry',
+            onPressed: widget.onRetry),
       ));
     });
   }

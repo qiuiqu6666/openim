@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'organizer/organizer_refresh_queue.dart';
 import 'identity/conversation_display_name.dart';
 import 'updates/conversation_update_buffer.dart';
@@ -42,6 +43,7 @@ import 'summary/conversation_feed_snapshot.dart';
 import 'settings/conversation_settings_projection.dart';
 import 'unread/conversation_unread_count.dart';
 import 'unread/conversation_unread_sync.dart';
+import 'unread/friend_approval_notice.dart';
 
 class ConversationLogic extends GetxController with WidgetsBindingObserver {
   ConversationLogic({LegacyServiceConversationCleanup? legacyCleanup})
@@ -54,14 +56,18 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final folders = <ChatFolder>[].obs;
   final states = <String, ChatConversationState>{}.obs;
   ConversationFeedSnapshotCache? _feedCache;
-  late final _pinOrderKey = 'pinned_group_order_v1_${Config.imApiUrl}_$_accountID';
+  late final _pinOrderKey =
+      'pinned_group_order_v1_${Config.imApiUrl}_$_accountID';
   late final _pinnedGroupOrder = PinnedGroupOrder(
     SpUtil().getStringList(_pinOrderKey) ?? [],
-    save: (ids) { SpUtil().putStringList(_pinOrderKey, ids); },
+    save: (ids) {
+      SpUtil().putStringList(_pinOrderKey, ids);
+    },
   );
   ConversationFeedSnapshot get feedSnapshot =>
       (_feedCache ??= ConversationFeedSnapshotCache(list, states,
-          order: _pinnedGroupOrder.apply)).read();
+              order: _pinnedGroupOrder.apply))
+          .read();
   final organizerLoading = false.obs;
   final organizerError = RxnString();
   int _organizerSyncAt = 0;
@@ -75,6 +81,16 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   bool _closed = false;
   final _accountID = OpenIM.iMManager.userID;
   final _accountToken = DataSp.chatToken;
+  late final _friendApprovalNotice = FriendApprovalNotice(
+    read: (id) => SpUtil().getObject(_friendNoticeKey(id)),
+    write: (id, value) {
+      SpUtil().putObject(_friendNoticeKey(id), value);
+    },
+  );
+  String _friendNoticeKey(String id) =>
+      'friend_approval_read_v1_${Config.imApiUrl}_${_accountID}_$id';
+  bool hasFriendApprovalNotice(ConversationInfo info) =>
+      _friendApprovalNotice.pending(info);
   int _listGeneration = 0;
   int _clearGeneration = 0;
   bool _readingList = false;
@@ -436,13 +452,13 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   }
 
   bool existUnreadMsg(ConversationInfo info) {
-    return getUnreadCount(info) > 0;
+    return getUnreadCount(info) > 0 || hasFriendApprovalNotice(info);
   }
 
   final _pendingMarkReads = <String, Future<void>>{};
   Future<void> markConversationRead(ConversationInfo info) async {
     if (!_sessionActive) throw StateError('Session is no longer active');
-    if (info.unreadCount == 0) return;
+    if (!existUnreadMsg(info)) return;
     final request = ConversationReadRequest.capture(info);
     final projecting = onConversationReadRequested(request);
     try {
@@ -486,12 +502,21 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       bool Function(ConversationInfo)? includes}) async {
     if (markingAllRead.value || !_sessionActive) return;
     markingAllRead.value = true;
-    readBatchProgress.value = '准备中…';
+    readBatchProgress.value = AppCopy.text('准备中…');
     final generation = _clearGeneration;
     bool current() => _sessionActive && generation == _clearGeneration;
     final reader =
         ConversationSnapshotReader(timeout: const Duration(minutes: 2));
     final api = _serverBatchReads = ConversationBatchReadApi();
+    final noticeReads = list
+        .where((info) =>
+            hasFriendApprovalNotice(info) &&
+            (includes?.call(info) ??
+                (scope == 'single' ||
+                    scope == 'all' ||
+                    (conversationIDs?.contains(info.conversationID) ?? false))))
+        .map(ConversationReadRequest.capture)
+        .toList();
     try {
       final rows = includes == null
           ? <ConversationInfo>[]
@@ -514,16 +539,31 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
           apply: api.apply,
           isCurrent: () => current() && api.isCurrent,
           confirmed: (targets) {
-            if (projection.confirm(targets, list, _readProjection.confirm)) {
+            if (projection.confirm(targets, list, (request) {
+              _readProjection.confirm(request);
+              _friendApprovalNotice.confirm(request.conversationID,
+                  messageID: request.messageID,
+                  sequence: request.messageSequence,
+                  time: request.latestMsgSendTime);
+            })) {
               list.refresh();
             }
           },
           progress: (done, total) =>
               readBatchProgress.value = '$done / $total');
       if (!current()) return;
+      if (failed == 0) {
+        for (final request in noticeReads) {
+          _friendApprovalNotice.confirm(request.conversationID,
+              messageID: request.messageID,
+              sequence: request.messageSequence,
+              time: request.latestMsgSendTime);
+        }
+        if (noticeReads.isNotEmpty) list.refresh();
+      }
       await _loadConversationList(firstPageOnly: false, reconcileUnread: true);
       if (current() && failed > 0) {
-        IMViews.showToast('$failed 个会话未完成已读，请稍后重试');
+        IMViews.showToast(AppCopy.format('{#0} 个会话未完成已读，请稍后重试', [failed]));
       }
     } catch (error) {
       if (current()) IMViews.showErrorToast(error);
@@ -556,7 +596,14 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
       return;
     }
     _readProjection.confirm(request);
-    var changed = false;
+    _friendApprovalNotice.confirm(request.conversationID,
+        messageID: request.messageID,
+        sequence: request.messageSequence,
+        time: request.latestMsgSendTime);
+    var changed = list.any((info) =>
+        info.conversationID == request.conversationID &&
+        info.latestMsg?.contentType ==
+            MessageType.friendApplicationApprovedNotification);
     for (final info in list) {
       if (request.canClear(info) && info.unreadCount > 0) {
         info.unreadCount = 0;
@@ -639,7 +686,34 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> deleteConversation(ConversationInfo info,
-      {bool propagateError = false}) async {
+          {bool propagateError = false}) =>
+      _removeConversation(info, propagateError: propagateError);
+
+  /// Remove the feed entry without deleting persisted messages or history cache.
+  Future<void> hideConversation(ConversationInfo info,
+          {bool propagateError = false}) =>
+      _removeConversation(info,
+          preserveHistory: true, propagateError: propagateError);
+
+  Future<void> hidePeerConversation(String userID) async {
+    if (!_sessionActive) return;
+    final clearing = _clearGeneration;
+    final conversation = list.firstWhereOrNull(
+            (info) => info.isSingleChat && info.userID == userID) ??
+        await OpenIM.iMManager.conversationManager.getOneConversation(
+            sourceID: userID, sessionType: ConversationType.single);
+    if (!_sessionActive || clearing != _clearGeneration) return;
+    // getOneConversation can return an unpersisted placeholder for a stranger.
+    if ((conversation.latestMsgSendTime ?? 0) <= 0 &&
+        !list.any(
+            (info) => info.conversationID == conversation.conversationID)) {
+      return;
+    }
+    await hideConversation(conversation, propagateError: true);
+  }
+
+  Future<void> _removeConversation(ConversationInfo info,
+      {bool preserveHistory = false, bool propagateError = false}) async {
     if (!_sessionActive || !_deletions.begin(info)) return;
     ++_structureRevision;
     _latestSync.discard(info);
@@ -648,17 +722,26 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     final clearing = _clearGeneration;
     if (_readingList) _changesDuringRead[info.conversationID] = null;
     try {
-      await OpenIM.iMManager.conversationManager
-          .deleteConversationAndDeleteAllMsg(
-        conversationID: info.conversationID,
-      );
+      if (preserveHistory) {
+        await OpenIM.iMManager.conversationManager
+            .hideConversation(conversationID: info.conversationID);
+      } else {
+        await OpenIM.iMManager.conversationManager
+            .deleteConversationAndDeleteAllMsg(
+          conversationID: info.conversationID,
+        );
+      }
       if (!_sessionActive || clearing != _clearGeneration) return;
       ++_structureRevision;
       _deletions.complete(info.conversationID);
       if (_readingList) _changesDuringRead[info.conversationID] = null;
-      ChatHistoryCache.removeConversation(
-          OpenIM.iMManager.userID, info.conversationID);
+      if (!preserveHistory) {
+        ChatHistoryCache.removeConversation(
+            OpenIM.iMManager.userID, info.conversationID);
+      }
       list.removeWhere((item) => item.conversationID == info.conversationID);
+      homeLogic.conversationsAtFirstPage
+          .removeWhere((item) => item.conversationID == info.conversationID);
       tempDraftText.remove(info.conversationID);
     } catch (error) {
       if (_sessionActive && clearing == _clearGeneration) {
@@ -1021,7 +1104,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
     } on ChatOrganizerConflict catch (error) {
       if (!_sessionActive) return false;
       _applyState(error.current);
-      IMViews.showToast('此会话已在另一台设备更新，请重试');
+      IMViews.showToast(AppCopy.text('此会话已在另一台设备更新，请重试'));
     } catch (error) {
       if (_sessionActive) IMViews.showErrorToast(error);
     }

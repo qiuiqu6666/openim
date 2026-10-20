@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import '../report_center/pages/report_center_page.dart';
 // Adapted from 99chat d7c3c65, Apache-2.0. See README.md and LICENSE-99chat.
 import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
@@ -339,9 +340,10 @@ class _SangongGameRulesSettingsPageState
     if (_sessionBusy || _saving || !runtime.canManage || round == null) return;
     final ok = await AppDialog.confirm(
       context: context,
-      title: '退回全部注单并取消定庄',
-      message:
-          '退回第${round.periodNo}期全部有效下注，清除庄家和合庄，保留本期期号并恢复未定庄。已撤注退款的注单不会重复退款。',
+      title: AppCopy.text('退回全部注单并取消定庄'),
+      message: AppCopy.format(
+          '退回第{#0}期全部有效下注，清除庄家和合庄，保留本期期号并恢复未定庄。已撤注退款的注单不会重复退款。',
+          [round.periodNo]),
     );
     if (!mounted || !ok || !runtime.isCurrent) return;
     setState(() => _sessionBusy = true);
@@ -352,7 +354,7 @@ class _SangongGameRulesSettingsPageState
         _session = session;
         _canEdit = runtime.settings.canEdit;
       });
-      ToastUtils.toast('全部有效注单已退回，已恢复未定庄');
+      ToastUtils.toast(AppCopy.text('全部有效注单已退回，已恢复未定庄'));
     } catch (error) {
       if (mounted && runtime.isCurrent) {
         ToastUtils.toast(DioErrorMessage.forApp(error));
@@ -536,8 +538,8 @@ class _SangongGameRulesSettingsPageState
           if (SangongScope.read(context).canManage)
             SettingsGroup(children: [
               SettingsCell(
-                  title: '报表中心',
-                  value: '汇总 / 用户 / 团队 / 账变 / 牌局',
+                  title: AppCopy.text('报表中心'),
+                  value: AppCopy.text('汇总 / 用户 / 团队 / 账变 / 牌局'),
                   showDivider: false,
                   onTap: _saving || _sessionBusy
                       ? null

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -83,7 +84,7 @@ class FavoritePickerFilters extends StatelessWidget {
                     ]))),
             IconButton(
                 key: const ValueKey('favorites-search-toggle'),
-                tooltip: text('搜索收藏', 'Search favorites'),
+                tooltip: text(AppCopy.text('搜索收藏'), 'Search favorites'),
                 onPressed: disabled ? null : onToggleSearch,
                 icon: Icon(Icons.search_rounded,
                     size: FavoritePickerTokens.toolbarIconSize, color: muted)),
@@ -107,7 +108,8 @@ class FavoritePickerFilters extends StatelessWidget {
               onChanged: onChanged,
               onSubmitted: (_) => onSubmitted(),
               decoration: InputDecoration(
-                  hintText: text('搜索内容或来源', 'Search content or source'),
+                  hintText:
+                      text(AppCopy.text('搜索内容或来源'), 'Search content or source'),
                   prefixIcon: const Icon(Icons.search),
                   isDense: true,
                   filled: true,

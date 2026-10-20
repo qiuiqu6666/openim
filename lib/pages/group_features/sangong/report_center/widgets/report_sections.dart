@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'report_widgets.dart';
 
@@ -73,9 +74,9 @@ class ReportBalanceCard extends StatelessWidget {
                     size: 20, color: colors.onPrimaryContainer),
                 const SizedBox(width: 8),
                 Expanded(
-                    child: Text('全群当前积分',
+                    child: Text(AppCopy.text('全群当前积分'),
                         style: TextStyle(color: colors.onPrimaryContainer))),
-                Text('实时',
+                Text(AppCopy.text('实时'),
                     style: TextStyle(
                         color: colors.onPrimaryContainer, fontSize: 12)),
               ]),
@@ -85,7 +86,7 @@ class ReportBalanceCard extends StatelessWidget {
                       color: colors.onPrimaryContainer,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
-              Text('${reportValue(users)} 位登记用户 · 当前余额合计',
+              Text(AppCopy.format('{#0} 位登记用户 · 当前余额合计', [reportValue(users)]),
                   style: TextStyle(
                       color: colors.onPrimaryContainer, fontSize: 12)),
             ])));

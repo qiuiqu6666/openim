@@ -38,6 +38,8 @@ class _Fixture {
   bool entryCurrent = true;
   bool chatCurrent = true;
   bool focusResult = true;
+  bool pushNewChat = false;
+  final entryScroll = ScrollController();
   ChatHistoryActiveChat? chat;
   Future<Message?> Function()? lookup;
   Future<ConversationInfo?> Function()? conversationLookup;
@@ -48,8 +50,11 @@ class _Fixture {
   late Route<dynamic> entryRoute;
   late ChatHistoryMessageNavigation navigation;
 
-  void initialize({bool productionSource = false}) {
+  void initialize(
+      {bool productionSource = false, bool preserveEntryRoute = false}) {
+    addTearDown(entryScroll.dispose);
     navigation = ChatHistoryMessageNavigation(
+      preserveEntryRoute: preserveEntryRoute,
       currentSession: () => owner,
       currentChat: (_) => chat,
       showFeedback: feedback.add,
@@ -68,7 +73,13 @@ class _Fixture {
             },
       startChat: (conversation, message, isCurrent) async {
         startupGuard = isCurrent;
-        if (isCurrent()) opened.add((conversation, message));
+        if (isCurrent()) {
+          opened.add((conversation, message));
+          if (pushNewChat) {
+            await navigator.currentState!.push(MaterialPageRoute<void>(
+                builder: (_) => const Scaffold(body: Text('Positioned chat'))));
+          }
+        }
       },
     );
   }
@@ -96,13 +107,23 @@ class _Fixture {
         settings: const RouteSettings(name: 'search'),
         builder: (context) {
           entryContext = context;
-          return const Scaffold(body: Text('Search results'));
+          return Scaffold(
+              body: Column(children: [
+            const Text('Search results'),
+            Expanded(
+                child: ListView.builder(
+                    controller: entryScroll,
+                    itemExtent: 60,
+                    itemCount: 80,
+                    itemBuilder: (_, index) => Text('Message $index'))),
+          ]));
         });
     unawaited(navigator.currentState!.push(entryRoute));
     await tester.pumpAndSettle();
   }
 
-  Future<bool> open() => navigation.open(entryContext,
+  Future<bool> open({bool? preserveEntryRoute}) => navigation.open(entryContext,
+      preserveEntryRoute: preserveEntryRoute,
       conversationID: _conversationID,
       message: snapshot,
       isEntryCurrent: () => entryCurrent);
@@ -120,6 +141,31 @@ void main() {
   tearDown(() => TestDefaultBinaryMessengerBinding
       .instance.defaultBinaryMessenger
       .setMockMethodCallHandler(channel, null));
+
+  testWidgets('member and date results survive chat back with scroll preserved',
+      (tester) async {
+    final f = _Fixture()..initialize();
+    f.pushNewChat = true;
+    await f.mount(tester);
+    f.entryScroll.jumpTo(900);
+    await tester.pumpAndSettle();
+    final position = f.entryScroll.offset;
+    final action = f.open(preserveEntryRoute: true);
+    await tester.pumpAndSettle();
+    expect(find.text('Positioned chat'), findsOneWidget);
+    expect(f.entryContext.mounted, isTrue);
+    expect(f.entryRoute.isActive, isTrue);
+    expect(f.chatRoute.isActive, isTrue);
+    expect(f.focused, isEmpty);
+    expect(f.opened.single.$2, same(f.fresh));
+    f.navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(await action, isTrue);
+    expect(f.entryRoute.isCurrent, isTrue);
+    expect(find.text('Search results'), findsOneWidget);
+    expect(f.entryScroll.offset, position);
+    expect(f.feedback, isEmpty);
+  });
 
   testWidgets('reuses the concrete chat route and its fresh SDK target',
       (tester) async {
@@ -217,7 +263,16 @@ void main() {
     await tester.pumpAndSettle();
     f.entryRoute = MaterialPageRoute<void>(builder: (context) {
       f.entryContext = context;
-      return const Scaffold(body: Text('Search results'));
+      return Scaffold(
+          body: Column(children: [
+        const Text('Search results'),
+        Expanded(
+            child: ListView.builder(
+                controller: f.entryScroll,
+                itemExtent: 60,
+                itemCount: 80,
+                itemBuilder: (_, index) => Text('Message $index'))),
+      ]));
     });
     unawaited(f.navigator.currentState!.push(f.entryRoute));
     await tester.pumpAndSettle();

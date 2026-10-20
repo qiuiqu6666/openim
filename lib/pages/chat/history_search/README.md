@@ -261,3 +261,10 @@ skipped. Static checks found no errors/warnings (existing info diagnostics remai
 and the Android debug APK built successfully. Route identity, account, cached
 startup, late window results, drafts, expiry and live-buffer verification are
 recorded in [the validation report](../../../../docs/chat-search-jump-pagination-validation.md).
+
+2026-10-20 member/date result navigation: these lists pass
+`preserveEntryRoute: true` on each message-open request, even when the navigation
+adapter is inherited from the parent search page. The adapter pushes
+a chat with the freshly validated message instead of popping to an earlier
+chat route. Returning leaves the original result widget, query, pagination and
+scroll position intact. Other navigation callers retain their existing behavior.

@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -118,11 +119,13 @@ class _SangongUserAgentGroupEntryState
           listenable: _runtime,
           builder: (_, __) => _current
               ? child
-              : CupertinoAlertDialog(title: const Text('游戏权限已变化'), actions: [
-                  CupertinoDialogAction(
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: const Text('关闭'))
-                ]));
+              : CupertinoAlertDialog(
+                  title: Text(AppCopy.text('游戏权限已变化')),
+                  actions: [
+                      CupertinoDialogAction(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: Text(AppCopy.text('关闭')))
+                    ]));
 
   Future<void> _edit({bool clear = false}) async {
     if (!_current || _saving || _loading || (!clear && !widget.hasRebate)) {
@@ -135,17 +138,18 @@ class _SangongUserAgentGroupEntryState
         final confirmed = await AppDialog.confirm(
             context: context,
             title: '清除代理群',
-            message: '清除后，该用户将无法从原代理群进入三公代理。',
+            message: AppCopy.text('清除后，该用户将无法从原代理群进入三公代理。'),
             dialogWrapper: _guardDialog);
         if (!_current || !confirmed) return;
       } else {
         final input = await AppDialog.prompt(
             context: context,
-            title: '设置代理群',
-            message: '可从群资料复制群 ID。一个代理群只对应一个厅；用户加入后可查看自己在本厅的代理和团队数据。',
-            placeholder: '请输入群 ID',
+            title: AppCopy.text('设置代理群'),
+            message:
+                AppCopy.text('可从群资料复制群 ID。一个代理群只对应一个厅；用户加入后可查看自己在本厅的代理和团队数据。'),
+            placeholder: AppCopy.text('请输入群 ID'),
             initialValue: _groupId ?? '',
-            confirmText: '保存',
+            confirmText: AppCopy.text('保存'),
             maxLength: 128,
             dialogWrapper: _guardDialog);
         if (!_current || input == null) return;
@@ -157,7 +161,8 @@ class _SangongUserAgentGroupEntryState
       await _api.setUserGroup(_userId, groupId);
       if (!mounted || !_current) return;
       await _load();
-      if (mounted && _current) ToastUtils.toast('已保存', context: context);
+      if (mounted && _current)
+        ToastUtils.toast(AppCopy.text('已保存'), context: context);
     } catch (error) {
       if (mounted && _current) {
         ToastUtils.toast(DioErrorMessage.forApp(error), context: context);
@@ -171,8 +176,10 @@ class _SangongUserAgentGroupEntryState
   Widget build(BuildContext context) {
     if (!_current) return const SizedBox.shrink();
     final title = _groupId == null
-        ? '未设置'
-        : (_group?.groupName?.isNotEmpty == true ? _group!.groupName! : '已设置');
+        ? AppCopy.text('未设置')
+        : (_group?.groupName?.isNotEmpty == true
+            ? _group!.groupName!
+            : AppCopy.text('已设置'));
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         const Icon(Icons.groups_outlined),
@@ -183,9 +190,9 @@ class _SangongUserAgentGroupEntryState
       const SizedBox(height: AppTokens.s2),
       Text(
           _loading
-              ? '正在加载…'
+              ? AppCopy.text('正在加载…')
               : _error != null
-                  ? '加载失败，请重试'
+                  ? AppCopy.text('加载失败，请重试')
                   : title,
           maxLines: 2,
           overflow: TextOverflow.ellipsis),
@@ -202,23 +209,24 @@ class _SangongUserAgentGroupEntryState
               TextButton.icon(
                   onPressed: _load,
                   icon: const Icon(Icons.refresh),
-                  label: const Text('重试'))
+                  label: Text(AppCopy.text('重试')))
             else
               TextButton(
                   onPressed:
                       _loading || _saving || !widget.hasRebate ? null : _edit,
                   child: Text(_saving
-                      ? '保存中…'
+                      ? AppCopy.text('保存中…')
                       : _groupId == null
-                          ? '设置'
-                          : '更换')),
+                          ? AppCopy.text('设置')
+                          : AppCopy.text('更换'))),
             if (_groupId != null && !_loading && _error == null)
               TextButton(
                   onPressed: _saving ? null : () => _edit(clear: true),
-                  child: const Text('清除绑定')),
+                  child: Text(AppCopy.text('清除绑定'))),
           ])),
       if (!widget.hasRebate)
-        Text('返水比例大于 0 时可设置代理群', style: Theme.of(context).textTheme.bodySmall),
+        Text(AppCopy.text('返水比例大于 0 时可设置代理群'),
+            style: Theme.of(context).textTheme.bodySmall),
       const Divider(),
     ]);
   }

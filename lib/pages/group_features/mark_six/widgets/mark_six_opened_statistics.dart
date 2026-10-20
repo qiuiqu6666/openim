@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 // Adapted from 99chat lottery_dashboard.dart _openedStatistics.
 // Source: https://github.com/qiuiqu6666/99chat (Apache-2.0).
 import 'package:flutter/material.dart';
@@ -10,28 +11,28 @@ class MarkSixOpenedStatistics extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sample = draws.where((draw) => draw.drawn).take(100).toList();
-    if (sample.isEmpty) return const MarkSixEmpty(message: '暂无已开奖记录');
+    if (sample.isEmpty) return MarkSixEmpty(message: AppCopy.text('暂无已开奖记录'));
     return Column(children: [
-      _section(context, sample, '基本类型', [
-        ('parity', '单', MarkSixStyle.blue),
-        ('parity', '双', MarkSixStyle.red),
+      _section(context, sample, AppCopy.text('基本类型'), [
+        ('parity', AppCopy.text('单'), MarkSixStyle.blue),
+        ('parity', AppCopy.text('双'), MarkSixStyle.red),
         ('size', '大', MarkSixStyle.red),
         ('size', '小', MarkSixStyle.blue)
       ]),
-      _section(context, sample, '组合类型', [
-        ('combination', '小单', MarkSixStyle.blue),
-        ('combination', '小双', MarkSixStyle.green),
-        ('combination', '大单', Colors.orange),
-        ('combination', '大双', MarkSixStyle.red)
+      _section(context, sample, AppCopy.text('组合类型'), [
+        ('combination', AppCopy.text('小单'), MarkSixStyle.blue),
+        ('combination', AppCopy.text('小双'), MarkSixStyle.green),
+        ('combination', AppCopy.text('大单'), Colors.orange),
+        ('combination', AppCopy.text('大双'), MarkSixStyle.red)
       ]),
       _section(
           context,
           sample,
           '色波',
           [
-            ('wave', '红', MarkSixStyle.red),
-            ('wave', '蓝', MarkSixStyle.blue),
-            ('wave', '绿', MarkSixStyle.green)
+            ('wave', AppCopy.text('红'), MarkSixStyle.red),
+            ('wave', AppCopy.text('蓝'), MarkSixStyle.blue),
+            ('wave', AppCopy.text('绿'), MarkSixStyle.green)
           ],
           columns: 3),
       _section(context, sample, '生肖', [
@@ -40,14 +41,14 @@ class MarkSixOpenedStatistics extends StatelessWidget {
           '牛',
           '虎',
           '兔',
-          '龙',
+          AppCopy.text('龙'),
           '蛇',
-          '马',
+          AppCopy.text('马'),
           '羊',
           '猴',
-          '鸡',
+          AppCopy.text('鸡'),
           '狗',
-          '猪'
+          AppCopy.text('猪')
         ])
           ('zodiac', zodiac, null)
       ]),
@@ -75,7 +76,8 @@ class MarkSixOpenedStatistics extends StatelessWidget {
                         fontSize: 16, fontWeight: FontWeight.w800))),
             Icon(Icons.bar_chart_rounded, size: 16, color: style.primary),
             const SizedBox(width: 4),
-            Text('数据统计', style: TextStyle(fontSize: 11, color: style.secondary))
+            Text(AppCopy.text('数据统计'),
+                style: TextStyle(fontSize: 11, color: style.secondary))
           ]),
           const SizedBox(height: 10),
           Container(
@@ -90,14 +92,14 @@ class MarkSixOpenedStatistics extends StatelessWidget {
                         child: Row(children: [
                       Expanded(
                           flex: 4,
-                          child: Text('类型',
+                          child: Text(AppCopy.text('类型'),
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                   fontSize: 11, color: style.secondary))),
                       const SizedBox(width: 8),
                       Expanded(
                           flex: 5,
-                          child: Text('已开次数',
+                          child: Text(AppCopy.text('已开次数'),
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                   fontSize: 11, color: style.secondary))),

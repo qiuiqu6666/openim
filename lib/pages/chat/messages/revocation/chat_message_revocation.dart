@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
@@ -91,14 +92,14 @@ class ChatMessageRevocation {
     }
 
     String unavailable() {
-      if (!isCurrentMessage(message)) return '消息状态已变化，请重新长按消息';
+      if (!isCurrentMessage(message)) return AppCopy.text('消息状态已变化，请重新长按消息');
       if (message.sendID == currentUserID() &&
           (message.sendTime ?? 0) > 0 &&
           _nowMilliseconds() - message.sendTime! >=
               const Duration(minutes: 2).inMilliseconds) {
-        return '消息已超过两分钟，无法撤回';
+        return AppCopy.text('消息已超过两分钟，无法撤回');
       }
-      return '当前消息无法撤回或你没有撤回权限';
+      return AppCopy.text('当前消息无法撤回或你没有撤回权限');
     }
 
     void reject() {
@@ -117,7 +118,7 @@ class ChatMessageRevocation {
       return;
     }
     if (_confirming) {
-      stop('confirmation_pending', '请先完成当前撤回确认');
+      stop('confirmation_pending', AppCopy.text('请先完成当前撤回确认'));
       return;
     }
     if (!canRevoke(message)) {
@@ -126,7 +127,7 @@ class ChatMessageRevocation {
     }
     final id = message.clientMsgID!;
     if (!_pending.add(id)) {
-      stop('request_pending', '正在撤回，请稍候');
+      stop('request_pending', AppCopy.text('正在撤回，请稍候'));
       return;
     }
     final account = currentUserID();
@@ -175,7 +176,7 @@ class ChatMessageRevocation {
         final snapshot = await _readMembers(group!, account, message.sendID!);
         if (!validate()) return;
         if (revision != groupRevision()) {
-          stop('membership_changed', '群成员信息已变化，请重新长按消息');
+          stop('membership_changed', AppCopy.text('群成员信息已变化，请重新长按消息'));
           return;
         }
         if (snapshot.self?.groupID != group ||
@@ -193,7 +194,7 @@ class ChatMessageRevocation {
               selfRole: snapshot.self?.roleLevel,
               senderRole: snapshot.target?.roleLevel,
             )) {
-          stop('permission_denied', '当前消息无法撤回或你没有撤回权限');
+          stop('permission_denied', AppCopy.text('当前消息无法撤回或你没有撤回权限'));
           return;
         }
       }
@@ -225,17 +226,17 @@ class ChatMessageRevocation {
         return;
       }
       if (stage == 'confirmation') {
-        showFeedback('无法打开撤回确认，请重新长按消息重试');
+        showFeedback(AppCopy.text('无法打开撤回确认，请重新长按消息重试'));
         return;
       }
       if (stage == 'local_update') {
-        showFeedback('撤回已成功，显示更新失败，请重新进入聊天核对');
+        showFeedback(AppCopy.text('撤回已成功，显示更新失败，请重新进入聊天核对'));
         return;
       }
       showFeedback(error is PlatformException &&
               int.tryParse(error.code) == SDKErrorCode.insufficientPermissions
-          ? '你没有撤回这条消息的权限'
-          : '撤回失败，请检查网络或消息是否已超过可撤回时限');
+          ? AppCopy.text('你没有撤回这条消息的权限')
+          : AppCopy.text('撤回失败，请检查网络或消息是否已超过可撤回时限'));
     } finally {
       _pending.remove(id);
     }

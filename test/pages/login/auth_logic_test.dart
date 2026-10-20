@@ -186,14 +186,19 @@ void main() {
 
   testWidgets('login submits while update check is still pending',
       (tester) async {
-    PackageInfo.setMockInitialValues(appName: 'test', packageName: 'test',
-        version: '1.0.0', buildNumber: '1', buildSignature: '');
+    PackageInfo.setMockInitialValues(
+        appName: 'test',
+        packageName: 'test',
+        version: '1.0.0',
+        buildNumber: '1',
+        buildSignature: '');
     await tester.pumpWidget(_app());
     final adapter = _UnexpectedHTTP();
     http.dio.httpClientAdapter = adapter;
     final app = Get.find<AppController>() as _App;
     final gate = Completer<void>();
     app.updateCheck = gate.future;
+    login.selectLoginType(LoginType.phone);
     login.isPasswordLogin.value = false;
     login.phoneCtrl.text = '13800138000';
     login.verificationCodeCtrl.text = '123456';
@@ -231,35 +236,30 @@ void main() {
     expect(login.enabled.value, isTrue);
   });
 
-  testWidgets('password account infers the API identity while SMS stays phone',
+  testWidgets(
+      'explicit identity is preserved for numeric IDs and email-shaped IDs',
       (tester) async {
-    login.phoneCtrl.text = 'account';
-    login.pwdCtrl.text = 'password1';
-    expect(login.loginType.value, LoginType.account);
-    expect(login.account, 'account');
-    login.phoneCtrl.text = '12345';
-    expect(login.loginType.value, LoginType.account);
-    login.phoneCtrl.text = '@13800138000';
-    expect(login.loginType.value, LoginType.account);
-    expect(login.account, '@13800138000');
-    login.phoneCtrl.text = ' user@example.com ';
-    expect(login.loginType.value, LoginType.email);
-    expect(login.email, 'user@example.com');
-    expect(login.tabController.index, LoginType.email.rawValue);
-    login.phoneCtrl.text = '13800138000';
-    expect(login.loginType.value, LoginType.phone);
+    for (final type in LoginType.values) {
+      login.selectLoginType(type);
+      for (final input in ['13800138000', '12345', 'user@example.com', '']) {
+        login.phoneCtrl.text = input;
+        expect(login.loginType.value, type);
+        expect(login.operateType, type);
+      }
+    }
+    login.selectLoginType(LoginType.account);
     login.togglePasswordType();
-    login.phoneCtrl.text = 'account';
-    expect(login.loginType.value, LoginType.phone);
-    expect(login.isPasswordLogin.value, isFalse);
-    expect(login.enabled.value, isFalse);
-    login.verificationCodeCtrl.text = '123456';
-    login.togglePasswordType();
-    expect(login.loginType.value, LoginType.account);
-    expect(login.phoneCtrl.text, 'account');
-    expect(login.pwdCtrl.text, 'password1');
-    expect(login.verificationCodeCtrl.text, '123456');
-    expect(login.enabled.value, isTrue);
+    expect(login.isPasswordLogin.value, isTrue);
+    expect(await login.getVerificationCode(), isFalse);
+    login.selectLoginType(LoginType.phone);
+    login.areaCode.value = '+852';
+    login.phoneCtrl.text = '51234567';
+    expect(login.phone, '51234567');
+    expect(login.account, isNull);
+    login.selectLoginType(LoginType.account);
+    login.phoneCtrl.text = '51234567';
+    expect(login.account, '51234567');
+    expect(login.phone, isNull);
   });
 
   testWidgets('empty targets cannot request a login or recovery code',
@@ -284,24 +284,25 @@ void main() {
     expect(forget.codeRequests, 0);
   });
 
-  testWidgets(
-      'login code accepts a trimmed phone and rejects non-phone targets',
+  testWidgets('login code accepts trimmed email and phone identities',
       (tester) async {
     await tester.pumpWidget(_app());
     login.selectLoginType(LoginType.email);
     login.phoneCtrl.text = '  user@example.com  ';
-    expect(await login.getVerificationCode(), isFalse);
+    expect(await login.getVerificationCode(), isTrue);
+    login.selectLoginType(LoginType.phone);
     login.phoneCtrl.text = ' 13800138000 ';
     expect(await login.getVerificationCode(), isTrue);
-    expect(login.codeRequests, 1);
+    expect(login.codeRequests, 2);
   });
 
-  testWidgets(
-      'recovery accepts its trimmed phone independently of the login tab',
+  testWidgets('recovery explicitly switches from email to phone',
       (tester) async {
     await tester.pumpWidget(_app());
     login.operateType = LoginType.email;
     final forget = Get.put<ForgetPasswordLogic>(_Forget()) as _Forget;
+    expect(forget.emailMode.value, isTrue);
+    forget.selectEmail(false);
     forget.phoneCtrl.text = ' 13800138000 ';
     expect(await forget.getVerificationCode(), isTrue);
     expect(forget.codeRequests, 1);
@@ -338,6 +339,7 @@ void main() {
       }
       expect(login.submitting.value, isFalse);
     }
+    login.selectLoginType(LoginType.phone);
     login.isPasswordLogin.value = false;
     login.verificationCodeCtrl.text = '123456';
     for (final target in ['123', 'invalid-phone', 'user@example.com']) {
@@ -345,11 +347,15 @@ void main() {
       await login.login();
     }
     login.isPasswordLogin.value = true;
+    login.selectLoginType(LoginType.email);
     login.phoneCtrl.text = 'user@';
     login.pwdCtrl.text = 'password1';
     await login.login();
+    login.selectLoginType(LoginType.account);
+    login.pwdCtrl.text = 'password1';
     login.phoneCtrl.text = '@@';
     await login.login();
+    login.selectLoginType(LoginType.phone);
     login.isPasswordLogin.value = false;
     login.phoneCtrl.text = '13800138000';
     for (final code in ['123', 'abcdef']) {
@@ -494,7 +500,8 @@ void main() {
     expect(find.text('auth form'), findsOneWidget);
   });
 
-  testWidgets('recovery verifies and resets once before returning to login',
+  testWidgets(
+      'recovery resets once without consuming a preview before returning to login',
       (tester) async {
     await tester.pumpWidget(_app());
     Get.toNamed(AppRoutes.login);
@@ -509,11 +516,7 @@ void main() {
     });
     expect(forget.submitting.value, isTrue);
     await forget.nextStep();
-    expect(forget.checks, 1);
-    await tester.runAsync(() async {
-      forget.response.complete();
-      await Future<void>.delayed(Duration.zero);
-    });
+    expect(forget.checks, 0);
     expect(forget.resets, 1);
     expect(find.text('recovery form'), findsOneWidget);
     await tester.runAsync(() async {
@@ -526,21 +529,20 @@ void main() {
     expect(DataSp.getLoginCertificate(), isNull);
   });
 
-  testWidgets('recovery ignores a late verification after leaving',
-      (tester) async {
+  testWidgets('recovery ignores a late reset after leaving', (tester) async {
     await tester.pumpWidget(_app());
     login.operateType = LoginType.phone;
     final forget = Get.put<ForgetPasswordLogic>(_Forget()) as _Forget;
     _fillRecovery(forget);
     final pending = forget.nextStep();
     await Get.delete<ForgetPasswordLogic>(force: true);
-    forget.response.complete();
+    forget.resetResponse.complete();
     await pending;
     await tester.pumpAndSettle();
 
     expect(find.text('auth form'), findsOneWidget);
-    expect(forget.checks, 1);
-    expect(forget.resets, 0);
+    expect(forget.checks, 0);
+    expect(forget.resets, 1);
   });
 
   testWidgets('failed recovery keeps the form and releases submission',
@@ -550,14 +552,14 @@ void main() {
     final forget = Get.put<ForgetPasswordLogic>(_Forget()) as _Forget;
     _fillRecovery(forget);
     final pending = forget.nextStep();
-    forget.response.completeError(StateError('wrong code'));
+    forget.resetResponse.completeError(StateError('wrong code'));
     await pending;
 
     expect(forget.submitting.value, isFalse);
     expect(forget.verificationCodeCtrl.text, '123456');
     expect(forget.pwdCtrl.text, 'password1');
     expect(forget.pwdAgainCtrl.text, 'password1');
-    expect(forget.resets, 0);
+    expect(forget.resets, 1);
     expect(find.text('auth form'), findsOneWidget);
   });
 
@@ -567,7 +569,6 @@ void main() {
     final forget = Get.put<ForgetPasswordLogic>(_Forget()) as _Forget;
     _fillRecovery(forget);
     final pending = forget.nextStep();
-    forget.response.complete();
     await tester.pump();
     expect(forget.resets, 1);
     forget.resetResponse.completeError(StateError('offline'));

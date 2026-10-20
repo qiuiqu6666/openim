@@ -113,10 +113,59 @@ void main() {
   });
   tearDown(Get.reset);
 
+  testWidgets('code login switches to email and back without mixing identities',
+      (tester) async {
+    final logic = await _mount(tester);
+    logic.togglePasswordType();
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('auth-identity-email')));
+    await tester.pump();
+    logic.selectLoginType(LoginType.email);
+    logic.phoneCtrl.text = 'person@example.test';
+    logic.verificationCodeCtrl.text = '123456';
+    await tester.pump();
+    expect(logic.loginType.value, LoginType.email);
+    expect(logic.email, 'person@example.test');
+    await tester.tap(find.byKey(const ValueKey('auth-identity-email')));
+    await tester.pump();
+    expect(logic.verificationCodeCtrl.text, '123456');
+    expect(logic.phone, isNull);
+    expect(find.text('6-digit email code'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('auth-identity-phone')));
+    await tester.pump();
+    expect(logic.loginType.value, LoginType.phone);
+    expect(logic.email, isNull);
+    expect(logic.verificationCodeCtrl.text, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('password identity survives clearing and repeated tab switches',
+      (tester) async {
+    final logic = await _mount(tester);
+    expect(logic.isPasswordLogin.value, isTrue);
+    logic.selectLoginType(LoginType.email);
+    logic.phoneCtrl.text = 'person@example.test';
+    await tester.pump();
+    for (var i = 0; i < 12; i++) {
+      final email = i.isOdd;
+      await tester.tap(
+          find.byKey(ValueKey('auth-identity-${email ? "email" : "phone"}')));
+      await tester.pump();
+      expect(logic.loginType.value, email ? LoginType.email : LoginType.phone);
+      expect(logic.phoneCtrl.text, isEmpty);
+    }
+    logic.pwdCtrl.text = 'password123';
+    await tester.pump();
+    expect(logic.loginType.value, LoginType.email);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'fields validate on blur, then update while the user corrects them',
       (tester) async {
     final logic = await _mount(tester);
+    logic.selectLoginType(LoginType.email);
+    await tester.pump();
     await tester.enterText(_field(logic.phoneCtrl), 'user@');
     expect(logic.accountError, isNull);
     await _tap(tester, _field(logic.pwdCtrl));
@@ -165,11 +214,11 @@ void main() {
     final logic = await _mount(tester);
     await tester.runAsync(logic.login);
     await tester.pump();
-    expect(logic.accountError, StrRes.plsEnterAccount);
+    expect(logic.accountError, StrRes.plsEnterPhoneNumber);
     expect(logic.passwordError, StrRes.plsEnterPassword);
     expect(logic.codeError, isNull);
     expect(logic.formError, isNull);
-    expect(find.text(StrRes.plsEnterAccount), findsOneWidget);
+    expect(find.text(StrRes.plsEnterPhoneNumber), findsOneWidget);
     expect(find.text(StrRes.plsEnterPassword), findsOneWidget);
     expect(logic.submitting.value, isFalse);
   });
@@ -249,9 +298,12 @@ void main() {
     final mode =
         tester.getRect(find.byKey(const ValueKey('login-mode-switch')));
     expect(remember.center.dy, recovery.center.dy);
-    expect(button.top - remember.bottom, AuthReferenceTokens.buttonGap);
+    expect(button.top - remember.bottom, AuthReferenceTokens.passwordSubmitGap);
     expect(mode.top, greaterThanOrEqualTo(button.bottom));
-    expect(mode.center.dx, button.center.dx);
+    expect(mode.left, button.left);
+    final register =
+        tester.getRect(find.byKey(const ValueKey('login-register')));
+    expect(register.right, button.right);
     expect(tester.takeException(), isNull);
   });
 

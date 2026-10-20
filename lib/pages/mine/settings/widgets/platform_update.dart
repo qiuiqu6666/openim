@@ -1,3 +1,4 @@
+import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import '../update/android/android_update_runtime.dart';
@@ -116,7 +117,7 @@ Future<bool> checkPlatformUpdate(BuildContext context,
           : release.changelog.isNotEmpty
               ? release.changelog
               : settingsText(context,
-                  zh: '发现新版本 v$target，是否立即更新？',
+                  zh: AppCopy.format('发现新版本 v{#0}，是否立即更新？', [target]),
                   en: 'Version $target is available. Update now?'),
       force: force,
       actionLabel: invalidURI
@@ -139,34 +140,8 @@ Future<bool> checkPlatformUpdate(BuildContext context,
     // Removing a route externally is not proof that a required update finished.
     return !force && context.mounted;
   } catch (_) {
-    if (context.mounted && automatic) {
-      onBlocking?.call();
-      PlatformConfig? retryConfig;
-      await showPlatformUpdateDialog(context,
-          title: settingsText(context,
-              zh: '暂时无法检查更新', en: 'Update Check Unavailable'),
-          message: settingsText(context,
-              zh: '请检查网络，重试完成版本检查后继续使用。',
-              en:
-                  'Check your connection and retry the version check to continue.'),
-          force: true,
-          closeOnSuccess: true,
-          actionLabel: settingsText(context, zh: '重试', en: 'Retry'),
-          failureMessage: settingsText(context,
-              zh: '仍无法检查更新，请检查网络后重试。',
-              en: 'Still unable to check updates. Check your connection and retry.'),
-          onUpdate: () async {
-        retryConfig = await retryPlatformUpdate<PlatformConfig>(fetch);
-      });
-      if (context.mounted) {
-        return checkPlatformUpdate(context,
-            automatic: true,
-            fetchConfig: fetch,
-            openURL: open,
-            onBlocking: onBlocking,
-            prefetchedConfig: retryConfig);
-      }
-    }
+    // An unavailable background check must not block normal app use.
+    // Return false below so a later check can retry when connectivity recovers.
     if (context.mounted && !automatic) {
       showSettingsMessage(
           context,
