@@ -4,6 +4,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import '../../../core/controller/im_controller.dart';
+import '../media/chat_media_preview.dart';
 
 class MessageContextPage extends StatefulWidget {
   const MessageContextPage(
@@ -26,16 +27,42 @@ class _MessageContextPageState extends State<MessageContextPage> {
   final targetKey = GlobalKey();
   bool busy = false, failed = false, older = true, newer = true;
   HistoryScanCursor? _olderScan, _newerScan;
+  bool _openingMedia = false;
+  late final (String, String?) _mediaOwner;
+  Future<void> _openMedia(Message message) async {
+    if (_openingMedia || !mounted) return;
+    _openingMedia = true;
+    try {
+      await ChatMediaPreview.open(context,
+          conversationID: widget.conversationID,
+          selected: message,
+          messages: messages,
+          isCurrent: () =>
+              mounted &&
+              _mediaOwner == (OpenIM.iMManager.userID, OpenIM.iMManager.token),
+          onDeleted: (id) {
+            if (!mounted) return;
+            removed.add(id);
+            setState(() => messages.removeWhere((m) => m.clientMsgID == id));
+          });
+    } finally {
+      _openingMedia = false;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    // Capture ownership before any asynchronous history request or user action.
+    _mediaOwner = (OpenIM.iMManager.userID, OpenIM.iMManager.token);
     if (Get.isRegistered<IMController>()) {
       final im = Get.find<IMController>();
       void remove(String? id) {
         if (id == null) return;
         removed.add(id);
-        if (mounted)
+        if (mounted) {
           setState(() => messages.removeWhere((m) => m.clientMsgID == id));
+        }
       }
 
       subscriptions
@@ -82,8 +109,9 @@ class _MessageContextPageState extends State<MessageContextPage> {
               startMsg: _olderScan ?? messages.first,
               count: 20);
       if (!mounted) return;
-      if ((page.errCode ?? 0) != 0)
+      if ((page.errCode ?? 0) != 0) {
         throw StateError('History context read failed');
+      }
       final byID = {for (final m in messages) m.clientMsgID: m};
       for (final m in page.messageList ?? <Message>[]) {
         if (!removed.contains(m.clientMsgID)) byID[m.clientMsgID] = m;
@@ -99,12 +127,14 @@ class _MessageContextPageState extends State<MessageContextPage> {
         older = page.isEnd != true;
         _olderScan = page.scanCursor;
       }
-      if (initial)
+      if (initial) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final targetContext = targetKey.currentContext;
-          if (targetContext != null)
+          if (targetContext != null) {
             Scrollable.ensureVisible(targetContext, alignment: 0.5);
+          }
         });
+      }
     } catch (_) {
       if (mounted) {
         failed = true;
@@ -170,15 +200,14 @@ class _MessageContextPageState extends State<MessageContextPage> {
                         : null;
                   },
                   onClickItemView: () {
-                    if (message.isPictureType || message.isVideoType)
-                      IMUtils.previewMediaFile(
-                          context: context, message: message);
+                    if (message.isPictureType || message.isVideoType) {
+                      _openMedia(message);
+                    }
                   },
                   mediaItemBuilder: (_, m) => m.isVideoType
                       ? IconButton(
                           icon: const Icon(Icons.play_circle_outline),
-                          onPressed: () => IMUtils.previewMediaFile(
-                              context: context, message: m))
+                          onPressed: () => _openMedia(m))
                       : null,
                 )),
           if (newer && messages.isNotEmpty)

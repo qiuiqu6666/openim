@@ -85,7 +85,11 @@ void main() {
           findsOneWidget,
         );
         final filter = tester.widget<BackdropFilter>(blur).filter;
-        final sigma = surface == NavigationGlassSurface.top ? 18.0 : 20.0;
+        final sigma = switch (surface) {
+          NavigationGlassSurface.top => 18.0,
+          NavigationGlassSurface.bottom => 20.0,
+          NavigationGlassSurface.floating => 8.0,
+        };
         expect(
             filter,
             ui.ImageFilter.blur(

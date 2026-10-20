@@ -201,6 +201,7 @@ flutter:
     - lib/pages/mine/secondary/calls/assets/
     - assets/wallet.png
     - lib/pages/chat/messages/selection/assets/
+    - lib/pages/chat/messages/forwarding/assets/
     - lib/pages/chat/stickers/builtin/assets/4351/
     - lib/pages/official_account/assets/
     - lib/pages/contacts/create_group/assets/

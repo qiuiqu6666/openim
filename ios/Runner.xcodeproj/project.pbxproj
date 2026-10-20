@@ -11,6 +11,7 @@
 		B859AE1818E6455390B84203 /* YoumengBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B859AE1818E6455390B84204; };
 		B859AE1818E6455390B84205 /* TunnelConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B859AE1818E6455390B84206; };
 		10CA7100302D2E3000000001 /* NativeChatLocationMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */; };
+		20CA7100302D2E3000000011 /* ChatLocationAddressBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20CA7100302D2E3000000012 /* ChatLocationAddressBridge.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		173BE1932A67E13300A4D9A9 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 173BE1922A67E13300A4D9A9 /* NotificationService.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
@@ -58,6 +59,7 @@
 		0A43C86933581DC06E08B1B1 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 		B859AE1818E6455390B84206 /* TunnelConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Youmeng/TunnelConnection.swift; sourceTree = "<group>"; };
 		10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChatLocationMap.swift; sourceTree = "<group>"; };
+		20CA7100302D2E3000000012 /* ChatLocationAddressBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatLocationAddressBridge.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
 		1706ED5D2AC2917E004FD73C /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Main.strings"; sourceTree = "<group>"; };
@@ -184,6 +186,7 @@
 				B859AE1818E6455390B84204 /* YoumengBridge.swift */,
 				B859AE1818E6455390B84206 /* TunnelConnection.swift */,
 				10CA7100302D2E3000000002 /* NativeChatLocationMap.swift */,
+				20CA7100302D2E3000000012 /* ChatLocationAddressBridge.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
@@ -503,6 +506,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				10CA7100302D2E3000000001 /* NativeChatLocationMap.swift in Sources */,
+				20CA7100302D2E3000000011 /* ChatLocationAddressBridge.swift in Sources */,
 				CA110CA5302D2E3000000001 /* CallPictureInPictureBridge.swift in Sources */,
 				CA110CA5302D2E3000000004 /* CallVideoFrameView.m in Sources */,
 				DA140CA5302D2E3000000001 /* LiveAirPlayViewFactory.swift in Sources */,

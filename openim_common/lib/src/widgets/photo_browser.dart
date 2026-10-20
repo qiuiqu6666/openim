@@ -28,8 +28,10 @@ import 'media_browser/local_media_availability.dart';
 import 'media_browser/media_action_sheet.dart';
 import 'media_browser/media_video_hero.dart';
 import 'media_browser/viewer_image_provider.dart';
+import 'media_browser/recognition/media_image_recognition.dart';
 
 export 'media_browser/media_source.dart';
+export 'media_browser/media_share_sheet.dart' show MediaShareRecipient;
 import 'media_browser/media_grid_thumbnail.dart';
 
 class MediaBrowser extends StatefulWidget {
@@ -48,6 +50,9 @@ class MediaBrowser extends StatefulWidget {
     this.onForward,
     this.onDelete,
     this.onViewInChat,
+    this.onFavorite,
+    this.loadShareRecipients,
+    this.onForwardTo,
     this.imageProviderFactory,
     this.autoLoadOriginal = true,
   });
@@ -73,6 +78,9 @@ class MediaBrowser extends StatefulWidget {
 
   /// Called after closing the preview to locate its selected chat message.
   final ValueChanged<int>? onViewInChat;
+  final ValueChanged<int>? onFavorite;
+  final Future<List<MediaShareRecipient>> Function()? loadShareRecipients;
+  final void Function(int index, MediaShareRecipient recipient)? onForwardTo;
   @override
   State<MediaBrowser> createState() => _MediaBrowserState();
 }
@@ -412,7 +420,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
               onLongPress: widget.closeOnly
                   ? () {}
                   : widget.onLongPress == null
-                      ? null
+                      ? () => _showMoreMenu(context)
                       : () => widget.onLongPress!(currentIndex),
               child: NotificationListener<ScrollNotification>(
                 onNotification: _observeGalleryScroll,
@@ -531,7 +539,9 @@ class _MediaBrowserState extends State<MediaBrowser> {
               bottom: false,
               minimum: const EdgeInsets.symmetric(horizontal: 12),
               child: SizedBox(
-                height: MediaReadingViewport.toolbarExtent,
+                height: MediaReadingViewport.toolbarExtent *
+                    (MediaQuery.textScalerOf(context).scale(14) / 14)
+                        .clamp(1.0, 3.0),
                 child: Row(children: [
                   Transform.translate(
                     offset: Offset(0, (TitleBar.chatToolbarHeight - 72) / 2),
@@ -651,7 +661,13 @@ class _MediaBrowserState extends State<MediaBrowser> {
                         _showGrid = true;
                         _notifyChrome();
                       }),
-                    if (widget.onDelete != null || widget.onViewInChat != null)
+                    if (widget.onSave != null ||
+                        widget.onForward != null ||
+                        widget.onFavorite != null ||
+                        widget.showGallery ||
+                        (!source.isVideo && MediaImageRecognition.start != null) ||
+                        widget.onDelete != null ||
+                        widget.onViewInChat != null)
                       _roundAction(context,
                           icon: Icons.more_horiz,
                           tooltip: 'mediaMore'.tr,
@@ -793,11 +809,18 @@ class _MediaBrowserState extends State<MediaBrowser> {
   Future<void> _showMoreMenu(BuildContext context) async {
     final index = currentIndex;
     final source = widget.sources[index];
-    final action = await showMediaActionSheet(context,
+    final recognize = MediaImageRecognition.start;
+    final selection = await showMediaActionSheet(context,
+        recognize: source.isVideo || source.loading || recognize == null
+            ? null : () => recognize(source),
         canSave: widget.onSave != null,
         canForward: widget.onForward != null,
         canViewInChat: widget.onViewInChat != null,
-        canDelete: widget.onDelete != null);
+        canDelete: widget.onDelete != null,
+        canFavorite: widget.onFavorite != null,
+        canShowGallery: widget.showGallery,
+        loadRecipients:
+            widget.onForwardTo == null ? null : widget.loadShareRecipients);
     // A menu always acts on the item it was opened for. Source replacements or
     // closing this route must not apply the choice to a different attachment.
     if (!mounted ||
@@ -807,11 +830,42 @@ class _MediaBrowserState extends State<MediaBrowser> {
         !identical(widget.sources[index], source)) {
       return;
     }
-    switch (action) {
+    final recipient = selection?.recipient;
+    final target = selection?.target;
+    if (target != null) {
+      bool active() => mounted &&
+          context.mounted &&
+          currentIndex == index &&
+          index < widget.sources.length &&
+          identical(widget.sources[index], source) &&
+          ModalRoute.of(context)?.isCurrent == true;
+      if (!active()) return;
+      try {
+        if (selection!.openTarget) {
+          await target.open?.call(context, active);
+        } else {
+          await Clipboard.setData(ClipboardData(text: target.value));
+          if (active()) IMViews.showToast(AppCopy.text('已复制'));
+        }
+      } catch (_) {
+        if (active()) IMViews.showToast(AppCopy.text('操作失败，请重试'));
+      }
+      return;
+    }
+    if (recipient != null) {
+      widget.onForwardTo?.call(index, recipient);
+      return;
+    }
+    switch (selection?.action) {
       case MediaAction.save:
         widget.onSave?.call(index);
       case MediaAction.forward:
         widget.onForward?.call(index);
+      case MediaAction.favorite:
+        widget.onFavorite?.call(index);
+      case MediaAction.gallery:
+        _showGrid = true;
+        _notifyChrome();
       case MediaAction.viewInChat:
         final locate = widget.onViewInChat;
         if (locate == null) return;

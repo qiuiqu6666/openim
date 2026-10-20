@@ -23,6 +23,8 @@ import '../../favorites/widgets/favorite_search_formatter.dart';
 import '../../favorites/widgets/favorite_swipe_delete.dart';
 import '../../favorites/favorite_p0.dart';
 import '../../favorites/media/favorite_picked_media.dart';
+import '../../favorites/feedback/favorite_media_feedback.dart';
+import '../../favorites/feedback/favorite_media_progress.dart';
 import '../settings/settings_navigation.dart';
 import '../settings/widgets/settings_widgets.dart';
 import 'favorite_note_edit_page.dart';
@@ -815,6 +817,7 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
   bool _busy = false;
   bool _choosingCreateAction = false;
   bool _confirmingDelete = false;
+  FavoriteKind? _creatingMedia;
   final Set<String> _selectedIds = {};
   final Map<String, FavoriteItem> _selectedItems = {};
   final Map<String, int> _unconfirmedDeleteVersions = {};
@@ -1158,13 +1161,17 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
             SettingsAction(
                 _text(AppCopy.text('笔记'), 'Note'), _FavoriteCreateAction.note),
             SettingsAction(_text(AppCopy.text('图片'), 'Image'),
-                _FavoriteCreateAction.image),
+                _FavoriteCreateAction.image,
+                subtitle: FavoriteMediaFeedback.limitHint(context, FavoriteKind.image)),
             SettingsAction(_text(AppCopy.text('视频'), 'Video'),
-                _FavoriteCreateAction.video),
+                _FavoriteCreateAction.video,
+                subtitle: FavoriteMediaFeedback.limitHint(context, FavoriteKind.video)),
             SettingsAction(_text(AppCopy.text('音频'), 'Audio'),
-                _FavoriteCreateAction.audio),
+                _FavoriteCreateAction.audio,
+                subtitle: FavoriteMediaFeedback.limitHint(context, FavoriteKind.audio)),
             SettingsAction(
-                _text(AppCopy.text('文件'), 'File'), _FavoriteCreateAction.file),
+                _text(AppCopy.text('文件'), 'File'), _FavoriteCreateAction.file,
+                subtitle: FavoriteMediaFeedback.limitHint(context, FavoriteKind.file)),
             SettingsAction(
                 _text(AppCopy.text('链接'), 'Link'), _FavoriteCreateAction.link),
           ]);
@@ -1196,17 +1203,20 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
               }));
       return;
     }
-    setState(() => _busy = true);
+    final kind = switch (action) {
+      _FavoriteCreateAction.image => FavoriteKind.image,
+      _FavoriteCreateAction.video => FavoriteKind.video,
+      _FavoriteCreateAction.audio => FavoriteKind.audio,
+      _ => FavoriteKind.file,
+    };
+    setState(() {
+      _busy = true;
+      _creatingMedia = kind;
+    });
     try {
       String? path;
       String? name;
       String? reportedMimeType;
-      final kind = switch (action) {
-        _FavoriteCreateAction.image => FavoriteKind.image,
-        _FavoriteCreateAction.video => FavoriteKind.video,
-        _FavoriteCreateAction.audio => FavoriteKind.audio,
-        _ => FavoriteKind.file,
-      };
       if (kind == FavoriteKind.image || kind == FavoriteKind.video) {
         final assets = await AssetPicker.pickAssets(context,
             pickerConfig: AssetPickerConfig(
@@ -1259,11 +1269,15 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
       }
     } catch (error) {
       if (mounted && _current) {
-        showSettingsError(context, error,
-            _text(AppCopy.text('收藏失败，请重试'), 'Could not save. Please retry.'));
+        await FavoriteMediaFeedback.showFailure(context, error, kind: kind);
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _creatingMedia = null;
+        });
+      }
     }
   }
 
@@ -1298,20 +1312,9 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
                 if (_busy && !_confirmingDelete)
                   AnimatedBuilder(
                       animation: widget.repository,
-                      builder: (context, _) => Column(children: [
-                            LinearProgressIndicator(
-                                value: widget.repository.uploadProgress),
-                            if (widget.repository.uploadProgress != null)
-                              Padding(
-                                  padding: const EdgeInsets.all(AppTokens.s3),
-                                  child: Text(_text(
-                                      AppCopy.format('正在上传原件 {#0}%', [
-                                        (widget.repository.uploadProgress! *
-                                                100)
-                                            .round()
-                                      ]),
-                                      'Uploading original ${(widget.repository.uploadProgress! * 100).round()}%'))),
-                          ])),
+                      builder: (context, _) => _creatingMedia != null
+                          ? FavoriteMediaProgress(progress: widget.repository.uploadProgress)
+                          : LinearProgressIndicator(value: widget.repository.uploadProgress)),
                 if (_batchMessage != null)
                   Padding(
                       padding: const EdgeInsets.all(AppTokens.s4),

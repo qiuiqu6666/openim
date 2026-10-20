@@ -27,7 +27,8 @@ Message forwardingReceipt(Message message) => Message.fromJson({
     });
 
 class ForwardingFixture {
-  ForwardingFixture() {
+  ForwardingFixture(
+      {Future<bool> Function(List<Message>, dynamic, bool)? stageForward}) {
     delivery = ChatDeliveryController(
         messageList: timeline,
         accountID: 'self',
@@ -49,6 +50,7 @@ class ForwardingFixture {
         removeMessage: (_) {},
         isClosed: () => closed);
     controller = ChatForwardingController(
+        stageForward: stageForward,
         delivery: delivery,
         messages: () => timeline,
         isClosed: () => closed,

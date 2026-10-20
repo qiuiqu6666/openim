@@ -1,3 +1,4 @@
+import 'location_detail_gps_fixture.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
@@ -30,7 +31,10 @@ Message location(
         });
 
 void main() {
-  setUp(setupMarkdownFixture);
+  setUp(() {
+    setupMarkdownFixture();
+    installUnavailableDetailGps();
+  });
   tearDown(Get.reset);
   test('legacy names and real addresses parse without inventing address data',
       () {

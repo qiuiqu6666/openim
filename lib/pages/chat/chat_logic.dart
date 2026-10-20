@@ -1,3 +1,5 @@
+import 'messages/forwarding/pending_forward_store.dart';
+import 'messages/forwarding/pending_forward.dart';
 import 'package:openim_common/localization.dart';
 import 'navigation/chat_entry_trace.dart';
 import 'mentions/chat_mention_controller.dart';
@@ -377,6 +379,7 @@ class ChatLogic extends SuperController {
     )),
     showFeedback: IMViews.showToast,
   );
+  late final PendingForwardController pendingForward;
   late final ChatForwardingController _forwarding = ChatForwardingController(
     delivery: _delivery,
     messages: () => messageList,
@@ -386,7 +389,16 @@ class ChatLogic extends SuperController {
     faceUrl: () => faceUrl.value,
     canForward: canForward,
     closeToolbox: closeToolbox,
-    onForwardNeedsReview: () => messageSelection.cancel(),
+    onForwardNeedsReview: () {
+      messageSelection.cancel();
+      pendingForward.draft.value = null;
+    },
+    stageForward: (messages, recipient, merged) => AppNavigator.stageForward(
+      PendingForward(messages, recipient,
+          merged: merged,
+          mergeTitle: '${nickname.value} · ${'sdkMergedHistory'.tr}'),
+      isCurrent: () => !_sessionInactive,
+    ),
   );
   late final MessageSelectionController messageSelection =
       MessageSelectionController(
@@ -1047,6 +1059,15 @@ class ChatLogic extends SuperController {
     entryTrace = arguments['chatEntryTrace'] as ChatEntryTrace?;
     entryTrace?.mark('init_start');
     conversationInfo = arguments['conversationInfo'];
+    pendingForward = PendingForwardStore.shared.conversation(
+      accountID: OpenIM.iMManager.userID,
+      sessionToken: DataSp.imToken,
+      conversationID: conversationInfo.conversationID,
+    );
+    final incomingForward = arguments['pendingForward'] as PendingForward?;
+    if (incomingForward != null && !pendingForward.sending.value) {
+      pendingForward.draft.value = incomingForward;
+    }
     _readDiagnostics
         .record('route_enter', {'unreadCount': conversationInfo.unreadCount});
     final account = arguments['officialAccount'];
@@ -1259,7 +1280,22 @@ class ChatLogic extends SuperController {
           : AppNavigator.startGroupChatSetup(
               conversationInfo: conversationInfo);
 
-  Future<void> sendTextMsg() => _composer.sendTextMsg();
+  Future<void> sendTextMsg() async {
+    if (_sessionInactive ||
+        sendingMuted ||
+        isInvalidGroup ||
+        pendingForward.sending.value) {
+      return;
+    }
+    if (pendingForward.draft.value != null) {
+      final sent = await pendingForward.send((draft) => _forwarding.sendPending(
+          draft.messages, draft.recipient,
+          merged: draft.merged, mergeTitle: draft.mergeTitle));
+      if (!sent || _sessionInactive) return;
+    }
+    await _composer.sendTextMsg();
+  }
+
   void mentionMessageSender(Message message) =>
       _composer.mentionMessageSender(message);
   Future<void> onLongPressAvatar(BuildContext context, Message message) =>

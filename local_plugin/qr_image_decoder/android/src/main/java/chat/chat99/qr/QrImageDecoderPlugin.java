@@ -28,11 +28,26 @@ public final class QrImageDecoderPlugin implements FlutterPlugin {
         cache = binding.getApplicationContext().getCacheDir();
         channel = new MethodChannel(binding.getBinaryMessenger(), "99chat/qr_image_decoder");
         channel.setMethodCallHandler((call, result) -> {
-            if (!call.method.equals("decode")) { result.notImplemented(); return; }
+            boolean text = call.method.equals("recognizeText");
+            if (!text && !call.method.equals("decode")) { result.notImplemented(); return; }
             String path = call.argument("path");
             if (path == null) { result.error("invalidImage", "Invalid image", null); return; }
             if (!busy.compareAndSet(false, true)) { result.error("busy", "Busy", null); return; }
             executor.execute(() -> {
+                if (text) {
+                    String recognized = null;
+                    try {
+                        recognized = ImageTextRecognizer.recognize(binding.getApplicationContext(), path);
+                    } catch (Exception | OutOfMemoryError ignored) { }
+                    String reply = recognized;
+                    busy.set(false);
+                    main.post(() -> {
+                        if (!attached) return;
+                        if (reply == null) result.error("textUnavailable", "Text recognition failed", null);
+                        else result.success(reply);
+                    });
+                    return;
+                }
                 Map<String, Object> value = null;
                 String error = "invalidImage";
                 try { value = decode(path); }

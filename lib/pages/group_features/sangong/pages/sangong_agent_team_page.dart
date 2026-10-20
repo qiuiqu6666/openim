@@ -1,3 +1,6 @@
+import 'package:flutter/services.dart';
+import '../../mark_six/widgets/mark_six_style.dart';
+import '../../widgets/group_feature_tokens.dart';
 import 'package:openim_common/localization.dart';
 import 'dart:async';
 import '../services/account_identity/sangong_team_user_search.dart';
@@ -35,7 +38,8 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
   late final _accountSession = AgentSessionSnapshot(SangongScope.read(context));
   bool get _isCurrentSession => mounted && _accountSession.isCurrent;
 
-  bool _direct = false;
+  String _sortBy = 'balance';
+  bool _sortDescending = true;
   bool _loading = true;
   bool _transferring = false;
   String? _error;
@@ -77,7 +81,7 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
     try {
       final data =
           await SangongScope.read(context).agent.fetchSangongTeamMembers(
-                direct: _direct,
+                direct: false,
               );
       if (!mounted || !_isCurrentSession || request != _loadRequest) return;
       setState(() {
@@ -246,6 +250,7 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GroupFeatureTokens.of(context);
     final data = _data;
     final query = _searchQuery.trim().toLowerCase();
     final members = (data?.members ?? const <SangongTeamMemberDto>[])
@@ -264,10 +269,26 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
                   .contains(query),
         )
         .toList();
+    members.sort((a, b) {
+      final left = _sortBy == 'balance'
+          ? a.balance
+          : _sortBy == 'level'
+              ? a.levelNo
+              : a.playerTurnover + a.bankerTurnover;
+      final right = _sortBy == 'balance'
+          ? b.balance
+          : _sortBy == 'level'
+              ? b.levelNo
+              : b.playerTurnover + b.bankerTurnover;
+      final order =
+          _sortDescending ? right.compareTo(left) : left.compareTo(right);
+      return order == 0 ? a.imUserId.compareTo(b.imUserId) : order;
+    });
     return SangongAgentAuthorizedView(
       runtime: _accountSession.runtime,
       session: _accountSession,
       child: Scaffold(
+        backgroundColor: tokens.background,
         appBar: AppBar(
           centerTitle: true,
           leading: const AppBackButton(),
@@ -284,203 +305,383 @@ class _SangongAgentTeamPageState extends State<SangongAgentTeamPage> {
               ),
           ],
         ),
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: SegmentedButton<bool>(
-                segments: [
-                  ButtonSegment(
-                      value: false, label: Text(AppCopy.text('全部下级'))),
-                  ButtonSegment(value: true, label: Text(AppCopy.text('直属下级'))),
-                ],
-                selected: {_direct},
-                onSelectionChanged: (value) {
-                  final direct = value.first;
-                  if (direct == _direct) return;
-                  setState(() => _direct = direct);
-                  _load();
-                },
-              ),
+        body: SafeArea(
+          top: false,
+          child: RefreshIndicator(
+            onRefresh: _load,
+            child: CustomScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                    child: ColoredBox(
+                        color: tokens.surface,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                              child: TextField(
+                                controller: _searchController,
+                                textInputAction: TextInputAction.search,
+                                onChanged: _search,
+                                decoration: InputDecoration(
+                                  hintText: AppCopy.text('搜索昵称、备注或账号'),
+                                  filled: true,
+                                  fillColor: tokens.background,
+                                  prefixIcon: const Icon(Icons.search),
+                                  suffixIcon: _searchQuery.isEmpty
+                                      ? null
+                                      : IconButton(
+                                          tooltip: AppCopy.text('清空搜索'),
+                                          icon: const Icon(Icons.clear),
+                                          onPressed: () {
+                                            _searchController.clear();
+                                            _search('');
+                                          },
+                                        ),
+                                  isDense: true,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                        MarkSixStyle.radius),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.all(tokens.inset),
+                              child: _teamFilterBar(
+                                  data, members.length, query.isNotEmpty),
+                            ),
+                          ],
+                        ))),
+                _buildBody(members),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: TextField(
-                controller: _searchController,
-                textInputAction: TextInputAction.search,
-                onChanged: _search,
-                decoration: InputDecoration(
-                  hintText: AppCopy.text('搜索昵称、备注、公开账号或用户ID'),
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchQuery.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: AppCopy.text('清空搜索'),
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _searchController.clear();
-                            _search('');
-                          },
-                        ),
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-            if (data != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        data.batchNo.isNotEmpty
-                            ? '${data.businessDate} · 批次 ${data.batchNo}'
-                            : data.businessDate.isEmpty
-                                ? '批次 ID ${data.sessionId}'
-                                : '${data.businessDate} · 批次 ID ${data.sessionId}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    Text(
-                      query.isEmpty
-                          ? '共 ${data.members.length} 人'
-                          : '找到 ${members.length} 人 / 共 ${data.members.length} 人',
-                    ),
-                  ],
-                ),
-              ),
-            Expanded(child: _buildBody(members)),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildBody(List<SangongTeamMemberDto> members) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(_error!, textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: _load, child: Text(AppCopy.text('重试'))),
-          ],
-        ),
+  Widget _teamFilterBar(
+      SangongTeamMembersDto? data, int visible, bool searching) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final tokens = GroupFeatureTokens.of(context);
+    final total = data?.members.length ?? 0;
+    Widget sortButton(String key, String title) {
+      final selected = _sortBy == key;
+      return ChoiceChip(
+        selected: selected,
+        showCheckmark: false,
+        label: Text(
+            '${AppCopy.text(title)}${selected ? (_sortDescending ? ' ↓' : ' ↑') : ''}'),
+        tooltip: selected
+            ? (_sortDescending ? '从高到低，点击改为从低到高' : '从低到高，点击改为从高到低')
+            : key == 'level'
+                ? '点击从低到高排序'
+                : '点击从高到低排序',
+        onSelected: (_) => setState(() {
+          if (selected) {
+            _sortDescending = !_sortDescending;
+          } else {
+            _sortBy = key;
+            _sortDescending = key != 'level';
+          }
+        }),
       );
+    }
+
+    final count = Text.rich(
+        TextSpan(children: [
+          TextSpan(text: searching ? '找到 ' : '共 '),
+          TextSpan(
+              text: '${searching ? visible : total}',
+              style: TextStyle(
+                  color: colors.primary, fontWeight: FontWeight.w700)),
+          TextSpan(text: searching ? ' 人 / 共 $total 人' : ' 人'),
+        ]),
+        style: theme.textTheme.bodyMedium?.copyWith(color: tokens.text));
+    return Wrap(
+      spacing: tokens.inset / 2,
+      runSpacing: tokens.inset / 2,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        sortButton('balance', '积分排序'),
+        sortButton('turnover', '总流水排序'),
+        sortButton('level', '层级排序'),
+        count,
+      ],
+    );
+  }
+
+  Widget _buildBody(List<SangongTeamMemberDto> members) {
+    if (_loading) {
+      return const SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: CircularProgressIndicator()));
+    }
+    if (_error != null) {
+      return SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_error!, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                FilledButton(onPressed: _load, child: Text(AppCopy.text('重试'))),
+              ],
+            ),
+          ));
     }
     if (members.isEmpty) {
-      return Center(
-        child: Text(_searchQuery.trim().isEmpty
-            ? AppCopy.text('暂无下级')
-            : AppCopy.text('未找到匹配的下级')),
-      );
+      return SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Text(_searchQuery.trim().isEmpty
+                ? AppCopy.text('暂无下级')
+                : AppCopy.text('未找到匹配的下级')),
+          ));
     }
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
+    final tokens = GroupFeatureTokens.of(context);
+    return SliverPadding(
+      padding: EdgeInsets.all(tokens.inset),
+      sliver: SliverList.separated(
         itemCount: members.length,
-        separatorBuilder: (_, __) => const Divider(height: 1, indent: 80),
+        separatorBuilder: (_, __) => SizedBox(height: tokens.inset / 2),
         itemBuilder: (context, index) => _memberTile(members[index]),
       ),
     );
   }
 
   Widget _memberTile(SangongTeamMemberDto member) {
-    final name = member.nickname.trim().isEmpty
-        ? AppCopy.text('用户')
-        : member.nickname.trim();
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      leading: SangongIMAvatar(
-          userID: member.imUserId, nickname: member.nickname, size: 52),
-      title: SangongUserName(
-        userID: member.imUserId,
-        nickname: name,
-        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SangongPublicAccount(
-              userID: member.imUserId,
-              style: Theme.of(context).textTheme.bodySmall),
-          Text(AppCopy.format('第 {#0} 级  ·  余额 {#1}  ·  未返水 {#2}', [
-            member.levelNo,
-            _amount(member.balance),
-            _amount(member.pendingRebate)
-          ])),
-          Text(AppCopy.format('闲流水 {#0}  ·  庄流水 {#1}', [
-            _amount(member.playerTurnover),
-            _amount(member.bankerTurnover)
-          ])),
-        ],
-      ),
-      isThreeLine: true,
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        IconButton(
-          tooltip: AppCopy.text('划转积分'),
-          icon: const Icon(Icons.swap_horiz_rounded),
-          onPressed: _transferring || member.imUserId.trim().isEmpty
-              ? null
-              : () => _transfer(member),
-        ),
-        const Icon(Icons.chevron_right_rounded),
-      ]),
-      onTap: () {
-        if (!_isCurrentSession) return;
-        SangongAgentMemberDetailPage.open(context, member);
-      },
-    );
-    /*
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: colorScheme.outlineVariant),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _metricSection('当前批次统计', [
-                ('总流水', member.batchTotalTurnover),
-                ('玩家流水', member.playerTurnover),
-                ('庄家流水', member.bankerTurnover),
-                ('上分', member.batchUp),
-                ('下分', member.batchDown),
-                ('盈亏', member.batchProfitLoss),
-                ('当前已返水', member.batchRebate),
-              ]),
-              const SizedBox(height: 14),
-              Divider(height: 1, color: colorScheme.outlineVariant),
-              const SizedBox(height: 14),
-              _metricSection('今日', [
-                ('上分', member.todayUp),
-                ('下分', member.todayDown),
-                ('盈亏', member.todayProfitLoss),
-              ]),
-              const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.icon(
-                  onPressed: member.imUserId.trim().isEmpty
-                      ? null
-                      : () => _transfer(member),
-                  icon: const Icon(Icons.swap_horiz_rounded),
-                  label: const Text('划转积分'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );*/
+    final style = MarkSixStyle.of(context);
+    final theme = Theme.of(context).textTheme;
+    final radius = BorderRadius.circular(_TeamReferenceTokens.radius);
+    void detail() {
+      if (_isCurrentSession) SangongAgentMemberDetailPage.open(context, member);
+    }
+
+    Widget metric(String label, num value, {bool primary = false}) => Expanded(
+          child: Semantics(
+              container: true,
+              excludeSemantics: true,
+              label: '${AppCopy.text(label)} ${_amount(value)}',
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(_amount(value),
+                        style: theme.titleLarge?.copyWith(
+                            fontSize: _TeamReferenceTokens.valueSize,
+                            fontWeight: FontWeight.w600,
+                            color: primary ? style.primary : style.text))),
+                const SizedBox(height: _TeamReferenceTokens.smallGap),
+                Text(AppCopy.text(label),
+                    style: theme.bodySmall?.copyWith(
+                        fontSize: _TeamReferenceTokens.labelSize,
+                        color: style.secondary)),
+              ])),
+        );
+    Widget divider() => Container(
+        width: 1,
+        height: _TeamReferenceTokens.dividerHeight,
+        color: style.divider);
+    final referenceHeight = _TeamReferenceTokens.height *
+        (MediaQuery.textScalerOf(context).scale(14) / 14).clamp(1.0, 3.0);
+    // Fixed reference composition scales as a whole; it never changes into a grid.
+    return LayoutBuilder(
+        builder: (context, constraints) => SizedBox(
+              width: constraints.maxWidth,
+              height: constraints.maxWidth *
+                  _TeamReferenceTokens.height /
+                  _TeamReferenceTokens.width,
+              child: FittedBox(
+                  fit: BoxFit.contain,
+                  child: SizedBox(
+                    width: _TeamReferenceTokens.width,
+                    height: referenceHeight,
+                    child: Material(
+                        color: style.surface,
+                        borderRadius: radius,
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: detail,
+                          child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: _TeamReferenceTokens.inset),
+                              child: Row(children: [
+                                SangongIMAvatar(
+                                    userID: member.imUserId,
+                                    nickname: member.nickname,
+                                    size: _TeamReferenceTokens.avatar),
+                                const SizedBox(width: _TeamReferenceTokens.gap),
+                                Expanded(
+                                    child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                      Row(children: [
+                                        Expanded(
+                                            child: SangongIdentityView(
+                                                userID: member.imUserId,
+                                                builder: (identity) => Text(
+                                                    identity
+                                                                ?.nickname
+                                                                .trim()
+                                                                .isNotEmpty ==
+                                                            true
+                                                        ? identity!.nickname
+                                                        : member.nickname,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow
+                                                        .ellipsis,
+                                                    style: theme.titleLarge?.copyWith(
+                                                        fontSize:
+                                                            _TeamReferenceTokens
+                                                                .nameSize,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: style.text)))),
+                                        Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 20, vertical: 10),
+                                            decoration: BoxDecoration(
+                                                color: style.background,
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                        _TeamReferenceTokens
+                                                            .radius)),
+                                            child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                      Icons
+                                                          .workspace_premium_rounded,
+                                                      color: style.primary,
+                                                      size: 28),
+                                                  const SizedBox(width: 12),
+                                                  Text(
+                                                      AppCopy.format('第 {#0} 级',
+                                                          [member.levelNo]),
+                                                      style: theme.bodyMedium
+                                                          ?.copyWith(
+                                                              fontSize:
+                                                                  _TeamReferenceTokens
+                                                                      .labelSize,
+                                                              color: style
+                                                                  .secondary)),
+                                                ])),
+                                        Icon(Icons.chevron_right_rounded,
+                                            color: style.secondary, size: 36),
+                                      ]),
+                                      SangongIdentityView(
+                                          userID: member.imUserId,
+                                          builder: (identity) {
+                                            final account =
+                                                identity?.account ?? '';
+                                            return Row(children: [
+                                              Flexible(
+                                                  child: Text(
+                                                      '账号：${account.isEmpty ? AppCopy.text('未获取') : account}',
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow
+                                                          .ellipsis,
+                                                      style: theme.bodyMedium
+                                                          ?.copyWith(
+                                                              fontSize:
+                                                                  _TeamReferenceTokens
+                                                                      .labelSize,
+                                                              color: style
+                                                                  .secondary))),
+                                              IconButton(
+                                                  tooltip: AppCopy.text('复制账号'),
+                                                  icon: const Icon(
+                                                      Icons.copy_rounded,
+                                                      size: 26),
+                                                  color: style.secondary,
+                                                  onPressed: account.isEmpty
+                                                      ? null
+                                                      : () async {
+                                                          await Clipboard.setData(
+                                                              ClipboardData(
+                                                                  text:
+                                                                      account));
+                                                          if (context.mounted &&
+                                                              _isCurrentSession) {
+                                                            ToastUtils.toast(
+                                                                AppCopy.text(
+                                                                    '账号已复制'),
+                                                                context:
+                                                                    context);
+                                                          }
+                                                        }),
+                                            ]);
+                                          }),
+                                      const SizedBox(
+                                          height: _TeamReferenceTokens.gap),
+                                      Row(children: [
+                                        metric('总积分', member.balance,
+                                            primary: true),
+                                        divider(),
+                                        metric('未返水', member.pendingRebate),
+                                        divider(),
+                                        metric('闲流水', member.playerTurnover),
+                                        divider(),
+                                        metric('庄流水', member.bankerTurnover),
+                                        divider(),
+                                        const SizedBox(width: 20),
+                                        IconButton(
+                                            tooltip: AppCopy.text('划转积分'),
+                                            style: IconButton.styleFrom(
+                                                foregroundColor: style.primary,
+                                                backgroundColor: style.primary
+                                                    .withValues(alpha: .06),
+                                                minimumSize:
+                                                    const Size(164, 64),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 24)),
+                                            icon: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                      Icons.swap_horiz_rounded,
+                                                      size: 36),
+                                                  const SizedBox(width: 12),
+                                                  Text(AppCopy.text('划转'),
+                                                      style: const TextStyle(
+                                                          fontSize: 28)),
+                                                ]),
+                                            onPressed: _transferring ||
+                                                    member.imUserId
+                                                        .trim()
+                                                        .isEmpty
+                                                ? null
+                                                : () => _transfer(member)),
+                                      ]),
+                                    ])),
+                              ])),
+                        )),
+                  )),
+            ));
   }
+}
+
+abstract final class _TeamReferenceTokens {
+  static const width = 960.0;
+  static const height = 312.0;
+  static const radius = 28.0;
+  static const inset = 32.0;
+  static const avatar = 128.0;
+  static const gap = 32.0;
+  static const smallGap = 8.0;
+  static const nameSize = 36.0;
+  static const valueSize = 32.0;
+  static const labelSize = 22.0;
+  static const dividerHeight = 40.0;
 }

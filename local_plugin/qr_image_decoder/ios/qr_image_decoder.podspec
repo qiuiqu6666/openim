@@ -10,5 +10,5 @@ Pod::Spec.new do |s|
   s.dependency 'Flutter'
   s.platform = :ios, '15.0'
   s.swift_version = '5.0'
-  s.frameworks = 'ImageIO', 'CoreGraphics'
+  s.frameworks = 'ImageIO', 'CoreGraphics', 'Vision'
 end

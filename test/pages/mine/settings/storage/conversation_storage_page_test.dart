@@ -1,9 +1,13 @@
 import 'dart:collection';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:openim_common/openim_common.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:openim/pages/mine/settings/storage/conversation_storage_page.dart';
 import 'package:openim/pages/mine/settings/pages/storage_media_repository.dart';
 import 'package:openim/pages/mine/settings/storage/widgets/storage_media_thumbnail.dart';
@@ -67,7 +71,60 @@ Future<ValueNotifier<int>> _pumpStorage(WidgetTester tester, _Source source,
 }
 
 void main() {
+  setUp(() => OpenIM.iMManager.userID = 'self');
   tearDown(Get.reset);
+
+  testWidgets('stored chat picture exposes the full media actions',
+      (tester) async {
+    OpenIM.iMManager.userID = 'self';
+    final cacheRoot =
+        Directory.systemTemp.createTempSync('media-preview-storage-');
+    const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathChannel, (_) async => cacheRoot.path);
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(pathChannel, null);
+    });
+    SharedPreferences.setMockInitialValues({});
+    await SpUtil().init();
+    final path = File('assets/ai/11.webp').absolute.path;
+    final source = _Source(0);
+    source.values.add(StorageMediaItem(
+      id: 'stored-picture',
+      message: Message(
+        clientMsgID: 'stored-picture',
+        contentType: MessageType.picture,
+        status: MessageStatus.succeeded,
+        pictureElem: PictureElem(sourcePath: path),
+      ),
+      conversationID: 'conversation',
+      conversationName: 'Storage',
+      conversationFaceURL: null,
+      type: StorageMediaType.image,
+      bytes: 10,
+      time: DateTime(2026, 10, 21),
+      localPaths: [path],
+      cachedURLs: const [],
+    ));
+    await _pumpStorage(tester, source);
+    await tester.tap(find.byKey(const ValueKey('stored-picture')));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+    }
+    await tester.pumpAndSettle();
+    final browser = tester.widget<MediaBrowser>(find.byType(MediaBrowser));
+    expect(browser.onForward, isNotNull);
+    expect(browser.onFavorite, isNotNull);
+    expect(browser.onDelete, isNotNull);
+    expect(browser.onViewInChat, isNotNull);
+    expect(browser.loadShareRecipients, isNotNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('1000 items mount only viewport tiles and stay lazy on scroll',
       (tester) async {

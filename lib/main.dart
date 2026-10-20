@@ -22,6 +22,7 @@ void main() {
       AppThemeController.instance.load();
       NavigationGlassController.instance.load();
       await NavigationGlassController.instance.initializeRenderer();
+      InAppBrowserHost.installBackHandler();
       runApp(const ChatApp());
     }));
   }, (error, stackTrace) {

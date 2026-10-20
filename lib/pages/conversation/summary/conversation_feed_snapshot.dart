@@ -6,15 +6,20 @@ import '../unread/conversation_unread_count.dart';
 
 /// Share one projection between the two feeds and their navigation badges.
 class ConversationFeedSnapshotCache {
-  ConversationFeedSnapshotCache(this.rows, this.states, {this.order}) {
+  ConversationFeedSnapshotCache(this.rows, this.states,
+      {this.order, this.allows, this.membershipRevision}) {
     _workers = [
       ever(rows, (_) => _dirty = true),
       ever(states, (_) => _dirty = true),
+      if (membershipRevision != null)
+        ever(membershipRevision!, (_) => _dirty = true),
     ];
   }
   final RxList<ConversationInfo> rows;
   final RxMap<String, ChatConversationState> states;
   final List<ConversationInfo> Function(Iterable<ConversationInfo>)? order;
+  final bool Function(ConversationInfo)? allows;
+  final RxInt? membershipRevision;
   late final List<Worker> _workers;
   bool _dirty = true;
   ConversationFeedSnapshot? _snapshot;
@@ -23,8 +28,11 @@ class ConversationFeedSnapshotCache {
     // Register both dependencies even when the derived value is cached.
     rows.length;
     states.length;
+    membershipRevision?.value;
     if (_dirty || _snapshot == null) {
-      _snapshot = ConversationFeedSnapshot(order?.call(rows) ?? rows, states);
+      final ordered = order?.call(rows) ?? rows;
+      _snapshot = ConversationFeedSnapshot(
+          allows == null ? ordered : ordered.where(allows!), states);
       _dirty = false;
     }
     return _snapshot!;

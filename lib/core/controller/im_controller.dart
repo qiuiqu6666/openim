@@ -1,3 +1,4 @@
+import '../../pages/chat/messages/forwarding/pending_forward_store.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -521,6 +522,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   }
 
   Future<void> logout() {
+    PendingForwardStore.shared.clear();
+    InAppBrowserHost.close();
     resetNotificationReadiness();
     apiConnectionHealth?.close();
     apiConnectionHealth = null;

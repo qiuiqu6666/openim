@@ -77,7 +77,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('选择厅'), findsNothing);
     expect(find.text('切换厅'), findsNothing);
-    expect(find.text('所属厅：b 厅'), findsOneWidget);
+    expect(find.text('所属厅：b 厅'), findsNothing);
     expect(api.calls.last.query?['tenantId'], 'b');
     Navigator.of(tester.element(find.text('查询下级'))).pop();
     await tester.pumpAndSettle();
@@ -85,7 +85,7 @@ void main() {
     await flushSangong(tester);
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('团队统计'), findsOneWidget);
-    expect(find.text('所属厅：b 厅'), findsOneWidget);
+    expect(find.text('所属厅：b 厅'), findsNothing);
     expect(api.calls.last.query?['tenantId'], 'b');
     expect(tester.takeException(), isNull);
   });

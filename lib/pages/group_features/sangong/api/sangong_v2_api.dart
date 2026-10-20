@@ -83,29 +83,43 @@ class SangongV2Api {
     bool current() => agent
         ? scope.matches(http.context, http.tenantId)
         : identical(context, http.context) && tenant == http.tenantId;
-    final first = await read(resource, query: {...query, 'limit': 100});
-    if (first['members'] is! List) throw const FormatException('团队数据无效');
-    final members = List<dynamic>.from(first['members']);
-    var before = _cursor(first);
-    while (before > 0) {
+    // Restart the whole snapshot once; never retain rows from an old version.
+    attempts:
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (!current()) throw StateError('账号或群上下文已变化，请重新进入');
+      final first = await read(resource,
+          query: {...query, 'limit': 100, 'snapshotId': 'new'});
+      if (first['members'] is! List) throw const FormatException('团队数据无效');
+      final members = List<dynamic>.from(first['members']);
+      var before = _cursor(first);
+      while (before > 0) {
+        if (!current()) {
+          throw StateError('账号或群上下文已变化，请重新进入');
+        }
+        final page = await read(resource, query: {
+          ...query,
+          'limit': 100,
+          'beforeId': before,
+          if (first['snapshotId'] is String) 'snapshotId': first['snapshotId'],
+        });
+        if (!current()) throw StateError('账号或群上下文已变化，请重新进入');
+        if (page['members'] is! List) throw const FormatException('团队数据无效');
+        if (page['version'] != first['version']) {
+          if (attempt == 0) continue attempts;
+          throw StateError('团队数据已更新，请刷新后查看');
+        }
+        members.addAll((page['members'] as List)
+            .where((row) => row is! Map || row['isSelf'] != true));
+        final next = _cursor(page);
+        if (next >= before) throw const FormatException('团队分页游标无效');
+        before = next;
+      }
       if (!current()) {
         throw StateError('账号或群上下文已变化，请重新进入');
       }
-      final page = await read(resource,
-          query: {...query, 'limit': 100, 'beforeId': before});
-      if (page['version'] != first['version'] || page['members'] is! List) {
-        throw StateError('团队数据已更新，请刷新后查看');
-      }
-      members.addAll((page['members'] as List)
-          .where((row) => row is! Map || row['isSelf'] != true));
-      final next = _cursor(page);
-      if (next >= before) throw const FormatException('团队分页游标无效');
-      before = next;
+      return {...first, 'members': members, 'nextBeforeId': 0};
     }
-    if (!current()) {
-      throw StateError('账号或群上下文已变化，请重新进入');
-    }
-    return {...first, 'members': members, 'nextBeforeId': 0};
+    throw StateError('团队数据已更新，请刷新后查看');
   }
 
   int _cursor(Map<String, dynamic> data) {

@@ -18,9 +18,19 @@ class ChatLocationNativeMapOptions {
     this.onSearchReady,
     this.readOnly = false,
     this.onSnapshot,
+    this.detail = false,
+    this.satellite = false,
+    this.cameraTarget,
+    this.userLocation,
+    this.viewportInsets = EdgeInsets.zero,
+    this.onCapabilities,
   });
 
   final LatLng? selected;
+  final bool detail, satellite;
+  final LatLng? cameraTarget, userLocation;
+  final EdgeInsets viewportInsets;
+  final ValueChanged<bool>? onCapabilities;
   final bool dark, active;
   final bool readOnly;
   final ValueChanged<Uint8List>? onSnapshot;

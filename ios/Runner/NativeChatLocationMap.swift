@@ -49,6 +49,8 @@ private final class NativeChatLocationMap: NSObject,
     private var placeSearch: MKLocalSearch?
     private var placeSearchReply: FlutterResult?
     private var readOnly = false
+    private var detail = false
+    private var userPin: MKPointAnnotation?
     private var snapshotter: MKMapSnapshotter?
     private var snapshotReply: FlutterResult?
     private var active = true
@@ -73,6 +75,7 @@ private final class NativeChatLocationMap: NSObject,
             name: "openim/chat-location-map/\(viewId)", binaryMessenger: messenger)
         super.init()
         readOnly = parameters["readOnly"] as? Bool ?? false
+        detail = parameters["detail"] as? Bool ?? false
 
         mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         mapView.mapType = .standard
@@ -129,6 +132,23 @@ private final class NativeChatLocationMap: NSObject,
             }
             let zoom = (parameters["zoom"] as? NSNumber)?.doubleValue ?? 16
             move(to: coordinate, zoom: zoom)
+            result(nil)
+        case "detailView":
+            guard detail, let mapView = map else { result(nil); return }
+            mapView.mapType = parameters["satellite"] as? Bool == true ? .hybrid : .standard
+            let top = (parameters["topInset"] as? NSNumber)?.doubleValue ?? 0
+            let bottom = (parameters["bottomInset"] as? NSNumber)?.doubleValue ?? 0
+            mapView.layoutMargins = UIEdgeInsets(top: top, left: 16, bottom: bottom, right: 16)
+            if let lat = parameters["userLatitude"], let lon = parameters["userLongitude"],
+               let coordinate = Self.coordinate(["latitude": lat, "longitude": lon]) {
+                if let pin = userPin { pin.coordinate = coordinate }
+                else { let pin = MKPointAnnotation(); pin.coordinate = coordinate; userPin = pin; mapView.addAnnotation(pin) }
+            }
+            if parameters["moveCamera"] as? Bool == true, let coordinate = Self.coordinate(parameters) {
+                let region = MKCoordinateRegion(center: coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.0055, longitudeDelta: 0.0055))
+                mapView.setRegion(region, animated: false)
+            }
             result(nil)
         case "style":
             setStyle(dark: parameters["dark"] as? Bool ?? false)
@@ -323,11 +343,21 @@ private final class NativeChatLocationMap: NSObject,
 
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
         guard annotation is MKPointAnnotation else { return nil }
+        if annotation === userPin {
+            let identifier = "chat-location-device"
+            let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) ?? MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+            view.annotation = annotation
+            view.image = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24)).image { _ in
+                UIColor.white.setFill(); UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: 24, height: 24)).fill()
+                UIColor.systemBlue.setFill(); UIBezierPath(ovalIn: CGRect(x: 3, y: 3, width: 18, height: 18)).fill()
+            }
+            return view
+        }
         let identifier = "chat-location-selected"
         let pin = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
             as? MKMarkerAnnotationView ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
         pin.annotation = annotation
-        pin.markerTintColor = .systemGreen
+        pin.markerTintColor = detail ? .systemBlue : .systemGreen
         pin.glyphImage = UIImage(systemName: "mappin")
         pin.canShowCallout = false
         pin.isDraggable = false
@@ -402,6 +432,7 @@ private final class NativeChatLocationMap: NSObject,
         tapRecognizer = nil
         panRecognizer = nil
         selectedPin = nil
+        userPin = nil
         map = nil
     }
 

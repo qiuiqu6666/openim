@@ -16,11 +16,13 @@ void main() {
 
   test('retains friend invitation fields and their original source', () {
     for (final source in ['qrcode', 'link']) {
+      for (final scheme in ['chat99', 'openim']) {
       expect(
         parseContactQrResult(
-            'openim://user/peer?source=$source&inviteCode=fi_test'),
+            '$scheme://user/peer?source=$source&inviteCode=fi_test'),
         {'userID': 'peer', 'inviteCode': 'fi_test', 'source': source},
       );
+      }
     }
   });
 
@@ -35,6 +37,9 @@ void main() {
       'https://99chat.vip?group=%FF',
       'https://99chat.vip?group=bad%20id',
       'openim://user/peer',
+      'chat99://user/peer',
+      'chat99://user/peer?source=card&inviteCode=fi_test',
+      'chat99://user/peer?source=qrcode&inviteCode=%FF',
       'openim://user/peer?source=qrcode&inviteCode=%FF',
     ]) {
       expect(parseContactQrResult(value), isNull, reason: value);

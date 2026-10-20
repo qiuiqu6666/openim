@@ -1,3 +1,4 @@
+import 'messages/forwarding/pending_forward_bar.dart';
 import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -203,7 +204,15 @@ class ChatPage extends StatelessWidget {
               message: logic.quotedMessage.value,
               onClose: logic.clearReply,
             ),
+          if (logic.pendingForward.draft.value case final draft?)
+            PendingForwardBar(
+              count: draft.messages.length,
+              sending: logic.pendingForward.sending.value,
+              onCancel: logic.pendingForward.cancel,
+            ),
           ChatInputBox(
+            pendingSend: logic.pendingForward.draft.value != null,
+            pendingSending: logic.pendingForward.sending.value,
             builtinStickerPanel:
                 ChatBuiltinStickerPanel(onSend: logic.sendBuiltinSticker),
             builtinStickerIcon: Image.asset(
@@ -222,7 +231,7 @@ class ChatPage extends StatelessWidget {
             controller: logic.inputCtrl,
             focusNode: logic.focusNode,
             isNotInGroup: logic.isInvalidGroup,
-            enabled: !logic.sendingMuted,
+            enabled: !logic.sendingMuted && !logic.pendingForward.sending.value,
             showDisabledWarning: !logic.groupMutePending,
             hintText: logic.groupMembershipPending
                 ? StrRes.synchronizing

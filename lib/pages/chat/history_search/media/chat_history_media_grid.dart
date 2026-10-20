@@ -57,17 +57,11 @@ class _MediaCell extends StatelessWidget {
   final VoidCallback onTap;
 
   String? get _thumbnailUrl {
-    final candidates = message.contentType == MessageType.video
-        ? [message.videoElem?.snapshotUrl]
-        : [
-            message.pictureElem?.snapshotPicture?.url,
-            message.pictureElem?.bigPicture?.url,
-            message.pictureElem?.sourcePicture?.url,
-          ];
-    for (final url in candidates) {
-      if (url != null && url.trim().isNotEmpty) return url.trim();
-    }
-    return null;
+    // Missing thumbnails must not trigger full-size downloads in the grid.
+    final url = message.contentType == MessageType.video
+        ? message.videoElem?.snapshotUrl
+        : message.pictureElem?.snapshotPicture?.url;
+    return url == null || url.trim().isEmpty ? null : url.trim();
   }
 
   @override
@@ -80,9 +74,7 @@ class _MediaCell extends StatelessWidget {
       child: Stack(fit: StackFit.expand, children: [
         LayoutBuilder(
           builder: (context, constraints) => ChatVideoThumbnail(
-            path: video
-                ? message.videoElem?.snapshotPath
-                : message.pictureElem?.sourcePath,
+            path: video ? message.videoElem?.snapshotPath : null,
             url: _thumbnailUrl,
             width: constraints.maxWidth,
           ),

@@ -1214,6 +1214,9 @@ class IMUtils {
       ValueChanged<int>? onForward,
       ValueChanged<int>? onDelete,
       ValueChanged<int>? onViewInChat,
+      ValueChanged<int>? onFavorite,
+      Future<List<MediaShareRecipient>> Function()? loadShareRecipients,
+      void Function(int, MediaShareRecipient)? onForwardTo,
       bool onlySave = false,
       bool showGallery = true,
       bool showCounter = true}) {
@@ -1288,6 +1291,9 @@ class IMUtils {
       onForward: onForward,
       onDelete: onDelete,
       onViewInChat: onViewInChat,
+      onFavorite: onFavorite,
+      loadShareRecipients: loadShareRecipients,
+      onForwardTo: onForwardTo,
       muted: muted,
     );
     return Navigator.of(context)

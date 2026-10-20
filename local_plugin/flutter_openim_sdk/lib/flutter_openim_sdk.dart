@@ -44,3 +44,5 @@ export 'src/openim.dart';
 export 'src/utils.dart';
 
 export 'src/diagnostics/diagnostic_logging_manager.dart';
+export 'src/diagnostics/media_diagnostic_journal.dart'
+    show mediaFailureReason, mediaErrorFields;

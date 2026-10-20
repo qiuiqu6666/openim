@@ -105,7 +105,11 @@ class _SangongAgentHallPageState extends State<SangongAgentHallPage> {
           key: ObjectKey(runtime), runtime: runtime, child: page);
     }
     return Scaffold(
-      appBar: AppBar(leading: const AppBackButton(), title: const Text('三公代理')),
+      appBar: AppBar(
+        centerTitle: widget.section == 'team',
+        leading: const AppBackButton(),
+        title: Text(AppCopy.text(widget.section == 'team' ? '查询下级' : '三公代理')),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Center(

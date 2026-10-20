@@ -64,9 +64,16 @@ class _NativeMapViewState extends State<_NativeMapView> {
     final options = widget.options;
     if (options.dark != oldWidget.options.dark) {
       unawaited(_invoke('style', {'dark': options.dark}));
+      if (options.detail) unawaited(_view());
     }
     if (options.active != oldWidget.options.active) {
       unawaited(_invoke('setActive', {'active': options.active}));
+    }
+    if (options.detail &&
+        (options.userLocation != oldWidget.options.userLocation ||
+            options.satellite != oldWidget.options.satellite ||
+            options.viewportInsets != oldWidget.options.viewportInsets)) {
+      unawaited(_view());
     }
     // Only GPS/recenter requests move the map. Echoing a manual selection here
     // would interrupt the native map's pan/deceleration gesture.
@@ -145,6 +152,7 @@ class _NativeMapViewState extends State<_NativeMapView> {
       widget.options.onSearchReady
           ?.call((query, center) => searchNativePlaces(channel, query, center));
     }
+    widget.options.onCapabilities?.call(true);
     widget.options.onReady();
   }
 
@@ -179,7 +187,26 @@ class _NativeMapViewState extends State<_NativeMapView> {
         'longitude': selected.longitude,
         'zoom': ChatLocationPickerTokens.selectedZoom
       });
+      if (widget.options.detail) await _view(moveCamera: true);
     }
+  }
+
+  Future<void> _view({bool moveCamera = false}) async {
+    final options = widget.options;
+    final camera = options.cameraTarget ?? options.selected;
+    await _invoke('detailView', {
+      'satellite': options.satellite,
+      'dark': options.dark,
+      'topInset': options.viewportInsets.top,
+      'bottomInset': options.viewportInsets.bottom,
+      'moveCamera': moveCamera,
+      if (camera != null) 'latitude': camera.latitude,
+      if (camera != null) 'longitude': camera.longitude,
+      if (options.userLocation != null)
+        'userLatitude': options.userLocation!.latitude,
+      if (options.userLocation != null)
+        'userLongitude': options.userLocation!.longitude,
+    });
   }
 
   void _failed(Object? code) {
@@ -210,6 +237,7 @@ class _NativeMapViewState extends State<_NativeMapView> {
     final params = <String, dynamic>{
       'dark': widget.options.dark,
       'readOnly': widget.options.readOnly,
+      'detail': widget.options.detail,
       'privacyAgreed': defaultTargetPlatform == TargetPlatform.android,
       if (point != null) 'latitude': point.latitude,
       if (point != null) 'longitude': point.longitude

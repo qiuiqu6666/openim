@@ -78,6 +78,18 @@ class AgentRebateApi {
     return data;
   }
 
+  Future<Map<String, dynamic>> fetchSangongTeamDaily({String? to}) async {
+    final data = await _api.read('team-daily', query: {
+      'limit': 15,
+      if (to != null && to.isNotEmpty) 'to': to,
+    });
+    SangongAgentResponse.daily(data);
+    if (data['nextTo'] is! String || data['scope'] != 'current_team') {
+      throw const FormatException('团队每日数据格式无效');
+    }
+    return data;
+  }
+
   Future<Map<String, dynamic>> fetchSangongMemberDashboard({
     required String imUserId,
   }) async {

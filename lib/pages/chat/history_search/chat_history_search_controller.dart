@@ -73,6 +73,13 @@ class ChatHistorySearchController extends ChangeNotifier {
                   (source as ChatHistoryCloudSource).cloudHasMore)));
 
   /// Clearing the input also invalidates any in-flight keyword search.
+  void removeMessage(String id) {
+    if (_disposed) return;
+    _results.removeWhere((message) => message.clientMsgID == id);
+    _pending.removeWhere((message) => message.clientMsgID == id);
+    notifyListeners();
+  }
+
   void clear() {
     if (_disposed) return;
     ++_generation;

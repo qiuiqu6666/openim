@@ -18,9 +18,7 @@ GroupFeatureContext _context(SangongTestApi api) => GroupFeatureContext(
       capabilities: const GroupFeatureCapabilities(
           version: 1,
           sangong: GroupGameCapabilities(
-              canOpenAgent: true,
-              canViewRebateHistory: true,
-              tenantID: 'a')),
+              canOpenAgent: true, canViewRebateHistory: true, tenantID: 'a')),
       sessionCurrent: () => true,
       onFeaturesChanged: (_) {},
     );
@@ -67,13 +65,28 @@ Future<SangongRuntime> _pump(
 }
 
 void main() {
+  testWidgets('team loading keeps the destination title', (tester) async {
+    final pending = Completer<dynamic>();
+    final api = SangongTestApi()
+      ..respond = (call) =>
+          call.path.endsWith('/tenants') ? pending.future : _response(call);
+    await _pump(tester, api);
+    expect(find.text('查询下级'), findsOneWidget);
+    expect(find.text('三公代理'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    pending.complete(_choices(['a']));
+    await flushSangong(tester);
+    expect(find.text('查询下级'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   for (final dark in [false, true]) {
     for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
       testWidgets('fixed hall opens directly without a picker $dark $platform',
           (tester) async {
         final api = SangongTestApi()..respond = _response;
         await _pump(tester, api, dark: dark, platform: platform);
-        expect(find.text('所属厅：a 厅'), findsOneWidget);
+        expect(find.text('所属厅：a 厅'), findsNothing);
+        expect(find.text('查询下级'), findsOneWidget);
         expect(find.text('选择厅'), findsNothing);
         expect(find.text('切换厅'), findsNothing);
         expect(api.calls.last.query?['tenantId'], 'a');
@@ -102,7 +115,7 @@ void main() {
     final api = SangongTestApi()..respond = _response;
     await _pump(tester, api, section: 'personal');
     expect(find.byType(SangongAgentMemberDetailPage), findsOneWidget);
-    expect(find.text('所属厅：a 厅'), findsOneWidget);
+    expect(find.text('所属厅：a 厅'), findsNothing);
     expect(find.text('111'), findsOneWidget);
     expect(find.text('切换厅'), findsNothing);
     expect(tester.takeException(), isNull);

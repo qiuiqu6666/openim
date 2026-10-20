@@ -14,8 +14,18 @@ class RecentConversationDirectoryResult {
 /// One failed membership check cannot discard unrelated chats. Bound native
 /// queries and retain the original SDK order after independent checks finish.
 class RecentConversationDirectory {
-  const RecentConversationDirectory(this.isJoinedGroup);
+  const RecentConversationDirectory(this.isJoinedGroup, {this.joinedGroupIDs});
   final Future<bool> Function(String) isJoinedGroup;
+  final Future<Set<String>> Function()? joinedGroupIDs;
+
+  factory RecentConversationDirectory.sdk() => RecentConversationDirectory(
+        (id) => OpenIM.iMManager.groupManager.isJoinedGroup(groupID: id),
+        joinedGroupIDs: () async =>
+            (await OpenIM.iMManager.groupManager.getJoinedGroupList())
+                .map((group) => group.groupID)
+                .whereType<String>()
+                .toSet(),
+      );
 
   Future<RecentConversationDirectoryResult> load(List<ConversationInfo> rows,
       {required bool Function(ConversationInfo) isVisible,
@@ -38,6 +48,48 @@ class RecentConversationDirectory {
       }
     }
     if (isCurrent()) onUpdate?.call(snapshot());
+    if (joinedGroupIDs != null) {
+      final checks = <String, int>{
+        for (final row in rows)
+          if (visible(row) &&
+              row.isGroupChat &&
+              (row.groupID?.isNotEmpty ?? false))
+            row.groupID!: 0,
+      };
+      for (final id in checks.keys) {
+        checks[id] = cache.begin(id);
+      }
+      var failed = false;
+      if (checks.isNotEmpty && isCurrent()) {
+        try {
+          final joined =
+              await joinedGroupIDs!().timeout(const Duration(seconds: 5));
+          if (isCurrent()) {
+            for (final entry in checks.entries) {
+              if (cache.complete(
+                      entry.key, entry.value, joined.contains(entry.key)) &&
+                  !joined.contains(entry.key)) {
+                onExcluded?.call(entry.key);
+              }
+            }
+            for (var index = 0; index < rows.length; index++) {
+              final row = rows[index];
+              if (visible(row) &&
+                  row.isGroupChat &&
+                  cache.contains(row.groupID)) {
+                results[index] = row;
+              }
+            }
+          }
+        } catch (_) {
+          // Do not fan out to per-group queries after a bulk failure.
+          failed = isCurrent();
+        }
+      }
+      final output = isCurrent() ? snapshot() : <ConversationInfo>[];
+      if (isCurrent()) onUpdate?.call(output);
+      return RecentConversationDirectoryResult(output, failed);
+    }
     Timer? publishTimer;
     void publishSoon() {
       if (onUpdate == null || publishTimer != null) return;

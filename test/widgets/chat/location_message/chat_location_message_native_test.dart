@@ -1,3 +1,4 @@
+import 'location_detail_gps_fixture.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +14,10 @@ import '../markdown/support/markdown_fixture.dart';
 import 'chat_location_message_card_test.dart' show location;
 
 void main() {
-  setUp(setupMarkdownFixture);
+  setUp(() {
+    setupMarkdownFixture();
+    installUnavailableDetailGps();
+  });
   tearDown(Get.reset);
   testWidgets('incoming card does not initialize AMap until detail consent',
       (tester) async {

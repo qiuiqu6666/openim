@@ -41,6 +41,75 @@ Future<void> _confirmTransfer(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('daily history does not inherit the latest batch filter',
+      (tester) async {
+    final api = SangongTestApi()
+      ..respond = (call) => call.path.endsWith('/member')
+          ? {
+              'member': _member(),
+              'batch': {'batchNo': 'latest-batch'}
+            }
+          : {
+              'days': [
+                {'businessDate': '2025-01-01', 'balance': 1},
+                {'businessDate': '2026-10-20', 'balance': 2},
+              ]
+            };
+    final runtime = SangongRuntime(sangongTestContext(api));
+    addTearDown(runtime.dispose);
+    addTearDown(() => unmountSangong(tester));
+    await pumpSangongPage(
+        tester,
+        runtime,
+        SangongAgentMemberDetailPage(
+            member: SangongTeamMemberDto.fromJson(_member())));
+    await tester.tap(find.text('个人每天数据'));
+    await flushSangong(tester);
+    expect(find.text('2025-01-01'), findsOneWidget);
+    expect(find.text('2026-10-20'), findsOneWidget);
+    for (final call
+        in api.calls.where((c) => c.path.endsWith('/member-daily'))) {
+      expect(call.query?.containsKey('batchNo'), isFalse);
+      expect(call.query?.containsKey('from'), isFalse);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('summary uses lifetime totals instead of current batch',
+      (tester) async {
+    final api = SangongTestApi()
+      ..respond = (_) => {
+            'member': {..._member(), 'batchProfitLoss': 11, 'batchUp': 22},
+            'lifetime': {
+              'aggregation': 'all_time',
+              'profitLoss': 9876,
+              'playerTurnover': 11111,
+              'bankerTurnover': 22222,
+              'totalTurnover': 33333,
+              'totalUp': 44444,
+              'totalDown': 55555,
+              'rebate': 66666
+            },
+          };
+    final runtime =
+        SangongRuntime(sangongTestContext(api, canViewHistory: false));
+    addTearDown(runtime.dispose);
+    addTearDown(() => unmountSangong(tester));
+    await pumpSangongPage(
+        tester,
+        runtime,
+        SangongAgentMemberDetailPage(
+            member: SangongTeamMemberDto.fromJson(_member())));
+    await tester.tap(find.text('汇总'));
+    await tester.pump();
+    expect(find.text('累计盈亏'), findsOneWidget);
+    expect(find.text('9876'), findsOneWidget);
+    expect(find.text('33333'), findsOneWidget);
+    expect(find.text('44444'), findsOneWidget);
+    expect(find.text('本批次盈亏'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final dark in [false, true]) {
     testWidgets('pending rebate uses the pending field, dark=$dark',
         (tester) async {
@@ -50,8 +119,14 @@ void main() {
       addTearDown(() => unmountSangong(tester));
       await pumpSangongPage(tester, runtime, const SangongAgentTeamPage(),
           dark: dark);
-      expect(find.textContaining('未返水 7'), findsOneWidget);
-      expect(find.textContaining('未返水 5'), findsNothing);
+      expect(
+          find.byWidgetPredicate(
+              (w) => w is Semantics && w.properties.label == '未返水 7'),
+          findsOneWidget);
+      expect(
+          find.byWidgetPredicate(
+              (w) => w is Semantics && w.properties.label == '未返水 5'),
+          findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -109,7 +184,7 @@ void main() {
     addTearDown(() => unmountSangong(tester));
     await pumpSangongPage(tester, runtime, const SangongAgentDashboardPage());
     expect(find.text('返回数据格式无效，请重试'), findsOneWidget);
-    expect(find.text('团队概览'), findsNothing);
+    expect(find.text('团队总余额'), findsNothing);
     expect(find.text('暂无下级'), findsNothing);
   });
 

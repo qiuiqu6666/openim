@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../widgets/settings_widgets.dart';
@@ -11,6 +12,8 @@ import '../pages/storage_media_repository.dart';
 import '../pages/storage_widgets.dart';
 import 'storage_media_catalog.dart';
 import 'widgets/storage_media_tile.dart';
+import '../../../chat/media/chat_media_preview.dart';
+import '../../../chat/media/chat_picture_gallery.dart';
 
 class ConversationStoragePage extends StatefulWidget {
   const ConversationStoragePage({
@@ -38,6 +41,7 @@ class ConversationStoragePage extends StatefulWidget {
 }
 
 class _ConversationStoragePageState extends State<ConversationStoragePage> {
+  late final (String, String?) _mediaOwner;
   final _selected = <String>{};
   bool _selecting = false;
   bool _deleting = false;
@@ -141,6 +145,7 @@ class _ConversationStoragePageState extends State<ConversationStoragePage> {
   @override
   void initState() {
     super.initState();
+    _mediaOwner = (OpenIM.iMManager.userID, OpenIM.iMManager.token);
     _rebuildCatalog();
     widget.revision.addListener(_refresh);
   }
@@ -339,7 +344,12 @@ class _ConversationStoragePageState extends State<ConversationStoragePage> {
     _opening = true;
     final generation = _catalogGeneration;
     try {
-      final gallery = _items.where((media) => media.type == item.type).toList();
+      final gallery = _items
+          .where((media) =>
+              media.type == item.type &&
+              !media.message.hasExpired &&
+              media.message.attachedInfoElem?.isPrivateChat != true)
+          .toList();
       final sources = <MediaSource>[];
       // Bound asynchronous filesystem work when a conversation has many media.
       for (var offset = 0; offset < gallery.length; offset += 12) {
@@ -348,12 +358,26 @@ class _ConversationStoragePageState extends State<ConversationStoragePage> {
         if (!mounted || generation != _catalogGeneration) return;
       }
       if (!mounted || generation != _catalogGeneration) return;
-      IMUtils.previewMediaFile(
-        context: context,
-        message: item.message,
-        sources: sources,
-        initialIndex: gallery.indexWhere((media) => media.id == item.id),
-        showCounter: true,
+      await ChatMediaPreview.open(
+        context,
+        conversationID: widget.conversationID,
+        selected: item.message,
+        messages: gallery.map((media) => media.message),
+        gallery: ChatPictureGallery(
+            sources: sources,
+            messages: gallery.map((media) => media.message).toList(),
+            initialIndex: gallery.indexWhere((media) => media.id == item.id)),
+        isCurrent: () =>
+            mounted &&
+            generation == _catalogGeneration &&
+            _mediaOwner == (OpenIM.iMManager.userID, OpenIM.iMManager.token),
+        onDeleted: (id) {
+          final ids = gallery
+              .where((media) => media.message.clientMsgID == id)
+              .map((media) => media.id)
+              .toSet();
+          widget.onRemoved(ids);
+        },
       );
     } finally {
       _opening = false;

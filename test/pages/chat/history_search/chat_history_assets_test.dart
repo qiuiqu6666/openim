@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -362,6 +363,88 @@ void main() {
     expect(source.queries, hasLength(1));
     expect(tester.state<ScrollableState>(_scroll).position.pixels,
         closeTo(before, .01));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('search preview exposes full menu and locates the swiped message',
+      (tester) async {
+    source.messages = [
+      _message('first', MessageType.picture, imagePath),
+      _message('second', MessageType.picture, imagePath),
+    ];
+    await mount(tester, ChatHistoryCategory.picture);
+    await tester.tap(_result('first'));
+    await _finishIo(tester);
+    final browser = tester.widget<MediaBrowser>(find.byType(MediaBrowser));
+    expect(browser.onForward, isNotNull);
+    expect(browser.onFavorite, isNotNull);
+    expect(browser.onDelete, isNotNull);
+    expect(browser.onViewInChat, isNotNull);
+    expect(browser.loadShareRecipients, isNotNull);
+    expect(browser.onForwardTo, isNotNull);
+    await tester.drag(
+        find.byType(ExtendedImageGesturePageView), const Offset(-320, 0));
+    await _finishIo(tester);
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+    for (final label in ['转发', '收藏', '保存到相册', '在聊天中查看', '图片和视频', '删除', '更多']) {
+      expect(find.byKey(ValueKey('media-share-$label')), findsOneWidget);
+    }
+    await tester.tap(find.byKey(const ValueKey('media-share-在聊天中查看')));
+    await _finishIo(tester);
+    expect(find.byType(MediaBrowser), findsNothing);
+    expect(messageNavigation.calls.single.message.clientMsgID, 'second');
+    expect(messageNavigation.calls.single.conversationID, 'asset-chat');
+  });
+
+  testWidgets(
+      'search preview deletion confirms and removes the exact SDK record',
+      (tester) async {
+    source.messages = [_message('delete-me', MessageType.picture, imagePath)];
+    final deleted = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      switch (call.method) {
+        case 'findMessageList':
+          return jsonEncode({
+            'findResultItems': [
+              {
+                'conversationID': 'asset-chat',
+                'messageList': source.messages.map((m) => m.toJson()).toList()
+              }
+            ]
+          });
+        case 'getMultipleConversation':
+          return jsonEncode([
+            {
+              'conversationID': 'asset-chat',
+              'conversationType': ConversationType.single,
+              'unreadCount': 0,
+              'userID': 'peer'
+            }
+          ]);
+        case 'deleteMessageFromLocalStorage':
+          deleted.add(call.arguments['clientMsgID'] as String);
+          expect(call.arguments['conversationID'], 'asset-chat');
+          return null;
+        default:
+          throw PlatformException(code: 'unexpected', message: call.method);
+      }
+    });
+    await mount(tester, ChatHistoryCategory.picture);
+    await tester.tap(_result('delete-me'));
+    await _finishIo(tester);
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('media-share-删除')));
+    await tester.pumpAndSettle();
+    expect(deleted, isEmpty);
+    expect(find.byKey(const ValueKey('message-selection-delete-sheet')),
+        findsOneWidget);
+    await tester.tap(find.text('删除'));
+    await _finishIo(tester);
+    expect(deleted, ['delete-me']);
+    expect(_result('delete-me'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

@@ -105,6 +105,16 @@ class AppTokens {
   static const double profileAvatarSize = 72;
   static const double profileContentMaxWidth = 600;
   static const double minimumTapSize = 48;
+  static const double browserSheetHeightFactor = .94;
+  static const double browserBackgroundScale = .90;
+  static const double browserBackgroundOffset = s4;
+  static const Duration browserOpenDuration = Duration(milliseconds: 420);
+  static const Duration browserCloseDuration = Duration(milliseconds: 320);
+  static const Curve browserBackgroundCurve = Curves.easeInOutCubic;
+  static const Curve browserSheetCurve =
+      Interval(.08, 1, curve: Curves.easeInOutCubic);
+  static const double browserDismissFraction = .25;
+  static const double browserDismissVelocity = 700;
   static const double profileMenuIconSize = 28;
   static const double profileQrIconSize = 20;
   static const double mainTabIndicatorWidth = 32;

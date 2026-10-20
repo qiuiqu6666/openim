@@ -2,6 +2,9 @@ package io.openim.location;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Color;
 import java.io.ByteArrayOutputStream;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -50,6 +53,8 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
     private MapView mapView;
     private AMap map;
     private Marker marker;
+    private Marker userMarker;
+    private boolean detail;
     private volatile boolean disposed;
     private volatile boolean active = true;
     private volatile boolean hostResumed;
@@ -70,6 +75,7 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
                           Consumer<NativeChatLocationMap> onDisposed) {
         this.context = context;
         readOnly = params != null && Boolean.TRUE.equals(params.get("readOnly"));
+        detail = params != null && Boolean.TRUE.equals(params.get("detail"));
         this.lifecycle = lifecycle;
         this.onDisposed = onDisposed;
         container = new FrameLayout(context);
@@ -203,6 +209,35 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
                     }
                     result.success(null);
                     break;
+                case "detailView":
+                    if (detail && map != null && args != null) {
+                        map.setMapType(Boolean.TRUE.equals(args.get("satellite")) ? AMap.MAP_TYPE_SATELLITE
+                                : Boolean.TRUE.equals(args.get("dark")) ? AMap.MAP_TYPE_NIGHT : AMap.MAP_TYPE_NORMAL);
+                        float density = context.getResources().getDisplayMetrics().density;
+                        Number inset = args.get("bottomInset") instanceof Number ? (Number) args.get("bottomInset") : 0;
+                        map.getUiSettings().setLogoBottomMargin((int) (inset.floatValue() * density));
+                        Map<String, Object> user = new HashMap<>();
+                        user.put("latitude", args.get("userLatitude")); user.put("longitude", args.get("userLongitude"));
+                        LatLng userPoint = readWgs84(user);
+                        if (userPoint != null) {
+                            LatLng nativeUser = toNative(userPoint);
+                            if (userMarker == null) {
+                                int size = Math.max(24, (int) (24 * density));
+                                Bitmap dot = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+                                Canvas canvas = new Canvas(dot); Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                                paint.setColor(Color.WHITE); canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint);
+                                paint.setColor(Color.rgb(30, 144, 255)); canvas.drawCircle(size / 2f, size / 2f, size * .375f, paint);
+                                userMarker = map.addMarker(new MarkerOptions().position(nativeUser).anchor(.5f, .5f)
+                                        .icon(BitmapDescriptorFactory.fromBitmap(dot)));
+                            } else userMarker.setPosition(nativeUser);
+                        }
+                        if (Boolean.TRUE.equals(args.get("moveCamera"))) {
+                            LatLng camera = readWgs84(args);
+                            if (camera != null) map.moveCamera(CameraUpdateFactory.newLatLngZoom(toNative(camera), 16f));
+                        }
+                    }
+                    result.success(null);
+                    break;
                 case "style":
                     if (map != null && args != null) map.setMapType(Boolean.TRUE.equals(args.get("dark"))
                             ? AMap.MAP_TYPE_NIGHT : AMap.MAP_TYPE_NORMAL);
@@ -301,7 +336,7 @@ public final class NativeChatLocationMap implements PlatformView, DefaultLifecyc
     private void updateMarker(LatLng point) {
         if (marker == null) {
             marker = map.addMarker(new MarkerOptions().position(point).anchor(0.5f, 1f)
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)));
+                    .icon(BitmapDescriptorFactory.defaultMarker(detail ? BitmapDescriptorFactory.HUE_AZURE : BitmapDescriptorFactory.HUE_GREEN)));
         } else marker.setPosition(point);
     }
 
