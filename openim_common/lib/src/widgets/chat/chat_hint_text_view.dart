@@ -40,7 +40,7 @@ class ChatHintTextView extends StatelessWidget {
                       )),
                 children: [
                   TextSpan(
-                    text: sprintf(StrRes.createGroupNtf, ['']),
+                    text: sprintf(IMUtils.groupCreatedLabel(ntf), ['']),
                     style: Styles.ts_8E9AB0_12sp,
                   ),
                 ],

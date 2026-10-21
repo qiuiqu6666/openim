@@ -2,6 +2,7 @@ import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -15,6 +16,7 @@ class GroupQrcodeContent extends StatelessWidget {
       required this.groupName,
       required this.groupId,
       this.faceUrl,
+      this.isChannel = false,
       required this.qrData,
       required this.cardKey,
       this.saving = false,
@@ -24,6 +26,7 @@ class GroupQrcodeContent extends StatelessWidget {
       required this.onCopy});
   final String groupName, groupId, qrData;
   final String? faceUrl;
+  final bool isChannel;
   final GlobalKey cardKey;
   final bool saving, scanning;
   final VoidCallback onSave, onScan, onCopy;
@@ -93,7 +96,7 @@ class GroupQrcodeContent extends StatelessWidget {
                                   color: AppTokens.surfaceAlt(dark: dark),
                                   borderRadius:
                                       BorderRadius.circular(AppTokens.rSm)),
-                              child: Text(StrRes.groupQrcode,
+                              child: Text(isChannel ? 'channelQrcode'.tr : StrRes.groupQrcode,
                                   style: TextStyle(
                                       color: sub,
                                       fontSize: GroupQrcodeTokens.captionSize,
@@ -138,7 +141,7 @@ class GroupQrcodeContent extends StatelessWidget {
                           )),
                   const SizedBox(height: AppTokens.s5),
                   Text(
-                      _text(context, AppCopy.text('扫一扫二维码，立即加入群聊'),
+                      isChannel ? 'channelQrcodeHint'.tr : _text(context, AppCopy.text('扫一扫二维码，立即加入群聊'),
                           'Scan the QR code to join this group'),
                       textAlign: TextAlign.center,
                       style: TextStyle(

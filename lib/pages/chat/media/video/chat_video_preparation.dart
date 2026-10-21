@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:video_compress/video_compress.dart';
+import '../preparation/media_operation_wait.dart';
 
 enum ChatVideoQuality { standard, original }
 
@@ -16,42 +17,85 @@ Future<ChatVideoQuality?> chooseChatVideoQuality() =>
       ]),
     );
 
+final _videoQueue = <Object>[];
+bool _encoderAwaitingCompletion = false;
+
 Future<File> prepareChatVideo(File original, ChatVideoQuality quality,
-    {Duration busyTimeout = const Duration(seconds: 30),
-    Duration compressionTimeout = const Duration(minutes: 2)}) async {
+    {Duration? busyTimeout,
+    Duration compressionTimeout = const Duration(minutes: 10),
+    Duration idleTimeout = const Duration(seconds: 60),
+    bool Function()? isCancelled,
+    void Function(String)? onPhase}) async {
+  final cancelled = isCancelled ?? () => false;
+  if (cancelled()) throw StateError('Video preparation cancelled');
   if (quality == ChatVideoQuality.original) return original;
-  // Native compression is globally exclusive even across preparation lanes.
-  // Never delete the source or cancel another module's compressor.
-  // Overlapping albums must not silently bypass the selected compression.
+  if (_videoQueue.length >= 20) {
+    throw StateError('Video preparation queue is full');
+  }
+  final ticket = Object();
+  _videoQueue.add(ticket);
+  onPhase?.call('queued');
   final waiting = Stopwatch()..start();
-  while (VideoCompress.isCompressing) {
-    if (waiting.elapsed >= busyTimeout) {
-      throw TimeoutException('Video compressor is busy');
+  try {
+    while (_videoQueue.first != ticket || VideoCompress.isCompressing) {
+      if (cancelled()) throw StateError('Video preparation cancelled');
+      if (_encoderAwaitingCompletion) {
+        throw StateError(
+            'Video encoder is still stopping; retry or select original');
+      }
+      if (busyTimeout != null && waiting.elapsed >= busyTimeout) {
+        throw TimeoutException('Video compressor is busy');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-  }
-  // The accepted attachment task already owns local preparation feedback.
-  // Compression must not block the chat or dismiss another task's loader.
-  final operation = VideoCompress.compressVideo(original.path,
-      quality: VideoQuality.Res1280x720Quality,
-      deleteOrigin: false,
-      frameRate: 30,
-      includeAudio: true);
-  final info = await operation.timeout(compressionTimeout, onTimeout: () async {
-    // Only this operation owns the compressor. Do not reset its busy flag:
-    // late native completion must not race a new encoder or mutate a message.
+    if (cancelled()) throw StateError('Video preparation cancelled');
+    onPhase?.call('compressing');
+    final progress = StreamController<double>();
+    final subscription =
+        VideoCompress.compressProgress$.subscribe(progress.add);
+    var completed = false;
+    final operation = VideoCompress.compressVideo(original.path,
+        quality: VideoQuality.Res1280x720Quality,
+        deleteOrigin: false,
+        frameRate: 30,
+        includeAudio: true);
+    // Only actual native completion releases the compressor, including after
+    // the observer times out. Never reset the plugin's global busy flag.
+    unawaited(operation
+        .then<void>((_) {}, onError: (Object _, StackTrace __) {})
+        .whenComplete(() {
+      completed = true;
+      _encoderAwaitingCompletion = false;
+      subscription.unsubscribe();
+      unawaited(progress.close());
+    }));
+    MediaInfo? info;
     try {
-      await VideoCompress.cancelCompression()
-          .timeout(const Duration(seconds: 2));
+      info = await waitMediaOperation(operation,
+          totalTimeout: compressionTimeout,
+          idleTimeout: idleTimeout,
+          isCancelled: cancelled,
+          progress: progress.stream);
     } catch (_) {
-      // The caller still receives the timeout and can explicitly retry.
+      if (!completed) {
+        _encoderAwaitingCompletion = true;
+        try {
+          await VideoCompress.cancelCompression()
+              .timeout(const Duration(seconds: 2));
+        } catch (_) {/* Keep ownership until the native completion arrives. */}
+      }
+      rethrow;
     }
-    throw TimeoutException('Video compression timed out', compressionTimeout);
-  });
-  final output = info?.file;
-  if (output == null || !await output.exists() || await output.length() == 0) {
-    throw StateError('Video compression did not produce a playable file');
+    if (cancelled()) throw StateError('Video preparation cancelled');
+    final File? output = info?.file;
+    if (output == null ||
+        !await output.exists() ||
+        await output.length() == 0) {
+      throw StateError('Video compression did not produce a playable file');
+    }
+    if (await output.length() >= await original.length()) return original;
+    return output;
+  } finally {
+    _videoQueue.remove(ticket);
   }
-  if (await output.length() >= await original.length()) return original;
-  return output;
 }

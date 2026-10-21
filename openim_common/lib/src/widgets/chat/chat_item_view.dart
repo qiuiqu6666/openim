@@ -99,6 +99,8 @@ class ChatItemView extends StatefulWidget {
     this.textScaleFactor = 1.0,
     this.ignorePointer = false,
     this.showLeftNickname = true,
+    this.showAvatar = true,
+    this.alignLeft = false,
     this.showRightNickname = false,
     this.isStickerMedia = false,
     this.itemMargin,
@@ -155,6 +157,9 @@ class ChatItemView extends StatefulWidget {
   final VoidCallback? onRetryVoiceTranscription;
   final double textScaleFactor;
   final bool ignorePointer;
+  /// Presentation only; sender identity still controls receipts and actions.
+  final bool alignLeft;
+  final bool showAvatar;
   final bool showLeftNickname;
   final bool showRightNickname;
   final bool isStickerMedia;
@@ -214,7 +219,7 @@ class _ChatItemViewState extends State<ChatItemView> {
           EdgeInsets.only(
               bottom: sticker ? StickerBubbleLayout.rowGap : AppTokens.s4),
       padding: widget.itemPadding ??
-          _textBubbleStyle?.rowPadding(_isISend) ??
+          _textBubbleStyle?.rowPadding(_isISend && !widget.alignLeft) ??
           EdgeInsets.symmetric(
               horizontal: sticker ? StickerBubbleLayout.rowInset : 10.w),
       child: Center(child: _child),
@@ -469,6 +474,8 @@ class _ChatItemViewState extends State<ChatItemView> {
       rightNickname: widget.rightNickname ?? OpenIM.iMManager.userInfo.nickname,
       rightFaceUrl: widget.rightFaceUrl ?? OpenIM.iMManager.userInfo.faceURL,
       showLeftNickname: widget.showLeftNickname,
+      showAvatar: widget.showAvatar,
+      alignLeft: widget.alignLeft,
       showRightNickname: widget.showRightNickname,
       timelineStr: widget.timelineStr,
       onTapTimeline: widget.onTapTimeline,

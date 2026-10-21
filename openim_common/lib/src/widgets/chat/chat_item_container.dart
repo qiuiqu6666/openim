@@ -35,6 +35,8 @@ class ChatItemContainer extends StatelessWidget {
     required this.isSendFailed,
     this.ignorePointer = false,
     this.showLeftNickname = true,
+    this.showAvatar = true,
+    this.alignLeft = false,
     this.showRightNickname = false,
     required this.child,
     this.childWithStatusBuilder,
@@ -77,6 +79,9 @@ class ChatItemContainer extends StatelessWidget {
   final bool isSending;
   final bool isSendFailed;
   final bool ignorePointer;
+  /// Presentation only; sender identity still controls receipts and actions.
+  final bool alignLeft;
+  final bool showAvatar;
   final bool showLeftNickname;
   final bool showRightNickname;
   final Widget child;
@@ -125,7 +130,7 @@ class ChatItemContainer extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                  child: isISend
+                  child: isISend && !alignLeft
                       ? _buildRightView(context)
                       : _buildLeftView(context)),
             ],
@@ -391,22 +396,24 @@ class ChatItemContainer extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
-          leftAvatar ??
-              AvatarView(
-                width: textBubbleStyle != null ? avatarSize : avatarSize.w,
-                height: textBubbleStyle != null ? avatarSize : avatarSize.h,
-                isCircle: textBubbleStyle != null ? true : null,
-                textStyle: textBubbleStyle?.avatarTextStyle ??
-                    Styles.ts_FFFFFF_14sp_medium,
-                textScaler: textBubbleStyle?.avatarTextScaler,
-                url: leftFaceUrl,
-                text: leftNickname,
-                onTap: onTapLeftAvatar,
-                onLongPress: onLongPressLeftAvatar,
-              ),
-          textBubbleStyle == null
-              ? 10.horizontalSpace
-              : SizedBox(width: textBubbleStyle!.avatarGap),
+          if (showAvatar) ...[
+            leftAvatar ??
+                AvatarView(
+                  width: textBubbleStyle != null ? avatarSize : avatarSize.w,
+                  height: textBubbleStyle != null ? avatarSize : avatarSize.h,
+                  isCircle: textBubbleStyle != null ? true : null,
+                  textStyle: textBubbleStyle?.avatarTextStyle ??
+                      Styles.ts_FFFFFF_14sp_medium,
+                  textScaler: textBubbleStyle?.avatarTextScaler,
+                  url: leftFaceUrl,
+                  text: leftNickname,
+                  onTap: onTapLeftAvatar,
+                  onLongPress: onLongPressLeftAvatar,
+                ),
+            textBubbleStyle == null
+                ? 10.horizontalSpace
+                : SizedBox(width: textBubbleStyle!.avatarGap),
+          ],
           Flexible(
               child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

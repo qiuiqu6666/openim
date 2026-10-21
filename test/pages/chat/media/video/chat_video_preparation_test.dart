@@ -109,4 +109,94 @@ void main() {
     expect(calls, hasLength(2));
     expect(results.map((file) => file.path), everyElement(output.path));
   });
+  test('healthy encoder can outlast another video queue budget', () async {
+    final release = Completer<String>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      if (call.method == 'compressVideo') return release.future;
+      return null;
+    });
+    final first = prepareChatVideo(source, ChatVideoQuality.standard);
+    await Future<void>.delayed(Duration.zero);
+    try {
+      await expectLater(
+          prepareChatVideo(source, ChatVideoQuality.standard,
+              busyTimeout: const Duration(milliseconds: 20)),
+          throwsA(isA<TimeoutException>()));
+      expect(VideoCompress.isCompressing, isTrue);
+      expect(calls.map((c) => c.method), ['compressVideo']);
+    } finally {
+      release.complete(jsonEncode({'path': output.path}));
+      expect((await first).path, output.path);
+    }
+  });
+
+  test('cancel acknowledgement does not release a missing encoder callback',
+      () async {
+    final release = Completer<String>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      if (call.method == 'compressVideo') return release.future;
+      return null;
+    });
+    try {
+      await expectLater(
+          prepareChatVideo(source, ChatVideoQuality.standard,
+              compressionTimeout: const Duration(milliseconds: 20)),
+          throwsA(isA<TimeoutException>()));
+      expect(VideoCompress.isCompressing, isTrue);
+      await expectLater(
+          prepareChatVideo(source, ChatVideoQuality.standard,
+              busyTimeout: Duration.zero),
+          throwsStateError);
+      expect(
+          calls.map((c) => c.method), ['compressVideo', 'cancelCompression']);
+      expect(await prepareChatVideo(source, ChatVideoQuality.original), source);
+    } finally {
+      release.complete(jsonEncode({'path': output.path}));
+      await Future<void>.delayed(Duration.zero);
+    }
+  });
+
+  test('default queue waits for healthy previous compression', () async {
+    final release = Completer<String>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      if (call.method == 'compressVideo' && calls.length == 1) {
+        return release.future;
+      }
+      return jsonEncode({'path': output.path});
+    });
+    final first = prepareChatVideo(source, ChatVideoQuality.standard);
+    await Future<void>.delayed(Duration.zero);
+    final second = prepareChatVideo(source, ChatVideoQuality.standard);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    expect(calls, hasLength(1));
+    release.complete(jsonEncode({'path': output.path}));
+    expect((await Future.wait([first, second])).map((f) => f.path),
+        everyElement(output.path));
+    expect(calls, hasLength(2));
+  });
+
+  test('cancel queued video never cancels active encoder', () async {
+    final release = Completer<String>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      return release.future;
+    });
+    final first = prepareChatVideo(source, ChatVideoQuality.standard);
+    await Future<void>.delayed(Duration.zero);
+    var cancelled = false;
+    final second = prepareChatVideo(source, ChatVideoQuality.standard,
+        isCancelled: () => cancelled);
+    cancelled = true;
+    await expectLater(second, throwsStateError);
+    expect(calls.map((c) => c.method), ['compressVideo']);
+    release.complete(jsonEncode({'path': output.path}));
+    await first;
+  });
 }

@@ -77,4 +77,25 @@ void main() {
     expect(await pending, isNull);
     expect(originalReads, 0);
   });
+  test('late export is discarded while original fallback remains stalled',
+      () async {
+    final export = Completer<File?>();
+    final original = Completer<File?>();
+    final stages = <String>[];
+    final asset = _Asset(export.future, original.future,
+        onOriginalRead: () => export.complete(photo));
+    try {
+      await expectLater(
+          loadChatMediaAsset(asset,
+              timeout: const Duration(milliseconds: 20),
+              isCancelled: () => false,
+              onReadFailure: (stage, _) => stages.add(stage)),
+          throwsStateError);
+      expect(await export.future, photo);
+      expect(stages, ['asset_export', 'asset_original']);
+    } finally {
+      original.complete(photo);
+    }
+  });
+
 }

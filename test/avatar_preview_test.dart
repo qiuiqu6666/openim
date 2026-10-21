@@ -57,7 +57,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byIcon(Icons.download_rounded), findsOneWidget);
-      expect(find.byType(IconButton), findsOneWidget);
+      expect(find.byType(IconButton), findsNWidgets(2));
+      final back = find.byKey(const ValueKey('picture-preview-back'));
+      expect(back, findsOneWidget);
+      expect(tester.getSize(back).width, greaterThanOrEqualTo(48));
+      await tester.tap(back);
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatPicturePreview), findsNothing);
+      expect(find.byType(AvatarView), findsOneWidget);
     });
   }
 }

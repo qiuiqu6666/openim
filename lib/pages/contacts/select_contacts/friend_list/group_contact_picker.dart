@@ -13,9 +13,15 @@ import '../../../official_account/widgets/official_account_name_label.dart';
 
 class GroupContactPicker extends StatefulWidget {
   const GroupContactPicker(
-      {super.key, required this.friends, required this.selection});
+      {super.key,
+      required this.friends,
+      required this.selection,
+      this.onNext,
+      this.onBack});
   final SelectContactsFromFriendsLogic friends;
   final SelectContactsLogic selection;
+  final VoidCallback? onNext;
+  final VoidCallback? onBack;
   @override
   State<GroupContactPicker> createState() => _GroupContactPickerState();
 }
@@ -49,7 +55,7 @@ class _GroupContactPickerState extends State<GroupContactPicker> {
           surfaceTintColor: Colors.transparent,
           centerTitle: true,
           leading: IconButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
               tooltip: MaterialLocalizations.of(context).backButtonTooltip,
               icon: Icon(CupertinoIcons.back, color: Styles.c_0089FF)),
           title: Column(children: [
@@ -64,7 +70,7 @@ class _GroupContactPickerState extends State<GroupContactPicker> {
           actions: [
             Obx(() => TextButton(
                   onPressed: widget.selection.enabledConfirmButton
-                      ? widget.selection.confirmSelectedList
+                      ? (widget.onNext ?? widget.selection.confirmSelectedList)
                       : null,
                   child: Text(StrRes.nextStep,
                       style: const TextStyle(fontSize: 16)),

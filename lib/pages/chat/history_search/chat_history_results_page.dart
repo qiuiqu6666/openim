@@ -36,6 +36,7 @@ class ChatHistoryResultsPage extends StatefulWidget {
     this.sender,
     this.source,
     this.isGroup = false,
+    this.isChannel = false,
     this.senderSource,
     this.messageNavigation,
   });
@@ -47,6 +48,7 @@ class ChatHistoryResultsPage extends StatefulWidget {
   final ChatHistorySender? sender;
   final ChatHistorySearchSource? source;
   final bool isGroup;
+  final bool isChannel;
   final ChatHistorySenderSource? senderSource;
   final ChatHistoryMessageNavigation? messageNavigation;
 
@@ -297,7 +299,7 @@ class _ChatHistoryResultsPageState extends State<ChatHistoryResultsPage> {
                 animation: _controller,
                 builder: (context, _) => ChatHistoryKeywordResults(
                   controller: _controller,
-                  isGroup: widget.isGroup,
+                  isGroup: widget.isGroup, isChannel: widget.isChannel,
                   waiting: _waiting,
                   onCategory: _openCategory,
                   onMessage: _openContext,

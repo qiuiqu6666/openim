@@ -51,6 +51,13 @@ void main() {
       expect(tester.widget<AppSwitch>(find.byType(AppSwitch)).onChanged,
           isNotNull);
 
+      expect(find.text('sdkMutedList'.tr), findsOneWidget);
+      fixture.setup.groupInfo.update((info) => info!.ex = '{"conversationKind":"channel"}');
+      await tester.pump();
+      expect(find.text('sdkMutedList'.tr), findsNothing);
+      fixture.setup.groupInfo.update((info) => info!.ex = '{}');
+      await tester.pump();
+      expect(find.text('sdkMutedList'.tr), findsOneWidget);
       fixture.setup.groupInfo.update((info) => info!.status = 3);
       await tester.pump();
       expect(tester.widget<AppSwitch>(find.byType(AppSwitch)).value, isTrue);

@@ -74,4 +74,46 @@ void main() {
       });
     }
   }
+  testWidgets('video phases and recovery actions fit large text',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(Get.reset);
+    var cancelled = 0, originals = 0;
+    await tester.pumpWidget(GetMaterialApp(
+      locale: const Locale('en', 'US'),
+      translations: TranslationService(),
+      theme: ThemeData.light(),
+      builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(2)),
+          child: child!),
+      home: Scaffold(
+          body: ChatMediaPreparationIndicator(
+              count: 2,
+              failedCount: 1,
+              stageLabel: 'Downloading videos (1) · Waiting to compress (1)',
+              onCancel: () => cancelled++,
+              onRetry: () {},
+              onRetryOriginal: () => originals++)),
+    ));
+    expect(tester.takeException(), isNull);
+    for (final text in [
+      'Cancel pending preparation',
+      'Retry failed videos as originals'
+    ]) {
+      final button = find.widgetWithText(TextButton, text);
+      expect(tester.getSize(button).height,
+          greaterThanOrEqualTo(AppTokens.minimumTapSize));
+      await tester.ensureVisible(button);
+      await tester.pump();
+      await tester.tap(button);
+    }
+    expect(cancelled, 1);
+    expect(originals, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }

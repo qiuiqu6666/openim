@@ -141,6 +141,7 @@ void main() {
       String initialQuery = '',
       bool filesOnly = false,
       bool isGroup = false,
+      bool isChannel = false,
       Widget? page}) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -158,6 +159,7 @@ void main() {
               initialQuery: initialQuery,
               filesOnly: filesOnly,
               isGroup: isGroup,
+              isChannel: isChannel,
               source: source,
               senderSource: senderSource,
               messageNavigation: messageNavigation,
@@ -181,6 +183,14 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
   }
+
+  testWidgets('channel shortcuts omit members but retain date media and files', (tester) async {
+    await mount(tester, isGroup: true, isChannel: true);
+    expect(categoryEntry(ChatHistoryCategory.sender), findsNothing);
+    for (final category in [ChatHistoryCategory.media, ChatHistoryCategory.file, ChatHistoryCategory.date]) {
+      expect(categoryEntry(category), findsOneWidget);
+    }
+  });
 
   testWidgets(
       'inherited navigation returns from chat to the selected member list',

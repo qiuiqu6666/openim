@@ -1,4 +1,5 @@
 import 'messages/forwarding/pending_forward_store.dart';
+import '../channels/models/channel_kind.dart';
 import 'messages/forwarding/pending_forward.dart';
 import 'package:openim_common/localization.dart';
 import 'navigation/chat_entry_trace.dart';
@@ -488,6 +489,8 @@ class ChatLogic extends SuperController {
   RxString get announcementVersion => _group.announcementVersion;
   String? get groupOwnerID => _group.groupOwnerID;
   bool get sendingMuted => isOfficialNotificationChat || _group.sendingMuted;
+  bool get isChannel => _group.isChannel;
+  bool get isChannelSubscriber => isChannel && !_group.isAdminOrOwner;
   bool get groupMutePending =>
       !isOfficialNotificationChat && _group.muteStatusPending;
   bool get groupMembershipPending => _group.membershipPending.value;
@@ -837,7 +840,10 @@ class ChatLogic extends SuperController {
 
   String get memberStr => isSingleChat || !_group.memberCountKnown.value
       ? ''
-      : 'groupMemberCountLabel'.trArgs(['$memberCount']);
+      : (isChannelEx(_group.groupInfo?.ex)
+              ? 'channelSubscriberCountLabel'
+              : 'groupMemberCountLabel')
+          .trArgs(['$memberCount']);
 
   String? get senderName => isSingleChat
       ? OpenIM.iMManager.userInfo.nickname
@@ -1439,6 +1445,10 @@ class ChatLogic extends SuperController {
   int get preparingMediaCount => _media.preparingCount.value;
   int get failedMediaPreparationCount => _media.failedPreparationCount.value;
   void retryMediaPreparation() => _media.retryPreparation();
+  String? get mediaPreparationLabel => _media.preparationLabel;
+  bool get hasFailedVideoPreparation => _media.hasFailedVideos;
+  void retryOriginalVideoPreparation() => _media.retryPreparation(originalVideos: true);
+  void cancelMediaPreparation() => _media.cancelPreparation();
   Future<void> onTapFile() => _media.onTapFile();
   Future<void> onTapCamera() => _media.onTapCamera();
   Future<void> onTapRecord() => _voice.onTapRecord();

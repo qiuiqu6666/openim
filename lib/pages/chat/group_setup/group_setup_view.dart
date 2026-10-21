@@ -7,6 +7,8 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'group_setup_logic.dart';
+import '../../channels/detail/channel_live_profile_page.dart';
+import '../../channels/models/channel_kind.dart';
 import '../complaints/complaint_reason_page.dart';
 import 'group_announcement_page.dart';
 import 'loading/group_setup_loading.dart';
@@ -21,6 +23,12 @@ class GroupSetupPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Obx(() => isChannelEx(logic.groupInfo.value.ex)
+        ? ChannelLiveProfilePage(logic: logic)
+        : _buildGroup(context));
+  }
+
+  Widget _buildGroup(BuildContext context) {
     return Scaffold(
       appBar: GlassAppBar(
         toolbarHeight: kToolbarHeight,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../channels/models/channel_kind.dart';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -164,6 +165,11 @@ class ChatGroupController {
   bool get isGroupChat => groupID()?.trim().isNotEmpty == true;
   bool get isInvalidGroup =>
       isGroupChat && !membershipPending.value && !isInGroup.value;
+  bool get isChannel {
+    _muteRevision.value;
+    return isGroupChat && isChannelEx(groupInfo?.ex);
+  }
+
   bool get isAdminOrOwner =>
       groupMemberRoleLevel.value == GroupRoleLevel.admin ||
       groupMemberRoleLevel.value == GroupRoleLevel.owner;
@@ -188,6 +194,9 @@ class ChatGroupController {
   bool get sendingMuted {
     _muteRevision.value;
     if (membershipPending.value) return true;
+    if (isGroupChat && isChannelEx(groupInfo?.ex) && !isAdminOrOwner) {
+      return true;
+    }
     return isGroupChat &&
         ((groupMembersInfo?.muteEndTime ?? 0) > _nowSeconds() ||
             (groupInfo?.status == 3 &&

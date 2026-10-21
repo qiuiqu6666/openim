@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'media/video_gallery/video_gallery_action.dart';
+import '../widgets/media_browser/media_preview_action_button.dart';
 
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:azlistview/azlistview.dart';
@@ -60,6 +61,17 @@ class IntervalDo {
 }
 
 class IMUtils {
+  static String groupCreatedLabel(GroupNotification notification) {
+    try {
+      final ex = json.decode(notification.group?.ex ?? '');
+      if (ex is Map && ex['conversationKind'] == 'channel') {
+        return StrRes.createChannelNtf;
+      }
+    } catch (_) {
+      // Legacy groups may have empty or non-JSON extension metadata.
+    }
+    return StrRes.createGroupNtf;
+  }
   IMUtils._();
 
   static Future<CroppedFile?> uCrop(String path) {
@@ -578,7 +590,7 @@ class IMUtils {
             {
               final ntf = GroupNotification.fromJson(map);
 
-              final label = StrRes.createGroupNtf;
+              final label = groupCreatedLabel(ntf);
               text = sprintf(label, [getGroupMemberShowName(ntf.opUser!)]);
             }
             break;
@@ -1019,14 +1031,26 @@ class IMUtils {
               },
             ),
           );
-          if (!showSaveButton ||
-              currentIndex < 0 ||
-              currentIndex >= sources.length ||
-              sources[currentIndex].url == null) {
-            return preview;
-          }
+          final canSave = showSaveButton &&
+              currentIndex >= 0 &&
+              currentIndex < sources.length &&
+              sources[currentIndex].url != null;
           return Stack(fit: StackFit.expand, children: [
             preview,
+            Positioned(
+              left: AppTokens.s5,
+              top: AppTokens.s3,
+              child: SafeArea(
+                bottom: false,
+                child: MediaPreviewActionButton(
+                  key: const ValueKey('picture-preview-back'),
+                  label: MaterialLocalizations.of(context).backButtonTooltip,
+                  icon: Icons.arrow_back_ios_new_rounded,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
+            ),
+            if (canSave)
             Positioned(
               right: 20,
               bottom: 0,

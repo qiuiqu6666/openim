@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../home_quick_actions.dart';
+import '../../channels/channel_entry.dart';
 
 /// One menu definition for the conversations and contacts headers.
 List<HomeQuickAction> homeContactActions({
@@ -28,8 +29,9 @@ List<HomeQuickAction> homeContactActions({
     HomeQuickAction(
         id: 'createChannel',
         title: zh ? AppCopy.text('创建频道') : 'Create Channel',
-        subtitle: zh ? AppCopy.text('暂未开放') : 'Coming soon',
-        enabled: false),
+        subtitle:
+            zh ? AppCopy.text('创建频道') : 'Create a channel',
+        onTap: () => openChannelPages(context, create: true)),
     HomeQuickAction(
         id: 'scanQRCode',
         title: StrRes.scan,

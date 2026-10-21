@@ -1,3 +1,5 @@
+import '../../../channels/models/channel_kind.dart';
+import '../../../channels/presentation/channel_labels.dart';
 import 'package:openim_common/localization.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +11,7 @@ class GroupManagePage extends StatelessWidget {
   final GroupManageLogic logic;
   GroupManagePage({super.key, GroupManageLogic? logic})
       : logic = logic ?? Get.find<GroupManageLogic>();
+  String _label(String text) => channelLabel(text, channel: isChannelEx(logic.groupInfo.value.ex));
   static const _radius = BorderRadius.all(Radius.circular(12));
 
   @override
@@ -25,7 +28,7 @@ class GroupManagePage extends StatelessWidget {
                 onPressed: () => Navigator.of(context).pop(),
                 icon: Icon(CupertinoIcons.back,
                     color: Styles.c_0089FF, size: 24)),
-            title: Text(StrRes.groupManage,
+            title: Text(_label(StrRes.groupManage),
                 style: Styles.ts_0C1C33_17sp_semibold)),
         body: SafeArea(
             top: false,
@@ -46,13 +49,14 @@ class GroupManagePage extends StatelessWidget {
                         children: [
                       _section([
                         if (logic.groupSetupLogic.isOwnerOrAdmin)
-                          _toggle('sdkMuteAll'.tr,
-                              value: info.status == 3,
-                              onChanged: busy
+                          _toggle(isChannelEx(info.ex) ? 'channelPublishRestricted'.tr : 'sdkMuteAll'.tr,
+                              value: isChannelEx(info.ex) || info.status == 3,
+                              onChanged: busy || isChannelEx(info.ex)
                                   ? null
                                   : (v) => logic.saveRules(muted: v)),
                         _row('sdkAdminList'.tr, onTap: logic.admins),
-                        _row('sdkMutedList'.tr, onTap: logic.mutedMembers),
+                        if (!isChannelEx(info.ex))
+                          _row('sdkMutedList'.tr, onTap: logic.mutedMembers),
                         if (owner)
                           _row('sdkJoinRule'.tr,
                               subtitle: 'sdkJoinRule${rule.clamp(0, 2)}'.tr,
@@ -126,12 +130,12 @@ class GroupManagePage extends StatelessWidget {
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                          Text(title,
+                          Text(_label(title),
                               style: TextStyle(
                                   fontSize: 16, color: Styles.c_0C1C33)),
                           if (subtitle != null) ...[
                             const SizedBox(height: 6),
-                            Text(subtitle,
+                            Text(_label(subtitle),
                                 style: TextStyle(
                                     fontSize: 13,
                                     height: 1.4,
@@ -175,7 +179,7 @@ class GroupManagePage extends StatelessWidget {
                     borderRadius: BorderRadius.circular(3))),
             Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 24),
-              child: Text('sdkJoinRule'.tr,
+              child: Text(_label('sdkJoinRule'.tr),
                   style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w600,
@@ -190,8 +194,8 @@ class GroupManagePage extends StatelessWidget {
                   Semantics(
                     selected: draft == i,
                     child: _row(
-                      'sdkJoinRule$i'.tr,
-                      subtitle: 'sdkJoinRuleDescription$i'.tr,
+                      _label('sdkJoinRule$i'.tr),
+                      subtitle: _label('sdkJoinRuleDescription$i'.tr),
                       onTap: () => Navigator.of(sheetContext).pop(i),
                       trailing: Icon(
                           draft == i
@@ -229,9 +233,9 @@ class GroupManagePage extends StatelessWidget {
     }
     final confirmed = await showAppConfirm(
       context,
-      title: AppCopy.text('确认修改入群验证'),
-      message: AppCopy.format('将入群验证修改为“{#0}”？\n{#1}',
-          ['sdkJoinRule$selected'.tr, 'sdkJoinRuleDescription$selected'.tr]),
+      title: _label(AppCopy.text('确认修改入群验证')),
+      message: _label(AppCopy.format('将入群验证修改为“{#0}”？\n{#1}',
+          ['sdkJoinRule$selected'.tr, 'sdkJoinRuleDescription$selected'.tr])),
       cancelText: StrRes.cancel,
       confirmText: AppCopy.text('确认修改'),
     );

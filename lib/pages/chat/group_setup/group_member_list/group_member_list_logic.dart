@@ -1,3 +1,5 @@
+import '../../../channels/models/channel_kind.dart';
+import '../../../channels/presentation/channel_labels.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/widgets.dart';
@@ -493,9 +495,10 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  static _transferGroupRight(GroupMembersInfo membersInfo) async {
+  Future<void> _transferGroupRight(GroupMembersInfo membersInfo) async {
     var confirm = await Get.dialog(CustomDialog(
-      title: sprintf(StrRes.confirmTransferGroupToUser, [
+      title: sprintf(channelLabel(StrRes.confirmTransferGroupToUser,
+          channel: isChannelEx(groupInfo.ex)), [
         ContactRemarkSource.displayName(membersInfo.userID,
             nickname: membersInfo.nickname)
       ]),

@@ -24,6 +24,7 @@ Future<void> _showContent(
   String groupId = _groupId,
   String qrData = _qrData,
   bool saving = false,
+  bool isChannel = false,
   bool scanning = false,
   GlobalKey? cardKey,
   VoidCallback? onSave,
@@ -56,6 +57,7 @@ Future<void> _showContent(
       home: Scaffold(
         body: SafeArea(
           child: GroupQrcodeContent(
+            isChannel: isChannel,
             groupName: groupName,
             groupId: groupId,
             qrData: qrData,
@@ -86,6 +88,13 @@ Future<Uint8List> _paintedQrBytes(QrPainter painter) async {
 }
 
 void main() {
+  testWidgets('channel QR card uses channel labels and preserves QR payload', (tester) async {
+    await _showContent(tester, isChannel: true);
+    expect(find.text('频道二维码'), findsOneWidget);
+    expect(find.text('扫一扫二维码，立即加入频道'), findsOneWidget);
+    expect(find.text(StrRes.groupQrcode), findsNothing);
+    expect(tester.widget<GroupQrcodeContent>(find.byType(GroupQrcodeContent)).qrData, _qrData);
+  });
   setUp(() => Get.testMode = true);
   tearDown(Get.reset);
 

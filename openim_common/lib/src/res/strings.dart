@@ -174,6 +174,7 @@ class StrRes {
   static String get groupAc => 'groupAc'.tr;
 
   static String get createGroupNtf => 'createGroupNtf'.tr;
+  static String get createChannelNtf => 'createChannelNtf'.tr;
 
   static String get editGroupInfoNtf => 'editGroupInfoNtf'.tr;
 

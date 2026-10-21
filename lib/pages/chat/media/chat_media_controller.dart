@@ -80,15 +80,35 @@ class ChatMediaController {
   final tempMessages = <Message>[];
   final preparingCount = 0.obs;
   final failedPreparationCount = 0.obs;
-  final _preparationRetries = <void Function()>[];
+  final _preparationRetries = <({bool video, void Function(bool) retry})>[];
+  final preparationStages = <String, String>{}.obs;
+  int _preparationEpoch = 0;
+  bool get hasFailedVideos => _preparationRetries.any((entry) => entry.video);
+  void cancelPreparation() {
+    _preparationEpoch++;
+  }
 
-  void retryPreparation() {
+  String? get preparationLabel {
+    final labels = <String>[];
+    for (final stage in ['download', 'queued', 'compressing']) {
+      final count =
+          preparationStages.values.where((value) => value == stage).length;
+      if (count > 0) {
+        labels.add('chatVideoStage_$stage'.trParams({'count': '$count'}));
+      }
+    }
+    return labels.isEmpty ? null : labels.join(' · ');
+  }
+
+  void retryPreparation({bool originalVideos = false}) {
     if (isClosed || sendingMuted || isInvalidGroup) return;
-    final retries = List.of(_preparationRetries);
-    _preparationRetries.clear();
-    failedPreparationCount.value = 0;
+    final retries = _preparationRetries
+        .where((entry) => !originalVideos || entry.video)
+        .toList();
+    _preparationRetries.removeWhere((entry) => retries.contains(entry));
+    failedPreparationCount.value = _preparationRetries.length;
     for (final retry in retries) {
-      retry();
+      retry.retry(originalVideos && retry.video);
     }
   }
 
@@ -100,6 +120,7 @@ class ChatMediaController {
 
   void close() {
     _closed = true;
+    preparationStages.clear();
     tempMessages.clear();
     preparingCount.value = 0;
     _preparationRetries.clear();
@@ -316,15 +337,18 @@ class ChatMediaController {
     }
 
     onPrepared();
+    final preparationEpoch = _preparationEpoch;
+    bool preparationStopped() =>
+        stopped() || preparationEpoch != _preparationEpoch;
     final ready = List.generate(assets.length, (_) => Completer<Message?>());
     final messages = <int, Message>{};
     preparingCount.value += assets.length;
     Future<void> prepareItem(int index) async {
       Message? message;
       try {
-        if (!stopped()) {
+        if (!preparationStopped()) {
           message = await _prepareAsset(assets[index],
-              quality: quality, cancelled: stopped);
+              quality: quality, cancelled: preparationStopped);
           if (message != null && !stopped()) {
             messages[index] = message;
             if (task != null) {
@@ -339,19 +363,23 @@ class ChatMediaController {
           }
         }
       } catch (error) {
+        if (preparationStopped()) return;
         ChatMediaDiagnostics.record('prepare_asset',
             outcome: 'failed', error: error);
         // Accepted work may fail before the SDK can create a message.
         // Report that failure even if its original route has gone away.
         if (task?.current == true || !isClosed) _onPreparationFailed();
         if (!isClosed && !stopped()) {
-          _preparationRetries.add(() {
-            if (stopped()) return;
-            unawaited(_sendSelectedAssets([assets[index]],
-                onPrepared: () {},
-                originalChoice: original,
-                acceptedTask: task));
-          });
+          _preparationRetries.add((
+            video: assets[index].type == AssetType.video,
+            retry: (useOriginal) {
+              if (stopped()) return;
+              unawaited(_sendSelectedAssets([assets[index]],
+                  onPrepared: () {},
+                  originalChoice: useOriginal ? true : original,
+                  acceptedTask: task));
+            }
+          ));
           failedPreparationCount.value = _preparationRetries.length;
         }
       } finally {
@@ -581,62 +609,71 @@ class ChatMediaController {
       bool Function()? cancelled}) async {
     final stopped = cancelled ?? () => isClosed;
     final trace = ChatMediaTrace();
-    final originalFile = await trace.run(
-        'load_asset',
-        () => loadChatMediaAsset(asset,
-            timeout: assetReadTimeout,
-            isCancelled: stopped,
-            onReadFailure: (stage, error) =>
-                trace.record(stage, outcome: 'failed', error: error)));
-    if (stopped()) return null;
-    if (originalFile == null) {
-      throw StateError('Selected asset file is unavailable');
-    }
-    final path = originalFile.path;
-    switch (asset.type) {
-      case AssetType.image:
-        return _preparePicture(path,
-            cancelled: stopped,
-            trace: trace,
-            originalQuality: quality == ChatVideoQuality.original);
-      case AssetType.video:
-        final prepared = await trace.run(
-            'compress_video', () => prepareChatVideo(originalFile, quality));
-        if (stopped()) return null;
-        final saved = await trace.run('retain_video',
-            () => _retainAttachment(prepared.path).timeout(assetReadTimeout));
-        if (stopped()) return null;
-        final thumbnail = await trace.run(
-            'video_thumbnail',
-            () => asset
-                .thumbnailDataWithSize(const ThumbnailSize(640, 640))
-                .timeout(assetReadTimeout));
-        if (stopped()) return null;
-        if (thumbnail == null) {
-          throw StateError('Video thumbnail unavailable');
-        }
-        final snapshot = File('${saved.path}.jpg');
-        await snapshot.writeAsBytes(thumbnail).timeout(assetReadTimeout);
-        final mimeType = prepared.path != path
-            ? 'video/mp4'
-            : await asset.mimeTypeAsync.timeout(assetReadTimeout) ??
-                'video/mp4';
-        if (stopped()) return null;
-        final message = await trace.run(
-            'create_video_message',
-            () => OpenIM.iMManager.messageManager
-                .createVideoMessageFromFullPath(
-                    videoPath: saved.path,
-                    videoType: mimeType,
-                    duration: asset.videoDuration.inSeconds < 1
-                        ? 1
-                        : asset.videoDuration.inSeconds,
-                    snapshotPath: snapshot.path)
-                .timeout(messageCreationTimeout));
-        if (stopped()) return null;
-        return message;
-      default:
-        throw StateError('Unsupported asset type');
+    if (asset.type == AssetType.video) preparationStages[trace.id] = 'download';
+    try {
+      final originalFile = await trace.run(
+          'load_asset',
+          () => loadChatMediaAsset(asset,
+              timeout: assetReadTimeout,
+              isCancelled: stopped,
+              onReadFailure: (stage, error) =>
+                  trace.record(stage, outcome: 'failed', error: error)));
+      if (stopped()) return null;
+      if (originalFile == null) {
+        throw StateError('Selected asset file is unavailable');
+      }
+      final path = originalFile.path;
+      switch (asset.type) {
+        case AssetType.image:
+          return _preparePicture(path,
+              cancelled: stopped,
+              trace: trace,
+              originalQuality: quality == ChatVideoQuality.original);
+        case AssetType.video:
+          final prepared = await trace.run(
+              'compress_video',
+              () => prepareChatVideo(originalFile, quality,
+                      isCancelled: stopped, onPhase: (stage) {
+                    if (!stopped()) preparationStages[trace.id] = stage;
+                  }));
+          if (stopped()) return null;
+          final saved = await trace.run('retain_video',
+              () => _retainAttachment(prepared.path).timeout(assetReadTimeout));
+          if (stopped()) return null;
+          final thumbnail = await trace.run(
+              'video_thumbnail',
+              () => asset
+                  .thumbnailDataWithSize(const ThumbnailSize(640, 640))
+                  .timeout(assetReadTimeout));
+          if (stopped()) return null;
+          if (thumbnail == null) {
+            throw StateError('Video thumbnail unavailable');
+          }
+          final snapshot = File('${saved.path}.jpg');
+          await snapshot.writeAsBytes(thumbnail).timeout(assetReadTimeout);
+          final mimeType = prepared.path != path
+              ? 'video/mp4'
+              : await asset.mimeTypeAsync.timeout(assetReadTimeout) ??
+                  'video/mp4';
+          if (stopped()) return null;
+          final message = await trace.run(
+              'create_video_message',
+              () => OpenIM.iMManager.messageManager
+                  .createVideoMessageFromFullPath(
+                      videoPath: saved.path,
+                      videoType: mimeType,
+                      duration: asset.videoDuration.inSeconds < 1
+                          ? 1
+                          : asset.videoDuration.inSeconds,
+                      snapshotPath: snapshot.path)
+                  .timeout(messageCreationTimeout));
+          if (stopped()) return null;
+          return message;
+        default:
+          throw StateError('Unsupported asset type');
+      }
+    } finally {
+      preparationStages.remove(trace.id);
     }
   }
 }

@@ -1,4 +1,6 @@
 import 'package:openim_common/media_localization.dart';
+import '../../channels/models/channel_kind.dart';
+import '../../channels/presentation/channel_labels.dart';
 import 'package:openim/core/user_activity/activity_sdk.dart';
 import 'dart:async';
 import 'dart:io';
@@ -297,7 +299,8 @@ class GroupSetupLogic extends GetxController {
   }
 
   void searchHistory() => Get.to(() =>
-      ChatHistorySearchPage(conversationID: conversationID, isGroup: true));
+      ChatHistorySearchPage(conversationID: conversationID, isGroup: true,
+        isChannel: isChannelEx(groupInfo.value.ex)));
 
   void editMyGroupNickname() =>
       AppNavigator.startEditGroupName(type: EditNameType.myGroupMemberNickname);
@@ -588,9 +591,40 @@ class GroupSetupLogic extends GetxController {
         groupInfo: groupInfo.value,
       );
 
-  void groupManage() => AppNavigator.startGroupManage(
+  void groupManage() {
+    if (isChannelEx(groupInfo.value.ex) &&
+        (!membership.resolved.value || membership.failed.value || !isOwnerOrAdmin)) {
+      return;
+    }
+    AppNavigator.startGroupManage(
         groupInfo: groupInfo.value,
       );
+  }
+
+  bool _clearingChannelHistory = false;
+  Future<void> clearChannelHistory() async {
+    if (_clearingChannelHistory || !_isCurrentGroupSession) return;
+    _clearingChannelHistory = true;
+    final permission = capturePermissionContext();
+    final id = conversationInfo.value.conversationID;
+    try {
+      final confirmed = await Get.dialog<bool>(CustomDialog(
+          title: 'clearThisChatConfirm'.tr, rightText: StrRes.delete));
+      if (confirmed != true || !isPermissionContextCurrent(permission)) return;
+      await OpenIM.iMManager.conversationManager
+          .clearConversationAndDeleteAllMsg(conversationID: id);
+      if (isPermissionContextCurrent(permission)) {
+        chatLogic.clearAllMessage();
+        ChatHistoryCache.removeConversation(OpenIM.iMManager.userID, id);
+      }
+    } catch (error) {
+      if (isPermissionContextCurrent(permission)) {
+        IMViews.showErrorToast(error.toString());
+      }
+    } finally {
+      _clearingChannelHistory = false;
+    }
+  }
 
   Future<void> _removeConversation() async {
     final conversationID = conversationInfo.value.conversationID;
@@ -611,7 +645,7 @@ class GroupSetupLogic extends GetxController {
       if (isJoinedGroup.value) {
         if (isOwner) {
           var confirm = await Get.dialog(CustomDialog(
-            title: StrRes.dismissGroupHint,
+            title: channelLabel(StrRes.dismissGroupHint, channel: isChannelEx(groupInfo.value.ex)),
           ));
           if (!_isCurrentGroupSession) return;
           if (confirm == true) {
@@ -623,7 +657,7 @@ class GroupSetupLogic extends GetxController {
           }
         } else {
           var confirm = await Get.dialog(CustomDialog(
-            title: StrRes.quitGroupHint,
+            title: channelLabel(StrRes.quitGroupHint, channel: isChannelEx(groupInfo.value.ex)),
           ));
           if (!_isCurrentGroupSession) return;
           if (confirm == true) {
@@ -687,7 +721,13 @@ class GroupSetupLogic extends GetxController {
 
   Future<void> addMember() => _memberOperations.inviteMembers();
 
-  Future<void> removeMember() => _memberOperations.removeMembers();
+  Future<void> removeMember() async {
+    if (isChannelEx(groupInfo.value.ex) &&
+        (!membership.resolved.value || membership.failed.value || !isOwnerOrAdmin)) {
+      return;
+    }
+    await _memberOperations.removeMembers();
+  }
 
   void viewMemberInfo(GroupMembersInfo membersInfo) =>
       AppNavigator.startUserProfilePane(

@@ -17,6 +17,7 @@ class ChatHistoryKeywordResults extends StatelessWidget {
     super.key,
     required this.controller,
     required this.isGroup,
+    this.isChannel = false,
     required this.waiting,
     required this.onCategory,
     required this.onMessage,
@@ -25,6 +26,7 @@ class ChatHistoryKeywordResults extends StatelessWidget {
 
   final ChatHistorySearchController controller;
   final bool isGroup;
+  final bool isChannel;
   final bool waiting;
   final ValueChanged<ChatHistoryCategory> onCategory;
   final ValueChanged<Message> onMessage;
@@ -65,7 +67,7 @@ class ChatHistoryKeywordResults extends StatelessWidget {
             itemBuilder: (context, index) {
               if (index == 0) {
                 return ChatHistorySearchShortcuts(
-                    isGroup: isGroup, onSelected: onCategory);
+                    isGroup: isGroup, isChannel: isChannel, onSelected: onCategory);
               }
               if (index == controller.results.length + 1) {
                 return _status(context);

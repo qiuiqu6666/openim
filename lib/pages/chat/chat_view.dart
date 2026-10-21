@@ -1,3 +1,5 @@
+import '../channels/conversation/channel_notification_bar.dart';
+import '../conversation/conversation_logic.dart';
 import 'messages/forwarding/pending_forward_bar.dart';
 import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
@@ -119,15 +121,16 @@ class ChatPage extends StatelessWidget {
             bottom: false,
             child: Column(children: [
               if (logic.isGroupChat)
-                Obx(() => logic.announcement.value.trim().isEmpty
-                    ? const SizedBox.shrink()
-                    : GroupAnnouncementBanner(
-                        text: logic.announcement.value,
-                        version: logic.announcementVersion.value,
-                        groupID: logic.groupID!,
-                        userID: OpenIM.iMManager.userID,
-                        preferences: SpUtil().prefs,
-                      )),
+                Obx(() =>
+                    logic.isChannel || logic.announcement.value.trim().isEmpty
+                        ? const SizedBox.shrink()
+                        : GroupAnnouncementBanner(
+                            text: logic.announcement.value,
+                            version: logic.announcementVersion.value,
+                            groupID: logic.groupID!,
+                            userID: OpenIM.iMManager.userID,
+                            preferences: SpUtil().prefs,
+                          )),
               Expanded(
                   child: ListenableBuilder(
                       listenable: logic.groupFeatures,
@@ -162,7 +165,9 @@ class ChatPage extends StatelessWidget {
                               bottomView: input,
                               child: messages,
                             );
-                            if (!logic.isGroupChat || !logic.isInGroup.value) {
+                            if (!logic.isGroupChat ||
+                                logic.isChannel ||
+                                !logic.isInGroup.value) {
                               return body;
                             }
                             logic.groupMemberRoleLevel.value;
@@ -189,90 +194,110 @@ class ChatPage extends StatelessWidget {
         ),
       );
 
-  Widget _buildComposer() => Obx(() => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (logic.preparingMediaCount > 0 ||
-              logic.failedMediaPreparationCount > 0)
-            ChatMediaPreparationIndicator(
-              count: logic.preparingMediaCount,
-              failedCount: logic.failedMediaPreparationCount,
-              onRetry: logic.retryMediaPreparation,
-            ),
-          if (logic.quotedMessage.value != null)
-            ChatComposerContextPreview(
-              message: logic.quotedMessage.value,
-              onClose: logic.clearReply,
-            ),
-          if (logic.pendingForward.draft.value case final draft?)
-            PendingForwardBar(
-              key: ObjectKey(draft),
-              onOpenOptions: logic.reviewPendingForward,
-              count: draft.messages.length,
-              sending: logic.pendingForward.sending.value,
-              onCancel: logic.pendingForward.cancel,
-            ),
-          ChatInputBox(
-            pendingSend: logic.pendingForward.draft.value != null,
-            pendingSending: logic.pendingForward.sending.value,
-            builtinStickerPanel:
-                ChatBuiltinStickerPanel(onSend: logic.sendBuiltinSticker),
-            builtinStickerIcon: Image.asset(
-              ChatBuiltinStickerCatalog.menuAssetPath,
-              width: AppTokens.s7,
-              height: AppTokens.s7,
-              fit: BoxFit.contain,
-            ),
-            stickerPanel: PersonalStickerPanel(
-              store: logic.personalStickers,
-              onAdd: logic.addPersonalSticker,
-              onSend: logic.sendPersonalSticker,
-              onSendDice: logic.sendDice,
-            ),
-            forceCloseToolboxSub: logic.forceCloseToolbox,
-            controller: logic.inputCtrl,
-            focusNode: logic.focusNode,
-            isNotInGroup: logic.isInvalidGroup,
-            enabled: !logic.sendingMuted && !logic.pendingForward.sending.value,
-            showDisabledWarning: !logic.groupMutePending,
-            hintText: logic.groupMembershipPending
-                ? StrRes.synchronizing
-                : logic.groupMutePending
-                    ? ''
-                    : (logic.sendingMuted ? StrRes.youMuted : null),
-            directionalText: logic.directionalText(),
-            onCloseDirectional: logic.onClearDirectional,
-            onSend: (v) => logic.sendTextMsg(),
-            onTapVoice: logic.onTapRecord,
-            toolbox: ListenableBuilder(
-                listenable: logic.groupFeatures,
-                builder: (context, _) => ChatToolBox(
-                      extraItems: logic.isGroupChat
-                          ? GroupFeatureActions.items(
-                              context, logic.groupFeatureContext,
-                              onLiveStateChanged: () => logic.groupFeatures
-                                  .refreshGroup(logic.groupID!))
-                          : const [],
-                      onTapAlbum: logic.onTapAlbum,
-                      onTapFile: logic.onTapFile,
-                      onTapCamera: logic.onTapCamera,
-                      onTapCard: logic.onTapCard,
-                      onTapLocation: logic.onTapLocation,
-                      onTapCall: logic.isGroupChat ? null : logic.call,
-                      onTapRedPacket: logic.onTapRedPacket,
-                      onTapTransfer: logic.onTapTransfer,
-                      onTapFavorites: logic.onTapFavorites,
-                      isGroupChat: logic.isGroupChat,
-                    )),
-            voiceRecordBar: HoldToRecordButton(
-              expandedPanel: true,
-              enabled: !logic.sendingMuted && !logic.isInvalidGroup,
-              onRecorded: logic.sendRecordedVoice,
-              onConvertToText: logic.convertRecordedVoice,
-            ),
-          ),
-        ],
-      ));
+  Widget _buildComposer() =>
+      Obx(() => logic.isChannelSubscriber && !logic.isInvalidGroup
+          ? ChannelNotificationBar(
+              key: ValueKey(logic.conversationInfo.conversationID),
+              conversation: () => logic.conversationInfo,
+              changes: logic.imLogic.conversationChangedSubject,
+              setMuted: (info, muted) =>
+                  Get.find<ConversationLogic>().setNotDisturb(info, muted),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (logic.preparingMediaCount > 0 ||
+                    logic.failedMediaPreparationCount > 0)
+                  ChatMediaPreparationIndicator(
+                    count: logic.preparingMediaCount,
+                    failedCount: logic.failedMediaPreparationCount,
+                    onRetry: logic.retryMediaPreparation,
+                    stageLabel: logic.mediaPreparationLabel,
+                    onCancel: logic.cancelMediaPreparation,
+                    onRetryOriginal: logic.hasFailedVideoPreparation
+                        ? logic.retryOriginalVideoPreparation
+                        : null,
+                  ),
+                if (logic.quotedMessage.value != null)
+                  ChatComposerContextPreview(
+                    message: logic.quotedMessage.value,
+                    onClose: logic.clearReply,
+                  ),
+                if (logic.pendingForward.draft.value case final draft?)
+                  PendingForwardBar(
+                    key: ObjectKey(draft),
+                    onOpenOptions: logic.reviewPendingForward,
+                    count: draft.messages.length,
+                    sending: logic.pendingForward.sending.value,
+                    onCancel: logic.pendingForward.cancel,
+                  ),
+                ChatInputBox(
+                  pendingSend: logic.pendingForward.draft.value != null,
+                  pendingSending: logic.pendingForward.sending.value,
+                  builtinStickerPanel:
+                      ChatBuiltinStickerPanel(onSend: logic.sendBuiltinSticker),
+                  builtinStickerIcon: Image.asset(
+                    ChatBuiltinStickerCatalog.menuAssetPath,
+                    width: AppTokens.s7,
+                    height: AppTokens.s7,
+                    fit: BoxFit.contain,
+                  ),
+                  stickerPanel: PersonalStickerPanel(
+                    store: logic.personalStickers,
+                    onAdd: logic.addPersonalSticker,
+                    onSend: logic.sendPersonalSticker,
+                    onSendDice: logic.sendDice,
+                  ),
+                  forceCloseToolboxSub: logic.forceCloseToolbox,
+                  controller: logic.inputCtrl,
+                  focusNode: logic.focusNode,
+                  isNotInGroup: logic.isInvalidGroup,
+                  enabled: !logic.sendingMuted &&
+                      !logic.pendingForward.sending.value,
+                  showDisabledWarning: !logic.groupMutePending,
+                  hintText: logic.groupMembershipPending
+                      ? StrRes.synchronizing
+                      : logic.groupMutePending
+                          ? ''
+                          : (logic.isChannelSubscriber
+                              ? 'channelPublishRestricted'.tr
+                              : logic.sendingMuted
+                                  ? StrRes.youMuted
+                                  : null),
+                  directionalText: logic.directionalText(),
+                  onCloseDirectional: logic.onClearDirectional,
+                  onSend: (v) => logic.sendTextMsg(),
+                  onTapVoice: logic.onTapRecord,
+                  toolbox: ListenableBuilder(
+                      listenable: logic.groupFeatures,
+                      builder: (context, _) => ChatToolBox(
+                            extraItems: logic.isGroupChat && !logic.isChannel
+                                ? GroupFeatureActions.items(
+                                    context, logic.groupFeatureContext,
+                                    onLiveStateChanged: () => logic
+                                        .groupFeatures
+                                        .refreshGroup(logic.groupID!))
+                                : const [],
+                            onTapAlbum: logic.onTapAlbum,
+                            onTapFile: logic.onTapFile,
+                            onTapCamera: logic.onTapCamera,
+                            onTapCard: logic.onTapCard,
+                            onTapLocation: logic.onTapLocation,
+                            onTapCall: logic.isGroupChat ? null : logic.call,
+                            onTapRedPacket: logic.onTapRedPacket,
+                            onTapTransfer: logic.onTapTransfer,
+                            onTapFavorites: logic.onTapFavorites,
+                            isGroupChat: logic.isGroupChat,
+                          )),
+                  voiceRecordBar: HoldToRecordButton(
+                    expandedPanel: true,
+                    enabled: !logic.sendingMuted && !logic.isInvalidGroup,
+                    onRecorded: logic.sendRecordedVoice,
+                    onConvertToText: logic.convertRecordedVoice,
+                  ),
+                ),
+              ],
+            ));
 
   Widget _buildMessages() =>
       ChatMessageList(key: _messageListKey, logic: logic);

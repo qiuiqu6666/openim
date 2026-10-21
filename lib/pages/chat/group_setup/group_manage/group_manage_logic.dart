@@ -1,3 +1,4 @@
+import '../../../channels/models/channel_kind.dart';
 import 'package:openim_common/localization.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -46,6 +47,7 @@ class GroupManageLogic extends GetxController {
     busy.value = true;
     try {
       final id = context.groupID;
+      if (muted == false && isChannelEx(groupInfo.value.ex)) return;
       if (muted != null) {
         await OpenIM.iMManager.groupManager
             .changeGroupMute(groupID: id, mute: muted);
@@ -129,11 +131,13 @@ class GroupManageLogic extends GetxController {
 
   void admins() => Get.to(() => GroupMemberPermissionsPage(
       groupID: groupInfo.value.groupID,
+      isChannel: isChannelEx(groupInfo.value.ex),
       owner: groupSetupLogic.isOwner,
       mode: MemberPermissionMode.admins));
 
   void mutedMembers() => Get.to(() => GroupMemberPermissionsPage(
       groupID: groupInfo.value.groupID,
+      isChannel: isChannelEx(groupInfo.value.ex),
       owner: groupSetupLogic.isOwner,
       mode: MemberPermissionMode.muted));
 

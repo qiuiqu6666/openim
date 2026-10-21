@@ -1,3 +1,4 @@
+import 'widgets/contact_action_avatar.dart';
 import 'package:openim_common/localization.dart';
 import 'dart:math' as math;
 
@@ -9,6 +10,7 @@ import 'package:visibility_detector/visibility_detector.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'contacts_logic.dart';
+import '../channels/channel_entry.dart';
 import '../global_search/inline/inline_global_search_surface.dart';
 import 'presence_label.dart';
 import 'presence/contact_presence_policy.dart';
@@ -88,16 +90,18 @@ class ContactsPage extends StatelessWidget {
     final rows = <_DirectoryRow>[
       _DirectoryRow.action(
           chinese ? '新的朋友' : StrRes.newFriend,
-          'assets/images/contact_new_99chat.png',
+          ContactActionArtwork.newFriend,
           logic.newFriend,
           logic.friendApplicationCount),
       _DirectoryRow.action(
           StrRes.newGroupRequest,
-          'assets/images/contact_notice_99chat.png',
+          ContactActionArtwork.groupNotice,
           logic.newGroup,
           logic.groupApplicationCount),
       _DirectoryRow.action(chinese ? '我的群聊' : StrRes.myGroup,
-          'assets/images/contact_groups_99chat.png', logic.myGroup, 0),
+          ContactActionArtwork.myGroups, logic.myGroup, 0),
+      _DirectoryRow.action(chinese ? '频道' : 'Channels',
+          ContactActionArtwork.channel, () => openChannelPages(context), 0),
       for (final friend in starred) _DirectoryRow.friend(friend, starred: true),
       for (final friend in regular) _DirectoryRow.friend(friend),
       _DirectoryRow.footer(),
@@ -152,16 +156,7 @@ class ContactsPage extends StatelessWidget {
   Widget _buildAction(_DirectoryRow row) => _buildRow(
         onTap: row.onTap,
         avatar: Stack(clipBehavior: Clip.none, children: [
-          ClipOval(
-            child: Transform.scale(
-              scale: row.icon!.contains('contact_notice_') ? 1.5 : 1,
-              child: Image.asset(row.icon!,
-                  package: 'openim_common',
-                  width: 44.w,
-                  height: 44.w,
-                  fit: BoxFit.cover),
-            ),
-          ),
+          ContactActionAvatar(artwork: row.icon!, size: 44.w),
           if (row.count > 0)
             Positioned(
               top: -3.h,
@@ -317,7 +312,7 @@ class _DirectoryRow implements ISuspensionBean {
         tag = '~';
 
   final String? label;
-  final String? icon;
+  final ContactActionArtwork? icon;
   final VoidCallback? onTap;
   final int count;
   final ISUserInfo? friend;

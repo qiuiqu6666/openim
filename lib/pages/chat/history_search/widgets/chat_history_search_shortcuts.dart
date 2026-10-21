@@ -10,10 +10,12 @@ class ChatHistorySearchShortcuts extends StatelessWidget {
   const ChatHistorySearchShortcuts({
     super.key,
     required this.isGroup,
+    this.isChannel = false,
     required this.onSelected,
   });
 
   final bool isGroup;
+  final bool isChannel;
   final ValueChanged<ChatHistoryCategory> onSelected;
 
   @override
@@ -34,7 +36,7 @@ class ChatHistorySearchShortcuts extends StatelessWidget {
           Icons.calendar_today_outlined,
           chatHistorySearchText(context, 'date'),
         ),
-        (
+        if (!isChannel) (
           ChatHistoryCategory.sender,
           Icons.person_outline,
           chatHistorySearchText(context, 'groupMembers'),

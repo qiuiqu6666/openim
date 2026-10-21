@@ -14,6 +14,7 @@ class ChatHistorySearchPage extends StatelessWidget {
     this.initialQuery = '',
     this.filesOnly = false,
     this.isGroup = false,
+    this.isChannel = false,
     this.source,
     this.senderSource,
     this.messageNavigation,
@@ -23,6 +24,7 @@ class ChatHistorySearchPage extends StatelessWidget {
   final String initialQuery;
   final bool filesOnly;
   final bool isGroup;
+  final bool isChannel;
   final ChatHistorySearchSource? source;
   final ChatHistorySenderSource? senderSource;
   final ChatHistoryMessageNavigation? messageNavigation;
@@ -32,7 +34,7 @@ class ChatHistorySearchPage extends StatelessWidget {
         conversationID: conversationID,
         category: filesOnly ? ChatHistoryCategory.file : null,
         initialQuery: initialQuery,
-        isGroup: isGroup,
+        isGroup: isGroup, isChannel: isChannel,
         source: source,
         senderSource: senderSource,
         messageNavigation: messageNavigation,

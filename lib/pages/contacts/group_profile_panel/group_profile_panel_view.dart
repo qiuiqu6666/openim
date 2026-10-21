@@ -1,3 +1,5 @@
+import '../../channels/models/channel_kind.dart';
+import '../../channels/presentation/channel_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -5,9 +7,10 @@ import 'package:openim_common/openim_common.dart';
 import 'group_profile_panel_logic.dart';
 
 class GroupProfilePanelPage extends StatelessWidget {
-  final logic = Get.find<GroupProfilePanelLogic>();
+  final GroupProfilePanelLogic logic;
 
-  GroupProfilePanelPage({super.key});
+  GroupProfilePanelPage({super.key, GroupProfilePanelLogic? logic})
+      : logic = logic ?? Get.find<GroupProfilePanelLogic>();
 
   static Color get _muted => Styles.c_8E9AB0;
   static Color get _card => Styles.c_F4F5F7;
@@ -26,6 +29,7 @@ class GroupProfilePanelPage extends StatelessWidget {
         ),
         body: Obx(() {
           final group = logic.groupInfo.value;
+          final channel = isChannelEx(group.ex);
           return SafeArea(
             top: false,
             child: Column(
@@ -59,7 +63,7 @@ class GroupProfilePanelPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '共${group.memberCount ?? logic.members.length}人',
+                        channel ? 'channelSubscriberCountLabel'.trArgs(['${group.memberCount ?? logic.members.length}']) : '共${group.memberCount ?? logic.members.length}人',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 16, color: _muted),
                       ),
@@ -76,8 +80,8 @@ class GroupProfilePanelPage extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('群UID',
-                                      style: TextStyle(
+                                  Text(channel ? channelText(context, '频道ID', 'Channel ID') : '群UID',
+                                      style: const TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600)),
                                   const SizedBox(height: 4),
@@ -101,7 +105,7 @@ class GroupProfilePanelPage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      Text('groupAnnouncement'.tr,
+                      Text(channel ? channelText(context, '频道公告', 'Channel announcement') : 'groupAnnouncement'.tr,
                           style: const TextStyle(
                               fontSize: 17, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 10),
@@ -115,7 +119,7 @@ class GroupProfilePanelPage extends StatelessWidget {
                         child: Text(
                           group.notification?.isNotEmpty == true
                               ? group.notification!
-                              : 'groupNoAnnouncement'.tr,
+                              : channel ? channelText(context, '暂无频道公告', 'No channel announcement') : 'groupNoAnnouncement'.tr,
                           style: TextStyle(fontSize: 15, color: _muted),
                         ),
                       ),
@@ -126,8 +130,8 @@ class GroupProfilePanelPage extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                   child: Button(
                     text: logic.isJoined.value
-                        ? StrRes.enterGroup
-                        : StrRes.applyJoin,
+                        ? (channel ? channelText(context, '进入频道', 'Enter channel') : StrRes.enterGroup)
+                        : (channel ? channelText(context, '订阅频道', 'Subscribe to channel') : StrRes.applyJoin),
                     onTap: logic.enterGroup,
                   ),
                 ),

@@ -1,3 +1,5 @@
+import '../../../channels/models/channel_kind.dart';
+import '../../../channels/presentation/channel_labels.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -19,18 +21,20 @@ class GroupMemberListPage extends StatelessWidget {
             Get.find<GroupMemberListLogic>(
                 tag: (Get.arguments['opType'] as GroupMemberOpType).name);
 
+  String _label(String text) => channelLabel(text, channel: isChannelEx(logic.groupInfo.ex));
+
   @override
   Widget build(BuildContext context) {
     return Obx(() {
       final members = logic.visibleMembers;
       return Scaffold(
         appBar: TitleBar.back(
-          title: logic.opType == GroupMemberOpType.del
+          title: _label(logic.opType == GroupMemberOpType.del
               ? StrRes.removeGroupMember
               : logic.groupInfo.memberCount == null
                   ? StrRes.groupMember
                   : 'groupMemberPageTitle'
-                      .trParams({'count': '${logic.groupInfo.memberCount}'}),
+                      .trParams({'count': '${logic.groupInfo.memberCount}'})),
           backIconColor: Styles.c_0089FF,
           right: SizedBox(width: 24.w),
         ),
@@ -45,7 +49,7 @@ class GroupMemberListPage extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10.r),
                         child: SearchBox(
                           height: 40.h,
-                          hintText: 'groupMemberSearchHint'.tr,
+                          hintText: _label('groupMemberSearchHint'.tr),
                           backgroundColor: Styles.c_F0F2F6,
                           enabled: true,
                           controller: logic.searchController,
@@ -220,7 +224,7 @@ class GroupMemberListPage extends StatelessWidget {
                     ),
                     child: Text(
                         membersInfo.roleLevel == GroupRoleLevel.owner
-                            ? StrRes.groupOwner
+                            ? _label(StrRes.groupOwner)
                             : StrRes.groupAdmin,
                         style: Styles.ts_0089FF_12sp.copyWith(
                             color: membersInfo.roleLevel == GroupRoleLevel.owner

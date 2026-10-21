@@ -5,6 +5,7 @@ import 'package:openim_common/openim_common.dart';
 import 'group_qrcode_content.dart';
 import 'group_qrcode_logic.dart';
 import 'group_qrcode_tokens.dart';
+import '../../../channels/models/channel_kind.dart';
 
 class GroupQrcodePage extends StatelessWidget {
   final logic = Get.find<GroupQrcodeLogic>();
@@ -15,10 +16,11 @@ class GroupQrcodePage extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Obx(() {
       final group = logic.groupSetupLogic.groupInfo.value;
+      final channel = isChannelEx(group.ex);
       return Scaffold(
         appBar: GlassAppBar(
           centerTitle: true,
-          title: Text(StrRes.groupQrcode,
+          title: Text(channel ? 'channelQrcode'.tr : StrRes.groupQrcode,
               style: TextStyle(
                   color: AppTokens.textPrimary(dark: dark),
                   fontSize: GroupQrcodeTokens.titleSize,
@@ -34,6 +36,7 @@ class GroupQrcodePage extends StatelessWidget {
         body: SafeArea(
             top: false,
             child: GroupQrcodeContent(
+              isChannel: channel,
               groupName: group.groupName ?? '',
               groupId: logic.displayGroupId,
               faceUrl: group.faceURL,

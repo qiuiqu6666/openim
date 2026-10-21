@@ -109,7 +109,9 @@ class ChatMessageTile extends StatelessWidget {
         textContentBuilder: textContentBuilder,
         rightNickname: logic.senderName,
         rightFaceUrl: OpenIM.iMManager.userInfo.faceURL,
-        showLeftNickname: !logic.isSingleChat,
+        alignLeft: logic.isChannel,
+        showAvatar: !logic.isChannel,
+        showLeftNickname: !logic.isSingleChat && !logic.isChannel,
         showRightNickname: false,
         onFailedToResend: logic.isOfficialNotificationChat
             ? null
@@ -156,7 +158,7 @@ class ChatMessageTile extends StatelessWidget {
                     IMUtils.parseMsg(message),
               ),
             ),
-          if (logic.canForward(message))
+          if (logic.canForward(message) && !logic.isChannelSubscriber)
             PopMenuInfo(
               id: 'replyMessage',
               text: StrRes.menuReply,

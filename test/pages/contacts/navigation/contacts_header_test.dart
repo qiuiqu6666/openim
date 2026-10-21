@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../channels/support/channel_contacts_fixture.dart';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -8,6 +9,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim/core/im_callback.dart';
 import 'package:openim/pages/contacts/navigation/contacts_header.dart';
@@ -96,7 +98,7 @@ void main() {
     await h.openMenu(tester);
     expect(_menuIDs(tester),
         ['searchAdd', 'createGroup', 'createChannel', 'scanQRCode']);
-    expect(find.text('Coming soon'), findsOneWidget);
+    expect(find.text('Create a channel'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -182,20 +184,30 @@ void main() {
     });
   }
 
-  testWidgets('unavailable channel is disabled and does not navigate',
-      (tester) async {
+  testWidgets('channel preview opens the creation form', (tester) async {
+    registerChannelContactsFixture();
     final h = _HeaderHost();
     await h.mount(tester);
+    ScreenUtil.init(tester.element(find.byType(ContactsHeader)),
+        designSize: const Size(390, 844));
     await h.openMenu(tester);
     final channel = find.ancestor(
         of: _tile('createChannel'),
         matching: find.byType(PopupMenuItem<String>));
-    expect(tester.widget<PopupMenuItem<String>>(channel).enabled, isFalse);
+    expect(tester.widget<PopupMenuItem<String>>(channel).enabled, isTrue);
     await tester.tap(_tile('createChannel'));
     await tester.pumpAndSettle();
     expect(h.calls, isEmpty);
-    expect(find.byType(HomeQuickActionTile), findsNWidgets(4));
-    await h.dismissMenu(tester);
+    expect(find.byType(HomeQuickActionTile), findsNothing);
+    expect(find.text('什么是频道？', findRichText: true), findsOneWidget);
+    await tester.tap(find.text('创建频道').last);
+    await tester.pumpAndSettle();
+    expect(find.text('选择联系人'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('group-picker-channel-friend')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('下一步').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('channel-name')), findsOneWidget);
     expect(h.calls, isEmpty);
     expect(tester.takeException(), isNull);
   });

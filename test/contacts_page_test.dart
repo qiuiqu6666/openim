@@ -1,3 +1,4 @@
+import 'package:openim/pages/contacts/widgets/contact_action_avatar.dart';
 import 'dart:io';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'dart:ui' as ui;
@@ -102,6 +103,8 @@ void main() {
     expect(find.text('新的朋友'), findsOneWidget);
     expect(find.text('群通知'), findsOneWidget);
     expect(find.text('我的群聊'), findsOneWidget);
+    expect(tester.widgetList<ContactActionAvatar>(find.byType(ContactActionAvatar))
+        .map((widget) => widget.artwork), ContactActionArtwork.values);
     expect(find.byType(AzListView), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('contacts-search-button')));
     await tester.pumpAndSettle();
@@ -135,16 +138,8 @@ void main() {
     expect(tester.takeException(), isNull);
     const output = String.fromEnvironment('CONTACTS_LAYOUT_PREVIEW');
     if (output.isNotEmpty) {
-      for (final name in [
-        'contact_new_99chat.png',
-        'contact_notice_99chat.png',
-        'contact_groups_99chat.png',
-      ]) {
-        await tester.runAsync(() => precacheImage(
-              AssetImage('assets/images/$name', package: 'openim_common'),
-              previewKey.currentContext!,
-            ));
-      }
+      await tester.runAsync(() => precacheImage(
+        const AssetImage(ContactActionAvatar.asset), previewKey.currentContext!));
       await tester.pumpAndSettle();
       final boundary = previewKey.currentContext!.findRenderObject()
           as RenderRepaintBoundary;

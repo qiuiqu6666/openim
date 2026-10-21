@@ -35,8 +35,7 @@ class FundPacketDetail extends StatelessWidget {
       required this.formatTime,
       required this.inlineErrors,
       required this.footer,
-      required this.onRefresh,
-      required this.onShowCover});
+      required this.onRefresh});
   final FundOrder order;
   final String userID, statusText, greeting;
   final FundAmount? claimedAmount;
@@ -49,7 +48,6 @@ class FundPacketDetail extends StatelessWidget {
   final String Function(DateTime time) formatTime;
   final Widget inlineErrors, footer;
   final Future<void> Function() onRefresh;
-  final VoidCallback? onShowCover;
   @override
   Widget build(BuildContext context) {
     final cs = FundPageColors.of(context);
@@ -246,13 +244,6 @@ class FundPacketDetail extends StatelessWidget {
                                         color: cs.line),
                                 ]),
                             childCount: claims.length)),
-                  if (order.requiresClaim && amount == null)
-                    SliverToBoxAdapter(
-                        child: TextButton(
-                            key: const ValueKey('fund-detail-back-cover'),
-                            onPressed: onShowCover,
-                            child: Text(text(AppCopy.text('返回红包封面'),
-                                'Back to red packet')))),
                   const SliverToBoxAdapter(
                       child: SizedBox(height: AppTokens.s7)),
                 ]),

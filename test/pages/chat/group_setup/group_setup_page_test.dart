@@ -17,6 +17,20 @@ class _FakeGroupSetupLogic implements GroupSetupLogic {
   final bool manager;
   int avatarChanges = 0;
   int nameEdits = 0;
+  int searches = 0;
+  int invites = 0;
+  int removals = 0;
+  @override
+  Future<void> removeMember() async {
+    removals++;
+  }
+  @override
+  void searchHistory() => searches++;
+  @override
+  Future<void> addMember() async {
+    invites++;
+  }
+
   @override
   bool get isClosed => false;
   @override
@@ -66,6 +80,52 @@ class _FakeGroupSetupLogic implements GroupSetupLogic {
 }
 
 void main() {
+  for (final manager in [false, true]) {
+    testWidgets(
+        'channel profile uses reference layout and real actions ($manager)',
+        (tester) async {
+      tester.view.physicalSize = const Size(375, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final logic = _FakeGroupSetupLogic(manager: manager);
+      logic.groupInfo.value.ex = '{"conversationKind":"channel"}';
+      logic.membership.accept();
+      addTearDown(logic.membership.dispose);
+      await tester.pumpWidget(ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (_, __) => GetMaterialApp(
+              translations: TranslationService(),
+              locale: const Locale('zh', 'CN'),
+              supportedLocales: const [Locale('zh', 'CN')],
+              localizationsDelegates: GlobalMaterialLocalizations.delegates,
+              home: GroupSetupPage(logic: logic))));
+      await tester.pumpAndSettle();
+      expect(find.text('3位订阅者'), findsOneWidget);
+      expect(find.text('频道别名'), findsOneWidget);
+      expect(find.text('群成员'), findsNothing);
+      expect(find.text('群公告'), findsNothing);
+      expect(find.text('频道设置'), manager ? findsOneWidget : findsNothing);
+      expect(find.text('移除订阅者'), manager ? findsOneWidget : findsNothing);
+      await tester.tap(find.text('搜索'));
+      expect(logic.searches, 1);
+      if (manager) {
+        await tester.tap(find.text('添加订阅者'));
+        expect(logic.invites, 1);
+        await tester.tap(find.text('移除订阅者'));
+        expect(logic.removals, 1);
+        logic.isJoinedGroup.value = false;
+        await tester.pumpAndSettle();
+        expect(find.text('移除订阅者'), findsNothing);
+        expect(find.text('频道设置'), findsNothing);
+        logic.isJoinedGroup.value = true;
+        logic.membership.failed.value = true;
+        await tester.pumpAndSettle();
+        expect(find.text('移除订阅者'), findsNothing);
+        expect(find.text('频道设置'), findsNothing);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final manager in [false, true]) {
     testWidgets('group header avatar respects edit permission ($manager)',
         (tester) async {
@@ -167,9 +227,10 @@ void main() {
     expect(find.text('消息免打扰'), findsOneWidget);
     expect(find.text('置顶聊天'), findsOneWidget);
     final chevrons = find.byIcon(Icons.chevron_right_rounded);
-    expect(chevrons, findsNWidgets(5));
+    // A non-manager has four navigable rows; profile editing is unavailable.
+    expect(chevrons, findsNWidgets(4));
     final arrowPositions =
-        List.generate(5, (index) => tester.getTopLeft(chevrons.at(index)).dx);
+        List.generate(4, (index) => tester.getTopLeft(chevrons.at(index)).dx);
     expect(arrowPositions.every((x) => x > 260), isTrue);
     expect(
         arrowPositions.reduce((a, b) => a > b ? a : b) -

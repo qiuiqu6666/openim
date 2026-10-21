@@ -1,6 +1,7 @@
 import 'package:openim_common/localization.dart';
 import 'index/group_indexed_list.dart';
 import 'package:flutter/material.dart';
+import '../../channels/models/channel_kind.dart';
 import '../../group_features/identity/group_name_label.dart';
 import '../../group_features/widgets/group_live_avatar.dart';
 import '../../group_features/models/group_features.dart';
@@ -20,6 +21,7 @@ class GroupListPage extends StatelessWidget {
   final Set<String>? allowedGroupIDs;
   final String? title;
   final String? disabledReason;
+  final bool channelsOnly;
 
   GroupListPage(
       {super.key,
@@ -27,6 +29,7 @@ class GroupListPage extends StatelessWidget {
       this.onSelected,
       this.allowedGroupIDs,
       this.title,
+      this.channelsOnly = false,
       this.disabledReason})
       : logic = logic ?? Get.find<GroupListLogic>();
 
@@ -84,7 +87,9 @@ class GroupListPage extends StatelessWidget {
 
   Widget _buildSearchResults(BuildContext context) {
     final search = logic.search;
-    final groups = search.results.toList(growable: false);
+    final groups = search.results
+        .where((group) => isChannelEx(group.ex) == channelsOnly)
+        .toList(growable: false);
     if (search.loading.value || search.failed.value || groups.isEmpty) {
       return contactListPlaceholder(
         context,
@@ -92,10 +97,11 @@ class GroupListPage extends StatelessWidget {
         loading: search.loading.value,
         failed: search.failed.value,
         onRetry: search.run,
-        footer: const GroupCountFooter(count: 0),
+        footer: GroupCountFooter(count: 0, channels: channelsOnly),
       );
     }
     return _buildList(
+      context,
       groups,
       key: ValueKey('group-search-${search.query.value}'),
       showCount: true,
@@ -105,7 +111,7 @@ class GroupListPage extends StatelessWidget {
   Widget _buildDirectory(BuildContext context) {
     final groups = <String, GroupInfo>{
       for (final group in [...logic.iCreatedList, ...logic.iJoinedList])
-        group.groupID: group,
+        if (isChannelEx(group.ex) == channelsOnly) group.groupID: group,
     }.values.toList(growable: false);
     final loading = logic.loading[true]! || logic.loading[false]!;
     final failed = logic.loadFailed[true]! || logic.loadFailed[false]!;
@@ -117,12 +123,16 @@ class GroupListPage extends StatelessWidget {
       },
       child: groups.isEmpty
           ? contactListPlaceholder(context,
-              title: chinese ? AppCopy.text('暂无群聊') : 'No groups yet',
+              title: channelsOnly
+                  ? (chinese ? AppCopy.text('暂无频道') : 'No channels yet')
+                  : chinese
+                      ? AppCopy.text('暂无群聊')
+                      : 'No groups yet',
               loading: loading,
               failed: failed, onRetry: () async {
               await Future.wait(
                   [logic.iCreatedInitial(), logic.iJoinedInitial()]);
-            }, footer: const GroupCountFooter(count: 0))
+            }, footer: GroupCountFooter(count: 0, channels: channelsOnly))
           : Column(children: [
               if (loading) const LinearProgressIndicator(),
               if (failed)
@@ -136,21 +146,25 @@ class GroupListPage extends StatelessWidget {
                       : 'Loading failed. Retry'),
                 ),
               Expanded(
-                  child: _buildList(groups, showCount: !loading && !failed)),
+                  child: _buildList(context, groups,
+                      showCount: !loading && !failed)),
             ]),
     );
   }
 
-  Widget _buildList(List<GroupInfo> groups,
+  Widget _buildList(BuildContext context, List<GroupInfo> groups,
           {Key? key, required bool showCount}) =>
       GroupIndexedList(
         key: key,
         groups: groups,
-        footer: showCount ? GroupCountFooter(count: groups.length) : null,
-        itemBuilder: (info) => _buildItemView(info, showDivider: true),
+        footer: showCount
+            ? GroupCountFooter(count: groups.length, channels: channelsOnly)
+            : null,
+        itemBuilder: (info) => _buildItemView(context, info, showDivider: true),
       );
 
-  Widget _buildItemView(GroupInfo info, {required bool showDivider}) =>
+  Widget _buildItemView(BuildContext context, GroupInfo info,
+          {required bool showDivider}) =>
       Material(
         color: Styles.c_FFFFFF,
         child: Column(children: [
@@ -194,8 +208,12 @@ class GroupListPage extends StatelessWidget {
                         !allowedGroupIDs!.contains(info.groupID) &&
                         disabledReason != null
                     ? disabledReason!
-                    : 'profileCommonGroupsMembers'
-                        .trParams({'count': '${info.memberCount ?? 0}'}),
+                    : channelsOnly
+                        ? (Localizations.localeOf(context).languageCode == 'zh'
+                            ? '${info.memberCount ?? 0} 位订阅者'
+                            : '${info.memberCount ?? 0} subscribers')
+                        : 'profileCommonGroupsMembers'
+                            .trParams({'count': '${info.memberCount ?? 0}'}),
                 style: Styles.ts_8E9AB0_14sp),
             trailing: Icon(Icons.chevron_right, color: Styles.c_8E9AB0),
             onTap: () => onSelected == null

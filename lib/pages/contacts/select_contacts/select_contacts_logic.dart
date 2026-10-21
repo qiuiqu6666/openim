@@ -48,6 +48,15 @@ class SelectContactsLogic extends GetxController
     openSelectedSheet = false;
   }
 
+  /// Route-owned multi-selection used by embedded creation flows.
+  SelectContactsLogic.groupPicker({required bool Function() isCurrent})
+      : _onPicked = null,
+        _selectionCurrent = isCurrent,
+        _recentDirectory = RecentConversationDirectory.sdk() {
+    action = SelAction.crateGroup;
+    openSelectedSheet = false;
+  }
+
   final ValueChanged<Object>? _onPicked;
   final bool Function()? _selectionCurrent;
   bool get isSingleSelection => _onPicked != null;
@@ -125,7 +134,7 @@ class SelectContactsLogic extends GetxController
     // Routes bind after login; constructing an unmounted picker needs no SDK.
     _accountID;
     _sessionToken;
-    if (isSingleSelection) {
+    if (_selectionCurrent != null) {
       super.onInit();
       return;
     }
@@ -160,7 +169,9 @@ class SelectContactsLogic extends GetxController
 
   @override
   void onReady() {
-    unawaited(reloadRecentConversations());
+    if (_selectionCurrent == null || isSingleSelection) {
+      unawaited(reloadRecentConversations());
+    }
     if (openSelectedSheet) viewSelectedContactsList();
     super.onReady();
   }

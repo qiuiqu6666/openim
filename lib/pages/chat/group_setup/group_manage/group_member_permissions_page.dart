@@ -1,3 +1,4 @@
+import '../../../channels/presentation/channel_labels.dart';
 import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
@@ -17,10 +18,12 @@ class GroupMemberPermissionsPage extends StatefulWidget {
       {super.key,
       required this.groupID,
       required this.owner,
+      this.isChannel = false,
       this.mode = MemberPermissionMode.admins});
   final MemberPermissionMode mode;
   final String groupID;
   final bool owner;
+  final bool isChannel;
   @override
   State<GroupMemberPermissionsPage> createState() =>
       _GroupMemberPermissionsPageState();
@@ -55,6 +58,7 @@ class _GroupMemberPermissionsPageState
             builder: (_) => GroupMemberPermissionsPage(
                 groupID: widget.groupID,
                 owner: widget.owner,
+                isChannel: widget.isChannel,
                 mode: mode == MemberPermissionMode.admins
                     ? MemberPermissionMode.addAdmin
                     : MemberPermissionMode.addMuted)));
@@ -321,7 +325,7 @@ class _GroupMemberPermissionsPageState
         if (loading || busy != null)
           LinearProgressIndicator(color: Styles.c_0089FF),
         if (!mutedList)
-          card(StrRes.groupOwner,
+          card(channelLabel(StrRes.groupOwner, channel: widget.isChannel),
               [for (final member in owners) memberRow(member)]),
         card(
             '${mutedList ? AppCopy.text('禁言成员') : AppCopy.text('管理员')} (${admins.length})',
@@ -503,10 +507,10 @@ class _GroupMemberPermissionsPageState
                                     : member.userID ?? '';
                                 final role = member.roleLevel ==
                                         GroupRoleLevel.owner
-                                    ? StrRes.groupOwner
+                                    ? channelLabel(StrRes.groupOwner, channel: widget.isChannel)
                                     : member.roleLevel == GroupRoleLevel.admin
                                         ? 'sdkAdmin'.tr
-                                        : StrRes.groupMember;
+                                        : channelLabel(StrRes.groupMember, channel: widget.isChannel);
                                 if (mode == MemberPermissionMode.addAdmin) {
                                   final selected =
                                       _selected.containsKey(member.userID);

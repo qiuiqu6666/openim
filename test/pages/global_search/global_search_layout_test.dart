@@ -195,6 +195,24 @@ void _expectTopSection(WidgetTester tester, int id, String firstTitle) {
 }
 
 void main() {
+  testWidgets('channels have their own result section and subscriber counts', (tester) async {
+    final source = _Source()
+      ..friendResults = []
+      ..conversationResults = []
+      ..groupResults = [
+        GroupInfo(groupID: 'g', groupName: '普通群'),
+        GroupInfo(groupID: 'c', groupName: '新闻频道', memberCount: 2,
+          ex: '{"conversationKind":"channel"}'),
+      ];
+    await _mount(tester, source);
+    await _search(tester);
+    expect(find.byKey(const ValueKey('global-search-section-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('global-search-section-5')), findsOneWidget);
+    expect(find.text('频道'), findsOneWidget);
+    expect(find.text('新闻频道'), findsOneWidget);
+    expect(find.text('2 位订阅者'), findsOneWidget);
+    expect(find.text('普通群'), findsOneWidget);
+  });
   testWidgets('footer reflects remaining cloud history and completion',
       (tester) async {
     final logic = await _mount(tester, _Source());

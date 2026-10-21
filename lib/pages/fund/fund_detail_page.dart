@@ -275,7 +275,10 @@ class _FundDetailPageState extends State<FundDetailPage>
       setState(() {
         _order = order;
         _loading = false;
-        if (!order.requiresClaim || order.claimedShareFor(userID) != null) {
+        if (!order.requiresClaim ||
+            !order.isOpen ||
+            order.isExpired ||
+            order.claimedShareFor(userID) != null) {
           _showPacketDetails = true;
         }
         if (order.claimedShareFor(userID) != null ||
@@ -809,8 +812,6 @@ class _FundDetailPageState extends State<FundDetailPage>
         onRefresh: () async {
           if (!_loading && !_claiming) await _load();
         },
-        onShowCover:
-            _claiming ? null : () => setState(() => _showPacketDetails = false),
       );
 
   Widget _amountView(FundAmount amount, FundCurrency currency, double fontSize,

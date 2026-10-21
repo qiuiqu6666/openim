@@ -68,6 +68,29 @@ Future<void> scrollTo(WidgetTester tester, Finder target,
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets('channel and ordinary directories separate groups by ex', (tester) async {
+    final fixture = FriendPickerPresenceFixture(action: SelAction.forward);
+    await fixture.open(tester);
+    final logic = Get.put(_Directory([
+      GroupInfo(groupID: 'ordinary', groupName: '普通群', ownerUserID: 'self'),
+      GroupInfo(groupID: 'channel', groupName: '新闻频道', ownerUserID: 'self',
+        memberCount: 9, ex: '{"conversationKind":"channel"}'),
+    ]));
+    fixture.navigator.currentState!.push(MaterialPageRoute<void>(
+      builder: (_) => GroupListPage(logic: logic, channelsOnly: true, title: '频道')));
+    await tester.pumpAndSettle();
+    expect(find.text('新闻频道'), findsOneWidget);
+    expect(find.text('普通群'), findsNothing);
+    expect(find.text('9 位订阅者'), findsOneWidget);
+    expect(find.text('共 1 个频道'), findsOneWidget);
+    fixture.navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    fixture.navigator.currentState!.push(MaterialPageRoute<void>(
+      builder: (_) => GroupListPage(logic: logic)));
+    await tester.pumpAndSettle();
+    expect(find.text('普通群'), findsOneWidget);
+    expect(find.text('新闻频道'), findsNothing);
+  });
   setUpAll(() async {
     if (previewDirectory.isEmpty) return;
     for (final font in {

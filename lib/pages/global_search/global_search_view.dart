@@ -1,3 +1,5 @@
+import '../channels/models/channel_kind.dart';
+import '../channels/presentation/channel_ui.dart';
 import 'package:openim_common/localization.dart';
 import '../chat/history_search/widgets/chat_history_search_bar.dart';
 
@@ -34,7 +36,8 @@ class GlobalSearchPage extends StatelessWidget {
         StrRes.globalSearchContacts,
         StrRes.groupChat,
         'globalSearchConversations'.tr,
-        StrRes.globalSearchChatHistory
+        StrRes.globalSearchChatHistory,
+        'channelsLabel'.tr
       ];
 
   @override
@@ -110,12 +113,13 @@ class GlobalSearchPage extends StatelessWidget {
                             ex: friend.ex,
                           ));
                     }).toList());
+                for (final channel in [false, true]) {
                 section(
-                    2,
-                    logic.groupList
+                    channel ? 5 : 2,
+                    logic.groupList.where((group) => isChannelEx(group.ex) == channel)
                         .map((group) => _row(
                                 group.groupName ?? group.groupID,
-                                groupMessages[group.groupID] == null
+                                channel ? channelText(context, '${group.memberCount ?? 0} 位订阅者', '${group.memberCount ?? 0} subscribers') : groupMessages[group.groupID] == null
                                     ? ''
                                     : conversationLatestMessageText(
                                         groupMessages[group.groupID]!),
@@ -132,6 +136,7 @@ class GlobalSearchPage extends StatelessWidget {
                                     ex: group.ex,
                                     store: logic.source.groupFeatures)))
                         .toList());
+                }
                 section(
                     3,
                     logic.conversations
@@ -416,10 +421,21 @@ class GlobalSearchPage extends StatelessWidget {
       if (item.conversationID == null) return;
       Get.to(() => ChatHistorySearchPage(
           conversationID: item.conversationID!,
+          isChannel: _isChannelConversation(item.conversationID!),
           isGroup: item.conversationType != ConversationType.single,
           initialQuery: logic.query.value,
           filesOnly: files));
     }, sentAt: message?.sendTime);
+  }
+
+  bool _isChannelConversation(String id) {
+    final conversation = logic.source.currentConversations
+        .where((item) => item.conversationID == id).firstOrNull;
+    final groupID = conversation?.groupID;
+    if (groupID == null) return false;
+    final group = logic.groupList.where((item) => item.groupID == groupID).firstOrNull
+        ?? logic.source.groupFeatures?.cachedGroupInfo(groupID);
+    return isChannelEx(group?.ex);
   }
 
   Widget _cloudConversation(CloudKeywordMessage message) {
@@ -433,6 +449,7 @@ class GlobalSearchPage extends StatelessWidget {
         conversation?.isGroupChat ?? message.conversationID.startsWith('sg_'),
         () => Get.to(() => ChatHistorySearchPage(
             conversationID: message.conversationID,
+            isChannel: _isChannelConversation(message.conversationID),
             isGroup: conversation?.isGroupChat ??
                 message.conversationID.startsWith('sg_'),
             initialQuery: logic.query.value)),

@@ -467,7 +467,7 @@ void main() {
     expect(paths.toSet(), hasLength(2));
   });
 
-  test('slow receipt does not block later bubbles and sends stay ordered',
+  test('slow receipt does not block later bubbles and submissions continue',
       () async {
     final firstUpload = Completer<void>();
     deliver = (message) =>
@@ -477,8 +477,8 @@ void main() {
       _Asset('second', Future.value(photo)),
     ];
     final pending = media.onTapAlbum();
-    await _until(() => staged.length == 2 && uploadCalls == 2);
-    expect(sends, hasLength(1));
+    await _until(() => staged.length == 2 && sends.length == 2);
+    expect(sends, hasLength(2));
     expect(media.preparingCount.value, 0);
     expect(paths.toSet(), hasLength(2));
     expect(paths, everyElement(isNot(photo.path)));
@@ -676,4 +676,36 @@ void main() {
     expect(media.preparingCount.value, 0);
     expect(media.pickingAttachment, isFalse);
   });
+  test('cancel pending preparation never sends a late asset', () async {
+    final release = Completer<File?>();
+    selected = [_Asset('cancel-late', release.future)];
+    final pending = media.onTapAlbum();
+    await _until(() => media.preparingCount.value == 1);
+    media.cancelPreparation();
+    release.complete(photo);
+    await pending;
+    expect(staged, isEmpty);
+    expect(sends, isEmpty);
+    expect(failures, 0);
+    expect(media.failedPreparationCount.value, 0);
+  });
+
+  test('explicit original retry bypasses a failed video encoder', () async {
+    const encoder = MethodChannel('video_compress');
+    var encodes = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(encoder, (_) async { encodes++; return null; });
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(encoder, null));
+    selected = [_VideoAsset(photo, () async => Uint8List.fromList([1,2,3]))];
+    await media.onTapAlbum();
+    expect(media.hasFailedVideos, isTrue);
+    expect(sends, isEmpty);
+    media.retryPreparation(originalVideos: true);
+    await _until(() => sends.isNotEmpty);
+    expect(encodes, 1);
+    expect(sends, hasLength(1));
+    expect(media.failedPreparationCount.value, 0);
+  });
+
 }
