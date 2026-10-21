@@ -1,3 +1,4 @@
+import 'package:openim_common/src/widgets/in_app_browser/in_app_browser_route.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
@@ -165,7 +166,7 @@ void main() {
       home: Builder(
           builder: (context) => Scaffold(
                   body: TextButton(
-                onPressed: () => openInAppBrowser(
+                onPressed: () => _openLegacyBrowser(
                     Uri.parse('https://example.com'),
                     context: context),
                 child: const Text('Open'),
@@ -271,7 +272,7 @@ void main() {
       home: const Scaffold(
           key: ValueKey('underlying-chat'), body: Text('Original page')),
     ));
-    await openInAppBrowser(Uri.parse('https://example.com'));
+    await _openLegacyBrowser(Uri.parse('https://example.com'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     final webController = platform.controllers.single;
@@ -345,7 +346,7 @@ void main() {
         home: const Scaffold(body: Text('Chat')),
       ));
       Future<void> addPage(String host) async {
-        await openInAppBrowser(Uri.parse('https://$host'));
+        await _openLegacyBrowser(Uri.parse('https://$host'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 500));
         platform.delegates.last.finished('https://$host');
@@ -465,7 +466,7 @@ void main() {
       home: const Scaffold(body: Text('Chat')),
     ));
     for (var i = 0; i < 8; i++) {
-      await openInAppBrowser(Uri.parse('https://page$i.example'));
+      await _openLegacyBrowser(Uri.parse('https://page$i.example'));
     }
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
@@ -480,11 +481,9 @@ void main() {
     expect(find.text('page7.example').hitTestable(), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('browser-page-count')));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-        find.text('page0.example'), 100,
+    await tester.scrollUntilVisible(find.text('page0.example'), 100,
         scrollable: find.byType(Scrollable));
-    expect(find.text('page0.example').hitTestable(),
-        findsOneWidget);
+    expect(find.text('page0.example').hitTestable(), findsOneWidget);
     expect(await InAppBrowserHost.active!.handleBack(), isTrue);
     await tester.pumpAndSettle();
     final dock = find.byKey(const ValueKey('browser-dock-surface'));
@@ -515,7 +514,7 @@ void main() {
         builder: (_, child) => InAppBrowserHost(child: child!),
         home: const Scaffold(body: Text('Chat')),
       ));
-      await openInAppBrowser(Uri.parse('https://first.example'));
+      await _openLegacyBrowser(Uri.parse('https://first.example'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       platform.delegates.first.finished('https://first.example');
@@ -526,7 +525,7 @@ void main() {
       first.onEdgeDragStart!();
       if (interruptedByNewPage) {
         first.onEdgeDragUpdate!(30);
-        await openInAppBrowser(Uri.parse('https://second.example'));
+        await _openLegacyBrowser(Uri.parse('https://second.example'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 500));
         platform.delegates.last.finished('https://second.example');
@@ -566,7 +565,7 @@ void main() {
                   child: const Text('Cancel sharing')))));
       return 0;
     };
-    await openInAppBrowser(Uri.parse('https://example.com'));
+    await _openLegacyBrowser(Uri.parse('https://example.com'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     platform.delegates.single.finished('https://example.com');
@@ -628,7 +627,8 @@ void main() {
         return Scaffold(
           key: background,
           body: TextButton(
-            onPressed: () => openInAppBrowser(Uri.parse('https://example.com'),
+            onPressed: () => _openLegacyBrowser(
+                Uri.parse('https://example.com'),
                 context: context),
             child: const Text('Open'),
           ),
@@ -856,8 +856,8 @@ void main() {
     expect(platform.controllers, isEmpty);
     expect(find.text('Embedded web pages are not supported on this platform.'),
         findsOneWidget);
-    expect(await openInAppBrowser(Uri.parse('file:///test')), isFalse);
-    expect(await openInAppBrowser(Uri.parse('https://user:pass@example.com')),
+    expect(await _openLegacyBrowser(Uri.parse('file:///test')), isFalse);
+    expect(await _openLegacyBrowser(Uri.parse('https://user:pass@example.com')),
         isFalse);
     debugDefaultTargetPlatformOverride = null;
   });
@@ -886,4 +886,24 @@ void main() {
     await tester.pumpAndSettle();
     debugDefaultTargetPlatformOverride = null;
   });
+}
+
+// Direct coverage for the retained legacy widgets, no longer the public entry.
+Future<bool> _openLegacyBrowser(Uri uri, {BuildContext? context}) async {
+  if (!isInAppBrowserUri(uri)) return false;
+  final browserHost = InAppBrowserHost.active;
+  if (browserHost != null) {
+    browserHost.open(uri);
+    return true;
+  }
+  final navigator = context != null
+      ? Navigator.of(context, rootNavigator: true)
+      : Get.key.currentState;
+  if (navigator == null) return false;
+  final host = context ?? navigator.context;
+  navigator.push<void>(InAppBrowserRoute(
+      uri: uri,
+      scrim: Theme.of(host).colorScheme.scrim,
+      reduced: MediaQuery.disableAnimationsOf(host)));
+  return true;
 }

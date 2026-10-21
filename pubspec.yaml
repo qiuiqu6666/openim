@@ -159,6 +159,7 @@ dependency_overrides:
     path: local_plugin/uri_to_file
 
 dev_dependencies:
+  url_launcher_platform_interface: ^2.3.2
   # Allocate native events for the MPV callback lifecycle regression test.
   ffi: ^2.1.4
   integration_test:

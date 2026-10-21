@@ -1,30 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'in_app_browser_route.dart';
-import 'in_app_browser_host.dart';
+import 'package:url_launcher/url_launcher.dart';
 export 'in_app_browser_host.dart';
 export 'in_app_browser_page.dart';
 export 'in_app_browser_share.dart';
 
-/// Opens a web link on the app's navigator without invoking another application.
+/// Uses system-owned browser chrome; does not create an app-managed WebView.
 Future<bool> openInAppBrowser(Uri uri, {BuildContext? context}) async {
-  if (!isInAppBrowserUri(uri)) return false;
-  final browserHost = InAppBrowserHost.active;
-  if (browserHost != null) {
-    browserHost.open(uri);
-    return true;
+  return await openSystemBrowser(uri) == SystemBrowserOpenResult.opened;
+}
+
+enum SystemBrowserOpenResult { opened, invalidLink, unavailable, failed }
+
+/// Preserve the failure reason so a missing browser is not blamed on the link.
+Future<SystemBrowserOpenResult> openSystemBrowser(Uri uri) async {
+  if (!isInAppBrowserUri(uri)) return SystemBrowserOpenResult.invalidLink;
+  try {
+    // Avoid the launcher's fallback to a custom WebView or an external browser.
+    if (!await supportsLaunchMode(LaunchMode.inAppBrowserView)) {
+      return SystemBrowserOpenResult.unavailable;
+    }
+    return await launchUrl(uri, mode: LaunchMode.inAppBrowserView)
+        ? SystemBrowserOpenResult.opened
+        : SystemBrowserOpenResult.failed;
+  } catch (_) {
+    return SystemBrowserOpenResult.failed;
   }
-  final navigator = context != null
-      ? Navigator.of(context, rootNavigator: true)
-      : Get.key.currentState;
-  if (navigator == null) return false;
-  final host = context ?? navigator.context;
-  navigator.push<void>(InAppBrowserRoute(
-    uri: uri,
-    scrim: Theme.of(host).colorScheme.scrim,
-    reduced: MediaQuery.disableAnimationsOf(host),
-  ));
-  return true;
 }
 
 bool isInAppBrowserUri(Uri uri) =>
