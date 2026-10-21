@@ -188,6 +188,26 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('drag follows finger and selects only on release',
+      (tester) async {
+    final selected = <int>[];
+    await pumpNavigation(tester, onSelected: selected.add);
+    final track = find.byKey(const ValueKey('home-nav-drag-track'));
+    final rect = tester.getRect(track);
+    final gesture = await tester
+        .startGesture(Offset(rect.left + rect.width / 10, rect.center.dy));
+    await gesture.moveTo(Offset(rect.left + rect.width * .7, rect.center.dy));
+    await tester.pump();
+    expect(selected, isEmpty);
+    expect(
+        tester.getCenter(find.byKey(const ValueKey('home-nav-selection'))).dx,
+        closeTo(rect.left + rect.width * .7, 2));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(selected, [3]);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('bottom surface meets safe area without extra gap',
       (tester) async {
     for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
@@ -394,7 +414,8 @@ void main() {
     }
   });
 
-  testWidgets('phone/tablet sizes, large text and reduced motion do not overflow',
+  testWidgets(
+      'phone/tablet sizes, large text and reduced motion do not overflow',
       (tester) async {
     for (final size in [
       const Size(320, 568),
@@ -403,8 +424,7 @@ void main() {
       const Size(768, 1024),
       const Size(1024, 768),
     ]) {
-      await pumpNavigation(tester,
-          size: size, scale: 3, reducedMotion: true);
+      await pumpNavigation(tester, size: size, scale: 3, reducedMotion: true);
       expect(tester.takeException(), isNull);
       expect(tester.getRect(_bottomSurface()).height, 64);
       for (final widget in tester.widgetList<AnimatedContainer>(find.descendant(

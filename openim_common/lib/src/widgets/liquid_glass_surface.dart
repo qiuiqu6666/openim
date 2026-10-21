@@ -117,6 +117,7 @@ class LiquidGlassSurface extends StatelessWidget {
     this.tint,
     this.opacity,
     this.preferLiquid = false,
+    this.refractive = false,
     this.surface = NavigationGlassSurface.top,
   }) : assert(opacity == null || (opacity >= 0 && opacity <= 1));
 
@@ -125,6 +126,9 @@ class LiquidGlassSurface extends StatelessWidget {
   final Color? tint;
   final double? opacity;
   final bool preferLiquid;
+
+  /// Full background refraction for fixed navigation surfaces on supported GPUs.
+  final bool refractive;
   final NavigationGlassSurface surface;
 
   @override
@@ -165,7 +169,9 @@ class LiquidGlassSurface extends StatelessWidget {
         data: CupertinoTheme.of(context).copyWith(brightness: theme.brightness),
         child: glass.GlassContainer(
           useOwnLayer: true,
-          quality: NavigationGlassTokens.quality,
+          quality: refractive
+              ? glass.GlassQuality.premium
+              : NavigationGlassTokens.quality,
           settings: NavigationGlassTokens.settings(context,
               tint: tint, opacity: opacity, surface: surface),
           shape: glass.LiquidRoundedRectangle(

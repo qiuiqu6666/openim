@@ -24,6 +24,8 @@ class GlassBottomNavBar extends StatefulWidget {
 }
 
 class _GlassBottomNavBarState extends State<GlassBottomNavBar> {
+  double? _dragSlot;
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +58,7 @@ class _GlassBottomNavBarState extends State<GlassBottomNavBar> {
                 borderRadius: corners,
                 opacity: HomeNavigationTokens.opacity(context),
                 preferLiquid: true,
+                refractive: true,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                       borderRadius: corners,
@@ -66,71 +69,105 @@ class _GlassBottomNavBarState extends State<GlassBottomNavBar> {
                     child: LayoutBuilder(builder: (context, constraints) {
                       final slotWidth =
                           constraints.maxWidth / config.items.length;
-                      return Stack(children: [
-                        AnimatedPositionedDirectional(
-                          duration: MediaQuery.disableAnimationsOf(context)
-                              ? Duration.zero
-                              : NavigationGlassTokens.duration,
-                          curve: Curves.easeInOutCubic,
-                          start: slotWidth * config.selectedIndex +
-                              HomeNavigationTokens.selectionInset,
-                          top: HomeNavigationTokens.selectionInset,
-                          bottom: HomeNavigationTokens.selectionInset,
-                          width: slotWidth -
-                              HomeNavigationTokens.selectionInset * 2,
-                          child: IgnorePointer(
-                              child: DecoratedBox(
-                            key: const ValueKey('home-nav-selection'),
-                            decoration: BoxDecoration(
-                                color: HomeNavigationTokens.selection(context),
-                                borderRadius: corners,
-                                border: Border.all(
-                                    color: HomeNavigationTokens.edge(context))),
-                          )),
-                        ),
-                        Positioned.fill(
-                            child: MediaQuery.removePadding(
-                          context: context,
-                          removeBottom: true,
-                          child: Theme(
-                            data: Theme.of(context).copyWith(
-                              splashFactory: NoSplash.splashFactory,
-                              highlightColor: Colors.transparent,
-                              splashColor: Colors.transparent,
-                              hoverColor: Colors.transparent,
+                      void track(Offset position) {
+                        final x =
+                            Directionality.of(context) == TextDirection.rtl
+                                ? constraints.maxWidth - position.dx
+                                : position.dx;
+                        setState(() => _dragSlot = (x / slotWidth - .5)
+                            .clamp(0.0, config.items.length - 1.0));
+                      }
+
+                      return GestureDetector(
+                          key: const ValueKey('home-nav-drag-track'),
+                          behavior: HitTestBehavior.opaque,
+                          onHorizontalDragStart: (details) =>
+                              track(details.localPosition),
+                          onHorizontalDragUpdate: (details) =>
+                              track(details.localPosition),
+                          onHorizontalDragCancel: () =>
+                              setState(() => _dragSlot = null),
+                          onHorizontalDragEnd: (_) {
+                            final target = _dragSlot?.round();
+                            setState(() => _dragSlot = null);
+                            if (target != null &&
+                                target != config.selectedIndex) {
+                              (widget.onItemSelected ??
+                                  config.onItemSelected)(target);
+                            }
+                          },
+                          child: Stack(children: [
+                            AnimatedPositionedDirectional(
+                              duration: _dragSlot != null ||
+                                      MediaQuery.disableAnimationsOf(context)
+                                  ? Duration.zero
+                                  : NavigationGlassTokens.duration,
+                              curve: Curves.easeInOutCubic,
+                              start: slotWidth *
+                                      (_dragSlot ??
+                                          config.selectedIndex.toDouble()) +
+                                  HomeNavigationTokens.selectionInset,
+                              top: HomeNavigationTokens.selectionInset,
+                              bottom: HomeNavigationTokens.selectionInset,
+                              width: slotWidth -
+                                  HomeNavigationTokens.selectionInset * 2,
+                              child: IgnorePointer(
+                                  child: DecoratedBox(
+                                key: const ValueKey('home-nav-selection'),
+                                decoration: BoxDecoration(
+                                    color:
+                                        HomeNavigationTokens.selection(context),
+                                    borderRadius: corners,
+                                    border: Border.all(
+                                        color: HomeNavigationTokens.edge(
+                                            context))),
+                              )),
                             ),
-                            child: BottomNavigationBar(
-                              items: [
-                                for (var index = 0;
-                                    index < config.items.length;
-                                    index++)
-                                  BottomNavigationBarItem(
-                                    // The fixed icon lane contains compact unread
-                                    // pills; keep their digits inside the pill.
-                                    icon: MediaQuery.withClampedTextScaling(
-                                      maxScaleFactor: 1,
-                                      child: config.selectedIndex == index
-                                          ? config.items[index].icon
-                                          : config.items[index].inactiveIcon,
-                                    ),
-                                    label: config.items[index].title ?? '',
-                                  ),
-                              ],
-                              currentIndex: config.selectedIndex,
-                              type: BottomNavigationBarType.fixed,
-                              selectedFontSize: HomeNavigationTokens.labelSize,
-                              unselectedFontSize:
-                                  HomeNavigationTokens.labelSize,
-                              selectedItemColor: AppTokens.accent,
-                              unselectedItemColor: inactive,
-                              backgroundColor: Colors.transparent,
-                              elevation: 0,
-                              onTap: widget.onItemSelected ??
-                                  config.onItemSelected,
-                            ),
-                          ),
-                        )),
-                      ]);
+                            Positioned.fill(
+                                child: MediaQuery.removePadding(
+                              context: context,
+                              removeBottom: true,
+                              child: Theme(
+                                data: Theme.of(context).copyWith(
+                                  splashFactory: NoSplash.splashFactory,
+                                  highlightColor: Colors.transparent,
+                                  splashColor: Colors.transparent,
+                                  hoverColor: Colors.transparent,
+                                ),
+                                child: BottomNavigationBar(
+                                  items: [
+                                    for (var index = 0;
+                                        index < config.items.length;
+                                        index++)
+                                      BottomNavigationBarItem(
+                                        // The fixed icon lane contains compact unread
+                                        // pills; keep their digits inside the pill.
+                                        icon: MediaQuery.withClampedTextScaling(
+                                          maxScaleFactor: 1,
+                                          child: config.selectedIndex == index
+                                              ? config.items[index].icon
+                                              : config
+                                                  .items[index].inactiveIcon,
+                                        ),
+                                        label: config.items[index].title ?? '',
+                                      ),
+                                  ],
+                                  currentIndex: config.selectedIndex,
+                                  type: BottomNavigationBarType.fixed,
+                                  selectedFontSize:
+                                      HomeNavigationTokens.labelSize,
+                                  unselectedFontSize:
+                                      HomeNavigationTokens.labelSize,
+                                  selectedItemColor: AppTokens.accent,
+                                  unselectedItemColor: inactive,
+                                  backgroundColor: Colors.transparent,
+                                  elevation: 0,
+                                  onTap: widget.onItemSelected ??
+                                      config.onItemSelected,
+                                ),
+                              ),
+                            )),
+                          ]));
                     }),
                   ),
                 ),
